@@ -6,27 +6,78 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"sync"
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
+
+const maxPooledBlockFrameBytes = 1 << 20
+
+var blockFramePool = sync.Pool{
+	New: func() any {
+		buffer := make([]byte, 0, 4096)
+		return &buffer
+	},
+}
 
 func writeBlock(file *os.File, payload []byte) (blockRef, error) {
 	offset, err := file.Seek(0, io.SeekEnd)
 	if err != nil {
 		return blockRef{}, fmt.Errorf("seek block writer: %w", err)
 	}
-	frame := make([]byte, 4+len(payload)+4)
+	if uint64(len(payload)) > uint64(^uint32(0)) {
+		return blockRef{}, fmt.Errorf("block payload too large: %d", len(payload))
+	}
+	frame := borrowBlockFrame(len(payload) + 8)
+	defer releaseBlockFrame(frame)
 	binary.BigEndian.PutUint32(frame[:4], uint32(len(payload)))
 	copy(frame[4:], payload)
 	checksum := crc32.Checksum(payload, crcTable)
 	binary.BigEndian.PutUint32(frame[len(frame)-4:], checksum)
-	if _, err := file.Write(frame); err != nil {
-		return blockRef{}, fmt.Errorf("write block: %w", err)
+	if err := writeAll(file, frame); err != nil {
+		return blockRef{}, err
 	}
 	return blockRef{
 		Offset: offset,
-		Size:   int64(len(frame)),
+		Size:   int64(len(payload) + 8),
 	}, nil
+}
+
+func borrowBlockFrame(size int) []byte {
+	if size > maxPooledBlockFrameBytes {
+		return make([]byte, size)
+	}
+	ptr, ok := blockFramePool.Get().(*[]byte)
+	if !ok || ptr == nil {
+		return make([]byte, size)
+	}
+	frame := *ptr
+	if cap(frame) < size {
+		return make([]byte, size)
+	}
+	return frame[:size]
+}
+
+func releaseBlockFrame(frame []byte) {
+	if cap(frame) > maxPooledBlockFrameBytes {
+		return
+	}
+	frame = frame[:0]
+	blockFramePool.Put(&frame)
+}
+
+func writeAll(file *os.File, data []byte) error {
+	for len(data) > 0 {
+		written, err := file.Write(data)
+		if err != nil {
+			return fmt.Errorf("write block: %w", err)
+		}
+		if written == 0 {
+			return fmt.Errorf("write block: wrote zero bytes")
+		}
+		data = data[written:]
+	}
+	return nil
 }
 
 func readBlock(path string, ref blockRef) ([]byte, error) {

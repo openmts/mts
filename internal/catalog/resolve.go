@@ -8,9 +8,25 @@ import (
 )
 
 func (c *Catalog) resolveSeriesLocked(measurement string, tags map[string]string) (Series, error) {
+	series, changed, err := c.resolveSeriesNoSnapshotLocked(measurement, tags)
+	if err != nil {
+		return Series{}, err
+	}
+	if changed {
+		if err := c.saveSnapshotLocked(); err != nil {
+			return Series{}, err
+		}
+	}
+	return series, nil
+}
+
+func (c *Catalog) resolveSeriesNoSnapshotLocked(
+	measurement string,
+	tags map[string]string,
+) (Series, bool, error) {
 	key := seriesKey(measurement, tags)
 	if id, ok := c.seriesByKey[key]; ok {
-		return c.series[id], nil
+		return c.series[id], false, nil
 	}
 	series := Series{
 		ID:          c.nextSeriesID,
@@ -22,20 +38,33 @@ func (c *Catalog) resolveSeriesLocked(measurement string, tags map[string]string
 		Series: &series,
 	}
 	if err := c.appendEntryLocked(entry); err != nil {
-		return Series{}, err
+		return Series{}, false, err
 	}
 	c.applySeries(series)
 	c.nextSeriesID++
-	if err := c.saveSnapshotLocked(); err != nil {
-		return Series{}, err
-	}
-	return series, nil
+	return series, true, nil
 }
 
 func (c *Catalog) resolveFieldsLocked(
 	measurement string,
 	values map[string]model.FieldValue,
 ) ([]model.ResolvedField, error) {
+	fields, changed, err := c.resolveFieldsNoSnapshotLocked(measurement, values)
+	if err != nil {
+		return nil, err
+	}
+	if changed {
+		if err := c.saveSnapshotLocked(); err != nil {
+			return nil, err
+		}
+	}
+	return fields, nil
+}
+
+func (c *Catalog) resolveFieldsNoSnapshotLocked(
+	measurement string,
+	values map[string]model.FieldValue,
+) ([]model.ResolvedField, bool, error) {
 	names := make([]string, 0, len(values))
 	for name := range values {
 		names = append(names, name)
@@ -43,12 +72,14 @@ func (c *Catalog) resolveFieldsLocked(
 	sort.Strings(names)
 
 	fields := make([]model.ResolvedField, 0, len(names))
+	changed := false
 	for _, name := range names {
 		value := values[name]
-		field, err := c.resolveFieldLocked(measurement, name, value.Type)
+		field, fieldChanged, err := c.resolveFieldNoSnapshotLocked(measurement, name, value.Type)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
+		changed = changed || fieldChanged
 		fields = append(fields, model.ResolvedField{
 			FieldID:   field.ID,
 			FieldName: field.Name,
@@ -56,21 +87,21 @@ func (c *Catalog) resolveFieldsLocked(
 			Value:     value,
 		})
 	}
-	return fields, nil
+	return fields, changed, nil
 }
 
-func (c *Catalog) resolveFieldLocked(
+func (c *Catalog) resolveFieldNoSnapshotLocked(
 	measurement string,
 	name string,
 	fieldType model.FieldType,
-) (Field, error) {
+) (Field, bool, error) {
 	key := fieldKey(measurement, name)
 	if id, ok := c.fieldsByKey[key]; ok {
 		field := c.fields[id]
 		if field.Type != fieldType {
-			return Field{}, fmt.Errorf("%w: %s", ErrFieldTypeConflict, name)
+			return Field{}, false, fmt.Errorf("%w: %s", ErrFieldTypeConflict, name)
 		}
-		return field, nil
+		return field, false, nil
 	}
 	field := Field{
 		ID:          c.nextFieldID,
@@ -83,14 +114,11 @@ func (c *Catalog) resolveFieldLocked(
 		Field: &field,
 	}
 	if err := c.appendEntryLocked(entry); err != nil {
-		return Field{}, err
+		return Field{}, false, err
 	}
 	c.applyField(field)
 	c.nextFieldID++
-	if err := c.saveSnapshotLocked(); err != nil {
-		return Field{}, err
-	}
-	return field, nil
+	return field, true, nil
 }
 
 func (c *Catalog) applySeries(series Series) {

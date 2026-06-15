@@ -13,7 +13,8 @@ import (
 const batchVersion byte = 2
 
 func encodeBatch(records []model.ResolvedPoint) ([]byte, error) {
-	dst := []byte{batchVersion}
+	dst := make([]byte, 0, estimateBatchSize(records))
+	dst = append(dst, batchVersion)
 	dst = binary.AppendUvarint(dst, uint64(len(records)))
 	for _, record := range records {
 		var err error
@@ -23,6 +24,75 @@ func encodeBatch(records []model.ResolvedPoint) ([]byte, error) {
 		}
 	}
 	return dst, nil
+}
+
+func estimateBatchSize(records []model.ResolvedPoint) int {
+	size := 1 + uvarintSize(uint64(len(records)))
+	for _, record := range records {
+		size += estimatePointSize(record)
+	}
+	return size
+}
+
+func estimatePointSize(point model.ResolvedPoint) int {
+	size := stringSize(point.Database)
+	size += stringSize(point.RetentionPolicy)
+	size += stringSize(point.Measurement)
+	size += estimateTagsSize(point.Tags)
+	size += uvarintSize(point.SeriesID)
+	size += varintSize(point.Timestamp)
+	size += uvarintSize(point.WriteSeq)
+	size += uvarintSize(uint64(len(point.Fields)))
+	for _, field := range point.Fields {
+		size += estimateFieldSize(field)
+	}
+	return size
+}
+
+func estimateTagsSize(tags map[string]string) int {
+	size := uvarintSize(uint64(len(tags)))
+	for key, value := range tags {
+		size += stringSize(key) + stringSize(value)
+	}
+	return size
+}
+
+func estimateFieldSize(field model.ResolvedField) int {
+	size := uvarintSize(uint64(field.FieldID))
+	size += stringSize(field.FieldName) + 1
+	switch field.Value.Type {
+	case model.FieldFloat64:
+		return size + 8
+	case model.FieldInt64:
+		return size + varintSize(field.Value.Int64)
+	case model.FieldString:
+		return size + stringSize(field.Value.String)
+	case model.FieldBool:
+		return size + 1
+	default:
+		return size
+	}
+}
+
+func stringSize(value string) int {
+	return uvarintSize(uint64(len(value))) + len(value)
+}
+
+func uvarintSize(value uint64) int {
+	size := 1
+	for value >= 0x80 {
+		value >>= 7
+		size++
+	}
+	return size
+}
+
+func varintSize(value int64) int {
+	encoded := uint64(value) << 1
+	if value < 0 {
+		encoded = ^encoded
+	}
+	return uvarintSize(encoded)
 }
 
 func decodeBatch(payload []byte) ([]model.ResolvedPoint, error) {

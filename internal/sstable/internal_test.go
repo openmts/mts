@@ -40,6 +40,37 @@ func TestBlockReadValidationErrors(t *testing.T) {
 	}
 }
 
+func TestBlockFramePoolLargeBufferBranch(t *testing.T) {
+	frame := borrowBlockFrame(maxPooledBlockFrameBytes + 1)
+	if len(frame) != maxPooledBlockFrameBytes+1 {
+		t.Fatalf("borrowBlockFrame() len = %d, want %d", len(frame), maxPooledBlockFrameBytes+1)
+	}
+	releaseBlockFrame(frame)
+	small := borrowBlockFrame(16)
+	if len(small) != 16 {
+		t.Fatalf("borrowBlockFrame(small) len = %d, want 16", len(small))
+	}
+	releaseBlockFrame(small)
+}
+
+func TestBlockFramePoolReusesSmallBuffer(t *testing.T) {
+	frame := borrowBlockFrame(32)
+	if len(frame) != 32 {
+		t.Fatalf("borrowBlockFrame() len = %d, want 32", len(frame))
+	}
+	frame[0] = 7
+	releaseBlockFrame(frame)
+
+	reused := borrowBlockFrame(16)
+	if len(reused) != 16 {
+		t.Fatalf("borrowBlockFrame(reused) len = %d, want 16", len(reused))
+	}
+	if cap(reused) < 32 {
+		t.Fatalf("borrowBlockFrame(reused) cap = %d, want at least 32", cap(reused))
+	}
+	releaseBlockFrame(reused)
+}
+
 func TestPartUnknownEncodingsAndSortHelpers(t *testing.T) {
 	dir := t.TempDir()
 	timePath := filepath.Join(dir, timestampsFile)
@@ -65,7 +96,7 @@ func TestPartUnknownEncodingsAndSortHelpers(t *testing.T) {
 	if _, err := part.readTimeBlock(timeRef); err == nil {
 		t.Fatal("readTimeBlock() unknown encoding error = nil, want error")
 	}
-	_, err = part.readValueColumn(1, columnRef{FieldID: 2, ValueRef: valueRef}, Query{Start: 0, End: 10})
+	_, err = part.readValueColumn(1, columnRef{FieldID: 2, ValueRef: valueRef}, nil, Query{Start: 0, End: 10})
 	if err == nil {
 		t.Fatal("readValueColumn() unknown encoding error = nil, want error")
 	}
@@ -104,6 +135,71 @@ func TestPartUnknownEncodingsAndSortHelpers(t *testing.T) {
 		FieldIDs: map[uint32]struct{}{2: {}},
 	}) {
 		t.Fatal("partMatches() matched non-overlapping field IDs")
+	}
+}
+
+func TestGroupColumnsSortsUnsortedSamplesWithoutMutatingInput(t *testing.T) {
+	columns := []model.ColumnData{
+		{
+			SeriesID:  1,
+			FieldID:   2,
+			FieldType: model.FieldFloat64,
+			Samples: []model.VersionedSample{
+				{Timestamp: 20, WriteSeq: 2, Value: model.Float64Value(2)},
+				{Timestamp: 10, WriteSeq: 1, Value: model.Float64Value(1)},
+			},
+		},
+	}
+	grouped := groupColumns(columns)
+	got := grouped[1][0].Samples
+	if len(got) != 2 || got[0].Timestamp != 10 || got[1].Timestamp != 20 {
+		t.Fatalf("grouped samples = %#v, want sorted timestamps 10,20", got)
+	}
+	if columns[0].Samples[0].Timestamp != 20 {
+		t.Fatalf("input samples were mutated: %#v", columns[0].Samples)
+	}
+	if !samplesSorted(got) {
+		t.Fatal("samplesSorted(sorted) = false, want true")
+	}
+}
+
+func TestCollectTimestampsAlignedAndSparseColumns(t *testing.T) {
+	aligned := []model.ColumnData{
+		{
+			Samples: []model.VersionedSample{
+				{Timestamp: 10},
+				{Timestamp: 20},
+			},
+		},
+		{
+			Samples: []model.VersionedSample{
+				{Timestamp: 10},
+				{Timestamp: 20},
+			},
+		},
+	}
+	got := collectTimestamps(aligned)
+	if len(got) != 2 || got[0] != 10 || got[1] != 20 {
+		t.Fatalf("aligned timestamps = %v, want [10 20]", got)
+	}
+
+	sparse := []model.ColumnData{
+		{
+			Samples: []model.VersionedSample{
+				{Timestamp: 20},
+				{Timestamp: 40},
+			},
+		},
+		{
+			Samples: []model.VersionedSample{
+				{Timestamp: 10},
+				{Timestamp: 40},
+			},
+		},
+	}
+	got = collectTimestamps(sparse)
+	if len(got) != 3 || got[0] != 10 || got[1] != 20 || got[2] != 40 {
+		t.Fatalf("sparse timestamps = %v, want [10 20 40]", got)
 	}
 }
 
@@ -173,7 +269,7 @@ func TestPartDecodeErrors(t *testing.T) {
 	if _, err := part.readTimeBlock(timeRef); err == nil {
 		t.Fatal("readTimeBlock(bad json) error = nil, want error")
 	}
-	_, err = part.readValueColumn(1, columnRef{FieldID: 2, ValueRef: valueRef}, Query{Start: 0, End: 10})
+	_, err = part.readValueColumn(1, columnRef{FieldID: 2, ValueRef: valueRef}, nil, Query{Start: 0, End: 10})
 	if err == nil {
 		t.Fatal("readValueColumn(bad json) error = nil, want error")
 	}
@@ -181,13 +277,13 @@ func TestPartDecodeErrors(t *testing.T) {
 	if _, err := missingPart.readTimeBlock(blockRef{}); err == nil {
 		t.Fatal("readTimeBlock(missing file) error = nil, want error")
 	}
-	filtered := filterSamples(1, valueBlock{
+	filtered := columnFromBlock(1, filterValueBlock(valueBlock{
 		FieldID:   2,
 		FieldType: model.FieldInt64,
 		Samples: []model.VersionedSample{
 			{Timestamp: 100, WriteSeq: 1, Value: model.Int64Value(1)},
 		},
-	}, Query{Start: 0, End: 10})
+	}, Query{Start: 0, End: 10}))
 	if len(filtered.Samples) != 0 {
 		t.Fatalf("filtered sample count = %d, want 0", len(filtered.Samples))
 	}
@@ -401,7 +497,7 @@ func assertDecoderRejectsPrefixes(t *testing.T, payload []byte, decode func([]by
 	}
 }
 
-func TestOpenPartRejectsBadIndexBlock(t *testing.T) {
+func TestPartQueryRejectsBadLazyIndexBlock(t *testing.T) {
 	dir := t.TempDir()
 	indexFileHandle := mustCreateTestFile(t, filepath.Join(dir, indexFile))
 	indexRef, err := writeBlock(indexFileHandle, []byte("{"))
@@ -411,16 +507,38 @@ func TestOpenPartRejectsBadIndexBlock(t *testing.T) {
 	if err := indexFileHandle.Close(); err != nil {
 		t.Fatalf("Close(index) error = %v", err)
 	}
+	metaIndexPayload, err := encodeMetaIndexRows([]metaIndexRow{
+		{
+			MinSeriesID: 1,
+			MaxSeriesID: 1,
+			MinTime:     0,
+			MaxTime:     10,
+			FieldIDs:    []uint32{1},
+			IndexRef:    indexRef,
+		},
+	})
+	if err != nil {
+		t.Fatalf("encodeMetaIndexRows() error = %v", err)
+	}
+	metaIndexRef, err := writeBinaryBlock(filepath.Join(dir, metaindexFile), metaIndexPayload)
+	if err != nil {
+		t.Fatalf("writeBinaryBlock(metaindex) error = %v", err)
+	}
 	meta := metadata{
 		FormatVersion: partFormatVersion,
-		Part:          PartMeta{ID: "bad-index"},
+		Part:          PartMeta{ID: "bad-index", MinTime: 0, MaxTime: 10, MinSeriesID: 1, MaxSeriesID: 1},
 		IndexRef:      indexRef,
+		MetaIndexRef:  metaIndexRef,
 	}
 	if err := writeMetadata(dir, meta); err != nil {
 		t.Fatalf("writeMetadata() error = %v", err)
 	}
-	if _, err := OpenPart(dir); err == nil {
-		t.Fatal("OpenPart(bad index block) error = nil, want error")
+	part, err := OpenPart(dir)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	if _, err := part.Query(Query{Start: 0, End: 10}); err == nil {
+		t.Fatal("Query(bad lazy index block) error = nil, want error")
 	}
 }
 

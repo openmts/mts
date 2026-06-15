@@ -19,12 +19,18 @@ import (
 type config struct {
 	dataDir     string
 	mode        string
+	fieldLayout string
 	points      int
 	series      int
 	queryRepeat int
 	cpuProfile  string
 	memProfile  string
 }
+
+const (
+	fieldLayoutDefault = "default"
+	fieldLayoutWide10  = "wide10"
+)
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -70,7 +76,15 @@ func run(args []string) (err error) {
 	if err := writeMemProfile(cfg.memProfile); err != nil {
 		return err
 	}
-	log.Printf("mode=%s points=%d series=%d query_repeat=%d data_dir=%s", cfg.mode, cfg.points, cfg.series, cfg.queryRepeat, dir)
+	log.Printf(
+		"mode=%s field_layout=%s points=%d series=%d query_repeat=%d data_dir=%s",
+		cfg.mode,
+		normalizedFieldLayout(cfg.fieldLayout),
+		cfg.points,
+		cfg.series,
+		cfg.queryRepeat,
+		dir,
+	)
 	return nil
 }
 
@@ -80,6 +94,7 @@ func parseConfig(args []string) (config, error) {
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&cfg.dataDir, "data-dir", "", "数据目录；为空时使用临时目录并自动清理")
 	flags.StringVar(&cfg.mode, "mode", "query", "workload 模式：write/query/compact/replay")
+	flags.StringVar(&cfg.fieldLayout, "field-layout", fieldLayoutDefault, "字段布局：default/wide10")
 	flags.IntVar(&cfg.points, "points", 10000, "写入点数")
 	flags.IntVar(&cfg.series, "series", 100, "series 数量")
 	flags.IntVar(&cfg.queryRepeat, "query-repeat", 5, "查询重复次数")
@@ -109,7 +124,19 @@ func validateConfig(cfg config) error {
 	if cfg.queryRepeat < 0 {
 		return fmt.Errorf("query-repeat must be non-negative")
 	}
+	switch normalizedFieldLayout(cfg.fieldLayout) {
+	case fieldLayoutDefault, fieldLayoutWide10:
+	default:
+		return fmt.Errorf("unsupported field layout %q", cfg.fieldLayout)
+	}
 	return nil
+}
+
+func normalizedFieldLayout(layout string) string {
+	if layout == "" {
+		return fieldLayoutDefault
+	}
+	return layout
 }
 
 func prepareDataDir(path string) (string, func() error, error) {
@@ -195,7 +222,8 @@ func queryWorkload(ctx context.Context, eng *mts.Engine, cfg config) error {
 func compactWorkload(ctx context.Context, eng *mts.Engine, cfg config) error {
 	flushEvery := max(cfg.points/4, 1)
 	for index := range cfg.points {
-		if err := eng.Write(ctx, []mts.Point{workloadPoint(index, cfg.series)}, mts.WriteOptions{}); err != nil {
+		point := workloadPoint(index, cfg.series, cfg.fieldLayout)
+		if err := eng.Write(ctx, []mts.Point{point}, mts.WriteOptions{}); err != nil {
 			return fmt.Errorf("write compact point: %w", err)
 		}
 		if (index+1)%flushEvery == 0 {
@@ -241,7 +269,7 @@ func writePoints(ctx context.Context, eng *mts.Engine, cfg config) error {
 	const batchSize = 1024
 	batch := make([]mts.Point, 0, batchSize)
 	for index := range cfg.points {
-		batch = append(batch, workloadPoint(index, cfg.series))
+		batch = append(batch, workloadPoint(index, cfg.series, cfg.fieldLayout))
 		if len(batch) == batchSize {
 			if err := eng.Write(ctx, batch, mts.WriteOptions{}); err != nil {
 				return fmt.Errorf("write batch: %w", err)
@@ -262,7 +290,7 @@ func writePointsSynced(ctx context.Context, eng *mts.Engine, cfg config) error {
 	const batchSize = 1024
 	batch := make([]mts.Point, 0, batchSize)
 	for index := range cfg.points {
-		batch = append(batch, workloadPoint(index, cfg.series))
+		batch = append(batch, workloadPoint(index, cfg.series, cfg.fieldLayout))
 		if len(batch) == batchSize {
 			if err := eng.Write(ctx, batch, mts.WriteOptions{Sync: true}); err != nil {
 				return fmt.Errorf("write synced batch: %w", err)
@@ -279,7 +307,14 @@ func writePointsSynced(ctx context.Context, eng *mts.Engine, cfg config) error {
 	return nil
 }
 
-func workloadPoint(index int, series int) mts.Point {
+func workloadPoint(index int, series int, layout string) mts.Point {
+	if normalizedFieldLayout(layout) == fieldLayoutWide10 {
+		return wide10WorkloadPoint(index, series)
+	}
+	return defaultWorkloadPoint(index, series)
+}
+
+func defaultWorkloadPoint(index int, series int) mts.Point {
 	seriesID := index % series
 	return mts.Point{
 		Measurement: "pprof",
@@ -290,6 +325,27 @@ func workloadPoint(index int, series int) mts.Point {
 			"count":  mts.Int64Value(int64(index)),
 			"state":  mts.StringValue("ok"),
 			"value":  mts.Float64Value(float64(index)),
+		},
+	}
+}
+
+func wide10WorkloadPoint(index int, series int) mts.Point {
+	seriesID := index % series
+	return mts.Point{
+		Measurement: "pprof",
+		Tags:        map[string]string{"host": fmt.Sprintf("host-%04d", seriesID)},
+		Timestamp:   int64(index),
+		Fields: map[string]mts.FieldValue{
+			"active": mts.BoolValue(index%2 == 0),
+			"f0":     mts.Float64Value(float64(index)),
+			"f1":     mts.Float64Value(float64(index) + 0.1),
+			"f2":     mts.Float64Value(float64(index) + 0.2),
+			"f3":     mts.Float64Value(float64(index) + 0.3),
+			"f4":     mts.Float64Value(float64(index) + 0.4),
+			"i0":     mts.Int64Value(int64(index)),
+			"i1":     mts.Int64Value(int64(seriesID)),
+			"i2":     mts.Int64Value(int64(index % 86400)),
+			"state":  mts.StringValue("ok"),
 		},
 	}
 }

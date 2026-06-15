@@ -80,10 +80,17 @@ func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 }
 
 func (s *Shard) Write(point model.ResolvedPoint, syncWrite bool) error {
-	if err := s.wal.Append([]model.ResolvedPoint{point}, syncWrite); err != nil {
+	return s.WriteBatch([]model.ResolvedPoint{point}, syncWrite)
+}
+
+func (s *Shard) WriteBatch(points []model.ResolvedPoint, syncWrite bool) error {
+	if len(points) == 0 {
+		return nil
+	}
+	if err := s.wal.Append(points, syncWrite); err != nil {
 		return err
 	}
-	if err := s.mem.Apply(point); err != nil {
+	if err := s.mem.ApplyBatch(points); err != nil {
 		return err
 	}
 	if s.mem.SampleCount() >= s.opts.MemTableMaxSamples {
@@ -108,39 +115,46 @@ func (s *Shard) flushLocked() error {
 		return nil
 	}
 	snapshot := s.mem.SnapshotAndReset()
-	columns := snapshot.Query(memtable.Query{
+	columns := snapshot.Columns(memtable.Query{
 		Start: s.opts.Start,
 		End:   s.opts.End,
 	})
 	if len(columns) == 0 {
+		s.mem.Restore(snapshot)
 		return nil
 	}
 	meta, err := sstable.WritePart(s.opts.Dir, 0, s.nextPartID(), columns)
 	if err != nil {
+		s.mem.Restore(snapshot)
 		return err
 	}
 	if s.testHooks.afterPartWriteBeforeManifest != nil {
 		if err := s.testHooks.afterPartWriteBeforeManifest(); err != nil {
+			s.mem.Restore(snapshot)
 			return err
 		}
 	}
 	part, err := sstable.OpenPart(meta.Path)
 	if err != nil {
+		s.mem.Restore(snapshot)
 		return err
 	}
 	nextManifest := sstable.Manifest{Parts: append([]sstable.PartMeta{}, s.manifest.Parts...)}
 	nextManifest.Parts = append(nextManifest.Parts, meta)
 	if err := sstable.WriteManifest(s.opts.Dir, nextManifest); err != nil {
+		s.mem.Restore(snapshot)
 		return err
 	}
 	s.parts = append(s.parts, part)
 	s.manifest = nextManifest
 	if s.testHooks.afterManifestBeforeWALTrunc != nil {
 		if err := s.testHooks.afterManifestBeforeWALTrunc(); err != nil {
+			s.mem.Restore(snapshot)
 			return err
 		}
 	}
 	if err := s.wal.TruncateAll(); err != nil {
+		s.mem.Restore(snapshot)
 		return err
 	}
 	return nil

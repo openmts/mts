@@ -123,7 +123,7 @@ func writeSeries(
 		Columns:  make([]columnRef, 0, len(columns)),
 	}
 	for _, column := range columns {
-		ref, err := writeValueBlock(files.values, column)
+		ref, err := writeValueBlock(files.values, column, timestamps)
 		if err != nil {
 			return indexRow{}, err
 		}
@@ -132,8 +132,12 @@ func writeSeries(
 	return row, nil
 }
 
-func writeValueBlock(file *os.File, column model.ColumnData) (columnRef, error) {
-	payload, err := marshalValueBlock(nil, column)
+func writeValueBlock(
+	file *os.File,
+	column model.ColumnData,
+	rowTimestamps []int64,
+) (columnRef, error) {
+	payload, err := marshalValueBlockWithTimestamps(nil, column, rowTimestamps)
 	if err != nil {
 		return columnRef{}, fmt.Errorf("encode value block: %w", err)
 	}

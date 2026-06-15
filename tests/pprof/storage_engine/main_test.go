@@ -68,6 +68,7 @@ func TestRunRejectsBadInputs(t *testing.T) {
 	}{
 		{name: "bad flag", args: []string{"-unknown"}},
 		{name: "invalid config", args: []string{"-points", "1", "-series", "2"}},
+		{name: "bad field layout", args: []string{"-field-layout", "bad", "-points", "1", "-series", "1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -178,6 +179,26 @@ func TestWritePointsSyncedExactBatch(t *testing.T) {
 	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestWide10WorkloadPointHasExpectedFields(t *testing.T) {
+	point := workloadPoint(7, 3, fieldLayoutWide10)
+	if len(point.Fields) != 10 {
+		t.Fatalf("field count = %d, want 10", len(point.Fields))
+	}
+	counts := countFieldTypes(point.Fields)
+	if counts[mts.FieldFloat64] != 5 {
+		t.Fatalf("float field count = %d, want 5", counts[mts.FieldFloat64])
+	}
+	if counts[mts.FieldInt64] != 3 {
+		t.Fatalf("int field count = %d, want 3", counts[mts.FieldInt64])
+	}
+	if counts[mts.FieldString] != 1 {
+		t.Fatalf("string field count = %d, want 1", counts[mts.FieldString])
+	}
+	if counts[mts.FieldBool] != 1 {
+		t.Fatalf("bool field count = %d, want 1", counts[mts.FieldBool])
 	}
 }
 
@@ -327,6 +348,25 @@ func TestReplayWorkloadRejectsWriteError(t *testing.T) {
 	}
 }
 
+func TestReplayWorkloadRejectsMissingQueriedSeries(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	eng, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	err = replayWorkload(ctx, eng, config{points: 1, series: 2, queryRepeat: 2}, dir)
+	if err == nil {
+		t.Fatal("replayWorkload(missing queried series) error = nil, want error")
+	}
+}
+
+func TestWriteMemProfileEmptyPath(t *testing.T) {
+	if err := writeMemProfile(""); err != nil {
+		t.Fatalf("writeMemProfile(empty) error = %v", err)
+	}
+}
+
 func TestWriteMemProfileRejectsInvalidPath(t *testing.T) {
 	if err := writeMemProfile("bad\x00path"); err == nil {
 		t.Fatal("writeMemProfile(invalid) error = nil, want error")
@@ -381,4 +421,12 @@ func assertNonEmptyFile(t *testing.T, path string) {
 	if info.Mode().Perm() != 0600 {
 		t.Fatalf("file %s mode = %v, want 0600", path, info.Mode().Perm())
 	}
+}
+
+func countFieldTypes(fields map[string]mts.FieldValue) map[mts.FieldType]int {
+	counts := make(map[mts.FieldType]int)
+	for _, value := range fields {
+		counts[value.Type]++
+	}
+	return counts
 }

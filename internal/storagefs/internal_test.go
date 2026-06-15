@@ -66,6 +66,16 @@ func TestWriteAndCloseClosedFileReturnsError(t *testing.T) {
 	}
 }
 
+func TestWriteAndCloseSyncErrorReturnsError(t *testing.T) {
+	file, err := os.OpenFile(os.DevNull, os.O_WRONLY, FileMode)
+	if err != nil {
+		t.Fatalf("OpenFile(%s) error = %v", os.DevNull, err)
+	}
+	if err := writeAndClose(file, []byte("x")); err == nil {
+		t.Fatal("writeAndClose(sync error) error = nil, want error")
+	}
+}
+
 func TestMkdirAllInvalidPathReturnsError(t *testing.T) {
 	if err := MkdirAll("bad\x00path"); err == nil {
 		t.Fatal("MkdirAll(invalid) error = nil, want error")

@@ -9,8 +9,10 @@ import (
 func groupColumns(columns []model.ColumnData) map[uint64][]model.ColumnData {
 	grouped := make(map[uint64][]model.ColumnData)
 	for _, column := range columns {
-		column.Samples = cloneSamples(column.Samples)
-		sortSamples(column.Samples)
+		if !samplesSorted(column.Samples) {
+			column.Samples = cloneSamples(column.Samples)
+			sortSamples(column.Samples)
+		}
 		grouped[column.SeriesID] = append(grouped[column.SeriesID], column)
 	}
 	return grouped
@@ -28,6 +30,9 @@ func sortedSeriesIDs(grouped map[uint64][]model.ColumnData) []uint64 {
 }
 
 func collectTimestamps(columns []model.ColumnData) []int64 {
+	if timestamps, ok := alignedTimestamps(columns); ok {
+		return timestamps
+	}
 	seen := make(map[int64]struct{})
 	for _, column := range columns {
 		for _, sample := range column.Samples {
@@ -42,6 +47,28 @@ func collectTimestamps(columns []model.ColumnData) []int64 {
 		return timestamps[i] < timestamps[j]
 	})
 	return timestamps
+}
+
+func alignedTimestamps(columns []model.ColumnData) ([]int64, bool) {
+	if len(columns) == 0 {
+		return []int64{}, true
+	}
+	first := columns[0].Samples
+	for _, column := range columns[1:] {
+		if len(column.Samples) != len(first) {
+			return nil, false
+		}
+		for index, sample := range column.Samples {
+			if sample.Timestamp != first[index].Timestamp {
+				return nil, false
+			}
+		}
+	}
+	timestamps := make([]int64, len(first))
+	for index, sample := range first {
+		timestamps[index] = sample.Timestamp
+	}
+	return timestamps, true
 }
 
 func timeBlockFrom(timestamps []int64) timeBlock {
@@ -110,6 +137,15 @@ func sortSamples(samples []model.VersionedSample) {
 	sort.Slice(samples, func(i, j int) bool {
 		return samples[i].Timestamp < samples[j].Timestamp
 	})
+}
+
+func samplesSorted(samples []model.VersionedSample) bool {
+	for index := 1; index < len(samples); index++ {
+		if samples[index-1].Timestamp > samples[index].Timestamp {
+			return false
+		}
+	}
+	return true
 }
 
 func cloneSamples(samples []model.VersionedSample) []model.VersionedSample {

@@ -25,12 +25,21 @@ type Snapshot struct {
 	sampleCount int
 }
 
-type sampleEntry struct {
-	fieldType model.FieldType
-	sample    model.VersionedSample
+type columnKey struct {
+	seriesID uint64
+	fieldID  uint32
 }
 
-type tableData map[uint64]map[uint32]map[int64]sampleEntry
+type columnBuffer struct {
+	seriesID  uint64
+	fieldID   uint32
+	fieldType model.FieldType
+	first     model.VersionedSample
+	samples   []model.VersionedSample
+	count     int
+}
+
+type tableData map[columnKey]*columnBuffer
 
 func New() *MemTable {
 	return &MemTable{
@@ -41,10 +50,15 @@ func New() *MemTable {
 func (m *MemTable) Apply(point model.ResolvedPoint) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, field := range point.Fields {
-		if m.applyField(point, field) {
-			m.sampleCount++
-		}
+	m.applyPointLocked(point)
+	return nil
+}
+
+func (m *MemTable) ApplyBatch(points []model.ResolvedPoint) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, point := range points {
+		m.applyPointLocked(point)
 	}
 	return nil
 }
@@ -59,7 +73,7 @@ func (m *MemTable) SnapshotAndReset() *Snapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	snapshot := &Snapshot{
-		data:        cloneData(m.data),
+		data:        m.data,
 		sampleCount: m.sampleCount,
 	}
 	m.data = make(tableData)
@@ -81,15 +95,25 @@ func (m *MemTable) Query(query Query) []model.ColumnData {
 }
 
 func (s *Snapshot) Query(query Query) []model.ColumnData {
+	return s.Columns(query)
+}
+
+func (s *Snapshot) Columns(query Query) []model.ColumnData {
 	if s == nil || query.End < query.Start {
 		return []model.ColumnData{}
 	}
-	columns := make([]model.ColumnData, 0)
-	for seriesID, fields := range s.data {
-		if !containsSeries(query.SeriesIDs, seriesID) {
+	columns := make([]model.ColumnData, 0, len(s.data))
+	for _, column := range s.data {
+		if column == nil || !containsSeries(query.SeriesIDs, column.seriesID) {
 			continue
 		}
-		columns = append(columns, queryFields(seriesID, fields, query)...)
+		if !containsField(query.FieldIDs, column.fieldID) {
+			continue
+		}
+		out := columnDataFromBuffer(column, query)
+		if len(out.Samples) > 0 {
+			columns = append(columns, out)
+		}
 	}
 	sortColumns(columns)
 	return columns
@@ -102,72 +126,133 @@ func (s *Snapshot) SampleCount() int {
 	return s.sampleCount
 }
 
-func (m *MemTable) applyField(point model.ResolvedPoint, field model.ResolvedField) bool {
-	fields, ok := m.data[point.SeriesID]
-	if !ok {
-		fields = make(map[uint32]map[int64]sampleEntry)
-		m.data[point.SeriesID] = fields
+func (m *MemTable) Restore(snapshot *Snapshot) {
+	if snapshot == nil || snapshot.sampleCount == 0 {
+		return
 	}
-	samples, ok := fields[field.FieldID]
-	if !ok {
-		samples = make(map[int64]sampleEntry)
-		fields[field.FieldID] = samples
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, column := range snapshot.data {
+		m.restoreColumnLocked(column)
 	}
-	current, exists := samples[point.Timestamp]
-	if exists && current.sample.WriteSeq >= point.WriteSeq {
-		return false
-	}
-	samples[point.Timestamp] = sampleEntry{
-		fieldType: field.Type,
-		sample: model.VersionedSample{
-			Timestamp: point.Timestamp,
-			WriteSeq:  point.WriteSeq,
-			Value:     field.Value,
-		},
-	}
-	return !exists
 }
 
-func queryFields(
-	seriesID uint64,
-	fields map[uint32]map[int64]sampleEntry,
-	query Query,
-) []model.ColumnData {
-	columns := make([]model.ColumnData, 0, len(fields))
-	for fieldID, samples := range fields {
-		if !containsField(query.FieldIDs, fieldID) {
-			continue
-		}
-		column := querySamples(seriesID, fieldID, samples, query)
-		if len(column.Samples) > 0 {
-			columns = append(columns, column)
-		}
+func (m *MemTable) applyPointLocked(point model.ResolvedPoint) {
+	for _, field := range point.Fields {
+		m.applyField(point, field)
+		m.sampleCount++
 	}
-	return columns
 }
 
-func querySamples(
+func (m *MemTable) applyField(point model.ResolvedPoint, field model.ResolvedField) {
+	column := ensureColumn(m.data, point.SeriesID, field.FieldID, field.Type)
+	column.appendSample(model.VersionedSample{
+		Timestamp: point.Timestamp,
+		WriteSeq:  point.WriteSeq,
+		Value:     field.Value,
+	})
+}
+
+func (m *MemTable) restoreColumnLocked(src *columnBuffer) {
+	if src == nil || src.count == 0 {
+		return
+	}
+	dst := ensureColumn(m.data, src.seriesID, src.fieldID, src.fieldType)
+	dst.appendColumn(src)
+	m.sampleCount += src.count
+}
+
+func ensureColumn(
+	data tableData,
 	seriesID uint64,
 	fieldID uint32,
-	samples map[int64]sampleEntry,
-	query Query,
-) model.ColumnData {
-	column := model.ColumnData{
-		SeriesID: seriesID,
-		FieldID:  fieldID,
-		Samples:  make([]model.VersionedSample, 0),
+	fieldType model.FieldType,
+) *columnBuffer {
+	key := columnKey{
+		seriesID: seriesID,
+		fieldID:  fieldID,
 	}
-	for timestamp, entry := range samples {
-		if timestamp < query.Start || timestamp > query.End {
+	column, ok := data[key]
+	if !ok {
+		column = &columnBuffer{
+			seriesID:  seriesID,
+			fieldID:   fieldID,
+			fieldType: fieldType,
+		}
+		data[key] = column
+		return column
+	}
+	column.fieldType = fieldType
+	return column
+}
+
+func columnDataFromBuffer(column *columnBuffer, query Query) model.ColumnData {
+	return model.ColumnData{
+		SeriesID:  column.seriesID,
+		FieldID:   column.fieldID,
+		FieldType: column.fieldType,
+		Samples:   compactSamples(column, query),
+	}
+}
+
+func (c *columnBuffer) appendSample(sample model.VersionedSample) {
+	if c.count == 0 {
+		c.first = sample
+		c.count = 1
+		return
+	}
+	c.samples = append(c.samples, sample)
+	c.count++
+}
+
+func (c *columnBuffer) appendColumn(src *columnBuffer) {
+	if src.count == 0 {
+		return
+	}
+	c.appendSample(src.first)
+	for _, sample := range src.samples {
+		c.appendSample(sample)
+	}
+}
+
+func compactSamples(column *columnBuffer, query Query) []model.VersionedSample {
+	if column.count == 0 {
+		return []model.VersionedSample{}
+	}
+	samples := make([]model.VersionedSample, 0, column.count)
+	samples = appendMatchingSample(samples, column.first, query)
+	for _, sample := range column.samples {
+		samples = appendMatchingSample(samples, sample, query)
+	}
+	if len(samples) <= 1 {
+		return samples
+	}
+	sort.Slice(samples, func(i, j int) bool {
+		if samples[i].Timestamp != samples[j].Timestamp {
+			return samples[i].Timestamp < samples[j].Timestamp
+		}
+		return samples[i].WriteSeq > samples[j].WriteSeq
+	})
+	write := 0
+	for _, sample := range samples {
+		if write > 0 && samples[write-1].Timestamp == sample.Timestamp {
 			continue
 		}
-		column.FieldType = entry.fieldType
-		column.Samples = append(column.Samples, entry.sample)
+		samples[write] = sample
+		write++
 	}
-	sort.Slice(column.Samples, func(i, j int) bool {
-		return column.Samples[i].Timestamp < column.Samples[j].Timestamp
-	})
-	return column
+	return samples[:write]
+}
+
+func appendMatchingSample(
+	dst []model.VersionedSample,
+	sample model.VersionedSample,
+	query Query,
+) []model.VersionedSample {
+	if sample.Timestamp < query.Start || sample.Timestamp > query.End {
+		return dst
+	}
+	return append(dst, sample)
 }
 
 func sortColumns(columns []model.ColumnData) {
@@ -197,24 +282,28 @@ func containsField(filter map[uint32]struct{}, fieldID uint32) bool {
 
 func cloneData(src tableData) tableData {
 	dst := make(tableData, len(src))
-	for seriesID, fields := range src {
-		dst[seriesID] = cloneFields(fields)
+	for key, column := range src {
+		dst[key] = cloneColumn(column)
 	}
 	return dst
 }
 
-func cloneFields(src map[uint32]map[int64]sampleEntry) map[uint32]map[int64]sampleEntry {
-	dst := make(map[uint32]map[int64]sampleEntry, len(src))
-	for fieldID, samples := range src {
-		dst[fieldID] = cloneSamples(samples)
+func cloneColumn(src *columnBuffer) *columnBuffer {
+	if src == nil {
+		return nil
 	}
-	return dst
+	return &columnBuffer{
+		seriesID:  src.seriesID,
+		fieldID:   src.fieldID,
+		fieldType: src.fieldType,
+		first:     src.first,
+		samples:   cloneSamples(src.samples),
+		count:     src.count,
+	}
 }
 
-func cloneSamples(src map[int64]sampleEntry) map[int64]sampleEntry {
-	dst := make(map[int64]sampleEntry, len(src))
-	for timestamp, sample := range src {
-		dst[timestamp] = sample
-	}
+func cloneSamples(src []model.VersionedSample) []model.VersionedSample {
+	dst := make([]model.VersionedSample, len(src))
+	copy(dst, src)
 	return dst
 }

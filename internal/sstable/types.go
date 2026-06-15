@@ -92,7 +92,6 @@ type valueBlock struct {
 type Part struct {
 	path     string
 	metadata metadata
-	rows     []indexRow
 	metaRows []metaIndexRow
 	stats    *readStats
 }

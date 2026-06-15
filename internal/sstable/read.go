@@ -14,14 +14,6 @@ func OpenPart(path string) (*Part, error) {
 	if err != nil {
 		return nil, err
 	}
-	payload, err := readBlock(filepath.Join(path, indexFile), meta.IndexRef)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := decodeIndexRows(payload)
-	if err != nil {
-		return nil, fmt.Errorf("decode part index: %w", err)
-	}
 	metaRows, err := loadPartMetaIndex(path, meta.MetaIndexRef)
 	if err != nil {
 		return nil, err
@@ -29,7 +21,6 @@ func OpenPart(path string) (*Part, error) {
 	return &Part{
 		path:     filepath.Clean(path),
 		metadata: meta,
-		rows:     rows,
 		metaRows: metaRows,
 	}, nil
 }
@@ -45,8 +36,12 @@ func (p *Part) Query(query Query) ([]model.ColumnData, error) {
 	if !partMatches(p.metadata.Part, p.metaRows, query) {
 		return []model.ColumnData{}, nil
 	}
+	rows, err := p.loadIndexRows()
+	if err != nil {
+		return nil, err
+	}
 	columns := make([]model.ColumnData, 0)
-	for _, row := range p.rows {
+	for _, row := range rows {
 		if !rowMatches(row, query) {
 			continue
 		}
@@ -60,8 +55,21 @@ func (p *Part) Query(query Query) ([]model.ColumnData, error) {
 	return columns, nil
 }
 
+func (p *Part) loadIndexRows() ([]indexRow, error) {
+	payload, err := readBlock(filepath.Join(p.path, indexFile), p.metadata.IndexRef)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := decodeIndexRows(payload)
+	if err != nil {
+		return nil, fmt.Errorf("decode part index: %w", err)
+	}
+	return rows, nil
+}
+
 func (p *Part) queryRow(row indexRow, query Query) ([]model.ColumnData, error) {
-	if _, err := p.readTimeBlock(row.TimeRef); err != nil {
+	timeBlock, err := p.readTimeBlock(row.TimeRef)
+	if err != nil {
 		return nil, err
 	}
 	columns := make([]model.ColumnData, 0, len(row.Columns))
@@ -69,7 +77,7 @@ func (p *Part) queryRow(row indexRow, query Query) ([]model.ColumnData, error) {
 		if !containsField(query.FieldIDs, ref.FieldID) {
 			continue
 		}
-		column, err := p.readValueColumn(row.SeriesID, ref, query)
+		column, err := p.readValueColumn(row.SeriesID, ref, timeBlock.Timestamps, query)
 		if err != nil {
 			return nil, err
 		}
@@ -98,6 +106,7 @@ func (p *Part) readTimeBlock(ref blockRef) (timeBlock, error) {
 func (p *Part) readValueColumn(
 	seriesID uint64,
 	ref columnRef,
+	rowTimestamps []int64,
 	query Query,
 ) (model.ColumnData, error) {
 	if p.stats != nil {
@@ -107,11 +116,11 @@ func (p *Part) readValueColumn(
 	if err != nil {
 		return model.ColumnData{}, err
 	}
-	block, err := unmarshalValueBlock(payload)
+	block, err := unmarshalValueBlockWithTimestamps(payload, rowTimestamps, query)
 	if err != nil {
 		return model.ColumnData{}, fmt.Errorf("decode value block: %w", err)
 	}
-	return filterSamples(seriesID, block, query), nil
+	return columnFromBlock(seriesID, block), nil
 }
 
 func (p *Part) resetReadStatsForTest() *readStats {
@@ -204,18 +213,12 @@ func timeBlockFromTimestamps(timestamps []int64) timeBlock {
 	return block
 }
 
-func filterSamples(seriesID uint64, block valueBlock, query Query) model.ColumnData {
+func columnFromBlock(seriesID uint64, block valueBlock) model.ColumnData {
 	column := model.ColumnData{
 		SeriesID:  seriesID,
 		FieldID:   block.FieldID,
 		FieldType: block.FieldType,
-		Samples:   make([]model.VersionedSample, 0, len(block.Samples)),
-	}
-	for _, sample := range block.Samples {
-		if sample.Timestamp < query.Start || sample.Timestamp > query.End {
-			continue
-		}
-		column.Samples = append(column.Samples, sample)
+		Samples:   block.Samples,
 	}
 	sortSamples(column.Samples)
 	return column

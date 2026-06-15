@@ -22,6 +22,11 @@ type Engine struct {
 	writeSeq uint64
 }
 
+type shardBatch struct {
+	shard  *Shard
+	points []model.ResolvedPoint
+}
+
 func Open(_ context.Context, opts model.Options) (*Engine, error) {
 	opts = normalizeOptions(opts)
 	if opts.Path == "" {
@@ -61,8 +66,25 @@ func (e *Engine) Close(_ context.Context) error {
 }
 
 func (e *Engine) Write(_ context.Context, points []model.Point, opts model.WriteOptions) error {
-	for _, point := range points {
-		if err := e.writePoint(point, opts); err != nil {
+	if len(points) == 0 {
+		return nil
+	}
+	normalized := make([]model.Point, len(points))
+	for index, point := range points {
+		normalized[index] = normalizePoint(e.opts, point)
+	}
+	resolved, err := e.catalog.ResolvePoints(normalized)
+	if err != nil {
+		return err
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	batches, err := e.groupByShardLocked(resolved)
+	if err != nil {
+		return err
+	}
+	for _, batch := range batches {
+		if err := batch.shard.WriteBatch(batch.points, opts.Sync); err != nil {
 			return err
 		}
 	}
@@ -80,27 +102,33 @@ func (e *Engine) Flush(_ context.Context) error {
 	return nil
 }
 
-func (e *Engine) writePoint(point model.Point, opts model.WriteOptions) error {
-	point = normalizePoint(e.opts, point)
-	resolved, err := e.catalog.ResolvePoint(point)
-	if err != nil {
-		return err
+func (e *Engine) groupByShardLocked(points []model.ResolvedPoint) ([]shardBatch, error) {
+	positions := make(map[*Shard]int)
+	batches := make([]shardBatch, 0, 1)
+	for index := range points {
+		shard, err := e.shardForLocked(
+			points[index].Database,
+			points[index].RetentionPolicy,
+			points[index].Timestamp,
+		)
+		if err != nil {
+			return nil, err
+		}
+		e.writeSeq++
+		points[index].WriteSeq = e.writeSeq
+		position, ok := positions[shard]
+		if !ok {
+			positions[shard] = len(batches)
+			batch := shardBatch{shard: shard}
+			if len(batches) == 0 {
+				batch.points = points[:0]
+			}
+			batches = append(batches, batch)
+			position = len(batches) - 1
+		}
+		batches[position].points = append(batches[position].points, points[index])
 	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.writeSeq++
-	resolved.WriteSeq = e.writeSeq
-	shard, err := e.shardForLocked(resolved.Database, resolved.RetentionPolicy, resolved.Timestamp)
-	if err != nil {
-		return err
-	}
-	if err := shard.Write(resolved, opts.Sync); err != nil {
-		return err
-	}
-	if resolved.WriteSeq > e.writeSeq {
-		e.writeSeq = resolved.WriteSeq
-	}
-	return nil
+	return batches, nil
 }
 
 func (e *Engine) shardForLocked(database string, policy string, timestamp int64) (*Shard, error) {

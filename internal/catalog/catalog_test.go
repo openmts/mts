@@ -2,6 +2,7 @@ package catalog_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -193,6 +194,59 @@ func TestCatalogRejectsInvalidPoint(t *testing.T) {
 	}
 }
 
+func TestCatalogResolvePointsMatchesResolvePoint(t *testing.T) {
+	dir := t.TempDir()
+	cat, err := catalog.Open(dir)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := cat.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+	points := []model.Point{
+		catalogPoint("cpu", "host-a", 1),
+		catalogPoint("cpu", "host-a", 2),
+		catalogPoint("cpu", "host-b", 3),
+	}
+	got, err := cat.ResolvePoints(points)
+	if err != nil {
+		t.Fatalf("ResolvePoints() error = %v", err)
+	}
+	if len(got) != len(points) {
+		t.Fatalf("ResolvePoints() len = %d, want %d", len(got), len(points))
+	}
+	if got[0].SeriesID != got[1].SeriesID {
+		t.Fatalf("same tags got different series ids: %d vs %d", got[0].SeriesID, got[1].SeriesID)
+	}
+	if got[0].SeriesID == got[2].SeriesID {
+		t.Fatalf("different tags got same series id: %d", got[0].SeriesID)
+	}
+}
+
+func TestCatalogResolvePointsRejectsInvalidPoint(t *testing.T) {
+	cat, err := catalog.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := cat.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+	_, err = cat.ResolvePoints([]model.Point{
+		catalogPoint("cpu", "host-a", 1),
+		{Measurement: "", Fields: map[string]model.FieldValue{"v": model.Float64Value(1)}},
+	})
+	if !errors.Is(err, catalog.ErrEmptyMeasurement) {
+		t.Fatalf("ResolvePoints() error = %v, want ErrEmptyMeasurement", err)
+	}
+	if len(cat.MatchSeries("cpu", nil)) != 0 {
+		t.Fatal("ResolvePoints() created series before rejecting invalid batch")
+	}
+}
+
 func TestCatalogOpenInvalidPathReturnsError(t *testing.T) {
 	if _, err := catalog.Open("bad\x00path"); err == nil {
 		t.Fatal("Open(invalid) error = nil, want error")
@@ -238,5 +292,17 @@ func TestCatalogCloseTwiceAndMatchAllTags(t *testing.T) {
 	}
 	if err := cat.Close(); err != nil {
 		t.Fatalf("Close() second error = %v", err)
+	}
+}
+
+func catalogPoint(measurement string, host string, timestamp int64) model.Point {
+	return model.Point{
+		Measurement: measurement,
+		Tags:        map[string]string{"host": host},
+		Timestamp:   timestamp,
+		Fields: map[string]model.FieldValue{
+			"active": model.BoolValue(timestamp%2 == 0),
+			"usage":  model.Float64Value(float64(timestamp)),
+		},
 	}
 }

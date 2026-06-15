@@ -2,7 +2,10 @@ package engine
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -211,6 +214,164 @@ func TestFlushFailureBeforeManifestDoesNotExposePart(t *testing.T) {
 	}
 	if err := reopened.Close(); err != nil {
 		t.Fatalf("Close(reopened) error = %v", err)
+	}
+}
+
+func TestEngineWriteBatchUsesSingleWALFramePerShard(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	eng, err := Open(ctx, model.Options{
+		Path:               dir,
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1000,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	points := make([]model.Point, 0, 10)
+	for index := range 10 {
+		points = append(points, testBatchPoint(int64(index)))
+	}
+	if err := eng.Write(ctx, points, model.WriteOptions{}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	walPath := filepath.Join(dir, "data", "default", "autogen", "shards", "0", "wal", "000001.wal")
+	frames, err := countWALFrames(walPath)
+	if err != nil {
+		t.Fatalf("countWALFrames() error = %v", err)
+	}
+	if frames != 1 {
+		t.Fatalf("wal frames = %d, want 1", frames)
+	}
+}
+
+func TestEngineWriteBatchAcrossShards(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	eng, err := Open(ctx, model.Options{
+		Path:               dir,
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1000,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	points := []model.Point{
+		testBatchPoint(1),
+		testBatchPoint(int64(time.Hour) + 1),
+		testBatchPoint(2),
+	}
+	if err := eng.Write(ctx, points, model.WriteOptions{}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	rows, err := eng.QueryRows(ctx, model.Query{Measurement: "batch", StartTime: 0, EndTime: int64(2 * time.Hour)})
+	if err != nil {
+		t.Fatalf("QueryRows() error = %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("row count = %d, want 3", len(rows))
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	for _, start := range []string{"0", fmt.Sprint(int64(time.Hour))} {
+		walPath := filepath.Join(dir, "data", "default", "autogen", "shards", start, "wal", "000001.wal")
+		frames, err := countWALFrames(walPath)
+		if err != nil {
+			t.Fatalf("countWALFrames(%s) error = %v", start, err)
+		}
+		if frames != 1 {
+			t.Fatalf("wal frames for shard %s = %d, want 1", start, frames)
+		}
+	}
+}
+
+func TestEngineFlushPersistsLatestWriteSeq(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 100,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	points := []model.Point{
+		{
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			Timestamp:   10,
+			Fields:      map[string]model.FieldValue{"v": model.Float64Value(1)},
+		},
+		{
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			Timestamp:   10,
+			Fields:      map[string]model.FieldValue{"v": model.Float64Value(3)},
+		},
+		{
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			Timestamp:   10,
+			Fields:      map[string]model.FieldValue{"v": model.Float64Value(2)},
+		},
+	}
+	if err := eng.Write(ctx, points, model.WriteOptions{Sync: true}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if err := eng.Flush(ctx); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+	rows, err := eng.QueryRows(ctx, model.Query{
+		Measurement: "cpu",
+		Tags:        map[string]string{"host": "a"},
+		StartTime:   0,
+		EndTime:     20,
+	})
+	if err != nil {
+		t.Fatalf("QueryRows() error = %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("row count = %d, want 1", len(rows))
+	}
+	if rows[0].Fields["v"].Float64 != 2 {
+		t.Fatalf("flushed value = %v, want latest write value 2", rows[0].Fields["v"].Float64)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestShardFlushFailureRestoresSnapshot(t *testing.T) {
+	opts := ShardOptions{
+		Dir:                t.TempDir(),
+		Start:              0,
+		End:                int64(time.Hour),
+		MemTableMaxSamples: 1,
+	}
+	shard, _, err := OpenShard(opts)
+	if err != nil {
+		t.Fatalf("OpenShard() error = %v", err)
+	}
+	shard.testHooks.afterPartWriteBeforeManifest = func() error {
+		return errors.New("stop before manifest")
+	}
+	err = shard.WriteBatch([]model.ResolvedPoint{testResolvedPoint(1, 10, 1)}, false)
+	if err == nil {
+		t.Fatal("WriteBatch() error = nil, want injected flush error")
+	}
+	got, queryErr := shard.Query(memtable.Query{Start: 0, End: 20})
+	if queryErr != nil {
+		t.Fatalf("Query() error = %v", queryErr)
+	}
+	if len(got) != 1 {
+		t.Fatalf("query count after failed flush = %d, want 1", len(got))
+	}
+	if err := shard.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
 	}
 }
 
@@ -449,6 +610,51 @@ func testResolvedPoint(seriesID uint64, timestamp int64, writeSeq uint64) model.
 		Fields: []model.ResolvedField{
 			{FieldID: 1, FieldName: "v", Type: model.FieldFloat64, Value: model.Float64Value(float64(writeSeq))},
 		},
+	}
+}
+
+func testBatchPoint(timestamp int64) model.Point {
+	return model.Point{
+		Measurement: "batch",
+		Tags:        map[string]string{"host": "a"},
+		Timestamp:   timestamp,
+		Fields: map[string]model.FieldValue{
+			"v": model.Float64Value(float64(timestamp)),
+		},
+	}
+}
+
+func countWALFrames(path string) (int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	count, readErr := countOpenWALFrames(file)
+	closeErr := file.Close()
+	if readErr != nil {
+		return 0, readErr
+	}
+	if closeErr != nil {
+		return 0, closeErr
+	}
+	return count, nil
+}
+
+func countOpenWALFrames(reader io.Reader) (int, error) {
+	count := 0
+	header := make([]byte, 4)
+	for {
+		if _, err := io.ReadFull(reader, header); err != nil {
+			if err == io.EOF {
+				return count, nil
+			}
+			return 0, err
+		}
+		length := binary.BigEndian.Uint32(header)
+		if _, err := io.CopyN(io.Discard, reader, int64(length)); err != nil {
+			return 0, err
+		}
+		count++
 	}
 }
 

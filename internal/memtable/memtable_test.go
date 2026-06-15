@@ -1,6 +1,7 @@
 package memtable_test
 
 import (
+	"reflect"
 	"testing"
 
 	"codeberg.org/mts/mts/internal/memtable"
@@ -19,8 +20,8 @@ func TestMemTableLWWAndSnapshot(t *testing.T) {
 			t.Fatalf("Apply() error = %v", err)
 		}
 	}
-	if mt.SampleCount() != 2 {
-		t.Fatalf("SampleCount() = %d, want 2", mt.SampleCount())
+	if mt.SampleCount() != 4 {
+		t.Fatalf("SampleCount() = %d, want 4", mt.SampleCount())
 	}
 
 	snap := mt.SnapshotAndReset()
@@ -106,6 +107,125 @@ func TestMemTableMutableQueryAndEmptySnapshot(t *testing.T) {
 		End:       10,
 	}); len(got) != 0 {
 		t.Fatalf("filtered out count = %d, want 0", len(got))
+	}
+}
+
+func TestApplyBatchMatchesApply(t *testing.T) {
+	points := []model.ResolvedPoint{
+		resolvedPoint(1, 10, 1, model.Float64Value(1)),
+		resolvedPoint(1, 11, 2, model.Float64Value(2)),
+		resolvedPoint(2, 10, 3, model.Int64Value(3)),
+	}
+	oneByOne := memtable.New()
+	for _, point := range points {
+		if err := oneByOne.Apply(point); err != nil {
+			t.Fatalf("Apply() error = %v", err)
+		}
+	}
+	batched := memtable.New()
+	if err := batched.ApplyBatch(points); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+	want := oneByOne.Snapshot().Query(memtable.Query{Start: 0, End: 20})
+	got := batched.Snapshot().Query(memtable.Query{Start: 0, End: 20})
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ApplyBatch() columns = %#v, want %#v", got, want)
+	}
+}
+
+func TestAppendBufferKeepsLatestWriteSeq(t *testing.T) {
+	mt := memtable.New()
+	points := []model.ResolvedPoint{
+		resolvedPoint(1, 10, 1, model.Float64Value(1)),
+		resolvedPoint(1, 10, 3, model.Float64Value(3)),
+		resolvedPoint(1, 10, 2, model.Float64Value(2)),
+	}
+	if err := mt.ApplyBatch(points); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+	got := mt.Query(memtable.Query{Start: 0, End: 20})
+	if len(got) != 1 || len(got[0].Samples) != 1 {
+		t.Fatalf("Query() = %#v, want one compacted sample", got)
+	}
+	if got[0].Samples[0].Value.Float64 != 3 {
+		t.Fatalf("latest value = %v, want 3", got[0].Samples[0].Value.Float64)
+	}
+}
+
+func TestSnapshotColumnsAreSortedAndCompacted(t *testing.T) {
+	mt := memtable.New()
+	points := []model.ResolvedPoint{
+		resolvedPoint(2, 20, 1, model.Int64Value(20)),
+		resolvedPoint(1, 10, 1, model.Float64Value(1)),
+		resolvedPoint(1, 10, 2, model.Float64Value(2)),
+		resolvedPoint(1, 5, 3, model.Float64Value(5)),
+	}
+	if err := mt.ApplyBatch(points); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+	got := mt.Snapshot().Columns(memtable.Query{Start: 0, End: 30})
+	if len(got) != 2 {
+		t.Fatalf("Columns() len = %d, want 2", len(got))
+	}
+	if got[0].SeriesID != 1 || got[1].SeriesID != 2 {
+		t.Fatalf("Columns() order = %#v", got)
+	}
+	samples := got[0].Samples
+	if len(samples) != 2 || samples[0].Timestamp != 5 || samples[1].Timestamp != 10 {
+		t.Fatalf("Samples order = %#v, want timestamps 5,10", samples)
+	}
+	if samples[1].Value.Float64 != 2 {
+		t.Fatalf("LWW value = %v, want 2", samples[1].Value.Float64)
+	}
+}
+
+func TestSnapshotAndResetKeepsSnapshotStable(t *testing.T) {
+	mt := memtable.New()
+	if err := mt.Apply(resolvedPoint(1, 10, 1, model.Float64Value(1))); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	snapshot := mt.SnapshotAndReset()
+	if mt.SampleCount() != 0 {
+		t.Fatalf("SampleCount() after reset = %d, want 0", mt.SampleCount())
+	}
+	if err := mt.Apply(resolvedPoint(1, 10, 2, model.Float64Value(2))); err != nil {
+		t.Fatalf("Apply() second error = %v", err)
+	}
+	got := snapshot.Query(memtable.Query{Start: 0, End: 20})
+	if len(got) != 1 || len(got[0].Samples) != 1 {
+		t.Fatalf("old snapshot columns = %#v, want one sample", got)
+	}
+	if got[0].Samples[0].Value.Float64 != 1 {
+		t.Fatalf("old snapshot value = %v, want 1", got[0].Samples[0].Value.Float64)
+	}
+}
+
+func TestRestoreMergesSnapshotWithCurrentData(t *testing.T) {
+	mt := memtable.New()
+	if err := mt.Apply(resolvedPoint(1, 10, 1, model.Float64Value(1))); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	snapshot := mt.SnapshotAndReset()
+	if err := mt.Apply(resolvedPoint(1, 10, 2, model.Float64Value(2))); err != nil {
+		t.Fatalf("Apply(newer) error = %v", err)
+	}
+	if err := mt.Apply(resolvedPoint(2, 20, 3, model.Int64Value(3))); err != nil {
+		t.Fatalf("Apply(other) error = %v", err)
+	}
+	mt.Restore(snapshot)
+	if mt.SampleCount() != 3 {
+		t.Fatalf("SampleCount() = %d, want 3", mt.SampleCount())
+	}
+	got := mt.Query(memtable.Query{Start: 0, End: 30})
+	if len(got) != 2 {
+		t.Fatalf("column count = %d, want 2", len(got))
+	}
+	if got[0].Samples[0].Value.Float64 != 2 {
+		t.Fatalf("restored stale value replaced newer value: %#v", got[0].Samples[0].Value)
+	}
+	mt.Restore(nil)
+	if mt.SampleCount() != 3 {
+		t.Fatalf("SampleCount() after nil restore = %d, want 3", mt.SampleCount())
 	}
 }
 
