@@ -41,6 +41,20 @@ type columnBuffer struct {
 
 type tableData map[columnKey]*columnBuffer
 
+type columnReservation struct {
+	fieldType model.FieldType
+	count     int
+}
+
+const maxPooledReservations = 1 << 15
+
+var reservationMapPool = sync.Pool{
+	New: func() any {
+		reservations := make(map[columnKey]columnReservation)
+		return &reservations
+	},
+}
+
 func New() *MemTable {
 	return &MemTable{
 		data: make(tableData),
@@ -57,6 +71,7 @@ func (m *MemTable) Apply(point model.ResolvedPoint) error {
 func (m *MemTable) ApplyBatch(points []model.ResolvedPoint) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.reserveBatchLocked(points)
 	for _, point := range points {
 		m.applyPointLocked(point)
 	}
@@ -144,6 +159,47 @@ func (m *MemTable) applyPointLocked(point model.ResolvedPoint) {
 	}
 }
 
+func (m *MemTable) reserveBatchLocked(points []model.ResolvedPoint) {
+	if len(points) <= 1 {
+		return
+	}
+	reservations := borrowReservationMap()
+	for _, point := range points {
+		for _, field := range point.Fields {
+			key := columnKey{seriesID: point.SeriesID, fieldID: field.FieldID}
+			reservation := reservations[key]
+			reservation.fieldType = field.Type
+			reservation.count++
+			reservations[key] = reservation
+		}
+	}
+	for key, reservation := range reservations {
+		column := ensureColumn(m.data, key.seriesID, key.fieldID, reservation.fieldType)
+		column.reserve(reservation.count)
+	}
+	releaseReservationMap(reservations)
+}
+
+func borrowReservationMap() map[columnKey]columnReservation {
+	ptr, ok := reservationMapPool.Get().(*map[columnKey]columnReservation)
+	if !ok || ptr == nil {
+		return make(map[columnKey]columnReservation)
+	}
+	reservations := *ptr
+	clear(reservations)
+	return reservations
+}
+
+func releaseReservationMap(reservations map[columnKey]columnReservation) {
+	if reservations == nil {
+		return
+	}
+	if len(reservations) > maxPooledReservations {
+		return
+	}
+	reservationMapPool.Put(&reservations)
+}
+
 func (m *MemTable) applyField(point model.ResolvedPoint, field model.ResolvedField) {
 	column := ensureColumn(m.data, point.SeriesID, field.FieldID, field.Type)
 	column.appendSample(model.VersionedSample{
@@ -203,6 +259,22 @@ func (c *columnBuffer) appendSample(sample model.VersionedSample) {
 	}
 	c.samples = append(c.samples, sample)
 	c.count++
+}
+
+func (c *columnBuffer) reserve(additional int) {
+	if additional <= 0 {
+		return
+	}
+	target := len(c.samples) + additional
+	if c.count == 0 {
+		target--
+	}
+	if target <= cap(c.samples) {
+		return
+	}
+	samples := make([]model.VersionedSample, len(c.samples), target)
+	copy(samples, c.samples)
+	c.samples = samples
 }
 
 func (c *columnBuffer) appendColumn(src *columnBuffer) {
