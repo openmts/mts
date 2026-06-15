@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,6 +59,45 @@ func TestCatalogResolveReopenAndTypeConflict(t *testing.T) {
 	}
 	if err := cat.Close(); err != nil {
 		t.Fatalf("Close() after reopen error = %v", err)
+	}
+}
+
+func TestCatalogPersistenceIsBinary(t *testing.T) {
+	dir := t.TempDir()
+	cat, err := catalog.Open(dir)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	point := model.Point{
+		Measurement: "cpu",
+		Tags:        map[string]string{"host": "a"},
+		Fields:      map[string]model.FieldValue{"usage": model.Float64Value(1)},
+	}
+	if _, err := cat.ResolvePoint(point); err != nil {
+		t.Fatalf("ResolvePoint() error = %v", err)
+	}
+	if err := cat.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	for _, name := range []string{"catalog.wal", "snapshot.bin"} {
+		path := filepath.Join(dir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile(%s) error = %v", name, err)
+		}
+		if bytes.Contains(data, []byte(`{"`)) {
+			t.Fatalf("%s contains JSON marker", name)
+		}
+	}
+	reopened, err := catalog.Open(dir)
+	if err != nil {
+		t.Fatalf("Open() after binary persistence error = %v", err)
+	}
+	if _, err := reopened.ResolvePoint(point); err != nil {
+		t.Fatalf("ResolvePoint() after reopen error = %v", err)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatalf("Close() reopened error = %v", err)
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 
 type config struct {
 	dataDir     string
+	mode        string
 	points      int
 	series      int
 	queryRepeat int
@@ -63,13 +64,13 @@ func run(args []string) (err error) {
 		err = errors.Join(err, eng.Close(ctx))
 	}()
 
-	if err := runWorkload(ctx, eng, cfg); err != nil {
+	if err := runWorkloadWithDir(ctx, eng, cfg, dir); err != nil {
 		return err
 	}
 	if err := writeMemProfile(cfg.memProfile); err != nil {
 		return err
 	}
-	log.Printf("points=%d series=%d query_repeat=%d data_dir=%s", cfg.points, cfg.series, cfg.queryRepeat, dir)
+	log.Printf("mode=%s points=%d series=%d query_repeat=%d data_dir=%s", cfg.mode, cfg.points, cfg.series, cfg.queryRepeat, dir)
 	return nil
 }
 
@@ -78,6 +79,7 @@ func parseConfig(args []string) (config, error) {
 	flags := flag.NewFlagSet("storage_engine", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&cfg.dataDir, "data-dir", "", "数据目录；为空时使用临时目录并自动清理")
+	flags.StringVar(&cfg.mode, "mode", "query", "workload 模式：write/query/compact/replay")
 	flags.IntVar(&cfg.points, "points", 10000, "写入点数")
 	flags.IntVar(&cfg.series, "series", 100, "series 数量")
 	flags.IntVar(&cfg.queryRepeat, "query-repeat", 5, "查询重复次数")
@@ -90,6 +92,11 @@ func parseConfig(args []string) (config, error) {
 }
 
 func validateConfig(cfg config) error {
+	switch cfg.mode {
+	case "write", "query", "compact", "replay":
+	default:
+		return fmt.Errorf("unsupported mode %q", cfg.mode)
+	}
 	if cfg.points <= 0 {
 		return fmt.Errorf("points must be positive")
 	}
@@ -151,6 +158,25 @@ func startCPUProfile(path string) (func() error, error) {
 }
 
 func runWorkload(ctx context.Context, eng *mts.Engine, cfg config) error {
+	return runWorkloadWithDir(ctx, eng, cfg, "")
+}
+
+func runWorkloadWithDir(ctx context.Context, eng *mts.Engine, cfg config, dir string) error {
+	switch cfg.mode {
+	case "write":
+		return writePoints(ctx, eng, cfg)
+	case "query":
+		return queryWorkload(ctx, eng, cfg)
+	case "compact":
+		return compactWorkload(ctx, eng, cfg)
+	case "replay":
+		return replayWorkload(ctx, eng, cfg, dir)
+	default:
+		return fmt.Errorf("unsupported mode %q", cfg.mode)
+	}
+}
+
+func queryWorkload(ctx context.Context, eng *mts.Engine, cfg config) error {
 	if err := writePoints(ctx, eng, cfg); err != nil {
 		return err
 	}
@@ -162,6 +188,51 @@ func runWorkload(ctx context.Context, eng *mts.Engine, cfg config) error {
 	}
 	if err := queryRows(ctx, eng, cfg); err != nil {
 		return err
+	}
+	return nil
+}
+
+func compactWorkload(ctx context.Context, eng *mts.Engine, cfg config) error {
+	flushEvery := max(cfg.points/4, 1)
+	for index := range cfg.points {
+		if err := eng.Write(ctx, []mts.Point{workloadPoint(index, cfg.series)}, mts.WriteOptions{}); err != nil {
+			return fmt.Errorf("write compact point: %w", err)
+		}
+		if (index+1)%flushEvery == 0 {
+			if err := eng.Flush(ctx); err != nil {
+				return fmt.Errorf("flush compact batch: %w", err)
+			}
+		}
+	}
+	if err := eng.Flush(ctx); err != nil {
+		return fmt.Errorf("flush compact final: %w", err)
+	}
+	if err := eng.Compact(ctx); err != nil {
+		return fmt.Errorf("compact engine: %w", err)
+	}
+	return nil
+}
+
+func replayWorkload(ctx context.Context, eng *mts.Engine, cfg config, dir string) error {
+	if dir == "" {
+		return fmt.Errorf("replay mode requires data dir")
+	}
+	if err := writePointsSynced(ctx, eng, cfg); err != nil {
+		return err
+	}
+	if err := eng.Close(ctx); err != nil {
+		return fmt.Errorf("close before replay: %w", err)
+	}
+	reopened, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 8192})
+	if err != nil {
+		return fmt.Errorf("reopen for replay: %w", err)
+	}
+	if err := queryRows(ctx, reopened, cfg); err != nil {
+		closeErr := reopened.Close(ctx)
+		return errors.Join(err, closeErr)
+	}
+	if err := reopened.Close(ctx); err != nil {
+		return fmt.Errorf("close replay engine: %w", err)
 	}
 	return nil
 }
@@ -183,6 +254,27 @@ func writePoints(ctx context.Context, eng *mts.Engine, cfg config) error {
 	}
 	if err := eng.Write(ctx, batch, mts.WriteOptions{Sync: true}); err != nil {
 		return fmt.Errorf("write final batch: %w", err)
+	}
+	return nil
+}
+
+func writePointsSynced(ctx context.Context, eng *mts.Engine, cfg config) error {
+	const batchSize = 1024
+	batch := make([]mts.Point, 0, batchSize)
+	for index := range cfg.points {
+		batch = append(batch, workloadPoint(index, cfg.series))
+		if len(batch) == batchSize {
+			if err := eng.Write(ctx, batch, mts.WriteOptions{Sync: true}); err != nil {
+				return fmt.Errorf("write synced batch: %w", err)
+			}
+			batch = batch[:0]
+		}
+	}
+	if len(batch) == 0 {
+		return nil
+	}
+	if err := eng.Write(ctx, batch, mts.WriteOptions{Sync: true}); err != nil {
+		return fmt.Errorf("write final synced batch: %w", err)
 	}
 	return nil
 }

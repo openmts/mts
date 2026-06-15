@@ -1,0 +1,13 @@
+package main
+
+import "testing"
+
+func TestRun(t *testing.T) {
+	if err := run(); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+}
+
+func TestMainFunction(t *testing.T) {
+	main()
+}

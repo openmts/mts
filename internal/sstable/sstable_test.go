@@ -1,8 +1,10 @@
 package sstable_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"codeberg.org/mts/mts/internal/model"
@@ -107,6 +109,39 @@ func TestPartRejectsEmptyColumnsAndMissingManifestIsEmpty(t *testing.T) {
 	}
 	if manifest.Parts == nil {
 		t.Fatal("manifest Parts = nil, want initialized empty slice")
+	}
+}
+
+func TestManifestIsBinaryAndRejectsCorruption(t *testing.T) {
+	dir := t.TempDir()
+	manifest := sstable.Manifest{
+		Parts: []sstable.PartMeta{
+			{ID: "sst-000001", Level: 1, MinTime: 1, MaxTime: 2, Path: filepath.Join(dir, "sst-000001")},
+		},
+	}
+	if err := sstable.WriteManifest(dir, manifest); err != nil {
+		t.Fatalf("WriteManifest() error = %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "MANIFEST.bin"))
+	if err != nil {
+		t.Fatalf("ReadFile(MANIFEST.bin) error = %v", err)
+	}
+	if bytes.Contains(data, []byte(`{"`)) {
+		t.Fatal("manifest contains JSON marker")
+	}
+	loaded, err := sstable.LoadManifest(dir)
+	if err != nil {
+		t.Fatalf("LoadManifest() error = %v", err)
+	}
+	if !reflect.DeepEqual(loaded, manifest) {
+		t.Fatalf("manifest = %#v, want %#v", loaded, manifest)
+	}
+	data[len(data)-1] ^= 0xff
+	if err := os.WriteFile(filepath.Join(dir, "MANIFEST.bin"), data, 0600); err != nil {
+		t.Fatalf("WriteFile(corrupt) error = %v", err)
+	}
+	if _, err := sstable.LoadManifest(dir); err == nil {
+		t.Fatal("LoadManifest(corrupt) error = nil, want error")
 	}
 }
 

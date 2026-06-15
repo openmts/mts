@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -176,6 +177,129 @@ func TestEngineCompactsMultiplePartsAndReopens(t *testing.T) {
 	}
 }
 
+func TestFlushFailureBeforeManifestDoesNotExposePart(t *testing.T) {
+	dir := t.TempDir()
+	opts := ShardOptions{
+		Dir:                dir,
+		Start:              0,
+		End:                int64(time.Hour),
+		MemTableMaxSamples: 1,
+	}
+	shard, _, err := OpenShard(opts)
+	if err != nil {
+		t.Fatalf("OpenShard() error = %v", err)
+	}
+	shard.testHooks.afterPartWriteBeforeManifest = func() error {
+		return errors.New("stop before manifest")
+	}
+	if err := shard.Write(testResolvedPoint(1, 10, 1), true); err == nil {
+		t.Fatal("Write() error = nil, want injected flush error")
+	}
+	if err := shard.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	reopened, _, err := OpenShard(opts)
+	if err != nil {
+		t.Fatalf("OpenShard(reopen) error = %v", err)
+	}
+	got, err := reopened.Query(memtable.Query{Start: 0, End: 20})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("query count = %d, want WAL replayed data only", len(got))
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatalf("Close(reopened) error = %v", err)
+	}
+}
+
+func TestSizeTieredCompactionTriggersByPartCount(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+		Compaction: model.CompactionOptions{
+			Enabled:         true,
+			Level0PartLimit: 2,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	for index := range 4 {
+		point := model.Point{
+			Measurement: "cpu",
+			Timestamp:   int64(index),
+			Fields:      map[string]model.FieldValue{"v": model.Float64Value(float64(index))},
+		}
+		if err := eng.Write(ctx, []model.Point{point}, model.WriteOptions{Sync: true}); err != nil {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("Write() error = %v close = %v", err, closeErr)
+		}
+	}
+	shard := onlyShardForTest(t, eng)
+	if len(shard.manifest.Parts) > 2 {
+		t.Fatalf("part count = %d, want compacted to <=2", len(shard.manifest.Parts))
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestDirectorySizeAndCompactionSizeLimit(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "data.bin")
+	if err := os.WriteFile(filePath, []byte("abcd"), 0600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	size, err := directorySize(dir)
+	if err != nil {
+		t.Fatalf("directorySize() error = %v", err)
+	}
+	if size != 4 {
+		t.Fatalf("directorySize() = %d, want 4", size)
+	}
+
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+		Compaction: model.CompactionOptions{
+			Enabled:         true,
+			Level0PartLimit: 100,
+			Level0SizeLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	for index := range 2 {
+		if err := eng.Write(ctx, []model.Point{{
+			Measurement: "cpu",
+			Timestamp:   int64(index),
+			Fields:      map[string]model.FieldValue{"v": model.Float64Value(float64(index))},
+		}}, model.WriteOptions{Sync: true}); err != nil {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("Write() error = %v close = %v", err, closeErr)
+		}
+	}
+	shard := onlyShardForTest(t, eng)
+	for _, part := range shard.manifest.Parts {
+		if part.Level == 0 {
+			t.Fatalf("manifest parts = %#v, want no level-0 parts after size-triggered compaction", shard.manifest.Parts)
+		}
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if _, err := directorySize("bad\x00path"); err == nil {
+		t.Fatal("directorySize(invalid) error = nil, want error")
+	}
+}
+
 func TestEngineRetentionKeepsActiveShard(t *testing.T) {
 	ctx := context.Background()
 	opts := model.Options{
@@ -217,6 +341,10 @@ func TestEngineRetentionKeepsActiveShard(t *testing.T) {
 func TestOpenRejectsEmptyPathAndShardStartFloorsNegativeTime(t *testing.T) {
 	if _, err := Open(context.Background(), model.Options{}); err == nil {
 		t.Fatal("Open() error = nil, want empty path error")
+	}
+	opts := normalizeOptions(model.Options{Compaction: model.CompactionOptions{Enabled: true}})
+	if opts.Compaction.Level0PartLimit != 4 {
+		t.Fatalf("default Level0PartLimit = %d, want 4", opts.Compaction.Level0PartLimit)
 	}
 	if got := shardStart(-1, time.Hour); got != -int64(time.Hour) {
 		t.Fatalf("shardStart(-1) = %d, want %d", got, -int64(time.Hour))
@@ -311,6 +439,31 @@ func corruptValuesFile(t *testing.T, root string) {
 	if err := file.Close(); err != nil {
 		t.Fatalf("Close(values) error = %v", err)
 	}
+}
+
+func testResolvedPoint(seriesID uint64, timestamp int64, writeSeq uint64) model.ResolvedPoint {
+	return model.ResolvedPoint{
+		SeriesID:  seriesID,
+		Timestamp: timestamp,
+		WriteSeq:  writeSeq,
+		Fields: []model.ResolvedField{
+			{FieldID: 1, FieldName: "v", Type: model.FieldFloat64, Value: model.Float64Value(float64(writeSeq))},
+		},
+	}
+}
+
+func onlyShardForTest(t *testing.T, eng *Engine) *Shard {
+	t.Helper()
+	eng.mu.Lock()
+	defer eng.mu.Unlock()
+	if len(eng.shards) != 1 {
+		t.Fatalf("shard count = %d, want 1", len(eng.shards))
+	}
+	for _, shard := range eng.shards {
+		return shard
+	}
+	t.Fatal("no shard found")
+	return nil
 }
 
 func TestMergeColumnDataKeepsNewestSequence(t *testing.T) {

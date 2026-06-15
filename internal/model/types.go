@@ -74,6 +74,7 @@ type Options struct {
 	Retention              time.Duration
 	MemTableMaxSamples     int
 	WAL                    WALOptions
+	Compaction             CompactionOptions
 }
 
 type WALOptions struct {
@@ -81,6 +82,14 @@ type WALOptions struct {
 	SegmentBytes int64
 	BatchRecords int
 	BatchBytes   int64
+}
+
+type CompactionOptions struct {
+	Enabled            bool
+	Level0PartLimit    int
+	Level0SizeLimit    int64
+	MaxOutputPartBytes int64
+	BackgroundInterval time.Duration
 }
 
 type WriteOptions struct {

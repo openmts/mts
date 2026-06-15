@@ -26,6 +26,8 @@ type Options = model.Options
 
 type WALOptions = model.WALOptions
 
+type CompactionOptions = model.CompactionOptions
+
 type WriteOptions = model.WriteOptions
 
 type ColumnSeries = model.ColumnSeries

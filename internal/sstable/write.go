@@ -1,7 +1,6 @@
 package sstable
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -111,10 +110,7 @@ func writeSeries(
 		return columns[i].FieldID < columns[j].FieldID
 	})
 	timestamps := collectTimestamps(columns)
-	timePayload, err := json.Marshal(timeBlockFrom(timestamps))
-	if err != nil {
-		return indexRow{}, fmt.Errorf("encode time block: %w", err)
-	}
+	timePayload := marshalTimeBlock(nil, timestamps)
 	timeRef, err := writeBlock(files.timestamps, timePayload)
 	if err != nil {
 		return indexRow{}, err
@@ -137,12 +133,7 @@ func writeSeries(
 }
 
 func writeValueBlock(file *os.File, column model.ColumnData) (columnRef, error) {
-	payload, err := json.Marshal(valueBlock{
-		Encoding:  "plain-json-v1",
-		FieldID:   column.FieldID,
-		FieldType: column.FieldType,
-		Samples:   cloneSamples(column.Samples),
-	})
+	payload, err := marshalValueBlock(nil, column)
 	if err != nil {
 		return columnRef{}, fmt.Errorf("encode value block: %w", err)
 	}
@@ -158,13 +149,21 @@ func writeValueBlock(file *os.File, column model.ColumnData) (columnRef, error) 
 }
 
 func writePartIndexes(path string, meta *metadata, rows []indexRow) error {
-	indexRef, err := writeJSONBlock(filepath.Join(path, indexFile), rows)
+	indexPayload, err := encodeIndexRows(rows)
+	if err != nil {
+		return err
+	}
+	indexRef, err := writeBinaryBlock(filepath.Join(path, indexFile), indexPayload)
 	if err != nil {
 		return err
 	}
 	meta.IndexRef = indexRef
 	metaIndex := []metaIndexRow{metaIndexFromRows(meta.Part, indexRef, rows)}
-	metaIndexRef, err := writeJSONBlock(filepath.Join(path, metaindexFile), metaIndex)
+	metaIndexPayload, err := encodeMetaIndexRows(metaIndex)
+	if err != nil {
+		return err
+	}
+	metaIndexRef, err := writeBinaryBlock(filepath.Join(path, metaindexFile), metaIndexPayload)
 	if err != nil {
 		return err
 	}
@@ -172,15 +171,10 @@ func writePartIndexes(path string, meta *metadata, rows []indexRow) error {
 	return writeMetadata(path, *meta)
 }
 
-func writeJSONBlock(path string, value any) (blockRef, error) {
+func writeBinaryBlock(path string, payload []byte) (blockRef, error) {
 	file, err := openWritable(path)
 	if err != nil {
 		return blockRef{}, err
-	}
-	payload, err := json.Marshal(value)
-	if err != nil {
-		closeErr := file.Close()
-		return blockRef{}, fmt.Errorf("encode json block: %w close: %v", err, closeErr)
 	}
 	ref, writeErr := writeBlock(file, payload)
 	closeErr := file.Close()
@@ -188,13 +182,13 @@ func writeJSONBlock(path string, value any) (blockRef, error) {
 		return blockRef{}, writeErr
 	}
 	if closeErr != nil {
-		return blockRef{}, fmt.Errorf("close json block file: %w", closeErr)
+		return blockRef{}, fmt.Errorf("close binary block file: %w", closeErr)
 	}
 	return ref, nil
 }
 
 func writeMetadata(path string, meta metadata) error {
-	data, err := json.MarshalIndent(meta, "", "  ")
+	data, err := encodeMetadata(meta)
 	if err != nil {
 		return fmt.Errorf("encode part metadata: %w", err)
 	}
@@ -214,7 +208,7 @@ func ensureStringsFile(path string) error {
 
 func newMetadata(level int, id string) metadata {
 	return metadata{
-		FormatVersion: 1,
+		FormatVersion: partFormatVersion,
 		CreatedUnix:   time.Now().Unix(),
 		Part: PartMeta{
 			ID:    id,

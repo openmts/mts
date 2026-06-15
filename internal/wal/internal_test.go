@@ -2,9 +2,7 @@ package wal
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"errors"
-	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,11 +20,11 @@ func TestAppendRejectsUnencodablePayloadAndEmptyReplay(t *testing.T) {
 		Timestamp: 1,
 		WriteSeq:  1,
 		Fields: []model.ResolvedField{
-			{FieldID: 2, Type: model.FieldFloat64, Value: model.Float64Value(math.NaN())},
+			{FieldID: 2, Type: model.FieldType(99), Value: model.FieldValue{Type: model.FieldType(99)}},
 		},
 	}
 	if err := log.Append([]model.ResolvedPoint{bad}, false); err == nil {
-		t.Fatal("Append(NaN) error = nil, want marshal error")
+		t.Fatal("Append(unsupported field type) error = nil, want encode error")
 	}
 	if err := log.TruncateAll(); err != nil {
 		t.Fatalf("TruncateAll() error = %v", err)
@@ -43,13 +41,13 @@ func TestAppendRejectsUnencodablePayloadAndEmptyReplay(t *testing.T) {
 	}
 }
 
-func TestReplayRejectsUnsupportedTypeBadJSONAndSmallLength(t *testing.T) {
+func TestReplayRejectsUnsupportedTypeBadPayloadAndSmallLength(t *testing.T) {
 	tests := []struct {
 		name  string
 		frame []byte
 	}{
-		{name: "unsupported type", frame: encodeFrame(99, []byte(`[]`))},
-		{name: "bad json", frame: encodeFrame(recordWriteBatch, []byte(`{`))},
+		{name: "unsupported type", frame: encodeFrame(99, []byte{batchVersion, 0})},
+		{name: "bad payload", frame: encodeFrame(recordWriteBatch, []byte{batchVersion})},
 		{name: "small length", frame: smallLengthFrame()},
 	}
 	for _, tt := range tests {
@@ -69,6 +67,55 @@ func TestReplayRejectsUnsupportedTypeBadJSONAndSmallLength(t *testing.T) {
 				t.Fatalf("Close() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestBinaryPayloadDecodeValidationErrors(t *testing.T) {
+	if _, err := decodeBatch([]byte{batchVersion, 0, 1}); err == nil {
+		t.Fatal("decodeBatch(trailing) error = nil, want error")
+	}
+	if _, err := decodeBatch([]byte{99}); err == nil {
+		t.Fatal("decodeBatch(version) error = nil, want error")
+	}
+
+	reader := newBatchReader([]byte{2})
+	if _, err := reader.bool("bad bool"); err == nil {
+		t.Fatal("bool(invalid) error = nil, want error")
+	}
+	if err := newBatchReader([]byte{1}).done("wal test"); err == nil {
+		t.Fatal("done(trailing) error = nil, want error")
+	}
+	if _, err := uint32Value("field id", uint64(^uint32(0))+1); err == nil {
+		t.Fatal("uint32Value(overflow) error = nil, want error")
+	}
+	if _, err := readValuePayload(model.FieldType(99), newBatchReader(nil)); err == nil {
+		t.Fatal("readValuePayload(unknown) error = nil, want error")
+	}
+}
+
+func TestDecodeBatchRejectsTruncatedPayloadPrefixes(t *testing.T) {
+	payload, err := encodeBatch([]model.ResolvedPoint{{
+		Database:        "db",
+		RetentionPolicy: "rp",
+		Measurement:     "cpu",
+		Tags:            map[string]string{"host": "a", "zone": "z"},
+		SeriesID:        1,
+		Timestamp:       10,
+		WriteSeq:        2,
+		Fields: []model.ResolvedField{
+			{FieldID: 1, FieldName: "f", Type: model.FieldFloat64, Value: model.Float64Value(1)},
+			{FieldID: 2, FieldName: "i", Type: model.FieldInt64, Value: model.Int64Value(2)},
+			{FieldID: 3, FieldName: "s", Type: model.FieldString, Value: model.StringValue("ok")},
+			{FieldID: 4, FieldName: "b", Type: model.FieldBool, Value: model.BoolValue(false)},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("encodeBatch() error = %v", err)
+	}
+	for size := 0; size < len(payload); size++ {
+		if _, err := decodeBatch(payload[:size]); err == nil {
+			t.Fatalf("decodeBatch(prefix %d) error = nil, want error", size)
+		}
 	}
 }
 
@@ -97,7 +144,7 @@ func TestOpenIgnoresNonSegmentsAndReusesLastSegment(t *testing.T) {
 		t.Fatalf("Mkdir(non-segment dir) error = %v", err)
 	}
 	record := model.ResolvedPoint{SeriesID: 10, Timestamp: 20, WriteSeq: 30}
-	if err := os.WriteFile(filepath.Join(dir, "000003.wal"), encodeFrame(recordWriteBatch, mustJSON(t, []model.ResolvedPoint{record})), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "000003.wal"), encodeFrame(recordWriteBatch, mustBatch(t, []model.ResolvedPoint{record})), 0600); err != nil {
 		t.Fatalf("WriteFile(segment) error = %v", err)
 	}
 
@@ -191,11 +238,11 @@ func TestInternalPathErrors(t *testing.T) {
 	}
 }
 
-func mustJSON(t *testing.T, records []model.ResolvedPoint) []byte {
+func mustBatch(t *testing.T, records []model.ResolvedPoint) []byte {
 	t.Helper()
-	data, err := json.Marshal(records)
+	data, err := encodeBatch(records)
 	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
+		t.Fatalf("encodeBatch() error = %v", err)
 	}
 	return data
 }

@@ -27,8 +27,3 @@ type walEntry struct {
 	Series *Series `json:"series,omitempty"`
 	Field  *Field  `json:"field,omitempty"`
 }
-
-type walLine struct {
-	CRC     uint32 `json:"crc"`
-	Payload []byte `json:"payload"`
-}

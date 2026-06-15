@@ -3,13 +3,15 @@ package sstable
 import "codeberg.org/mts/mts/internal/model"
 
 const (
-	metadataFile   = "metadata.json"
-	metaindexFile  = "metaindex.bin"
-	indexFile      = "index.bin"
-	timestampsFile = "timestamps.bin"
-	valuesFile     = "values.bin"
-	stringsFile    = "strings.bin"
-	manifestFile   = "MANIFEST.json"
+	metadataFile       = "metadata.bin"
+	legacyMetadataFile = "metadata.json"
+	metaindexFile      = "metaindex.bin"
+	indexFile          = "index.bin"
+	timestampsFile     = "timestamps.bin"
+	valuesFile         = "values.bin"
+	stringsFile        = "strings.bin"
+	manifestFile       = "MANIFEST.bin"
+	legacyManifestFile = "MANIFEST.json"
 )
 
 type Query struct {
@@ -91,4 +93,11 @@ type Part struct {
 	path     string
 	metadata metadata
 	rows     []indexRow
+	metaRows []metaIndexRow
+	stats    *readStats
+}
+
+type readStats struct {
+	TimeBlocksRead  int
+	ValueBlocksRead int
 }

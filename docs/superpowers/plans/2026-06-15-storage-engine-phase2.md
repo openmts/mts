@@ -57,7 +57,7 @@
 - Create: `tests/e2e/no_json_storage/main.go`
 - Modify: `docs/superpowers/plans/2026-06-15-storage-engine-phase2.md`
 
-- [ ] **Step 1: Add benchmark package skeleton**
+- [x] **Step 1: Add benchmark package skeleton**
 
 Create `internal/bench/storage_bench_test.go`:
 
@@ -116,7 +116,7 @@ func makeBenchPoints(count int, series int) []mts.Point {
 }
 ```
 
-- [ ] **Step 2: Run benchmark once to capture baseline**
+- [x] **Step 2: Run benchmark once to capture baseline**
 
 Run:
 
@@ -126,7 +126,7 @@ go test ./internal/bench -bench=. -benchmem -count=1 -timeout 600s
 
 Expected: PASS with benchmark rows for `BenchmarkEngineWriteBatch`.
 
-- [ ] **Step 3: Add binary-only e2e guard**
+- [x] **Step 3: Add binary-only e2e guard**
 
 Create `tests/e2e/no_json_storage/main.go` that writes data, flushes, then scans storage files and fails if it finds JSON object markers in production storage files:
 
@@ -208,7 +208,7 @@ func assertNoJSONStorage(root string) error {
 }
 ```
 
-- [ ] **Step 4: Run the guard and observe failure before binary migration**
+- [x] **Step 4: Run the guard and observe failure before binary migration**
 
 Run:
 
@@ -218,7 +218,7 @@ cd tests/e2e/no_json_storage && go build -o no_json_storage . && ./no_json_stora
 
 Expected: FAIL on current implementation because catalog, manifest, metadata, index or values contain JSON.
 
-实现备注：完成后记录 baseline benchmark output path or summary。
+实现备注：已新增 `internal/bench/storage_bench_test.go` 和 `tests/e2e/no_json_storage`。基线命令 `go test ./internal/bench -bench=. -benchmem -count=1 -timeout 600s` 通过，结果为 1K 写入 `22243271 ns/op, 12209360 B/op, 77621 allocs/op`，10K 写入 `76501112 ns/op, 61665505 B/op, 264745 allocs/op`。no-json guard 已按预期失败，失败文件为 `catalog/catalog.wal`，证明当前生产落盘仍包含 JSON。
 
 ## Task 2: Shared Binary Codec
 
@@ -227,7 +227,7 @@ Expected: FAIL on current implementation because catalog, manifest, metadata, in
 - Create: `internal/codec/binary.go`
 - Create: `internal/codec/codec_test.go`
 
-- [ ] **Step 1: Add codec tests**
+- [x] **Step 1: Add codec tests**
 
 Create `internal/codec/codec_test.go`:
 
@@ -285,7 +285,7 @@ func TestFieldValueRoundTrip(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run codec tests and verify failure**
+- [x] **Step 2: Run codec tests and verify failure**
 
 Run:
 
@@ -295,7 +295,7 @@ go test ./internal/codec -timeout 180s
 
 Expected: FAIL because package does not exist.
 
-- [ ] **Step 3: Implement envelope and primitive codec**
+- [x] **Step 3: Implement envelope and primitive codec**
 
 Implement:
 
@@ -327,7 +327,7 @@ Encoding rules:
 - FieldValue uses `type byte + typed payload`.
 - Errors must include context and never panic.
 
-- [ ] **Step 4: Run codec tests**
+- [x] **Step 4: Run codec tests**
 
 Run:
 
@@ -337,7 +337,7 @@ go test ./internal/codec -timeout 180s
 
 Expected: PASS.
 
-实现备注：完成后记录 codec envelope layout and test result。
+实现备注：已新增 `internal/codec`。Envelope 布局为 `magic[7] + version u16le + flags u16le + payloadLen uvarint + payload + crc32c u32le`，CRC 使用 Castagnoli 并覆盖 CRC 前所有字节。已实现 string、FieldValue、bool bitset 编解码；`go test ./internal/codec -timeout 180s` 通过。
 
 ## Task 3: Binary Catalog Persistence
 
@@ -347,7 +347,7 @@ Expected: PASS.
 - Modify: `internal/catalog/catalog_test.go`
 - Modify: `internal/catalog/internal_test.go`
 
-- [ ] **Step 1: Add binary catalog persistence tests**
+- [x] **Step 1: Add binary catalog persistence tests**
 
 Add tests asserting snapshot and WAL contain no JSON markers and reopen works:
 
@@ -392,7 +392,7 @@ func TestCatalogPersistenceIsBinary(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run catalog tests and verify failure**
+- [x] **Step 2: Run catalog tests and verify failure**
 
 Run:
 
@@ -402,7 +402,7 @@ go test ./internal/catalog -run TestCatalogPersistenceIsBinary -timeout 180s
 
 Expected: FAIL because current persistence uses JSON files.
 
-- [ ] **Step 3: Implement binary catalog snapshot and WAL**
+- [x] **Step 3: Implement binary catalog snapshot and WAL**
 
 Implementation requirements:
 
@@ -417,7 +417,7 @@ Implementation requirements:
 - File envelope magic: `MTSCAT2`, version `2`.
 - WAL line format must be binary length-prefixed records, not JSONL.
 
-- [ ] **Step 4: Run catalog package**
+- [x] **Step 4: Run catalog package**
 
 Run:
 
@@ -427,7 +427,7 @@ go test ./internal/catalog -timeout 180s
 
 Expected: PASS.
 
-实现备注：完成后记录 old JSON files behavior and binary file names。
+实现备注：Catalog snapshot 已从 `snapshot.json` 切换为 `snapshot.bin`，文件 envelope magic 为 `MTSCAT2`、version `2`；仅存在旧 `snapshot.json` 时 `Open` 返回明确的 legacy JSON unsupported 错误。`catalog.wal` 文件名保留，内容改为 `uvarint frame length + MTSCAT2 envelope` 的二进制记录。`go test ./internal/catalog -timeout 180s` 通过。
 
 ## Task 4: WAL Binary Batch Payload
 
@@ -436,7 +436,7 @@ Expected: PASS.
 - Modify: `internal/wal/wal_test.go`
 - Modify: `internal/wal/internal_test.go`
 
-- [ ] **Step 1: Add WAL binary payload tests**
+- [x] **Step 1: Add WAL binary payload tests**
 
 Add a test that appends representative points and asserts WAL does not contain JSON markers:
 
@@ -486,7 +486,7 @@ func TestWALPayloadIsBinary(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run WAL test and verify failure**
+- [x] **Step 2: Run WAL test and verify failure**
 
 Run:
 
@@ -496,7 +496,7 @@ go test ./internal/wal -run TestWALPayloadIsBinary -timeout 180s
 
 Expected: FAIL because current WAL payload is JSON.
 
-- [ ] **Step 3: Implement WAL v2 payload codec**
+- [x] **Step 3: Implement WAL v2 payload codec**
 
 Implementation requirements:
 
@@ -509,7 +509,7 @@ Implementation requirements:
 - Decode must validate buffer exhaustion and unsupported field type.
 - Remove `encoding/json` from production WAL package.
 
-- [ ] **Step 4: Run WAL package**
+- [x] **Step 4: Run WAL package**
 
 Run:
 
@@ -519,7 +519,7 @@ go test ./internal/wal -timeout 180s
 
 Expected: PASS.
 
-实现备注：完成后 record WAL file size for 10K pprof workload before/after if available。
+实现备注：WAL frame 外壳保留现有 length/version/type/CRC32C，write batch payload 已切换为 batch version `2` 的二进制编码，包含 point count、database/rp/measurement、排序 tags、seriesID、timestamp、writeSeq 和 typed fields。`internal/wal` 已无 `encoding/json` 引用；`go test ./internal/wal -timeout 180s` 通过。滚段测试阈值从 80 调整为 40，以匹配更小的二进制 frame。
 
 ## Task 5: SSTable Binary Metadata, Index, And Blocks
 
@@ -532,7 +532,7 @@ Expected: PASS.
 - Modify: `internal/sstable/internal_test.go`
 - Modify: `internal/sstable/sstable_test.go`
 
-- [ ] **Step 1: Add SSTable encoding tests**
+- [x] **Step 1: Add SSTable encoding tests**
 
 Create tests for timestamp and all field value types:
 
@@ -569,7 +569,7 @@ func TestBinaryBlocksRoundTripAllTypes(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run SSTable encoding tests and verify failure**
+- [x] **Step 2: Run SSTable encoding tests and verify failure**
 
 Run:
 
@@ -579,7 +579,7 @@ go test ./internal/sstable -run TestBinaryBlocksRoundTripAllTypes -timeout 180s
 
 Expected: FAIL because binary block functions do not exist.
 
-- [ ] **Step 3: Implement SSTable v2 binary block codecs**
+- [x] **Step 3: Implement SSTable v2 binary block codecs**
 
 Required block encodings:
 
@@ -590,7 +590,7 @@ Required block encodings:
 - String block: timestamps/writeSeq arrays plus `uvarint length + bytes`.
 - Metadata/index/metaindex payloads use binary structs with magic/version envelope.
 
-- [ ] **Step 4: Migrate WritePart and OpenPart to binary files**
+- [x] **Step 4: Migrate WritePart and OpenPart to binary files**
 
 Implementation requirements:
 
@@ -610,7 +610,7 @@ go test ./internal/sstable -timeout 180s
 
 Expected: PASS.
 
-实现备注：完成后 document exact file names and magic/version constants。
+实现备注：Part metadata 已切换为 `metadata.bin`，旧 `metadata.json` 仅返回 legacy JSON unsupported。`index.bin` 使用 `MTSIDX2` envelope，`metaindex.bin` 使用 `MTSMIX2` envelope，Part metadata 使用 `MTSPRT2` envelope，版本均为 `2`。`timestamps.bin` 使用 delta time block，`values.bin` 使用 typed value block，bool 值使用 bitset。`strings.bin` 仍保留为空文件占位。`go test ./internal/sstable -timeout 180s` 通过；`internal/sstable` 仅剩 `manifest.go` 仍使用 JSON，进入 Task 6 迁移。
 
 ## Task 6: Binary Manifest And Crash-Safe Commit
 
@@ -620,7 +620,7 @@ Expected: PASS.
 - Modify: `internal/storagefs/fs.go`
 - Modify: `internal/storagefs/fs_test.go`
 
-- [ ] **Step 1: Add binary manifest tests**
+- [x] **Step 1: Add binary manifest tests**
 
 Add tests:
 
@@ -655,7 +655,7 @@ func TestManifestIsBinaryAndRejectsCorruption(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run manifest test and verify failure**
+- [x] **Step 2: Run manifest test and verify failure**
 
 Run:
 
@@ -665,7 +665,7 @@ go test ./internal/sstable -run TestManifestIsBinaryAndRejectsCorruption -timeou
 
 Expected: FAIL because current manifest is JSON.
 
-- [ ] **Step 3: Implement `MANIFEST.bin` and durable rename**
+- [x] **Step 3: Implement `MANIFEST.bin` and durable rename**
 
 Implementation requirements:
 
@@ -674,7 +674,7 @@ Implementation requirements:
 - If legacy `MANIFEST.json` exists without `MANIFEST.bin`, return unsupported legacy manifest error.
 - `storagefs.WriteFileAtomic` already provides most semantics; ensure it is used or extended for binary payload.
 
-- [ ] **Step 4: Run storagefs and sstable packages**
+- [x] **Step 4: Run storagefs and sstable packages**
 
 Run:
 
@@ -684,7 +684,7 @@ go test ./internal/storagefs ./internal/sstable -timeout 180s
 
 Expected: PASS.
 
-实现备注：完成后 record manifest file name transition behavior。
+实现备注：Manifest 已从 `MANIFEST.json` 切换为 `MANIFEST.bin`，使用 `MTSMAN2` envelope、version `2`。缺失 manifest 返回空 manifest；仅存在旧 `MANIFEST.json` 时返回 legacy JSON unsupported；损坏 envelope/CRC 会阻止加载。`WriteManifest` 继续通过 `storagefs.WriteFileAtomic` 完成临时文件、fsync、rename、fsync 目录。`go test ./internal/storagefs ./internal/sstable -timeout 180s` 通过。
 
 ## Task 7: Query Pruning And Read Instrumentation
 
@@ -694,7 +694,7 @@ Expected: PASS.
 - Modify: `internal/sstable/sstable_test.go`
 - Modify: `internal/engine/query.go`
 
-- [ ] **Step 1: Add query pruning test with read counters**
+- [x] **Step 1: Add query pruning test with read counters**
 
 Add an internal test that writes multiple fields and asserts query only reads target value block. Use package-private test hooks:
 
@@ -728,7 +728,7 @@ func TestPartQueryPrunesValueBlocksByField(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run pruning test and verify failure or missing stats**
+- [x] **Step 2: Run pruning test and verify failure or missing stats**
 
 Run:
 
@@ -738,7 +738,7 @@ go test ./internal/sstable -run TestPartQueryPrunesValueBlocksByField -timeout 1
 
 Expected: FAIL until read stats and pruning are implemented.
 
-- [ ] **Step 3: Implement metaindex/index pruning**
+- [x] **Step 3: Implement metaindex/index pruning**
 
 Implementation requirements:
 
@@ -748,7 +748,7 @@ Implementation requirements:
 - For matching index rows, check series/time/field before reading value block.
 - Keep test-only stats under unexported struct; production behavior unchanged.
 
-- [ ] **Step 4: Run sstable and engine query tests**
+- [x] **Step 4: Run sstable and engine query tests**
 
 Run:
 
@@ -758,7 +758,7 @@ go test ./internal/sstable ./internal/engine -run 'Query|Part' -timeout 180s
 
 Expected: PASS.
 
-实现备注：完成后 record read stats behavior and pruning limits。
+实现备注：`Part` 增加未导出的 read stats hook，测试中可验证 `TimeBlocksRead` / `ValueBlocksRead`。`Part.Query` 先按 Part time range、seriesID 范围和 metaindex fieldIDs 做粗剪枝，再按 index row 和 columnRef 读取命中的 value block；定向测试确认查询单字段时只读取 1 个 value block。`go test ./internal/sstable ./internal/engine -run 'Query|Part' -timeout 180s` 通过。
 
 ## Task 8: Shard Lifecycle Locking And Flush Ordering
 
@@ -768,7 +768,7 @@ Expected: PASS.
 - Modify: `internal/engine/engine_test.go`
 - Modify: `internal/engine/error_test.go`
 
-- [ ] **Step 1: Add crash-ordering tests**
+- [x] **Step 1: Add crash-ordering tests**
 
 Add tests with injected failure points. Define package-private hooks:
 
@@ -801,7 +801,7 @@ func TestFlushFailureBeforeManifestDoesNotExposePart(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test and verify failure**
+- [x] **Step 2: Run test and verify failure**
 
 Run:
 
@@ -811,7 +811,7 @@ go test ./internal/engine -run TestFlushFailureBeforeManifestDoesNotExposePart -
 
 Expected: FAIL until hooks and ordering are implemented.
 
-- [ ] **Step 3: Implement shard lifecycle locking and flush sequence**
+- [x] **Step 3: Implement shard lifecycle locking and flush sequence**
 
 Flush sequence:
 
@@ -825,7 +825,7 @@ Flush sequence:
 
 If step 7 fails, keep manifest and part; replay may duplicate but LWW must preserve correctness.
 
-- [ ] **Step 4: Run engine package**
+- [x] **Step 4: Run engine package**
 
 Run:
 
@@ -835,7 +835,7 @@ go test ./internal/engine -timeout 180s
 
 Expected: PASS.
 
-实现备注：完成后 document locking order and replay behavior。
+实现备注：Shard 增加 lifecycle mutex，flush、compact、retention delete 互斥。Flush 顺序调整为：snapshot memtable、写 Part、测试 hook、打开 Part、原子写 manifest、更新内存 parts/manifest、测试 hook、最后截断 WAL。manifest 未提交失败时新 Part 不进入内存和 manifest，重启后仅通过 WAL replay 恢复；manifest 已提交但 WAL 未截断时允许 replay 重复数据，依赖 LWW 合并保持正确性。`go test ./internal/engine -timeout 180s` 通过。
 
 ## Task 9: Size-Tiered Compaction
 
@@ -846,7 +846,7 @@ Expected: PASS.
 - Modify: `internal/engine/shard.go`
 - Modify: `internal/engine/engine_test.go`
 
-- [ ] **Step 1: Add compaction options tests**
+- [x] **Step 1: Add compaction options tests**
 
 Test automatic size-tiered compaction trigger:
 
@@ -882,7 +882,7 @@ func TestSizeTieredCompactionTriggersByPartCount(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run compaction trigger test and verify failure**
+- [x] **Step 2: Run compaction trigger test and verify failure**
 
 Run:
 
@@ -892,7 +892,7 @@ go test ./internal/engine -run TestSizeTieredCompactionTriggersByPartCount -time
 
 Expected: FAIL because compaction options do not exist.
 
-- [ ] **Step 3: Implement compaction options and strategy**
+- [x] **Step 3: Implement compaction options and strategy**
 
 Add:
 
@@ -914,7 +914,7 @@ Rules:
 - Compact only selected level-0 parts into next level; do not always compact every part.
 - Manifest update remains atomic and rollback-safe.
 
-- [ ] **Step 4: Run engine tests**
+- [x] **Step 4: Run engine tests**
 
 Run:
 
@@ -924,7 +924,7 @@ go test ./internal/engine -timeout 180s
 
 Expected: PASS.
 
-实现备注：完成后 record compaction threshold defaults。
+实现备注：新增 `model.CompactionOptions` 并通过根包 alias 暴露。默认自动 compaction 关闭；启用且 `Level0PartLimit <= 0` 时默认阈值为 `4`。Flush 后执行 size-tiered 检查，仅选择超过阈值或大小阈值的 level-0 Part 合并到 level 1，已有高层 Part 保留；手动 `Compact` 保持全量合并入口。`go test ./internal/engine -timeout 180s` 通过。
 
 ## Task 10: E2E Recovery, Integrity, Retention, And Pruning
 
@@ -935,7 +935,7 @@ Expected: PASS.
 - Create: `tests/e2e/retention/main.go`
 - Create: `tests/e2e/query_pruning/main.go`
 
-- [ ] **Step 1: Add e2e cases**
+- [x] **Step 1: Add e2e cases**
 
 Each case must be a `main` package and follow this pattern:
 
@@ -956,7 +956,7 @@ Case requirements:
 - `retention`: write two shards, apply cutoff, verify old shard removed and new shard remains.
 - `query_pruning`: write 100 series x 4 fields, query one series/field, verify correct result and no JSON marker remains in files.
 
-- [ ] **Step 2: Run every e2e case**
+- [x] **Step 2: Run every e2e case**
 
 Run:
 
@@ -969,7 +969,7 @@ done
 
 Expected: PASS for every e2e case.
 
-实现备注：完成后 list all e2e cases and runtime summary。
+实现备注：已新增 `wal_recovery`、`flush_manifest_recovery`、`compaction_integrity`、`retention`、`query_pruning`。执行 `gofmt -w tests/e2e/*/main.go && for dir in tests/e2e/*; do ...; done` 通过，实际通过目录包括新增 5 个、`no_json_storage` 和 `simple_integrity`，总耗时约 1 秒，运行后已删除 e2e 二进制。
 
 ## Task 11: Pprof Workload Modes And Benchmarks
 
@@ -979,7 +979,7 @@ Expected: PASS for every e2e case.
 - Modify: `internal/bench/storage_bench_test.go`
 - Create: `docs/benchmarks/storage-engine-phase2.md`
 
-- [ ] **Step 1: Add pprof workload mode tests**
+- [x] **Step 1: Add pprof workload mode tests**
 
 Add table-driven tests for `-mode=write`, `-mode=query`, `-mode=compact`, `-mode=replay`:
 
@@ -996,7 +996,7 @@ func TestRunModes(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Implement pprof modes**
+- [x] **Step 2: Implement pprof modes**
 
 Mode behavior:
 
@@ -1005,7 +1005,7 @@ Mode behavior:
 - `compact`: write enough small flushes, compact.
 - `replay`: write synced WAL, close, reopen to force replay.
 
-- [ ] **Step 3: Run pprof tests and smoke profile**
+- [x] **Step 3: Run pprof tests and smoke profile**
 
 Run:
 
@@ -1016,7 +1016,7 @@ cd tests/pprof/storage_engine && go build -o storage_engine . && ./storage_engin
 
 Expected: PASS and profile files generated then cleaned.
 
-- [ ] **Step 4: Record benchmark baseline**
+- [x] **Step 4: Record benchmark baseline**
 
 Run:
 
@@ -1026,7 +1026,7 @@ go test ./internal/bench -bench=. -benchmem -count=3 -timeout 900s | tee /tmp/mt
 
 Write a short summary to `docs/benchmarks/storage-engine-phase2.md` including command, machine context from `go env GOOS GOARCH`, and benchmark rows.
 
-实现备注：完成后 record profile smoke command and benchmark summary path。
+实现备注：`tests/pprof/storage_engine` 新增 `-mode=write|query|compact|replay`，默认 `query`。`go test ./tests/pprof/storage_engine -timeout 180s` 通过；profile smoke 命令生成 CPU/heap profile 成功并清理。Benchmark 命令 `go test ./internal/bench -bench=. -benchmem -count=3 -timeout 900s` 通过，摘要写入 `docs/benchmarks/storage-engine-phase2.md`。
 
 ## Task 12: Quality Gate And Commit
 
@@ -1034,7 +1034,7 @@ Write a short summary to `docs/benchmarks/storage-engine-phase2.md` including co
 - Modify: this plan with completion notes.
 - Modify docs if benchmark/e2e command names changed.
 
-- [ ] **Step 1: Run full tests with coverage**
+- [x] **Step 1: Run full tests with coverage**
 
 Run:
 
@@ -1045,7 +1045,7 @@ go tool cover -func=coverage.out | tail -1
 
 Expected: PASS and total coverage `>=90%`.
 
-- [ ] **Step 2: Run formatting and lint**
+- [x] **Step 2: Run formatting and lint**
 
 Run:
 
@@ -1057,7 +1057,7 @@ timeout 720s golangci-lint run --timeout 12m
 
 Expected: all commands exit 0 and lint prints `0 issues.`
 
-- [ ] **Step 3: Run all e2e cases**
+- [x] **Step 3: Run all e2e cases**
 
 Run:
 
@@ -1070,7 +1070,7 @@ done
 
 Expected: all e2e binaries pass and are removed.
 
-- [ ] **Step 4: Verify no non-code artifacts**
+- [x] **Step 4: Verify no non-code artifacts**
 
 Run:
 
@@ -1081,7 +1081,7 @@ find . -maxdepth 6 -type f \( -name 'coverage.out' -o -name '*.prof' -o -name '*
 
 Expected: no output.
 
-- [ ] **Step 5: Commit implementation**
+- [x] **Step 5: Commit implementation**
 
 Run:
 
@@ -1094,7 +1094,7 @@ git commit -m "feat(storage): 强化二进制存储引擎"
 
 Expected: commit succeeds; staged files do not include binaries, profiles, or coverage files.
 
-实现备注：完成后 record final commit hash and verification outputs。
+实现备注：`go test ./... -coverprofile=coverage.out -timeout 600s` 通过，`go tool cover -func=coverage.out | tail -1` 输出总覆盖率 `90.0%`。`goimports-reviser`、`gofmt`、`golangci-lint run --timeout 12m` 均通过，lint 输出 `0 issues.`。`tests/e2e` 全量 build/run 通过，包括 `compaction_integrity`、`flush_manifest_recovery`、`no_json_storage`、`query_pruning`、`retention`、`simple_integrity`、`wal_recovery`。已删除 `coverage.out`，产物扫描无输出。最终提交信息为 `feat(storage): 强化二进制存储引擎`。
 
 ## Self-Review
 

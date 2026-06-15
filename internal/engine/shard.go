@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
@@ -20,15 +21,24 @@ type ShardOptions struct {
 	End                int64
 	WAL                model.WALOptions
 	MemTableMaxSamples int
+	Compaction         model.CompactionOptions
 }
 
 type Shard struct {
-	opts     ShardOptions
-	wal      *wal.Log
-	mem      *memtable.MemTable
-	parts    []*sstable.Part
-	manifest sstable.Manifest
-	nextPart int
+	lifecycleMu sync.Mutex
+
+	opts      ShardOptions
+	wal       *wal.Log
+	mem       *memtable.MemTable
+	parts     []*sstable.Part
+	manifest  sstable.Manifest
+	nextPart  int
+	testHooks shardTestHooks
+}
+
+type shardTestHooks struct {
+	afterPartWriteBeforeManifest func() error
+	afterManifestBeforeWALTrunc  func() error
 }
 
 func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
@@ -85,6 +95,15 @@ func (s *Shard) Write(point model.ResolvedPoint, syncWrite bool) error {
 }
 
 func (s *Shard) Flush() error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.flushLocked(); err != nil {
+		return err
+	}
+	return s.maybeCompactLocked()
+}
+
+func (s *Shard) flushLocked() error {
 	if s.mem.SampleCount() == 0 {
 		return nil
 	}
@@ -100,14 +119,26 @@ func (s *Shard) Flush() error {
 	if err != nil {
 		return err
 	}
+	if s.testHooks.afterPartWriteBeforeManifest != nil {
+		if err := s.testHooks.afterPartWriteBeforeManifest(); err != nil {
+			return err
+		}
+	}
 	part, err := sstable.OpenPart(meta.Path)
 	if err != nil {
 		return err
 	}
-	s.parts = append(s.parts, part)
-	s.manifest.Parts = append(s.manifest.Parts, meta)
-	if err := sstable.WriteManifest(s.opts.Dir, s.manifest); err != nil {
+	nextManifest := sstable.Manifest{Parts: append([]sstable.PartMeta{}, s.manifest.Parts...)}
+	nextManifest.Parts = append(nextManifest.Parts, meta)
+	if err := sstable.WriteManifest(s.opts.Dir, nextManifest); err != nil {
 		return err
+	}
+	s.parts = append(s.parts, part)
+	s.manifest = nextManifest
+	if s.testHooks.afterManifestBeforeWALTrunc != nil {
+		if err := s.testHooks.afterManifestBeforeWALTrunc(); err != nil {
+			return err
+		}
 	}
 	if err := s.wal.TruncateAll(); err != nil {
 		return err
@@ -133,6 +164,12 @@ func (s *Shard) Query(query memtable.Query) ([]model.ColumnData, error) {
 }
 
 func (s *Shard) Close() error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.closeLocked()
+}
+
+func (s *Shard) closeLocked() error {
 	if s.wal == nil {
 		return nil
 	}

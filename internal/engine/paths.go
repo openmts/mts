@@ -28,6 +28,9 @@ func normalizeOptions(opts model.Options) model.Options {
 	if opts.MemTableMaxSamples <= 0 {
 		opts.MemTableMaxSamples = defaultMemTableSamples
 	}
+	if opts.Compaction.Enabled && opts.Compaction.Level0PartLimit <= 0 {
+		opts.Compaction.Level0PartLimit = 4
+	}
 	return opts
 }
 

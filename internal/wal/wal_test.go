@@ -1,6 +1,7 @@
 package wal_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -51,6 +52,54 @@ func TestWALAppendReplayAndTruncateTail(t *testing.T) {
 	}
 }
 
+func TestWALPayloadIsBinary(t *testing.T) {
+	dir := t.TempDir()
+	log, err := wal.Open(dir, wal.Options{Sync: true})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	record := model.ResolvedPoint{
+		Database:        "db",
+		RetentionPolicy: "rp",
+		Measurement:     "cpu",
+		Tags:            map[string]string{"host": "a"},
+		SeriesID:        1,
+		Timestamp:       10,
+		WriteSeq:        2,
+		Fields: []model.ResolvedField{
+			{FieldID: 1, FieldName: "value", Type: model.FieldFloat64, Value: model.Float64Value(1.5)},
+			{FieldID: 2, FieldName: "state", Type: model.FieldString, Value: model.StringValue("ok")},
+		},
+	}
+	if err := log.Append([]model.ResolvedPoint{record}, true); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "000001.wal"))
+	if err != nil {
+		t.Fatalf("ReadFile(wal) error = %v", err)
+	}
+	if bytes.Contains(data, []byte(`"series_id"`)) || bytes.Contains(data, []byte(`{"`)) {
+		t.Fatal("wal payload contains JSON marker")
+	}
+	log, err = wal.Open(dir, wal.Options{})
+	if err != nil {
+		t.Fatalf("Open(replay) error = %v", err)
+	}
+	got, err := log.Replay()
+	if err != nil {
+		t.Fatalf("Replay() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, []model.ResolvedPoint{record}) {
+		t.Fatalf("Replay() = %#v, want %#v", got, []model.ResolvedPoint{record})
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close(replay) error = %v", err)
+	}
+}
+
 func TestWALDetectsMiddleCorruption(t *testing.T) {
 	dir := t.TempDir()
 	log, err := wal.Open(dir, wal.Options{SegmentBytes: 4096, Sync: true})
@@ -95,7 +144,7 @@ func TestWALDetectsMiddleCorruption(t *testing.T) {
 
 func TestWALRolloverBatchSyncAndTruncateAll(t *testing.T) {
 	dir := t.TempDir()
-	log, err := wal.Open(dir, wal.Options{SegmentBytes: 80, BatchRecords: 2})
+	log, err := wal.Open(dir, wal.Options{SegmentBytes: 40, BatchRecords: 2})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

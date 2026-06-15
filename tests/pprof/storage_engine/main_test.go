@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,6 +47,17 @@ func TestRunWithTemporaryDataDir(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("run(temp) error = %v", err)
+	}
+}
+
+func TestRunModes(t *testing.T) {
+	for _, mode := range []string{"write", "query", "compact", "replay"} {
+		t.Run(mode, func(t *testing.T) {
+			err := run([]string{"-mode", mode, "-points", "200", "-series", "10", "-query-repeat", "2"})
+			if err != nil {
+				t.Fatalf("run(%s) error = %v", mode, err)
+			}
+		})
 	}
 }
 
@@ -150,6 +162,25 @@ func TestWritePointsExactBatch(t *testing.T) {
 	}
 }
 
+func TestWritePointsSyncedExactBatch(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 2048,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := writePointsSynced(ctx, eng, config{points: 1024, series: 16}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("writePointsSynced() error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestWritePointsRejectsClosedEngine(t *testing.T) {
 	ctx := context.Background()
 	eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})
@@ -175,6 +206,33 @@ func TestRunWorkloadRejectsClosedEngine(t *testing.T) {
 	}
 	if err := runWorkload(ctx, eng, config{points: 1, series: 1}); err == nil {
 		t.Fatal("runWorkload(closed) error = nil, want error")
+	}
+}
+
+func TestWorkloadModesRejectRuntimeErrors(t *testing.T) {
+	ctx := context.Background()
+	for _, tt := range []struct {
+		name string
+		cfg  config
+	}{
+		{name: "unsupported mode", cfg: config{mode: "bad", points: 1, series: 1}},
+		{name: "replay missing dir", cfg: config{mode: "replay", points: 1, series: 1}},
+		{name: "query closed engine", cfg: config{mode: "query", points: 1, series: 1}},
+		{name: "compact closed engine", cfg: config{mode: "compact", points: 1, series: 1}},
+		{name: "write closed engine", cfg: config{mode: "write", points: 1, series: 1}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})
+			if err != nil {
+				t.Fatalf("Open() error = %v", err)
+			}
+			if err := eng.Close(ctx); err != nil {
+				t.Fatalf("Close() error = %v", err)
+			}
+			if err := runWorkloadWithDir(ctx, eng, tt.cfg, ""); err == nil {
+				t.Fatal("runWorkloadWithDir() error = nil, want error")
+			}
+		})
 	}
 }
 
@@ -212,6 +270,63 @@ func TestQueryRowsRejectsEmptyResult(t *testing.T) {
 	}
 }
 
+func TestQueryRowsRejectsClosedEngine(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := queryRows(ctx, eng, config{points: 1, series: 1, queryRepeat: 1}); err == nil {
+		t.Fatal("queryRows(closed) error = nil, want error")
+	}
+}
+
+func TestWritePointsSyncedRejectsClosedEngine(t *testing.T) {
+	ctx := context.Background()
+	for _, points := range []int{1, 1024} {
+		t.Run(fmt.Sprintf("points=%d", points), func(t *testing.T) {
+			eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})
+			if err != nil {
+				t.Fatalf("Open() error = %v", err)
+			}
+			if err := eng.Close(ctx); err != nil {
+				t.Fatalf("Close() error = %v", err)
+			}
+			if err := writePointsSynced(ctx, eng, config{points: points, series: 1}); err == nil {
+				t.Fatal("writePointsSynced(closed) error = nil, want error")
+			}
+		})
+	}
+}
+
+func TestReplayWorkloadRejectsReopenError(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := replayWorkload(ctx, eng, config{points: 1, series: 1}, "bad\x00path"); err == nil {
+		t.Fatal("replayWorkload(reopen) error = nil, want error")
+	}
+}
+
+func TestReplayWorkloadRejectsWriteError(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := replayWorkload(ctx, eng, config{points: 1, series: 1}, t.TempDir()); err == nil {
+		t.Fatal("replayWorkload(write error) error = nil, want error")
+	}
+}
+
 func TestWriteMemProfileRejectsInvalidPath(t *testing.T) {
 	if err := writeMemProfile("bad\x00path"); err == nil {
 		t.Fatal("writeMemProfile(invalid) error = nil, want error")
@@ -233,10 +348,11 @@ func TestValidateConfigRejectsInvalidValues(t *testing.T) {
 		name string
 		cfg  config
 	}{
-		{name: "zero points", cfg: config{points: 0, series: 1}},
-		{name: "zero series", cfg: config{points: 1, series: 0}},
-		{name: "series greater than points", cfg: config{points: 1, series: 2}},
-		{name: "negative query repeat", cfg: config{points: 1, series: 1, queryRepeat: -1}},
+		{name: "bad mode", cfg: config{mode: "bad", points: 1, series: 1}},
+		{name: "zero points", cfg: config{mode: "query", points: 0, series: 1}},
+		{name: "zero series", cfg: config{mode: "query", points: 1, series: 0}},
+		{name: "series greater than points", cfg: config{mode: "query", points: 1, series: 2}},
+		{name: "negative query repeat", cfg: config{mode: "query", points: 1, series: 1, queryRepeat: -1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

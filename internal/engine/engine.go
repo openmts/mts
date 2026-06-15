@@ -118,6 +118,7 @@ func (e *Engine) shardForLocked(database string, policy string, timestamp int64)
 		End:                start + int64(e.opts.ShardDuration) - 1,
 		WAL:                e.opts.WAL,
 		MemTableMaxSamples: e.opts.MemTableMaxSamples,
+		Compaction:         e.opts.Compaction,
 	})
 	if err != nil {
 		return nil, err
@@ -161,6 +162,7 @@ func (e *Engine) openShardDir(path string, entry os.DirEntry, err error) error {
 		End:                start + int64(e.opts.ShardDuration) - 1,
 		WAL:                e.opts.WAL,
 		MemTableMaxSamples: e.opts.MemTableMaxSamples,
+		Compaction:         e.opts.Compaction,
 	})
 	if err != nil {
 		return err

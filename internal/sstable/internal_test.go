@@ -2,11 +2,11 @@ package sstable
 
 import (
 	"encoding/binary"
-	"math"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"codeberg.org/mts/mts/internal/codec"
 	"codeberg.org/mts/mts/internal/model"
 )
 
@@ -88,6 +88,67 @@ func TestPartUnknownEncodingsAndSortHelpers(t *testing.T) {
 	if !rowMatches(indexRow{SeriesID: 1, MinTime: 1, MaxTime: 2}, Query{Start: 0, End: 10}) {
 		t.Fatal("rowMatches() did not match overlapping range")
 	}
+	if partMatches(PartMeta{MinTime: 100, MaxTime: 200}, nil, Query{Start: 0, End: 10}) {
+		t.Fatal("partMatches() matched non-overlapping time range")
+	}
+	if partMatches(PartMeta{MinTime: 0, MaxTime: 10, MinSeriesID: 10, MaxSeriesID: 20}, nil, Query{
+		Start:     0,
+		End:       10,
+		SeriesIDs: map[uint64]struct{}{1: {}},
+	}) {
+		t.Fatal("partMatches() matched non-overlapping series range")
+	}
+	if partMatches(PartMeta{MinTime: 0, MaxTime: 10}, []metaIndexRow{{FieldIDs: []uint32{1}}}, Query{
+		Start:    0,
+		End:      10,
+		FieldIDs: map[uint32]struct{}{2: {}},
+	}) {
+		t.Fatal("partMatches() matched non-overlapping field IDs")
+	}
+}
+
+func TestPartQueryPrunesValueBlocksByField(t *testing.T) {
+	dir := t.TempDir()
+	columns := []model.ColumnData{
+		columnWithField(1, 1, model.Float64Value(1)),
+		columnWithField(1, 2, model.Int64Value(2)),
+		columnWithField(1, 3, model.StringValue("skip")),
+	}
+	meta, err := WritePart(dir, 0, "sst-000001", columns)
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	stats := part.resetReadStatsForTest()
+	got, err := part.Query(Query{
+		SeriesIDs: map[uint64]struct{}{1: {}},
+		FieldIDs:  map[uint32]struct{}{2: {}},
+		Start:     0,
+		End:       10,
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if len(got) != 1 || got[0].FieldID != 2 {
+		t.Fatalf("Query() = %#v, want only field 2", got)
+	}
+	if stats.ValueBlocksRead != 1 {
+		t.Fatalf("ValueBlocksRead = %d, want 1", stats.ValueBlocksRead)
+	}
+}
+
+func columnWithField(seriesID uint64, fieldID uint32, value model.FieldValue) model.ColumnData {
+	return model.ColumnData{
+		SeriesID:  seriesID,
+		FieldID:   fieldID,
+		FieldType: value.Type,
+		Samples: []model.VersionedSample{
+			{Timestamp: 5, WriteSeq: 1, Value: value},
+		},
+	}
 }
 
 func TestPartDecodeErrors(t *testing.T) {
@@ -132,7 +193,215 @@ func TestPartDecodeErrors(t *testing.T) {
 	}
 }
 
-func TestOpenPartRejectsBadIndexJSON(t *testing.T) {
+func TestBinaryEncodingValidationErrors(t *testing.T) {
+	if _, err := unmarshalTimeBlock([]byte{99, 0}); err == nil {
+		t.Fatal("unmarshalTimeBlock(unknown) error = nil, want error")
+	}
+	if _, err := unmarshalValueBlock([]byte{99, 0}); err == nil {
+		t.Fatal("unmarshalValueBlock(unknown) error = nil, want error")
+	}
+	if _, err := marshalValueBlock(nil, model.ColumnData{
+		FieldType: model.FieldType(99),
+		Samples:   []model.VersionedSample{{Timestamp: 1, Value: model.FieldValue{Type: model.FieldType(99)}}},
+	}); err == nil {
+		t.Fatal("marshalValueBlock(unknown) error = nil, want error")
+	}
+	reader := newBlockReader([]byte{1})
+	if err := reader.done("sstable test"); err == nil {
+		t.Fatal("blockReader.done(trailing) error = nil, want error")
+	}
+	if _, err := newBlockReader([]byte{0xff, 0xff, 0xff, 0xff, 0x1f}).uint32("overflow"); err == nil {
+		t.Fatal("blockReader.uint32(overflow) error = nil, want error")
+	}
+	if _, err := readBlockRef(newBlockReader([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1})); err == nil {
+		t.Fatal("readBlockRef(overflow) error = nil, want error")
+	}
+	if _, err := appendBlockRef(nil, blockRef{Offset: -1}); err == nil {
+		t.Fatal("appendBlockRef(negative) error = nil, want error")
+	}
+}
+
+func TestManifestNormalizeAndLegacyErrors(t *testing.T) {
+	manifest := normalizeManifest(Manifest{Parts: []PartMeta{
+		{ID: "b", Level: 1},
+		{ID: "a", Level: 0},
+	}})
+	if manifest.Parts[0].ID != "a" {
+		t.Fatalf("first manifest part = %q, want a", manifest.Parts[0].ID)
+	}
+	if normalizeManifest(Manifest{}).Parts == nil {
+		t.Fatal("normalizeManifest() Parts = nil, want empty slice")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, legacyManifestFile), []byte("{}"), 0600); err != nil {
+		t.Fatalf("WriteFile(legacy manifest) error = %v", err)
+	}
+	if _, err := LoadManifest(dir); err == nil {
+		t.Fatal("LoadManifest(legacy) error = nil, want error")
+	}
+}
+
+func TestMetadataEncodingValidationErrors(t *testing.T) {
+	if _, err := encodeMetadata(metadata{Part: PartMeta{RowsCount: -1}}); err == nil {
+		t.Fatal("encodeMetadata(negative count) error = nil, want error")
+	}
+	if _, err := encodeMetadata(metadata{IndexRef: blockRef{Offset: -1}}); err == nil {
+		t.Fatal("encodeMetadata(negative ref) error = nil, want error")
+	}
+	if _, err := encodeIndexRows([]indexRow{{TimeRef: blockRef{Size: -1}}}); err == nil {
+		t.Fatal("encodeIndexRows(negative ref) error = nil, want error")
+	}
+	if _, err := encodeMetaIndexRows([]metaIndexRow{{IndexRef: blockRef{Offset: -1}}}); err == nil {
+		t.Fatal("encodeMetaIndexRows(negative ref) error = nil, want error")
+	}
+	if _, err := decodeMetadata([]byte{1}); err == nil {
+		t.Fatal("decodeMetadata(short) error = nil, want error")
+	}
+	if _, err := decodeIndexRows([]byte{1}); err == nil {
+		t.Fatal("decodeIndexRows(short) error = nil, want error")
+	}
+	if _, err := decodeMetaIndexRows([]byte{1}); err == nil {
+		t.Fatal("decodeMetaIndexRows(short) error = nil, want error")
+	}
+	block := timeBlockFrom([]int64{1, 2})
+	if block.Encoding != "plain-int64-v1" || block.MinTime != 1 || block.MaxTime != 2 {
+		t.Fatalf("timeBlockFrom() = %#v, want legacy metadata fields", block)
+	}
+}
+
+func TestSSTableBinaryDecodersRejectTruncatedPrefixes(t *testing.T) {
+	metaPayload, err := encodeMetadata(metadata{
+		FormatVersion: partFormatVersion,
+		Part:          PartMeta{ID: "sst", RowsCount: 1, SeriesCount: 1, BlockCount: 1},
+		IndexRef:      blockRef{Offset: 1, Size: 2},
+		MetaIndexRef:  blockRef{Offset: 3, Size: 4},
+	})
+	if err != nil {
+		t.Fatalf("encodeMetadata() error = %v", err)
+	}
+	assertDecoderRejectsPrefixes(t, metaPayload, func(data []byte) error {
+		_, err := decodeMetadata(data)
+		return err
+	})
+
+	indexPayload, err := encodeIndexRows([]indexRow{{
+		SeriesID: 1,
+		MinTime:  1,
+		MaxTime:  2,
+		TimeRef:  blockRef{Offset: 1, Size: 2},
+		Columns:  []columnRef{{FieldID: 1, FieldType: model.FieldFloat64, ValueRef: blockRef{Offset: 3, Size: 4}}},
+	}})
+	if err != nil {
+		t.Fatalf("encodeIndexRows() error = %v", err)
+	}
+	assertDecoderRejectsPrefixes(t, indexPayload, func(data []byte) error {
+		_, err := decodeIndexRows(data)
+		return err
+	})
+
+	metaIndexPayload, err := encodeMetaIndexRows([]metaIndexRow{{
+		MinSeriesID: 1,
+		MaxSeriesID: 2,
+		MinTime:     1,
+		MaxTime:     2,
+		FieldIDs:    []uint32{1, 2},
+		IndexRef:    blockRef{Offset: 1, Size: 2},
+	}})
+	if err != nil {
+		t.Fatalf("encodeMetaIndexRows() error = %v", err)
+	}
+	assertDecoderRejectsPrefixes(t, metaIndexPayload, func(data []byte) error {
+		_, err := decodeMetaIndexRows(data)
+		return err
+	})
+
+	timePayload := marshalTimeBlock(nil, []int64{1, 2, 4})
+	assertDecoderRejectsPrefixes(t, timePayload, func(data []byte) error {
+		_, err := unmarshalTimeBlock(data)
+		return err
+	})
+
+	valuePayload, err := marshalValueBlock(nil, columnWithField(1, 1, model.StringValue("abc")))
+	if err != nil {
+		t.Fatalf("marshalValueBlock() error = %v", err)
+	}
+	assertDecoderRejectsPrefixes(t, valuePayload, func(data []byte) error {
+		_, err := unmarshalValueBlock(data)
+		return err
+	})
+}
+
+func TestSSTableEnvelopePayloadDecodersRejectTruncatedInnerPayload(t *testing.T) {
+	metaPayload, err := encodeMetadata(metadata{
+		FormatVersion: partFormatVersion,
+		Part:          PartMeta{ID: "sst", RowsCount: 1, SeriesCount: 1, BlockCount: 1},
+		IndexRef:      blockRef{Offset: 1, Size: 2},
+		MetaIndexRef:  blockRef{Offset: 3, Size: 4},
+	})
+	if err != nil {
+		t.Fatalf("encodeMetadata() error = %v", err)
+	}
+	assertEnvelopePayloadPrefixes(t, metaPayload, partMagic, func(data []byte) error {
+		_, err := decodeMetadata(data)
+		return err
+	})
+
+	indexPayload, err := encodeIndexRows([]indexRow{{
+		SeriesID: 1,
+		MinTime:  1,
+		MaxTime:  2,
+		TimeRef:  blockRef{Offset: 1, Size: 2},
+		Columns:  []columnRef{{FieldID: 1, FieldType: model.FieldFloat64, ValueRef: blockRef{Offset: 3, Size: 4}}},
+	}})
+	if err != nil {
+		t.Fatalf("encodeIndexRows() error = %v", err)
+	}
+	assertEnvelopePayloadPrefixes(t, indexPayload, indexMagic, func(data []byte) error {
+		_, err := decodeIndexRows(data)
+		return err
+	})
+
+	metaIndexPayload, err := encodeMetaIndexRows([]metaIndexRow{{
+		MinSeriesID: 1,
+		MaxSeriesID: 2,
+		MinTime:     1,
+		MaxTime:     2,
+		FieldIDs:    []uint32{1, 2},
+		IndexRef:    blockRef{Offset: 1, Size: 2},
+	}})
+	if err != nil {
+		t.Fatalf("encodeMetaIndexRows() error = %v", err)
+	}
+	assertEnvelopePayloadPrefixes(t, metaIndexPayload, metaIndexMagic, func(data []byte) error {
+		_, err := decodeMetaIndexRows(data)
+		return err
+	})
+}
+
+func assertEnvelopePayloadPrefixes(t *testing.T, frame []byte, magic codec.Magic, decode func([]byte) error) {
+	t.Helper()
+	env, err := codec.UnmarshalEnvelope(frame, magic, partFormatVersion)
+	if err != nil {
+		t.Fatalf("UnmarshalEnvelope() error = %v", err)
+	}
+	for size := 0; size < len(env.Payload); size++ {
+		prefixFrame := codec.MarshalEnvelope(nil, magic, partFormatVersion, 0, env.Payload[:size])
+		if err := decode(prefixFrame); err == nil {
+			t.Fatalf("decode(inner prefix %d/%d) error = nil, want error", size, len(env.Payload))
+		}
+	}
+}
+
+func assertDecoderRejectsPrefixes(t *testing.T, payload []byte, decode func([]byte) error) {
+	t.Helper()
+	for size := 0; size < len(payload); size++ {
+		if err := decode(payload[:size]); err == nil {
+			t.Fatalf("decode(prefix %d/%d) error = nil, want error", size, len(payload))
+		}
+	}
+}
+
+func TestOpenPartRejectsBadIndexBlock(t *testing.T) {
 	dir := t.TempDir()
 	indexFileHandle := mustCreateTestFile(t, filepath.Join(dir, indexFile))
 	indexRef, err := writeBlock(indexFileHandle, []byte("{"))
@@ -143,7 +412,7 @@ func TestOpenPartRejectsBadIndexJSON(t *testing.T) {
 		t.Fatalf("Close(index) error = %v", err)
 	}
 	meta := metadata{
-		FormatVersion: 1,
+		FormatVersion: partFormatVersion,
 		Part:          PartMeta{ID: "bad-index"},
 		IndexRef:      indexRef,
 	}
@@ -151,13 +420,13 @@ func TestOpenPartRejectsBadIndexJSON(t *testing.T) {
 		t.Fatalf("writeMetadata() error = %v", err)
 	}
 	if _, err := OpenPart(dir); err == nil {
-		t.Fatal("OpenPart(bad index json) error = nil, want error")
+		t.Fatal("OpenPart(bad index block) error = nil, want error")
 	}
 }
 
-func TestWriteJSONBlockMarshalError(t *testing.T) {
-	if _, err := writeJSONBlock(filepath.Join(t.TempDir(), "index.bin"), make(chan int)); err == nil {
-		t.Fatal("writeJSONBlock() error = nil, want marshal error")
+func TestPartWriterPathErrors(t *testing.T) {
+	if _, err := writeBinaryBlock(filepath.Join("bad\x00path", "index.bin"), []byte{1}); err == nil {
+		t.Fatal("writeBinaryBlock(invalid) error = nil, want error")
 	}
 	if err := writeMetadata("bad\x00path", metadata{}); err == nil {
 		t.Fatal("writeMetadata(invalid) error = nil, want error")
@@ -174,19 +443,19 @@ func TestWriteJSONBlockMarshalError(t *testing.T) {
 	}
 }
 
-func TestWritePartPropagatesValueMarshalError(t *testing.T) {
+func TestWritePartPropagatesUnsupportedValueType(t *testing.T) {
 	columns := []model.ColumnData{
 		{
 			SeriesID:  1,
 			FieldID:   2,
-			FieldType: model.FieldFloat64,
+			FieldType: model.FieldType(99),
 			Samples: []model.VersionedSample{
-				{Timestamp: 10, WriteSeq: 1, Value: model.Float64Value(math.NaN())},
+				{Timestamp: 10, WriteSeq: 1, Value: model.FieldValue{Type: model.FieldType(99)}},
 			},
 		},
 	}
-	if _, err := WritePart(t.TempDir(), 0, "sst-nan", columns); err == nil {
-		t.Fatal("WritePart(NaN) error = nil, want marshal error")
+	if _, err := WritePart(t.TempDir(), 0, "sst-bad-type", columns); err == nil {
+		t.Fatal("WritePart(unsupported type) error = nil, want encode error")
 	}
 }
 

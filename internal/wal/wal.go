@@ -2,7 +2,6 @@ package wal
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -60,7 +59,7 @@ func Open(dir string, opts Options) (*Log, error) {
 }
 
 func (l *Log) Append(records []model.ResolvedPoint, syncWrite bool) error {
-	payload, err := json.Marshal(records)
+	payload, err := encodeBatch(records)
 	if err != nil {
 		return fmt.Errorf("encode wal record: %w", err)
 	}
@@ -295,8 +294,8 @@ func readFrame(reader io.Reader) ([]model.ResolvedPoint, error) {
 	if got != want {
 		return nil, fmt.Errorf("wal record crc mismatch")
 	}
-	var records []model.ResolvedPoint
-	if err := json.Unmarshal(body[2:len(body)-4], &records); err != nil {
+	records, err := decodeBatch(body[2 : len(body)-4])
+	if err != nil {
 		return nil, fmt.Errorf("decode wal payload: %w", err)
 	}
 	return records, nil
