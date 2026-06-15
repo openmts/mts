@@ -12,6 +12,7 @@ Phase 2 的目标是在继续建设上层能力之前，先把存储层关键路
 
 - WAL 二进制 batch payload 与 replay 性能改进。
 - SSTable v2 二进制 block encoding，覆盖 `float64`、`int64`、`string`、`bool` 四种字段类型。
+- Catalog、Manifest、SSTable metadata/index/metaindex 等持久化元数据切换为紧凑二进制格式。
 - SSTable metaindex/index 增强，使查询能按 time、series、field 剪枝。
 - Manifest 原子提交与 flush/compaction 崩溃恢复语义硬化。
 - Size-tiered compaction 策略、后台调度接口和手动触发兼容。
@@ -30,7 +31,7 @@ Phase 2 的目标是在继续建设上层能力之前，先把存储层关键路
 ## 目标
 
 1. 存储层在单机嵌入式模式下具备明确、可测试的崩溃恢复语义。
-2. 读写路径去掉主要 JSON 热点，减少 CPU 与分配压力。
+2. 持久化数据文件不使用 JSON，读写路径去掉 JSON 热点，减少 CPU、磁盘空间与分配压力。
 3. 查询能通过 Part 元数据、metaindex 和 index 跳过无关数据块。
 4. Compaction 从手动全量合并升级为可配置策略。
 5. 每次性能相关改动都有 benchmark 或 pprof 证据。
@@ -40,6 +41,7 @@ Phase 2 的目标是在继续建设上层能力之前，先把存储层关键路
 - 不承诺“绝对最优性能”。Phase 2 的验收方式是相对基线的可测改进，以及结构上允许后续继续优化。
 - 不引入复杂外部依赖。生产代码仍优先使用标准库，除非某个依赖能显著降低风险并经单独确认。
 - 不改变用户可见的数据模型：仍只支持 `float64`、`int64`、`string`、`bool`。
+- 不在持久化数据路径使用 JSON、Gob、CSV、YAML 等通用文本/反射序列化格式；测试夹具和文档示例不受此限制。
 
 ## 需求
 
@@ -50,8 +52,18 @@ Phase 2 的目标是在继续建设上层能力之前，先把存储层关键路
 - When WAL 最后一条 record 不完整时，系统 shall 在 replay 时截断尾部半条 record 并保留之前完整数据。
 - When WAL 中间 record 损坏或 CRC 不匹配时，系统 shall 返回错误，不得静默跳过。
 - When MemTable flush 成功提交 manifest 后，系统 shall 截断对应 shard 的 WAL。
+- When WAL 持久化 batch payload 时，系统 shall 使用自定义二进制编码，不得使用 JSON 作为 payload 格式。
 - If flush 写入 Part 成功但 manifest 未提交，系统 shall 在重启后不暴露该未提交 Part。
 - If manifest 已提交但 WAL 截断前崩溃，系统 shall 在重启 replay 后仍保持 Last Write Wins，不产生错误重复结果。
+
+### 紧凑二进制存储
+
+- When 任意生产数据落盘时，系统 shall 使用版本化二进制格式，不得使用 JSON、CSV、YAML、Gob 等通用格式。
+- When 需要保存变长字符串时，系统 shall 使用 length-prefixed bytes 或 string table，不得保存带字段名的文本对象。
+- When 需要保存整数、浮点数、时间戳或布尔值时，系统 shall 使用固定宽度、varint、delta、bit-pack 等二进制编码。
+- When 需要保存结构元数据时，系统 shall 使用显式 magic、version、flags、record count 与字段顺序编码。
+- When 读取未知 magic 或 version 时，系统 shall 返回明确的 unsupported format 错误。
+- When 需要调试可读信息时，系统 may 通过独立工具导出 JSON，但存储文件本身 shall 保持二进制格式。
 
 ### SSTable v2 Encoding
 
@@ -75,6 +87,8 @@ Phase 2 的目标是在继续建设上层能力之前，先把存储层关键路
 ### Manifest 与崩溃一致性
 
 - When 写 manifest 时，系统 shall 使用临时文件、fsync 文件、rename、fsync 目录的顺序完成原子替换。
+- When 写 manifest 内容时，系统 shall 使用二进制 manifest encoding，不得使用 JSON。
+- When 写 catalog snapshot 或 catalog WAL 时，系统 shall 使用二进制 catalog encoding，不得使用 JSON。
 - When 打开 shard 时，系统 shall 只加载 manifest 中引用的 Part。
 - When shard 目录存在孤儿 Part 时，系统 shall 不暴露它；清理可以延迟到后续维护流程。
 - When manifest 损坏时，系统 shall 返回明确错误，阻止继续打开 shard。
@@ -107,7 +121,7 @@ Phase 2 的目标是在继续建设上层能力之前，先把存储层关键路
 
 ### WAL v2
 
-WAL 保留现有 frame 外壳：length、version、record type、payload、CRC32C。Phase 2 改造 payload：从 JSON 编码切换为内部二进制 batch encoding。batch payload 包含 record count，每条 point 包含 database/policy/measurement/tag 已解析后的 seriesID、timestamp、writeSeq 和 fields。字段值按类型编码，避免 JSON marshal/unmarshal 热点。
+WAL 保留现有 frame 外壳：length、version、record type、payload、CRC32C。Phase 2 改造 payload：从 JSON 编码切换为内部二进制 batch encoding。batch payload 包含 record count，每条 point 包含 database/policy/measurement/tag 已解析后的 seriesID、timestamp、writeSeq 和 fields。字段值按类型编码，避免 JSON marshal/unmarshal 热点，并减少 WAL 文件体积。
 
 ### SSTable v2
 
@@ -120,6 +134,10 @@ Part 仍采用目录式结构，保留 `metadata`、`metaindex`、`index`、`tim
 - string block：offset table + bytes，或 length-prefixed bytes。
 
 所有 block 继续使用 CRC32C framing。metadata 中记录 format version，便于未来兼容 v1/v2。
+
+### Catalog 与 Manifest v2
+
+Catalog snapshot、catalog WAL、shard manifest、Part metadata、index、metaindex 全部切换为二进制 codec。每类文件使用独立 magic，例如 `MTSCAT2`、`MTSMAN2`、`MTSPRT2`，并统一采用 `magic + version + flags + payload length + payload + crc32c` 的文件级 envelope。payload 内部使用显式字段顺序和 varint/length-prefixed 编码，不保存 JSON 字段名。
 
 ### Query Path
 
