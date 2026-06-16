@@ -27,6 +27,12 @@ type shardBatch struct {
 	points []model.ResolvedPoint
 }
 
+type shardLookupKey struct {
+	database string
+	policy   string
+	start    int64
+}
+
 func Open(_ context.Context, opts model.Options) (*Engine, error) {
 	opts = normalizeOptions(opts)
 	if opts.Path == "" {
@@ -104,13 +110,10 @@ func (e *Engine) Flush(_ context.Context) error {
 
 func (e *Engine) groupByShardLocked(points []model.ResolvedPoint) ([]shardBatch, error) {
 	positions := make(map[*Shard]int)
+	shards := make(map[shardLookupKey]*Shard, 1)
 	batches := make([]shardBatch, 0, 1)
 	for index := range points {
-		shard, err := e.shardForLocked(
-			points[index].Database,
-			points[index].RetentionPolicy,
-			points[index].Timestamp,
-		)
+		shard, err := e.shardForPointLocked(points[index], shards)
 		if err != nil {
 			return nil, err
 		}
@@ -131,8 +134,28 @@ func (e *Engine) groupByShardLocked(points []model.ResolvedPoint) ([]shardBatch,
 	return batches, nil
 }
 
-func (e *Engine) shardForLocked(database string, policy string, timestamp int64) (*Shard, error) {
-	start := shardStart(timestamp, e.opts.ShardDuration)
+func (e *Engine) shardForPointLocked(
+	point model.ResolvedPoint,
+	shards map[shardLookupKey]*Shard,
+) (*Shard, error) {
+	start := shardStart(point.Timestamp, e.opts.ShardDuration)
+	key := shardLookupKey{
+		database: point.Database,
+		policy:   point.RetentionPolicy,
+		start:    start,
+	}
+	if shard, ok := shards[key]; ok {
+		return shard, nil
+	}
+	shard, err := e.shardForStartLocked(key.database, key.policy, key.start)
+	if err != nil {
+		return nil, err
+	}
+	shards[key] = shard
+	return shard, nil
+}
+
+func (e *Engine) shardForStartLocked(database string, policy string, start int64) (*Shard, error) {
 	id := shardID(database, policy, start)
 	if shard, ok := e.shards[id]; ok {
 		return shard, nil

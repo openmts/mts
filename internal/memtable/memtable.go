@@ -252,7 +252,7 @@ func columnDataFromBuffer(column *columnBuffer, query Query) model.ColumnData {
 }
 
 func (c *columnBuffer) appendSample(sample model.VersionedSample) {
-	if c.count == 0 {
+	if c.count == 0 && cap(c.samples) == 0 {
 		c.first = sample
 		c.count = 1
 		return
@@ -266,7 +266,7 @@ func (c *columnBuffer) reserve(additional int) {
 		return
 	}
 	target := len(c.samples) + additional
-	if c.count == 0 {
+	if c.count == 0 && additional == 1 {
 		target--
 	}
 	if target <= cap(c.samples) {
@@ -281,7 +281,9 @@ func (c *columnBuffer) appendColumn(src *columnBuffer) {
 	if src.count == 0 {
 		return
 	}
-	c.appendSample(src.first)
+	if len(src.samples) != src.count {
+		c.appendSample(src.first)
+	}
 	for _, sample := range src.samples {
 		c.appendSample(sample)
 	}
@@ -291,11 +293,43 @@ func compactSamples(column *columnBuffer, query Query) []model.VersionedSample {
 	if column.count == 0 {
 		return []model.VersionedSample{}
 	}
+	if len(column.samples) == column.count {
+		return compactDenseSamples(column.samples, query)
+	}
 	samples := make([]model.VersionedSample, 0, column.count)
 	samples = appendMatchingSample(samples, column.first, query)
 	for _, sample := range column.samples {
 		samples = appendMatchingSample(samples, sample, query)
 	}
+	return compactMaterializedSamples(samples)
+}
+
+func compactDenseSamples(samples []model.VersionedSample, query Query) []model.VersionedSample {
+	if denseSamplesInRangeSortedUnique(samples, query) {
+		return samples
+	}
+	filtered := make([]model.VersionedSample, 0, len(samples))
+	for _, sample := range samples {
+		filtered = appendMatchingSample(filtered, sample, query)
+	}
+	return compactMaterializedSamples(filtered)
+}
+
+func denseSamplesInRangeSortedUnique(samples []model.VersionedSample, query Query) bool {
+	var previous int64
+	for index, sample := range samples {
+		if sample.Timestamp < query.Start || sample.Timestamp > query.End {
+			return false
+		}
+		if index > 0 && sample.Timestamp <= previous {
+			return false
+		}
+		previous = sample.Timestamp
+	}
+	return true
+}
+
+func compactMaterializedSamples(samples []model.VersionedSample) []model.VersionedSample {
 	if len(samples) <= 1 {
 		return samples
 	}

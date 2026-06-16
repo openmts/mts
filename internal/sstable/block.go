@@ -15,9 +15,42 @@ const maxPooledBlockFrameBytes = 1 << 20
 
 var blockFramePool = sync.Pool{
 	New: func() any {
-		buffer := make([]byte, 0, 4096)
-		return &buffer
+		return &blockFrame{buf: make([]byte, 0, 4096)}
 	},
+}
+
+type blockFrame struct {
+	buf []byte
+}
+
+type blockWriter struct {
+	file   *os.File
+	offset int64
+}
+
+type blockPayload struct {
+	data  []byte
+	frame *blockFrame
+}
+
+func newBlockWriter(file *os.File) (*blockWriter, error) {
+	offset, err := file.Seek(0, io.SeekEnd)
+	if err != nil {
+		return nil, fmt.Errorf("seek block writer: %w", err)
+	}
+	return &blockWriter{
+		file:   file,
+		offset: offset,
+	}, nil
+}
+
+func (w *blockWriter) write(payload []byte) (blockRef, error) {
+	ref, err := writeBlockAt(w.file, w.offset, payload)
+	if err != nil {
+		return blockRef{}, err
+	}
+	w.offset += ref.Size
+	return ref, nil
 }
 
 func writeBlock(file *os.File, payload []byte) (blockRef, error) {
@@ -25,11 +58,16 @@ func writeBlock(file *os.File, payload []byte) (blockRef, error) {
 	if err != nil {
 		return blockRef{}, fmt.Errorf("seek block writer: %w", err)
 	}
+	return writeBlockAt(file, offset, payload)
+}
+
+func writeBlockAt(file *os.File, offset int64, payload []byte) (blockRef, error) {
 	if uint64(len(payload)) > uint64(^uint32(0)) {
 		return blockRef{}, fmt.Errorf("block payload too large: %d", len(payload))
 	}
-	frame := borrowBlockFrame(len(payload) + 8)
-	defer releaseBlockFrame(frame)
+	handle := borrowBlockFrameHandle(len(payload) + 8)
+	defer releaseBlockFrameHandle(handle)
+	frame := handle.buf
 	binary.BigEndian.PutUint32(frame[:4], uint32(len(payload)))
 	copy(frame[4:], payload)
 	checksum := crc32.Checksum(payload, crcTable)
@@ -44,26 +82,38 @@ func writeBlock(file *os.File, payload []byte) (blockRef, error) {
 }
 
 func borrowBlockFrame(size int) []byte {
+	return borrowBlockFrameHandle(size).buf
+}
+
+func borrowBlockFrameHandle(size int) *blockFrame {
 	if size > maxPooledBlockFrameBytes {
-		return make([]byte, size)
+		return &blockFrame{buf: make([]byte, size)}
 	}
-	ptr, ok := blockFramePool.Get().(*[]byte)
-	if !ok || ptr == nil {
-		return make([]byte, size)
+	frame, ok := blockFramePool.Get().(*blockFrame)
+	if !ok {
+		return &blockFrame{buf: make([]byte, size)}
 	}
-	frame := *ptr
-	if cap(frame) < size {
-		return make([]byte, size)
+	if cap(frame.buf) < size {
+		frame.buf = make([]byte, size)
+		return frame
 	}
-	return frame[:size]
+	frame.buf = frame.buf[:size]
+	return frame
 }
 
 func releaseBlockFrame(frame []byte) {
 	if cap(frame) > maxPooledBlockFrameBytes {
 		return
 	}
-	frame = frame[:0]
-	blockFramePool.Put(&frame)
+	releaseBlockFrameHandle(&blockFrame{buf: frame[:0]})
+}
+
+func releaseBlockFrameHandle(frame *blockFrame) {
+	if frame == nil || cap(frame.buf) > maxPooledBlockFrameBytes {
+		return
+	}
+	frame.buf = frame.buf[:0]
+	blockFramePool.Put(frame)
 }
 
 func writeAll(file *os.File, data []byte) error {
@@ -97,22 +147,48 @@ func readBlock(path string, ref blockRef) ([]byte, error) {
 }
 
 func readBlockFrom(file *os.File, ref blockRef) ([]byte, error) {
-	frame := make([]byte, ref.Size)
-	if _, err := file.ReadAt(frame, ref.Offset); err != nil {
-		return nil, fmt.Errorf("read block: %w", err)
+	payload, err := readBlockPayloadFrom(file, ref)
+	if err != nil {
+		return nil, err
 	}
-	if len(frame) < 8 {
-		return nil, fmt.Errorf("block frame is too small")
+	data := append([]byte(nil), payload.Bytes()...)
+	payload.Release()
+	return data, nil
+}
+
+func readBlockPayloadFrom(file *os.File, ref blockRef) (blockPayload, error) {
+	if ref.Size < 8 {
+		return blockPayload{}, fmt.Errorf("block frame is too small")
 	}
-	length := binary.BigEndian.Uint32(frame[:4])
-	if int(length) != len(frame)-8 {
-		return nil, fmt.Errorf("block length mismatch")
+	frame := borrowBlockFrameHandle(int(ref.Size))
+	if _, err := file.ReadAt(frame.buf, ref.Offset); err != nil {
+		releaseBlockFrameHandle(frame)
+		return blockPayload{}, fmt.Errorf("read block: %w", err)
 	}
-	payload := frame[4 : len(frame)-4]
-	want := binary.BigEndian.Uint32(frame[len(frame)-4:])
+	length := binary.BigEndian.Uint32(frame.buf[:4])
+	if int(length) != len(frame.buf)-8 {
+		releaseBlockFrameHandle(frame)
+		return blockPayload{}, fmt.Errorf("block length mismatch")
+	}
+	payload := frame.buf[4 : len(frame.buf)-4]
+	want := binary.BigEndian.Uint32(frame.buf[len(frame.buf)-4:])
 	got := crc32.Checksum(payload, crcTable)
 	if got != want {
-		return nil, fmt.Errorf("block crc mismatch")
+		releaseBlockFrameHandle(frame)
+		return blockPayload{}, fmt.Errorf("block crc mismatch")
 	}
-	return payload, nil
+	return blockPayload{data: payload, frame: frame}, nil
+}
+
+func (p blockPayload) Bytes() []byte {
+	return p.data
+}
+
+func (p *blockPayload) Release() {
+	if p == nil || p.frame == nil {
+		return
+	}
+	releaseBlockFrameHandle(p.frame)
+	p.data = nil
+	p.frame = nil
 }

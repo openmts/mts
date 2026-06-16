@@ -42,8 +42,10 @@ func WritePart(root string, level int, id string, columns []model.ColumnData) (P
 }
 
 type partFiles struct {
-	timestamps *os.File
-	values     *os.File
+	timestamps  *os.File
+	values      *os.File
+	timeBlocks  *blockWriter
+	valueBlocks *blockWriter
 }
 
 func openPartFiles(path string) (*partFiles, error) {
@@ -56,9 +58,23 @@ func openPartFiles(path string) (*partFiles, error) {
 		closeErr := timestamps.Close()
 		return nil, fmt.Errorf("open values file: %w close timestamps: %v", err, closeErr)
 	}
+	timeBlocks, err := newBlockWriter(timestamps)
+	if err != nil {
+		indexErr := timestamps.Close()
+		valueErr := values.Close()
+		return nil, fmt.Errorf("open block writer: %w close timestamps: %v close values: %v", err, indexErr, valueErr)
+	}
+	valueBlocks, err := newBlockWriter(values)
+	if err != nil {
+		indexErr := timestamps.Close()
+		valueErr := values.Close()
+		return nil, fmt.Errorf("open value block writer: %w close timestamps: %v close values: %v", err, indexErr, valueErr)
+	}
 	return &partFiles{
-		timestamps: timestamps,
-		values:     values,
+		timestamps:  timestamps,
+		values:      values,
+		timeBlocks:  timeBlocks,
+		valueBlocks: valueBlocks,
 	}, nil
 }
 
@@ -87,16 +103,16 @@ func writeColumns(
 	id string,
 	columns []model.ColumnData,
 ) ([]indexRow, metadata, error) {
-	grouped := groupColumns(columns)
-	rows := make([]indexRow, 0, len(grouped))
+	groups := groupColumnRuns(columns)
+	rows := make([]indexRow, 0, len(groups))
 	meta := newMetadata(level, id)
-	for _, seriesID := range sortedSeriesIDs(grouped) {
-		row, err := writeSeries(files, seriesID, grouped[seriesID])
+	for _, group := range groups {
+		row, err := writeSeries(files, group.seriesID, group.columns)
 		if err != nil {
 			return nil, metadata{}, err
 		}
 		rows = append(rows, row)
-		updateMeta(&meta.Part, row, grouped[seriesID])
+		updateMeta(&meta.Part, row, group.columns)
 	}
 	return rows, meta, nil
 }
@@ -111,7 +127,7 @@ func writeSeries(
 	})
 	timestamps := collectTimestamps(columns)
 	timePayload := marshalTimeBlock(nil, timestamps)
-	timeRef, err := writeBlock(files.timestamps, timePayload)
+	timeRef, err := files.timeBlocks.write(timePayload)
 	if err != nil {
 		return indexRow{}, err
 	}
@@ -123,7 +139,7 @@ func writeSeries(
 		Columns:  make([]columnRef, 0, len(columns)),
 	}
 	for _, column := range columns {
-		ref, err := writeValueBlock(files.values, column, timestamps)
+		ref, err := writeValueBlock(files.valueBlocks, column, timestamps)
 		if err != nil {
 			return indexRow{}, err
 		}
@@ -133,7 +149,7 @@ func writeSeries(
 }
 
 func writeValueBlock(
-	file *os.File,
+	writer *blockWriter,
 	column model.ColumnData,
 	rowTimestamps []int64,
 ) (columnRef, error) {
@@ -141,7 +157,7 @@ func writeValueBlock(
 	if err != nil {
 		return columnRef{}, fmt.Errorf("encode value block: %w", err)
 	}
-	ref, err := writeBlock(file, payload)
+	ref, err := writer.write(payload)
 	if err != nil {
 		return columnRef{}, err
 	}

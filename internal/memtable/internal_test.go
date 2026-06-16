@@ -70,9 +70,12 @@ func TestApplyBatchReservesColumnCapacity(t *testing.T) {
 	if column.count != len(points) {
 		t.Fatalf("column count = %d, want %d", column.count, len(points))
 	}
-	wantSampleCapacity := len(points) - 1
+	wantSampleCapacity := len(points)
 	if cap(column.samples) != wantSampleCapacity {
 		t.Fatalf("column sample cap = %d, want %d", cap(column.samples), wantSampleCapacity)
+	}
+	if len(column.samples) != len(points) {
+		t.Fatalf("dense sample len = %d, want %d", len(column.samples), len(points))
 	}
 }
 

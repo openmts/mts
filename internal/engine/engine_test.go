@@ -716,6 +716,116 @@ func TestMergeColumnDataKeepsNewestSequence(t *testing.T) {
 	}
 }
 
+func TestMergeColumnDataOrderedFastPathAllocations(t *testing.T) {
+	columns := []model.ColumnData{
+		columnForMergeTest(2, 1, 0, 100),
+		columnForMergeTest(1, 1, 0, 100),
+		columnForMergeTest(1, 1, 50, 100),
+		columnForMergeTest(1, 2, 0, 100),
+	}
+	columns[2].Samples[0] = model.VersionedSample{
+		Timestamp: 50,
+		WriteSeq:  999,
+		Value:     model.Float64Value(999),
+	}
+	allocs := testing.AllocsPerRun(100, func() {
+		merged := mergeColumnData(columns)
+		if len(merged) != 3 {
+			t.Fatalf("merged column count = %d, want 3", len(merged))
+		}
+		if merged[0].SeriesID != 1 || merged[0].FieldID != 1 {
+			t.Fatalf("first column = (%d,%d), want (1,1)", merged[0].SeriesID, merged[0].FieldID)
+		}
+		if len(merged[0].Samples) != 150 {
+			t.Fatalf("merged samples = %d, want 150", len(merged[0].Samples))
+		}
+		if merged[0].Samples[50].Value.Float64 != 999 {
+			t.Fatalf("latest value at timestamp 50 = %v, want 999", merged[0].Samples[50].Value.Float64)
+		}
+	})
+	if allocs > 20 {
+		t.Fatalf("mergeColumnData ordered allocs/run = %.2f, want <= 20", allocs)
+	}
+}
+
+func TestMergeColumnDataSingleOrderedColumnKeepsNewestSequence(t *testing.T) {
+	merged := mergeColumnData([]model.ColumnData{
+		{
+			SeriesID:  1,
+			FieldID:   2,
+			FieldType: model.FieldInt64,
+			Samples: []model.VersionedSample{
+				{Timestamp: 10, WriteSeq: 1, Value: model.Int64Value(1)},
+				{Timestamp: 10, WriteSeq: 3, Value: model.Int64Value(3)},
+				{Timestamp: 20, WriteSeq: 2, Value: model.Int64Value(2)},
+			},
+		},
+	})
+	if len(merged) != 1 {
+		t.Fatalf("merged column count = %d, want 1", len(merged))
+	}
+	got := merged[0].Samples
+	if len(got) != 2 {
+		t.Fatalf("sample count = %d, want 2", len(got))
+	}
+	if got[0].Timestamp != 10 || got[0].Value.Int64 != 3 {
+		t.Fatalf("first sample = %#v, want timestamp 10 value 3", got[0])
+	}
+}
+
+func TestMergeColumnDataUnorderedSamplesUseFallback(t *testing.T) {
+	merged := mergeColumnData([]model.ColumnData{
+		{
+			SeriesID:  1,
+			FieldID:   2,
+			FieldType: model.FieldFloat64,
+			Samples: []model.VersionedSample{
+				{Timestamp: 20, WriteSeq: 1, Value: model.Float64Value(2)},
+				{Timestamp: 10, WriteSeq: 1, Value: model.Float64Value(1)},
+			},
+		},
+		{
+			SeriesID:  1,
+			FieldID:   2,
+			FieldType: model.FieldFloat64,
+			Samples: []model.VersionedSample{
+				{Timestamp: 10, WriteSeq: 3, Value: model.Float64Value(3)},
+			},
+		},
+	})
+	if len(merged) != 1 {
+		t.Fatalf("merged column count = %d, want 1", len(merged))
+	}
+	got := merged[0].Samples
+	if len(got) != 2 {
+		t.Fatalf("sample count = %d, want 2", len(got))
+	}
+	if got[0].Timestamp != 10 || got[0].Value.Float64 != 3 {
+		t.Fatalf("first sample = %#v, want timestamp 10 value 3", got[0])
+	}
+	if got[1].Timestamp != 20 || got[1].Value.Float64 != 2 {
+		t.Fatalf("second sample = %#v, want timestamp 20 value 2", got[1])
+	}
+}
+
+func columnForMergeTest(seriesID uint64, fieldID uint32, start int64, count int) model.ColumnData {
+	samples := make([]model.VersionedSample, 0, count)
+	for index := 0; index < count; index++ {
+		timestamp := start + int64(index)
+		samples = append(samples, model.VersionedSample{
+			Timestamp: timestamp,
+			WriteSeq:  uint64(index + 1),
+			Value:     model.Float64Value(float64(timestamp)),
+		})
+	}
+	return model.ColumnData{
+		SeriesID:  seriesID,
+		FieldID:   fieldID,
+		FieldType: model.FieldFloat64,
+		Samples:   samples,
+	}
+}
+
 func TestDecorateColumnsSkipsMissingCatalogEntries(t *testing.T) {
 	cat, err := catalog.Open(t.TempDir())
 	if err != nil {

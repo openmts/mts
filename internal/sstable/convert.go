@@ -6,16 +6,54 @@ import (
 	"codeberg.org/mts/mts/internal/model"
 )
 
+type columnGroup struct {
+	seriesID uint64
+	columns  []model.ColumnData
+}
+
 func groupColumns(columns []model.ColumnData) map[uint64][]model.ColumnData {
+	cloned := append([]model.ColumnData(nil), columns...)
+	groups := groupColumnRuns(cloned)
 	grouped := make(map[uint64][]model.ColumnData)
-	for _, column := range columns {
-		if !samplesSorted(column.Samples) {
-			column.Samples = cloneSamples(column.Samples)
-			sortSamples(column.Samples)
-		}
-		grouped[column.SeriesID] = append(grouped[column.SeriesID], column)
+	for _, group := range groups {
+		grouped[group.seriesID] = group.columns
 	}
 	return grouped
+}
+
+func groupColumnRuns(columns []model.ColumnData) []columnGroup {
+	if len(columns) == 0 {
+		return nil
+	}
+	sortColumnsForWrite(columns)
+	for index := range columns {
+		if !samplesSorted(columns[index].Samples) {
+			columns[index].Samples = cloneSamples(columns[index].Samples)
+			sortSamples(columns[index].Samples)
+		}
+	}
+	groups := make([]columnGroup, 0, len(columns))
+	for start := 0; start < len(columns); {
+		end := start + 1
+		for end < len(columns) && columns[end].SeriesID == columns[start].SeriesID {
+			end++
+		}
+		groups = append(groups, columnGroup{
+			seriesID: columns[start].SeriesID,
+			columns:  columns[start:end],
+		})
+		start = end
+	}
+	return groups
+}
+
+func sortColumnsForWrite(columns []model.ColumnData) {
+	sort.Slice(columns, func(i, j int) bool {
+		if columns[i].SeriesID != columns[j].SeriesID {
+			return columns[i].SeriesID < columns[j].SeriesID
+		}
+		return columns[i].FieldID < columns[j].FieldID
+	})
 }
 
 func sortedSeriesIDs(grouped map[uint64][]model.ColumnData) []uint64 {
@@ -33,6 +71,55 @@ func collectTimestamps(columns []model.ColumnData) []int64 {
 	if timestamps, ok := alignedTimestamps(columns); ok {
 		return timestamps
 	}
+	if columnsSamplesSorted(columns) {
+		return mergeColumnTimestamps(columns)
+	}
+	return collectTimestampsFallback(columns)
+}
+
+func mergeColumnTimestamps(columns []model.ColumnData) []int64 {
+	positions := make([]int, len(columns))
+	timestamps := make([]int64, 0, totalSamples(columns))
+	for {
+		timestamp, ok := nextTimestamp(columns, positions)
+		if !ok {
+			return timestamps
+		}
+		timestamps = append(timestamps, timestamp)
+		for columnIndex, column := range columns {
+			for positions[columnIndex] < len(column.Samples) &&
+				column.Samples[positions[columnIndex]].Timestamp == timestamp {
+				positions[columnIndex]++
+			}
+		}
+	}
+}
+
+func nextTimestamp(columns []model.ColumnData, positions []int) (int64, bool) {
+	var timestamp int64
+	found := false
+	for index, column := range columns {
+		if positions[index] >= len(column.Samples) {
+			continue
+		}
+		current := column.Samples[positions[index]].Timestamp
+		if !found || current < timestamp {
+			timestamp = current
+			found = true
+		}
+	}
+	return timestamp, found
+}
+
+func totalSamples(columns []model.ColumnData) int {
+	total := 0
+	for _, column := range columns {
+		total += len(column.Samples)
+	}
+	return total
+}
+
+func collectTimestampsFallback(columns []model.ColumnData) []int64 {
 	seen := make(map[int64]struct{})
 	for _, column := range columns {
 		for _, sample := range column.Samples {
@@ -47,6 +134,15 @@ func collectTimestamps(columns []model.ColumnData) []int64 {
 		return timestamps[i] < timestamps[j]
 	})
 	return timestamps
+}
+
+func columnsSamplesSorted(columns []model.ColumnData) bool {
+	for _, column := range columns {
+		if !samplesSorted(column.Samples) {
+			return false
+		}
+	}
+	return true
 }
 
 func alignedTimestamps(columns []model.ColumnData) ([]int64, bool) {

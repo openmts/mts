@@ -1,12 +1,14 @@
 package wal
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"codeberg.org/mts/mts/internal/codec"
 	"codeberg.org/mts/mts/internal/model"
 )
 
@@ -93,6 +95,32 @@ func TestBinaryPayloadDecodeValidationErrors(t *testing.T) {
 	}
 }
 
+func TestAppendTagsFastPathsAndStableMultiTagOrder(t *testing.T) {
+	tests := []struct {
+		name string
+		tags map[string]string
+		want []byte
+	}{
+		{name: "none", tags: nil, want: binary.AppendUvarint(nil, 0)},
+		{
+			name: "one",
+			tags: map[string]string{"host": "a"},
+			want: encodedTags("host", "a"),
+		},
+		{
+			name: "many",
+			tags: map[string]string{"region": "west", "host": "a"},
+			want: encodedTags("host", "a", "region", "west"),
+		},
+	}
+	for _, tt := range tests {
+		got := appendTags(nil, tt.tags)
+		if !bytes.Equal(got, tt.want) {
+			t.Fatalf("%s encoded tags = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
 func TestDecodeBatchRejectsTruncatedPayloadPrefixes(t *testing.T) {
 	payload, err := encodeBatch([]model.ResolvedPoint{{
 		Database:        "db",
@@ -117,6 +145,15 @@ func TestDecodeBatchRejectsTruncatedPayloadPrefixes(t *testing.T) {
 			t.Fatalf("decodeBatch(prefix %d) error = nil, want error", size)
 		}
 	}
+}
+
+func encodedTags(parts ...string) []byte {
+	dst := binary.AppendUvarint(nil, uint64(len(parts)/2))
+	for index := 0; index < len(parts); index += 2 {
+		dst = codec.AppendString(dst, parts[index])
+		dst = codec.AppendString(dst, parts[index+1])
+	}
+	return dst
 }
 
 func TestTruncateAllAfterCloseIsSafe(t *testing.T) {

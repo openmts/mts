@@ -6,6 +6,14 @@ import (
 )
 
 func seriesKey(measurement string, tags map[string]string) string {
+	if len(tags) == 0 {
+		return measurement
+	}
+	if len(tags) == 1 {
+		for key, value := range tags {
+			return measurement + "\xff" + key + "=" + value
+		}
+	}
 	parts := make([]string, 0, len(tags)+1)
 	parts = append(parts, measurement)
 	keys := make([]string, 0, len(tags))

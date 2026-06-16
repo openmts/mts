@@ -225,6 +225,46 @@ func TestCatalogResolvePointsMatchesResolvePoint(t *testing.T) {
 	}
 }
 
+func TestCatalogResolvePointClonesTagsAndResolvePointsBorrowsTags(t *testing.T) {
+	cat, err := catalog.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := cat.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+
+	single := catalogPoint("cpu", "single", 1)
+	resolvedSingle, err := cat.ResolvePoint(single)
+	if err != nil {
+		t.Fatalf("ResolvePoint() error = %v", err)
+	}
+	single.Tags["host"] = "changed"
+	if resolvedSingle.Tags["host"] != "single" {
+		t.Fatalf("ResolvePoint() tags alias input: %q", resolvedSingle.Tags["host"])
+	}
+
+	batch := catalogPoint("cpu", "batch", 2)
+	resolvedBatch, err := cat.ResolvePoints([]model.Point{batch})
+	if err != nil {
+		t.Fatalf("ResolvePoints() error = %v", err)
+	}
+	batch.Tags["host"] = "changed"
+	if resolvedBatch[0].Tags["host"] != "changed" {
+		t.Fatalf("ResolvePoints() cloned tags = %q, want borrowed map", resolvedBatch[0].Tags["host"])
+	}
+
+	series, ok := cat.Series(resolvedBatch[0].SeriesID)
+	if !ok {
+		t.Fatalf("Series(%d) not found", resolvedBatch[0].SeriesID)
+	}
+	if series.Tags["host"] != "batch" {
+		t.Fatalf("series tags changed through borrowed result: %q", series.Tags["host"])
+	}
+}
+
 func TestCatalogResolvePointsRejectsInvalidPoint(t *testing.T) {
 	cat, err := catalog.Open(t.TempDir())
 	if err != nil {

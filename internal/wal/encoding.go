@@ -244,6 +244,17 @@ func readField(reader *batchReader) (model.ResolvedField, error) {
 }
 
 func appendTags(dst []byte, tags map[string]string) []byte {
+	if len(tags) == 0 {
+		return binary.AppendUvarint(dst, 0)
+	}
+	if len(tags) == 1 {
+		dst = binary.AppendUvarint(dst, 1)
+		for key, value := range tags {
+			dst = codec.AppendString(dst, key)
+			dst = codec.AppendString(dst, value)
+			return dst
+		}
+	}
 	keys := make([]string, 0, len(tags))
 	for key := range tags {
 		keys = append(keys, key)

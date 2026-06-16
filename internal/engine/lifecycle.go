@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"path/filepath"
 	"time"
@@ -93,10 +94,15 @@ func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel in
 	keptParts, keptMeta := s.keepUnselectedParts(candidates)
 	nextManifest := sstable.Manifest{Parts: append(keptMeta, meta)}
 	if err := sstable.WriteManifest(s.opts.Dir, nextManifest); err != nil {
-		return err
+		closeErr := part.Close()
+		return errors.Join(err, closeErr)
 	}
+	oldParts := s.parts
 	s.parts = append(keptParts, part)
 	s.manifest = nextManifest
+	if err := closeSelectedParts(oldParts, candidates); err != nil {
+		return err
+	}
 	return removeOldParts(candidates, meta.ID)
 }
 
@@ -160,6 +166,17 @@ func (s *Shard) keepUnselectedParts(candidates []sstable.PartMeta) ([]*sstable.P
 		}
 	}
 	return keptParts, keptMeta
+}
+
+func closeSelectedParts(parts []*sstable.Part, selectedMeta []sstable.PartMeta) error {
+	selected := partIDSet(selectedMeta)
+	var err error
+	for _, part := range parts {
+		if _, ok := selected[part.Meta().ID]; ok {
+			err = errors.Join(err, part.Close())
+		}
+	}
+	return err
 }
 
 func partIDSet(parts []sstable.PartMeta) map[string]struct{} {

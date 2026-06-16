@@ -28,9 +28,11 @@ type Catalog struct {
 	nextSeriesID uint64
 	nextFieldID  uint32
 	seriesByKey  map[string]uint64
+	seriesByTag  map[string]map[string]map[string]uint64
 	series       map[uint64]Series
 	fieldsByKey  map[string]uint32
 	fields       map[uint32]Field
+	fieldSchemas map[string][]Field
 }
 
 func Open(dir string) (*Catalog, error) {
@@ -75,22 +77,29 @@ func (c *Catalog) ResolvePoint(point model.Point) (model.ResolvedPoint, error) {
 }
 
 func (c *Catalog) ResolvePoints(points []model.Point) ([]model.ResolvedPoint, error) {
+	totalFields := 0
 	for _, point := range points {
 		if err := validatePoint(point); err != nil {
 			return nil, err
 		}
+		totalFields += len(point.Fields)
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	resolved := make([]model.ResolvedPoint, 0, len(points))
+	arena := resolvedFieldArena{
+		fields: make([]model.ResolvedField, totalFields),
+	}
+	resolved := make([]model.ResolvedPoint, len(points))
 	changed := false
-	for _, point := range points {
-		got, pointChanged, err := c.resolvePointNoSnapshotLocked(point)
+	for index, point := range points {
+		// ResolvePoints feeds the synchronous engine write path, so the resolved
+		// point may borrow input tags instead of cloning them per sample.
+		got, pointChanged, err := c.resolvePointNoSnapshotLocked(point, false, &arena)
 		if err != nil {
 			return nil, err
 		}
 		changed = changed || pointChanged
-		resolved = append(resolved, got)
+		resolved[index] = got
 	}
 	if changed {
 		if err := c.saveSnapshotLocked(); err != nil {
@@ -109,37 +118,44 @@ func (c *Catalog) resolvePointLocked(point model.Point) (model.ResolvedPoint, er
 	if err != nil {
 		return model.ResolvedPoint{}, err
 	}
-	return model.ResolvedPoint{
-		Database:        point.Database,
-		RetentionPolicy: point.RetentionPolicy,
-		Measurement:     point.Measurement,
-		Tags:            cloneTags(point.Tags),
-		SeriesID:        series.ID,
-		Timestamp:       point.Timestamp,
-		Fields:          fields,
-	}, nil
+	return resolvedPointFrom(point, series.ID, fields, true), nil
 }
 
 func (c *Catalog) resolvePointNoSnapshotLocked(
 	point model.Point,
+	cloneResultTags bool,
+	arena *resolvedFieldArena,
 ) (model.ResolvedPoint, bool, error) {
 	series, seriesChanged, err := c.resolveSeriesNoSnapshotLocked(point.Measurement, point.Tags)
 	if err != nil {
 		return model.ResolvedPoint{}, false, err
 	}
-	fields, fieldsChanged, err := c.resolveFieldsNoSnapshotLocked(point.Measurement, point.Fields)
+	fields, fieldsChanged, err := c.resolveFieldsNoSnapshotLocked(point.Measurement, point.Fields, arena)
 	if err != nil {
 		return model.ResolvedPoint{}, false, err
+	}
+	return resolvedPointFrom(point, series.ID, fields, cloneResultTags), seriesChanged || fieldsChanged, nil
+}
+
+func resolvedPointFrom(
+	point model.Point,
+	seriesID uint64,
+	fields []model.ResolvedField,
+	cloneResultTags bool,
+) model.ResolvedPoint {
+	tags := point.Tags
+	if cloneResultTags {
+		tags = cloneTags(tags)
 	}
 	return model.ResolvedPoint{
 		Database:        point.Database,
 		RetentionPolicy: point.RetentionPolicy,
 		Measurement:     point.Measurement,
-		Tags:            cloneTags(point.Tags),
-		SeriesID:        series.ID,
+		Tags:            tags,
+		SeriesID:        seriesID,
 		Timestamp:       point.Timestamp,
 		Fields:          fields,
-	}, seriesChanged || fieldsChanged, nil
+	}
 }
 
 func (c *Catalog) MatchSeries(measurement string, tags map[string]string) []uint64 {
@@ -204,9 +220,11 @@ func newCatalog(dir string) *Catalog {
 		nextSeriesID: 1,
 		nextFieldID:  1,
 		seriesByKey:  make(map[string]uint64),
+		seriesByTag:  make(map[string]map[string]map[string]uint64),
 		series:       make(map[uint64]Series),
 		fieldsByKey:  make(map[string]uint32),
 		fields:       make(map[uint32]Field),
+		fieldSchemas: make(map[string][]Field),
 	}
 }
 

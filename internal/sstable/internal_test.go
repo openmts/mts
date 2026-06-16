@@ -71,6 +71,57 @@ func TestBlockFramePoolReusesSmallBuffer(t *testing.T) {
 	releaseBlockFrame(reused)
 }
 
+func TestBlockPayloadReleaseDoesNotCorruptCopiedData(t *testing.T) {
+	dir := t.TempDir()
+	file := mustCreateTestFile(t, filepath.Join(dir, "blocks.bin"))
+	ref, err := writeBlock(file, []byte("payload"))
+	if err != nil {
+		t.Fatalf("writeBlock() error = %v", err)
+	}
+	payload, err := readBlockPayloadFrom(file, ref)
+	if err != nil {
+		t.Fatalf("readBlockPayloadFrom() error = %v", err)
+	}
+	copied := append([]byte(nil), payload.Bytes()...)
+	payload.Release()
+	if string(copied) != "payload" {
+		t.Fatalf("copied payload = %q, want payload", string(copied))
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close(blocks.bin) error = %v", err)
+	}
+}
+
+func TestBlockWriterWritesSequentialOffsets(t *testing.T) {
+	dir := t.TempDir()
+	file := mustCreateTestFile(t, filepath.Join(dir, "blocks.bin"))
+	writer, err := newBlockWriter(file)
+	if err != nil {
+		t.Fatalf("newBlockWriter() error = %v", err)
+	}
+	first, err := writer.write([]byte("first"))
+	if err != nil {
+		t.Fatalf("writer.write(first) error = %v", err)
+	}
+	second, err := writer.write([]byte("second"))
+	if err != nil {
+		t.Fatalf("writer.write(second) error = %v", err)
+	}
+	if second.Offset != first.Offset+first.Size {
+		t.Fatalf("second offset = %d, want %d", second.Offset, first.Offset+first.Size)
+	}
+	got, err := readBlockFrom(file, second)
+	if err != nil {
+		t.Fatalf("readBlockFrom(second) error = %v", err)
+	}
+	if string(got) != "second" {
+		t.Fatalf("second payload = %q, want second", string(got))
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close(blocks.bin) error = %v", err)
+	}
+}
+
 func TestPartUnknownEncodingsAndSortHelpers(t *testing.T) {
 	dir := t.TempDir()
 	timePath := filepath.Join(dir, timestampsFile)
@@ -203,6 +254,74 @@ func TestCollectTimestampsAlignedAndSparseColumns(t *testing.T) {
 	}
 }
 
+func TestCollectTimestampsSparseOrderedAllocations(t *testing.T) {
+	columns := []model.ColumnData{
+		columnWithTimestamps(1, 1, 0, 100),
+		columnWithTimestamps(1, 2, 50, 100),
+		columnWithTimestamps(1, 3, 100, 100),
+	}
+	allocs := testing.AllocsPerRun(100, func() {
+		got := collectTimestamps(columns)
+		if len(got) != 200 {
+			t.Fatalf("timestamp count = %d, want 200", len(got))
+		}
+		if got[0] != 0 || got[len(got)-1] != 199 {
+			t.Fatalf("timestamp bounds = (%d,%d), want (0,199)", got[0], got[len(got)-1])
+		}
+	})
+	if allocs > 8 {
+		t.Fatalf("collectTimestamps ordered allocs/run = %.2f, want <= 8", allocs)
+	}
+}
+
+func TestCollectTimestampsUnsortedFallbackAndSortedSeriesIDs(t *testing.T) {
+	columns := []model.ColumnData{
+		{
+			Samples: []model.VersionedSample{
+				{Timestamp: 30},
+				{Timestamp: 10},
+			},
+		},
+		{
+			Samples: []model.VersionedSample{
+				{Timestamp: 20},
+				{Timestamp: 10},
+			},
+		},
+	}
+	got := collectTimestamps(columns)
+	if len(got) != 3 || got[0] != 10 || got[1] != 20 || got[2] != 30 {
+		t.Fatalf("timestamps = %v, want [10 20 30]", got)
+	}
+	grouped := map[uint64][]model.ColumnData{
+		3: nil,
+		1: nil,
+		2: nil,
+	}
+	ids := sortedSeriesIDs(grouped)
+	if len(ids) != 3 || ids[0] != 1 || ids[1] != 2 || ids[2] != 3 {
+		t.Fatalf("series ids = %v, want [1 2 3]", ids)
+	}
+}
+
+func columnWithTimestamps(seriesID uint64, fieldID uint32, start int64, count int) model.ColumnData {
+	samples := make([]model.VersionedSample, 0, count)
+	for index := 0; index < count; index++ {
+		timestamp := start + int64(index)
+		samples = append(samples, model.VersionedSample{
+			Timestamp: timestamp,
+			WriteSeq:  uint64(index + 1),
+			Value:     model.Float64Value(float64(timestamp)),
+		})
+	}
+	return model.ColumnData{
+		SeriesID:  seriesID,
+		FieldID:   fieldID,
+		FieldType: model.FieldFloat64,
+		Samples:   samples,
+	}
+}
+
 func TestPartQueryPrunesValueBlocksByField(t *testing.T) {
 	dir := t.TempDir()
 	columns := []model.ColumnData{
@@ -233,6 +352,112 @@ func TestPartQueryPrunesValueBlocksByField(t *testing.T) {
 	}
 	if stats.ValueBlocksRead != 1 {
 		t.Fatalf("ValueBlocksRead = %d, want 1", stats.ValueBlocksRead)
+	}
+}
+
+func TestOpenPartQueriesWithAlreadyOpenedBlockFiles(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+		columnWithField(1, 2, model.Float64Value(42)),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+
+	for _, name := range []string{indexFile, timestampsFile, valuesFile} {
+		path := filepath.Join(meta.Path, name)
+		if err := os.Rename(path, path+".moved"); err != nil {
+			t.Fatalf("Rename(%s) error = %v", name, err)
+		}
+	}
+
+	got, err := part.Query(Query{Start: 0, End: 10})
+	if err != nil {
+		t.Fatalf("Query() after block files moved error = %v", err)
+	}
+	if len(got) != 1 || len(got[0].Samples) != 1 || got[0].Samples[0].Value.Float64 != 42 {
+		t.Fatalf("Query() = %#v, want retained open file data", got)
+	}
+}
+
+func TestPartCloseIsIdempotentAndNilSafe(t *testing.T) {
+	if err := (*Part)(nil).Close(); err != nil {
+		t.Fatalf("nil Part Close() error = %v", err)
+	}
+
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+		columnWithField(1, 2, model.Float64Value(1)),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close() second error = %v", err)
+	}
+}
+
+func TestOpenPartReadFilesReportsMissingFiles(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := openPartReadFiles(dir); err == nil {
+		t.Fatal("openPartReadFiles(missing index) error = nil, want error")
+	}
+	if err := os.WriteFile(filepath.Join(dir, indexFile), nil, 0600); err != nil {
+		t.Fatalf("WriteFile(index) error = %v", err)
+	}
+	if _, err := openPartReadFiles(dir); err == nil {
+		t.Fatal("openPartReadFiles(missing timestamps) error = nil, want error")
+	}
+	if err := os.WriteFile(filepath.Join(dir, timestampsFile), nil, 0600); err != nil {
+		t.Fatalf("WriteFile(timestamps) error = %v", err)
+	}
+	if _, err := openPartReadFiles(dir); err == nil {
+		t.Fatal("openPartReadFiles(missing values) error = nil, want error")
+	}
+}
+
+func TestOpenPartClosesReadFilesOnBadMetaIndex(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{indexFile, timestampsFile, valuesFile} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0600); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", name, err)
+		}
+	}
+	metaIndexRef, err := writeBinaryBlock(filepath.Join(dir, metaindexFile), []byte("{"))
+	if err != nil {
+		t.Fatalf("writeBinaryBlock(metaindex) error = %v", err)
+	}
+	meta := metadata{
+		FormatVersion: partFormatVersion,
+		Part:          PartMeta{ID: "bad-metaindex"},
+		MetaIndexRef:  metaIndexRef,
+	}
+	if err := writeMetadata(dir, meta); err != nil {
+		t.Fatalf("writeMetadata() error = %v", err)
+	}
+	if _, err := OpenPart(dir); err == nil {
+		t.Fatal("OpenPart(bad metaindex) error = nil, want error")
+	}
+}
+
+func TestPartReadBlockRejectsUnknownFile(t *testing.T) {
+	part := &Part{files: &partReadFiles{}}
+	if _, err := part.readBlock("unknown.bin", blockRef{}); err == nil {
+		t.Fatal("readBlock(unknown file) error = nil, want error")
+	}
+	if err := closeFile(nil, "nil"); err != nil {
+		t.Fatalf("closeFile(nil) error = %v", err)
 	}
 }
 
@@ -506,6 +731,12 @@ func TestPartQueryRejectsBadLazyIndexBlock(t *testing.T) {
 	}
 	if err := indexFileHandle.Close(); err != nil {
 		t.Fatalf("Close(index) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, timestampsFile), nil, 0600); err != nil {
+		t.Fatalf("WriteFile(timestamps) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, valuesFile), nil, 0600); err != nil {
+		t.Fatalf("WriteFile(values) error = %v", err)
 	}
 	metaIndexPayload, err := encodeMetaIndexRows([]metaIndexRow{
 		{

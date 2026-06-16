@@ -1,6 +1,7 @@
 package sstable
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,15 +15,82 @@ func OpenPart(path string) (*Part, error) {
 	if err != nil {
 		return nil, err
 	}
+	files, err := openPartReadFiles(path)
+	if err != nil {
+		return nil, err
+	}
 	metaRows, err := loadPartMetaIndex(path, meta.MetaIndexRef)
 	if err != nil {
+		closeErr := files.close()
+		if closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
 		return nil, err
 	}
 	return &Part{
 		path:     filepath.Clean(path),
 		metadata: meta,
 		metaRows: metaRows,
+		files:    files,
 	}, nil
+}
+
+func openPartReadFiles(path string) (*partReadFiles, error) {
+	clean := filepath.Clean(path)
+	index, err := os.Open(filepath.Join(clean, indexFile))
+	if err != nil {
+		return nil, fmt.Errorf("open part index: %w", err)
+	}
+	timestamps, err := os.Open(filepath.Join(clean, timestampsFile))
+	if err != nil {
+		closeErr := index.Close()
+		return nil, errors.Join(fmt.Errorf("open part timestamps: %w", err), closeErr)
+	}
+	values, err := os.Open(filepath.Join(clean, valuesFile))
+	if err != nil {
+		indexErr := index.Close()
+		timeErr := timestamps.Close()
+		return nil, errors.Join(fmt.Errorf("open part values: %w", err), indexErr, timeErr)
+	}
+	return &partReadFiles{
+		index:      index,
+		timestamps: timestamps,
+		values:     values,
+	}, nil
+}
+
+func (f *partReadFiles) close() error {
+	if f == nil {
+		return nil
+	}
+	indexErr := closeFile(f.index, "part index")
+	timeErr := closeFile(f.timestamps, "part timestamps")
+	valueErr := closeFile(f.values, "part values")
+	f.index = nil
+	f.timestamps = nil
+	f.values = nil
+	return errors.Join(indexErr, timeErr, valueErr)
+}
+
+func closeFile(file *os.File, name string) error {
+	if file == nil {
+		return nil
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", name, err)
+	}
+	return nil
+}
+
+func (p *Part) Close() error {
+	if p == nil {
+		return nil
+	}
+	if err := p.files.close(); err != nil {
+		return err
+	}
+	p.files = nil
+	return nil
 }
 
 func (p *Part) Meta() PartMeta {
@@ -56,11 +124,12 @@ func (p *Part) Query(query Query) ([]model.ColumnData, error) {
 }
 
 func (p *Part) loadIndexRows() ([]indexRow, error) {
-	payload, err := readBlock(filepath.Join(p.path, indexFile), p.metadata.IndexRef)
+	payload, err := p.readBlockPayload(indexFile, p.metadata.IndexRef)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := decodeIndexRows(payload)
+	rows, err := decodeIndexRows(payload.Bytes())
+	payload.Release()
 	if err != nil {
 		return nil, fmt.Errorf("decode part index: %w", err)
 	}
@@ -92,11 +161,12 @@ func (p *Part) readTimeBlock(ref blockRef) (timeBlock, error) {
 	if p.stats != nil {
 		p.stats.TimeBlocksRead++
 	}
-	payload, err := readBlock(filepath.Join(p.path, timestampsFile), ref)
+	payload, err := p.readBlockPayload(timestampsFile, ref)
 	if err != nil {
 		return timeBlock{}, err
 	}
-	timestamps, err := unmarshalTimeBlock(payload)
+	timestamps, err := unmarshalTimeBlock(payload.Bytes())
+	payload.Release()
 	if err != nil {
 		return timeBlock{}, fmt.Errorf("decode time block: %w", err)
 	}
@@ -112,15 +182,52 @@ func (p *Part) readValueColumn(
 	if p.stats != nil {
 		p.stats.ValueBlocksRead++
 	}
-	payload, err := readBlock(filepath.Join(p.path, valuesFile), ref.ValueRef)
+	payload, err := p.readBlockPayload(valuesFile, ref.ValueRef)
 	if err != nil {
 		return model.ColumnData{}, err
 	}
-	block, err := unmarshalValueBlockWithTimestamps(payload, rowTimestamps, query)
+	block, err := unmarshalValueBlockWithTimestamps(payload.Bytes(), rowTimestamps, query)
+	payload.Release()
 	if err != nil {
 		return model.ColumnData{}, fmt.Errorf("decode value block: %w", err)
 	}
 	return columnFromBlock(seriesID, block), nil
+}
+
+func (p *Part) readBlock(name string, ref blockRef) ([]byte, error) {
+	if p.files == nil {
+		return readBlock(filepath.Join(p.path, name), ref)
+	}
+	switch name {
+	case indexFile:
+		return readBlockFrom(p.files.index, ref)
+	case timestampsFile:
+		return readBlockFrom(p.files.timestamps, ref)
+	case valuesFile:
+		return readBlockFrom(p.files.values, ref)
+	default:
+		return nil, fmt.Errorf("unsupported part block file %q", name)
+	}
+}
+
+func (p *Part) readBlockPayload(name string, ref blockRef) (blockPayload, error) {
+	if p.files == nil {
+		data, err := readBlock(filepath.Join(p.path, name), ref)
+		if err != nil {
+			return blockPayload{}, err
+		}
+		return blockPayload{data: data}, nil
+	}
+	switch name {
+	case indexFile:
+		return readBlockPayloadFrom(p.files.index, ref)
+	case timestampsFile:
+		return readBlockPayloadFrom(p.files.timestamps, ref)
+	case valuesFile:
+		return readBlockPayloadFrom(p.files.values, ref)
+	default:
+		return blockPayload{}, fmt.Errorf("unsupported part block file %q", name)
+	}
 }
 
 func (p *Part) resetReadStatsForTest() *readStats {
@@ -220,7 +327,9 @@ func columnFromBlock(seriesID uint64, block valueBlock) model.ColumnData {
 		FieldType: block.FieldType,
 		Samples:   block.Samples,
 	}
-	sortSamples(column.Samples)
+	if !samplesSorted(column.Samples) {
+		sortSamples(column.Samples)
+	}
 	return column
 }
 

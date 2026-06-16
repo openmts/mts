@@ -1,6 +1,10 @@
 package sstable
 
-import "codeberg.org/mts/mts/internal/model"
+import (
+	"os"
+
+	"codeberg.org/mts/mts/internal/model"
+)
 
 const (
 	metadataFile       = "metadata.bin"
@@ -93,7 +97,14 @@ type Part struct {
 	path     string
 	metadata metadata
 	metaRows []metaIndexRow
+	files    *partReadFiles
 	stats    *readStats
+}
+
+type partReadFiles struct {
+	index      *os.File
+	timestamps *os.File
+	values     *os.File
 }
 
 type readStats struct {

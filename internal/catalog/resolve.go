@@ -7,6 +7,20 @@ import (
 	"codeberg.org/mts/mts/internal/model"
 )
 
+type resolvedFieldArena struct {
+	fields []model.ResolvedField
+	offset int
+}
+
+func makeResolvedFields(count int, arena *resolvedFieldArena) []model.ResolvedField {
+	if arena == nil {
+		return make([]model.ResolvedField, count)
+	}
+	start := arena.offset
+	arena.offset += count
+	return arena.fields[start:arena.offset]
+}
+
 func (c *Catalog) resolveSeriesLocked(measurement string, tags map[string]string) (Series, error) {
 	series, changed, err := c.resolveSeriesNoSnapshotLocked(measurement, tags)
 	if err != nil {
@@ -24,6 +38,9 @@ func (c *Catalog) resolveSeriesNoSnapshotLocked(
 	measurement string,
 	tags map[string]string,
 ) (Series, bool, error) {
+	if id, ok := c.lookupSeriesID(measurement, tags); ok {
+		return c.series[id], false, nil
+	}
 	key := seriesKey(measurement, tags)
 	if id, ok := c.seriesByKey[key]; ok {
 		return c.series[id], false, nil
@@ -45,11 +62,54 @@ func (c *Catalog) resolveSeriesNoSnapshotLocked(
 	return series, true, nil
 }
 
+func (c *Catalog) lookupSeriesID(measurement string, tags map[string]string) (uint64, bool) {
+	if len(tags) == 0 {
+		id, ok := c.seriesByKey[measurement]
+		return id, ok
+	}
+	if len(tags) != 1 {
+		return 0, false
+	}
+	for key, value := range tags {
+		valuesByTagKey := c.seriesByTag[measurement]
+		if valuesByTagKey == nil {
+			return 0, false
+		}
+		values := valuesByTagKey[key]
+		if values == nil {
+			return 0, false
+		}
+		id, ok := values[value]
+		return id, ok
+	}
+	return 0, false
+}
+
+func (c *Catalog) upsertSingleTagSeries(series Series) {
+	if len(series.Tags) != 1 {
+		return
+	}
+	for key, value := range series.Tags {
+		valuesByTagKey := c.seriesByTag[series.Measurement]
+		if valuesByTagKey == nil {
+			valuesByTagKey = make(map[string]map[string]uint64, 1)
+			c.seriesByTag[series.Measurement] = valuesByTagKey
+		}
+		values := valuesByTagKey[key]
+		if values == nil {
+			values = make(map[string]uint64, 1)
+			valuesByTagKey[key] = values
+		}
+		values[value] = series.ID
+		return
+	}
+}
+
 func (c *Catalog) resolveFieldsLocked(
 	measurement string,
 	values map[string]model.FieldValue,
 ) ([]model.ResolvedField, error) {
-	fields, changed, err := c.resolveFieldsNoSnapshotLocked(measurement, values)
+	fields, changed, err := c.resolveFieldsNoSnapshotLocked(measurement, values, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -64,30 +124,66 @@ func (c *Catalog) resolveFieldsLocked(
 func (c *Catalog) resolveFieldsNoSnapshotLocked(
 	measurement string,
 	values map[string]model.FieldValue,
+	arena *resolvedFieldArena,
 ) ([]model.ResolvedField, bool, error) {
+	if fields, ok, err := c.resolveFieldsFromSchema(measurement, values, arena); ok || err != nil {
+		return fields, false, err
+	}
+
 	names := make([]string, 0, len(values))
 	for name := range values {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
-	fields := make([]model.ResolvedField, 0, len(names))
+	fields := makeResolvedFields(len(names), arena)
 	changed := false
-	for _, name := range names {
+	for index, name := range names {
 		value := values[name]
 		field, fieldChanged, err := c.resolveFieldNoSnapshotLocked(measurement, name, value.Type)
 		if err != nil {
 			return nil, false, err
 		}
 		changed = changed || fieldChanged
-		fields = append(fields, model.ResolvedField{
+		fields[index] = model.ResolvedField{
 			FieldID:   field.ID,
 			FieldName: field.Name,
 			Type:      field.Type,
 			Value:     value,
-		})
+		}
 	}
 	return fields, changed, nil
+}
+
+func (c *Catalog) resolveFieldsFromSchema(
+	measurement string,
+	values map[string]model.FieldValue,
+	arena *resolvedFieldArena,
+) ([]model.ResolvedField, bool, error) {
+	schema := c.fieldSchemas[measurement]
+	if len(schema) == 0 || len(schema) != len(values) {
+		return nil, false, nil
+	}
+	for _, field := range schema {
+		value, ok := values[field.Name]
+		if !ok {
+			return nil, false, nil
+		}
+		if field.Type != value.Type {
+			return nil, true, fmt.Errorf("%w: %s", ErrFieldTypeConflict, field.Name)
+		}
+	}
+	fields := makeResolvedFields(len(schema), arena)
+	for index, field := range schema {
+		value := values[field.Name]
+		fields[index] = model.ResolvedField{
+			FieldID:   field.ID,
+			FieldName: field.Name,
+			Type:      field.Type,
+			Value:     value,
+		}
+	}
+	return fields, true, nil
 }
 
 func (c *Catalog) resolveFieldNoSnapshotLocked(
@@ -95,6 +191,12 @@ func (c *Catalog) resolveFieldNoSnapshotLocked(
 	name string,
 	fieldType model.FieldType,
 ) (Field, bool, error) {
+	if field, ok := c.schemaField(measurement, name); ok {
+		if field.Type != fieldType {
+			return Field{}, false, fmt.Errorf("%w: %s", ErrFieldTypeConflict, name)
+		}
+		return field, false, nil
+	}
 	key := fieldKey(measurement, name)
 	if id, ok := c.fieldsByKey[key]; ok {
 		field := c.fields[id]
@@ -121,10 +223,22 @@ func (c *Catalog) resolveFieldNoSnapshotLocked(
 	return field, true, nil
 }
 
+func (c *Catalog) schemaField(measurement string, name string) (Field, bool) {
+	schema := c.fieldSchemas[measurement]
+	index := sort.Search(len(schema), func(index int) bool {
+		return schema[index].Name >= name
+	})
+	if index >= len(schema) || schema[index].Name != name {
+		return Field{}, false
+	}
+	return schema[index], true
+}
+
 func (c *Catalog) applySeries(series Series) {
 	series.Tags = cloneTags(series.Tags)
 	c.series[series.ID] = series
 	c.seriesByKey[seriesKey(series.Measurement, series.Tags)] = series.ID
+	c.upsertSingleTagSeries(series)
 	if series.ID >= c.nextSeriesID {
 		c.nextSeriesID = series.ID + 1
 	}
@@ -133,7 +247,27 @@ func (c *Catalog) applySeries(series Series) {
 func (c *Catalog) applyField(field Field) {
 	c.fields[field.ID] = field
 	c.fieldsByKey[fieldKey(field.Measurement, field.Name)] = field.ID
+	c.upsertFieldSchema(field)
 	if field.ID >= c.nextFieldID {
 		c.nextFieldID = field.ID + 1
 	}
+}
+
+func (c *Catalog) upsertFieldSchema(field Field) {
+	schema := c.fieldSchemas[field.Measurement]
+	for index, existing := range schema {
+		if existing.Name == field.Name {
+			schema[index] = field
+			c.fieldSchemas[field.Measurement] = schema
+			return
+		}
+		if existing.Name > field.Name {
+			schema = append(schema, Field{})
+			copy(schema[index+1:], schema[index:])
+			schema[index] = field
+			c.fieldSchemas[field.Measurement] = schema
+			return
+		}
+	}
+	c.fieldSchemas[field.Measurement] = append(schema, field)
 }
