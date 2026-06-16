@@ -13,19 +13,16 @@ import (
 )
 
 const (
-	catalogVersion      = 2
 	catalogRecordSeries = 1
 	catalogRecordField  = 2
+
+	snapshotCheckpointRecords = 4096
 )
 
 var catalogMagic = codec.Magic("MTSCAT2")
 
 func (c *Catalog) snapshotPath() string {
 	return filepath.Join(c.dir, "snapshot.bin")
-}
-
-func (c *Catalog) legacySnapshotPath() string {
-	return filepath.Join(c.dir, "snapshot.json")
 }
 
 func (c *Catalog) walPath() string {
@@ -36,7 +33,7 @@ func (c *Catalog) loadSnapshot() error {
 	data, err := os.ReadFile(c.snapshotPath())
 	if err != nil {
 		if os.IsNotExist(err) {
-			return c.rejectLegacySnapshot()
+			return nil
 		}
 		return fmt.Errorf("read catalog snapshot: %w", err)
 	}
@@ -63,6 +60,33 @@ func (c *Catalog) saveSnapshotLocked() error {
 	return nil
 }
 
+func (c *Catalog) checkpointSnapshotLocked(force bool) error {
+	if c.snapshotDirtyRecords == 0 {
+		return nil
+	}
+	if !force && c.snapshotDirtyRecords < snapshotCheckpointRecords {
+		return nil
+	}
+	if err := c.saveSnapshotLocked(); err != nil {
+		return err
+	}
+	if c.wal == nil {
+		c.snapshotDirtyRecords = 0
+		return nil
+	}
+	if err := c.wal.Truncate(0); err != nil {
+		return fmt.Errorf("truncate catalog wal after snapshot: %w", err)
+	}
+	if _, err := c.wal.Seek(0, 0); err != nil {
+		return fmt.Errorf("seek catalog wal after snapshot: %w", err)
+	}
+	if err := c.wal.Sync(); err != nil {
+		return fmt.Errorf("sync truncated catalog wal: %w", err)
+	}
+	c.snapshotDirtyRecords = 0
+	return nil
+}
+
 func (c *Catalog) replayWAL() error {
 	data, err := os.ReadFile(c.walPath())
 	if err != nil {
@@ -71,14 +95,17 @@ func (c *Catalog) replayWAL() error {
 		}
 		return fmt.Errorf("read catalog wal for replay: %w", err)
 	}
+	replayed := 0
 	for len(data) > 0 {
 		entry, rest, err := decodeWALRecord(data)
 		if err != nil {
 			return err
 		}
 		c.applyEntry(entry)
+		replayed++
 		data = rest
 	}
+	c.snapshotDirtyRecords += replayed
 	return nil
 }
 
@@ -87,7 +114,7 @@ func (c *Catalog) appendEntryLocked(entry walEntry) error {
 	if err != nil {
 		return fmt.Errorf("encode catalog wal entry: %w", err)
 	}
-	frame := codec.MarshalEnvelope(nil, catalogMagic, catalogVersion, 0, payload)
+	frame := codec.MarshalEnvelope(nil, catalogMagic, 0, payload)
 	encoded := binary.AppendUvarint(nil, uint64(len(frame)))
 	encoded = append(encoded, frame...)
 	if _, err := c.wal.Write(encoded); err != nil {
@@ -114,15 +141,6 @@ func (c *Catalog) applyEntry(entry walEntry) {
 			c.applyField(*entry.Field)
 		}
 	}
-}
-
-func (c *Catalog) rejectLegacySnapshot() error {
-	if _, err := os.Stat(c.legacySnapshotPath()); err == nil {
-		return fmt.Errorf("catalog snapshot legacy JSON format is unsupported: %s", c.legacySnapshotPath())
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat legacy catalog snapshot: %w", err)
-	}
-	return nil
 }
 
 func (c *Catalog) snapshotLocked() snapshot {
@@ -152,11 +170,11 @@ func encodeSnapshot(snap snapshot) []byte {
 	for _, field := range snap.Fields {
 		payload = appendField(payload, field)
 	}
-	return codec.MarshalEnvelope(nil, catalogMagic, catalogVersion, 0, payload)
+	return codec.MarshalEnvelope(nil, catalogMagic, 0, payload)
 }
 
 func decodeSnapshot(data []byte) (snapshot, error) {
-	env, err := codec.UnmarshalEnvelope(data, catalogMagic, catalogVersion)
+	env, err := codec.UnmarshalEnvelope(data, catalogMagic)
 	if err != nil {
 		return snapshot{}, err
 	}
@@ -262,7 +280,7 @@ func decodeWALRecord(data []byte) (walEntry, []byte, error) {
 }
 
 func decodeWALFrame(frame []byte) (walEntry, error) {
-	env, err := codec.UnmarshalEnvelope(frame, catalogMagic, catalogVersion)
+	env, err := codec.UnmarshalEnvelope(frame, catalogMagic)
 	if err != nil {
 		return walEntry{}, fmt.Errorf("decode catalog wal frame: %w", err)
 	}

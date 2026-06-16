@@ -243,16 +243,16 @@ func TestPartMultiSeriesQueryAllAndInvalidFiles(t *testing.T) {
 	if err := os.Mkdir(badPart, 0700); err != nil {
 		t.Fatalf("Mkdir(bad-part) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(badPart, "metadata.json"), []byte("{"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(badPart, "metadata.bin"), []byte("{"), 0600); err != nil {
 		t.Fatalf("WriteFile(bad metadata) error = %v", err)
 	}
 	if _, err := sstable.OpenPart(badPart); err == nil {
 		t.Fatal("OpenPart(bad metadata) error = nil, want error")
 	}
-	if err := os.WriteFile(filepath.Join(dir, "MANIFEST.json"), []byte("{"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "MANIFEST.bin"), []byte("{"), 0600); err != nil {
 		t.Fatalf("WriteFile(bad manifest) error = %v", err)
 	}
 	if _, err := sstable.LoadManifest(dir); err == nil {
-		t.Fatal("LoadManifest(bad json) error = nil, want error")
+		t.Fatal("LoadManifest(bad manifest) error = nil, want error")
 	}
 }

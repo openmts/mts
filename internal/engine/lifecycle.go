@@ -5,12 +5,17 @@ import (
 	"errors"
 	"io/fs"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/sstable"
 	"codeberg.org/mts/mts/internal/storagefs"
 )
+
+const streamingCompactionSeriesBatchSize = 256
+
+const maxCachedCompactionIndexRows = 65536
 
 func (e *Engine) Compact(_ context.Context) error {
 	e.mu.Lock()
@@ -77,14 +82,11 @@ func (s *Shard) maybeCompactLocked() error {
 
 func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel int) error {
 	hadTombstones := len(s.tombstones) > 0
-	columns, err := s.queryPartCandidates(candidates)
-	if err != nil {
-		return err
-	}
-	if len(columns) == 0 {
+	candidateParts := s.selectedParts(candidates)
+	if len(candidateParts) == 0 {
 		return nil
 	}
-	newParts, newMeta, err := s.writeCompactionOutputsLocked(outputLevel, columns)
+	newParts, newMeta, err := s.writeStreamingCompactionOutputsLocked(outputLevel, candidateParts)
 	if err != nil {
 		return err
 	}
@@ -110,34 +112,281 @@ func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel in
 	return nil
 }
 
-func (s *Shard) writeCompactionOutputsLocked(
+func (s *Shard) selectedParts(candidates []sstable.PartMeta) []*sstable.Part {
+	selected := partIDSet(candidates)
+	parts := make([]*sstable.Part, 0, len(candidates))
+	for _, part := range s.parts {
+		if _, ok := selected[part.Meta().ID]; ok {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
+func (s *Shard) writeStreamingCompactionOutputsLocked(
 	outputLevel int,
-	columns []model.ColumnData,
+	candidateParts []*sstable.Part,
 ) ([]*sstable.Part, []sstable.PartMeta, error) {
-	groups := splitCompactionColumns(columns, s.opts.Compaction.MaxOutputPartBytes)
-	parts := make([]*sstable.Part, 0, len(groups))
-	metas := make([]sstable.PartMeta, 0, len(groups))
-	for _, group := range groups {
-		meta, err := sstable.WritePartWithOptions(s.opts.Dir, outputLevel, s.nextPartID(), group, sstable.WriteOptions{
-			Compression: s.opts.Compression,
-		})
+	inputs, err := newCompactionInputs(candidateParts, s.opts.Start, s.opts.End)
+	if err != nil {
+		return nil, nil, err
+	}
+	seriesIDs, err := compactionSeriesIDs(inputs)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(seriesIDs) == 0 {
+		return nil, nil, nil
+	}
+	output := newCompactionOutput(s, outputLevel)
+	for _, seriesID := range seriesIDs {
+		columns, err := s.queryCompactionSeries(inputs, seriesID)
 		if err != nil {
-			closeErr := closeParts(parts)
-			return nil, nil, errors.Join(err, closeErr)
+			abortErr := output.abort()
+			return nil, nil, errors.Join(err, abortErr)
 		}
-		part, err := sstable.OpenPart(meta.Path)
-		if err != nil {
-			closeErr := closeParts(parts)
-			return nil, nil, errors.Join(err, closeErr)
+		if err := output.addSeries(columns); err != nil {
+			abortErr := output.abort()
+			return nil, nil, errors.Join(err, abortErr)
 		}
-		parts = append(parts, part)
-		metas = append(metas, meta)
+	}
+	parts, metas, err := output.close()
+	if err != nil {
+		abortErr := output.abort()
+		return nil, nil, errors.Join(err, abortErr)
 	}
 	return parts, metas, nil
 }
 
-func splitCompactionColumns(columns []model.ColumnData, targetBytes int64) [][]model.ColumnData {
-	if targetBytes <= 0 || len(columns) <= 1 {
+type compactionInput struct {
+	part   *sstable.Part
+	query  sstable.Query
+	reader *sstable.SeriesBatchReader
+}
+
+func newCompactionInputs(parts []*sstable.Part, start int64, end int64) ([]compactionInput, error) {
+	cacheReaders := shouldCacheCompactionReaders(parts)
+	inputs := make([]compactionInput, 0, len(parts))
+	for _, part := range parts {
+		query := sstable.Query{Start: start, End: end}
+		input := compactionInput{part: part, query: query}
+		if cacheReaders {
+			reader, err := sstable.NewSeriesBatchReader(part, query)
+			if err != nil {
+				return nil, err
+			}
+			input.reader = reader
+		}
+		inputs = append(inputs, input)
+	}
+	return inputs, nil
+}
+
+func shouldCacheCompactionReaders(parts []*sstable.Part) bool {
+	total := 0
+	for _, part := range parts {
+		total += part.Meta().SeriesCount
+		if total > maxCachedCompactionIndexRows {
+			return false
+		}
+	}
+	return true
+}
+
+func compactionSeriesIDs(inputs []compactionInput) ([]uint64, error) {
+	total := 0
+	for _, input := range inputs {
+		if input.reader != nil {
+			total += input.reader.SeriesCount()
+			continue
+		}
+		total += input.part.Meta().SeriesCount
+	}
+	ids := make([]uint64, 0, total)
+	for _, input := range inputs {
+		if input.reader != nil {
+			ids = input.reader.AppendSeriesIDs(ids)
+			continue
+		}
+		partIDs, err := input.part.SeriesIDs(input.query)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, partIDs...)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		return ids[i] < ids[j]
+	})
+	return compactSortedSeriesIDs(ids), nil
+}
+
+func compactSortedSeriesIDs(ids []uint64) []uint64 {
+	if len(ids) <= 1 {
+		return ids
+	}
+	write := 1
+	for read := 1; read < len(ids); read++ {
+		if ids[read] == ids[write-1] {
+			continue
+		}
+		ids[write] = ids[read]
+		write++
+	}
+	return ids[:write]
+}
+
+func (s *Shard) queryCompactionSeries(
+	inputs []compactionInput,
+	seriesID uint64,
+) ([]model.ColumnData, error) {
+	columns := make([]model.ColumnData, 0)
+	for _, input := range inputs {
+		var got []model.ColumnData
+		var err error
+		if input.reader != nil {
+			got, err = input.reader.QuerySeriesID(seriesID)
+		} else {
+			got, err = input.part.QuerySeriesIDs(input.query, []uint64{seriesID})
+		}
+		if err != nil {
+			return nil, err
+		}
+		columns = append(columns, got...)
+	}
+	merged := mergeColumnData(columns)
+	return applyTombstones(merged, s.tombstones), nil
+}
+
+func forEachCompactionSeriesGroup(
+	columns []model.ColumnData,
+	visit func([]model.ColumnData) error,
+) error {
+	if len(columns) == 0 {
+		return nil
+	}
+	sortColumnData(columns)
+	for start := 0; start < len(columns); {
+		end := start + 1
+		for end < len(columns) && columns[end].SeriesID == columns[start].SeriesID {
+			end++
+		}
+		if err := visit(columns[start:end]); err != nil {
+			return err
+		}
+		start = end
+	}
+	return nil
+}
+
+type compactionOutput struct {
+	shard        *Shard
+	outputLevel  int
+	writer       *sstable.PartWriter
+	currentBytes int64
+	parts        []*sstable.Part
+	metas        []sstable.PartMeta
+}
+
+func newCompactionOutput(shard *Shard, outputLevel int) *compactionOutput {
+	return &compactionOutput{
+		shard:       shard,
+		outputLevel: outputLevel,
+		parts:       make([]*sstable.Part, 0),
+		metas:       make([]sstable.PartMeta, 0),
+	}
+}
+
+func (o *compactionOutput) addSeries(columns []model.ColumnData) error {
+	if len(columns) == 0 {
+		return nil
+	}
+	for _, group := range splitLargeSeriesColumns(columns, o.shard.opts.Compaction.MaxOutputPartBytes) {
+		if err := o.addSeriesGroup(group); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (o *compactionOutput) addSeriesGroup(columns []model.ColumnData) error {
+	columnsBytes := estimateColumnsBytes(columns)
+	if o.shouldRoll(columnsBytes) {
+		if err := o.closeCurrent(); err != nil {
+			return err
+		}
+	}
+	if o.writer == nil {
+		writer, err := sstable.NewPartWriter(o.shard.opts.Dir, o.outputLevel, o.shard.nextPartID(), sstable.WriteOptions{
+			Compression: o.shard.opts.Compression,
+		})
+		if err != nil {
+			return err
+		}
+		o.writer = writer
+	}
+	if err := o.writer.AddSeries(columns); err != nil {
+		return err
+	}
+	o.currentBytes += columnsBytes
+	return nil
+}
+
+func (o *compactionOutput) shouldRoll(seriesBytes int64) bool {
+	target := o.shard.opts.Compaction.MaxOutputPartBytes
+	return target > 0 && o.writer != nil && o.currentBytes > 0 && o.currentBytes+seriesBytes > target
+}
+
+func (o *compactionOutput) close() ([]*sstable.Part, []sstable.PartMeta, error) {
+	if err := o.closeCurrent(); err != nil {
+		return nil, nil, err
+	}
+	return o.parts, o.metas, nil
+}
+
+func (o *compactionOutput) closeCurrent() error {
+	if o.writer == nil {
+		return nil
+	}
+	meta, err := o.writer.Close()
+	o.writer = nil
+	o.currentBytes = 0
+	if err != nil {
+		return err
+	}
+	part, err := sstable.OpenPart(meta.Path)
+	if err != nil {
+		return err
+	}
+	o.parts = append(o.parts, part)
+	o.metas = append(o.metas, meta)
+	return nil
+}
+
+func (o *compactionOutput) abort() error {
+	var err error
+	if o.writer != nil {
+		err = errors.Join(err, o.writer.Abort())
+		o.writer = nil
+	}
+	err = errors.Join(err, closeParts(o.parts))
+	for _, meta := range o.metas {
+		err = errors.Join(err, storagefs.RemoveAll(meta.Path))
+	}
+	o.parts = nil
+	o.metas = nil
+	return err
+}
+
+func estimateColumnsBytes(columns []model.ColumnData) int64 {
+	var total int64
+	for _, column := range columns {
+		total += estimateColumnBytes(column)
+	}
+	return total
+}
+
+func splitLargeSeriesColumns(columns []model.ColumnData, targetBytes int64) [][]model.ColumnData {
+	if targetBytes <= 0 || len(columns) <= 1 || estimateColumnsBytes(columns) <= targetBytes {
 		return [][]model.ColumnData{columns}
 	}
 	groups := make([][]model.ColumnData, 0, len(columns))
@@ -200,23 +449,6 @@ func (s *Shard) level0CompactionCandidates() ([]sstable.PartMeta, error) {
 		return candidates, nil
 	}
 	return nil, nil
-}
-
-func (s *Shard) queryPartCandidates(candidates []sstable.PartMeta) ([]model.ColumnData, error) {
-	selected := partIDSet(candidates)
-	columns := make([]model.ColumnData, 0)
-	for _, part := range s.parts {
-		if _, ok := selected[part.Meta().ID]; !ok {
-			continue
-		}
-		got, err := part.Query(sstable.Query{Start: s.opts.Start, End: s.opts.End})
-		if err != nil {
-			return nil, err
-		}
-		columns = append(columns, got...)
-	}
-	merged := mergeColumnData(columns)
-	return applyTombstones(merged, s.tombstones), nil
 }
 
 func (s *Shard) keepUnselectedParts(candidates []sstable.PartMeta) ([]*sstable.Part, []sstable.PartMeta) {

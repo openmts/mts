@@ -11,27 +11,39 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
+	"strings"
 	"time"
 
 	mts "codeberg.org/mts/mts"
 )
 
 type config struct {
-	dataDir        string
-	mode           string
-	fieldLayout    string
-	points         int
-	series         int
-	queryRepeat    int
-	cpuProfile     string
-	memProfile     string
-	prebuildPoints bool
-	prebuilt       []mts.Point
+	dataDir                      string
+	mode                         string
+	fieldLayout                  string
+	points                       int
+	series                       int
+	queryRepeat                  int
+	writeBatchSize               int
+	memTableMaxSamples           int
+	compactionEnabled            bool
+	compactionLevel0PartLimit    int
+	compactionLevel0SizeLimit    int64
+	compactionMaxOutputPartBytes int64
+	compactionBackgroundInterval time.Duration
+	flushOnExit                  bool
+	cpuProfile                   string
+	memProfile                   string
+	prebuildPoints               bool
+	prebuilt                     []mts.Point
 }
 
 const (
-	fieldLayoutDefault = "default"
-	fieldLayoutWide10  = "wide10"
+	fieldLayoutDefault        = "default"
+	fieldLayoutWide10         = "wide10"
+	defaultWriteBatchSize     = 1024
+	defaultMemTableMaxSamples = 8192
 )
 
 func main() {
@@ -71,7 +83,7 @@ func run(args []string) (err error) {
 	}()
 
 	ctx := context.Background()
-	eng, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 8192})
+	eng, err := mts.Open(ctx, storageOptions(dir, cfg))
 	if err != nil {
 		return fmt.Errorf("open engine: %w", err)
 	}
@@ -82,17 +94,43 @@ func run(args []string) (err error) {
 	if err := runWorkloadWithDir(ctx, eng, cfg, dir); err != nil {
 		return err
 	}
+	if cfg.flushOnExit && cfg.mode != "replay" {
+		if err := eng.Flush(ctx); err != nil {
+			return fmt.Errorf("flush on exit: %w", err)
+		}
+	}
 	if err := writeMemProfile(cfg.memProfile); err != nil {
 		return err
 	}
+	metrics, err := collectRunMetrics(dir)
+	if err != nil {
+		return err
+	}
 	log.Printf(
-		"mode=%s field_layout=%s points=%d series=%d query_repeat=%d data_dir=%s",
+		"mode=%s field_layout=%s points=%d series=%d query_repeat=%d write_batch_size=%d memtable_max_samples=%d compaction_enabled=%t data_dir=%s",
 		cfg.mode,
 		normalizedFieldLayout(cfg.fieldLayout),
 		cfg.points,
 		cfg.series,
 		cfg.queryRepeat,
+		normalizedWriteBatchSize(cfg),
+		normalizedMemTableMaxSamples(cfg),
+		cfg.compactionEnabled,
 		dir,
+	)
+	log.Printf(
+		"metrics sstable_count=%d data_dir_bytes=%d heap_alloc_bytes=%d heap_sys_bytes=%d heap_total_alloc_bytes=%d mallocs=%d frees=%d num_gc=%d pause_total_ns=%d rss_bytes=%d rss_peak_bytes=%d",
+		metrics.sstableCount,
+		metrics.dataDirBytes,
+		metrics.heapAllocBytes,
+		metrics.heapSysBytes,
+		metrics.heapTotalAllocBytes,
+		metrics.mallocs,
+		metrics.frees,
+		metrics.numGC,
+		metrics.pauseTotalNs,
+		metrics.rssBytes,
+		metrics.rssPeakBytes,
 	)
 	return nil
 }
@@ -107,6 +145,14 @@ func parseConfig(args []string) (config, error) {
 	flags.IntVar(&cfg.points, "points", 10000, "写入点数")
 	flags.IntVar(&cfg.series, "series", 100, "series 数量")
 	flags.IntVar(&cfg.queryRepeat, "query-repeat", 5, "查询重复次数")
+	flags.IntVar(&cfg.writeBatchSize, "write-batch-size", defaultWriteBatchSize, "每次 Engine.Write 提交的 point 数")
+	flags.IntVar(&cfg.memTableMaxSamples, "memtable-max-samples", defaultMemTableMaxSamples, "触发 MemTable flush 的 sample 数；wide10 中 1 point=10 samples")
+	flags.BoolVar(&cfg.compactionEnabled, "compaction-enabled", false, "启用 size-tiered compaction")
+	flags.IntVar(&cfg.compactionLevel0PartLimit, "compaction-level0-part-limit", 0, "Level-0 part 数超过该值时触发 compaction；0 使用引擎默认值")
+	flags.Int64Var(&cfg.compactionLevel0SizeLimit, "compaction-level0-size-limit", 0, "Level-0 part 总大小超过该值时触发 compaction；0 表示不按大小触发")
+	flags.Int64Var(&cfg.compactionMaxOutputPartBytes, "compaction-max-output-part-bytes", 0, "compaction 输出 part 目标大小；0 表示单 part 输出")
+	flags.DurationVar(&cfg.compactionBackgroundInterval, "compaction-background-interval", 0, "后台 compaction 间隔；0 表示不启动后台循环")
+	flags.BoolVar(&cfg.flushOnExit, "flush-on-exit", false, "workload 结束后强制 Flush，便于统计完整落盘后的 SSTable 数量")
 	flags.StringVar(&cfg.cpuProfile, "cpu-profile", "", "CPU profile 输出文件")
 	flags.StringVar(&cfg.memProfile, "mem-profile", "", "heap profile 输出文件")
 	flags.BoolVar(&cfg.prebuildPoints, "prebuild-points", false, "在 profile 主阶段前预生成 points")
@@ -134,6 +180,24 @@ func validateConfig(cfg config) error {
 	if cfg.queryRepeat < 0 {
 		return fmt.Errorf("query-repeat must be non-negative")
 	}
+	if cfg.writeBatchSize <= 0 {
+		return fmt.Errorf("write-batch-size must be positive")
+	}
+	if cfg.memTableMaxSamples <= 0 {
+		return fmt.Errorf("memtable-max-samples must be positive")
+	}
+	if cfg.compactionLevel0PartLimit < 0 {
+		return fmt.Errorf("compaction-level0-part-limit must be non-negative")
+	}
+	if cfg.compactionLevel0SizeLimit < 0 {
+		return fmt.Errorf("compaction-level0-size-limit must be non-negative")
+	}
+	if cfg.compactionMaxOutputPartBytes < 0 {
+		return fmt.Errorf("compaction-max-output-part-bytes must be non-negative")
+	}
+	if cfg.compactionBackgroundInterval < 0 {
+		return fmt.Errorf("compaction-background-interval must be non-negative")
+	}
 	switch normalizedFieldLayout(cfg.fieldLayout) {
 	case fieldLayoutDefault, fieldLayoutWide10:
 	default:
@@ -147,6 +211,35 @@ func normalizedFieldLayout(layout string) string {
 		return fieldLayoutDefault
 	}
 	return layout
+}
+
+func storageOptions(path string, cfg config) mts.Options {
+	return mts.Options{
+		Path:               path,
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: normalizedMemTableMaxSamples(cfg),
+		Compaction: mts.CompactionOptions{
+			Enabled:            cfg.compactionEnabled,
+			Level0PartLimit:    cfg.compactionLevel0PartLimit,
+			Level0SizeLimit:    cfg.compactionLevel0SizeLimit,
+			MaxOutputPartBytes: cfg.compactionMaxOutputPartBytes,
+			BackgroundInterval: cfg.compactionBackgroundInterval,
+		},
+	}
+}
+
+func normalizedWriteBatchSize(cfg config) int {
+	if cfg.writeBatchSize <= 0 {
+		return defaultWriteBatchSize
+	}
+	return cfg.writeBatchSize
+}
+
+func normalizedMemTableMaxSamples(cfg config) int {
+	if cfg.memTableMaxSamples <= 0 {
+		return defaultMemTableMaxSamples
+	}
+	return cfg.memTableMaxSamples
 }
 
 func prepareDataDir(path string) (string, func() error, error) {
@@ -171,6 +264,101 @@ func prepareDataDir(path string) (string, func() error, error) {
 	return dir, func() error {
 		return os.RemoveAll(dir)
 	}, nil
+}
+
+type runMetrics struct {
+	sstableCount        int
+	dataDirBytes        int64
+	heapAllocBytes      uint64
+	heapSysBytes        uint64
+	heapTotalAllocBytes uint64
+	mallocs             uint64
+	frees               uint64
+	numGC               uint32
+	pauseTotalNs        uint64
+	rssBytes            uint64
+	rssPeakBytes        uint64
+}
+
+func collectRunMetrics(root string) (runMetrics, error) {
+	var metrics runMetrics
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if strings.HasPrefix(entry.Name(), "sst-") {
+				metrics.sstableCount++
+			}
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		metrics.dataDirBytes += info.Size()
+		return nil
+	})
+	if err != nil {
+		return runMetrics{}, fmt.Errorf("collect run metrics: %w", err)
+	}
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	metrics.heapAllocBytes = mem.HeapAlloc
+	metrics.heapSysBytes = mem.HeapSys
+	metrics.heapTotalAllocBytes = mem.TotalAlloc
+	metrics.mallocs = mem.Mallocs
+	metrics.frees = mem.Frees
+	metrics.numGC = mem.NumGC
+	metrics.pauseTotalNs = mem.PauseTotalNs
+	metrics.rssBytes, metrics.rssPeakBytes = readProcessRSS()
+	return metrics, nil
+}
+
+func readProcessRSS() (uint64, uint64) {
+	data, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		return 0, 0
+	}
+	rss, peak, err := parseProcStatusRSS(string(data))
+	if err != nil {
+		return 0, 0
+	}
+	return rss, peak
+}
+
+func parseProcStatusRSS(status string) (uint64, uint64, error) {
+	var rss uint64
+	var peak uint64
+	for _, line := range strings.Split(status, "\n") {
+		switch {
+		case strings.HasPrefix(line, "VmRSS:"):
+			value, err := parseProcStatusKB(line)
+			if err != nil {
+				return 0, 0, err
+			}
+			rss = value
+		case strings.HasPrefix(line, "VmHWM:"):
+			value, err := parseProcStatusKB(line)
+			if err != nil {
+				return 0, 0, err
+			}
+			peak = value
+		}
+	}
+	return rss, peak, nil
+}
+
+func parseProcStatusKB(line string) (uint64, error) {
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return 0, fmt.Errorf("parse proc status line %q: missing value", line)
+	}
+	kb, err := strconv.ParseUint(fields[1], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse proc status line %q: %w", line, err)
+	}
+	return kb * 1024, nil
 }
 
 func startCPUProfile(path string) (func() error, error) {
@@ -261,7 +449,7 @@ func replayWorkload(ctx context.Context, eng *mts.Engine, cfg config, dir string
 	if err := eng.Close(ctx); err != nil {
 		return fmt.Errorf("close before replay: %w", err)
 	}
-	reopened, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 8192})
+	reopened, err := mts.Open(ctx, storageOptions(dir, cfg))
 	if err != nil {
 		return fmt.Errorf("reopen for replay: %w", err)
 	}
@@ -276,7 +464,7 @@ func replayWorkload(ctx context.Context, eng *mts.Engine, cfg config, dir string
 }
 
 func writePoints(ctx context.Context, eng *mts.Engine, cfg config) error {
-	const batchSize = 1024
+	batchSize := normalizedWriteBatchSize(cfg)
 	batch := make([]mts.Point, 0, batchSize)
 	for index := range cfg.points {
 		batch = append(batch, workloadPointAt(cfg, index))
@@ -297,7 +485,7 @@ func writePoints(ctx context.Context, eng *mts.Engine, cfg config) error {
 }
 
 func writePointsSynced(ctx context.Context, eng *mts.Engine, cfg config) error {
-	const batchSize = 1024
+	batchSize := normalizedWriteBatchSize(cfg)
 	batch := make([]mts.Point, 0, batchSize)
 	for index := range cfg.points {
 		batch = append(batch, workloadPointAt(cfg, index))

@@ -169,7 +169,7 @@ func alignedTimestamps(columns []model.ColumnData) ([]int64, bool) {
 
 func timeBlockFrom(timestamps []int64) timeBlock {
 	return timeBlock{
-		Encoding:   "plain-int64-v1",
+		Encoding:   "plain-int64",
 		MinTime:    timestamps[0],
 		MaxTime:    timestamps[len(timestamps)-1],
 		Timestamps: append([]int64{}, timestamps...),

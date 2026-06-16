@@ -35,6 +35,8 @@ type Catalog struct {
 	fieldSchemas map[string][]Field
 	databases    map[string]struct{}
 	policies     map[string]map[string]model.RetentionPolicy
+
+	snapshotDirtyRecords int
 }
 
 type Snapshot struct {
@@ -70,6 +72,9 @@ func (c *Catalog) Close() error {
 	if c.wal == nil {
 		return nil
 	}
+	if err := c.checkpointSnapshotLocked(true); err != nil {
+		return err
+	}
 	if err := c.wal.Close(); err != nil {
 		return fmt.Errorf("close catalog wal: %w", err)
 	}
@@ -99,6 +104,7 @@ func (c *Catalog) ResolvePoints(points []model.Point) ([]model.ResolvedPoint, er
 	arena := resolvedFieldArena{
 		fields: make([]model.ResolvedField, totalFields),
 	}
+	cache := &resolveBatchCache{}
 	resolved := make([]model.ResolvedPoint, len(points))
 	changed := false
 	metadataChanged := false
@@ -106,7 +112,7 @@ func (c *Catalog) ResolvePoints(points []model.Point) ([]model.ResolvedPoint, er
 		metadataChanged = c.ensureMetadataLocked(point.Database, point.RetentionPolicy) || metadataChanged
 		// ResolvePoints feeds the synchronous engine write path, so the resolved
 		// point may borrow input tags instead of cloning them per sample.
-		got, pointChanged, err := c.resolvePointNoSnapshotLocked(point, false, &arena)
+		got, pointChanged, err := c.resolvePointNoSnapshotCachedLocked(point, false, &arena, cache)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +120,7 @@ func (c *Catalog) ResolvePoints(points []model.Point) ([]model.ResolvedPoint, er
 		resolved[index] = got
 	}
 	if changed {
-		if err := c.saveSnapshotLocked(); err != nil {
+		if err := c.checkpointSnapshotLocked(false); err != nil {
 			return nil, err
 		}
 	}
@@ -166,12 +172,13 @@ func (c *Catalog) ensureMetadataLocked(database string, policy string) bool {
 	return changed
 }
 
-func (c *Catalog) resolvePointNoSnapshotLocked(
+func (c *Catalog) resolvePointNoSnapshotCachedLocked(
 	point model.Point,
 	cloneResultTags bool,
 	arena *resolvedFieldArena,
+	cache *resolveBatchCache,
 ) (model.ResolvedPoint, bool, error) {
-	series, seriesChanged, err := c.resolveSeriesNoSnapshotLocked(point.Measurement, point.Tags)
+	series, seriesChanged, err := c.resolveSeriesNoSnapshotCachedLocked(point.Measurement, point.Tags, cache)
 	if err != nil {
 		return model.ResolvedPoint{}, false, err
 	}

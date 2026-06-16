@@ -69,6 +69,153 @@ func TestRunWithPrebuiltPoints(t *testing.T) {
 	}
 }
 
+func TestRunWithStorageParameters(t *testing.T) {
+	root := t.TempDir()
+	err := run([]string{
+		"-data-dir", filepath.Join(root, "data"),
+		"-mode", "write",
+		"-field-layout", fieldLayoutWide10,
+		"-points", "40",
+		"-series", "4",
+		"-write-batch-size", "7",
+		"-memtable-max-samples", "40",
+		"-compaction-enabled",
+		"-compaction-level0-part-limit", "2",
+		"-compaction-level0-size-limit", "1024",
+		"-compaction-max-output-part-bytes", "2048",
+		"-compaction-background-interval", "10ms",
+		"-flush-on-exit",
+	})
+	if err != nil {
+		t.Fatalf("run(storage params) error = %v", err)
+	}
+}
+
+func TestParseConfigStorageParameters(t *testing.T) {
+	cfg, err := parseConfig([]string{
+		"-write-batch-size", "2048",
+		"-memtable-max-samples", "1000000",
+		"-compaction-enabled",
+		"-compaction-level0-part-limit", "8",
+		"-compaction-level0-size-limit", "1048576",
+		"-compaction-max-output-part-bytes", "268435456",
+		"-compaction-background-interval", "250ms",
+		"-flush-on-exit",
+	})
+	if err != nil {
+		t.Fatalf("parseConfig(storage params) error = %v", err)
+	}
+	if cfg.writeBatchSize != 2048 {
+		t.Fatalf("writeBatchSize = %d, want 2048", cfg.writeBatchSize)
+	}
+	if cfg.memTableMaxSamples != 1000000 {
+		t.Fatalf("memTableMaxSamples = %d, want 1000000", cfg.memTableMaxSamples)
+	}
+	if !cfg.compactionEnabled {
+		t.Fatal("compactionEnabled = false, want true")
+	}
+	if cfg.compactionLevel0PartLimit != 8 {
+		t.Fatalf("compactionLevel0PartLimit = %d, want 8", cfg.compactionLevel0PartLimit)
+	}
+	if cfg.compactionLevel0SizeLimit != 1048576 {
+		t.Fatalf("compactionLevel0SizeLimit = %d, want 1048576", cfg.compactionLevel0SizeLimit)
+	}
+	if cfg.compactionMaxOutputPartBytes != 268435456 {
+		t.Fatalf("compactionMaxOutputPartBytes = %d, want 268435456", cfg.compactionMaxOutputPartBytes)
+	}
+	if cfg.compactionBackgroundInterval != 250*time.Millisecond {
+		t.Fatalf("compactionBackgroundInterval = %s, want 250ms", cfg.compactionBackgroundInterval)
+	}
+	if !cfg.flushOnExit {
+		t.Fatal("flushOnExit = false, want true")
+	}
+}
+
+func TestStorageOptions(t *testing.T) {
+	cfg := config{
+		memTableMaxSamples:           1234,
+		compactionEnabled:            true,
+		compactionLevel0PartLimit:    3,
+		compactionLevel0SizeLimit:    4096,
+		compactionMaxOutputPartBytes: 8192,
+		compactionBackgroundInterval: time.Second,
+	}
+	opts := storageOptions("/tmp/mts-test", cfg)
+	if opts.Path != "/tmp/mts-test" {
+		t.Fatalf("Path = %q, want /tmp/mts-test", opts.Path)
+	}
+	if opts.MemTableMaxSamples != 1234 {
+		t.Fatalf("MemTableMaxSamples = %d, want 1234", opts.MemTableMaxSamples)
+	}
+	if !opts.Compaction.Enabled {
+		t.Fatal("Compaction.Enabled = false, want true")
+	}
+	if opts.Compaction.Level0PartLimit != 3 {
+		t.Fatalf("Level0PartLimit = %d, want 3", opts.Compaction.Level0PartLimit)
+	}
+	if opts.Compaction.Level0SizeLimit != 4096 {
+		t.Fatalf("Level0SizeLimit = %d, want 4096", opts.Compaction.Level0SizeLimit)
+	}
+	if opts.Compaction.MaxOutputPartBytes != 8192 {
+		t.Fatalf("MaxOutputPartBytes = %d, want 8192", opts.Compaction.MaxOutputPartBytes)
+	}
+	if opts.Compaction.BackgroundInterval != time.Second {
+		t.Fatalf("BackgroundInterval = %s, want 1s", opts.Compaction.BackgroundInterval)
+	}
+}
+
+func TestCollectRunMetrics(t *testing.T) {
+	root := t.TempDir()
+	partDir := filepath.Join(root, "data", "db", "rp", "shards", "0", "sst-000001")
+	if err := os.MkdirAll(partDir, 0700); err != nil {
+		t.Fatalf("MkdirAll(part) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(partDir, "values.bin"), []byte("abcd"), 0600); err != nil {
+		t.Fatalf("WriteFile(values) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "other.bin"), []byte("xy"), 0600); err != nil {
+		t.Fatalf("WriteFile(other) error = %v", err)
+	}
+	metrics, err := collectRunMetrics(root)
+	if err != nil {
+		t.Fatalf("collectRunMetrics() error = %v", err)
+	}
+	if metrics.sstableCount != 1 {
+		t.Fatalf("sstableCount = %d, want 1", metrics.sstableCount)
+	}
+	if metrics.dataDirBytes != 6 {
+		t.Fatalf("dataDirBytes = %d, want 6", metrics.dataDirBytes)
+	}
+	if metrics.heapSysBytes == 0 {
+		t.Fatal("heapSysBytes = 0, want runtime metric")
+	}
+	if metrics.heapTotalAllocBytes == 0 {
+		t.Fatal("heapTotalAllocBytes = 0, want runtime metric")
+	}
+	if metrics.mallocs == 0 {
+		t.Fatal("mallocs = 0, want runtime metric")
+	}
+	if metrics.pauseTotalNs == 0 && metrics.numGC > 0 {
+		t.Fatal("pauseTotalNs = 0 with numGC > 0, want GC pause metric")
+	}
+}
+
+func TestParseProcStatusRSS(t *testing.T) {
+	rss, peak, err := parseProcStatusRSS("Name:\tmts\nVmHWM:\t  456 kB\nVmRSS:\t  123 kB\n")
+	if err != nil {
+		t.Fatalf("parseProcStatusRSS() error = %v", err)
+	}
+	if rss != 123*1024 {
+		t.Fatalf("rss = %d, want %d", rss, 123*1024)
+	}
+	if peak != 456*1024 {
+		t.Fatalf("peak = %d, want %d", peak, 456*1024)
+	}
+	if _, _, err := parseProcStatusRSS("VmRSS:\tbad kB\n"); err == nil {
+		t.Fatal("parseProcStatusRSS(bad) error = nil, want error")
+	}
+}
+
 func TestWorkloadsUsePrebuiltPoints(t *testing.T) {
 	ctx := context.Background()
 	for _, mode := range []string{"write", "compact"} {
@@ -433,6 +580,12 @@ func TestValidateConfigRejectsInvalidValues(t *testing.T) {
 		{name: "zero series", cfg: config{mode: "query", points: 1, series: 0}},
 		{name: "series greater than points", cfg: config{mode: "query", points: 1, series: 2}},
 		{name: "negative query repeat", cfg: config{mode: "query", points: 1, series: 1, queryRepeat: -1}},
+		{name: "zero write batch size", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 0, memTableMaxSamples: 1}},
+		{name: "zero memtable samples", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 0}},
+		{name: "negative level0 part limit", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 1, compactionLevel0PartLimit: -1}},
+		{name: "negative level0 size limit", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 1, compactionLevel0SizeLimit: -1}},
+		{name: "negative max output part bytes", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 1, compactionMaxOutputPartBytes: -1}},
+		{name: "negative background interval", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 1, compactionBackgroundInterval: -time.Second}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

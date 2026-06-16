@@ -54,7 +54,7 @@ func marshalCompressedValueBlock(
 	if err != nil {
 		return nil, err
 	}
-	dst = append(dst, valueEncodingV5)
+	dst = append(dst, valueEncodingPageCompressed)
 	dst = binary.AppendUvarint(dst, uint64(column.FieldID))
 	dst = append(dst, byte(column.FieldType))
 	dst = binary.AppendUvarint(dst, uint64(len(column.Samples)))
@@ -66,34 +66,50 @@ func marshalCompressedValueBlock(
 
 func unmarshalCompressedValueBlock(payload []byte, query Query) (valueBlock, error) {
 	reader := newBlockReader(payload)
-	header, err := readValueHeaderV5(reader)
+	header, err := readCompressedValueHeader(reader)
 	if err != nil {
 		return valueBlock{}, err
 	}
-	timestamps, err := readCodecTimestamps(reader, header.count)
+	timeCodec, timePayload, err := readCodecPayload(reader, "timestamps")
 	if err != nil {
 		return valueBlock{}, err
 	}
-	writeSeqs, err := readCodecWriteSeqs(reader, header.count)
+	writeSeqCodec, writeSeqPayload, err := readCodecPayload(reader, "write seqs")
 	if err != nil {
 		return valueBlock{}, err
 	}
-	values, err := readCodecValues(reader, header.fieldType, header.count)
+	valueCodec, valuePayload, err := readCodecPayload(reader, "values")
 	if err != nil {
 		return valueBlock{}, err
 	}
-	if err := reader.done("value block v5"); err != nil {
+	if err := reader.done("compressed value page"); err != nil {
 		return valueBlock{}, err
 	}
-	return buildValueBlock(header, timestamps, writeSeqs, values).filter(query), nil
+	samples, err := readCompressedSamples(
+		header.fieldType,
+		header.count,
+		codecPayload{codecID: timeCodec, payload: timePayload},
+		codecPayload{codecID: writeSeqCodec, payload: writeSeqPayload},
+		codecPayload{codecID: valueCodec, payload: valuePayload},
+		query,
+	)
+	if err != nil {
+		return valueBlock{}, err
+	}
+	return valueBlock{
+		Encoding:  "compressed-values",
+		FieldID:   header.fieldID,
+		FieldType: header.fieldType,
+		Samples:   samples,
+	}, nil
 }
 
-func readValueHeaderV5(reader *blockReader) (valueHeader, error) {
+func readCompressedValueHeader(reader *blockReader) (valueHeader, error) {
 	encoding, err := reader.byte("value encoding")
 	if err != nil {
 		return valueHeader{}, err
 	}
-	if encoding != valueEncodingV5 {
+	if encoding != valueEncodingPageCompressed {
 		return valueHeader{}, fmt.Errorf("unknown value encoding %d", encoding)
 	}
 	fieldID, err := reader.uint32("field id")
@@ -148,14 +164,21 @@ func appendWriteSeqsPayload(dst []byte, writeSeqs []uint64) []byte {
 }
 
 func readCodecPayload(reader *blockReader, name string) (byte, []byte, error) {
-	codecID, err := reader.byte(name + " codec")
-	if err != nil {
-		return 0, nil, err
+	if len(reader.rest) == 0 {
+		return 0, nil, fmt.Errorf("decode sstable %s codec: missing byte", name)
 	}
-	size, err := reader.intCount(name + " size")
-	if err != nil {
-		return 0, nil, err
+	codecID := reader.rest[0]
+	reader.rest = reader.rest[1:]
+	sizeValue, sizeBytes := binary.Uvarint(reader.rest)
+	if sizeBytes <= 0 {
+		return 0, nil, fmt.Errorf("decode sstable %s size: invalid uvarint", name)
 	}
+	reader.rest = reader.rest[sizeBytes:]
+	maxInt := uint64(int(^uint(0) >> 1))
+	if sizeValue > maxInt {
+		return 0, nil, fmt.Errorf("decode sstable %s size: count %d overflows int", name, sizeValue)
+	}
+	size := int(sizeValue)
 	if size > len(reader.rest) {
 		return 0, nil, fmt.Errorf("decode sstable %s: truncated payload", name)
 	}
@@ -164,16 +187,25 @@ func readCodecPayload(reader *blockReader, name string) (byte, []byte, error) {
 	return codecID, payload, nil
 }
 
+type codecPayload struct {
+	codecID byte
+	payload []byte
+}
+
 func readCodecWriteSeqs(reader *blockReader, count int) ([]uint64, error) {
 	codecID, payload, err := readCodecPayload(reader, "write seqs")
 	if err != nil {
 		return nil, err
 	}
+	return decodeCodecWriteSeqs(codecID, payload, count)
+}
+
+func decodeCodecWriteSeqs(codecID byte, payload []byte, count int) ([]uint64, error) {
 	if codecID != compressionPlain {
 		return nil, fmt.Errorf("unknown write seq compression %d", codecID)
 	}
-	payloadReader := newBlockReader(payload)
-	writeSeqs, err := readWriteSeqs(payloadReader, count)
+	payloadReader := blockReader{rest: payload}
+	writeSeqs, err := readWriteSeqs(&payloadReader, count)
 	if err != nil {
 		return nil, err
 	}

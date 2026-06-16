@@ -8,8 +8,6 @@ import (
 	"codeberg.org/mts/mts/internal/model"
 )
 
-const partFormatVersion = 2
-
 var (
 	partMagic      = codec.Magic("MTSPRT2")
 	indexMagic     = codec.Magic("MTSIDX2")
@@ -17,7 +15,7 @@ var (
 )
 
 func encodeMetadata(meta metadata) ([]byte, error) {
-	payload := binary.AppendUvarint(nil, uint64(meta.FormatVersion))
+	payload := make([]byte, 0)
 	var err error
 	payload, err = appendPartMeta(payload, meta.Part)
 	if err != nil {
@@ -32,19 +30,15 @@ func encodeMetadata(meta metadata) ([]byte, error) {
 		return nil, err
 	}
 	payload = binary.AppendVarint(payload, meta.CreatedUnix)
-	return codec.MarshalEnvelope(nil, partMagic, partFormatVersion, 0, payload), nil
+	return codec.MarshalEnvelope(nil, partMagic, 0, payload), nil
 }
 
 func decodeMetadata(data []byte) (metadata, error) {
-	env, err := codec.UnmarshalEnvelope(data, partMagic, partFormatVersion)
+	env, err := codec.UnmarshalEnvelope(data, partMagic)
 	if err != nil {
 		return metadata{}, err
 	}
 	reader := newBlockReader(env.Payload)
-	version, err := reader.intCount("metadata format version")
-	if err != nil {
-		return metadata{}, err
-	}
 	part, err := readPartMeta(reader)
 	if err != nil {
 		return metadata{}, err
@@ -56,7 +50,7 @@ func decodeMetadata(data []byte) (metadata, error) {
 	if err := reader.done("part metadata"); err != nil {
 		return metadata{}, err
 	}
-	return metadata{FormatVersion: version, Part: part, IndexRef: indexRef, MetaIndexRef: metaIndexRef, CreatedUnix: createdUnix}, nil
+	return metadata{Part: part, IndexRef: indexRef, MetaIndexRef: metaIndexRef, CreatedUnix: createdUnix}, nil
 }
 
 func readMetadataTail(reader *blockReader) (blockRef, blockRef, int64, error) {
@@ -81,11 +75,11 @@ func encodeIndexRows(rows []indexRow) ([]byte, error) {
 			return nil, err
 		}
 	}
-	return codec.MarshalEnvelope(nil, indexMagic, partFormatVersion, 0, payload), nil
+	return codec.MarshalEnvelope(nil, indexMagic, 0, payload), nil
 }
 
 func decodeIndexRows(data []byte) ([]indexRow, error) {
-	env, err := codec.UnmarshalEnvelope(data, indexMagic, partFormatVersion)
+	env, err := codec.UnmarshalEnvelope(data, indexMagic)
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +99,58 @@ func decodeIndexRows(data []byte) ([]indexRow, error) {
 	return rows, reader.done("index rows")
 }
 
+func newIndexRowStream(data []byte) (*indexRowStream, error) {
+	env, err := codec.UnmarshalEnvelopeView(data, indexMagic)
+	if err != nil {
+		return nil, err
+	}
+	reader := newBlockReader(env.Payload)
+	count, err := reader.intCount("index row count")
+	if err != nil {
+		return nil, err
+	}
+	return &indexRowStream{reader: reader, remaining: count}, nil
+}
+
+func (s *indexRowStream) nextHeader() (indexRowHeader, bool, error) {
+	if s.remaining == 0 {
+		return indexRowHeader{}, false, nil
+	}
+	seriesID, err := s.reader.uvarint("index series id")
+	if err != nil {
+		return indexRowHeader{}, false, err
+	}
+	minTime, maxTime, timeRef, err := readIndexRowCore(s.reader)
+	if err != nil {
+		return indexRowHeader{}, false, err
+	}
+	s.remaining--
+	return indexRowHeader{
+		seriesID: seriesID,
+		minTime:  minTime,
+		maxTime:  maxTime,
+		timeRef:  timeRef,
+	}, true, nil
+}
+
+func (s *indexRowStream) done() error {
+	if s.remaining != 0 {
+		return fmt.Errorf("decode index rows: %d rows remaining", s.remaining)
+	}
+	return s.reader.done("index rows")
+}
+
+func (s *indexRowStream) appendFilteredColumnRefs(
+	dst []columnRef,
+	filter map[uint32]struct{},
+) ([]columnRef, error) {
+	return readFilteredColumnRefsInto(s.reader, dst, filter)
+}
+
+func (s *indexRowStream) skipColumnRefs() error {
+	return skipColumnRefs(s.reader)
+}
+
 func encodeMetaIndexRows(rows []metaIndexRow) ([]byte, error) {
 	payload := binary.AppendUvarint(nil, uint64(len(rows)))
 	var err error
@@ -114,11 +160,11 @@ func encodeMetaIndexRows(rows []metaIndexRow) ([]byte, error) {
 			return nil, err
 		}
 	}
-	return codec.MarshalEnvelope(nil, metaIndexMagic, partFormatVersion, 0, payload), nil
+	return codec.MarshalEnvelope(nil, metaIndexMagic, 0, payload), nil
 }
 
 func decodeMetaIndexRows(data []byte) ([]metaIndexRow, error) {
-	env, err := codec.UnmarshalEnvelope(data, metaIndexMagic, partFormatVersion)
+	env, err := codec.UnmarshalEnvelope(data, metaIndexMagic)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +249,18 @@ type partCounts struct {
 	series   int
 	blocks   int
 	writeSeq uint64
+}
+
+type indexRowHeader struct {
+	seriesID uint64
+	minTime  int64
+	maxTime  int64
+	timeRef  blockRef
+}
+
+type indexRowStream struct {
+	reader    *blockReader
+	remaining int
 }
 
 func readPartTimes(reader *blockReader) (partTimes, error) {
@@ -291,6 +349,16 @@ func readIndexRow(reader *blockReader) (indexRow, error) {
 	return indexRow{SeriesID: seriesID, MinTime: minTime, MaxTime: maxTime, TimeRef: timeRef, Columns: columns}, nil
 }
 
+func (h indexRowHeader) indexRow(columns []columnRef) indexRow {
+	return indexRow{
+		SeriesID: h.seriesID,
+		MinTime:  h.minTime,
+		MaxTime:  h.maxTime,
+		TimeRef:  h.timeRef,
+		Columns:  columns,
+	}
+}
+
 func readIndexRowCore(reader *blockReader) (int64, int64, blockRef, error) {
 	minTime, err := reader.varint("index min time")
 	if err != nil {
@@ -311,19 +379,49 @@ func appendColumnRef(dst []byte, column columnRef) ([]byte, error) {
 }
 
 func readColumnRefs(reader *blockReader) ([]columnRef, error) {
+	return readFilteredColumnRefsInto(reader, nil, nil)
+}
+
+func readFilteredColumnRefsInto(
+	reader *blockReader,
+	dst []columnRef,
+	filter map[uint32]struct{},
+) ([]columnRef, error) {
 	count, err := reader.intCount("column ref count")
 	if err != nil {
 		return nil, err
 	}
-	columns := make([]columnRef, 0, count)
+	capacity := count
+	if len(filter) > 0 && len(filter) < capacity {
+		capacity = len(filter)
+	}
+	columns := dst[:0]
+	if cap(columns) < capacity {
+		columns = make([]columnRef, 0, capacity)
+	}
 	for range count {
 		column, err := readColumnRef(reader)
 		if err != nil {
 			return nil, err
 		}
-		columns = append(columns, column)
+		if containsField(filter, column.FieldID) {
+			columns = append(columns, column)
+		}
 	}
 	return columns, nil
+}
+
+func skipColumnRefs(reader *blockReader) error {
+	count, err := reader.intCount("column ref count")
+	if err != nil {
+		return err
+	}
+	for range count {
+		if _, err := readColumnRef(reader); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func readColumnRef(reader *blockReader) (columnRef, error) {

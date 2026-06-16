@@ -7,15 +7,13 @@ import (
 )
 
 const (
-	metadataFile       = "metadata.bin"
-	legacyMetadataFile = "metadata.json"
-	metaindexFile      = "metaindex.bin"
-	indexFile          = "index.bin"
-	timestampsFile     = "timestamps.bin"
-	valuesFile         = "values.bin"
-	stringsFile        = "strings.bin"
-	manifestFile       = "MANIFEST.bin"
-	legacyManifestFile = "MANIFEST.json"
+	metadataFile   = "metadata.bin"
+	metaindexFile  = "metaindex.bin"
+	indexFile      = "index.bin"
+	timestampsFile = "timestamps.bin"
+	valuesFile     = "values.bin"
+	stringsFile    = "strings.bin"
+	manifestFile   = "MANIFEST.bin"
 )
 
 type Query struct {
@@ -44,11 +42,10 @@ type Manifest struct {
 }
 
 type metadata struct {
-	FormatVersion int      `json:"format_version"`
-	Part          PartMeta `json:"part"`
-	IndexRef      blockRef `json:"index_ref"`
-	MetaIndexRef  blockRef `json:"metaindex_ref"`
-	CreatedUnix   int64    `json:"created_unix"`
+	Part         PartMeta `json:"part"`
+	IndexRef     blockRef `json:"index_ref"`
+	MetaIndexRef blockRef `json:"metaindex_ref"`
+	CreatedUnix  int64    `json:"created_unix"`
 }
 
 type blockRef struct {

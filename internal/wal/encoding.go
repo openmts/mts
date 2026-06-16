@@ -10,17 +10,22 @@ import (
 	"codeberg.org/mts/mts/internal/model"
 )
 
-const batchVersion byte = 2
-
-const tombstoneVersion byte = 1
-
 func encodeBatch(records []model.ResolvedPoint) ([]byte, error) {
+	identities, identityRefs := batchIdentities(records)
+	fieldNames, fieldNameRefs := batchFieldNames(records)
 	dst := make([]byte, 0, estimateBatchSize(records))
-	dst = append(dst, batchVersion)
+	dst = binary.AppendUvarint(dst, uint64(len(identities)))
+	for _, identity := range identities {
+		dst = appendIdentity(dst, identity)
+	}
+	dst = binary.AppendUvarint(dst, uint64(len(fieldNames)))
+	for _, name := range fieldNames {
+		dst = codec.AppendString(dst, name)
+	}
 	dst = binary.AppendUvarint(dst, uint64(len(records)))
-	for _, record := range records {
+	for index, record := range records {
 		var err error
-		dst, err = appendPoint(dst, record)
+		dst, err = appendPoint(dst, record, identityRefs[index], fieldNameRefs[index])
 		if err != nil {
 			return nil, err
 		}
@@ -28,8 +33,73 @@ func encodeBatch(records []model.ResolvedPoint) ([]byte, error) {
 	return dst, nil
 }
 
+type batchIdentity struct {
+	database        string
+	retentionPolicy string
+	measurement     string
+	tags            map[string]string
+}
+
+func batchIdentities(records []model.ResolvedPoint) ([]batchIdentity, []int) {
+	identities := make([]batchIdentity, 0)
+	refs := make([]int, len(records))
+	seen := make(map[string]int)
+	for index, record := range records {
+		key := identityKey(record)
+		ref, ok := seen[key]
+		if !ok {
+			ref = len(identities)
+			seen[key] = ref
+			identities = append(identities, batchIdentity{
+				database:        record.Database,
+				retentionPolicy: record.RetentionPolicy,
+				measurement:     record.Measurement,
+				tags:            record.Tags,
+			})
+		}
+		refs[index] = ref
+	}
+	return identities, refs
+}
+
+func identityKey(point model.ResolvedPoint) string {
+	dst := make([]byte, 0, stringSize(point.Database)+stringSize(point.RetentionPolicy)+stringSize(point.Measurement)+estimateTagsSize(point.Tags))
+	dst = codec.AppendString(dst, point.Database)
+	dst = codec.AppendString(dst, point.RetentionPolicy)
+	dst = codec.AppendString(dst, point.Measurement)
+	dst = appendTags(dst, point.Tags)
+	return string(dst)
+}
+
+func batchFieldNames(records []model.ResolvedPoint) ([]string, [][]int) {
+	names := make([]string, 0)
+	refs := make([][]int, len(records))
+	seen := make(map[string]int)
+	for pointIndex, record := range records {
+		pointRefs := make([]int, len(record.Fields))
+		for fieldIndex, field := range record.Fields {
+			ref, ok := seen[field.FieldName]
+			if !ok {
+				ref = len(names)
+				seen[field.FieldName] = ref
+				names = append(names, field.FieldName)
+			}
+			pointRefs[fieldIndex] = ref
+		}
+		refs[pointIndex] = pointRefs
+	}
+	return names, refs
+}
+
+func appendIdentity(dst []byte, identity batchIdentity) []byte {
+	dst = codec.AppendString(dst, identity.database)
+	dst = codec.AppendString(dst, identity.retentionPolicy)
+	dst = codec.AppendString(dst, identity.measurement)
+	return appendTags(dst, identity.tags)
+}
+
 func estimateBatchSize(records []model.ResolvedPoint) int {
-	size := 1 + uvarintSize(uint64(len(records)))
+	size := uvarintSize(uint64(len(records)))
 	for _, record := range records {
 		size += estimatePointSize(record)
 	}
@@ -99,19 +169,24 @@ func varintSize(value int64) int {
 
 func decodeBatch(payload []byte) ([]model.ResolvedPoint, error) {
 	if len(payload) == 0 {
-		return nil, fmt.Errorf("missing batch version")
+		return nil, fmt.Errorf("empty wal batch")
 	}
-	if payload[0] != batchVersion {
-		return nil, fmt.Errorf("unsupported batch version %d", payload[0])
+	reader := newBatchReader(payload)
+	identities, err := readBatchIdentities(reader)
+	if err != nil {
+		return nil, err
 	}
-	reader := newBatchReader(payload[1:])
+	fieldNames, err := readBatchFieldNames(reader)
+	if err != nil {
+		return nil, err
+	}
 	count, err := reader.intCount("point count")
 	if err != nil {
 		return nil, err
 	}
 	records := make([]model.ResolvedPoint, 0, count)
 	for range count {
-		record, err := readPoint(reader)
+		record, err := readPoint(reader, identities, fieldNames)
 		if err != nil {
 			return nil, err
 		}
@@ -123,9 +198,62 @@ func decodeBatch(payload []byte) ([]model.ResolvedPoint, error) {
 	return records, nil
 }
 
+func readBatchIdentities(reader *batchReader) ([]batchIdentity, error) {
+	count, err := reader.intCount("identity count")
+	if err != nil {
+		return nil, err
+	}
+	identities := make([]batchIdentity, count)
+	for index := range count {
+		identity, err := readIdentity(reader)
+		if err != nil {
+			return nil, err
+		}
+		identities[index] = identity
+	}
+	return identities, nil
+}
+
+func readIdentity(reader *batchReader) (batchIdentity, error) {
+	database, err := reader.string("database")
+	if err != nil {
+		return batchIdentity{}, err
+	}
+	policy, err := reader.string("retention policy")
+	if err != nil {
+		return batchIdentity{}, err
+	}
+	measurement, err := reader.string("measurement")
+	if err != nil {
+		return batchIdentity{}, err
+	}
+	tags, err := readTags(reader)
+	return batchIdentity{
+		database:        database,
+		retentionPolicy: policy,
+		measurement:     measurement,
+		tags:            tags,
+	}, err
+}
+
+func readBatchFieldNames(reader *batchReader) ([]string, error) {
+	count, err := reader.intCount("field name count")
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, count)
+	for index := range count {
+		name, err := reader.string("field name")
+		if err != nil {
+			return nil, err
+		}
+		names[index] = name
+	}
+	return names, nil
+}
+
 func encodeTombstones(tombstones []model.Tombstone) ([]byte, error) {
 	dst := make([]byte, 0, estimateTombstonesSize(tombstones))
-	dst = append(dst, tombstoneVersion)
 	dst = binary.AppendUvarint(dst, uint64(len(tombstones)))
 	for _, tombstone := range tombstones {
 		dst = appendTombstone(dst, tombstone)
@@ -134,7 +262,7 @@ func encodeTombstones(tombstones []model.Tombstone) ([]byte, error) {
 }
 
 func estimateTombstonesSize(tombstones []model.Tombstone) int {
-	size := 1 + uvarintSize(uint64(len(tombstones)))
+	size := uvarintSize(uint64(len(tombstones)))
 	for _, tombstone := range tombstones {
 		size += varintSize(tombstone.StartTime) + varintSize(tombstone.EndTime)
 		size += uvarintSize(tombstone.WriteSeq)
@@ -161,12 +289,9 @@ func appendTombstone(dst []byte, tombstone model.Tombstone) []byte {
 
 func decodeTombstones(payload []byte) ([]model.Tombstone, error) {
 	if len(payload) == 0 {
-		return nil, fmt.Errorf("missing tombstone version")
+		return nil, fmt.Errorf("empty wal tombstones")
 	}
-	if payload[0] != tombstoneVersion {
-		return nil, fmt.Errorf("unsupported tombstone version %d", payload[0])
-	}
-	reader := newBatchReader(payload[1:])
+	reader := newBatchReader(payload)
 	count, err := reader.intCount("tombstone count")
 	if err != nil {
 		return nil, err
@@ -246,18 +371,23 @@ func readUint32s(reader *batchReader, name string) ([]uint32, error) {
 	return values, nil
 }
 
-func appendPoint(dst []byte, point model.ResolvedPoint) ([]byte, error) {
-	dst = codec.AppendString(dst, point.Database)
-	dst = codec.AppendString(dst, point.RetentionPolicy)
-	dst = codec.AppendString(dst, point.Measurement)
-	dst = appendTags(dst, point.Tags)
+func appendPoint(
+	dst []byte,
+	point model.ResolvedPoint,
+	identityRef int,
+	fieldNameRefs []int,
+) ([]byte, error) {
+	if len(fieldNameRefs) != len(point.Fields) {
+		return nil, fmt.Errorf("field name refs count %d does not match field count %d", len(fieldNameRefs), len(point.Fields))
+	}
+	dst = binary.AppendUvarint(dst, uint64(identityRef))
 	dst = binary.AppendUvarint(dst, point.SeriesID)
 	dst = binary.AppendVarint(dst, point.Timestamp)
 	dst = binary.AppendUvarint(dst, point.WriteSeq)
 	dst = binary.AppendUvarint(dst, uint64(len(point.Fields)))
-	for _, field := range point.Fields {
+	for index, field := range point.Fields {
 		var err error
-		dst, err = appendField(dst, field)
+		dst, err = appendField(dst, field, fieldNameRefs[index])
 		if err != nil {
 			return nil, err
 		}
@@ -265,44 +395,40 @@ func appendPoint(dst []byte, point model.ResolvedPoint) ([]byte, error) {
 	return dst, nil
 }
 
-func readPoint(reader *batchReader) (model.ResolvedPoint, error) {
-	identity, err := readPointIdentity(reader)
+func readPoint(
+	reader *batchReader,
+	identities []batchIdentity,
+	fieldNames []string,
+) (model.ResolvedPoint, error) {
+	identityRef, err := reader.intCount("identity ref")
 	if err != nil {
 		return model.ResolvedPoint{}, err
 	}
-	seriesID, timestamp, writeSeq, err := readPointVersion(reader)
+	if identityRef >= len(identities) {
+		return model.ResolvedPoint{}, fmt.Errorf("decode wal identity ref %d out of range", identityRef)
+	}
+	identity := identities[identityRef]
+	seriesID, timestamp, writeSeq, err := readPointHeader(reader)
 	if err != nil {
 		return model.ResolvedPoint{}, err
 	}
-	fields, err := readFields(reader)
+	fields, err := readFields(reader, fieldNames)
 	if err != nil {
 		return model.ResolvedPoint{}, err
 	}
-	identity.SeriesID = seriesID
-	identity.Timestamp = timestamp
-	identity.WriteSeq = writeSeq
-	identity.Fields = fields
-	return identity, nil
+	return model.ResolvedPoint{
+		Database:        identity.database,
+		RetentionPolicy: identity.retentionPolicy,
+		Measurement:     identity.measurement,
+		Tags:            cloneStringMap(identity.tags),
+		SeriesID:        seriesID,
+		Timestamp:       timestamp,
+		WriteSeq:        writeSeq,
+		Fields:          fields,
+	}, nil
 }
 
-func readPointIdentity(reader *batchReader) (model.ResolvedPoint, error) {
-	database, err := reader.string("database")
-	if err != nil {
-		return model.ResolvedPoint{}, err
-	}
-	policy, err := reader.string("retention policy")
-	if err != nil {
-		return model.ResolvedPoint{}, err
-	}
-	measurement, err := reader.string("measurement")
-	if err != nil {
-		return model.ResolvedPoint{}, err
-	}
-	tags, err := readTags(reader)
-	return model.ResolvedPoint{Database: database, RetentionPolicy: policy, Measurement: measurement, Tags: tags}, err
-}
-
-func readPointVersion(reader *batchReader) (uint64, int64, uint64, error) {
+func readPointHeader(reader *batchReader) (uint64, int64, uint64, error) {
 	seriesID, err := reader.uvarint("series id")
 	if err != nil {
 		return 0, 0, 0, err
@@ -315,17 +441,17 @@ func readPointVersion(reader *batchReader) (uint64, int64, uint64, error) {
 	return seriesID, timestamp, writeSeq, err
 }
 
-func appendField(dst []byte, field model.ResolvedField) ([]byte, error) {
+func appendField(dst []byte, field model.ResolvedField, fieldNameRef int) ([]byte, error) {
 	if field.Type != field.Value.Type {
 		return nil, fmt.Errorf("field %s type %d does not match value type %d", field.FieldName, field.Type, field.Value.Type)
 	}
 	dst = binary.AppendUvarint(dst, uint64(field.FieldID))
-	dst = codec.AppendString(dst, field.FieldName)
+	dst = binary.AppendUvarint(dst, uint64(fieldNameRef))
 	dst = append(dst, byte(field.Type))
 	return appendValuePayload(dst, field.Value)
 }
 
-func readFields(reader *batchReader) ([]model.ResolvedField, error) {
+func readFields(reader *batchReader, fieldNames []string) ([]model.ResolvedField, error) {
 	count, err := reader.intCount("field count")
 	if err != nil {
 		return nil, err
@@ -335,7 +461,7 @@ func readFields(reader *batchReader) ([]model.ResolvedField, error) {
 	}
 	fields := make([]model.ResolvedField, 0, count)
 	for range count {
-		field, err := readField(reader)
+		field, err := readField(reader, fieldNames)
 		if err != nil {
 			return nil, err
 		}
@@ -344,7 +470,7 @@ func readFields(reader *batchReader) ([]model.ResolvedField, error) {
 	return fields, nil
 }
 
-func readField(reader *batchReader) (model.ResolvedField, error) {
+func readField(reader *batchReader, fieldNames []string) (model.ResolvedField, error) {
 	id, err := reader.uvarint("field id")
 	if err != nil {
 		return model.ResolvedField{}, err
@@ -353,9 +479,12 @@ func readField(reader *batchReader) (model.ResolvedField, error) {
 	if err != nil {
 		return model.ResolvedField{}, err
 	}
-	name, err := reader.string("field name")
+	nameRef, err := reader.intCount("field name ref")
 	if err != nil {
 		return model.ResolvedField{}, err
+	}
+	if nameRef >= len(fieldNames) {
+		return model.ResolvedField{}, fmt.Errorf("decode wal field name ref %d out of range", nameRef)
 	}
 	fieldType, err := reader.byte("field type")
 	if err != nil {
@@ -365,7 +494,12 @@ func readField(reader *batchReader) (model.ResolvedField, error) {
 	if err != nil {
 		return model.ResolvedField{}, err
 	}
-	return model.ResolvedField{FieldID: fieldID, FieldName: name, Type: model.FieldType(fieldType), Value: value}, nil
+	return model.ResolvedField{
+		FieldID:   fieldID,
+		FieldName: fieldNames[nameRef],
+		Type:      model.FieldType(fieldType),
+		Value:     value,
+	}, nil
 }
 
 func appendTags(dst []byte, tags map[string]string) []byte {
@@ -422,6 +556,17 @@ func readTagPair(reader *batchReader) (string, string, error) {
 		return "", "", err
 	}
 	return key, value, nil
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		out[key] = value
+	}
+	return out
 }
 
 func appendValuePayload(dst []byte, value model.FieldValue) ([]byte, error) {

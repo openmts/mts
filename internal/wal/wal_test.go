@@ -2,6 +2,8 @@ package wal_test
 
 import (
 	"bytes"
+	"encoding/binary"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -187,13 +189,13 @@ func TestWALRolloverBatchSyncAndTruncateAll(t *testing.T) {
 	}
 }
 
-func TestWALReplayRejectsUnsupportedVersion(t *testing.T) {
+func TestWALReplayRejectsUnsupportedRecordType(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "000001.wal")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	frame := []byte{0, 0, 0, 6, 99, 1, 0, 0, 0, 0}
+	frame := unsupportedRecordTypeFrame()
 	if err := os.WriteFile(path, frame, 0600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -202,11 +204,20 @@ func TestWALReplayRejectsUnsupportedVersion(t *testing.T) {
 		t.Fatalf("Open() error = %v", err)
 	}
 	if _, err := log.Replay(); err == nil {
-		t.Fatal("Replay() error = nil, want unsupported version error")
+		t.Fatal("Replay() error = nil, want unsupported record type error")
 	}
 	if err := log.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
+}
+
+func unsupportedRecordTypeFrame() []byte {
+	body := []byte{99}
+	sum := crc32.Checksum(body, crc32.MakeTable(crc32.Castagnoli))
+	frame := make([]byte, 4, 9)
+	binary.BigEndian.PutUint32(frame, uint32(len(body)+4))
+	frame = append(frame, body...)
+	return binary.BigEndian.AppendUint32(frame, sum)
 }
 
 func TestWALOpenInvalidPathReturnsError(t *testing.T) {

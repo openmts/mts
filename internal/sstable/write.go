@@ -297,8 +297,7 @@ func ensureStringsFile(path string) error {
 
 func newMetadata(level int, id string) metadata {
 	return metadata{
-		FormatVersion: partFormatVersion,
-		CreatedUnix:   time.Now().Unix(),
+		CreatedUnix: time.Now().Unix(),
 		Part: PartMeta{
 			ID:    id,
 			Level: level,

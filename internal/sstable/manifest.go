@@ -42,13 +42,7 @@ func WriteManifest(dir string, manifest Manifest) error {
 	return nil
 }
 
-func loadMissingManifest(dir string) (Manifest, error) {
-	legacyPath := filepath.Join(dir, legacyManifestFile)
-	if _, err := os.Stat(legacyPath); err == nil {
-		return Manifest{}, fmt.Errorf("manifest legacy JSON format is unsupported: %s", legacyPath)
-	} else if !os.IsNotExist(err) {
-		return Manifest{}, fmt.Errorf("stat legacy manifest: %w", err)
-	}
+func loadMissingManifest(_ string) (Manifest, error) {
 	return Manifest{Parts: []PartMeta{}}, nil
 }
 
@@ -61,11 +55,11 @@ func encodeManifest(manifest Manifest) ([]byte, error) {
 			return nil, err
 		}
 	}
-	return codec.MarshalEnvelope(nil, manifestMagic, partFormatVersion, 0, payload), nil
+	return codec.MarshalEnvelope(nil, manifestMagic, 0, payload), nil
 }
 
 func decodeManifest(data []byte) (Manifest, error) {
-	env, err := codec.UnmarshalEnvelope(data, manifestMagic, partFormatVersion)
+	env, err := codec.UnmarshalEnvelope(data, manifestMagic)
 	if err != nil {
 		return Manifest{}, err
 	}

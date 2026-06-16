@@ -195,6 +195,7 @@ func (s *Shard) flushLocked() error {
 			return err
 		}
 	}
+	snapshot.Release()
 	return nil
 }
 

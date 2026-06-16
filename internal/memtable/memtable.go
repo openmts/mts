@@ -55,9 +55,11 @@ var reservationMapPool = sync.Pool{
 	},
 }
 
+var cloneDataHook func()
+
 func New() *MemTable {
 	return &MemTable{
-		data: make(tableData),
+		data: borrowTableData(),
 	}
 }
 
@@ -91,7 +93,7 @@ func (m *MemTable) SnapshotAndReset() *Snapshot {
 		data:        m.data,
 		sampleCount: m.sampleCount,
 	}
-	m.data = make(tableData)
+	m.data = borrowTableData()
 	m.sampleCount = 0
 	return snapshot
 }
@@ -106,7 +108,9 @@ func (m *MemTable) Snapshot() *Snapshot {
 }
 
 func (m *MemTable) Query(query Query) []model.ColumnData {
-	return m.Snapshot().Query(query)
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return columnsFromData(m.data, query, true)
 }
 
 func (s *Snapshot) Query(query Query) []model.ColumnData {
@@ -114,18 +118,25 @@ func (s *Snapshot) Query(query Query) []model.ColumnData {
 }
 
 func (s *Snapshot) Columns(query Query) []model.ColumnData {
-	if s == nil || query.End < query.Start {
+	if s == nil {
 		return []model.ColumnData{}
 	}
-	columns := make([]model.ColumnData, 0, len(s.data))
-	for _, column := range s.data {
+	return columnsFromData(s.data, query, false)
+}
+
+func columnsFromData(data tableData, query Query, detach bool) []model.ColumnData {
+	if query.End < query.Start {
+		return []model.ColumnData{}
+	}
+	columns := make([]model.ColumnData, 0, len(data))
+	for _, column := range data {
 		if column == nil || !containsSeries(query.SeriesIDs, column.seriesID) {
 			continue
 		}
 		if !containsField(query.FieldIDs, column.fieldID) {
 			continue
 		}
-		out := columnDataFromBuffer(column, query)
+		out := columnDataFromBuffer(column, query, detach)
 		if len(out.Samples) > 0 {
 			columns = append(columns, out)
 		}
@@ -139,6 +150,23 @@ func (s *Snapshot) SampleCount() int {
 		return 0
 	}
 	return s.sampleCount
+}
+
+func (s *Snapshot) Release() {
+	if s == nil {
+		return
+	}
+	data := s.data
+	for _, column := range s.data {
+		if column != nil {
+			column.first = model.VersionedSample{}
+			column.samples = nil
+			column.count = 0
+		}
+	}
+	releaseTableData(data)
+	s.data = nil
+	s.sampleCount = 0
 }
 
 func (m *MemTable) Restore(snapshot *Snapshot) {
@@ -242,12 +270,12 @@ func ensureColumn(
 	return column
 }
 
-func columnDataFromBuffer(column *columnBuffer, query Query) model.ColumnData {
+func columnDataFromBuffer(column *columnBuffer, query Query, detach bool) model.ColumnData {
 	return model.ColumnData{
 		SeriesID:  column.seriesID,
 		FieldID:   column.fieldID,
 		FieldType: column.fieldType,
-		Samples:   compactSamples(column, query),
+		Samples:   compactSamples(column, query, detach),
 	}
 }
 
@@ -255,6 +283,12 @@ func (c *columnBuffer) appendSample(sample model.VersionedSample) {
 	if c.count == 0 && cap(c.samples) == 0 {
 		c.first = sample
 		c.count = 1
+		return
+	}
+	if c.count == 1 && len(c.samples) == 0 {
+		c.samples = append(c.samples, c.first, sample)
+		c.first = model.VersionedSample{}
+		c.count = 2
 		return
 	}
 	c.samples = append(c.samples, sample)
@@ -269,12 +303,34 @@ func (c *columnBuffer) reserve(additional int) {
 	if c.count == 0 && additional == 1 {
 		target--
 	}
+	if c.count == 1 && len(c.samples) == 0 {
+		target++
+	}
 	if target <= cap(c.samples) {
 		return
 	}
-	samples := make([]model.VersionedSample, len(c.samples), target)
+	samples := make([]model.VersionedSample, len(c.samples), c.nextCapacity(target, additional))
 	copy(samples, c.samples)
 	c.samples = samples
+}
+
+func (c *columnBuffer) nextCapacity(target int, additional int) int {
+	current := cap(c.samples)
+	if current == 0 || additional > current {
+		return target
+	}
+	slack := current / 4
+	if slack < additional {
+		slack = additional
+	}
+	if slack > 8 {
+		slack = 8
+	}
+	next := target + slack
+	if next < target {
+		return target
+	}
+	return next
 }
 
 func (c *columnBuffer) appendColumn(src *columnBuffer) {
@@ -289,12 +345,12 @@ func (c *columnBuffer) appendColumn(src *columnBuffer) {
 	}
 }
 
-func compactSamples(column *columnBuffer, query Query) []model.VersionedSample {
+func compactSamples(column *columnBuffer, query Query, detach bool) []model.VersionedSample {
 	if column.count == 0 {
 		return []model.VersionedSample{}
 	}
 	if len(column.samples) == column.count {
-		return compactDenseSamples(column.samples, query)
+		return compactDenseSamples(column.samples, query, detach)
 	}
 	samples := make([]model.VersionedSample, 0, column.count)
 	samples = appendMatchingSample(samples, column.first, query)
@@ -304,8 +360,11 @@ func compactSamples(column *columnBuffer, query Query) []model.VersionedSample {
 	return compactMaterializedSamples(samples)
 }
 
-func compactDenseSamples(samples []model.VersionedSample, query Query) []model.VersionedSample {
+func compactDenseSamples(samples []model.VersionedSample, query Query, detach bool) []model.VersionedSample {
 	if denseSamplesInRangeSortedUnique(samples, query) {
+		if detach {
+			return cloneSamples(samples)
+		}
 		return samples
 	}
 	filtered := make([]model.VersionedSample, 0, len(samples))
@@ -387,6 +446,9 @@ func containsField(filter map[uint32]struct{}, fieldID uint32) bool {
 }
 
 func cloneData(src tableData) tableData {
+	if cloneDataHook != nil {
+		cloneDataHook()
+	}
 	dst := make(tableData, len(src))
 	for key, column := range src {
 		dst[key] = cloneColumn(column)

@@ -37,7 +37,7 @@ func TestShardWriteAndFlushErrors(t *testing.T) {
 
 func TestOpenShardManifestErrors(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "MANIFEST.json"), []byte("{"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "MANIFEST.bin"), []byte("{"), 0600); err != nil {
 		t.Fatalf("WriteFile(bad manifest) error = %v", err)
 	}
 	if _, _, err := OpenShard(ShardOptions{Dir: dir, Start: 0, End: 1}); err == nil {
@@ -65,7 +65,7 @@ func TestEngineOpenFlushAndCompactErrors(t *testing.T) {
 	if err := os.MkdirAll(badShardDir, 0700); err != nil {
 		t.Fatalf("MkdirAll(bad shard) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(badShardDir, "MANIFEST.json"), []byte("{"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(badShardDir, "MANIFEST.bin"), []byte("{"), 0600); err != nil {
 		t.Fatalf("WriteFile(bad manifest) error = %v", err)
 	}
 	if _, err := Open(context.Background(), model.Options{Path: root}); err == nil {

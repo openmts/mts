@@ -128,3 +128,80 @@
 按 `tests/e2e/*` 逐个 `go build` 和运行，完成后清理构建产物。
 
 实现备注：`compaction_integrity`、`flush_manifest_recovery`、`no_json_storage`、`query_pruning`、`retention`、`simple_integrity`、`wal_recovery` 均已 build/run 通过。已清理 e2e 二进制、`coverage.out` 和本轮 `/tmp` pprof 产物。
+
+### Task 6: SSTable index streaming 直读
+
+**Files:**
+- Modify: `internal/codec/envelope.go`
+- Modify: `internal/codec/codec_test.go`
+- Modify: `internal/sstable/metadata_encoding.go`
+- Modify: `internal/sstable/series_reader.go`
+- Modify: `internal/sstable/internal_test.go`
+
+- [x] **Step 1: 增加 envelope view 与 QuerySeriesIDs 直读测试**
+
+覆盖 `UnmarshalEnvelopeView` 不复制 payload、`QuerySeriesIDs` 在 index 损坏时返回错误、字段过滤只读取命中字段对应 value block。
+
+- [x] **Step 2: 实现 envelope 只读 view**
+
+保留 `UnmarshalEnvelope` 的复制语义，新增只在临时 decode 中使用的 `UnmarshalEnvelopeView`。
+
+- [x] **Step 3: 实现 index row streaming decoder**
+
+逐行读取 index header；不命中 series/time 的行直接跳过 column refs；命中行只保留查询字段需要的 column refs。
+
+- [x] **Step 4: 切换 Part.QuerySeriesIDs**
+
+大候选 direct fallback 不再调用 `loadIndexRows`，避免全量 `[]indexRow` 和 `[]columnRef` 物化。
+
+实现备注：`UnmarshalEnvelopeView` 保留 payload view，普通 `UnmarshalEnvelope` 继续复制；`Part.Query`、`Part.SeriesIDs`、`Part.QuerySeriesIDs` 已切到 index stream，未命中 row 仅跳过 column refs，字段过滤只保留命中 refs。stream 查询复用 `[]columnRef` scratch，1M compact pprof 中 `readFilteredColumnRefs` 已从 top alloc 移除，`QuerySeriesIDs` 累计 alloc 从约 `3423 MB` 降至约 `3149 MB`。定向测试 `go test -count=1 ./internal/codec ./internal/sstable ./internal/memtable -timeout 180s` 已通过。
+
+### Task 7: MemTable reserve 增长策略
+
+**Files:**
+- Modify: `internal/memtable/memtable.go`
+- Modify: `internal/memtable/internal_test.go`
+
+- [x] **Step 1: 调整容量测试**
+
+容量验收从精确值改为满足容量、支持增长留量，避免下一批写入频繁小扩容。
+
+- [x] **Step 2: 实现自适应增长**
+
+小增量采用受限留量增长，大批量一次性写入保持接近目标容量，降低 RSS 过度膨胀。
+
+实现备注：`columnBuffer.reserve` 对小批增量增加最多 8 个 sample 的受限 slack，对超过当前容量的大批预留保持目标容量，避免 wide 写入场景成千上万列同时翻倍。1M wide10 写入复测 RSS 峰值 `238688 KB`，低于本轮错误翻倍策略的 `302368 KB`，也低于前序记录约 `245128 KB`；耗时 `13.46s`。定向测试已覆盖增长留量。
+
+### Task 8: 剩余 compaction 与 page index 热点
+
+**Files:**
+- Create: `internal/memtable/pool.go`
+- Modify: `internal/memtable/memtable.go`
+- Modify: `internal/memtable/internal_test.go`
+- Modify: `internal/engine/lifecycle.go`
+- Modify: `internal/engine/engine_test.go`
+- Modify: `internal/sstable/encoding.go`
+- Modify: `internal/sstable/read.go`
+- Modify: `internal/sstable/internal_test.go`
+
+- [x] **Step 1: 复核剩余 pprof 热点**
+
+确认剩余可处理项为 compaction 中间分组、value page index materialize、MemTable table map 重建。列对象池化经过复测会抬高 RSS，已剔除。
+
+- [x] **Step 2: 实现 compaction 回调分组**
+
+`writeStreamingCompactionOutputsLocked` 直接通过 `forEachCompactionSeriesGroup` 消费 series group，不再构造 `[][]ColumnData`。
+
+- [x] **Step 3: 实现 value page index streaming 读取**
+
+热路径改为 `readValuePagesFromIndexPayload`，两遍扫描 index payload 计算命中 page 容量并读取命中 page，不再构造 `valuePageIndex.Pages`。
+
+- [x] **Step 4: 实现 MemTable tableData 复用**
+
+`New` 和 `SnapshotAndReset` 复用 table map；`Snapshot.Release` 清空并回收小表 map。列对象池化经复测 RSS 不合格，已撤销。
+
+- [x] **Step 5: 验证与复测**
+
+验证：`go test -count=1 ./... -coverprofile=coverage.out -timeout 600s` 总覆盖率 `90.0%`；`golangci-lint run --timeout 12m` 输出 `0 issues.`；`tests/e2e/*` 全部 build/run 通过。
+
+性能：最终 1M wide10 写入 `13.43s`，RSS `231020 KB`，SSTable `2`，落盘 `93.8 MB`；最终 1M compact `52.46s`，RSS `151412 KB`，SSTable `1`，落盘 `89.0 MB`。compact alloc_space 从上一轮约 `15.25 GB` 降至约 `14.49 GB`，`unmarshalValuePageIndex` 不再出现在热点中。

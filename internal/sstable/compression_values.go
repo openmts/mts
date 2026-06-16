@@ -133,6 +133,304 @@ func readCodecValues(
 	return values, payloadReader.done("values")
 }
 
+func readCodecSamples(
+	reader *blockReader,
+	fieldType model.FieldType,
+	timestamps []int64,
+	writeSeqs []uint64,
+	query Query,
+) ([]model.VersionedSample, error) {
+	codecID, payload, err := readCodecPayload(reader, "values")
+	if err != nil {
+		return nil, err
+	}
+	payloadReader := newBlockReader(payload)
+	var samples []model.VersionedSample
+	if codecID == compressionPlain {
+		samples, err = readSamples(payloadReader, fieldType, timestamps, writeSeqs, query)
+	} else {
+		var values []model.FieldValue
+		values, err = readCompressedValues(payloadReader, fieldType, codecID, len(timestamps))
+		if err == nil {
+			header := valueHeader{fieldType: fieldType, count: len(timestamps)}
+			samples = buildValueBlock(header, timestamps, writeSeqs, values).filter(query).Samples
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return samples, payloadReader.done("values")
+}
+
+func readCompressedSamples(
+	fieldType model.FieldType,
+	count int,
+	times codecPayload,
+	writeSeqs codecPayload,
+	values codecPayload,
+	query Query,
+) ([]model.VersionedSample, error) {
+	if times.codecID == compressionPlain &&
+		writeSeqs.codecID == compressionPlain &&
+		values.codecID == compressionPlain {
+		return readPlainCompressedSamples(fieldType, count, times.payload, writeSeqs.payload, values.payload, query)
+	}
+	timestamps, err := decodeCodecTimestamps(times.codecID, times.payload, count)
+	if err != nil {
+		return nil, err
+	}
+	seqs, err := decodeCodecWriteSeqs(writeSeqs.codecID, writeSeqs.payload, count)
+	if err != nil {
+		return nil, err
+	}
+	payloadReader := blockReader{rest: values.payload}
+	samples, err := readCodecPayloadSamples(&payloadReader, fieldType, values.codecID, timestamps, seqs, query)
+	if err != nil {
+		return nil, err
+	}
+	return samples, payloadReader.done("values")
+}
+
+func readCodecPayloadSamples(
+	reader *blockReader,
+	fieldType model.FieldType,
+	codecID byte,
+	timestamps []int64,
+	writeSeqs []uint64,
+	query Query,
+) ([]model.VersionedSample, error) {
+	if codecID == compressionPlain {
+		return readSamples(reader, fieldType, timestamps, writeSeqs, query)
+	}
+	values, err := readCompressedValues(reader, fieldType, codecID, len(timestamps))
+	if err != nil {
+		return nil, err
+	}
+	header := valueHeader{fieldType: fieldType, count: len(timestamps)}
+	return buildValueBlock(header, timestamps, writeSeqs, values).filter(query).Samples, nil
+}
+
+func readPlainCompressedSamples(
+	fieldType model.FieldType,
+	count int,
+	timePayload []byte,
+	writeSeqPayload []byte,
+	valuePayload []byte,
+	query Query,
+) ([]model.VersionedSample, error) {
+	timeReader := blockReader{rest: timePayload}
+	seqReader := blockReader{rest: writeSeqPayload}
+	valueReader := blockReader{rest: valuePayload}
+	samples, err := readPlainCompressedSamplesByType(
+		fieldType,
+		count,
+		&timeReader,
+		&seqReader,
+		&valueReader,
+		query,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := timeReader.done("timestamps"); err != nil {
+		return nil, err
+	}
+	if err := seqReader.done("write seqs"); err != nil {
+		return nil, err
+	}
+	if err := valueReader.done("values"); err != nil {
+		return nil, err
+	}
+	return samples, nil
+}
+
+func readPlainCompressedSamplesByType(
+	fieldType model.FieldType,
+	count int,
+	timeReader *blockReader,
+	seqReader *blockReader,
+	valueReader *blockReader,
+	query Query,
+) ([]model.VersionedSample, error) {
+	switch fieldType {
+	case model.FieldFloat64:
+		return readPlainCompressedFloatSamples(count, timeReader, seqReader, valueReader, query)
+	case model.FieldInt64:
+		return readPlainCompressedIntSamples(count, timeReader, seqReader, valueReader, query)
+	case model.FieldBool:
+		return readPlainCompressedBoolSamples(count, timeReader, seqReader, valueReader, query)
+	case model.FieldString:
+		return readPlainCompressedStringSamples(count, timeReader, seqReader, valueReader, query)
+	default:
+		return nil, fmt.Errorf("unsupported value block field type %d", fieldType)
+	}
+}
+
+func readPlainCompressedFloatSamples(
+	count int,
+	timeReader *blockReader,
+	seqReader *blockReader,
+	valueReader *blockReader,
+	query Query,
+) ([]model.VersionedSample, error) {
+	samples := make([]model.VersionedSample, 0, compressedQueryCapacity(count, query))
+	var timestamp int64
+	for index := range count {
+		var err error
+		timestamp, err = nextPlainTimestamp(timeReader, index, timestamp)
+		if err != nil {
+			return nil, err
+		}
+		writeSeq, err := seqReader.uvarint("write seq")
+		if err != nil {
+			return nil, err
+		}
+		value, err := valueReader.float64()
+		if err != nil {
+			return nil, err
+		}
+		if timestamp < query.Start || timestamp > query.End {
+			continue
+		}
+		samples = append(samples, model.VersionedSample{
+			Timestamp: timestamp,
+			WriteSeq:  writeSeq,
+			Value:     model.Float64Value(value),
+		})
+	}
+	return samples, nil
+}
+
+func readPlainCompressedIntSamples(
+	count int,
+	timeReader *blockReader,
+	seqReader *blockReader,
+	valueReader *blockReader,
+	query Query,
+) ([]model.VersionedSample, error) {
+	samples := make([]model.VersionedSample, 0, compressedQueryCapacity(count, query))
+	var timestamp int64
+	for index := range count {
+		var err error
+		timestamp, err = nextPlainTimestamp(timeReader, index, timestamp)
+		if err != nil {
+			return nil, err
+		}
+		writeSeq, err := seqReader.uvarint("write seq")
+		if err != nil {
+			return nil, err
+		}
+		value, err := valueReader.varint("int value")
+		if err != nil {
+			return nil, err
+		}
+		if timestamp < query.Start || timestamp > query.End {
+			continue
+		}
+		samples = append(samples, model.VersionedSample{
+			Timestamp: timestamp,
+			WriteSeq:  writeSeq,
+			Value:     model.Int64Value(value),
+		})
+	}
+	return samples, nil
+}
+
+func readPlainCompressedBoolSamples(
+	count int,
+	timeReader *blockReader,
+	seqReader *blockReader,
+	valueReader *blockReader,
+	query Query,
+) ([]model.VersionedSample, error) {
+	byteCount := (count + 7) / 8
+	if len(valueReader.rest) < byteCount {
+		return nil, fmt.Errorf("read bool values: read bool bits: truncated payload")
+	}
+	bits := valueReader.rest[:byteCount]
+	valueReader.rest = valueReader.rest[byteCount:]
+	samples := make([]model.VersionedSample, 0, compressedQueryCapacity(count, query))
+	var timestamp int64
+	for index := range count {
+		var err error
+		timestamp, err = nextPlainTimestamp(timeReader, index, timestamp)
+		if err != nil {
+			return nil, err
+		}
+		writeSeq, err := seqReader.uvarint("write seq")
+		if err != nil {
+			return nil, err
+		}
+		if timestamp < query.Start || timestamp > query.End {
+			continue
+		}
+		value := bits[index/8]&(1<<uint(index%8)) != 0
+		samples = append(samples, model.VersionedSample{
+			Timestamp: timestamp,
+			WriteSeq:  writeSeq,
+			Value:     model.BoolValue(value),
+		})
+	}
+	return samples, nil
+}
+
+func readPlainCompressedStringSamples(
+	count int,
+	timeReader *blockReader,
+	seqReader *blockReader,
+	valueReader *blockReader,
+	query Query,
+) ([]model.VersionedSample, error) {
+	samples := make([]model.VersionedSample, 0, compressedQueryCapacity(count, query))
+	var timestamp int64
+	for index := range count {
+		var err error
+		timestamp, err = nextPlainTimestamp(timeReader, index, timestamp)
+		if err != nil {
+			return nil, err
+		}
+		writeSeq, err := seqReader.uvarint("write seq")
+		if err != nil {
+			return nil, err
+		}
+		value, err := valueReader.string("string value")
+		if err != nil {
+			return nil, err
+		}
+		if timestamp < query.Start || timestamp > query.End {
+			continue
+		}
+		samples = append(samples, model.VersionedSample{
+			Timestamp: timestamp,
+			WriteSeq:  writeSeq,
+			Value:     model.StringValue(value),
+		})
+	}
+	return samples, nil
+}
+
+func nextPlainTimestamp(reader *blockReader, index int, previous int64) (int64, error) {
+	if index == 0 {
+		return reader.fixedInt64("first timestamp")
+	}
+	delta, err := reader.varint("timestamp delta")
+	if err != nil {
+		return 0, err
+	}
+	return previous + delta, nil
+}
+
+func compressedQueryCapacity(count int, query Query) int {
+	if query.End < query.Start || count == 0 {
+		return 0
+	}
+	width := query.End - query.Start + 1
+	if width <= 0 || width > int64(count) {
+		return count
+	}
+	return int(width)
+}
+
 func readCompressedValues(
 	reader *blockReader,
 	fieldType model.FieldType,

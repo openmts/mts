@@ -627,6 +627,237 @@ func TestCompactionSplitsOutputsByTargetBytes(t *testing.T) {
 	}
 }
 
+func TestCompactionOutputCloseAndAbortCleanup(t *testing.T) {
+	shard, _, err := OpenShard(ShardOptions{
+		Dir:   t.TempDir(),
+		Start: 0,
+		End:   int64(time.Hour),
+		Compaction: model.CompactionOptions{
+			MaxOutputPartBytes: 80,
+		},
+	})
+	if err != nil {
+		t.Fatalf("OpenShard() error = %v", err)
+	}
+
+	emptyOutput := newCompactionOutput(shard, 1)
+	parts, metas, err := emptyOutput.close()
+	if err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("empty close() error = %v shard close = %v", err, closeErr)
+	}
+	if len(parts) != 0 || len(metas) != 0 {
+		closeErr := shard.Close()
+		t.Fatalf("empty close() = %d parts %d metas, want none close = %v", len(parts), len(metas), closeErr)
+	}
+
+	output := newCompactionOutput(shard, 1)
+	first := []model.ColumnData{
+		wideColumnForCompactionOutputTest(1, 1, "alpha"),
+		wideColumnForCompactionOutputTest(1, 2, "beta"),
+	}
+	if err := output.addSeries(first); err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("addSeries(first) error = %v close = %v", err, closeErr)
+	}
+	if len(output.metas) == 0 {
+		closeErr := shard.Close()
+		t.Fatalf("addSeries(first) did not roll output close = %v", closeErr)
+	}
+	closedPath := output.metas[0].Path
+	if _, err := os.Stat(closedPath); err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("closed output stat error = %v close = %v", err, closeErr)
+	}
+	if err := output.addSeries([]model.ColumnData{wideColumnForCompactionOutputTest(2, 1, "gamma")}); err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("addSeries(second) error = %v close = %v", err, closeErr)
+	}
+	if output.writer == nil {
+		closeErr := shard.Close()
+		t.Fatalf("second writer is nil close = %v", closeErr)
+	}
+	openPath := filepath.Join(shard.opts.Dir, "sst-000003")
+	if _, err := os.Stat(openPath); err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("open output stat error = %v close = %v", err, closeErr)
+	}
+	if err := output.abort(); err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("abort() error = %v close = %v", err, closeErr)
+	}
+	if _, err := os.Stat(closedPath); !os.IsNotExist(err) {
+		closeErr := shard.Close()
+		t.Fatalf("closed output stat after abort = %v, want not exist close = %v", err, closeErr)
+	}
+	if _, err := os.Stat(openPath); !os.IsNotExist(err) {
+		closeErr := shard.Close()
+		t.Fatalf("open output stat after abort = %v, want not exist close = %v", err, closeErr)
+	}
+	if err := shard.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestStreamingCompactionAbortsOpenOutputOnBatchQueryError(t *testing.T) {
+	dir := t.TempDir()
+	shard, _, err := OpenShard(ShardOptions{
+		Dir:   dir,
+		Start: 0,
+		End:   int64(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("OpenShard() error = %v", err)
+	}
+
+	validColumns := make([]model.ColumnData, 0, streamingCompactionSeriesBatchSize)
+	for seriesID := 1; seriesID <= streamingCompactionSeriesBatchSize; seriesID++ {
+		validColumns = append(validColumns, streamCompactionColumnForTest(uint64(seriesID)))
+	}
+	validMeta, err := sstable.WritePart(dir, 0, "sst-000001", validColumns)
+	if err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("WritePart(valid) error = %v close = %v", err, closeErr)
+	}
+	validPart, err := sstable.OpenPart(validMeta.Path)
+	if err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("OpenPart(valid) error = %v close = %v", err, closeErr)
+	}
+
+	corruptMeta, err := sstable.WritePart(dir, 0, "sst-000002", []model.ColumnData{
+		streamCompactionColumnForTest(uint64(streamingCompactionSeriesBatchSize + 1)),
+	})
+	if err != nil {
+		validCloseErr := validPart.Close()
+		closeErr := shard.Close()
+		t.Fatalf("WritePart(corrupt) error = %v valid close = %v shard close = %v", err, validCloseErr, closeErr)
+	}
+	corruptPart, err := sstable.OpenPart(corruptMeta.Path)
+	if err != nil {
+		validCloseErr := validPart.Close()
+		closeErr := shard.Close()
+		t.Fatalf("OpenPart(corrupt) error = %v valid close = %v shard close = %v", err, validCloseErr, closeErr)
+	}
+	corruptValuesFileAtPath(t, corruptMeta.Path)
+
+	_, _, err = shard.writeStreamingCompactionOutputsLocked(1, []*sstable.Part{validPart, corruptPart})
+	if err == nil {
+		validCloseErr := validPart.Close()
+		corruptCloseErr := corruptPart.Close()
+		closeErr := shard.Close()
+		t.Fatalf(
+			"writeStreamingCompactionOutputsLocked() error = nil, want corrupt query error valid close = %v corrupt close = %v shard close = %v",
+			validCloseErr,
+			corruptCloseErr,
+			closeErr,
+		)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "sst-000003")); !os.IsNotExist(statErr) {
+		validCloseErr := validPart.Close()
+		corruptCloseErr := corruptPart.Close()
+		closeErr := shard.Close()
+		t.Fatalf(
+			"stream output stat = %v, want aborted output removed valid close = %v corrupt close = %v shard close = %v",
+			statErr,
+			validCloseErr,
+			corruptCloseErr,
+			closeErr,
+		)
+	}
+	if err := validPart.Close(); err != nil {
+		corruptCloseErr := corruptPart.Close()
+		closeErr := shard.Close()
+		t.Fatalf("Close(valid) error = %v corrupt close = %v shard close = %v", err, corruptCloseErr, closeErr)
+	}
+	if err := corruptPart.Close(); err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("Close(corrupt) error = %v shard close = %v", err, closeErr)
+	}
+	if err := shard.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestCompactionStreamsOneSeriesAtATime(t *testing.T) {
+	dir := t.TempDir()
+	shard, _, err := OpenShard(ShardOptions{
+		Dir:   dir,
+		Start: 0,
+		End:   int64(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("OpenShard() error = %v", err)
+	}
+	partOneMeta, err := sstable.WritePart(dir, 0, "sst-000001", []model.ColumnData{
+		compactionColumnForSeriesTest(1, []model.VersionedSample{
+			{Timestamp: 1, WriteSeq: 1, Value: model.Float64Value(1)},
+			{Timestamp: 2, WriteSeq: 1, Value: model.Float64Value(2)},
+		}),
+		compactionColumnForSeriesTest(2, []model.VersionedSample{
+			{Timestamp: 1, WriteSeq: 1, Value: model.Float64Value(10)},
+		}),
+	})
+	if err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("WritePart(one) error = %v close = %v", err, closeErr)
+	}
+	partTwoMeta, err := sstable.WritePart(dir, 0, "sst-000002", []model.ColumnData{
+		compactionColumnForSeriesTest(1, []model.VersionedSample{
+			{Timestamp: 2, WriteSeq: 9, Value: model.Float64Value(20)},
+			{Timestamp: 3, WriteSeq: 9, Value: model.Float64Value(30)},
+		}),
+		compactionColumnForSeriesTest(2, []model.VersionedSample{
+			{Timestamp: 2, WriteSeq: 1, Value: model.Float64Value(11)},
+		}),
+	})
+	if err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("WritePart(two) error = %v close = %v", err, closeErr)
+	}
+	partOne, err := sstable.OpenPart(partOneMeta.Path)
+	if err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("OpenPart(one) error = %v close = %v", err, closeErr)
+	}
+	partTwo, err := sstable.OpenPart(partTwoMeta.Path)
+	if err != nil {
+		closeErr := errors.Join(partOne.Close(), shard.Close())
+		t.Fatalf("OpenPart(two) error = %v close = %v", err, closeErr)
+	}
+	inputs, err := newCompactionInputs([]*sstable.Part{partOne, partTwo}, 0, int64(time.Hour))
+	if err != nil {
+		closeErr := errors.Join(partOne.Close(), partTwo.Close(), shard.Close())
+		t.Fatalf("newCompactionInputs() error = %v close = %v", err, closeErr)
+	}
+	shard.tombstones = []model.Tombstone{{SeriesIDs: []uint64{1}, StartTime: 1, EndTime: 1}}
+	columns, err := shard.queryCompactionSeries(inputs, 1)
+	if err != nil {
+		closeErr := errors.Join(partOne.Close(), partTwo.Close(), shard.Close())
+		t.Fatalf("queryCompactionSeries() error = %v close = %v", err, closeErr)
+	}
+	if len(columns) != 1 || columns[0].SeriesID != 1 {
+		closeErr := errors.Join(partOne.Close(), partTwo.Close(), shard.Close())
+		t.Fatalf("columns = %#v, want only series 1 close = %v", columns, closeErr)
+	}
+	if got := columns[0].Samples; len(got) != 2 || got[0].Timestamp != 2 || got[0].Value.Float64 != 20 || got[1].Timestamp != 3 {
+		closeErr := errors.Join(partOne.Close(), partTwo.Close(), shard.Close())
+		t.Fatalf("series 1 samples = %#v, want tombstoned ts=1 and newest ts=2 close = %v", got, closeErr)
+	}
+	seriesTwo, err := shard.queryCompactionSeries(inputs, 2)
+	if err != nil {
+		closeErr := errors.Join(partOne.Close(), partTwo.Close(), shard.Close())
+		t.Fatalf("queryCompactionSeries(series 2) error = %v close = %v", err, closeErr)
+	}
+	if len(seriesTwo) != 1 || seriesTwo[0].SeriesID != 2 || len(seriesTwo[0].Samples) != 2 {
+		closeErr := errors.Join(partOne.Close(), partTwo.Close(), shard.Close())
+		t.Fatalf("series 2 columns = %#v, want untouched two samples close = %v", seriesTwo, closeErr)
+	}
+	if err := errors.Join(partOne.Close(), partTwo.Close(), shard.Close()); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestOpenShardCleansOrphanParts(t *testing.T) {
 	ctx := context.Background()
 	opts := model.Options{Path: t.TempDir(), ShardDuration: time.Hour, MemTableMaxSamples: 1}
@@ -950,6 +1181,16 @@ func TestEngineQueryPropagatesPartCorruption(t *testing.T) {
 func corruptValuesFile(t *testing.T, root string) {
 	t.Helper()
 	path := filepath.Join(root, "data", defaultDatabase, defaultRetentionPolicy, "shards", "0", "sst-000001", "values.bin")
+	corruptValuesFilePath(t, path)
+}
+
+func corruptValuesFileAtPath(t *testing.T, partPath string) {
+	t.Helper()
+	corruptValuesFilePath(t, filepath.Join(partPath, "values.bin"))
+}
+
+func corruptValuesFilePath(t *testing.T, path string) {
+	t.Helper()
 	file, err := os.OpenFile(path, os.O_RDWR, 0600)
 	if err != nil {
 		t.Fatalf("OpenFile(values) error = %v", err)
@@ -960,6 +1201,38 @@ func corruptValuesFile(t *testing.T, root string) {
 	}
 	if err := file.Close(); err != nil {
 		t.Fatalf("Close(values) error = %v", err)
+	}
+}
+
+func streamCompactionColumnForTest(seriesID uint64) model.ColumnData {
+	timestamp := int64(seriesID)
+	return model.ColumnData{
+		SeriesID:  seriesID,
+		FieldID:   1,
+		FieldType: model.FieldFloat64,
+		Samples: []model.VersionedSample{
+			{Timestamp: timestamp, WriteSeq: seriesID, Value: model.Float64Value(float64(seriesID))},
+		},
+	}
+}
+
+func compactionColumnForSeriesTest(seriesID uint64, samples []model.VersionedSample) model.ColumnData {
+	return model.ColumnData{
+		SeriesID:  seriesID,
+		FieldID:   1,
+		FieldType: model.FieldFloat64,
+		Samples:   samples,
+	}
+}
+
+func wideColumnForCompactionOutputTest(seriesID uint64, fieldID uint32, value string) model.ColumnData {
+	return model.ColumnData{
+		SeriesID:  seriesID,
+		FieldID:   fieldID,
+		FieldType: model.FieldString,
+		Samples: []model.VersionedSample{
+			{Timestamp: int64(fieldID), WriteSeq: uint64(fieldID), Value: model.StringValue(value)},
+		},
 	}
 }
 
@@ -1222,6 +1495,42 @@ func TestMergeColumnDataOrderedFastPathAllocations(t *testing.T) {
 	})
 	if allocs > 20 {
 		t.Fatalf("mergeColumnData ordered allocs/run = %.2f, want <= 20", allocs)
+	}
+}
+
+func TestForEachCompactionSeriesGroupVisitsSortedGroups(t *testing.T) {
+	columns := []model.ColumnData{
+		columnForMergeTest(2, 1, 0, 1),
+		columnForMergeTest(1, 2, 0, 1),
+		columnForMergeTest(1, 1, 0, 1),
+	}
+	var got []uint64
+	if err := forEachCompactionSeriesGroup(columns, func(group []model.ColumnData) error {
+		got = append(got, group[0].SeriesID)
+		for _, column := range group {
+			if column.SeriesID != group[0].SeriesID {
+				t.Fatalf("mixed series group = %#v", group)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("forEachCompactionSeriesGroup() error = %v", err)
+	}
+	if len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("visited series = %v, want [1 2]", got)
+	}
+	if err := forEachCompactionSeriesGroup(nil, func(group []model.ColumnData) error {
+		t.Fatalf("unexpected empty group visit: %#v", group)
+		return nil
+	}); err != nil {
+		t.Fatalf("forEachCompactionSeriesGroup(empty) error = %v", err)
+	}
+	stopErr := errors.New("stop")
+	err := forEachCompactionSeriesGroup(columns, func(group []model.ColumnData) error {
+		return stopErr
+	})
+	if !errors.Is(err, stopErr) {
+		t.Fatalf("forEachCompactionSeriesGroup(error) = %v, want %v", err, stopErr)
 	}
 }
 

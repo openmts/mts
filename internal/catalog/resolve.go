@@ -12,6 +12,11 @@ type resolvedFieldArena struct {
 	offset int
 }
 
+type resolveBatchCache struct {
+	series  map[string]Series
+	tagKeys []string
+}
+
 func makeResolvedFields(count int, arena *resolvedFieldArena) []model.ResolvedField {
 	if arena == nil {
 		return make([]model.ResolvedField, count)
@@ -27,7 +32,7 @@ func (c *Catalog) resolveSeriesLocked(measurement string, tags map[string]string
 		return Series{}, err
 	}
 	if changed {
-		if err := c.saveSnapshotLocked(); err != nil {
+		if err := c.checkpointSnapshotLocked(false); err != nil {
 			return Series{}, err
 		}
 	}
@@ -38,6 +43,35 @@ func (c *Catalog) resolveSeriesNoSnapshotLocked(
 	measurement string,
 	tags map[string]string,
 ) (Series, bool, error) {
+	return c.resolveSeriesNoSnapshotCachedLocked(measurement, tags, nil)
+}
+
+func (c *Catalog) resolveSeriesNoSnapshotCachedLocked(
+	measurement string,
+	tags map[string]string,
+	cache *resolveBatchCache,
+) (Series, bool, error) {
+	if cache != nil && len(tags) > 1 {
+		var key string
+		key, cache.tagKeys = seriesKeyWithScratch(measurement, tags, cache.tagKeys)
+		if cache.series == nil {
+			cache.series = make(map[string]Series)
+		}
+		if series, ok := cache.series[key]; ok {
+			return series, false, nil
+		}
+		if id, ok := c.seriesByKey[key]; ok {
+			series := c.series[id]
+			cache.series[key] = series
+			return series, false, nil
+		}
+		series, changed, err := c.createSeriesNoSnapshotLocked(measurement, tags)
+		if err != nil {
+			return Series{}, false, err
+		}
+		cache.series[key] = series
+		return series, changed, nil
+	}
 	if id, ok := c.lookupSeriesID(measurement, tags); ok {
 		return c.series[id], false, nil
 	}
@@ -45,6 +79,13 @@ func (c *Catalog) resolveSeriesNoSnapshotLocked(
 	if id, ok := c.seriesByKey[key]; ok {
 		return c.series[id], false, nil
 	}
+	return c.createSeriesNoSnapshotLocked(measurement, tags)
+}
+
+func (c *Catalog) createSeriesNoSnapshotLocked(
+	measurement string,
+	tags map[string]string,
+) (Series, bool, error) {
 	series := Series{
 		ID:          c.nextSeriesID,
 		Measurement: measurement,
@@ -59,6 +100,7 @@ func (c *Catalog) resolveSeriesNoSnapshotLocked(
 	}
 	c.applySeries(series)
 	c.nextSeriesID++
+	c.snapshotDirtyRecords++
 	return series, true, nil
 }
 
@@ -114,7 +156,7 @@ func (c *Catalog) resolveFieldsLocked(
 		return nil, err
 	}
 	if changed {
-		if err := c.saveSnapshotLocked(); err != nil {
+		if err := c.checkpointSnapshotLocked(false); err != nil {
 			return nil, err
 		}
 	}
@@ -220,6 +262,7 @@ func (c *Catalog) resolveFieldNoSnapshotLocked(
 	}
 	c.applyField(field)
 	c.nextFieldID++
+	c.snapshotDirtyRecords++
 	return field, true, nil
 }
 

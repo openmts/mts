@@ -104,23 +104,131 @@ func (p *Part) Query(query Query) ([]model.ColumnData, error) {
 	if !partMatches(p.metadata.Part, p.metaRows, query) {
 		return []model.ColumnData{}, nil
 	}
-	rows, err := p.loadIndexRows()
+	return p.queryIndexRows(query, nil)
+}
+
+func (p *Part) SeriesIDs(query Query) ([]uint64, error) {
+	if query.End < query.Start {
+		return []uint64{}, nil
+	}
+	if !partMatches(p.metadata.Part, p.metaRows, query) {
+		return []uint64{}, nil
+	}
+	stream, payload, err := p.openIndexRowStream()
 	if err != nil {
 		return nil, err
 	}
-	columns := make([]model.ColumnData, 0)
-	for _, row := range rows {
-		if !rowMatches(row, query) {
-			continue
-		}
-		got, err := p.queryRow(row, query)
-		if err != nil {
-			return nil, err
-		}
-		columns = append(columns, got...)
+	ids, readErr := collectSeriesIDsFromStream(stream, query)
+	payload.Release()
+	if readErr != nil {
+		return nil, readErr
+	}
+	return ids, nil
+}
+
+func (p *Part) queryIndexRows(query Query, seriesIDs []uint64) ([]model.ColumnData, error) {
+	stream, payload, err := p.openIndexRowStream()
+	if err != nil {
+		return nil, err
+	}
+	columns, readErr := p.queryIndexRowStream(stream, query, seriesIDs)
+	payload.Release()
+	if readErr != nil {
+		return nil, readErr
 	}
 	sortColumns(columns)
 	return columns, nil
+}
+
+func (p *Part) openIndexRowStream() (*indexRowStream, blockPayload, error) {
+	payload, err := p.readBlockPayload(indexFile, p.metadata.IndexRef)
+	if err != nil {
+		return nil, blockPayload{}, err
+	}
+	stream, err := newIndexRowStream(payload.Bytes())
+	if err != nil {
+		payload.Release()
+		return nil, blockPayload{}, fmt.Errorf("decode part index: %w", err)
+	}
+	return stream, payload, nil
+}
+
+func collectSeriesIDsFromStream(stream *indexRowStream, query Query) ([]uint64, error) {
+	ids := make([]uint64, 0)
+	for {
+		header, ok, err := stream.nextHeader()
+		if err != nil {
+			return nil, fmt.Errorf("decode part index: %w", err)
+		}
+		if !ok {
+			break
+		}
+		if rowHeaderMatches(header, query) {
+			ids = append(ids, header.seriesID)
+		}
+		if err := stream.skipColumnRefs(); err != nil {
+			return nil, fmt.Errorf("decode part index: %w", err)
+		}
+	}
+	if err := stream.done(); err != nil {
+		return nil, fmt.Errorf("decode part index: %w", err)
+	}
+	return ids, nil
+}
+
+func (p *Part) queryIndexRowStream(
+	stream *indexRowStream,
+	query Query,
+	seriesIDs []uint64,
+) ([]model.ColumnData, error) {
+	columns := make([]model.ColumnData, 0)
+	refs := make([]columnRef, 0, 16)
+	for {
+		header, ok, err := stream.nextHeader()
+		if err != nil {
+			return nil, fmt.Errorf("decode part index: %w", err)
+		}
+		if !ok {
+			break
+		}
+		if !rowHeaderMatches(header, query) || !containsSortedSeriesIDOrAll(seriesIDs, header.seriesID) {
+			if err := stream.skipColumnRefs(); err != nil {
+				return nil, fmt.Errorf("decode part index: %w", err)
+			}
+			continue
+		}
+		got, nextRefs, err := p.queryIndexRowFromStream(stream, header, query, refs)
+		if err != nil {
+			return nil, err
+		}
+		refs = nextRefs
+		columns = append(columns, got...)
+	}
+	if err := stream.done(); err != nil {
+		return nil, fmt.Errorf("decode part index: %w", err)
+	}
+	return columns, nil
+}
+
+func (p *Part) queryIndexRowFromStream(
+	stream *indexRowStream,
+	header indexRowHeader,
+	query Query,
+	refs []columnRef,
+) ([]model.ColumnData, []columnRef, error) {
+	refs, err := stream.appendFilteredColumnRefs(refs, query.FieldIDs)
+	if err != nil {
+		return nil, refs, fmt.Errorf("decode part index: %w", err)
+	}
+	if len(refs) == 0 {
+		return nil, refs, nil
+	}
+	columns, err := p.queryRow(header.indexRow(refs), Query{
+		FieldIDs: query.FieldIDs,
+		Start:    query.Start,
+		End:      query.End,
+	})
+	return columns, refs, err
 }
 
 func (p *Part) loadIndexRows() ([]indexRow, error) {
@@ -186,13 +294,13 @@ func (p *Part) readValueColumn(
 	if err != nil {
 		return model.ColumnData{}, err
 	}
-	if len(payload.Bytes()) > 0 && payload.Bytes()[0] == valueEncodingV4 {
-		index, err := unmarshalValuePageIndex(payload.Bytes())
+	if len(payload.Bytes()) > 0 && payload.Bytes()[0] == valueEncodingPageIndex {
+		column, err := p.readValuePagesFromIndexPayload(seriesID, payload.Bytes(), rowTimestamps, query)
 		payload.Release()
 		if err != nil {
 			return model.ColumnData{}, fmt.Errorf("decode value page index: %w", err)
 		}
-		return p.readValuePages(seriesID, index, rowTimestamps, query)
+		return column, nil
 	}
 	block, err := unmarshalValueBlockWithTimestamps(payload.Bytes(), rowTimestamps, query)
 	payload.Release()
@@ -202,34 +310,69 @@ func (p *Part) readValueColumn(
 	return columnFromBlock(seriesID, block), nil
 }
 
-func (p *Part) readValuePages(
+func (p *Part) readValuePagesFromIndexPayload(
 	seriesID uint64,
-	index valuePageIndex,
+	payload []byte,
 	rowTimestamps []int64,
 	query Query,
 ) (model.ColumnData, error) {
-	capacity := matchingValuePageSampleCapacity(index, query)
+	header, fullPages, fullRange, matches, err := scanValuePageIndexCoverage(payload, query)
+	if err != nil {
+		return model.ColumnData{}, err
+	}
+	capacity := matchingValuePageCapacity(header, matches)
+	if fullRange {
+		capacity = header.count
+	}
 	column := model.ColumnData{
 		SeriesID:  seriesID,
-		FieldID:   index.FieldID,
-		FieldType: index.FieldType,
+		FieldID:   header.fieldID,
+		FieldType: header.fieldType,
 		Samples:   make([]model.VersionedSample, 0, capacity),
 	}
-	for _, page := range index.Pages {
-		if page.MaxTime < query.Start || page.MinTime > query.End {
-			continue
-		}
-		payload, err := p.readBlockPayload(valuesFile, page.Ref)
+	if matches == 0 {
+		return column, nil
+	}
+	if fullRange {
+		return p.readValuePagesFromRefs(column, fullPages, rowTimestamps, query)
+	}
+	reader := newBlockReader(payload)
+	if _, err := readValuePageIndexHeader(reader); err != nil {
+		return model.ColumnData{}, err
+	}
+	for range header.pageCount {
+		page, err := readValuePageRef(reader)
 		if err != nil {
 			return model.ColumnData{}, err
 		}
-		if p.stats != nil {
-			p.stats.ValuePagesRead++
+		if page.MaxTime < query.Start || page.MinTime > query.End {
+			continue
 		}
-		block, err := unmarshalValueBlockWithTimestamps(payload.Bytes(), rowTimestamps, query)
-		payload.Release()
+		block, err := p.readValuePage(page.Ref, rowTimestamps, query)
 		if err != nil {
-			return model.ColumnData{}, fmt.Errorf("decode value page: %w", err)
+			return model.ColumnData{}, err
+		}
+		column.Samples = append(column.Samples, block.Samples...)
+	}
+	if err := reader.done("value page index"); err != nil {
+		return model.ColumnData{}, err
+	}
+	if !samplesSorted(column.Samples) {
+		sortSamples(column.Samples)
+	}
+	return column, nil
+}
+
+func (p *Part) readValuePagesFromRefs(
+	column model.ColumnData,
+	pages []valuePageRef,
+	rowTimestamps []int64,
+	query Query,
+) (model.ColumnData, error) {
+	for _, page := range pages {
+		block, err := p.readValuePage(page.Ref, rowTimestamps, query)
+		if err != nil {
+			return model.ColumnData{}, err
 		}
 		column.Samples = append(column.Samples, block.Samples...)
 	}
@@ -239,25 +382,90 @@ func (p *Part) readValuePages(
 	return column, nil
 }
 
-func matchingValuePageSampleCapacity(index valuePageIndex, query Query) int {
-	if len(index.Pages) == 0 || index.Count == 0 {
-		return 0
+func scanValuePageIndexCoverage(
+	payload []byte,
+	query Query,
+) (valuePageIndexHeader, []valuePageRef, bool, int, error) {
+	reader := newBlockReader(payload)
+	header, err := readValuePageIndexHeader(reader)
+	if err != nil {
+		return valuePageIndexHeader{}, nil, false, 0, err
+	}
+	pages := make([]valuePageRef, 0, header.pageCount)
+	matches := 0
+	fullRange := header.pageCount > 0
+	for range header.pageCount {
+		page, err := readValuePageRef(reader)
+		if err != nil {
+			return valuePageIndexHeader{}, nil, false, 0, err
+		}
+		if page.MaxTime >= query.Start && page.MinTime <= query.End {
+			matches++
+			if fullRange {
+				pages = append(pages, page)
+			}
+			continue
+		}
+		fullRange = false
+		pages = nil
+	}
+	if err := reader.done("value page index"); err != nil {
+		return valuePageIndexHeader{}, nil, false, 0, err
+	}
+	if !fullRange {
+		pages = nil
+	}
+	return header, pages, fullRange, matches, nil
+}
+
+func matchingValuePageIndexHeader(payload []byte, query Query) (valuePageIndexHeader, int, error) {
+	reader := newBlockReader(payload)
+	header, err := readValuePageIndexHeader(reader)
+	if err != nil {
+		return valuePageIndexHeader{}, 0, err
 	}
 	matches := 0
-	for _, page := range index.Pages {
+	for range header.pageCount {
+		page, err := readValuePageRef(reader)
+		if err != nil {
+			return valuePageIndexHeader{}, 0, err
+		}
 		if page.MaxTime >= query.Start && page.MinTime <= query.End {
 			matches++
 		}
 	}
-	if matches == 0 {
+	if err := reader.done("value page index"); err != nil {
+		return valuePageIndexHeader{}, 0, err
+	}
+	return header, matches, nil
+}
+
+func matchingValuePageCapacity(header valuePageIndexHeader, matches int) int {
+	if header.pageCount == 0 || header.count == 0 || matches == 0 {
 		return 0
 	}
-	pageAverage := (index.Count + len(index.Pages) - 1) / len(index.Pages)
+	pageAverage := (header.count + header.pageCount - 1) / header.pageCount
 	capacity := matches * pageAverage
-	if capacity > index.Count {
-		return index.Count
+	if capacity > header.count {
+		return header.count
 	}
 	return capacity
+}
+
+func (p *Part) readValuePage(ref blockRef, rowTimestamps []int64, query Query) (valueBlock, error) {
+	payload, err := p.readBlockPayload(valuesFile, ref)
+	if err != nil {
+		return valueBlock{}, err
+	}
+	if p.stats != nil {
+		p.stats.ValuePagesRead++
+	}
+	block, err := unmarshalValueBlockWithTimestamps(payload.Bytes(), rowTimestamps, query)
+	payload.Release()
+	if err != nil {
+		return valueBlock{}, fmt.Errorf("decode value page: %w", err)
+	}
+	return block, nil
 }
 
 func (p *Part) readBlock(name string, ref blockRef) ([]byte, error) {
@@ -340,29 +548,13 @@ func partFieldsMatch(rows []metaIndexRow, filter map[uint32]struct{}) bool {
 func loadPartMetadata(path string) (metadata, error) {
 	data, err := os.ReadFile(filepath.Join(path, metadataFile))
 	if err != nil {
-		if os.IsNotExist(err) {
-			return metadata{}, rejectLegacyMetadata(path)
-		}
 		return metadata{}, fmt.Errorf("read part metadata: %w", err)
 	}
 	meta, err := decodeMetadata(data)
 	if err != nil {
 		return metadata{}, fmt.Errorf("decode part metadata: %w", err)
 	}
-	if meta.FormatVersion != partFormatVersion {
-		return metadata{}, fmt.Errorf("unsupported part metadata format version %d", meta.FormatVersion)
-	}
 	return meta, nil
-}
-
-func rejectLegacyMetadata(path string) error {
-	legacyPath := filepath.Join(path, legacyMetadataFile)
-	if _, err := os.Stat(legacyPath); err == nil {
-		return fmt.Errorf("part metadata legacy JSON format is unsupported: %s", legacyPath)
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat legacy part metadata: %w", err)
-	}
-	return fmt.Errorf("read part metadata: %w", os.ErrNotExist)
 }
 
 func loadPartMetaIndex(path string, ref blockRef) ([]metaIndexRow, error) {
@@ -378,7 +570,7 @@ func loadPartMetaIndex(path string, ref blockRef) ([]metaIndexRow, error) {
 }
 
 func timeBlockFromTimestamps(timestamps []int64) timeBlock {
-	block := timeBlock{Encoding: "binary-v2", Timestamps: append([]int64{}, timestamps...)}
+	block := timeBlock{Encoding: "binary-delta", Timestamps: append([]int64{}, timestamps...)}
 	if len(timestamps) > 0 {
 		block.MinTime = timestamps[0]
 		block.MaxTime = timestamps[len(timestamps)-1]
@@ -404,6 +596,13 @@ func rowMatches(row indexRow, query Query) bool {
 		return false
 	}
 	return row.MaxTime >= query.Start && row.MinTime <= query.End
+}
+
+func rowHeaderMatches(header indexRowHeader, query Query) bool {
+	if !containsSeries(query.SeriesIDs, header.seriesID) {
+		return false
+	}
+	return header.maxTime >= query.Start && header.minTime <= query.End
 }
 
 func containsSeries(filter map[uint64]struct{}, seriesID uint64) bool {

@@ -26,13 +26,13 @@ func TestBinaryBlocksRoundTripAllTypes(t *testing.T) {
 		columnFor(model.FieldString, []model.FieldValue{model.StringValue("a"), model.StringValue("bb")}),
 	}
 	for _, column := range columns {
-		payload, err := marshalValueBlock(nil, column)
+		payload, err := marshalValueBlockWithTimestamps(nil, column, sampleTimestamps(column.Samples))
 		if err != nil {
-			t.Fatalf("marshalValueBlock(%v) error = %v", column.FieldType, err)
+			t.Fatalf("marshalValueBlockWithTimestamps(%v) error = %v", column.FieldType, err)
 		}
-		got, err := unmarshalValueBlock(payload)
+		got, err := unmarshalValueBlockWithTimestamps(payload, sampleTimestamps(column.Samples), Query{Start: 0, End: 100})
 		if err != nil {
-			t.Fatalf("unmarshalValueBlock(%v) error = %v", column.FieldType, err)
+			t.Fatalf("unmarshalValueBlockWithTimestamps(%v) error = %v", column.FieldType, err)
 		}
 		if !reflect.DeepEqual(got.Samples, column.Samples) {
 			t.Fatalf("samples = %#v, want %#v", got.Samples, column.Samples)
@@ -40,7 +40,28 @@ func TestBinaryBlocksRoundTripAllTypes(t *testing.T) {
 	}
 }
 
-func TestValueBlockV3AlignedIsCompactAndRoundTrips(t *testing.T) {
+func TestValuePageRejectsTruncatedTypedValues(t *testing.T) {
+	columns := []model.ColumnData{
+		columnFor(model.FieldFloat64, []model.FieldValue{model.Float64Value(1)}),
+		columnFor(model.FieldInt64, []model.FieldValue{model.Int64Value(1)}),
+		columnFor(model.FieldBool, []model.FieldValue{model.BoolValue(true)}),
+		columnFor(model.FieldString, []model.FieldValue{model.StringValue("abc")}),
+	}
+	for index, column := range columns {
+		t.Run(string(rune('0'+index)), func(t *testing.T) {
+			rowTimestamps := sampleTimestamps(column.Samples)
+			payload, err := marshalValueBlockWithTimestamps(nil, column, rowTimestamps)
+			if err != nil {
+				t.Fatalf("marshalValueBlockWithTimestamps() error = %v", err)
+			}
+			if _, err := unmarshalValueBlockWithTimestamps(payload[:len(payload)-1], rowTimestamps, Query{Start: 0, End: 100}); err == nil {
+				t.Fatal("unmarshalValueBlockWithTimestamps(truncated) error = nil, want error")
+			}
+		})
+	}
+}
+
+func TestValuePageAlignedIsCompactAndRoundTrips(t *testing.T) {
 	rowTimestamps := []int64{10, 20, 30, 40}
 	column := model.ColumnData{
 		SeriesID:  1,
@@ -53,23 +74,26 @@ func TestValueBlockV3AlignedIsCompactAndRoundTrips(t *testing.T) {
 			{Timestamp: 40, WriteSeq: 4, Value: model.Float64Value(4)},
 		},
 	}
-	v2, err := marshalValueBlock(nil, column)
-	if err != nil {
-		t.Fatalf("marshalValueBlock(v2) error = %v", err)
-	}
-	v3, err := marshalValueBlockWithTimestamps(nil, column, rowTimestamps)
+	payload, err := marshalValueBlockWithTimestamps(nil, column, rowTimestamps)
 	if err != nil {
 		t.Fatalf("marshalValueBlockWithTimestamps() error = %v", err)
 	}
-	if len(v3) >= len(v2) {
-		t.Fatalf("v3 size = %d, want smaller than v2 size %d", len(v3), len(v2))
+	plainPayload := appendSampleTimes(nil, column.Samples)
+	plainPayload = appendSampleWriteSeqs(plainPayload, column.Samples)
+	plainPayload, err = appendSampleValues(plainPayload, column)
+	if err != nil {
+		t.Fatalf("appendSampleValues() error = %v", err)
 	}
-	got, err := unmarshalValueBlockWithTimestamps(v3, rowTimestamps, Query{Start: 0, End: 100})
+	plainEstimate := len(plainPayload)
+	if len(payload) >= plainEstimate {
+		t.Fatalf("page payload size = %d, want smaller than plain timestamp estimate %d", len(payload), plainEstimate)
+	}
+	got, err := unmarshalValueBlockWithTimestamps(payload, rowTimestamps, Query{Start: 0, End: 100})
 	if err != nil {
 		t.Fatalf("unmarshalValueBlockWithTimestamps() error = %v", err)
 	}
 	if !reflect.DeepEqual(got.Samples, column.Samples) {
-		t.Fatalf("v3 samples = %#v, want %#v", got.Samples, column.Samples)
+		t.Fatalf("samples = %#v, want %#v", got.Samples, column.Samples)
 	}
 }
 
@@ -95,12 +119,12 @@ func TestValuePageIndexRoundTrip(t *testing.T) {
 		t.Fatalf("page index = %#v, want %#v", got, index)
 	}
 	if _, err := unmarshalValueBlockWithTimestamps(payload, []int64{10}, Query{Start: 0, End: 100}); err == nil {
-		t.Fatal("unmarshalValueBlockWithTimestamps(v4 index) error = nil, want error")
+		t.Fatal("unmarshalValueBlockWithTimestamps(page index) error = nil, want error")
 	}
 }
 
 func TestValuePageIndexRejectsMalformedPayload(t *testing.T) {
-	if _, err := unmarshalValuePageIndex([]byte{valueEncodingV3}); err == nil {
+	if _, err := unmarshalValuePageIndex([]byte{valueEncodingPagePlain}); err == nil {
 		t.Fatal("unmarshalValuePageIndex(wrong encoding) error = nil, want error")
 	}
 	if _, err := marshalValuePageIndex(nil, valuePageIndex{
@@ -113,7 +137,7 @@ func TestValuePageIndexRejectsMalformedPayload(t *testing.T) {
 	}
 }
 
-func TestValueBlockV3IndexedSparseRoundTripAndFilters(t *testing.T) {
+func TestValuePageIndexedSparseRoundTripAndFilters(t *testing.T) {
 	rowTimestamps := []int64{10, 20, 30, 40, 50}
 	column := model.ColumnData{
 		SeriesID:  1,
@@ -138,7 +162,57 @@ func TestValueBlockV3IndexedSparseRoundTripAndFilters(t *testing.T) {
 	}
 }
 
-func TestValueBlockV3FloatAndIntSamplesFilterInDirectReader(t *testing.T) {
+func TestReadIndexedTimeRefs(t *testing.T) {
+	rowTimestamps := []int64{10, 20, 30, 40}
+	payload := appendOrdinals(nil, []int{1, 3})
+	got, err := readIndexedTimeRefs(newBlockReader(payload), 2, rowTimestamps)
+	if err != nil {
+		t.Fatalf("readIndexedTimeRefs() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, []int64{20, 40}) {
+		t.Fatalf("timestamps = %#v, want [20 40]", got)
+	}
+	if _, err := readIndexedTimeRefs(newBlockReader(appendOrdinals(nil, []int{4})), 1, rowTimestamps); err == nil {
+		t.Fatal("readIndexedTimeRefs(out of range) error = nil, want error")
+	}
+}
+
+func TestValuePageIndexedStreamingAllocations(t *testing.T) {
+	rowTimestamps := make([]int64, 128)
+	samples := make([]model.VersionedSample, 0, len(rowTimestamps)/2)
+	for index := range rowTimestamps {
+		rowTimestamps[index] = int64(index)
+		if index%2 == 0 {
+			samples = append(samples, model.VersionedSample{
+				Timestamp: int64(index),
+				WriteSeq:  uint64(index + 1),
+				Value:     model.Float64Value(float64(index)),
+			})
+		}
+	}
+	payload, err := marshalValueBlockWithTimestamps(nil, model.ColumnData{
+		FieldID:   3,
+		FieldType: model.FieldFloat64,
+		Samples:   samples,
+	}, rowTimestamps)
+	if err != nil {
+		t.Fatalf("marshalValueBlockWithTimestamps() error = %v", err)
+	}
+	allocs := testing.AllocsPerRun(100, func() {
+		got, err := unmarshalValueBlockWithTimestamps(payload, rowTimestamps, Query{Start: 64, End: 64})
+		if err != nil {
+			t.Fatalf("unmarshalValueBlockWithTimestamps() error = %v", err)
+		}
+		if len(got.Samples) != 1 || got.Samples[0].Timestamp != 64 {
+			t.Fatalf("samples = %#v, want timestamp 64", got.Samples)
+		}
+	})
+	if allocs > 2 {
+		t.Fatalf("indexed page allocs/run = %.2f, want <= 2", allocs)
+	}
+}
+
+func TestValuePageFloatAndIntSamplesFilterInDirectReader(t *testing.T) {
 	rowTimestamps := []int64{10, 20, 30}
 	cases := []struct {
 		name   string
@@ -193,13 +267,175 @@ func TestValueBlockV3FloatAndIntSamplesFilterInDirectReader(t *testing.T) {
 	}
 }
 
+func TestUnmarshalValueBlockWithTimestampsStreamsAlignedFloatSamples(t *testing.T) {
+	rowTimestamps := make([]int64, 128)
+	samples := make([]model.VersionedSample, 128)
+	for index := range samples {
+		rowTimestamps[index] = int64(index)
+		samples[index] = model.VersionedSample{
+			Timestamp: int64(index),
+			WriteSeq:  uint64(index + 1),
+			Value:     model.Float64Value(float64(index)),
+		}
+	}
+	payload, err := marshalValueBlockWithTimestamps(nil, model.ColumnData{
+		FieldID:   2,
+		FieldType: model.FieldFloat64,
+		Samples:   samples,
+	}, rowTimestamps)
+	if err != nil {
+		t.Fatalf("marshalValueBlockWithTimestamps() error = %v", err)
+	}
+	var got valueBlock
+	allocs := testing.AllocsPerRun(100, func() {
+		got, err = unmarshalValueBlockWithTimestamps(payload, rowTimestamps, Query{Start: 0, End: 127})
+		if err != nil {
+			t.Fatalf("unmarshalValueBlockWithTimestamps() error = %v", err)
+		}
+	})
+	if allocs > 1 {
+		t.Fatalf("aligned float decode allocs/run = %.2f, want <= 1", allocs)
+	}
+	if !reflect.DeepEqual(got.Samples, samples) {
+		t.Fatalf("samples = %#v, want %#v", got.Samples, samples)
+	}
+}
+
+func TestReadBoolSamplesDirect(t *testing.T) {
+	rowTimestamps := []int64{1, 2, 3, 4, 5, 6, 7, 8}
+	samples := make([]model.VersionedSample, 0, len(rowTimestamps))
+	for index, timestamp := range rowTimestamps {
+		samples = append(samples, model.VersionedSample{
+			Timestamp: timestamp,
+			WriteSeq:  uint64(index + 1),
+			Value:     model.BoolValue(index%2 == 0),
+		})
+	}
+	payload, err := marshalValueBlockWithTimestamps(nil, model.ColumnData{
+		FieldID:   3,
+		FieldType: model.FieldBool,
+		Samples:   samples,
+	}, rowTimestamps)
+	if err != nil {
+		t.Fatalf("marshalValueBlockWithTimestamps() error = %v", err)
+	}
+	got, err := unmarshalValueBlockWithTimestamps(payload, rowTimestamps, Query{Start: 2, End: 7})
+	if err != nil {
+		t.Fatalf("unmarshalValueBlockWithTimestamps() error = %v", err)
+	}
+	want := samples[1:7]
+	if !reflect.DeepEqual(got.Samples, want) {
+		t.Fatalf("bool samples = %#v, want %#v", got.Samples, want)
+	}
+}
+
+func TestValuePageIndexedBoolSamples(t *testing.T) {
+	rowTimestamps := []int64{1, 2, 3, 4, 5}
+	column := model.ColumnData{
+		FieldID:   4,
+		FieldType: model.FieldBool,
+		Samples: []model.VersionedSample{
+			{Timestamp: 2, WriteSeq: 2, Value: model.BoolValue(true)},
+			{Timestamp: 5, WriteSeq: 5, Value: model.BoolValue(false)},
+		},
+	}
+	payload, err := marshalValueBlockWithTimestamps(nil, column, rowTimestamps)
+	if err != nil {
+		t.Fatalf("marshalValueBlockWithTimestamps() error = %v", err)
+	}
+	got, err := unmarshalValueBlockWithTimestamps(payload, rowTimestamps, Query{Start: 1, End: 5})
+	if err != nil {
+		t.Fatalf("unmarshalValueBlockWithTimestamps() error = %v", err)
+	}
+	if !reflect.DeepEqual(got.Samples, column.Samples) {
+		t.Fatalf("indexed bool samples = %#v, want %#v", got.Samples, column.Samples)
+	}
+}
+
+func TestValuePageIndexedSamplesAllScalarTypes(t *testing.T) {
+	rowTimestamps := []int64{1, 2, 3, 4, 5}
+	columns := []model.ColumnData{
+		{
+			FieldID:   5,
+			FieldType: model.FieldFloat64,
+			Samples: []model.VersionedSample{
+				{Timestamp: 2, WriteSeq: 2, Value: model.Float64Value(2.5)},
+				{Timestamp: 5, WriteSeq: 5, Value: model.Float64Value(5.5)},
+			},
+		},
+		{
+			FieldID:   6,
+			FieldType: model.FieldInt64,
+			Samples: []model.VersionedSample{
+				{Timestamp: 2, WriteSeq: 2, Value: model.Int64Value(2)},
+				{Timestamp: 5, WriteSeq: 5, Value: model.Int64Value(5)},
+			},
+		},
+		{
+			FieldID:   7,
+			FieldType: model.FieldString,
+			Samples: []model.VersionedSample{
+				{Timestamp: 2, WriteSeq: 2, Value: model.StringValue("two")},
+				{Timestamp: 5, WriteSeq: 5, Value: model.StringValue("five")},
+			},
+		},
+	}
+	for _, column := range columns {
+		payload, err := marshalValueBlockWithTimestamps(nil, column, rowTimestamps)
+		if err != nil {
+			t.Fatalf("marshalValueBlockWithTimestamps(%d) error = %v", column.FieldType, err)
+		}
+		got, err := unmarshalValueBlockWithTimestamps(payload, rowTimestamps, Query{Start: 1, End: 5})
+		if err != nil {
+			t.Fatalf("unmarshalValueBlockWithTimestamps(%d) error = %v", column.FieldType, err)
+		}
+		if !reflect.DeepEqual(got.Samples, column.Samples) {
+			t.Fatalf("indexed samples = %#v, want %#v", got.Samples, column.Samples)
+		}
+	}
+}
+
+func TestValuePageAlignedRejectsTruncatedValues(t *testing.T) {
+	rowTimestamps := []int64{1}
+	cases := []struct {
+		name      string
+		fieldType model.FieldType
+		value     model.FieldValue
+	}{
+		{name: "float", fieldType: model.FieldFloat64, value: model.Float64Value(1)},
+		{name: "int", fieldType: model.FieldInt64, value: model.Int64Value(1)},
+		{name: "bool", fieldType: model.FieldBool, value: model.BoolValue(true)},
+		{name: "string", fieldType: model.FieldString, value: model.StringValue("ok")},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			payload, err := marshalValueBlockWithTimestamps(nil, model.ColumnData{
+				FieldID:   9,
+				FieldType: tt.fieldType,
+				Samples: []model.VersionedSample{{
+					Timestamp: 1,
+					WriteSeq:  1,
+					Value:     tt.value,
+				}},
+			}, rowTimestamps)
+			if err != nil {
+				t.Fatalf("marshalValueBlockWithTimestamps() error = %v", err)
+			}
+			truncated := payload[:len(payload)-1]
+			if _, err := unmarshalValueBlockWithTimestamps(truncated, rowTimestamps, Query{Start: 0, End: 2}); err == nil {
+				t.Fatal("unmarshalValueBlockWithTimestamps(truncated) error = nil, want error")
+			}
+		})
+	}
+}
+
 func TestUnmarshalValueBlockWithTimestampsRejectsEmptyPayload(t *testing.T) {
 	if _, err := unmarshalValueBlockWithTimestamps(nil, nil, Query{Start: 0, End: 1}); err == nil {
 		t.Fatal("unmarshalValueBlockWithTimestamps(empty) error = nil, want error")
 	}
 }
 
-func TestValueBlockV3RejectsInvalidTimeReferences(t *testing.T) {
+func TestValuePageRejectsInvalidTimeReferences(t *testing.T) {
 	column := model.ColumnData{
 		FieldID:   2,
 		FieldType: model.FieldFloat64,
@@ -211,7 +447,7 @@ func TestValueBlockV3RejectsInvalidTimeReferences(t *testing.T) {
 		t.Fatal("marshalValueBlockWithTimestamps(missing timestamp) error = nil, want error")
 	}
 	payload := []byte{
-		valueEncodingV3,
+		valueEncodingPagePlain,
 		2,
 		byte(model.FieldFloat64),
 		1,
@@ -228,9 +464,9 @@ func TestValueBlockV3RejectsInvalidTimeReferences(t *testing.T) {
 	}
 }
 
-func TestValueBlockV3RejectsMalformedModesAndTypes(t *testing.T) {
+func TestValuePageRejectsMalformedModesAndTypes(t *testing.T) {
 	alignedMismatch := []byte{
-		valueEncodingV3,
+		valueEncodingPagePlain,
 		2,
 		byte(model.FieldFloat64),
 		2,
@@ -241,7 +477,7 @@ func TestValueBlockV3RejectsMalformedModesAndTypes(t *testing.T) {
 	}
 
 	unknownMode := []byte{
-		valueEncodingV3,
+		valueEncodingPagePlain,
 		2,
 		byte(model.FieldFloat64),
 		1,
@@ -252,7 +488,7 @@ func TestValueBlockV3RejectsMalformedModesAndTypes(t *testing.T) {
 	}
 
 	zeroDelta := []byte{
-		valueEncodingV3,
+		valueEncodingPagePlain,
 		2,
 		byte(model.FieldFloat64),
 		2,
@@ -265,7 +501,7 @@ func TestValueBlockV3RejectsMalformedModesAndTypes(t *testing.T) {
 	}
 
 	unsupportedType := []byte{
-		valueEncodingV3,
+		valueEncodingPagePlain,
 		2,
 		99,
 		0,
@@ -276,7 +512,7 @@ func TestValueBlockV3RejectsMalformedModesAndTypes(t *testing.T) {
 	}
 }
 
-func TestValueBlockV3BoolAndStringSamples(t *testing.T) {
+func TestValuePageBoolAndStringSamples(t *testing.T) {
 	rowTimestamps := []int64{10, 20}
 	cases := []model.ColumnData{
 		{
@@ -312,21 +548,6 @@ func TestValueBlockV3BoolAndStringSamples(t *testing.T) {
 	}
 }
 
-func TestValueBlockV2CompatibilityThroughTimestampDecoder(t *testing.T) {
-	column := columnFor(model.FieldString, []model.FieldValue{model.StringValue("old")})
-	payload, err := marshalValueBlock(nil, column)
-	if err != nil {
-		t.Fatalf("marshalValueBlock(v2) error = %v", err)
-	}
-	got, err := unmarshalValueBlockWithTimestamps(payload, nil, Query{Start: 0, End: 100})
-	if err != nil {
-		t.Fatalf("unmarshalValueBlockWithTimestamps(v2) error = %v", err)
-	}
-	if !reflect.DeepEqual(got.Samples, column.Samples) {
-		t.Fatalf("v2 samples = %#v, want %#v", got.Samples, column.Samples)
-	}
-}
-
 func columnFor(fieldType model.FieldType, values []model.FieldValue) model.ColumnData {
 	samples := make([]model.VersionedSample, 0, len(values))
 	for index, value := range values {
@@ -342,4 +563,12 @@ func columnFor(fieldType model.FieldType, values []model.FieldValue) model.Colum
 		FieldType: fieldType,
 		Samples:   samples,
 	}
+}
+
+func sampleTimestamps(samples []model.VersionedSample) []int64 {
+	timestamps := make([]int64, len(samples))
+	for index, sample := range samples {
+		timestamps[index] = sample.Timestamp
+	}
+	return timestamps
 }

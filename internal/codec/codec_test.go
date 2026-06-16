@@ -9,8 +9,8 @@ import (
 
 func TestEnvelopeRoundTripAndCorruption(t *testing.T) {
 	payload := []byte{1, 2, 3, 4}
-	frame := MarshalEnvelope(nil, Magic("MTSTST2"), 2, 0, payload)
-	got, err := UnmarshalEnvelope(frame, Magic("MTSTST2"), 2)
+	frame := MarshalEnvelope(nil, Magic("MTSTST2"), 0, payload)
+	got, err := UnmarshalEnvelope(frame, Magic("MTSTST2"))
 	if err != nil {
 		t.Fatalf("UnmarshalEnvelope() error = %v", err)
 	}
@@ -18,8 +18,31 @@ func TestEnvelopeRoundTripAndCorruption(t *testing.T) {
 		t.Fatalf("payload = %v, want %v", got.Payload, payload)
 	}
 	frame[len(frame)-1] ^= 0xff
-	if _, err := UnmarshalEnvelope(frame, Magic("MTSTST2"), 2); err == nil {
+	if _, err := UnmarshalEnvelope(frame, Magic("MTSTST2")); err == nil {
 		t.Fatal("UnmarshalEnvelope(corrupt) error = nil, want error")
+	}
+}
+
+func TestEnvelopeViewSharesPayloadAndCopyDoesNot(t *testing.T) {
+	payload := []byte{1, 2, 3, 4}
+	frame := MarshalEnvelope(nil, Magic("MTSTST2"), 7, payload)
+	copied, err := UnmarshalEnvelope(frame, Magic("MTSTST2"))
+	if err != nil {
+		t.Fatalf("UnmarshalEnvelope() error = %v", err)
+	}
+	view, err := UnmarshalEnvelopeView(frame, Magic("MTSTST2"))
+	if err != nil {
+		t.Fatalf("UnmarshalEnvelopeView() error = %v", err)
+	}
+	if view.Flags != 7 {
+		t.Fatalf("view flags = %d, want 7", view.Flags)
+	}
+	view.Payload[0] = 99
+	if copied.Payload[0] == 99 {
+		t.Fatal("UnmarshalEnvelope() returned shared payload, want copy")
+	}
+	if frame[envelopeHeadLen+1] != 99 {
+		t.Fatalf("view payload did not share frame backing array, frame byte = %d", frame[envelopeHeadLen+1])
 	}
 }
 
@@ -84,13 +107,6 @@ func TestBoolBitsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestEnvelopeRejectsUnsupportedVersion(t *testing.T) {
-	frame := MarshalEnvelope(nil, Magic("MTSTST2"), 3, 0, []byte{1})
-	if _, err := UnmarshalEnvelope(frame, Magic("MTSTST2"), 2); err == nil {
-		t.Fatal("UnmarshalEnvelope(unsupported version) error = nil, want error")
-	}
-}
-
 func TestFieldValueRejectsInvalidPayloads(t *testing.T) {
 	tests := [][]byte{
 		nil,
@@ -116,15 +132,15 @@ func TestAppendFieldValueUnsupportedTypeWritesTypeOnly(t *testing.T) {
 }
 
 func TestEnvelopeRejectsBadMagicLengthAndTrailingBytes(t *testing.T) {
-	if _, err := UnmarshalEnvelope([]byte{1}, Magic("MTSTST2"), 2); err == nil {
+	if _, err := UnmarshalEnvelope([]byte{1}, Magic("MTSTST2")); err == nil {
 		t.Fatal("UnmarshalEnvelope(short) error = nil, want error")
 	}
-	frame := MarshalEnvelope(nil, Magic("MTSTST2"), 2, 0, []byte{1})
-	if _, err := UnmarshalEnvelope(frame, Magic("MTSBAD2"), 2); err == nil {
+	frame := MarshalEnvelope(nil, Magic("MTSTST2"), 0, []byte{1})
+	if _, err := UnmarshalEnvelope(frame, Magic("MTSBAD2")); err == nil {
 		t.Fatal("UnmarshalEnvelope(magic) error = nil, want error")
 	}
 	frame = append(frame[:len(frame)-4], append([]byte{0}, frame[len(frame)-4:]...)...)
-	if _, err := UnmarshalEnvelope(frame, Magic("MTSTST2"), 2); err == nil {
+	if _, err := UnmarshalEnvelope(frame, Magic("MTSTST2")); err == nil {
 		t.Fatal("UnmarshalEnvelope(trailing) error = nil, want error")
 	}
 }

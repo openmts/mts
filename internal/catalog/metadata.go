@@ -13,8 +13,6 @@ import (
 	"codeberg.org/mts/mts/internal/storagefs"
 )
 
-const metadataVersion = 1
-
 var metadataMagic = codec.Magic("MTSMETA")
 
 func (c *Catalog) metadataPath() string {
@@ -56,7 +54,7 @@ func encodeMetadata(
 		payload = codec.AppendString(payload, name)
 		payload = appendPolicies(payload, policies[name])
 	}
-	return codec.MarshalEnvelope(nil, metadataMagic, metadataVersion, 0, payload)
+	return codec.MarshalEnvelope(nil, metadataMagic, 0, payload)
 }
 
 func decodeMetadata(data []byte) (
@@ -64,7 +62,7 @@ func decodeMetadata(data []byte) (
 	map[string]map[string]model.RetentionPolicy,
 	error,
 ) {
-	env, err := codec.UnmarshalEnvelope(data, metadataMagic, metadataVersion)
+	env, err := codec.UnmarshalEnvelope(data, metadataMagic)
 	if err != nil {
 		return nil, nil, err
 	}

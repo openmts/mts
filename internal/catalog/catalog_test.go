@@ -426,7 +426,7 @@ func TestCatalogOpenInvalidPathReturnsError(t *testing.T) {
 
 func TestCatalogOpenRejectsCorruptSnapshotAndWAL(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "snapshot.json"), []byte("{"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "snapshot.bin"), []byte("{"), 0600); err != nil {
 		t.Fatalf("WriteFile(snapshot) error = %v", err)
 	}
 	if _, err := catalog.Open(dir); err == nil {

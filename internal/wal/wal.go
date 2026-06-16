@@ -17,7 +17,6 @@ import (
 
 const (
 	defaultSegmentBytes int64 = 64 << 20
-	recordVersion       byte  = 1
 	recordWriteBatch    byte  = 1
 	recordTombstone     byte  = 2
 )
@@ -317,12 +316,11 @@ func (l *Log) intervalSyncLoop(interval time.Duration) {
 }
 
 func encodeFrame(recordType byte, payload []byte) []byte {
-	bodyLen := 1 + 1 + len(payload) + 4
+	bodyLen := 1 + len(payload) + 4
 	frame := make([]byte, 4+bodyLen)
 	binary.BigEndian.PutUint32(frame[:4], uint32(bodyLen))
-	frame[4] = recordVersion
-	frame[5] = recordType
-	copy(frame[6:], payload)
+	frame[4] = recordType
+	copy(frame[5:], payload)
 	checksum := crc32.Checksum(frame[4:4+bodyLen-4], castagnoliTable)
 	binary.BigEndian.PutUint32(frame[4+bodyLen-4:], checksum)
 	return frame
@@ -409,22 +407,19 @@ func readFrame(reader io.Reader) (Record, error) {
 		return Record{}, normalizeReadError(err)
 	}
 	length := binary.BigEndian.Uint32(header)
-	if length < 6 {
+	if length < 5 {
 		return Record{}, fmt.Errorf("wal record length is too small")
 	}
 	body := make([]byte, length)
 	if _, err := io.ReadFull(reader, body); err != nil {
 		return Record{}, normalizeReadError(err)
 	}
-	if body[0] != recordVersion {
-		return Record{}, fmt.Errorf("unsupported wal record version")
-	}
 	want := binary.BigEndian.Uint32(body[len(body)-4:])
 	got := crc32.Checksum(body[:len(body)-4], castagnoliTable)
 	if got != want {
 		return Record{}, fmt.Errorf("wal record crc mismatch")
 	}
-	record, err := decodeFramePayload(body[1], body[2:len(body)-4])
+	record, err := decodeFramePayload(body[0], body[1:len(body)-4])
 	if err != nil {
 		return Record{}, fmt.Errorf("decode wal payload: %w", err)
 	}

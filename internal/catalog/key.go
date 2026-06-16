@@ -6,25 +6,36 @@ import (
 )
 
 func seriesKey(measurement string, tags map[string]string) string {
+	key, _ := seriesKeyWithScratch(measurement, tags, nil)
+	return key
+}
+
+func seriesKeyWithScratch(measurement string, tags map[string]string, scratch []string) (string, []string) {
 	if len(tags) == 0 {
-		return measurement
+		return measurement, scratch
 	}
 	if len(tags) == 1 {
 		for key, value := range tags {
-			return measurement + "\xff" + key + "=" + value
+			return measurement + "\xff" + key + "=" + value, scratch
 		}
 	}
-	parts := make([]string, 0, len(tags)+1)
-	parts = append(parts, measurement)
-	keys := make([]string, 0, len(tags))
-	for key := range tags {
-		keys = append(keys, key)
+	scratch = scratch[:0]
+	size := len(measurement)
+	for key, value := range tags {
+		scratch = append(scratch, key)
+		size += 1 + len(key) + 1 + len(value)
 	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		parts = append(parts, key+"="+tags[key])
+	sort.Strings(scratch)
+	var builder strings.Builder
+	builder.Grow(size)
+	builder.WriteString(measurement)
+	for _, key := range scratch {
+		builder.WriteByte('\xff')
+		builder.WriteString(key)
+		builder.WriteByte('=')
+		builder.WriteString(tags[key])
 	}
-	return strings.Join(parts, "\xff")
+	return builder.String(), scratch
 }
 
 func fieldKey(measurement string, name string) string {

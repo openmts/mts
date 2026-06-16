@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -125,10 +126,7 @@ func TestTombstoneDecodeAndSizeBoundaries(t *testing.T) {
 	if _, err := decodeTombstones(nil); err == nil {
 		t.Fatal("decodeTombstones(empty) error = nil, want error")
 	}
-	if _, err := decodeTombstones([]byte{99}); err == nil {
-		t.Fatal("decodeTombstones(version) error = nil, want error")
-	}
-	payload := []byte{tombstoneVersion, 1, 1}
+	payload := []byte{1, 1}
 	if _, err := decodeTombstones(payload); err == nil {
 		t.Fatal("decodeTombstones(truncated) error = nil, want error")
 	}
@@ -143,8 +141,8 @@ func TestReplayRejectsUnsupportedTypeBadPayloadAndSmallLength(t *testing.T) {
 		name  string
 		frame []byte
 	}{
-		{name: "unsupported type", frame: encodeFrame(99, []byte{batchVersion, 0})},
-		{name: "bad payload", frame: encodeFrame(recordWriteBatch, []byte{batchVersion})},
+		{name: "unsupported type", frame: encodeFrame(99, nil)},
+		{name: "bad payload", frame: encodeFrame(recordWriteBatch, []byte{1})},
 		{name: "small length", frame: smallLengthFrame()},
 	}
 	for _, tt := range tests {
@@ -168,11 +166,8 @@ func TestReplayRejectsUnsupportedTypeBadPayloadAndSmallLength(t *testing.T) {
 }
 
 func TestBinaryPayloadDecodeValidationErrors(t *testing.T) {
-	if _, err := decodeBatch([]byte{batchVersion, 0, 1}); err == nil {
+	if _, err := decodeBatch([]byte{0, 1}); err == nil {
 		t.Fatal("decodeBatch(trailing) error = nil, want error")
-	}
-	if _, err := decodeBatch([]byte{99}); err == nil {
-		t.Fatal("decodeBatch(version) error = nil, want error")
 	}
 
 	reader := newBatchReader([]byte{2})
@@ -188,6 +183,69 @@ func TestBinaryPayloadDecodeValidationErrors(t *testing.T) {
 	if _, err := readValuePayload(model.FieldType(99), newBatchReader(nil)); err == nil {
 		t.Fatal("readValuePayload(unknown) error = nil, want error")
 	}
+}
+
+func TestWALBatchDictionaryRoundTripAndSize(t *testing.T) {
+	records := []model.ResolvedPoint{
+		walDictionaryPointForTest(1, 10, 1),
+		walDictionaryPointForTest(1, 11, 2),
+		walDictionaryPointForTest(1, 12, 3),
+	}
+	payload, err := encodeBatch(records)
+	if err != nil {
+		t.Fatalf("encodeBatch() error = %v", err)
+	}
+	got, err := decodeBatch(payload)
+	if err != nil {
+		t.Fatalf("decodeBatch() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, records) {
+		t.Fatalf("decodeBatch() = %#v, want %#v", got, records)
+	}
+	plainEstimate := 0
+	for _, record := range records {
+		plainEstimate += estimatePointSize(record)
+	}
+	if len(payload) >= plainEstimate {
+		t.Fatalf("dictionary payload size = %d, want smaller than plain estimate %d", len(payload), plainEstimate)
+	}
+}
+
+func TestWALBatchEmptyBatchRoundTrips(t *testing.T) {
+	payload, err := encodeBatch(nil)
+	if err != nil {
+		t.Fatalf("encodeBatch(nil) error = %v", err)
+	}
+	got, err := decodeBatch(payload)
+	if err != nil {
+		t.Fatalf("decodeBatch(empty) error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("decodeBatch(empty) count = %d, want 0", len(got))
+	}
+}
+
+func TestAppendPointRejectsMismatchedFieldRefs(t *testing.T) {
+	_, err := appendPoint(nil, walDictionaryPointForTest(1, 1, 1), 0, nil)
+	if err == nil {
+		t.Fatal("appendPoint(mismatched refs) error = nil, want error")
+	}
+}
+
+func TestWALBatchRejectsBadReferences(t *testing.T) {
+	records := []model.ResolvedPoint{walDictionaryPointForTest(1, 10, 1)}
+	payload, err := encodeBatch(records)
+	if err != nil {
+		t.Fatalf("encodeBatch() error = %v", err)
+	}
+	for index := 1; index < len(payload); index++ {
+		corrupt := append([]byte(nil), payload...)
+		corrupt[index] = 0xff
+		if _, err := decodeBatch(corrupt); err != nil {
+			return
+		}
+	}
+	t.Fatal("decodeBatch(corrupt refs) error = nil, want error")
 }
 
 func TestAppendTagsFastPathsAndStableMultiTagOrder(t *testing.T) {
@@ -261,6 +319,23 @@ func encodedTags(parts ...string) []byte {
 		dst = codec.AppendString(dst, parts[index+1])
 	}
 	return dst
+}
+
+func walDictionaryPointForTest(seriesID uint64, timestamp int64, writeSeq uint64) model.ResolvedPoint {
+	return model.ResolvedPoint{
+		Database:        "db",
+		RetentionPolicy: "rp",
+		Measurement:     "cpu",
+		Tags:            map[string]string{"host": "a", "region": "west"},
+		SeriesID:        seriesID,
+		Timestamp:       timestamp,
+		WriteSeq:        writeSeq,
+		Fields: []model.ResolvedField{
+			{FieldID: 1, FieldName: "usage", Type: model.FieldFloat64, Value: model.Float64Value(float64(timestamp))},
+			{FieldID: 2, FieldName: "state", Type: model.FieldString, Value: model.StringValue("ok")},
+			{FieldID: 3, FieldName: "active", Type: model.FieldBool, Value: model.BoolValue(true)},
+		},
+	}
 }
 
 func TestTruncateAllAfterCloseIsSafe(t *testing.T) {

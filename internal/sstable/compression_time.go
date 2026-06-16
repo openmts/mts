@@ -72,6 +72,10 @@ func readCodecTimestamps(reader *blockReader, count int) ([]int64, error) {
 	if err != nil {
 		return nil, err
 	}
+	return decodeCodecTimestamps(codecID, payload, count)
+}
+
+func decodeCodecTimestamps(codecID byte, payload []byte, count int) ([]int64, error) {
 	switch codecID {
 	case compressionPlain:
 		return decodePlainTimestamps(payload, count)

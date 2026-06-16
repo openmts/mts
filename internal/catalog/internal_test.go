@@ -17,7 +17,7 @@ func TestDecodeLineRejectsBadCRCAndApplyEntryIgnoresUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWALEntry() error = %v", err)
 	}
-	frame := codec.MarshalEnvelope(nil, catalogMagic, catalogVersion, 0, payload)
+	frame := codec.MarshalEnvelope(nil, catalogMagic, 0, payload)
 	frame[len(frame)-1] ^= 0xff
 	if _, err := decodeLine(frame); err == nil {
 		t.Fatal("decodeLine() bad crc error = nil, want error")
@@ -41,6 +41,33 @@ func TestSeriesKeyFastPathsAndStableMultiTagOrder(t *testing.T) {
 	want := "cpu\xffhost=a\xffregion=west"
 	if got != want {
 		t.Fatalf("seriesKey(multi tag) = %q, want %q", got, want)
+	}
+}
+
+func TestSeriesKeyMultiTagUsesSingleAllocationClass(t *testing.T) {
+	tags := map[string]string{
+		"host":   "a",
+		"region": "west",
+		"rack":   "r1",
+	}
+	scratch := make([]string, 0, len(tags))
+	got, nextScratch := seriesKeyWithScratch("cpu", tags, scratch)
+	if got != "cpu\xffhost=a\xffrack=r1\xffregion=west" {
+		t.Fatalf("seriesKeyWithScratch() = %q", got)
+	}
+	if cap(nextScratch) != cap(scratch) {
+		t.Fatalf("scratch cap = %d, want %d", cap(nextScratch), cap(scratch))
+	}
+
+	allocs := testing.AllocsPerRun(100, func() {
+		var key string
+		key, scratch = seriesKeyWithScratch("cpu", tags, scratch)
+		if key != got {
+			t.Fatalf("key = %q, want %q", key, got)
+		}
+	})
+	if allocs > 1 {
+		t.Fatalf("multi tag series key allocs/run = %.2f, want <= 1", allocs)
 	}
 }
 
@@ -149,6 +176,50 @@ func TestSingleTagSeriesIndexResolvesExistingSeries(t *testing.T) {
 	}
 }
 
+func TestResolvePointsCachesRepeatedMultiTagSeries(t *testing.T) {
+	cat, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := cat.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+
+	points := []model.Point{
+		{
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a", "region": "west"},
+			Timestamp:   1,
+			Fields:      map[string]model.FieldValue{"usage": model.Float64Value(1)},
+		},
+		{
+			Measurement: "cpu",
+			Tags:        map[string]string{"region": "west", "host": "a"},
+			Timestamp:   2,
+			Fields:      map[string]model.FieldValue{"usage": model.Float64Value(2)},
+		},
+	}
+	resolved, err := cat.ResolvePoints(points)
+	if err != nil {
+		t.Fatalf("ResolvePoints() error = %v", err)
+	}
+	if resolved[0].SeriesID != resolved[1].SeriesID {
+		t.Fatalf("series ids = %d,%d want same", resolved[0].SeriesID, resolved[1].SeriesID)
+	}
+	if len(cat.series) != 1 {
+		t.Fatalf("series count = %d, want 1", len(cat.series))
+	}
+	again, err := cat.ResolvePoints(points)
+	if err != nil {
+		t.Fatalf("ResolvePoints(again) error = %v", err)
+	}
+	if again[0].SeriesID != resolved[0].SeriesID || again[1].SeriesID != resolved[0].SeriesID {
+		t.Fatalf("again series ids = %d,%d want %d", again[0].SeriesID, again[1].SeriesID, resolved[0].SeriesID)
+	}
+}
+
 func TestAppendEntryLockedReturnsWriteError(t *testing.T) {
 	cat, err := Open(t.TempDir())
 	if err != nil {
@@ -170,6 +241,142 @@ func TestAppendEntryLockedReturnsWriteError(t *testing.T) {
 	}
 	if err := cat.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestCatalogDefersSnapshotAndReplaysWALBeforeClose(t *testing.T) {
+	dir := t.TempDir()
+	cat, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	points := []model.Point{
+		{Measurement: "cpu", Tags: map[string]string{"host": "a"}, Timestamp: 1, Fields: map[string]model.FieldValue{"v": model.Float64Value(1)}},
+		{Measurement: "cpu", Tags: map[string]string{"host": "b"}, Timestamp: 2, Fields: map[string]model.FieldValue{"v": model.Float64Value(2)}},
+	}
+	resolved, err := cat.ResolvePoints(points)
+	if err != nil {
+		closeErr := cat.Close()
+		t.Fatalf("ResolvePoints() error = %v close = %v", err, closeErr)
+	}
+	if _, err := os.Stat(cat.snapshotPath()); !os.IsNotExist(err) {
+		closeErr := cat.Close()
+		t.Fatalf("snapshot stat before checkpoint = %v, want not exist close = %v", err, closeErr)
+	}
+	if err := cat.wal.Close(); err != nil {
+		t.Fatalf("Close(wal crash simulation) error = %v", err)
+	}
+	cat.wal = nil
+
+	replayed, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open(replay) error = %v", err)
+	}
+	replayedResolved, err := replayed.ResolvePoints(points)
+	if err != nil {
+		closeErr := replayed.Close()
+		t.Fatalf("ResolvePoints(replayed) error = %v close = %v", err, closeErr)
+	}
+	if replayedResolved[0].SeriesID != resolved[0].SeriesID || replayedResolved[1].SeriesID != resolved[1].SeriesID {
+		closeErr := replayed.Close()
+		t.Fatalf("replayed series ids = %d,%d want %d,%d close = %v",
+			replayedResolved[0].SeriesID,
+			replayedResolved[1].SeriesID,
+			resolved[0].SeriesID,
+			resolved[1].SeriesID,
+			closeErr,
+		)
+	}
+	if err := replayed.Close(); err != nil {
+		t.Fatalf("Close(replayed) error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "snapshot.bin")); err != nil {
+		t.Fatalf("snapshot stat after Close() error = %v", err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "catalog.wal"))
+	if err != nil {
+		t.Fatalf("wal stat after checkpoint error = %v", err)
+	}
+	if info.Size() != 0 {
+		t.Fatalf("wal size after checkpoint = %d, want 0", info.Size())
+	}
+}
+
+func TestCatalogCheckpointAndFieldResolveBranches(t *testing.T) {
+	cat, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	cat.mu.Lock()
+	if err := cat.checkpointSnapshotLocked(false); err != nil {
+		cat.mu.Unlock()
+		t.Fatalf("checkpoint clean error = %v", err)
+	}
+	cat.snapshotDirtyRecords = 1
+	if err := cat.checkpointSnapshotLocked(false); err != nil {
+		cat.mu.Unlock()
+		t.Fatalf("checkpoint below threshold error = %v", err)
+	}
+	if cat.snapshotDirtyRecords != 1 {
+		cat.mu.Unlock()
+		t.Fatalf("dirty records after below-threshold checkpoint = %d, want 1", cat.snapshotDirtyRecords)
+	}
+	cat.mu.Unlock()
+
+	point := model.Point{
+		Measurement: "cpu",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"usage": model.Float64Value(1)},
+	}
+	if _, err := cat.ResolvePoint(point); err != nil {
+		t.Fatalf("ResolvePoint() error = %v", err)
+	}
+	cat.mu.Lock()
+	field, changed, err := cat.resolveFieldNoSnapshotLocked("cpu", "usage", model.FieldFloat64)
+	if err != nil {
+		cat.mu.Unlock()
+		t.Fatalf("resolve existing field error = %v", err)
+	}
+	if changed || field.Name != "usage" {
+		cat.mu.Unlock()
+		t.Fatalf("resolve existing field changed=%t field=%#v, want unchanged usage", changed, field)
+	}
+	_, _, err = cat.resolveFieldNoSnapshotLocked("cpu", "usage", model.FieldString)
+	cat.mu.Unlock()
+	if err == nil {
+		t.Fatal("resolve conflicting field error = nil, want error")
+	}
+	if err := cat.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	walNil := newCatalog(t.TempDir())
+	walNil.applySeries(Series{ID: 1, Measurement: "cpu"})
+	walNil.snapshotDirtyRecords = 1
+	if err := walNil.checkpointSnapshotLocked(true); err != nil {
+		t.Fatalf("checkpoint with nil wal error = %v", err)
+	}
+	if walNil.snapshotDirtyRecords != 0 {
+		t.Fatalf("dirty records after nil-wal checkpoint = %d, want 0", walNil.snapshotDirtyRecords)
+	}
+}
+
+func TestEnsureMetadataBranches(t *testing.T) {
+	cat := newCatalog(t.TempDir())
+	if cat.ensureMetadataLocked("", "hot") {
+		t.Fatal("ensureMetadataLocked(empty database) changed metadata")
+	}
+	if !cat.ensureMetadataLocked("metrics", "") {
+		t.Fatal("ensureMetadataLocked(new database) changed = false, want true")
+	}
+	if cat.ensureMetadataLocked("metrics", "") {
+		t.Fatal("ensureMetadataLocked(existing database) changed = true, want false")
+	}
+	if !cat.ensureMetadataLocked("metrics", "hot") {
+		t.Fatal("ensureMetadataLocked(new policy) changed = false, want true")
+	}
+	if cat.ensureMetadataLocked("metrics", "hot") {
+		t.Fatal("ensureMetadataLocked(existing policy) changed = true, want false")
 	}
 }
 
@@ -208,10 +415,10 @@ func TestCatalogBinaryDecodeValidationErrors(t *testing.T) {
 	if _, err := encodeWALEntry(walEntry{Type: "unknown"}); err == nil {
 		t.Fatal("encodeWALEntry(unknown) error = nil, want error")
 	}
-	if _, err := decodeWALFrame(codec.MarshalEnvelope(nil, catalogMagic, catalogVersion, 0, []byte{99})); err == nil {
+	if _, err := decodeWALFrame(codec.MarshalEnvelope(nil, catalogMagic, 0, []byte{99})); err == nil {
 		t.Fatal("decodeWALFrame(unknown record) error = nil, want error")
 	}
-	if _, err := decodeSnapshot(codec.MarshalEnvelope(nil, catalogMagic, catalogVersion, 0, []byte{1})); err == nil {
+	if _, err := decodeSnapshot(codec.MarshalEnvelope(nil, catalogMagic, 0, []byte{1})); err == nil {
 		t.Fatal("decodeSnapshot(truncated) error = nil, want error")
 	}
 	if !validFieldType(model.FieldBool) || validFieldType(model.FieldType(99)) {
@@ -223,16 +430,6 @@ func TestCatalogBinaryDecodeValidationErrors(t *testing.T) {
 	reader := newPayloadReader([]byte{1})
 	if err := reader.done("catalog test"); err == nil {
 		t.Fatal("payloadReader.done(trailing) error = nil, want error")
-	}
-}
-
-func TestCatalogRejectsLegacySnapshot(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "snapshot.json"), []byte("{}"), 0600); err != nil {
-		t.Fatalf("WriteFile(snapshot.json) error = %v", err)
-	}
-	if _, err := Open(dir); err == nil {
-		t.Fatal("Open(legacy snapshot) error = nil, want error")
 	}
 }
 
@@ -256,7 +453,7 @@ func TestCatalogBinaryDecodersRejectTruncatedPrefixes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWALEntry() error = %v", err)
 	}
-	frame := codec.MarshalEnvelope(nil, catalogMagic, catalogVersion, 0, entryPayload)
+	frame := codec.MarshalEnvelope(nil, catalogMagic, 0, entryPayload)
 	for size := 0; size < len(frame); size++ {
 		if _, err := decodeWALFrame(frame[:size]); err == nil {
 			t.Fatalf("decodeWALFrame(prefix %d) error = nil, want error", size)
@@ -271,12 +468,12 @@ func TestCatalogPayloadDecodersRejectTruncatedInnerPayload(t *testing.T) {
 		Series:       []Series{{ID: 1, Measurement: "cpu", Tags: map[string]string{"host": "a"}}},
 		Fields:       []Field{{ID: 1, Measurement: "cpu", Name: "value", Type: model.FieldFloat64}},
 	})
-	env, err := codec.UnmarshalEnvelope(snapshotFrame, catalogMagic, catalogVersion)
+	env, err := codec.UnmarshalEnvelope(snapshotFrame, catalogMagic)
 	if err != nil {
 		t.Fatalf("UnmarshalEnvelope(snapshot) error = %v", err)
 	}
 	for size := 0; size < len(env.Payload); size++ {
-		frame := codec.MarshalEnvelope(nil, catalogMagic, catalogVersion, 0, env.Payload[:size])
+		frame := codec.MarshalEnvelope(nil, catalogMagic, 0, env.Payload[:size])
 		if _, err := decodeSnapshot(frame); err == nil {
 			t.Fatalf("decodeSnapshot(inner prefix %d) error = nil, want error", size)
 		}
@@ -290,7 +487,7 @@ func TestCatalogPayloadDecodersRejectTruncatedInnerPayload(t *testing.T) {
 		t.Fatalf("encodeWALEntry(field) error = %v", err)
 	}
 	for size := 0; size < len(entryPayload); size++ {
-		frame := codec.MarshalEnvelope(nil, catalogMagic, catalogVersion, 0, entryPayload[:size])
+		frame := codec.MarshalEnvelope(nil, catalogMagic, 0, entryPayload[:size])
 		if _, err := decodeWALFrame(frame); err == nil {
 			t.Fatalf("decodeWALFrame(inner prefix %d) error = nil, want error", size)
 		}
