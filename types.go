@@ -28,11 +28,23 @@ type WALOptions = model.WALOptions
 
 type CompactionOptions = model.CompactionOptions
 
+type RetentionPolicy = model.RetentionPolicy
+
+type FieldSchema = model.FieldSchema
+
+type Series = model.Series
+
+type CompressionOptions = model.CompressionOptions
+
 type WriteOptions = model.WriteOptions
 
 type ColumnSeries = model.ColumnSeries
 
 type Row = model.Row
+
+type ColumnIterator = model.ColumnIterator
+
+type RowIterator = model.RowIterator
 
 func Float64Value(value float64) FieldValue {
 	return model.Float64Value(value)

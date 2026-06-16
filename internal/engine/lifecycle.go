@@ -55,7 +55,7 @@ func (s *Shard) Compact() error {
 	if err := s.flushLocked(); err != nil {
 		return err
 	}
-	if len(s.parts) <= 1 {
+	if len(s.parts) <= 1 && len(s.tombstones) == 0 {
 		return nil
 	}
 	return s.compactPartsLocked(s.manifest.Parts, 1)
@@ -76,6 +76,7 @@ func (s *Shard) maybeCompactLocked() error {
 }
 
 func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel int) error {
+	hadTombstones := len(s.tombstones) > 0
 	columns, err := s.queryPartCandidates(candidates)
 	if err != nil {
 		return err
@@ -83,27 +84,93 @@ func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel in
 	if len(columns) == 0 {
 		return nil
 	}
-	meta, err := sstable.WritePart(s.opts.Dir, outputLevel, s.nextPartID(), columns)
-	if err != nil {
-		return err
-	}
-	part, err := sstable.OpenPart(meta.Path)
+	newParts, newMeta, err := s.writeCompactionOutputsLocked(outputLevel, columns)
 	if err != nil {
 		return err
 	}
 	keptParts, keptMeta := s.keepUnselectedParts(candidates)
-	nextManifest := sstable.Manifest{Parts: append(keptMeta, meta)}
+	nextManifest := sstable.Manifest{Parts: append(keptMeta, newMeta...)}
 	if err := sstable.WriteManifest(s.opts.Dir, nextManifest); err != nil {
-		closeErr := part.Close()
+		closeErr := closeParts(newParts)
 		return errors.Join(err, closeErr)
 	}
 	oldParts := s.parts
-	s.parts = append(keptParts, part)
+	s.parts = append(keptParts, newParts...)
 	s.manifest = nextManifest
 	if err := closeSelectedParts(oldParts, candidates); err != nil {
 		return err
 	}
-	return removeOldParts(candidates, meta.ID)
+	if err := removeOldParts(candidates); err != nil {
+		return err
+	}
+	if hadTombstones {
+		s.tombstones = nil
+		return s.wal.Checkpoint()
+	}
+	return nil
+}
+
+func (s *Shard) writeCompactionOutputsLocked(
+	outputLevel int,
+	columns []model.ColumnData,
+) ([]*sstable.Part, []sstable.PartMeta, error) {
+	groups := splitCompactionColumns(columns, s.opts.Compaction.MaxOutputPartBytes)
+	parts := make([]*sstable.Part, 0, len(groups))
+	metas := make([]sstable.PartMeta, 0, len(groups))
+	for _, group := range groups {
+		meta, err := sstable.WritePartWithOptions(s.opts.Dir, outputLevel, s.nextPartID(), group, sstable.WriteOptions{
+			Compression: s.opts.Compression,
+		})
+		if err != nil {
+			closeErr := closeParts(parts)
+			return nil, nil, errors.Join(err, closeErr)
+		}
+		part, err := sstable.OpenPart(meta.Path)
+		if err != nil {
+			closeErr := closeParts(parts)
+			return nil, nil, errors.Join(err, closeErr)
+		}
+		parts = append(parts, part)
+		metas = append(metas, meta)
+	}
+	return parts, metas, nil
+}
+
+func splitCompactionColumns(columns []model.ColumnData, targetBytes int64) [][]model.ColumnData {
+	if targetBytes <= 0 || len(columns) <= 1 {
+		return [][]model.ColumnData{columns}
+	}
+	groups := make([][]model.ColumnData, 0, len(columns))
+	start := 0
+	var size int64
+	for index, column := range columns {
+		columnBytes := estimateColumnBytes(column)
+		if index > start && size+columnBytes > targetBytes {
+			groups = append(groups, columns[start:index])
+			start = index
+			size = 0
+		}
+		size += columnBytes
+	}
+	return append(groups, columns[start:])
+}
+
+func estimateColumnBytes(column model.ColumnData) int64 {
+	var bytes int64 = 32
+	for _, sample := range column.Samples {
+		bytes += 16
+		switch sample.Value.Type {
+		case model.FieldFloat64:
+			bytes += 8
+		case model.FieldInt64:
+			bytes += 8
+		case model.FieldBool:
+			bytes++
+		case model.FieldString:
+			bytes += int64(len(sample.Value.String)) + 4
+		}
+	}
+	return bytes
 }
 
 func (s *Shard) level0CompactionCandidates() ([]sstable.PartMeta, error) {
@@ -148,7 +215,8 @@ func (s *Shard) queryPartCandidates(candidates []sstable.PartMeta) ([]model.Colu
 		}
 		columns = append(columns, got...)
 	}
-	return mergeColumnData(columns), nil
+	merged := mergeColumnData(columns)
+	return applyTombstones(merged, s.tombstones), nil
 }
 
 func (s *Shard) keepUnselectedParts(candidates []sstable.PartMeta) ([]*sstable.Part, []sstable.PartMeta) {
@@ -206,11 +274,8 @@ func directorySize(root string) (int64, error) {
 	return total, nil
 }
 
-func removeOldParts(parts []sstable.PartMeta, keepID string) error {
+func removeOldParts(parts []sstable.PartMeta) error {
 	for _, part := range parts {
-		if part.ID == keepID {
-			continue
-		}
 		if err := storagefs.RemoveAll(part.Path); err != nil {
 			return err
 		}

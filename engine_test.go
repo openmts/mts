@@ -55,6 +55,28 @@ func TestEngineWriteFlushReopenQueryRows(t *testing.T) {
 	if len(columns) != 2 {
 		t.Fatalf("column count = %d, want 2", len(columns))
 	}
+	iter, err := eng.QueryColumnIterator(ctx, mts.Query{
+		Measurement: "cpu",
+		Tags:        map[string]string{"host": "a"},
+		StartTime:   0,
+		EndTime:     int64(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("QueryColumnIterator() error = %v", err)
+	}
+	iterCount := 0
+	for iter.Next() {
+		iterCount++
+	}
+	if err := iter.Err(); err != nil {
+		t.Fatalf("column iterator Err() = %v", err)
+	}
+	if err := iter.Close(); err != nil {
+		t.Fatalf("column iterator Close() error = %v", err)
+	}
+	if iterCount != 2 {
+		t.Fatalf("iterator column count = %d, want 2", iterCount)
+	}
 	rows, err := eng.QueryRows(ctx, mts.Query{
 		Measurement: "cpu",
 		Tags:        map[string]string{"host": "a"},
@@ -66,6 +88,28 @@ func TestEngineWriteFlushReopenQueryRows(t *testing.T) {
 	}
 	if len(rows) != 1 {
 		t.Fatalf("row count = %d, want 1", len(rows))
+	}
+	rowIter, err := eng.QueryRowIterator(ctx, mts.Query{
+		Measurement: "cpu",
+		Tags:        map[string]string{"host": "a"},
+		StartTime:   0,
+		EndTime:     int64(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("QueryRowIterator() error = %v", err)
+	}
+	rowCount := 0
+	for rowIter.Next() {
+		rowCount++
+	}
+	if err := rowIter.Err(); err != nil {
+		t.Fatalf("row iterator Err() = %v", err)
+	}
+	if err := rowIter.Close(); err != nil {
+		t.Fatalf("row iterator Close() error = %v", err)
+	}
+	if rowCount != 1 {
+		t.Fatalf("iterator row count = %d, want 1", rowCount)
 	}
 	if rows[0].Fields["usage"].Float64 != 1.5 {
 		t.Fatalf("usage = %v, want 1.5", rows[0].Fields["usage"].Float64)
@@ -191,6 +235,68 @@ func TestEngineCompactionAndRetention(t *testing.T) {
 	}
 	if len(rows) != 0 {
 		t.Fatalf("row count after retention = %d, want 0", len(rows))
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineMetadataWrappers(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.CreateDatabase(ctx, "metrics"); err != nil {
+		t.Fatalf("CreateDatabase() error = %v", err)
+	}
+	if err := eng.CreateRetentionPolicy(ctx, "metrics", mts.RetentionPolicy{Name: "hot"}); err != nil {
+		t.Fatalf("CreateRetentionPolicy() error = %v", err)
+	}
+	point := mts.Point{
+		Database:        "metrics",
+		RetentionPolicy: "hot",
+		Measurement:     "cpu",
+		Tags:            map[string]string{"host": "a"},
+		Timestamp:       1,
+		Fields:          map[string]mts.FieldValue{"usage": mts.Float64Value(1)},
+	}
+	if err := eng.Write(ctx, []mts.Point{point}, mts.WriteOptions{Sync: true}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	policies, err := eng.ListRetentionPolicies(ctx, "metrics")
+	if err != nil {
+		t.Fatalf("ListRetentionPolicies() error = %v", err)
+	}
+	if len(policies) != 1 || policies[0].Name != "hot" {
+		t.Fatalf("policies = %#v, want hot", policies)
+	}
+	measurements, err := eng.ListMeasurements(ctx, "metrics")
+	if err != nil {
+		t.Fatalf("ListMeasurements() error = %v", err)
+	}
+	if len(measurements) != 1 || measurements[0] != "cpu" {
+		t.Fatalf("measurements = %#v, want cpu", measurements)
+	}
+	fields, err := eng.ListFields(ctx, "metrics", "cpu")
+	if err != nil {
+		t.Fatalf("ListFields() error = %v", err)
+	}
+	if len(fields) != 1 || fields[0].Name != "usage" {
+		t.Fatalf("fields = %#v, want usage", fields)
+	}
+	series, err := eng.ListSeries(ctx, "metrics", "cpu", map[string]string{"host": "a"})
+	if err != nil {
+		t.Fatalf("ListSeries() error = %v", err)
+	}
+	if len(series) != 1 || series[0].Tags["host"] != "a" {
+		t.Fatalf("series = %#v, want host=a", series)
+	}
+	if errs := eng.MaintenanceErrors(ctx); len(errs) != 0 {
+		t.Fatalf("MaintenanceErrors() = %v, want none", errs)
+	}
+	if err := eng.DropDatabase(ctx, "metrics"); err != nil {
+		t.Fatalf("DropDatabase() error = %v", err)
 	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() error = %v", err)

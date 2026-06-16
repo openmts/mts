@@ -30,7 +30,10 @@ func run() (err error) {
 	defer func() {
 		err = errors.Join(err, os.RemoveAll(dir))
 	}()
+	return runWithDir(dir)
+}
 
+func runWithDir(dir string) error {
 	ctx := context.Background()
 	opts := mts.Options{Path: dir, ShardDuration: time.Hour, Retention: time.Hour, MemTableMaxSamples: 10}
 	eng, err := mts.Open(ctx, opts)
@@ -53,10 +56,7 @@ func run() (err error) {
 	if closeErr != nil {
 		return closeErr
 	}
-	if len(rows) != 1 || rows[0].Fields["v"].Float64 != 2 {
-		return fmt.Errorf("rows = %#v, want only retained new shard", rows)
-	}
-	return nil
+	return assertRetainedRows(rows)
 }
 
 func point(timestamp int64, value float64) mts.Point {
@@ -65,4 +65,11 @@ func point(timestamp int64, value float64) mts.Point {
 		Timestamp:   timestamp,
 		Fields:      map[string]mts.FieldValue{"v": mts.Float64Value(value)},
 	}
+}
+
+func assertRetainedRows(rows []mts.Row) error {
+	if len(rows) != 1 || rows[0].Fields["v"].Float64 != 2 {
+		return fmt.Errorf("rows = %#v, want only retained new shard", rows)
+	}
+	return nil
 }

@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	mts "codeberg.org/mts/mts"
+)
 
 func TestRun(t *testing.T) {
 	if err := run(); err != nil {
@@ -10,4 +14,20 @@ func TestRun(t *testing.T) {
 
 func TestMainFunction(t *testing.T) {
 	main()
+}
+
+func TestAssertManifestRowsRejectsMismatch(t *testing.T) {
+	if err := assertManifestRows(nil); err == nil {
+		t.Fatal("assertManifestRows(empty) error = nil, want error")
+	}
+	rows := []mts.Row{{Fields: map[string]mts.FieldValue{"v": mts.Float64Value(99)}}}
+	if err := assertManifestRows(rows); err == nil {
+		t.Fatal("assertManifestRows(wrong value) error = nil, want error")
+	}
+}
+
+func TestRunWithDirRejectsInvalidPath(t *testing.T) {
+	if err := runWithDir("bad\x00path"); err == nil {
+		t.Fatal("runWithDir(invalid) error = nil, want error")
+	}
 }

@@ -50,6 +50,46 @@ func TestRunWithTemporaryDataDir(t *testing.T) {
 	}
 }
 
+func TestRunWithPrebuiltPoints(t *testing.T) {
+	err := run([]string{
+		"-prebuild-points",
+		"-field-layout", fieldLayoutWide10,
+		"-points", "100",
+		"-series", "10",
+		"-query-repeat", "1",
+	})
+	if err != nil {
+		t.Fatalf("run(prebuild) error = %v", err)
+	}
+	cfg := config{points: 10, series: 2, fieldLayout: fieldLayoutWide10}
+	prebuilt := buildWorkloadPoints(cfg)
+	cfg.prebuilt = prebuilt
+	if got := workloadPointAt(cfg, 3); len(got.Fields) != 10 {
+		t.Fatalf("prebuilt field count = %d, want 10", len(got.Fields))
+	}
+}
+
+func TestWorkloadsUsePrebuiltPoints(t *testing.T) {
+	ctx := context.Background()
+	for _, mode := range []string{"write", "compact"} {
+		t.Run(mode, func(t *testing.T) {
+			eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})
+			if err != nil {
+				t.Fatalf("Open() error = %v", err)
+			}
+			cfg := config{mode: mode, points: 32, series: 4, prebuildPoints: true}
+			cfg.prebuilt = buildWorkloadPoints(cfg)
+			if err := runWorkload(ctx, eng, cfg); err != nil {
+				closeErr := eng.Close(ctx)
+				t.Fatalf("runWorkload(%s) error = %v close = %v", mode, err, closeErr)
+			}
+			if err := eng.Close(ctx); err != nil {
+				t.Fatalf("Close() error = %v", err)
+			}
+		})
+	}
+}
+
 func TestRunModes(t *testing.T) {
 	for _, mode := range []string{"write", "query", "compact", "replay"} {
 		t.Run(mode, func(t *testing.T) {

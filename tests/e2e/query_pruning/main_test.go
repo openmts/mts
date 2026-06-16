@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	mts "codeberg.org/mts/mts"
 )
 
 func TestRun(t *testing.T) {
@@ -26,5 +28,21 @@ func TestAssertNoJSONStorageRejectsMarkersAndMissingPath(t *testing.T) {
 	}
 	if err := assertNoJSONStorage(filepath.Join(dir, "missing")); err == nil {
 		t.Fatal("assertNoJSONStorage(missing) error = nil, want error")
+	}
+}
+
+func TestAssertPrunedRowsRejectsMismatch(t *testing.T) {
+	if err := assertPrunedRows(nil); err == nil {
+		t.Fatal("assertPrunedRows(empty) error = nil, want error")
+	}
+	rows := []mts.Row{{Fields: map[string]mts.FieldValue{"f2": mts.Int64Value(41)}}}
+	if err := assertPrunedRows(rows); err == nil {
+		t.Fatal("assertPrunedRows(wrong value) error = nil, want error")
+	}
+}
+
+func TestRunWithDirRejectsInvalidPath(t *testing.T) {
+	if err := runWithDir("bad\x00path"); err == nil {
+		t.Fatal("runWithDir(invalid) error = nil, want error")
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"codeberg.org/mts/mts/internal/catalog"
 	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/sstable"
 )
 
 func TestEngineLifecycleAndQueries(t *testing.T) {
@@ -55,6 +56,31 @@ func TestEngineLifecycleAndQueries(t *testing.T) {
 	if len(columns) != 2 {
 		t.Fatalf("column count = %d, want 2", len(columns))
 	}
+	iter, err := eng.QueryColumnIterator(ctx, model.Query{
+		Measurement: "cpu",
+		Tags:        map[string]string{"host": "a"},
+		StartTime:   0,
+		EndTime:     20,
+	})
+	if err != nil {
+		t.Fatalf("QueryColumnIterator() error = %v", err)
+	}
+	iterCount := 0
+	for iter.Next() {
+		if iter.Column().SeriesID == 0 {
+			t.Fatal("iterator returned empty column")
+		}
+		iterCount++
+	}
+	if err := iter.Err(); err != nil {
+		t.Fatalf("iterator Err() = %v", err)
+	}
+	if err := iter.Close(); err != nil {
+		t.Fatalf("iterator Close() error = %v", err)
+	}
+	if iterCount != 2 {
+		t.Fatalf("iterator column count = %d, want 2", iterCount)
+	}
 	rows, err := eng.QueryRows(ctx, model.Query{Measurement: "cpu", StartTime: 0, EndTime: 20})
 	if err != nil {
 		t.Fatalf("QueryRows() error = %v", err)
@@ -74,6 +100,66 @@ func TestEngineLifecycleAndQueries(t *testing.T) {
 	}
 	if len(rows) != 0 {
 		t.Fatalf("row count after retention = %d, want 0", len(rows))
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestQuerySnapshotAllowsConcurrentWrite(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1000,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	points := make([]model.Point, 0, 200)
+	for index := range 200 {
+		points = append(points, model.Point{
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			Timestamp:   int64(index),
+			Fields:      map[string]model.FieldValue{"v": model.Float64Value(float64(index))},
+		})
+	}
+	if err := eng.Write(ctx, points, model.WriteOptions{}); err != nil {
+		t.Fatalf("Write(seed) error = %v", err)
+	}
+
+	started := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		close(started)
+		_, queryErr := eng.QueryRows(ctx, model.Query{
+			Measurement: "cpu",
+			StartTime:   0,
+			EndTime:     199,
+		})
+		done <- queryErr
+	}()
+	<-started
+	writeDone := make(chan error, 1)
+	go func() {
+		writeDone <- eng.Write(ctx, []model.Point{{
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "b"},
+			Timestamp:   201,
+			Fields:      map[string]model.FieldValue{"v": model.Float64Value(201)},
+		}}, model.WriteOptions{})
+	}()
+	select {
+	case err := <-writeDone:
+		if err != nil {
+			t.Fatalf("concurrent Write() error = %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("concurrent Write() blocked behind query")
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("QueryRows() error = %v", err)
 	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -461,6 +547,281 @@ func TestDirectorySizeAndCompactionSizeLimit(t *testing.T) {
 	}
 }
 
+func TestBackgroundCompactionLifecycle(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+		Compaction: model.CompactionOptions{
+			Enabled:            true,
+			Level0PartLimit:    100,
+			BackgroundInterval: 10 * time.Millisecond,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	for index := range 3 {
+		if err := eng.Write(ctx, []model.Point{{
+			Measurement: "bg",
+			Timestamp:   int64(index),
+			Fields:      map[string]model.FieldValue{"v": model.Float64Value(float64(index))},
+		}}, model.WriteOptions{Sync: true}); err != nil {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("Write() error = %v close = %v", err, closeErr)
+		}
+	}
+	waitForTest(t, time.Second, func() bool {
+		shard := onlyShardForTest(t, eng)
+		return len(shard.manifest.Parts) == 1 && shard.manifest.Parts[0].Level == 1
+	})
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+}
+
+func TestCompactionSplitsOutputsByTargetBytes(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 4,
+		Compaction: model.CompactionOptions{
+			MaxOutputPartBytes: 80,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	for index := range 2 {
+		if err := eng.Write(ctx, []model.Point{widePointForTest(int64(index))}, model.WriteOptions{Sync: true}); err != nil {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("Write() error = %v close = %v", err, closeErr)
+		}
+	}
+	if err := eng.Compact(ctx); err != nil {
+		t.Fatalf("Compact() error = %v", err)
+	}
+	shard := onlyShardForTest(t, eng)
+	if len(shard.manifest.Parts) <= 1 {
+		t.Fatalf("part count = %d, want split compaction output", len(shard.manifest.Parts))
+	}
+	for _, part := range shard.manifest.Parts {
+		if part.Level != 1 {
+			t.Fatalf("part level = %d, want level 1", part.Level)
+		}
+	}
+	rows, err := eng.QueryRows(ctx, model.Query{Measurement: "wide", StartTime: 0, EndTime: 1})
+	if err != nil {
+		t.Fatalf("QueryRows() error = %v", err)
+	}
+	if len(rows) != 2 || len(rows[0].Fields) != 4 {
+		t.Fatalf("rows = %#v, want two wide rows", rows)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestOpenShardCleansOrphanParts(t *testing.T) {
+	ctx := context.Background()
+	opts := model.Options{Path: t.TempDir(), ShardDuration: time.Hour, MemTableMaxSamples: 1}
+	eng, err := Open(ctx, opts)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "orphan",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"v": model.Float64Value(1)},
+	}}, model.WriteOptions{Sync: true}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	orphanPath := filepath.Join(shardDir(opts.Path, "default", "autogen", 0), "sst-999999")
+	_, err = sstable.WritePart(filepath.Dir(orphanPath), 0, filepath.Base(orphanPath), []model.ColumnData{
+		columnForOrphanTest(),
+	})
+	if err != nil {
+		t.Fatalf("WritePart(orphan) error = %v", err)
+	}
+	reopened, err := Open(ctx, opts)
+	if err != nil {
+		t.Fatalf("reopen Open() error = %v", err)
+	}
+	if _, err := os.Stat(orphanPath); !os.IsNotExist(err) {
+		closeErr := reopened.Close(ctx)
+		t.Fatalf("orphan stat error = %v, want not exist close = %v", err, closeErr)
+	}
+	if errs := reopened.MaintenanceErrors(ctx); len(errs) != 0 {
+		closeErr := reopened.Close(ctx)
+		t.Fatalf("MaintenanceErrors() = %v, want none close = %v", errs, closeErr)
+	}
+	if err := reopened.Close(ctx); err != nil {
+		t.Fatalf("Close(reopened) error = %v", err)
+	}
+}
+
+func TestMetadataAPIDropsDatabaseData(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	eng, err := Open(ctx, model.Options{Path: dir, ShardDuration: time.Hour})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.CreateDatabase(ctx, "metrics"); err != nil {
+		t.Fatalf("CreateDatabase() error = %v", err)
+	}
+	if err := eng.CreateRetentionPolicy(ctx, "metrics", model.RetentionPolicy{Name: "hot"}); err != nil {
+		t.Fatalf("CreateRetentionPolicy() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Database:        "metrics",
+		RetentionPolicy: "hot",
+		Measurement:     "cpu",
+		Timestamp:       1,
+		Fields:          map[string]model.FieldValue{"v": model.Float64Value(1)},
+	}}, model.WriteOptions{Sync: true}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	fields, err := eng.ListFields(ctx, "metrics", "cpu")
+	if err != nil {
+		t.Fatalf("ListFields() error = %v", err)
+	}
+	if len(fields) != 1 {
+		t.Fatalf("field count = %d, want 1", len(fields))
+	}
+	policies, err := eng.ListRetentionPolicies(ctx, "metrics")
+	if err != nil {
+		t.Fatalf("ListRetentionPolicies() error = %v", err)
+	}
+	if len(policies) != 1 || policies[0].Name != "hot" {
+		t.Fatalf("policies = %#v, want hot", policies)
+	}
+	measurements, err := eng.ListMeasurements(ctx, "metrics")
+	if err != nil {
+		t.Fatalf("ListMeasurements() error = %v", err)
+	}
+	if len(measurements) != 1 || measurements[0] != "cpu" {
+		t.Fatalf("measurements = %#v, want cpu", measurements)
+	}
+	series, err := eng.ListSeries(ctx, "metrics", "cpu", nil)
+	if err != nil {
+		t.Fatalf("ListSeries() error = %v", err)
+	}
+	if len(series) != 1 {
+		t.Fatalf("series count = %d, want 1", len(series))
+	}
+	if err := eng.DropDatabase(ctx, "metrics"); err != nil {
+		t.Fatalf("DropDatabase() error = %v", err)
+	}
+	rows, err := eng.QueryRows(ctx, model.Query{
+		Database:        "metrics",
+		RetentionPolicy: "hot",
+		Measurement:     "cpu",
+		StartTime:       0,
+		EndTime:         10,
+	})
+	if err != nil {
+		t.Fatalf("QueryRows() error = %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("rows after drop = %#v, want none", rows)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "data", "metrics")); !os.IsNotExist(err) {
+		t.Fatalf("data dir stat = %v, want not exist", err)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestShardDeleteRangeReplaysAndCompactsTombstone(t *testing.T) {
+	opts := ShardOptions{
+		Dir:                t.TempDir(),
+		Start:              0,
+		End:                int64(time.Hour),
+		MemTableMaxSamples: 10,
+	}
+	shard, _, err := OpenShard(opts)
+	if err != nil {
+		t.Fatalf("OpenShard() error = %v", err)
+	}
+	points := []model.ResolvedPoint{
+		testResolvedPoint(1, 10, 1),
+		testResolvedPoint(1, 20, 2),
+		testResolvedPoint(1, 30, 3),
+	}
+	if err := shard.WriteBatch(points, true); err != nil {
+		t.Fatalf("WriteBatch() error = %v", err)
+	}
+	if err := shard.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+	tombstone := model.Tombstone{
+		SeriesIDs: []uint64{1},
+		FieldIDs:  []uint32{1},
+		StartTime: 15,
+		EndTime:   25,
+		WriteSeq:  4,
+	}
+	if err := shard.DeleteRange(tombstone, true); err != nil {
+		t.Fatalf("DeleteRange() error = %v", err)
+	}
+	got, err := shard.Query(memtable.Query{Start: 0, End: 40})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if len(got) != 1 || len(got[0].Samples) != 2 {
+		t.Fatalf("query after tombstone = %#v, want two samples", got)
+	}
+	if err := shard.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, _, err := OpenShard(opts)
+	if err != nil {
+		t.Fatalf("reopen OpenShard() error = %v", err)
+	}
+	got, err = reopened.Query(memtable.Query{Start: 0, End: 40})
+	if err != nil {
+		t.Fatalf("Query(reopened) error = %v", err)
+	}
+	if len(got) != 1 || len(got[0].Samples) != 2 {
+		t.Fatalf("reopened query after tombstone = %#v, want two samples", got)
+	}
+	if err := reopened.Compact(); err != nil {
+		t.Fatalf("Compact() error = %v", err)
+	}
+	if len(reopened.tombstones) != 0 {
+		t.Fatalf("tombstone count after compact = %d, want 0", len(reopened.tombstones))
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatalf("Close(reopened) error = %v", err)
+	}
+	finalShard, _, err := OpenShard(opts)
+	if err != nil {
+		t.Fatalf("final OpenShard() error = %v", err)
+	}
+	got, err = finalShard.Query(memtable.Query{Start: 0, End: 40})
+	closeErr := finalShard.Close()
+	if err != nil {
+		t.Fatalf("Query(final) error = %v close = %v", err, closeErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("Close(final) error = %v", closeErr)
+	}
+	if len(got) != 1 || len(got[0].Samples) != 2 {
+		t.Fatalf("final query after compact = %#v, want two samples", got)
+	}
+}
+
 func TestEngineRetentionKeepsActiveShard(t *testing.T) {
 	ctx := context.Background()
 	opts := model.Options{
@@ -624,6 +985,42 @@ func testBatchPoint(timestamp int64) model.Point {
 	}
 }
 
+func widePointForTest(timestamp int64) model.Point {
+	return model.Point{
+		Measurement: "wide",
+		Timestamp:   timestamp,
+		Fields: map[string]model.FieldValue{
+			"f0": model.Float64Value(float64(timestamp)),
+			"f1": model.Int64Value(timestamp),
+			"f2": model.StringValue("same"),
+			"f3": model.BoolValue(timestamp%2 == 0),
+		},
+	}
+}
+
+func columnForOrphanTest() model.ColumnData {
+	return model.ColumnData{
+		SeriesID:  1,
+		FieldID:   1,
+		FieldType: model.FieldFloat64,
+		Samples: []model.VersionedSample{
+			{Timestamp: 1, WriteSeq: 99, Value: model.Float64Value(99)},
+		},
+	}
+}
+
+func waitForTest(t *testing.T, timeout time.Duration, ok func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if ok() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("condition not satisfied before timeout")
+}
+
 func countWALFrames(path string) (int, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -714,6 +1111,86 @@ func TestMergeColumnDataKeepsNewestSequence(t *testing.T) {
 	if err := empty.Flush(); err != nil {
 		t.Fatalf("empty Flush() error = %v", err)
 	}
+}
+
+func TestColumnsToRowsFallsBackForUnalignedColumns(t *testing.T) {
+	columns := []model.ColumnSeries{
+		{
+			SeriesID:    1,
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			FieldName:   "a",
+			Timestamps:  []int64{1, 3},
+			Values:      []model.FieldValue{model.Int64Value(1), model.Int64Value(3)},
+		},
+		{
+			SeriesID:    1,
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			FieldName:   "b",
+			Timestamps:  []int64{2, 3},
+			Values:      []model.FieldValue{model.Int64Value(2), model.Int64Value(30)},
+		},
+	}
+	rows := columnsToRows(columns)
+	if len(rows) != 3 {
+		t.Fatalf("row count = %d, want 3", len(rows))
+	}
+	if rows[2].Fields["a"].Int64 != 3 || rows[2].Fields["b"].Int64 != 30 {
+		t.Fatalf("merged row = %#v, want fields a=3 b=30", rows[2])
+	}
+}
+
+func TestIteratorsReturnZeroBeforeNextAndAfterClose(t *testing.T) {
+	columns := &columnIterator{columns: []model.ColumnSeries{{SeriesID: 1}}}
+	if got := columns.Column(); got.SeriesID != 0 {
+		t.Fatalf("Column(before Next) = %#v, want zero", got)
+	}
+	if !columns.Next() {
+		t.Fatal("column Next() = false, want true")
+	}
+	if got := columns.Column(); got.SeriesID != 1 {
+		t.Fatalf("Column() = %#v, want series 1", got)
+	}
+	if err := columns.Close(); err != nil {
+		t.Fatalf("column Close() error = %v", err)
+	}
+
+	rows := &rowIterator{rows: []model.Row{{SeriesID: 2}}}
+	if got := rows.Row(); got.SeriesID != 0 {
+		t.Fatalf("Row(before Next) = %#v, want zero", got)
+	}
+	if !rows.Next() {
+		t.Fatal("row Next() = false, want true")
+	}
+	if got := rows.Row(); got.SeriesID != 2 {
+		t.Fatalf("Row() = %#v, want series 2", got)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatalf("row Close() error = %v", err)
+	}
+}
+
+func TestApplyTombstonesWithDefaultWriteSeqAndNoMatches(t *testing.T) {
+	got := applyTombstones(tombstoneColumnsForTest(), []model.Tombstone{{StartTime: 0, EndTime: 20}})
+	if len(got) != 0 {
+		t.Fatalf("default tombstone result = %#v, want deleted", got)
+	}
+	got = applyTombstones(tombstoneColumnsForTest(), []model.Tombstone{{SeriesIDs: []uint64{2}, StartTime: 0, EndTime: 20}})
+	if len(got) != 1 {
+		t.Fatalf("non-matching tombstone result = %#v, want kept", got)
+	}
+}
+
+func tombstoneColumnsForTest() []model.ColumnData {
+	return []model.ColumnData{{
+		SeriesID:  1,
+		FieldID:   1,
+		FieldType: model.FieldFloat64,
+		Samples: []model.VersionedSample{
+			{Timestamp: 10, WriteSeq: 100, Value: model.Float64Value(1)},
+		},
+	}}
 }
 
 func TestMergeColumnDataOrderedFastPathAllocations(t *testing.T) {
@@ -836,10 +1313,9 @@ func TestDecorateColumnsSkipsMissingCatalogEntries(t *testing.T) {
 			t.Fatalf("catalog.Close() error = %v", err)
 		}
 	}()
-	eng := &Engine{catalog: cat}
-	got := eng.decorateColumns([]model.ColumnData{
+	got := decorateColumns([]model.ColumnData{
 		{SeriesID: 999, FieldID: 1},
-	})
+	}, cat.Snapshot())
 	if len(got) != 0 {
 		t.Fatalf("decorated count = %d, want 0", len(got))
 	}

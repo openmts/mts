@@ -24,7 +24,7 @@
 - Test: `internal/engine/engine_test.go`
 - Test: `tests/e2e/query_pruning/main.go`
 
-- [ ] **Task 12.1: 增加 query 快照测试**
+- [x] **Task 12.1: 增加 query 快照测试**
 
   验收：长查询只在开始阶段复制 shard 指针和 catalog 元数据；查询执行期间新写入不会 panic，也不会破坏本次查询结果。
 
@@ -34,7 +34,9 @@
   go test -count=1 ./internal/engine -run 'TestQuerySnapshot|TestQueryRows' -timeout 180s
   ```
 
-- [ ] **Task 12.2: 缩短 Engine 锁范围**
+  实现备注：新增 catalog snapshot 与 query shard snapshot，查询开始阶段复制元数据和 shard 指针；已通过 `go test -count=1 . ./internal/catalog ./internal/engine -timeout 180s`。
+
+- [x] **Task 12.2: 缩短 Engine 锁范围**
 
   实现方向：
   - 在 `QueryColumns` 中先复制符合 database/rp/time 的 shard 指针。
@@ -43,7 +45,9 @@
 
   验收：现有 `QueryColumns` / `QueryRows` 返回结果不变。
 
-- [ ] **Task 12.3: 增加内部 ColumnIterator**
+  实现备注：`queryShards` 缩短 Engine 全局锁范围，Shard 查询改用生命周期读锁保护 memtable/part 快照。
+
+- [x] **Task 12.3: 增加内部 ColumnIterator**
 
   实现方向：
   - 先新增内部 iterator，不直接破坏公开 API。
@@ -52,13 +56,17 @@
 
   验收：小查询和空查询行为与当前 slice API 一致。
 
-- [ ] **Task 12.4: 优化 Row 聚合**
+  实现备注：新增 public `QueryColumnIterator`/`QueryRowIterator` 与内部 iterator；旧 slice API 基于 iterator 收集，保持兼容。
+
+- [x] **Task 12.4: 优化 Row 聚合**
 
   实现方向：
   - 对已按 `(seriesID, fieldID, timestamp)` 排序的列，优先线性构建 rows。
   - 只有发现跨字段乱序时才退回 map 聚合。
 
   验收：`QueryRows` 在 100K wide10 query pprof 中 `columnsToRows` 不进入 alloc_objects top 20。
+
+  实现备注：同 series 多字段 timestamp 对齐时走线性聚合快路径，不对齐才回退 map 聚合。
 
 ## Phase 13: SSTable Value Block Page Index
 
@@ -75,28 +83,34 @@
 - Test: `internal/sstable/sstable_test.go`
 - Test: `tests/e2e/query_pruning/main.go`
 
-- [ ] **Task 13.1: 设计 v4 value block**
+- [x] **Task 13.1: 设计 v4 value block**
 
   约束：
   - v3 仍可读取。
   - v4 page index 记录 page min/max timestamp、ordinal range、payload offset/size。
   - page 大小通过常量起步，默认目标 `32KB-128KB` uncompressed payload。
 
-- [ ] **Task 13.2: 写失败测试**
+  实现备注：v4 value ref 指向 page index block，page index 记录 page min/max time 与独立 value page block ref；v2/v3 读取兼容保留。
+
+- [x] **Task 13.2: 写失败测试**
 
   验收：
   - 查询小时间范围只读取命中 page。
   - page CRC 或长度损坏返回错误。
   - v3 part 兼容读取。
 
-- [ ] **Task 13.3: 实现 v4 写入和读取**
+  实现备注：新增 page index round-trip、畸形 payload 拒绝、命中页读取统计测试。
+
+- [x] **Task 13.3: 实现 v4 写入和读取**
 
   实现方向：
   - time block 保持 row-level。
   - value page 保存 writeSeq 和 typed values。
   - page index 放在 value block 头部或尾部，读取时先解析 index 再按 query range 读取 page。
 
-- [ ] **Task 13.4: pprof 验证**
+  实现备注：`WritePart` 默认写 v4 page index，读路径先解析 index，只读取时间范围命中的 page，并按命中 page 估算结果容量。
+
+- [x] **Task 13.4: pprof 验证**
 
   Run:
 
@@ -108,6 +122,8 @@
   ```
 
   验收：窄时间范围查询的 `sstable.readFloatSamples` / `readWriteSeqs` 分配随命中 page 数增长，而不是随整块样本数增长。
+
+  实现备注：100K wide10 query pprof 使用 `-prebuild-points` 复跑，heap profile 中 `main.wide10WorkloadPoint` 未进入 `alloc_space` / `alloc_objects` 前 20；`readValuePages`、`readFloatSamples`、`readWriteSeqs` 只在命中 page 后出现分配，验证 page 级剪枝生效。
 
 ## Phase 14: Typed Compression Policy
 
@@ -123,7 +139,7 @@
 - Test: `internal/sstable/compression_test.go`
 - Test: `internal/sstable/encoding_test.go`
 
-- [ ] **Task 14.1: 增加 CompressionOptions**
+- [x] **Task 14.1: 增加 CompressionOptions**
 
   建议字段：
   - `Enabled bool`
@@ -135,21 +151,31 @@
 
   默认保持当前编码，避免无配置时改变行为。
 
-- [ ] **Task 14.2: 实现 timestamp delta-of-delta**
+  实现备注：新增 `model.CompressionOptions` 并通过根包 alias 暴露；Shard 将配置传递给 SSTable `WritePartWithOptions`，默认 `Enabled=false` 时仍写未压缩 v3 page payload。
+
+- [x] **Task 14.2: 实现 timestamp delta-of-delta**
 
   验收：等间隔 timestamp 的 payload 小于当前 delta 编码，乱序 timestamp 拒绝或回退。
 
-- [ ] **Task 14.3: 实现 float XOR 编码**
+  实现备注：v5 compressed page timestamp 支持 delta-of-delta + zero-run，规则间隔序列小于 plain delta。
+
+- [x] **Task 14.3: 实现 float XOR 编码**
 
   验收：平滑 float 序列 payload 小于 plain float64；随机 float 可回退 plain，避免 CPU 换不到空间。
 
-- [ ] **Task 14.4: 实现 int delta/zigzag 编码**
+  实现备注：float64 支持 XOR 编码，只有候选 payload 小于 plain float64 时启用，否则自动回退 plain。
+
+- [x] **Task 14.4: 实现 int delta/zigzag 编码**
 
   验收：递增 int64 序列 payload 小于 plain varint/value encoding。
 
-- [ ] **Task 14.5: 实现 string page-local dictionary**
+  实现备注：int64 支持 delta + zigzag 编码，适合大基数递增序列；随机或收益不足时回退 plain。
+
+- [x] **Task 14.5: 实现 string page-local dictionary**
 
   验收：重复字符串序列 payload 小于 length-prefixed plain string；高基数字符串可回退 plain。
+
+  实现备注：string 支持 page-local dictionary + ordinal 编码，重复字符串序列小于 length-prefixed plain；已通过 `go test -count=1 ./internal/sstable ./internal/engine -timeout 180s`。
 
 ## Phase 15: Compaction Scheduler And Output Splitting
 
@@ -164,25 +190,31 @@
 - Test: `internal/engine/engine_test.go`
 - Test: `tests/e2e/compaction_integrity/main.go`
 
-- [ ] **Task 15.1: 后台 compaction lifecycle**
+- [x] **Task 15.1: 后台 compaction lifecycle**
 
   验收：
   - `Compaction.Enabled=true` 且 `BackgroundInterval>0` 时启动后台循环。
   - `Engine.Close` 能停止循环并等待退出。
   - 重复 `Close` 不 panic。
 
-- [ ] **Task 15.2: 输出 part 拆分**
+  实现备注：`Compaction.Enabled=true` 且 `BackgroundInterval>0` 时启动后台 ticker；`Engine.Close` 先停止后台 goroutine 并等待退出，重复 Close 保持安全。
+
+- [x] **Task 15.2: 输出 part 拆分**
 
   验收：
   - `MaxOutputPartBytes` 生效。
   - 单次 compaction 可输出多个 level+1 part。
   - 查询结果与单 part 输出一致。
 
-- [ ] **Task 15.3: orphan part 清理**
+  实现备注：compaction 按 `MaxOutputPartBytes` 估算列大小并分组输出多个 level+1 part，manifest 原子切换后再关闭并移除旧候选 part。
+
+- [x] **Task 15.3: orphan part 清理**
 
   验收：
   - manifest 未引用的 part 不暴露。
   - 清理失败不影响引擎打开，但会返回可观测错误或记录到维护结果。
+
+  实现备注：打开 shard 时清理 manifest 未引用的 `sst-*` 目录；失败记录到 shard maintenance error，并通过 `Engine.MaintenanceErrors` 暴露。已通过 `go test -count=1 ./internal/engine -timeout 180s`。
 
 ## Phase 16: WAL Durability, Checkpoint, Tombstone
 
@@ -198,7 +230,7 @@
 - Test: `internal/wal/wal_test.go`
 - Test: `tests/e2e/wal_recovery/main.go`
 
-- [ ] **Task 16.1: BatchFsync interval**
+- [x] **Task 16.1: BatchFsync interval**
 
   增加 `WALOptions.BatchInterval time.Duration`。
 
@@ -206,14 +238,18 @@
   - 未到 records/bytes 阈值时，超过 interval 会 fsync。
   - `WriteOptions.Sync=true` 仍强制同步。
 
-- [ ] **Task 16.2: segment checkpoint**
+  实现备注：`WALOptions.BatchInterval` 启动后台 ticker，对 pending WAL 执行有锁 fsync；强制同步与 records/bytes 阈值仍沿用原同步路径。
+
+- [x] **Task 16.2: segment checkpoint**
 
   验收：
   - flush 后只删除已 checkpoint 的旧 segment。
   - 当前活跃 segment 不被误删。
   - replay 从剩余 segment 恢复完整数据。
 
-- [ ] **Task 16.3: delete tombstone record**
+  实现备注：新增 `Log.Checkpoint`，flush 后滚动到新活跃 segment，再删除已 checkpoint 的旧 segment；保留 `TruncateAll` 兼容测试和显式清空场景。
+
+- [x] **Task 16.3: delete tombstone record**
 
   先实现内部 delete range，不暴露公开 API。
 
@@ -221,6 +257,8 @@
   - tombstone WAL replay 后仍生效。
   - query 过滤被删除时间范围。
   - compaction 后 tombstone 可折叠进输出 part 或保留 tombstone sidecar。
+
+  实现备注：新增内部 `model.Tombstone`、WAL tombstone record、`Shard.DeleteRange`；查询过滤 tombstone，WAL replay 后仍生效，compaction 会折叠 tombstone 并 checkpoint。已通过 `go test -count=1 ./internal/wal ./internal/engine -timeout 180s`。
 
 ## Phase 17: Metadata Management API
 
@@ -236,7 +274,7 @@
 - Test: `internal/catalog/catalog_test.go`
 - Test: `tests/e2e/simple_integrity/main.go`
 
-- [ ] **Task 17.1: database/rp API**
+- [x] **Task 17.1: database/rp API**
 
   建议 API：
   - `CreateDatabase(ctx, name string) error`
@@ -244,16 +282,22 @@
   - `CreateRetentionPolicy(ctx, database string, policy RetentionPolicy) error`
   - `ListRetentionPolicies(ctx, database string) ([]RetentionPolicy, error)`
 
-- [ ] **Task 17.2: schema inspection API**
+  实现备注：根包与 internal engine 暴露 database/RP API；Catalog 使用独立 `metadata.bin` 二进制文件持久化显式 database 与 retention policy，写入路径也会隐式创建。
+
+- [x] **Task 17.2: schema inspection API**
 
   建议 API：
   - `ListMeasurements(ctx, database string) ([]string, error)`
   - `ListFields(ctx, database, measurement string) ([]FieldSchema, error)`
   - `ListSeries(ctx, database, measurement string, tags map[string]string) ([]Series, error)`
 
-- [ ] **Task 17.3: metadata persistence**
+  实现备注：新增 `ListMeasurements`、`ListFields`、`ListSeries`，基于现有 series/field 索引返回稳定排序结果。
+
+- [x] **Task 17.3: metadata persistence**
 
   验收：重启后 database/rp/schema 仍可查询；删除 database 后旧 shard 不再暴露。
+
+  实现备注：Catalog metadata 重启后可查询；`DropDatabase` 会关闭并移除对应 shard 数据目录，旧 shard 不再参与查询。已通过 `go test -count=1 ./internal/catalog ./internal/engine -timeout 180s`。
 
 ## Phase 18: Benchmark And Pprof Governance
 
@@ -267,25 +311,31 @@
 - Modify: `internal/bench/storage_bench_test.go`
 - Create: `docs/benchmarks/storage-engine-benchmark-guide.md`
 
-- [ ] **Task 18.1: pprof 预生成 points 模式**
+- [x] **Task 18.1: pprof 预生成 points 模式**
 
   增加 `-prebuild-points`，将造数排除在 CPU profile 主阶段之外。
 
   验收：profile 中 `main.wide10WorkloadPoint` 不进入 alloc_space top 20。
 
-- [ ] **Task 18.2: benchstat 工作流**
+  实现备注：`tests/pprof/storage_engine` 新增 `-prebuild-points`，在 CPU profile 启动前构建 workload points，写入/查询/compact 路径复用预生成 slice；预生成阶段临时关闭 `runtime.MemProfileRate`，避免 heap profile 把造数分配计入主阶段热点。
+
+- [x] **Task 18.2: benchstat 工作流**
 
   文档化：
   - `go test -bench ... -count=10`
   - `benchstat old.txt new.txt`
   - 没有统计显著性时不得声称性能提升。
 
-- [ ] **Task 18.3: performance gate**
+  实现备注：新增 `docs/benchmarks/storage-engine-benchmark-guide.md`，记录 pprof、benchmark、benchstat 的复跑方法和显著性要求。
+
+- [x] **Task 18.3: performance gate**
 
   先做本地脚本，不直接接 CI：
   - 运行 10K default/wide10 benchmark。
   - 输出 sec/op、B/op、allocs/op。
   - 对比上一份基线文件。
+
+  实现备注：新增 `scripts/storage_benchmark_gate.sh`，运行 10K default/wide10 benchmark，存在基线时自动执行 `benchstat`。已通过 `go test -count=1 ./tests/pprof/storage_engine ./internal/bench -timeout 180s`。
 
 ## 统一完成门禁
 

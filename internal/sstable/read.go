@@ -186,12 +186,78 @@ func (p *Part) readValueColumn(
 	if err != nil {
 		return model.ColumnData{}, err
 	}
+	if len(payload.Bytes()) > 0 && payload.Bytes()[0] == valueEncodingV4 {
+		index, err := unmarshalValuePageIndex(payload.Bytes())
+		payload.Release()
+		if err != nil {
+			return model.ColumnData{}, fmt.Errorf("decode value page index: %w", err)
+		}
+		return p.readValuePages(seriesID, index, rowTimestamps, query)
+	}
 	block, err := unmarshalValueBlockWithTimestamps(payload.Bytes(), rowTimestamps, query)
 	payload.Release()
 	if err != nil {
 		return model.ColumnData{}, fmt.Errorf("decode value block: %w", err)
 	}
 	return columnFromBlock(seriesID, block), nil
+}
+
+func (p *Part) readValuePages(
+	seriesID uint64,
+	index valuePageIndex,
+	rowTimestamps []int64,
+	query Query,
+) (model.ColumnData, error) {
+	capacity := matchingValuePageSampleCapacity(index, query)
+	column := model.ColumnData{
+		SeriesID:  seriesID,
+		FieldID:   index.FieldID,
+		FieldType: index.FieldType,
+		Samples:   make([]model.VersionedSample, 0, capacity),
+	}
+	for _, page := range index.Pages {
+		if page.MaxTime < query.Start || page.MinTime > query.End {
+			continue
+		}
+		payload, err := p.readBlockPayload(valuesFile, page.Ref)
+		if err != nil {
+			return model.ColumnData{}, err
+		}
+		if p.stats != nil {
+			p.stats.ValuePagesRead++
+		}
+		block, err := unmarshalValueBlockWithTimestamps(payload.Bytes(), rowTimestamps, query)
+		payload.Release()
+		if err != nil {
+			return model.ColumnData{}, fmt.Errorf("decode value page: %w", err)
+		}
+		column.Samples = append(column.Samples, block.Samples...)
+	}
+	if !samplesSorted(column.Samples) {
+		sortSamples(column.Samples)
+	}
+	return column, nil
+}
+
+func matchingValuePageSampleCapacity(index valuePageIndex, query Query) int {
+	if len(index.Pages) == 0 || index.Count == 0 {
+		return 0
+	}
+	matches := 0
+	for _, page := range index.Pages {
+		if page.MaxTime >= query.Start && page.MinTime <= query.End {
+			matches++
+		}
+	}
+	if matches == 0 {
+		return 0
+	}
+	pageAverage := (index.Count + len(index.Pages) - 1) / len(index.Pages)
+	capacity := matches * pageAverage
+	if capacity > index.Count {
+		return index.Count
+	}
+	return capacity
 }
 
 func (p *Part) readBlock(name string, ref blockRef) ([]byte, error) {

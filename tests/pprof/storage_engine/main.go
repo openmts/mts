@@ -17,14 +17,16 @@ import (
 )
 
 type config struct {
-	dataDir     string
-	mode        string
-	fieldLayout string
-	points      int
-	series      int
-	queryRepeat int
-	cpuProfile  string
-	memProfile  string
+	dataDir        string
+	mode           string
+	fieldLayout    string
+	points         int
+	series         int
+	queryRepeat    int
+	cpuProfile     string
+	memProfile     string
+	prebuildPoints bool
+	prebuilt       []mts.Point
 }
 
 const (
@@ -45,6 +47,13 @@ func run(args []string) (err error) {
 	}
 	if err := validateConfig(cfg); err != nil {
 		return err
+	}
+	if cfg.prebuildPoints {
+		rate := runtime.MemProfileRate
+		runtime.MemProfileRate = 0
+		cfg.prebuilt = buildWorkloadPoints(cfg)
+		runtime.GC()
+		runtime.MemProfileRate = rate
 	}
 	dir, cleanup, err := prepareDataDir(cfg.dataDir)
 	if err != nil {
@@ -100,6 +109,7 @@ func parseConfig(args []string) (config, error) {
 	flags.IntVar(&cfg.queryRepeat, "query-repeat", 5, "查询重复次数")
 	flags.StringVar(&cfg.cpuProfile, "cpu-profile", "", "CPU profile 输出文件")
 	flags.StringVar(&cfg.memProfile, "mem-profile", "", "heap profile 输出文件")
+	flags.BoolVar(&cfg.prebuildPoints, "prebuild-points", false, "在 profile 主阶段前预生成 points")
 	if err := flags.Parse(args); err != nil {
 		return config{}, fmt.Errorf("parse flags: %w", err)
 	}
@@ -222,7 +232,7 @@ func queryWorkload(ctx context.Context, eng *mts.Engine, cfg config) error {
 func compactWorkload(ctx context.Context, eng *mts.Engine, cfg config) error {
 	flushEvery := max(cfg.points/4, 1)
 	for index := range cfg.points {
-		point := workloadPoint(index, cfg.series, cfg.fieldLayout)
+		point := workloadPointAt(cfg, index)
 		if err := eng.Write(ctx, []mts.Point{point}, mts.WriteOptions{}); err != nil {
 			return fmt.Errorf("write compact point: %w", err)
 		}
@@ -269,7 +279,7 @@ func writePoints(ctx context.Context, eng *mts.Engine, cfg config) error {
 	const batchSize = 1024
 	batch := make([]mts.Point, 0, batchSize)
 	for index := range cfg.points {
-		batch = append(batch, workloadPoint(index, cfg.series, cfg.fieldLayout))
+		batch = append(batch, workloadPointAt(cfg, index))
 		if len(batch) == batchSize {
 			if err := eng.Write(ctx, batch, mts.WriteOptions{}); err != nil {
 				return fmt.Errorf("write batch: %w", err)
@@ -290,7 +300,7 @@ func writePointsSynced(ctx context.Context, eng *mts.Engine, cfg config) error {
 	const batchSize = 1024
 	batch := make([]mts.Point, 0, batchSize)
 	for index := range cfg.points {
-		batch = append(batch, workloadPoint(index, cfg.series, cfg.fieldLayout))
+		batch = append(batch, workloadPointAt(cfg, index))
 		if len(batch) == batchSize {
 			if err := eng.Write(ctx, batch, mts.WriteOptions{Sync: true}); err != nil {
 				return fmt.Errorf("write synced batch: %w", err)
@@ -305,6 +315,21 @@ func writePointsSynced(ctx context.Context, eng *mts.Engine, cfg config) error {
 		return fmt.Errorf("write final synced batch: %w", err)
 	}
 	return nil
+}
+
+func buildWorkloadPoints(cfg config) []mts.Point {
+	points := make([]mts.Point, cfg.points)
+	for index := range cfg.points {
+		points[index] = workloadPoint(index, cfg.series, cfg.fieldLayout)
+	}
+	return points
+}
+
+func workloadPointAt(cfg config, index int) mts.Point {
+	if len(cfg.prebuilt) == cfg.points {
+		return cfg.prebuilt[index]
+	}
+	return workloadPoint(index, cfg.series, cfg.fieldLayout)
 }
 
 func workloadPoint(index int, series int, layout string) mts.Point {

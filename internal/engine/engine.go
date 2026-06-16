@@ -20,6 +20,10 @@ type Engine struct {
 	catalog  *catalog.Catalog
 	shards   map[string]*Shard
 	writeSeq uint64
+
+	compactStopOnce sync.Once
+	compactStop     chan struct{}
+	compactWG       sync.WaitGroup
 }
 
 type shardBatch struct {
@@ -54,10 +58,12 @@ func Open(_ context.Context, opts model.Options) (*Engine, error) {
 		closeErr := cat.Close()
 		return nil, fmt.Errorf("load shards: %w close catalog: %v", err, closeErr)
 	}
+	eng.startBackgroundCompaction()
 	return eng, nil
 }
 
 func (e *Engine) Close(_ context.Context) error {
+	e.stopBackgroundCompaction()
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, shard := range e.shards {
@@ -106,6 +112,18 @@ func (e *Engine) Flush(_ context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (e *Engine) MaintenanceErrors(_ context.Context) []error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	errs := make([]error, 0)
+	for _, shard := range e.shards {
+		if shard.maintenanceErr != nil {
+			errs = append(errs, shard.maintenanceErr)
+		}
+	}
+	return errs
 }
 
 func (e *Engine) groupByShardLocked(points []model.ResolvedPoint) ([]shardBatch, error) {
@@ -170,6 +188,7 @@ func (e *Engine) shardForStartLocked(database string, policy string, start int64
 		WAL:                e.opts.WAL,
 		MemTableMaxSamples: e.opts.MemTableMaxSamples,
 		Compaction:         e.opts.Compaction,
+		Compression:        e.opts.Compression,
 	})
 	if err != nil {
 		return nil, err
@@ -214,6 +233,7 @@ func (e *Engine) openShardDir(path string, entry os.DirEntry, err error) error {
 		WAL:                e.opts.WAL,
 		MemTableMaxSamples: e.opts.MemTableMaxSamples,
 		Compaction:         e.opts.Compaction,
+		Compression:        e.opts.Compression,
 	})
 	if err != nil {
 		return err

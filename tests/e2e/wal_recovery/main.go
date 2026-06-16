@@ -30,7 +30,10 @@ func run() (err error) {
 	defer func() {
 		err = errors.Join(err, os.RemoveAll(dir))
 	}()
+	return runWithDir(dir)
+}
 
+func runWithDir(dir string) error {
 	ctx := context.Background()
 	opts := mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 2000}
 	eng, err := mts.Open(ctx, opts)
@@ -57,10 +60,7 @@ func run() (err error) {
 	if closeErr != nil {
 		return closeErr
 	}
-	if len(rows) != 1000 {
-		return fmt.Errorf("row count = %d, want 1000", len(rows))
-	}
-	return nil
+	return assertRecoveredRows(rows, 1000)
 }
 
 func points(count int) []mts.Point {
@@ -73,4 +73,11 @@ func points(count int) []mts.Point {
 		})
 	}
 	return out
+}
+
+func assertRecoveredRows(rows []mts.Row, want int) error {
+	if len(rows) != want {
+		return fmt.Errorf("row count = %d, want %d", len(rows), want)
+	}
+	return nil
 }

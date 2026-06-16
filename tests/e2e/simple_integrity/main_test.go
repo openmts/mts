@@ -18,6 +18,12 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestRunWithDirRejectsInvalidPath(t *testing.T) {
+	if err := runWithDir("bad\x00path"); err == nil {
+		t.Fatal("runWithDir(invalid) error = nil, want error")
+	}
+}
+
 func TestWriteScenarioRejectsClosedEngine(t *testing.T) {
 	ctx := context.Background()
 	eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})

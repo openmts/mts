@@ -33,6 +33,13 @@ type Catalog struct {
 	fieldsByKey  map[string]uint32
 	fields       map[uint32]Field
 	fieldSchemas map[string][]Field
+	databases    map[string]struct{}
+	policies     map[string]map[string]model.RetentionPolicy
+}
+
+type Snapshot struct {
+	Series map[uint64]Series
+	Fields map[uint32]Field
 }
 
 func Open(dir string) (*Catalog, error) {
@@ -44,6 +51,9 @@ func Open(dir string) (*Catalog, error) {
 		return nil, err
 	}
 	if err := cat.replayWAL(); err != nil {
+		return nil, err
+	}
+	if err := cat.loadMetadata(); err != nil {
 		return nil, err
 	}
 	wal, err := os.OpenFile(cat.walPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, storagefs.FileMode)
@@ -91,7 +101,9 @@ func (c *Catalog) ResolvePoints(points []model.Point) ([]model.ResolvedPoint, er
 	}
 	resolved := make([]model.ResolvedPoint, len(points))
 	changed := false
+	metadataChanged := false
 	for index, point := range points {
+		metadataChanged = c.ensureMetadataLocked(point.Database, point.RetentionPolicy) || metadataChanged
 		// ResolvePoints feeds the synchronous engine write path, so the resolved
 		// point may borrow input tags instead of cloning them per sample.
 		got, pointChanged, err := c.resolvePointNoSnapshotLocked(point, false, &arena)
@@ -106,10 +118,16 @@ func (c *Catalog) ResolvePoints(points []model.Point) ([]model.ResolvedPoint, er
 			return nil, err
 		}
 	}
+	if metadataChanged {
+		if err := c.saveMetadataLocked(); err != nil {
+			return nil, err
+		}
+	}
 	return resolved, nil
 }
 
 func (c *Catalog) resolvePointLocked(point model.Point) (model.ResolvedPoint, error) {
+	metadataChanged := c.ensureMetadataLocked(point.Database, point.RetentionPolicy)
 	series, err := c.resolveSeriesLocked(point.Measurement, point.Tags)
 	if err != nil {
 		return model.ResolvedPoint{}, err
@@ -118,7 +136,34 @@ func (c *Catalog) resolvePointLocked(point model.Point) (model.ResolvedPoint, er
 	if err != nil {
 		return model.ResolvedPoint{}, err
 	}
+	if metadataChanged {
+		if err := c.saveMetadataLocked(); err != nil {
+			return model.ResolvedPoint{}, err
+		}
+	}
 	return resolvedPointFrom(point, series.ID, fields, true), nil
+}
+
+func (c *Catalog) ensureMetadataLocked(database string, policy string) bool {
+	if strings.TrimSpace(database) == "" {
+		return false
+	}
+	changed := false
+	if _, ok := c.databases[database]; !ok {
+		c.databases[database] = struct{}{}
+		changed = true
+	}
+	if strings.TrimSpace(policy) == "" {
+		return changed
+	}
+	if c.policies[database] == nil {
+		c.policies[database] = make(map[string]model.RetentionPolicy, 1)
+	}
+	if _, ok := c.policies[database][policy]; !ok {
+		c.policies[database][policy] = model.RetentionPolicy{Name: policy}
+		changed = true
+	}
+	return changed
 }
 
 func (c *Catalog) resolvePointNoSnapshotLocked(
@@ -214,6 +259,32 @@ func (c *Catalog) FieldIDs(measurement string, names []string) map[uint32]struct
 	return ids
 }
 
+func (c *Catalog) Snapshot() Snapshot {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return Snapshot{
+		Series: cloneSeriesMap(c.series),
+		Fields: cloneFieldMap(c.fields),
+	}
+}
+
+func cloneSeriesMap(series map[uint64]Series) map[uint64]Series {
+	out := make(map[uint64]Series, len(series))
+	for id, item := range series {
+		item.Tags = cloneTags(item.Tags)
+		out[id] = item
+	}
+	return out
+}
+
+func cloneFieldMap(fields map[uint32]Field) map[uint32]Field {
+	out := make(map[uint32]Field, len(fields))
+	for id, item := range fields {
+		out[id] = item
+	}
+	return out
+}
+
 func newCatalog(dir string) *Catalog {
 	return &Catalog{
 		dir:          filepath.Clean(dir),
@@ -225,6 +296,8 @@ func newCatalog(dir string) *Catalog {
 		fieldsByKey:  make(map[string]uint32),
 		fields:       make(map[uint32]Field),
 		fieldSchemas: make(map[string][]Field),
+		databases:    make(map[string]struct{}),
+		policies:     make(map[string]map[string]model.RetentionPolicy),
 	}
 }
 

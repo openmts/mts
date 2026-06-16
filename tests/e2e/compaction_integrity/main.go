@@ -30,7 +30,10 @@ func run() (err error) {
 	defer func() {
 		err = errors.Join(err, os.RemoveAll(dir))
 	}()
+	return runWithDir(dir)
+}
 
+func runWithDir(dir string) error {
 	ctx := context.Background()
 	eng, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 1})
 	if err != nil {
@@ -54,10 +57,7 @@ func run() (err error) {
 	if closeErr != nil {
 		return closeErr
 	}
-	if len(rows) != 1 || rows[0].Fields["v"].Float64 != 3 {
-		return fmt.Errorf("rows = %#v, want compacted LWW value 3", rows)
-	}
-	return nil
+	return assertCompactedRows(rows)
 }
 
 func point(value float64) mts.Point {
@@ -66,4 +66,11 @@ func point(value float64) mts.Point {
 		Timestamp:   10,
 		Fields:      map[string]mts.FieldValue{"v": mts.Float64Value(value)},
 	}
+}
+
+func assertCompactedRows(rows []mts.Row) error {
+	if len(rows) != 1 || rows[0].Fields["v"].Float64 != 3 {
+		return fmt.Errorf("rows = %#v, want compacted LWW value 3", rows)
+	}
+	return nil
 }

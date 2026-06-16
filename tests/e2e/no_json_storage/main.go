@@ -33,7 +33,10 @@ func run() (err error) {
 	defer func() {
 		err = errors.Join(err, os.RemoveAll(dir))
 	}()
+	return runWithDir(dir)
+}
 
+func runWithDir(dir string) error {
 	ctx := context.Background()
 	eng, err := mts.Open(ctx, mts.Options{
 		Path:               dir,

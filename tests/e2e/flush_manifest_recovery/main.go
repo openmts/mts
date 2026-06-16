@@ -33,7 +33,10 @@ func run() (err error) {
 	defer func() {
 		err = errors.Join(err, os.RemoveAll(dir))
 	}()
+	return runWithDir(dir)
+}
 
+func runWithDir(dir string) error {
 	ctx := context.Background()
 	opts := mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 10}
 	eng, err := mts.Open(ctx, opts)
@@ -67,10 +70,7 @@ func run() (err error) {
 	if closeErr != nil {
 		return closeErr
 	}
-	if len(rows) != 1 || rows[0].Fields["v"].Float64 != 1 {
-		return fmt.Errorf("rows = %#v, want only manifest referenced row", rows)
-	}
-	return nil
+	return assertManifestRows(rows)
 }
 
 func point(timestamp int64, value float64) mts.Point {
@@ -79,6 +79,13 @@ func point(timestamp int64, value float64) mts.Point {
 		Timestamp:   timestamp,
 		Fields:      map[string]mts.FieldValue{"v": mts.Float64Value(value)},
 	}
+}
+
+func assertManifestRows(rows []mts.Row) error {
+	if len(rows) != 1 || rows[0].Fields["v"].Float64 != 1 {
+		return fmt.Errorf("rows = %#v, want only manifest referenced row", rows)
+	}
+	return nil
 }
 
 func shardDir(root string) string {

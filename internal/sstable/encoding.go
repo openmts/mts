@@ -13,6 +13,8 @@ const (
 	timeEncodingDeltaV2 byte = 1
 	valueEncodingV2     byte = 2
 	valueEncodingV3     byte = 3
+	valueEncodingV4     byte = 4
+	valueEncodingV5     byte = 5
 
 	timeRefModeAligned byte = 0
 	timeRefModeIndexed byte = 1
@@ -127,6 +129,12 @@ func unmarshalValueBlockWithTimestamps(
 		}
 		return filterValueBlock(block, query), nil
 	}
+	if payload[0] == valueEncodingV4 {
+		return valueBlock{}, fmt.Errorf("value block v4 index must be decoded by readValueColumn")
+	}
+	if payload[0] == valueEncodingV5 {
+		return unmarshalCompressedValueBlock(payload, query)
+	}
 	reader := newBlockReader(payload)
 	header, err := readValueHeaderV3(reader)
 	if err != nil {
@@ -153,6 +161,92 @@ func unmarshalValueBlockWithTimestamps(
 		FieldType: header.fieldType,
 		Samples:   samples,
 	}, nil
+}
+
+func marshalValuePageIndex(dst []byte, index valuePageIndex) ([]byte, error) {
+	dst = append(dst, valueEncodingV4)
+	dst = binary.AppendUvarint(dst, uint64(index.FieldID))
+	dst = append(dst, byte(index.FieldType))
+	dst = binary.AppendUvarint(dst, uint64(index.Count))
+	dst = binary.AppendUvarint(dst, uint64(len(index.Pages)))
+	for _, page := range index.Pages {
+		dst = binary.AppendVarint(dst, page.MinTime)
+		dst = binary.AppendVarint(dst, page.MaxTime)
+		var err error
+		dst, err = appendBlockRef(dst, page.Ref)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+func unmarshalValuePageIndex(payload []byte) (valuePageIndex, error) {
+	reader := newBlockReader(payload)
+	encoding, err := reader.byte("value page index encoding")
+	if err != nil {
+		return valuePageIndex{}, err
+	}
+	if encoding != valueEncodingV4 {
+		return valuePageIndex{}, fmt.Errorf("unknown value page index encoding %d", encoding)
+	}
+	fieldID64, err := reader.uvarint("value page index field id")
+	if err != nil {
+		return valuePageIndex{}, err
+	}
+	fieldID, err := uint32Value("value page index field id", fieldID64)
+	if err != nil {
+		return valuePageIndex{}, err
+	}
+	fieldType, err := reader.byte("value page index field type")
+	if err != nil {
+		return valuePageIndex{}, err
+	}
+	count, err := reader.intCount("value page index sample count")
+	if err != nil {
+		return valuePageIndex{}, err
+	}
+	pageCount, err := reader.intCount("value page index page count")
+	if err != nil {
+		return valuePageIndex{}, err
+	}
+	pages := make([]valuePageRef, 0, pageCount)
+	for range pageCount {
+		page, err := readValuePageRef(reader)
+		if err != nil {
+			return valuePageIndex{}, err
+		}
+		pages = append(pages, page)
+	}
+	if err := reader.done("value page index"); err != nil {
+		return valuePageIndex{}, err
+	}
+	return valuePageIndex{
+		FieldID:   fieldID,
+		FieldType: model.FieldType(fieldType),
+		Count:     count,
+		Pages:     pages,
+	}, nil
+}
+
+func readValuePageRef(reader *blockReader) (valuePageRef, error) {
+	minTime, err := reader.varint("value page min time")
+	if err != nil {
+		return valuePageRef{}, err
+	}
+	maxTime, err := reader.varint("value page max time")
+	if err != nil {
+		return valuePageRef{}, err
+	}
+	ref, err := readBlockRef(reader)
+	return valuePageRef{MinTime: minTime, MaxTime: maxTime, Ref: ref}, err
+}
+
+func uint32Value(name string, value uint64) (uint32, error) {
+	if value > math.MaxUint32 {
+		return 0, fmt.Errorf("%s overflows uint32", name)
+	}
+	return uint32(value), nil
 }
 
 func encodeTimeRefs(

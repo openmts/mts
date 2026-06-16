@@ -102,6 +102,137 @@ func TestCatalogPersistenceIsBinary(t *testing.T) {
 	}
 }
 
+func TestCatalogMetadataManagementPersists(t *testing.T) {
+	dir := t.TempDir()
+	cat, err := catalog.Open(dir)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := cat.CreateDatabase("metrics"); err != nil {
+		t.Fatalf("CreateDatabase() error = %v", err)
+	}
+	if err := cat.CreateRetentionPolicy("metrics", model.RetentionPolicy{Name: "hot"}); err != nil {
+		t.Fatalf("CreateRetentionPolicy() error = %v", err)
+	}
+	point := model.Point{
+		Database:        "metrics",
+		RetentionPolicy: "hot",
+		Measurement:     "cpu",
+		Tags:            map[string]string{"host": "a"},
+		Fields:          map[string]model.FieldValue{"usage": model.Float64Value(1)},
+	}
+	if _, err := cat.ResolvePoint(point); err != nil {
+		t.Fatalf("ResolvePoint() error = %v", err)
+	}
+	if err := cat.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	reopened, err := catalog.Open(dir)
+	if err != nil {
+		t.Fatalf("Open(reopened) error = %v", err)
+	}
+	policies, err := reopened.ListRetentionPolicies("metrics")
+	if err != nil {
+		t.Fatalf("ListRetentionPolicies() error = %v", err)
+	}
+	if len(policies) != 1 || policies[0].Name != "hot" {
+		t.Fatalf("policies = %#v, want hot", policies)
+	}
+	measurements, err := reopened.ListMeasurements("metrics")
+	if err != nil {
+		t.Fatalf("ListMeasurements() error = %v", err)
+	}
+	if len(measurements) != 1 || measurements[0] != "cpu" {
+		t.Fatalf("measurements = %#v, want cpu", measurements)
+	}
+	fields, err := reopened.ListFields("metrics", "cpu")
+	if err != nil {
+		t.Fatalf("ListFields() error = %v", err)
+	}
+	if len(fields) != 1 || fields[0].Name != "usage" {
+		t.Fatalf("fields = %#v, want usage", fields)
+	}
+	series, err := reopened.ListSeries("metrics", "cpu", map[string]string{"host": "a"})
+	if err != nil {
+		t.Fatalf("ListSeries() error = %v", err)
+	}
+	if len(series) != 1 || series[0].Tags["host"] != "a" {
+		t.Fatalf("series = %#v, want host=a", series)
+	}
+	if err := reopened.DropDatabase("metrics"); err != nil {
+		t.Fatalf("DropDatabase() error = %v", err)
+	}
+	policies, err = reopened.ListRetentionPolicies("metrics")
+	if err != nil {
+		t.Fatalf("ListRetentionPolicies(after drop) error = %v", err)
+	}
+	if len(policies) != 0 {
+		t.Fatalf("policies after drop = %#v, want none", policies)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatalf("Close(reopened) error = %v", err)
+	}
+}
+
+func TestCatalogMetadataRejectsInvalidInputsAndCorruption(t *testing.T) {
+	dir := t.TempDir()
+	cat, err := catalog.Open(dir)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := cat.CreateDatabase(""); err == nil {
+		t.Fatal("CreateDatabase(empty) error = nil, want error")
+	}
+	if err := cat.CreateRetentionPolicy("", model.RetentionPolicy{Name: "hot"}); err == nil {
+		t.Fatal("CreateRetentionPolicy(empty db) error = nil, want error")
+	}
+	if err := cat.CreateRetentionPolicy("metrics", model.RetentionPolicy{}); err == nil {
+		t.Fatal("CreateRetentionPolicy(empty policy) error = nil, want error")
+	}
+	if policies, err := cat.ListRetentionPolicies("missing"); err != nil || len(policies) != 0 {
+		t.Fatalf("ListRetentionPolicies(missing) = %v, %v; want empty nil", policies, err)
+	}
+	if fields, err := cat.ListFields("missing", "cpu"); err != nil || len(fields) != 0 {
+		t.Fatalf("ListFields(missing) = %v, %v; want empty nil", fields, err)
+	}
+	if series, err := cat.ListSeries("missing", "cpu", nil); err != nil || len(series) != 0 {
+		t.Fatalf("ListSeries(missing) = %v, %v; want empty nil", series, err)
+	}
+	if err := cat.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "metadata.bin"), []byte{1, 2, 3}, 0600); err != nil {
+		t.Fatalf("WriteFile(metadata corrupt) error = %v", err)
+	}
+	if _, err := catalog.Open(dir); err == nil {
+		t.Fatal("Open(corrupt metadata) error = nil, want error")
+	}
+}
+
+func TestCatalogSnapshotClonesSeriesTags(t *testing.T) {
+	cat, err := catalog.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	point := catalogPoint("cpu", "a", 1)
+	resolved, err := cat.ResolvePoint(point)
+	if err != nil {
+		t.Fatalf("ResolvePoint() error = %v", err)
+	}
+	snap := cat.Snapshot()
+	snap.Series[resolved.SeriesID].Tags["host"] = "changed"
+	series, ok := cat.Series(resolved.SeriesID)
+	if !ok {
+		t.Fatalf("Series(%d) missing", resolved.SeriesID)
+	}
+	if series.Tags["host"] != "a" {
+		t.Fatalf("catalog series tag = %q, want a", series.Tags["host"])
+	}
+	if err := cat.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestCatalogMatchSeriesByExactTags(t *testing.T) {
 	cat, err := catalog.Open(t.TempDir())
 	if err != nil {

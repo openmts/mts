@@ -3,6 +3,7 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -23,18 +24,21 @@ type ShardOptions struct {
 	WAL                model.WALOptions
 	MemTableMaxSamples int
 	Compaction         model.CompactionOptions
+	Compression        model.CompressionOptions
 }
 
 type Shard struct {
-	lifecycleMu sync.Mutex
+	lifecycleMu sync.RWMutex
 
-	opts      ShardOptions
-	wal       *wal.Log
-	mem       *memtable.MemTable
-	parts     []*sstable.Part
-	manifest  sstable.Manifest
-	nextPart  int
-	testHooks shardTestHooks
+	opts           ShardOptions
+	wal            *wal.Log
+	mem            *memtable.MemTable
+	parts          []*sstable.Part
+	manifest       sstable.Manifest
+	tombstones     []model.Tombstone
+	nextPart       int
+	maintenanceErr error
+	testHooks      shardTestHooks
 }
 
 type shardTestHooks struct {
@@ -64,24 +68,33 @@ func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 		}
 		return nil, 0, err
 	}
+	shard.maintenanceErr = shard.cleanupOrphanParts()
 	log, err := wal.Open(filepath.Join(opts.Dir, "wal"), wal.Options(opts.WAL))
 	if err != nil {
 		closeErr := closeParts(shard.parts)
 		return nil, 0, errors.Join(err, closeErr)
 	}
 	shard.wal = log
-	replayed, err := log.Replay()
+	replayed, err := log.ReplayRecords()
 	if err != nil {
 		closeErr := shard.closeLocked()
 		return nil, 0, errors.Join(err, closeErr)
 	}
-	for _, point := range replayed {
-		if err := shard.mem.Apply(point); err != nil {
-			closeErr := shard.closeLocked()
-			return nil, 0, errors.Join(err, closeErr)
+	for _, record := range replayed {
+		for _, point := range record.Points {
+			if err := shard.mem.Apply(point); err != nil {
+				closeErr := shard.closeLocked()
+				return nil, 0, errors.Join(err, closeErr)
+			}
+			if point.WriteSeq > maxSeq {
+				maxSeq = point.WriteSeq
+			}
 		}
-		if point.WriteSeq > maxSeq {
-			maxSeq = point.WriteSeq
+		for _, tombstone := range record.Tombstones {
+			shard.tombstones = append(shard.tombstones, tombstone)
+			if tombstone.WriteSeq > maxSeq {
+				maxSeq = tombstone.WriteSeq
+			}
 		}
 	}
 	return shard, maxSeq, nil
@@ -109,6 +122,19 @@ func (s *Shard) WriteBatch(points []model.ResolvedPoint, syncWrite bool) error {
 	return nil
 }
 
+func (s *Shard) DeleteRange(tombstone model.Tombstone, syncWrite bool) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if tombstone.EndTime < tombstone.StartTime {
+		return nil
+	}
+	if err := s.wal.AppendTombstones([]model.Tombstone{tombstone}, syncWrite); err != nil {
+		return err
+	}
+	s.tombstones = append(s.tombstones, tombstone)
+	return nil
+}
+
 func (s *Shard) Flush() error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
@@ -131,7 +157,9 @@ func (s *Shard) flushLocked() error {
 		s.mem.Restore(snapshot)
 		return nil
 	}
-	meta, err := sstable.WritePart(s.opts.Dir, 0, s.nextPartID(), columns)
+	meta, err := sstable.WritePartWithOptions(s.opts.Dir, 0, s.nextPartID(), columns, sstable.WriteOptions{
+		Compression: s.opts.Compression,
+	})
 	if err != nil {
 		s.mem.Restore(snapshot)
 		return err
@@ -161,14 +189,18 @@ func (s *Shard) flushLocked() error {
 			return err
 		}
 	}
-	if err := s.wal.TruncateAll(); err != nil {
-		s.mem.Restore(snapshot)
-		return err
+	if len(s.tombstones) == 0 {
+		if err := s.wal.Checkpoint(); err != nil {
+			s.mem.Restore(snapshot)
+			return err
+		}
 	}
 	return nil
 }
 
 func (s *Shard) Query(query memtable.Query) ([]model.ColumnData, error) {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
 	columns := s.mem.Query(query)
 	for _, part := range s.parts {
 		got, err := part.Query(sstable.Query{
@@ -182,7 +214,7 @@ func (s *Shard) Query(query memtable.Query) ([]model.ColumnData, error) {
 		}
 		columns = append(columns, got...)
 	}
-	return mergeColumnData(columns), nil
+	return applyTombstones(mergeColumnData(columns), s.tombstones), nil
 }
 
 func (s *Shard) Close() error {
@@ -225,6 +257,36 @@ func (s *Shard) openParts() (uint64, error) {
 		}
 	}
 	return maxSeq, nil
+}
+
+func (s *Shard) cleanupOrphanParts() error {
+	referenced := make(map[string]struct{}, len(s.manifest.Parts))
+	for _, meta := range s.manifest.Parts {
+		referenced[filepath.Base(meta.Path)] = struct{}{}
+		referenced[meta.ID] = struct{}{}
+	}
+	entries, err := os.ReadDir(s.opts.Dir)
+	if err != nil {
+		return fmt.Errorf("read shard dir for orphan cleanup: %w", err)
+	}
+	var cleanupErr error
+	for _, entry := range entries {
+		if !entry.IsDir() || !isPartDirName(entry.Name()) {
+			continue
+		}
+		if _, ok := referenced[entry.Name()]; ok {
+			continue
+		}
+		err := storagefs.RemoveAll(filepath.Join(s.opts.Dir, entry.Name()))
+		if err != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove orphan part %s: %w", entry.Name(), err))
+		}
+	}
+	return cleanupErr
+}
+
+func isPartDirName(name string) bool {
+	return len(name) == len("sst-000000") && name[:4] == "sst-"
 }
 
 func (s *Shard) nextPartID() string {

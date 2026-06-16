@@ -33,7 +33,10 @@ func run() (err error) {
 	defer func() {
 		err = errors.Join(err, os.RemoveAll(dir))
 	}()
+	return runWithDir(dir)
+}
 
+func runWithDir(dir string) error {
 	ctx := context.Background()
 	eng, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 1000})
 	if err != nil {
@@ -61,10 +64,17 @@ func run() (err error) {
 	if closeErr != nil {
 		return closeErr
 	}
+	if err := assertPrunedRows(rows); err != nil {
+		return err
+	}
+	return assertNoJSONStorage(dir)
+}
+
+func assertPrunedRows(rows []mts.Row) error {
 	if len(rows) != 1 || len(rows[0].Fields) != 1 || rows[0].Fields["f2"].Int64 != 42 {
 		return fmt.Errorf("rows = %#v, want one pruned field result", rows)
 	}
-	return assertNoJSONStorage(dir)
+	return nil
 }
 
 func points() []mts.Point {

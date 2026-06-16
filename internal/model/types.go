@@ -75,13 +75,15 @@ type Options struct {
 	MemTableMaxSamples     int
 	WAL                    WALOptions
 	Compaction             CompactionOptions
+	Compression            CompressionOptions
 }
 
 type WALOptions struct {
-	Sync         bool
-	SegmentBytes int64
-	BatchRecords int
-	BatchBytes   int64
+	Sync          bool
+	SegmentBytes  int64
+	BatchRecords  int
+	BatchBytes    int64
+	BatchInterval time.Duration
 }
 
 type CompactionOptions struct {
@@ -90,6 +92,32 @@ type CompactionOptions struct {
 	Level0SizeLimit    int64
 	MaxOutputPartBytes int64
 	BackgroundInterval time.Duration
+}
+
+type RetentionPolicy struct {
+	Name     string
+	Duration time.Duration
+}
+
+type FieldSchema struct {
+	Measurement string
+	Name        string
+	Type        FieldType
+}
+
+type Series struct {
+	ID          uint64
+	Measurement string
+	Tags        map[string]string
+}
+
+type CompressionOptions struct {
+	Enabled       bool
+	Timestamp     string
+	Float         string
+	Int           string
+	String        string
+	MinPageValues int
 }
 
 type WriteOptions struct {
@@ -120,6 +148,14 @@ type VersionedSample struct {
 	Value     FieldValue `json:"value"`
 }
 
+type Tombstone struct {
+	SeriesIDs []uint64 `json:"series_ids"`
+	FieldIDs  []uint32 `json:"field_ids"`
+	StartTime int64    `json:"start_time"`
+	EndTime   int64    `json:"end_time"`
+	WriteSeq  uint64   `json:"write_seq"`
+}
+
 type ColumnData struct {
 	SeriesID  uint64            `json:"series_id"`
 	FieldID   uint32            `json:"field_id"`
@@ -144,4 +180,18 @@ type Row struct {
 	Tags        map[string]string
 	Timestamp   int64
 	Fields      map[string]FieldValue
+}
+
+type ColumnIterator interface {
+	Next() bool
+	Column() ColumnSeries
+	Err() error
+	Close() error
+}
+
+type RowIterator interface {
+	Next() bool
+	Row() Row
+	Err() error
+	Close() error
 }

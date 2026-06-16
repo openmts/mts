@@ -355,6 +355,70 @@ func TestPartQueryPrunesValueBlocksByField(t *testing.T) {
 	}
 }
 
+func TestPartQueryReadsOnlyMatchingValuePages(t *testing.T) {
+	dir := t.TempDir()
+	columns := []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, valueBlockPageSamples*3),
+	}
+	meta, err := WritePart(dir, 0, "sst-000001", columns)
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	stats := part.resetReadStatsForTest()
+	got, err := part.Query(Query{
+		SeriesIDs: map[uint64]struct{}{1: {}},
+		FieldIDs:  map[uint32]struct{}{2: {}},
+		Start:     int64(valueBlockPageSamples + 10),
+		End:       int64(valueBlockPageSamples + 10),
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if len(got) != 1 || len(got[0].Samples) != 1 {
+		t.Fatalf("query result = %#v, want one sample", got)
+	}
+	if stats.ValuePagesRead != 1 {
+		t.Fatalf("value pages read = %d, want 1", stats.ValuePagesRead)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestWritePartWithCompressionOptionsRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	column := columnWithTimestamps(1, 2, 0, 64)
+	meta, err := WritePartWithOptions(dir, 0, "sst-000001", []model.ColumnData{column}, WriteOptions{
+		Compression: model.CompressionOptions{Enabled: true, MinPageValues: 1},
+	})
+	if err != nil {
+		t.Fatalf("WritePartWithOptions() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	got, err := part.Query(Query{
+		SeriesIDs: map[uint64]struct{}{1: {}},
+		FieldIDs:  map[uint32]struct{}{2: {}},
+		Start:     10,
+		End:       12,
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if len(got) != 1 || len(got[0].Samples) != 3 {
+		t.Fatalf("compressed query result = %#v, want one column with 3 samples", got)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestOpenPartQueriesWithAlreadyOpenedBlockFiles(t *testing.T) {
 	dir := t.TempDir()
 	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
@@ -381,6 +445,68 @@ func TestOpenPartQueriesWithAlreadyOpenedBlockFiles(t *testing.T) {
 	}
 	if len(got) != 1 || len(got[0].Samples) != 1 || got[0].Samples[0].Value.Float64 != 42 {
 		t.Fatalf("Query() = %#v, want retained open file data", got)
+	}
+}
+
+func TestPartQueryFallsBackToPathAfterClose(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+		columnWithField(1, 2, model.Float64Value(42)),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	got, err := part.Query(Query{Start: 0, End: 10})
+	if err != nil {
+		t.Fatalf("Query() after Close error = %v", err)
+	}
+	if len(got) != 1 || got[0].Samples[0].Value.Float64 != 42 {
+		t.Fatalf("Query() after Close = %#v, want value 42", got)
+	}
+}
+
+func TestSSTableSmallHelpersAndOpenPartFilesErrors(t *testing.T) {
+	if valuePageCount(0) != 0 {
+		t.Fatalf("valuePageCount(0) = %d, want 0", valuePageCount(0))
+	}
+	if _, err := uint32Value("too large", uint64(^uint32(0))+1); err == nil {
+		t.Fatal("uint32Value(overflow) error = nil, want error")
+	}
+	row := indexRow{
+		SeriesID: 10,
+		MinTime:  5,
+		MaxTime:  10,
+		Columns:  []columnRef{{FieldID: 2}},
+	}
+	if rowMatches(row, Query{SeriesIDs: map[uint64]struct{}{11: {}}, Start: 0, End: 20}) {
+		t.Fatal("rowMatches(series mismatch) = true, want false")
+	}
+	if rowMatches(row, Query{Start: 20, End: 30}) {
+		t.Fatal("rowMatches(time mismatch) = true, want false")
+	}
+	if _, err := openPartFiles("bad\x00path"); err == nil {
+		t.Fatal("openPartFiles(invalid) error = nil, want error")
+	}
+	emptyIndex := valuePageIndex{}
+	if got := matchingValuePageSampleCapacity(emptyIndex, Query{Start: 0, End: 1}); got != 0 {
+		t.Fatalf("matchingValuePageSampleCapacity(empty) = %d, want 0", got)
+	}
+	index := valuePageIndex{
+		Count: 10,
+		Pages: []valuePageRef{
+			{MinTime: 0, MaxTime: 4},
+			{MinTime: 5, MaxTime: 9},
+		},
+	}
+	if got := matchingValuePageSampleCapacity(index, Query{Start: 20, End: 30}); got != 0 {
+		t.Fatalf("matchingValuePageSampleCapacity(no match) = %d, want 0", got)
 	}
 }
 

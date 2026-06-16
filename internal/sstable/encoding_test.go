@@ -73,6 +73,46 @@ func TestValueBlockV3AlignedIsCompactAndRoundTrips(t *testing.T) {
 	}
 }
 
+func TestValuePageIndexRoundTrip(t *testing.T) {
+	index := valuePageIndex{
+		FieldID:   7,
+		FieldType: model.FieldFloat64,
+		Count:     3,
+		Pages: []valuePageRef{
+			{MinTime: 10, MaxTime: 20, Ref: blockRef{Offset: 1, Size: 2}},
+			{MinTime: 30, MaxTime: 40, Ref: blockRef{Offset: 3, Size: 4}},
+		},
+	}
+	payload, err := marshalValuePageIndex(nil, index)
+	if err != nil {
+		t.Fatalf("marshalValuePageIndex() error = %v", err)
+	}
+	got, err := unmarshalValuePageIndex(payload)
+	if err != nil {
+		t.Fatalf("unmarshalValuePageIndex() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, index) {
+		t.Fatalf("page index = %#v, want %#v", got, index)
+	}
+	if _, err := unmarshalValueBlockWithTimestamps(payload, []int64{10}, Query{Start: 0, End: 100}); err == nil {
+		t.Fatal("unmarshalValueBlockWithTimestamps(v4 index) error = nil, want error")
+	}
+}
+
+func TestValuePageIndexRejectsMalformedPayload(t *testing.T) {
+	if _, err := unmarshalValuePageIndex([]byte{valueEncodingV3}); err == nil {
+		t.Fatal("unmarshalValuePageIndex(wrong encoding) error = nil, want error")
+	}
+	if _, err := marshalValuePageIndex(nil, valuePageIndex{
+		FieldID:   1,
+		FieldType: model.FieldFloat64,
+		Count:     1,
+		Pages:     []valuePageRef{{Ref: blockRef{Offset: -1}}},
+	}); err == nil {
+		t.Fatal("marshalValuePageIndex(negative ref) error = nil, want error")
+	}
+}
+
 func TestValueBlockV3IndexedSparseRoundTripAndFilters(t *testing.T) {
 	rowTimestamps := []int64{10, 20, 30, 40, 50}
 	column := model.ColumnData{

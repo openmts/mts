@@ -28,3 +28,9 @@ func TestAssertNoJSONStorageRejectsMarkersAndMissingPath(t *testing.T) {
 		t.Fatal("assertNoJSONStorage(missing) error = nil, want error")
 	}
 }
+
+func TestRunWithDirRejectsInvalidPath(t *testing.T) {
+	if err := runWithDir("bad\x00path"); err == nil {
+		t.Fatal("runWithDir(invalid) error = nil, want error")
+	}
+}

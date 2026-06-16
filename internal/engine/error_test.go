@@ -54,7 +54,7 @@ func TestOpenShardManifestErrors(t *testing.T) {
 	if _, _, err := OpenShard(ShardOptions{Dir: dir, Start: 0, End: 1}); err == nil {
 		t.Fatal("OpenShard(missing part) error = nil, want error")
 	}
-	if err := removeOldParts([]sstable.PartMeta{{ID: "bad", Path: "bad\x00path"}}, "keep"); err == nil {
+	if err := removeOldParts([]sstable.PartMeta{{ID: "bad", Path: "bad\x00path"}}); err == nil {
 		t.Fatal("removeOldParts(invalid) error = nil, want error")
 	}
 }

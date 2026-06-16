@@ -93,6 +93,19 @@ type valueBlock struct {
 	Samples   []model.VersionedSample `json:"samples"`
 }
 
+type valuePageRef struct {
+	MinTime int64
+	MaxTime int64
+	Ref     blockRef
+}
+
+type valuePageIndex struct {
+	FieldID   uint32
+	FieldType model.FieldType
+	Count     int
+	Pages     []valuePageRef
+}
+
 type Part struct {
 	path     string
 	metadata metadata
@@ -110,4 +123,5 @@ type partReadFiles struct {
 type readStats struct {
 	TimeBlocksRead  int
 	ValueBlocksRead int
+	ValuePagesRead  int
 }

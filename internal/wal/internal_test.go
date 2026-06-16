@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"codeberg.org/mts/mts/internal/codec"
 	"codeberg.org/mts/mts/internal/model"
@@ -40,6 +41,100 @@ func TestAppendRejectsUnencodablePayloadAndEmptyReplay(t *testing.T) {
 	}
 	if err := log.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestBatchIntervalSyncAndCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	log, err := Open(dir, Options{SegmentBytes: 96, BatchInterval: 10 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	record := model.ResolvedPoint{SeriesID: 1, Timestamp: 1, WriteSeq: 1}
+	if err := log.Append([]model.ResolvedPoint{record}, false); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+	waitForWALTest(t, time.Second, func() bool {
+		log.mu.Lock()
+		defer log.mu.Unlock()
+		return log.pendingRecords == 0 && log.pendingBytes == 0
+	})
+	if err := log.Append([]model.ResolvedPoint{record}, false); err != nil {
+		t.Fatalf("Append(second) error = %v", err)
+	}
+	if err := log.Checkpoint(); err != nil {
+		t.Fatalf("Checkpoint() error = %v", err)
+	}
+	got, err := log.Replay()
+	if err != nil {
+		t.Fatalf("Replay() after checkpoint error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("checkpoint replay count = %d, want 0", len(got))
+	}
+	segments, err := listSegments(dir)
+	if err != nil {
+		t.Fatalf("listSegments() error = %v", err)
+	}
+	if len(segments) != 1 || segments[0].number != 2 {
+		t.Fatalf("segments = %#v, want only active segment 2", segments)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestWALTombstoneReplayRecords(t *testing.T) {
+	dir := t.TempDir()
+	log, err := Open(dir, Options{Sync: true})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	tombstone := model.Tombstone{
+		SeriesIDs: []uint64{1},
+		FieldIDs:  []uint32{2},
+		StartTime: 10,
+		EndTime:   20,
+		WriteSeq:  7,
+	}
+	if err := log.AppendTombstones([]model.Tombstone{tombstone}, true); err != nil {
+		t.Fatalf("AppendTombstones() error = %v", err)
+	}
+	records, err := log.ReplayRecords()
+	if err != nil {
+		t.Fatalf("ReplayRecords() error = %v", err)
+	}
+	if len(records) != 1 || len(records[0].Tombstones) != 1 {
+		t.Fatalf("records = %#v, want one tombstone record", records)
+	}
+	if records[0].Tombstones[0].WriteSeq != tombstone.WriteSeq {
+		t.Fatalf("tombstone = %#v, want %#v", records[0].Tombstones[0], tombstone)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestTombstoneDecodeAndSizeBoundaries(t *testing.T) {
+	if uvarintSize(0) != 1 || uvarintSize(128) != 2 {
+		t.Fatalf("uvarintSize boundaries failed")
+	}
+	if varintSize(-1) != 1 {
+		t.Fatalf("varintSize(-1) = %d, want 1", varintSize(-1))
+	}
+	if _, err := decodeTombstones(nil); err == nil {
+		t.Fatal("decodeTombstones(empty) error = nil, want error")
+	}
+	if _, err := decodeTombstones([]byte{99}); err == nil {
+		t.Fatal("decodeTombstones(version) error = nil, want error")
+	}
+	payload := []byte{tombstoneVersion, 1, 1}
+	if _, err := decodeTombstones(payload); err == nil {
+		t.Fatal("decodeTombstones(truncated) error = nil, want error")
+	}
+	reader := newBatchReader([]byte{1})
+	if _, err := readUint32s(reader, "bad uint32"); err == nil {
+		t.Fatal("readUint32s(truncated) error = nil, want error")
 	}
 }
 
@@ -119,6 +214,18 @@ func TestAppendTagsFastPathsAndStableMultiTagOrder(t *testing.T) {
 			t.Fatalf("%s encoded tags = %v, want %v", tt.name, got, tt.want)
 		}
 	}
+}
+
+func waitForWALTest(t *testing.T, timeout time.Duration, ok func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if ok() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("condition not satisfied before timeout")
 }
 
 func TestDecodeBatchRejectsTruncatedPayloadPrefixes(t *testing.T) {

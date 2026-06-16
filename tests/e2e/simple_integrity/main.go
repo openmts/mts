@@ -19,7 +19,6 @@ func main() {
 }
 
 func run() (err error) {
-	ctx := context.Background()
 	dir, err := os.MkdirTemp("", "mts-e2e-simple-*")
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
@@ -31,7 +30,11 @@ func run() (err error) {
 	defer func() {
 		err = errors.Join(err, os.RemoveAll(dir))
 	}()
+	return runWithDir(dir)
+}
 
+func runWithDir(dir string) (err error) {
+	ctx := context.Background()
 	eng, err := mts.Open(ctx, mts.Options{
 		Path:               dir,
 		ShardDuration:      time.Hour,

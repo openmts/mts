@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
+	"time"
 
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/storagefs"
@@ -17,18 +19,22 @@ const (
 	defaultSegmentBytes int64 = 64 << 20
 	recordVersion       byte  = 1
 	recordWriteBatch    byte  = 1
+	recordTombstone     byte  = 2
 )
 
 var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
 
 type Options struct {
-	Sync         bool
-	SegmentBytes int64
-	BatchRecords int
-	BatchBytes   int64
+	Sync          bool
+	SegmentBytes  int64
+	BatchRecords  int
+	BatchBytes    int64
+	BatchInterval time.Duration
 }
 
 type Log struct {
+	mu sync.Mutex
+
 	dir  string
 	opts Options
 
@@ -38,6 +44,15 @@ type Log struct {
 
 	pendingRecords int
 	pendingBytes   int64
+
+	syncStopOnce sync.Once
+	syncStop     chan struct{}
+	syncWG       sync.WaitGroup
+}
+
+type Record struct {
+	Points     []model.ResolvedPoint
+	Tombstones []model.Tombstone
 }
 
 func Open(dir string, opts Options) (*Log, error) {
@@ -55,15 +70,22 @@ func Open(dir string, opts Options) (*Log, error) {
 	if err := log.openLastSegment(); err != nil {
 		return nil, err
 	}
+	log.startIntervalSync()
 	return log, nil
 }
 
 func (l *Log) Append(records []model.ResolvedPoint, syncWrite bool) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	payload, err := encodeBatch(records)
 	if err != nil {
 		return fmt.Errorf("encode wal record: %w", err)
 	}
-	frame := encodeFrame(recordWriteBatch, payload)
+	return l.appendFrameLocked(recordWriteBatch, payload, syncWrite)
+}
+
+func (l *Log) appendFrameLocked(recordType byte, payload []byte, syncWrite bool) error {
+	frame := encodeFrame(recordType, payload)
 	if err := l.rollIfNeeded(int64(len(frame))); err != nil {
 		return err
 	}
@@ -83,24 +105,50 @@ func (l *Log) Append(records []model.ResolvedPoint, syncWrite bool) error {
 	return nil
 }
 
+func (l *Log) AppendTombstones(tombstones []model.Tombstone, syncWrite bool) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	payload, err := encodeTombstones(tombstones)
+	if err != nil {
+		return fmt.Errorf("encode wal tombstone: %w", err)
+	}
+	return l.appendFrameLocked(recordTombstone, payload, syncWrite)
+}
+
 func (l *Log) Replay() ([]model.ResolvedPoint, error) {
-	segments, err := listSegments(l.dir)
+	records, err := l.ReplayRecords()
 	if err != nil {
 		return nil, err
 	}
 	points := make([]model.ResolvedPoint, 0)
+	for _, record := range records {
+		points = append(points, record.Points...)
+	}
+	return points, nil
+}
+
+func (l *Log) ReplayRecords() ([]Record, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	segments, err := listSegments(l.dir)
+	if err != nil {
+		return nil, err
+	}
+	records := make([]Record, 0)
 	for index, segment := range segments {
 		isLast := index == len(segments)-1
 		replayed, err := replaySegment(segment.path, isLast)
 		if err != nil {
 			return nil, err
 		}
-		points = append(points, replayed...)
+		records = append(records, replayed...)
 	}
-	return points, nil
+	return records, nil
 }
 
 func (l *Log) TruncateAll() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if l.file != nil {
 		if err := l.file.Close(); err != nil {
 			return fmt.Errorf("close wal before truncate: %w", err)
@@ -122,6 +170,9 @@ func (l *Log) TruncateAll() error {
 }
 
 func (l *Log) Close() error {
+	l.stopIntervalSync()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if l.file == nil {
 		return nil
 	}
@@ -130,6 +181,43 @@ func (l *Log) Close() error {
 	}
 	l.file = nil
 	return nil
+}
+
+func (l *Log) Checkpoint() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if err := l.syncPendingLocked(); err != nil {
+		return err
+	}
+	oldSegment := l.segment
+	if l.file != nil {
+		if err := l.file.Close(); err != nil {
+			return fmt.Errorf("close wal before checkpoint: %w", err)
+		}
+		l.file = nil
+	}
+	if err := l.openSegment(oldSegment + 1); err != nil {
+		return err
+	}
+	segments, err := listSegments(l.dir)
+	if err != nil {
+		return err
+	}
+	for _, segment := range segments {
+		if segment.number > oldSegment {
+			continue
+		}
+		if err := os.Remove(segment.path); err != nil {
+			return fmt.Errorf("remove checkpointed wal segment: %w", err)
+		}
+	}
+	return nil
+}
+
+func (l *Log) FlushPending() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.syncPendingLocked()
 }
 
 func (l *Log) openLastSegment() error {
@@ -183,6 +271,51 @@ func (l *Log) shouldSync(syncWrite bool) bool {
 	return l.opts.BatchBytes > 0 && l.pendingBytes >= l.opts.BatchBytes
 }
 
+func (l *Log) syncPendingLocked() error {
+	if l.file == nil || l.pendingRecords == 0 {
+		return nil
+	}
+	if err := l.file.Sync(); err != nil {
+		return fmt.Errorf("sync wal: %w", err)
+	}
+	l.pendingRecords = 0
+	l.pendingBytes = 0
+	return nil
+}
+
+func (l *Log) startIntervalSync() {
+	if l.opts.BatchInterval <= 0 {
+		return
+	}
+	l.syncStop = make(chan struct{})
+	l.syncWG.Add(1)
+	go l.intervalSyncLoop(l.opts.BatchInterval)
+}
+
+func (l *Log) stopIntervalSync() {
+	if l.syncStop == nil {
+		return
+	}
+	l.syncStopOnce.Do(func() {
+		close(l.syncStop)
+	})
+	l.syncWG.Wait()
+}
+
+func (l *Log) intervalSyncLoop(interval time.Duration) {
+	defer l.syncWG.Done()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			_ = l.FlushPending()
+		case <-l.syncStop:
+			return
+		}
+	}
+}
+
 func encodeFrame(recordType byte, payload []byte) []byte {
 	bodyLen := 1 + 1 + len(payload) + 4
 	frame := make([]byte, 4+bodyLen)
@@ -229,7 +362,7 @@ func segmentPath(dir string, number int) string {
 	return filepath.Join(dir, fmt.Sprintf("%06d.wal", number))
 }
 
-func replaySegment(path string, isLast bool) ([]model.ResolvedPoint, error) {
+func replaySegment(path string, isLast bool) ([]Record, error) {
 	file, err := os.OpenFile(path, os.O_RDWR, storagefs.FileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open wal segment for replay: %w", err)
@@ -245,8 +378,8 @@ func replaySegment(path string, isLast bool) ([]model.ResolvedPoint, error) {
 	return points, nil
 }
 
-func replayOpenSegment(file *os.File, isLast bool) ([]model.ResolvedPoint, error) {
-	points := make([]model.ResolvedPoint, 0)
+func replayOpenSegment(file *os.File, isLast bool) ([]Record, error) {
+	records := make([]Record, 0)
 	for {
 		offset, err := file.Seek(0, io.SeekCurrent)
 		if err != nil {
@@ -254,51 +387,61 @@ func replayOpenSegment(file *os.File, isLast bool) ([]model.ResolvedPoint, error
 		}
 		record, err := readFrame(file)
 		if err == nil {
-			points = append(points, record...)
+			records = append(records, record)
 			continue
 		}
 		if err == io.EOF {
-			return points, nil
+			return records, nil
 		}
 		if isLast && isPartial(err) {
 			if truncateErr := file.Truncate(offset); truncateErr != nil {
 				return nil, fmt.Errorf("truncate partial wal record: %w", truncateErr)
 			}
-			return points, nil
+			return records, nil
 		}
 		return nil, err
 	}
 }
 
-func readFrame(reader io.Reader) ([]model.ResolvedPoint, error) {
+func readFrame(reader io.Reader) (Record, error) {
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(reader, header); err != nil {
-		return nil, normalizeReadError(err)
+		return Record{}, normalizeReadError(err)
 	}
 	length := binary.BigEndian.Uint32(header)
 	if length < 6 {
-		return nil, fmt.Errorf("wal record length is too small")
+		return Record{}, fmt.Errorf("wal record length is too small")
 	}
 	body := make([]byte, length)
 	if _, err := io.ReadFull(reader, body); err != nil {
-		return nil, normalizeReadError(err)
+		return Record{}, normalizeReadError(err)
 	}
 	if body[0] != recordVersion {
-		return nil, fmt.Errorf("unsupported wal record version")
-	}
-	if body[1] != recordWriteBatch {
-		return nil, fmt.Errorf("unsupported wal record type")
+		return Record{}, fmt.Errorf("unsupported wal record version")
 	}
 	want := binary.BigEndian.Uint32(body[len(body)-4:])
 	got := crc32.Checksum(body[:len(body)-4], castagnoliTable)
 	if got != want {
-		return nil, fmt.Errorf("wal record crc mismatch")
+		return Record{}, fmt.Errorf("wal record crc mismatch")
 	}
-	records, err := decodeBatch(body[2 : len(body)-4])
+	record, err := decodeFramePayload(body[1], body[2:len(body)-4])
 	if err != nil {
-		return nil, fmt.Errorf("decode wal payload: %w", err)
+		return Record{}, fmt.Errorf("decode wal payload: %w", err)
 	}
-	return records, nil
+	return record, nil
+}
+
+func decodeFramePayload(recordType byte, payload []byte) (Record, error) {
+	switch recordType {
+	case recordWriteBatch:
+		points, err := decodeBatch(payload)
+		return Record{Points: points}, err
+	case recordTombstone:
+		tombstones, err := decodeTombstones(payload)
+		return Record{Tombstones: tombstones}, err
+	default:
+		return Record{}, fmt.Errorf("unsupported wal record type")
+	}
 }
 
 func normalizeReadError(err error) error {
