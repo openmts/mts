@@ -42,6 +42,22 @@ type Query struct {
 	Fields          []string          `json:"fields"`
 	StartTime       int64             `json:"start_time"`
 	EndTime         int64             `json:"end_time"`
+	Aggregates      []AggregateSpec   `json:"aggregates"`
+	Window          time.Duration     `json:"window"`
+	Limit           int               `json:"limit"`
+	Offset          int               `json:"offset"`
+	Budget          QueryBudget       `json:"budget"`
+}
+
+type AggregateSpec struct {
+	Field    string `json:"field"`
+	Function string `json:"function"`
+}
+
+type QueryBudget struct {
+	MaxShards  int `json:"max_shards"`
+	MaxParts   int `json:"max_parts"`
+	MaxSamples int `json:"max_samples"`
 }
 
 type Options struct {
@@ -54,6 +70,44 @@ type Options struct {
 	WAL                    WALOptions
 	Compaction             CompactionOptions
 	Compression            CompressionOptions
+	StorageMemory          StorageMemoryOptions
+}
+
+type StorageMemoryOptions struct {
+	SoftSampleLimit       int
+	HardSampleLimit       int
+	SoftBytesLimit        int64
+	HardBytesLimit        int64
+	QueryBytesLimit       int64
+	FlushBytesLimit       int64
+	CompactionBytesLimit  int64
+	CompressionBytesLimit int64
+}
+
+type StorageMemorySnapshot struct {
+	CurrentBytes          int64
+	PeakBytes             int64
+	ActiveBytes           int64
+	MemTableBytes         int64
+	WALBytes              int64
+	ReservationBytes      int64
+	WriteBytes            int64
+	FlushBytes            int64
+	QueryBytes            int64
+	CompactionBytes       int64
+	CompressionBytes      int64
+	SoftBytesLimit        int64
+	HardBytesLimit        int64
+	RejectedWrites        uint64
+	RejectedReservations  uint64
+	FlushTriggered        uint64
+	QueryBytesLimit       int64
+	FlushBytesLimit       int64
+	CompactionBytesLimit  int64
+	CompressionBytesLimit int64
+	RuntimeHeapAllocBytes int64
+	RuntimeRSSBytes       int64
+	RuntimeGapBytes       int64
 }
 
 type WALOptions struct {
@@ -248,6 +302,30 @@ func toModelQuery(query Query) model.Query {
 		Fields:          append([]string(nil), query.Fields...),
 		StartTime:       query.StartTime,
 		EndTime:         query.EndTime,
+		Aggregates:      toModelAggregateSpecs(query.Aggregates),
+		Window:          query.Window,
+		Limit:           query.Limit,
+		Offset:          query.Offset,
+		Budget:          toModelQueryBudget(query.Budget),
+	}
+}
+
+func toModelAggregateSpecs(specs []AggregateSpec) []model.AggregateSpec {
+	out := make([]model.AggregateSpec, len(specs))
+	for index, spec := range specs {
+		out[index] = model.AggregateSpec{
+			Field:    spec.Field,
+			Function: spec.Function,
+		}
+	}
+	return out
+}
+
+func toModelQueryBudget(budget QueryBudget) model.QueryBudget {
+	return model.QueryBudget{
+		MaxShards:  budget.MaxShards,
+		MaxParts:   budget.MaxParts,
+		MaxSamples: budget.MaxSamples,
 	}
 }
 
@@ -262,6 +340,20 @@ func toModelOptions(opts Options) model.Options {
 		WAL:                    toModelWALOptions(opts.WAL),
 		Compaction:             toModelCompactionOptions(opts.Compaction),
 		Compression:            toModelCompressionOptions(opts.Compression),
+		StorageMemory:          toModelStorageMemoryOptions(opts.StorageMemory),
+	}
+}
+
+func toModelStorageMemoryOptions(opts StorageMemoryOptions) model.StorageMemoryOptions {
+	return model.StorageMemoryOptions{
+		SoftSampleLimit:       opts.SoftSampleLimit,
+		HardSampleLimit:       opts.HardSampleLimit,
+		SoftBytesLimit:        opts.SoftBytesLimit,
+		HardBytesLimit:        opts.HardBytesLimit,
+		QueryBytesLimit:       opts.QueryBytesLimit,
+		FlushBytesLimit:       opts.FlushBytesLimit,
+		CompactionBytesLimit:  opts.CompactionBytesLimit,
+		CompressionBytesLimit: opts.CompressionBytesLimit,
 	}
 }
 
@@ -311,6 +403,34 @@ func toModelCompressionOptions(opts CompressionOptions) model.CompressionOptions
 
 func toModelWriteOptions(opts WriteOptions) model.WriteOptions {
 	return model.WriteOptions{Sync: opts.Sync}
+}
+
+func fromStorageMemorySnapshot(snapshot storageengine.StorageMemorySnapshot) StorageMemorySnapshot {
+	return StorageMemorySnapshot{
+		CurrentBytes:          snapshot.CurrentBytes,
+		PeakBytes:             snapshot.PeakBytes,
+		ActiveBytes:           snapshot.ActiveBytes,
+		MemTableBytes:         snapshot.MemTableBytes,
+		WALBytes:              snapshot.WALBytes,
+		ReservationBytes:      snapshot.ReservationBytes,
+		WriteBytes:            snapshot.WriteBytes,
+		FlushBytes:            snapshot.FlushBytes,
+		QueryBytes:            snapshot.QueryBytes,
+		CompactionBytes:       snapshot.CompactionBytes,
+		CompressionBytes:      snapshot.CompressionBytes,
+		SoftBytesLimit:        snapshot.SoftBytesLimit,
+		HardBytesLimit:        snapshot.HardBytesLimit,
+		RejectedWrites:        snapshot.RejectedWrites,
+		RejectedReservations:  snapshot.RejectedReservations,
+		FlushTriggered:        snapshot.FlushTriggered,
+		QueryBytesLimit:       snapshot.QueryBytesLimit,
+		FlushBytesLimit:       snapshot.FlushBytesLimit,
+		CompactionBytesLimit:  snapshot.CompactionBytesLimit,
+		CompressionBytesLimit: snapshot.CompressionBytesLimit,
+		RuntimeHeapAllocBytes: snapshot.RuntimeHeapAllocBytes,
+		RuntimeRSSBytes:       snapshot.RuntimeRSSBytes,
+		RuntimeGapBytes:       snapshot.RuntimeGapBytes,
+	}
 }
 
 func toModelRetentionPolicy(policy RetentionPolicy) model.RetentionPolicy {

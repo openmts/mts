@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"sync"
+
+	"codeberg.org/mts/mts/internal/storagefs"
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
@@ -118,7 +120,7 @@ func releaseBlockFrameHandle(frame *blockFrame) {
 
 func writeAll(file *os.File, data []byte) error {
 	for len(data) > 0 {
-		written, err := file.Write(data)
+		written, err := storagefs.Write(file, data)
 		if err != nil {
 			return fmt.Errorf("write block: %w", err)
 		}
@@ -131,7 +133,7 @@ func writeAll(file *os.File, data []byte) error {
 }
 
 func readBlock(path string, ref blockRef) ([]byte, error) {
-	file, err := os.Open(path)
+	file, err := storagefs.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open block file: %w", err)
 	}

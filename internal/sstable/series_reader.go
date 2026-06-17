@@ -51,7 +51,7 @@ func (p *Part) QuerySeriesIDs(query Query, seriesIDs []uint64) ([]model.ColumnDa
 	if !partMatches(p.metadata.Part, p.metaRows, query) {
 		return []model.ColumnData{}, nil
 	}
-	return p.queryIndexRows(query, seriesIDs)
+	return p.querySeriesIndexRows(query, seriesIDs)
 }
 
 func (r *SeriesBatchReader) SeriesIDs() []uint64 {

@@ -2,6 +2,7 @@ package mts_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -174,6 +175,119 @@ func TestEngineReplaysUnflushedWAL(t *testing.T) {
 	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() after replay query error = %v", err)
+	}
+}
+
+func TestPublicAPIReturnsErrorsForInvalidPathAndCanceledQuery(t *testing.T) {
+	ctx := context.Background()
+	if _, err := mts.Open(ctx, mts.Options{Path: "bad\x00path"}); err == nil {
+		t.Fatal("Open(invalid path) error = nil, want error")
+	}
+
+	eng, err := mts.Open(ctx, mts.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 10,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	query := mts.Query{Measurement: "cpu", StartTime: 0, EndTime: 1}
+	if _, err := eng.QueryColumns(canceled, query); !errors.Is(err, context.Canceled) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryColumns(canceled) error = %v, want context.Canceled close = %v", err, closeErr)
+	}
+	if _, err := eng.QueryColumnIterator(canceled, query); !errors.Is(err, context.Canceled) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryColumnIterator(canceled) error = %v, want context.Canceled close = %v", err, closeErr)
+	}
+	if _, err := eng.QueryRows(canceled, query); !errors.Is(err, context.Canceled) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows(canceled) error = %v, want context.Canceled close = %v", err, closeErr)
+	}
+	if _, err := eng.QueryRowIterator(canceled, query); !errors.Is(err, context.Canceled) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRowIterator(canceled) error = %v, want context.Canceled close = %v", err, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestPublicMetadataAPIs(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 10,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.CreateDatabase(ctx, "meta"); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("CreateDatabase() error = %v close = %v", err, closeErr)
+	}
+	if err := eng.CreateRetentionPolicy(ctx, "meta", mts.RetentionPolicy{Name: "rp", Duration: time.Hour}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("CreateRetentionPolicy() error = %v close = %v", err, closeErr)
+	}
+	point := mts.Point{
+		Database:        "meta",
+		RetentionPolicy: "rp",
+		Measurement:     "cpu",
+		Tags:            map[string]string{"host": "a"},
+		Timestamp:       1,
+		Fields:          map[string]mts.FieldValue{"value": mts.Float64Value(1)},
+	}
+	if err := eng.Write(ctx, []mts.Point{point}, mts.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	policies, err := eng.ListRetentionPolicies(ctx, "meta")
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("ListRetentionPolicies() error = %v close = %v", err, closeErr)
+	}
+	if len(policies) == 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("ListRetentionPolicies() empty close = %v", closeErr)
+	}
+	fields, err := eng.ListFields(ctx, "meta", "cpu")
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("ListFields() error = %v close = %v", err, closeErr)
+	}
+	if len(fields) != 1 || fields[0].Name != "value" {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("fields = %#v, want value close = %v", fields, closeErr)
+	}
+	series, err := eng.ListSeries(ctx, "meta", "cpu", map[string]string{"host": "a"})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("ListSeries() error = %v close = %v", err, closeErr)
+	}
+	if len(series) != 1 || series[0].Tags["host"] != "a" {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("series = %#v, want host a close = %v", series, closeErr)
+	}
+	measurements, err := eng.ListMeasurements(ctx, "meta")
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("ListMeasurements() error = %v close = %v", err, closeErr)
+	}
+	if len(measurements) != 1 || measurements[0] != "cpu" {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("measurements = %#v, want cpu close = %v", measurements, closeErr)
+	}
+	if err := eng.DropDatabase(ctx, "meta"); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("DropDatabase() error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
 	}
 }
 

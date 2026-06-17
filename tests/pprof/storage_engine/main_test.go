@@ -87,10 +87,30 @@ func TestRunWithStorageParameters(t *testing.T) {
 		"-compaction-max-cascade-steps", "4",
 		"-compaction-background-interval", "10ms",
 		"-compression-algorithm", "lz4",
+		"-storage-compression-bytes-limit", "1048576",
 		"-flush-on-exit",
 	})
 	if err != nil {
 		t.Fatalf("run(storage params) error = %v", err)
+	}
+}
+
+func TestRunCompactAndReplayModes(t *testing.T) {
+	for _, mode := range []string{"compact", "replay"} {
+		t.Run(mode, func(t *testing.T) {
+			err := run([]string{
+				"-data-dir", filepath.Join(t.TempDir(), "data"),
+				"-mode", mode,
+				"-points", "24",
+				"-series", "4",
+				"-query-repeat", "1",
+				"-write-batch-size", "5",
+				"-memtable-max-samples", "8",
+			})
+			if err != nil {
+				t.Fatalf("run(%s) error = %v", mode, err)
+			}
+		})
 	}
 }
 
@@ -106,6 +126,7 @@ func TestParseConfigStorageParameters(t *testing.T) {
 		"-compaction-max-cascade-steps", "6",
 		"-compaction-background-interval", "250ms",
 		"-compression-algorithm", "zstd",
+		"-storage-compression-bytes-limit", "12345",
 		"-flush-on-exit",
 	})
 	if err != nil {
@@ -144,6 +165,9 @@ func TestParseConfigStorageParameters(t *testing.T) {
 	if cfg.compressionAlgorithm != "zstd" {
 		t.Fatalf("compressionAlgorithm = %q, want zstd", cfg.compressionAlgorithm)
 	}
+	if cfg.storageCompressionBytesLimit != 12345 {
+		t.Fatalf("storageCompressionBytesLimit = %d, want 12345", cfg.storageCompressionBytesLimit)
+	}
 	if !cfg.flushOnExit {
 		t.Fatal("flushOnExit = false, want true")
 	}
@@ -163,6 +187,7 @@ func TestStorageOptions(t *testing.T) {
 		compactionMaxCascadeSteps:    5,
 		compactionBackgroundInterval: time.Second,
 		compressionAlgorithm:         "snappy",
+		storageCompressionBytesLimit: 4096,
 	}
 	opts := storageOptions("/tmp/mts-test", cfg)
 	if opts.Path != "/tmp/mts-test" {
@@ -194,6 +219,9 @@ func TestStorageOptions(t *testing.T) {
 	}
 	if !opts.Compression.Enabled || opts.Compression.Algorithm != "snappy" {
 		t.Fatalf("Compression = %#v, want enabled snappy", opts.Compression)
+	}
+	if opts.StorageMemory.CompressionBytesLimit != 4096 {
+		t.Fatalf("CompressionBytesLimit = %d, want 4096", opts.StorageMemory.CompressionBytesLimit)
 	}
 	if compressionOptions(compressionOff).Enabled {
 		t.Fatal("compressionOptions(off).Enabled = true, want false")

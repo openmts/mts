@@ -22,11 +22,12 @@ func marshalValuePage(
 	column model.ColumnData,
 	rowTimestamps []int64,
 	opts model.CompressionOptions,
+	budget CompressionMemoryBudget,
 ) ([]byte, error) {
 	if !compressionEnabled(opts, len(column.Samples)) {
 		return marshalValueBlockWithTimestamps(dst, column, rowTimestamps)
 	}
-	return marshalCompressedValueBlock(dst, column, opts)
+	return marshalCompressedValueBlock(dst, column, opts, budget)
 }
 
 func compressionEnabled(opts model.CompressionOptions, count int) bool {
@@ -44,6 +45,7 @@ func marshalCompressedValueBlock(
 	dst []byte,
 	column model.ColumnData,
 	opts model.CompressionOptions,
+	budget ...CompressionMemoryBudget,
 ) ([]byte, error) {
 	timeCodec, timePayload, err := encodeSampleTimestamps(column.Samples, opts.Timestamp)
 	if err != nil {
@@ -57,15 +59,15 @@ func marshalCompressedValueBlock(
 	dst = binary.AppendUvarint(dst, uint64(column.FieldID))
 	dst = append(dst, byte(column.FieldType))
 	dst = binary.AppendUvarint(dst, uint64(len(column.Samples)))
-	dst, err = appendCodecPayloadWithCompression(dst, timeCodec, timePayload, opts.Algorithm)
+	dst, err = appendCodecPayloadWithCompression(dst, timeCodec, timePayload, opts.Algorithm, budget...)
 	if err != nil {
 		return nil, err
 	}
-	dst, err = appendSampleWriteSeqsPayloadWithCompression(dst, column.Samples, opts.Algorithm)
+	dst, err = appendSampleWriteSeqsPayloadWithCompression(dst, column.Samples, opts.Algorithm, budget...)
 	if err != nil {
 		return nil, err
 	}
-	return appendCodecPayloadWithCompression(dst, valueCodec, valuePayload, opts.Algorithm)
+	return appendCodecPayloadWithCompression(dst, valueCodec, valuePayload, opts.Algorithm, budget...)
 }
 
 func unmarshalCompressedValueBlock(payload []byte, query Query) (valueBlock, error) {
@@ -170,12 +172,13 @@ func appendSampleWriteSeqsPayloadWithCompression(
 	dst []byte,
 	samples []model.VersionedSample,
 	algorithm string,
+	budget ...CompressionMemoryBudget,
 ) ([]byte, error) {
 	payload := make([]byte, 0, len(samples)*binary.MaxVarintLen64)
 	for _, sample := range samples {
 		payload = binary.AppendUvarint(payload, sample.WriteSeq)
 	}
-	return appendCodecPayloadWithCompression(dst, compressionPlain, payload, algorithm)
+	return appendCodecPayloadWithCompression(dst, compressionPlain, payload, algorithm, budget...)
 }
 
 func readCodecPayload(reader *blockReader, name string) (byte, []byte, error) {

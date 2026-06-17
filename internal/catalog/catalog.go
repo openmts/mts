@@ -59,7 +59,7 @@ func Open(dir string) (*Catalog, error) {
 	if err := cat.loadMetadata(); err != nil {
 		return nil, err
 	}
-	wal, err := os.OpenFile(cat.walPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, storagefs.FileMode)
+	wal, err := storagefs.OpenFile(cat.walPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, storagefs.FileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open catalog wal: %w", err)
 	}

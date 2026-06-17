@@ -1,22 +1,26 @@
 package sstable
 
 import (
+	"context"
 	"os"
 
 	"codeberg.org/mts/mts/internal/model"
 )
 
 const (
-	metadataFile   = "metadata.bin"
-	metaindexFile  = "metaindex.bin"
-	indexFile      = "index.bin"
-	timestampsFile = "timestamps.bin"
-	valuesFile     = "values.bin"
-	stringsFile    = "strings.bin"
-	manifestFile   = "MANIFEST.bin"
+	metadataFile    = "metadata.bin"
+	metaindexFile   = "metaindex.bin"
+	indexFile       = "index.bin"
+	seriesIndexFile = "series_index.bin"
+	timestampsFile  = "timestamps.bin"
+	valuesFile      = "values.bin"
+	stringsFile     = "strings.bin"
+	manifestFile    = "MANIFEST.bin"
 )
 
 type Query struct {
+	Context   context.Context
+	Budget    model.QueryBudget
 	SeriesIDs map[uint64]struct{}
 	FieldIDs  map[uint32]struct{}
 	Start     int64
@@ -42,10 +46,11 @@ type Manifest struct {
 }
 
 type metadata struct {
-	Part         PartMeta `json:"part"`
-	IndexRef     blockRef `json:"index_ref"`
-	MetaIndexRef blockRef `json:"metaindex_ref"`
-	CreatedUnix  int64    `json:"created_unix"`
+	Part           PartMeta `json:"part"`
+	IndexRef       blockRef `json:"index_ref"`
+	MetaIndexRef   blockRef `json:"metaindex_ref"`
+	SeriesIndexRef blockRef `json:"series_index_ref"`
+	CreatedUnix    int64    `json:"created_unix"`
 }
 
 type blockRef struct {
@@ -76,6 +81,14 @@ type metaIndexRow struct {
 	IndexRef    blockRef `json:"index_ref"`
 }
 
+type seriesIndexRow struct {
+	SeriesID uint64
+	MinTime  int64
+	MaxTime  int64
+	FieldIDs []uint32
+	IndexRef blockRef
+}
+
 type timeBlock struct {
 	Encoding   string  `json:"encoding"`
 	MinTime    int64   `json:"min_time"`
@@ -104,11 +117,12 @@ type valuePageIndex struct {
 }
 
 type Part struct {
-	path     string
-	metadata metadata
-	metaRows []metaIndexRow
-	files    *partReadFiles
-	stats    *readStats
+	path       string
+	metadata   metadata
+	metaRows   []metaIndexRow
+	seriesRows []seriesIndexRow
+	files      *partReadFiles
+	stats      *readStats
 }
 
 type partReadFiles struct {
@@ -121,4 +135,5 @@ type readStats struct {
 	TimeBlocksRead  int
 	ValueBlocksRead int
 	ValuePagesRead  int
+	IndexRowsRead   int
 }

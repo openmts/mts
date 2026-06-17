@@ -3,7 +3,6 @@ package engine
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -24,22 +23,24 @@ type ShardOptions struct {
 	MemTableMaxSamples int
 	Compaction         model.CompactionOptions
 	Compression        model.CompressionOptions
+	Memory             *storageMemoryLimiter
 	deps               shardDeps
 }
 
 type Shard struct {
 	lifecycleMu sync.RWMutex
 
-	opts           ShardOptions
-	wal            walStore
-	mem            memStore
-	parts          []partReader
-	manifest       sstable.Manifest
-	tombstones     []model.Tombstone
-	nextPart       int
-	maintenanceErr error
-	deps           shardDeps
-	testHooks      shardTestHooks
+	opts            ShardOptions
+	wal             walStore
+	mem             memStore
+	parts           []partReader
+	manifest        sstable.Manifest
+	tombstones      []model.Tombstone
+	nextPart        int
+	maintenanceErr  error
+	compactionStats compactionStatsRecorder
+	deps            shardDeps
+	testHooks       shardTestHooks
 }
 
 type shardTestHooks struct {
@@ -111,6 +112,11 @@ func (s *Shard) WriteBatch(points []model.ResolvedPoint, syncWrite bool) error {
 	if len(points) == 0 {
 		return nil
 	}
+	release, err := s.reserveWriteMemory(points)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if err := s.wal.Append(points, syncWrite); err != nil {
 		return err
 	}
@@ -123,6 +129,30 @@ func (s *Shard) WriteBatch(points []model.ResolvedPoint, syncWrite bool) error {
 		}
 	}
 	return nil
+}
+
+func (s *Shard) ApproxMemorySamples() int {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	return s.mem.ApproxMemorySamples()
+}
+
+func (s *Shard) ApproxMemoryBytes() int64 {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	return s.approxMemoryBytesLocked()
+}
+
+func (s *Shard) ApproxMemTableMemoryBytes() int64 {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	return s.mem.ApproxMemoryBytes()
+}
+
+func (s *Shard) ApproxWALMemoryBytes() int64 {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	return s.approxWALMemoryBytesLocked()
 }
 
 func (s *Shard) DeleteRange(tombstone model.Tombstone, syncWrite bool) error {
@@ -152,35 +182,46 @@ func (s *Shard) flushLocked() error {
 		return nil
 	}
 	snapshot := s.mem.SnapshotAndReset()
+	release, err := s.reserveFlushMemory(snapshot)
+	if err != nil {
+		s.mem.Restore(snapshot)
+		return err
+	}
 	columns := snapshot.Columns(memtable.Query{
 		Start: s.opts.Start,
 		End:   s.opts.End,
 	})
 	if len(columns) == 0 {
+		release()
 		s.mem.Restore(snapshot)
 		return nil
 	}
 	meta, err := s.deps.parts.WritePart(s.opts.Dir, 0, s.nextPartID(), columns, sstable.WriteOptions{
-		Compression: s.opts.Compression,
+		Compression:  s.opts.Compression,
+		MemoryBudget: storageCompressionBudget{memory: s.opts.Memory},
 	})
 	if err != nil {
+		release()
 		s.mem.Restore(snapshot)
 		return err
 	}
 	if s.testHooks.afterPartWriteBeforeManifest != nil {
 		if err := s.testHooks.afterPartWriteBeforeManifest(); err != nil {
+			release()
 			s.mem.Restore(snapshot)
 			return err
 		}
 	}
 	part, err := s.deps.parts.OpenPart(meta.Path)
 	if err != nil {
+		release()
 		s.mem.Restore(snapshot)
 		return err
 	}
 	nextManifest := sstable.Manifest{Parts: append([]sstable.PartMeta{}, s.manifest.Parts...)}
 	nextManifest.Parts = append(nextManifest.Parts, meta)
 	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
+		release()
 		s.mem.Restore(snapshot)
 		return err
 	}
@@ -188,43 +229,64 @@ func (s *Shard) flushLocked() error {
 	s.manifest = nextManifest
 	if s.testHooks.afterManifestBeforeWALTrunc != nil {
 		if err := s.testHooks.afterManifestBeforeWALTrunc(); err != nil {
+			release()
 			s.mem.Restore(snapshot)
 			return err
 		}
 	}
 	if len(s.tombstones) == 0 {
 		if err := s.wal.Checkpoint(); err != nil {
+			release()
 			s.mem.Restore(snapshot)
 			return err
 		}
 	}
 	snapshot.Release()
+	release()
 	return nil
 }
 
-func (s *Shard) Query(query memtable.Query) ([]model.ColumnData, error) {
-	s.lifecycleMu.RLock()
-	defer s.lifecycleMu.RUnlock()
-	columns := s.mem.Query(query)
-	for _, part := range s.parts {
-		got, err := part.Query(sstable.Query{
-			SeriesIDs: query.SeriesIDs,
-			FieldIDs:  query.FieldIDs,
-			Start:     query.Start,
-			End:       query.End,
-		})
-		if err != nil {
-			return nil, err
-		}
-		columns = append(columns, got...)
+func (s *Shard) reserveFlushMemory(snapshot memSnapshot) (func(), error) {
+	if s.opts.Memory == nil || snapshot == nil {
+		return func() {}, nil
 	}
-	return applyTombstones(mergeColumnData(columns), s.tombstones), nil
+	return s.opts.Memory.Reserve(storageMemoryFlush, 0, snapshot.ApproxMemoryBytes())
+}
+
+func (s *Shard) reserveWriteMemory(points []model.ResolvedPoint) (func(), error) {
+	if s.opts.Memory == nil {
+		return func() {}, nil
+	}
+	return s.opts.Memory.Reserve(storageMemoryWrite, 0, estimateWALFrameBytes(points))
+}
+
+func (s *Shard) approxMemoryBytesLocked() int64 {
+	return s.mem.ApproxMemoryBytes() + s.approxWALMemoryBytesLocked()
+}
+
+func (s *Shard) approxWALMemoryBytesLocked() int64 {
+	if s.wal == nil {
+		return 0
+	}
+	return s.wal.ApproxMemoryBytes()
+}
+
+func (s *Shard) Query(query memtable.Query) ([]model.ColumnData, error) {
+	stream, err := s.ScanColumns(query)
+	if err != nil {
+		return nil, err
+	}
+	return collectColumnDataStream(stream)
 }
 
 func (s *Shard) Close() error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
 	return s.closeLocked()
+}
+
+func (s *Shard) CompactionStatsSnapshot() CompactionStats {
+	return s.compactionStats.snapshot()
 }
 
 func (s *Shard) closeLocked() error {
@@ -269,7 +331,7 @@ func (s *Shard) cleanupOrphanParts() error {
 		referenced[filepath.Base(meta.Path)] = struct{}{}
 		referenced[meta.ID] = struct{}{}
 	}
-	entries, err := os.ReadDir(s.opts.Dir)
+	entries, err := storagefs.ReadDir(s.opts.Dir)
 	if err != nil {
 		return fmt.Errorf("read shard dir for orphan cleanup: %w", err)
 	}

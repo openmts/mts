@@ -14,7 +14,12 @@ import (
 const valueBlockPageSamples = 256
 
 type WriteOptions struct {
-	Compression model.CompressionOptions
+	Compression  model.CompressionOptions
+	MemoryBudget CompressionMemoryBudget
+}
+
+type CompressionMemoryBudget interface {
+	ReserveCompressionBytes(bytes int64) (func(), error)
 }
 
 func WritePart(root string, level int, id string, columns []model.ColumnData) (PartMeta, error) {
@@ -95,7 +100,7 @@ func openPartFiles(path string) (*partFiles, error) {
 }
 
 func openWritable(path string) (*os.File, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_RDWR, storagefs.FileMode)
+	file, err := storagefs.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_RDWR, storagefs.FileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open writable file: %w", err)
 	}
@@ -213,7 +218,7 @@ func writeValuePages(
 		}
 		pageColumn := column
 		pageColumn.Samples = column.Samples[start:end]
-		payload, err := marshalValuePage(nil, pageColumn, rowTimestamps, opts.Compression)
+		payload, err := marshalValuePage(nil, pageColumn, rowTimestamps, opts.Compression, opts.MemoryBudget)
 		if err != nil {
 			return valuePageIndex{}, fmt.Errorf("encode value page: %w", err)
 		}
@@ -238,11 +243,7 @@ func valuePageCount(samples int) int {
 }
 
 func writePartIndexes(path string, meta *metadata, rows []indexRow) error {
-	indexPayload, err := encodeIndexRows(rows)
-	if err != nil {
-		return err
-	}
-	indexRef, err := writeBinaryBlock(filepath.Join(path, indexFile), indexPayload)
+	indexRef, rowRefs, err := writeIndexBlocks(filepath.Join(path, indexFile), rows)
 	if err != nil {
 		return err
 	}
@@ -257,7 +258,63 @@ func writePartIndexes(path string, meta *metadata, rows []indexRow) error {
 		return err
 	}
 	meta.MetaIndexRef = metaIndexRef
+	seriesIndexPayload, err := encodeSeriesIndexRows(seriesIndexFromRows(rows, rowRefs))
+	if err != nil {
+		return err
+	}
+	seriesIndexRef, err := writeBinaryBlock(filepath.Join(path, seriesIndexFile), seriesIndexPayload)
+	if err != nil {
+		return err
+	}
+	meta.SeriesIndexRef = seriesIndexRef
 	return writeMetadata(path, *meta)
+}
+
+func writeIndexBlocks(path string, rows []indexRow) (blockRef, []blockRef, error) {
+	file, err := openWritable(path)
+	if err != nil {
+		return blockRef{}, nil, err
+	}
+	writer, err := newBlockWriter(file)
+	if err != nil {
+		closeErr := file.Close()
+		return blockRef{}, nil, fmt.Errorf("open index block writer: %w close index: %v", err, closeErr)
+	}
+	indexPayload, err := encodeIndexRows(rows)
+	if err != nil {
+		closeErr := file.Close()
+		return blockRef{}, nil, errorsWithClose(err, closeErr)
+	}
+	indexRef, err := writer.write(indexPayload)
+	if err != nil {
+		closeErr := file.Close()
+		return blockRef{}, nil, errorsWithClose(err, closeErr)
+	}
+	rowRefs := make([]blockRef, 0, len(rows))
+	for _, row := range rows {
+		rowPayload, err := encodeIndexRows([]indexRow{row})
+		if err != nil {
+			closeErr := file.Close()
+			return blockRef{}, nil, errorsWithClose(err, closeErr)
+		}
+		rowRef, err := writer.write(rowPayload)
+		if err != nil {
+			closeErr := file.Close()
+			return blockRef{}, nil, errorsWithClose(err, closeErr)
+		}
+		rowRefs = append(rowRefs, rowRef)
+	}
+	if err := file.Close(); err != nil {
+		return blockRef{}, nil, fmt.Errorf("close index blocks file: %w", err)
+	}
+	return indexRef, rowRefs, nil
+}
+
+func errorsWithClose(err error, closeErr error) error {
+	if closeErr == nil {
+		return err
+	}
+	return fmt.Errorf("%w close file: %v", err, closeErr)
 }
 
 func writeBinaryBlock(path string, payload []byte) (blockRef, error) {

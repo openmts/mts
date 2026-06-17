@@ -2,13 +2,16 @@ package sstable_test
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
+	"codeberg.org/mts/mts/internal/faultinject"
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/sstable"
+	"codeberg.org/mts/mts/internal/storagefs"
 )
 
 func TestPartWriteReadFieldPruneAndManifest(t *testing.T) {
@@ -85,6 +88,50 @@ func TestPartWriteReadFieldPruneAndManifest(t *testing.T) {
 	}
 	if len(pruned) != 0 {
 		t.Fatalf("pruned column count = %d, want 0", len(pruned))
+	}
+}
+
+func TestPartReadWritePropagatesStorageFaults(t *testing.T) {
+	columns := []model.ColumnData{{
+		SeriesID:  1,
+		FieldID:   2,
+		FieldType: model.FieldFloat64,
+		Samples: []model.VersionedSample{
+			{Timestamp: 1, WriteSeq: 1, Value: model.Float64Value(1)},
+		},
+	}}
+	for _, item := range []struct {
+		name string
+		op   faultinject.Operation
+	}{
+		{name: "create", op: faultinject.OpCreate},
+		{name: "write", op: faultinject.OpWrite},
+		{name: "rename", op: faultinject.OpRename},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			fs := faultinject.NewFS()
+			fs.FailNext(item.op, os.ErrPermission)
+			restore := storagefs.SetFaultController(fs)
+			_, err := sstable.WritePart(t.TempDir(), 0, "sst-000001", columns)
+			restore()
+			if err == nil {
+				t.Fatalf("WritePart(%s fault) error = nil, want error", item.op)
+			}
+		})
+	}
+
+	dir := t.TempDir()
+	meta, err := sstable.WritePart(dir, 0, "sst-000001", columns)
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	fs := faultinject.NewFS()
+	fs.FailNext(faultinject.OpStat, os.ErrPermission)
+	restore := storagefs.SetFaultController(fs)
+	_, err = sstable.OpenPart(meta.Path)
+	restore()
+	if err == nil {
+		t.Fatal("OpenPart(stat fault) error = nil, want error")
 	}
 }
 
@@ -254,5 +301,101 @@ func TestPartMultiSeriesQueryAllAndInvalidFiles(t *testing.T) {
 	}
 	if _, err := sstable.LoadManifest(dir); err == nil {
 		t.Fatal("LoadManifest(bad manifest) error = nil, want error")
+	}
+}
+
+func TestPartScanColumnsStreamsAndHonorsContext(t *testing.T) {
+	dir := t.TempDir()
+	columns := []model.ColumnData{
+		{
+			SeriesID:  1,
+			FieldID:   1,
+			FieldType: model.FieldInt64,
+			Samples: []model.VersionedSample{
+				{Timestamp: 10, WriteSeq: 1, Value: model.Int64Value(10)},
+			},
+		},
+		{
+			SeriesID:  2,
+			FieldID:   1,
+			FieldType: model.FieldInt64,
+			Samples: []model.VersionedSample{
+				{Timestamp: 20, WriteSeq: 1, Value: model.Int64Value(20)},
+			},
+		},
+	}
+	meta, err := sstable.WritePart(dir, 0, "sst-scan", columns)
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := sstable.OpenPart(filepath.Join(dir, meta.ID))
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	stream, err := part.ScanColumns(sstable.Query{Start: 0, End: 100})
+	if err != nil {
+		closeErr := part.Close()
+		t.Fatalf("ScanColumns() error = %v close = %v", err, closeErr)
+	}
+	var got []model.ColumnData
+	for stream.Next() {
+		got = append(got, stream.ColumnData())
+	}
+	if err := stream.Err(); err != nil {
+		closeErr := part.Close()
+		t.Fatalf("stream Err() = %v close = %v", err, closeErr)
+	}
+	if err := stream.Close(); err != nil {
+		closeErr := part.Close()
+		t.Fatalf("stream Close() error = %v part close = %v", err, closeErr)
+	}
+	if len(got) != 2 || got[0].SeriesID != 1 || got[1].SeriesID != 2 {
+		closeErr := part.Close()
+		t.Fatalf("streamed columns = %#v, want series 1 and 2 close = %v", got, closeErr)
+	}
+
+	filtered, err := part.ScanColumns(sstable.Query{
+		SeriesIDs: map[uint64]struct{}{2: {}},
+		Start:     0,
+		End:       100,
+	})
+	if err != nil {
+		closeErr := part.Close()
+		t.Fatalf("ScanColumns(filtered) error = %v close = %v", err, closeErr)
+	}
+	if !filtered.Next() {
+		closeErr := part.Close()
+		t.Fatalf("filtered Next() = false err=%v close = %v", filtered.Err(), closeErr)
+	}
+	if got := filtered.ColumnData(); got.SeriesID != 2 {
+		closeErr := part.Close()
+		t.Fatalf("filtered ColumnData() = %#v, want series 2 close = %v", got, closeErr)
+	}
+	if err := filtered.Close(); err != nil {
+		closeErr := part.Close()
+		t.Fatalf("filtered Close() error = %v part close = %v", err, closeErr)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	canceled, err := part.ScanColumns(sstable.Query{Context: ctx, Start: 0, End: 100})
+	if err != nil {
+		closeErr := part.Close()
+		t.Fatalf("ScanColumns(canceled) error = %v close = %v", err, closeErr)
+	}
+	if canceled.Next() {
+		closeErr := part.Close()
+		t.Fatalf("canceled Next() = true close = %v", closeErr)
+	}
+	if err := canceled.Err(); err == nil {
+		closeErr := part.Close()
+		t.Fatalf("canceled Err() = nil, want error close = %v", closeErr)
+	}
+	if err := canceled.Close(); err != nil {
+		closeErr := part.Close()
+		t.Fatalf("canceled Close() error = %v part close = %v", err, closeErr)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close(part) error = %v", err)
 	}
 }

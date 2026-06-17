@@ -20,7 +20,7 @@ func (c *Catalog) metadataPath() string {
 }
 
 func (c *Catalog) loadMetadata() error {
-	data, err := os.ReadFile(c.metadataPath())
+	data, err := storagefs.ReadFile(c.metadataPath())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil

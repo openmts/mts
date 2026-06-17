@@ -27,6 +27,12 @@ type config struct {
 	queryRepeat                  int
 	writeBatchSize               int
 	memTableMaxSamples           int
+	storageSoftBytesLimit        int64
+	storageHardBytesLimit        int64
+	storageQueryBytesLimit       int64
+	storageFlushBytesLimit       int64
+	storageCompactionBytesLimit  int64
+	storageCompressionBytesLimit int64
 	compactionEnabled            bool
 	compactionLevel0PartLimit    int
 	compactionLevel0SizeLimit    int64
@@ -126,6 +132,7 @@ func run(args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	storageMemory := eng.StorageMemorySnapshot()
 	log.Printf(
 		"mode=%s field_layout=%s points=%d series=%d query_repeat=%d write_batch_size=%d memtable_max_samples=%d compaction_enabled=%t compression_algorithm=%s data_dir=%s",
 		cfg.mode,
@@ -140,7 +147,7 @@ func run(args []string) (err error) {
 		dir,
 	)
 	log.Printf(
-		"metrics workload_duration_ms=%d sstable_count=%d data_dir_bytes=%d heap_alloc_bytes=%d heap_sys_bytes=%d heap_total_alloc_bytes=%d mallocs=%d frees=%d num_gc=%d pause_total_ns=%d rss_bytes=%d rss_peak_bytes=%d",
+		"metrics workload_duration_ms=%d sstable_count=%d data_dir_bytes=%d heap_alloc_bytes=%d heap_sys_bytes=%d heap_total_alloc_bytes=%d mallocs=%d frees=%d num_gc=%d pause_total_ns=%d rss_bytes=%d rss_peak_bytes=%d storage_current_bytes=%d storage_peak_bytes=%d storage_active_bytes=%d storage_memtable_bytes=%d storage_wal_bytes=%d storage_reservation_bytes=%d storage_write_bytes=%d storage_flush_bytes=%d storage_query_bytes=%d storage_compaction_bytes=%d storage_compression_bytes=%d storage_rejected_writes=%d storage_rejected_reservations=%d storage_flush_triggered=%d storage_runtime_heap_alloc_bytes=%d storage_runtime_rss_bytes=%d storage_runtime_gap_bytes=%d",
 		workloadDuration.Milliseconds(),
 		metrics.sstableCount,
 		metrics.dataDirBytes,
@@ -153,6 +160,23 @@ func run(args []string) (err error) {
 		metrics.pauseTotalNs,
 		metrics.rssBytes,
 		metrics.rssPeakBytes,
+		storageMemory.CurrentBytes,
+		storageMemory.PeakBytes,
+		storageMemory.ActiveBytes,
+		storageMemory.MemTableBytes,
+		storageMemory.WALBytes,
+		storageMemory.ReservationBytes,
+		storageMemory.WriteBytes,
+		storageMemory.FlushBytes,
+		storageMemory.QueryBytes,
+		storageMemory.CompactionBytes,
+		storageMemory.CompressionBytes,
+		storageMemory.RejectedWrites,
+		storageMemory.RejectedReservations,
+		storageMemory.FlushTriggered,
+		storageMemory.RuntimeHeapAllocBytes,
+		storageMemory.RuntimeRSSBytes,
+		storageMemory.RuntimeGapBytes,
 	)
 	return nil
 }
@@ -190,6 +214,12 @@ func parseConfig(args []string) (config, error) {
 	flags.IntVar(&cfg.queryRepeat, "query-repeat", 5, "查询重复次数")
 	flags.IntVar(&cfg.writeBatchSize, "write-batch-size", defaultWriteBatchSize, "每次 Engine.Write 提交的 point 数")
 	flags.IntVar(&cfg.memTableMaxSamples, "memtable-max-samples", defaultMemTableMaxSamples, "触发 MemTable flush 的 sample 数；wide10 中 1 point=10 samples")
+	flags.Int64Var(&cfg.storageSoftBytesLimit, "storage-soft-bytes-limit", 0, "存储层软字节阈值；达到后触发 flush")
+	flags.Int64Var(&cfg.storageHardBytesLimit, "storage-hard-bytes-limit", 0, "存储层硬字节阈值；超过后拒绝写入")
+	flags.Int64Var(&cfg.storageQueryBytesLimit, "storage-query-bytes-limit", 0, "查询物化字节阈值；超过后返回错误")
+	flags.Int64Var(&cfg.storageFlushBytesLimit, "storage-flush-bytes-limit", 0, "flush 临时字节阈值；超过后返回错误")
+	flags.Int64Var(&cfg.storageCompactionBytesLimit, "storage-compaction-bytes-limit", 0, "compaction 临时字节阈值；超过后返回错误")
+	flags.Int64Var(&cfg.storageCompressionBytesLimit, "storage-compression-bytes-limit", 0, "payload compression 临时字节阈值；超过后返回错误")
 	flags.BoolVar(&cfg.compactionEnabled, "compaction-enabled", false, "启用 size-tiered compaction")
 	flags.IntVar(&cfg.compactionLevel0PartLimit, "compaction-level0-part-limit", 0, "Level-0 part 数超过该值时触发 compaction；0 使用引擎默认值")
 	flags.Int64Var(&cfg.compactionLevel0SizeLimit, "compaction-level0-size-limit", 0, "Level-0 part 总大小超过该值时触发 compaction；0 表示不按大小触发")
@@ -236,6 +266,24 @@ func validateConfig(cfg config) error {
 	}
 	if cfg.memTableMaxSamples <= 0 {
 		return fmt.Errorf("memtable-max-samples must be positive")
+	}
+	if cfg.storageSoftBytesLimit < 0 {
+		return fmt.Errorf("storage-soft-bytes-limit must be non-negative")
+	}
+	if cfg.storageHardBytesLimit < 0 {
+		return fmt.Errorf("storage-hard-bytes-limit must be non-negative")
+	}
+	if cfg.storageQueryBytesLimit < 0 {
+		return fmt.Errorf("storage-query-bytes-limit must be non-negative")
+	}
+	if cfg.storageFlushBytesLimit < 0 {
+		return fmt.Errorf("storage-flush-bytes-limit must be non-negative")
+	}
+	if cfg.storageCompactionBytesLimit < 0 {
+		return fmt.Errorf("storage-compaction-bytes-limit must be non-negative")
+	}
+	if cfg.storageCompressionBytesLimit < 0 {
+		return fmt.Errorf("storage-compression-bytes-limit must be non-negative")
 	}
 	if cfg.compactionLevel0PartLimit < 0 {
 		return fmt.Errorf("compaction-level0-part-limit must be non-negative")
@@ -354,6 +402,14 @@ func storageOptions(path string, cfg config) mts.Options {
 			BackgroundInterval: cfg.compactionBackgroundInterval,
 		},
 		Compression: compressionOptions(cfg.compressionAlgorithm),
+		StorageMemory: mts.StorageMemoryOptions{
+			SoftBytesLimit:        cfg.storageSoftBytesLimit,
+			HardBytesLimit:        cfg.storageHardBytesLimit,
+			QueryBytesLimit:       cfg.storageQueryBytesLimit,
+			FlushBytesLimit:       cfg.storageFlushBytesLimit,
+			CompactionBytesLimit:  cfg.storageCompactionBytesLimit,
+			CompressionBytesLimit: cfg.storageCompressionBytesLimit,
+		},
 	}
 }
 

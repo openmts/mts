@@ -1,6 +1,7 @@
 package sstable
 
 import (
+	"encoding/binary"
 	"reflect"
 	"slices"
 	"testing"
@@ -134,6 +135,36 @@ func TestValuePageIndexRejectsMalformedPayload(t *testing.T) {
 		Pages:     []valuePageRef{{Ref: blockRef{Offset: -1}}},
 	}); err == nil {
 		t.Fatal("marshalValuePageIndex(negative ref) error = nil, want error")
+	}
+}
+
+func TestValuePageIndexHeaderOverflowAndHook(t *testing.T) {
+	payload := []byte{valueEncodingPageIndex}
+	payload = binary.AppendUvarint(payload, uint64(^uint32(0))+1)
+	payload = append(payload, byte(model.FieldFloat64), 0, 0)
+	if _, err := unmarshalValuePageIndex(payload); err == nil {
+		t.Fatal("unmarshalValuePageIndex(field overflow) error = nil, want error")
+	}
+
+	calls := 0
+	valuePageRefReadHook = func() { calls++ }
+	defer func() {
+		valuePageRefReadHook = nil
+	}()
+	encoded, err := marshalValuePageIndex(nil, valuePageIndex{
+		FieldID:   1,
+		FieldType: model.FieldFloat64,
+		Count:     1,
+		Pages:     []valuePageRef{{MinTime: 1, MaxTime: 2, Ref: blockRef{Offset: 3, Size: 4}}},
+	})
+	if err != nil {
+		t.Fatalf("marshalValuePageIndex() error = %v", err)
+	}
+	if _, err := unmarshalValuePageIndex(encoded); err != nil {
+		t.Fatalf("unmarshalValuePageIndex() error = %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("valuePageRefReadHook calls = %d, want 1", calls)
 	}
 }
 
@@ -435,6 +466,33 @@ func TestUnmarshalValueBlockWithTimestampsRejectsEmptyPayload(t *testing.T) {
 	}
 }
 
+func TestEmptyValueBlockAndTimeRefs(t *testing.T) {
+	payload, err := marshalValueBlockWithTimestamps(nil, model.ColumnData{
+		FieldID:   11,
+		FieldType: model.FieldString,
+	}, nil)
+	if err != nil {
+		t.Fatalf("marshalValueBlockWithTimestamps(empty) error = %v", err)
+	}
+	got, err := unmarshalValueBlockWithTimestamps(payload, nil, Query{Start: 0, End: 1})
+	if err != nil {
+		t.Fatalf("unmarshalValueBlockWithTimestamps(empty) error = %v", err)
+	}
+	if got.FieldID != 11 || got.FieldType != model.FieldString || len(got.Samples) != 0 {
+		t.Fatalf("empty value block = %#v, want header only", got)
+	}
+	mode, ordinals, err := encodeTimeRefs(nil, nil)
+	if err != nil {
+		t.Fatalf("encodeTimeRefs(empty) error = %v", err)
+	}
+	if mode != timeRefModeAligned || ordinals != nil {
+		t.Fatalf("encodeTimeRefs(empty) mode=%d ordinals=%v, want aligned nil", mode, ordinals)
+	}
+	if got := marshalTimeBlock(nil, nil); len(got) != 2 {
+		t.Fatalf("marshalTimeBlock(empty) len = %d, want 2", len(got))
+	}
+}
+
 func TestValuePageRejectsInvalidTimeReferences(t *testing.T) {
 	column := model.ColumnData{
 		FieldID:   2,
@@ -546,6 +604,65 @@ func TestValuePageBoolAndStringSamples(t *testing.T) {
 			t.Fatalf("samples for type %d = %#v, want %#v", column.FieldType, got.Samples, want)
 		}
 	}
+}
+
+func TestLegacyValueReadersAndFilter(t *testing.T) {
+	timestamps := []int64{1, 2, 3}
+	writeSeqs := []uint64{10, 20, 30}
+	query := Query{Start: 2, End: 2}
+	for _, item := range []struct {
+		name      string
+		fieldType model.FieldType
+		payload   []byte
+		want      model.FieldValue
+	}{
+		{name: "float", fieldType: model.FieldFloat64, payload: appendFloatValues(nil, []model.VersionedSample{{Value: model.Float64Value(1)}, {Value: model.Float64Value(2)}, {Value: model.Float64Value(3)}}), want: model.Float64Value(2)},
+		{name: "int", fieldType: model.FieldInt64, payload: appendIntValues(nil, []model.VersionedSample{{Value: model.Int64Value(1)}, {Value: model.Int64Value(2)}, {Value: model.Int64Value(3)}}), want: model.Int64Value(2)},
+		{name: "bool", fieldType: model.FieldBool, payload: mustAppendBoolValues(t, []model.VersionedSample{{Value: model.BoolValue(false)}, {Value: model.BoolValue(true)}, {Value: model.BoolValue(false)}}), want: model.BoolValue(true)},
+		{name: "string", fieldType: model.FieldString, payload: appendStringValues(nil, []model.VersionedSample{{Value: model.StringValue("a")}, {Value: model.StringValue("b")}, {Value: model.StringValue("c")}}), want: model.StringValue("b")},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			values, err := readValues(newBlockReader(item.payload), item.fieldType, 3)
+			if err != nil {
+				t.Fatalf("readValues() error = %v", err)
+			}
+			if !reflect.DeepEqual(values[1], item.want) {
+				t.Fatalf("readValues()[1] = %#v, want %#v", values[1], item.want)
+			}
+			samples, err := readSamples(newBlockReader(item.payload), item.fieldType, timestamps, writeSeqs, query)
+			if err != nil {
+				t.Fatalf("readSamples() error = %v", err)
+			}
+			if len(samples) != 1 || !reflect.DeepEqual(samples[0].Value, item.want) || samples[0].WriteSeq != 20 {
+				t.Fatalf("readSamples() = %#v, want timestamp 2 value %#v", samples, item.want)
+			}
+		})
+	}
+	if _, err := readValues(newBlockReader(nil), model.FieldType(99), 1); err == nil {
+		t.Fatal("readValues(unsupported) error = nil, want error")
+	}
+	if _, err := readSamples(newBlockReader(nil), model.FieldType(99), timestamps, writeSeqs, query); err == nil {
+		t.Fatal("readSamples(unsupported) error = nil, want error")
+	}
+
+	block := valueBlock{Samples: []model.VersionedSample{{Timestamp: 1}, {Timestamp: 2}, {Timestamp: 3}}}
+	got := filterValueBlock(block, Query{Start: 2, End: 3})
+	if len(got.Samples) != 2 {
+		t.Fatalf("filterValueBlock() len = %d, want 2", len(got.Samples))
+	}
+	got = filterValueBlock(block, Query{Start: 4, End: 3})
+	if len(got.Samples) != 0 {
+		t.Fatalf("filterValueBlock(empty range) len = %d, want 0", len(got.Samples))
+	}
+}
+
+func mustAppendBoolValues(t *testing.T, samples []model.VersionedSample) []byte {
+	t.Helper()
+	payload, err := appendBoolValues(nil, samples)
+	if err != nil {
+		t.Fatalf("appendBoolValues() error = %v", err)
+	}
+	return payload
 }
 
 func columnFor(fieldType model.FieldType, values []model.FieldValue) model.ColumnData {

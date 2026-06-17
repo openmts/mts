@@ -63,6 +63,10 @@ func (e *Engine) MaintenanceErrors(ctx context.Context) []error {
 	return e.inner.MaintenanceErrors(ctx)
 }
 
+func (e *Engine) StorageMemorySnapshot() StorageMemorySnapshot {
+	return fromStorageMemorySnapshot(e.inner.StorageMemorySnapshot())
+}
+
 func (e *Engine) CreateDatabase(ctx context.Context, name string) error {
 	return e.inner.CreateDatabase(ctx, name)
 }

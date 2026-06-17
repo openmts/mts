@@ -14,6 +14,7 @@ import (
 	"codeberg.org/mts/mts/internal/catalog"
 	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/queryexec"
 	"codeberg.org/mts/mts/internal/sstable"
 	"codeberg.org/mts/mts/internal/wal"
 )
@@ -1263,6 +1264,435 @@ func TestEngineQueryPropagatesPartCorruption(t *testing.T) {
 	}
 }
 
+func TestEngineStorageMemorySoftSampleLimitFlushesMemTables(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	eng, err := Open(ctx, model.Options{
+		Path:               dir,
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1000,
+		StorageMemory: model.StorageMemoryOptions{
+			SoftSampleLimit: 2,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	err = eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields: map[string]model.FieldValue{
+			"a": model.Float64Value(1),
+			"b": model.Int64Value(2),
+		},
+	}}, model.WriteOptions{})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	if got := eng.totalMemSamplesLockedForTest(); got != 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("mem samples = %d, want 0 after soft-limit flush close = %v", got, closeErr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "data", defaultDatabase, defaultRetentionPolicy, "shards", "0", "sst-000001")); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("stat flushed SSTable error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineStorageMemoryHardSampleLimitRejectsOversizedBatch(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:          t.TempDir(),
+		ShardDuration: time.Hour,
+		StorageMemory: model.StorageMemoryOptions{
+			HardSampleLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	err = eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields: map[string]model.FieldValue{
+			"a": model.Float64Value(1),
+			"b": model.Int64Value(2),
+		},
+	}}, model.WriteOptions{})
+	if err == nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = nil, want memory limit error close = %v", closeErr)
+	}
+	if got := eng.totalMemSamplesLockedForTest(); got != 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("mem samples = %d, want 0 after rejected write close = %v", got, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineStorageMemoryHardBytesLimitRejectsBeforeApply(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:          t.TempDir(),
+		ShardDuration: time.Hour,
+		StorageMemory: model.StorageMemoryOptions{
+			HardBytesLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	err = eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields: map[string]model.FieldValue{
+			"a": model.StringValue("this-write-is-larger-than-one-byte"),
+		},
+	}}, model.WriteOptions{})
+	if !errors.Is(err, ErrStorageMemoryLimitExceeded) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v, want ErrStorageMemoryLimitExceeded close = %v", err, closeErr)
+	}
+	if got := eng.totalMemBytesLockedForTest(); got != 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("mem bytes = %d, want 0 after rejected write close = %v", got, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineStorageMemorySoftBytesLimitFlushesAfterWrite(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	eng, err := Open(ctx, model.Options{
+		Path:               dir,
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1000,
+		StorageMemory: model.StorageMemoryOptions{
+			SoftBytesLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	err = eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields: map[string]model.FieldValue{
+			"a": model.StringValue("flush-after-write"),
+		},
+	}}, model.WriteOptions{})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	if got := eng.totalMemBytesLockedForTest(); got > 128 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("mem bytes = %d, want near empty after soft bytes flush close = %v", got, closeErr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "data", defaultDatabase, defaultRetentionPolicy, "shards", "0", "sst-000001")); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("stat flushed SSTable error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineStorageMemoryFlushBytesLimitRestoresMemTable(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1000,
+		StorageMemory: model.StorageMemoryOptions{
+			FlushBytesLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"a": model.StringValue("kept-in-memtable")},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Flush(ctx); !errors.Is(err, ErrStorageMemoryLimitExceeded) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Flush() error = %v, want ErrStorageMemoryLimitExceeded close = %v", err, closeErr)
+	}
+	rows, err := eng.QueryRows(ctx, model.Query{Measurement: "mem", StartTime: 0, EndTime: 10})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows() error = %v close = %v", err, closeErr)
+	}
+	if len(rows) != 1 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("rows = %d, want 1 after failed flush restore close = %v", len(rows), closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineStorageMemoryQueryBytesLimitStopsMaterialization(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+		StorageMemory: model.StorageMemoryOptions{
+			QueryBytesLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"a": model.StringValue("query-budget")},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	_, err = eng.QueryColumns(ctx, model.Query{Measurement: "mem", StartTime: 0, EndTime: 10})
+	if !errors.Is(err, ErrStorageMemoryLimitExceeded) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryColumns() error = %v, want ErrStorageMemoryLimitExceeded close = %v", err, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineStorageMemoryQueryIteratorBytesLimitStopsStream(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+		StorageMemory: model.StorageMemoryOptions{
+			QueryBytesLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"a": model.StringValue("query-iterator-budget")},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	iter, err := eng.QueryColumnIterator(ctx, model.Query{Measurement: "mem", StartTime: 0, EndTime: 10})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryColumnIterator() error = %v close = %v", err, closeErr)
+	}
+	if iter.Next() {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("Next() = true, want budget stop close = %v", closeErr)
+	}
+	if !errors.Is(iter.Err(), ErrStorageMemoryLimitExceeded) {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("Iterator Err() = %v, want ErrStorageMemoryLimitExceeded close = %v", iter.Err(), closeErr)
+	}
+	if err := errors.Join(iter.Close(), eng.Close(ctx)); err != nil {
+		t.Fatalf("close error = %v", err)
+	}
+}
+
+func TestEngineStorageMemorySnapshotIncludesWALPendingBytes(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:          t.TempDir(),
+		ShardDuration: time.Hour,
+		WAL: model.WALOptions{
+			BatchRecords: 1000,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"a": model.StringValue("wal-pending")},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	snapshot := eng.StorageMemorySnapshot()
+	if snapshot.WALBytes == 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("WALBytes = 0, want pending WAL bytes close = %v", closeErr)
+	}
+	if snapshot.ActiveBytes < snapshot.MemTableBytes+snapshot.WALBytes {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("snapshot = %#v, want active include memtable and wal close = %v", snapshot, closeErr)
+	}
+	if snapshot.RuntimeHeapAllocBytes == 0 || snapshot.RuntimeGapBytes < 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("runtime snapshot = %#v, want heap and non-negative gap close = %v", snapshot, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineStorageMemoryMetricsSnapshotIncludesSources(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:          t.TempDir(),
+		ShardDuration: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"a": model.StringValue("metrics")},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	metrics := eng.MetricsSnapshot()
+	names := make(map[string]struct{}, len(metrics))
+	for _, metric := range metrics {
+		names[metric.Name] = struct{}{}
+	}
+	for _, name := range []string{
+		"mts_storage_memory_current_bytes",
+		"mts_storage_memory_memtable_bytes",
+		"mts_storage_memory_wal_bytes",
+		"mts_storage_memory_runtime_gap_bytes",
+	} {
+		if _, ok := names[name]; !ok {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("metric %s missing from %#v close = %v", name, metrics, closeErr)
+		}
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineStorageMemoryCompressionBytesLimitRestoresMemTable(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1000,
+		Compression: model.CompressionOptions{
+			Enabled:       true,
+			Algorithm:     "snappy",
+			MinPageValues: 1,
+		},
+		StorageMemory: model.StorageMemoryOptions{
+			CompressionBytesLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "mem",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"a": model.StringValue("compression-budget")},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Flush(ctx); !errors.Is(err, ErrStorageMemoryLimitExceeded) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Flush() error = %v, want ErrStorageMemoryLimitExceeded close = %v", err, closeErr)
+	}
+	rows, err := eng.QueryRows(ctx, model.Query{Measurement: "mem", StartTime: 0, EndTime: 10})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows() error = %v close = %v", err, closeErr)
+	}
+	if len(rows) != 1 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("rows = %d, want 1 after failed compression flush close = %v", len(rows), closeErr)
+	}
+	snapshot := eng.StorageMemorySnapshot()
+	if snapshot.RejectedReservations == 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("RejectedReservations = 0, want compression reject recorded snapshot = %#v close = %v", snapshot, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineStorageMemoryCompactionBytesLimitKeepsInputParts(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+		StorageMemory: model.StorageMemoryOptions{
+			CompactionBytesLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	for index := range 2 {
+		if err := eng.Write(ctx, []model.Point{{
+			Measurement: "mem",
+			Timestamp:   int64(index + 1),
+			Fields:      map[string]model.FieldValue{"a": model.StringValue("compaction-budget")},
+		}}, model.WriteOptions{}); err != nil {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("Write(%d) error = %v close = %v", index, err, closeErr)
+		}
+	}
+	if err := eng.Compact(ctx); !errors.Is(err, ErrStorageMemoryLimitExceeded) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Compact() error = %v, want ErrStorageMemoryLimitExceeded close = %v", err, closeErr)
+	}
+	rows, err := eng.QueryRows(ctx, model.Query{Measurement: "mem", StartTime: 0, EndTime: 10})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows() error = %v close = %v", err, closeErr)
+	}
+	if len(rows) != 2 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("rows = %d, want 2 after failed compaction close = %v", len(rows), closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func (e *Engine) totalMemSamplesLockedForTest() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.totalMemSamplesLocked()
+}
+
+func (e *Engine) totalMemBytesLockedForTest() int64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.totalMemBytesLocked()
+}
+
 func corruptValuesFile(t *testing.T, root string) {
 	t.Helper()
 	path := filepath.Join(root, "data", defaultDatabase, defaultRetentionPolicy, "shards", "0", "sst-000001", "values.bin")
@@ -1352,6 +1782,17 @@ func widePointForTest(timestamp int64) model.Point {
 			"f1": model.Int64Value(timestamp),
 			"f2": model.StringValue("same"),
 			"f3": model.BoolValue(timestamp%2 == 0),
+		},
+	}
+}
+
+func columnStreamPointForTest(timestamp int64, value float64) model.Point {
+	return model.Point{
+		Measurement: "stream",
+		Tags:        map[string]string{"host": "a"},
+		Timestamp:   timestamp,
+		Fields: map[string]model.FieldValue{
+			"value": model.Float64Value(value),
 		},
 	}
 }
@@ -1471,6 +1912,131 @@ func TestMergeColumnDataKeepsNewestSequence(t *testing.T) {
 	}
 }
 
+func TestCloseColumnDataStreamsJoinsErrors(t *testing.T) {
+	closeErr := errors.New("close failed")
+	err := closeColumnDataStreams([]queryexec.ColumnDataStream{
+		failingColumnDataStream{err: closeErr},
+	})
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("closeColumnDataStreams() error = %v, want %v", err, closeErr)
+	}
+}
+
+func TestCompactionOutputCoversErrorAndRolloverBranches(t *testing.T) {
+	columns := []model.ColumnData{columnForMergeTest(1, 1, 1, 1)}
+	shard := &Shard{
+		opts: ShardOptions{Dir: t.TempDir()},
+		deps: normalizeShardDeps(shardDeps{
+			parts: &errorPartManager{newWriterErr: errors.New("new writer failed")},
+		}),
+	}
+	output := newCompactionOutput(shard, 1, compactionOutputOptions{})
+	if err := output.addSeries(nil); err != nil {
+		t.Fatalf("addSeries(nil) error = %v", err)
+	}
+	if err := output.addSeries(columns); err == nil {
+		t.Fatal("addSeries(new writer error) error = nil, want error")
+	}
+
+	shard.deps.parts = &errorPartManager{writer: &errorPartWriter{addErr: errors.New("add failed")}}
+	output = newCompactionOutput(shard, 1, compactionOutputOptions{})
+	if err := output.addSeries(columns); err == nil {
+		t.Fatal("addSeries(add error) error = nil, want error")
+	}
+
+	output = &compactionOutput{writer: &errorPartWriter{closeErr: errors.New("close failed")}}
+	if _, _, err := output.close(); err == nil {
+		t.Fatal("close(close error) error = nil, want error")
+	}
+
+	shard.deps.parts = &errorPartManager{writer: &errorPartWriter{}, openPartErr: errors.New("open failed")}
+	output = newCompactionOutput(shard, 1, compactionOutputOptions{})
+	if err := output.addSeries(columns); err != nil {
+		t.Fatalf("addSeries(before open error) error = %v", err)
+	}
+	if _, _, err := output.close(); err == nil {
+		t.Fatal("close(open part error) error = nil, want error")
+	}
+
+	manager := &errorPartManager{writer: &errorPartWriter{}}
+	shard.deps.parts = manager
+	output = newCompactionOutput(shard, 1, compactionOutputOptions{maxOutputPartBytes: 1})
+	if err := output.addSeries([]model.ColumnData{
+		columnForMergeTest(1, 1, 1, 1),
+		columnForMergeTest(1, 2, 1, 1),
+	}); err != nil {
+		t.Fatalf("addSeries(rollover) error = %v", err)
+	}
+	parts, metas, err := output.close()
+	if err != nil {
+		t.Fatalf("close(rollover) error = %v", err)
+	}
+	if len(parts) == 0 || len(metas) == 0 || manager.openPartCalls == 0 {
+		t.Fatalf("rollover parts=%d metas=%d openCalls=%d, want output", len(parts), len(metas), manager.openPartCalls)
+	}
+}
+
+type errorPartManager struct {
+	writer        partWriter
+	newWriterErr  error
+	openPartErr   error
+	openPartCalls int
+}
+
+func (m *errorPartManager) LoadManifest(string) (sstable.Manifest, error) {
+	return sstable.Manifest{}, nil
+}
+
+func (m *errorPartManager) WriteManifest(string, sstable.Manifest) error {
+	return nil
+}
+
+func (m *errorPartManager) OpenPart(string) (partReader, error) {
+	m.openPartCalls++
+	if m.openPartErr != nil {
+		return nil, m.openPartErr
+	}
+	return fakePartReader{meta: sstable.PartMeta{ID: "opened", Path: "opened"}}, nil
+}
+
+func (m *errorPartManager) WritePart(string, int, string, []model.ColumnData, sstable.WriteOptions) (sstable.PartMeta, error) {
+	return sstable.PartMeta{}, nil
+}
+
+func (m *errorPartManager) NewWriter(string, int, string, sstable.WriteOptions) (partWriter, error) {
+	if m.newWriterErr != nil {
+		return nil, m.newWriterErr
+	}
+	if m.writer != nil {
+		return m.writer, nil
+	}
+	return &errorPartWriter{}, nil
+}
+
+func (m *errorPartManager) NewSeriesBatchReader(partReader, sstable.Query) (seriesBatchReader, error) {
+	return fakeSeriesBatchReader{}, nil
+}
+
+type errorPartWriter struct {
+	addErr   error
+	closeErr error
+}
+
+func (w *errorPartWriter) AddSeries([]model.ColumnData) error {
+	return w.addErr
+}
+
+func (w *errorPartWriter) Close() (sstable.PartMeta, error) {
+	if w.closeErr != nil {
+		return sstable.PartMeta{}, w.closeErr
+	}
+	return sstable.PartMeta{ID: "closed", Path: "closed"}, nil
+}
+
+func (w *errorPartWriter) Abort() error {
+	return nil
+}
+
 func TestShardUsesInjectedStoragePorts(t *testing.T) {
 	mem := &fakeMemStore{
 		snapshot: &fakeMemSnapshot{
@@ -1554,7 +2120,7 @@ func TestColumnsToRowsFallsBackForUnalignedColumns(t *testing.T) {
 }
 
 func TestIteratorsReturnZeroBeforeNextAndAfterClose(t *testing.T) {
-	columns := &columnIterator{decorated: []model.ColumnSeries{{SeriesID: 1}}}
+	columns := newColumnIterator(queryexec.NewSliceColumnSeriesStream([]model.ColumnSeries{{SeriesID: 1}}))
 	if got := columns.Column(); got.SeriesID != 0 {
 		t.Fatalf("Column(before Next) = %#v, want zero", got)
 	}
@@ -1568,7 +2134,7 @@ func TestIteratorsReturnZeroBeforeNextAndAfterClose(t *testing.T) {
 		t.Fatalf("column Close() error = %v", err)
 	}
 
-	rows := &rowIterator{rows: []model.Row{{SeriesID: 2}}}
+	rows := newRowIterator(queryexec.NewSliceRowStream([]model.Row{{SeriesID: 2}}))
 	if got := rows.Row(); got.SeriesID != 0 {
 		t.Fatalf("Row(before Next) = %#v, want zero", got)
 	}
@@ -1581,9 +2147,37 @@ func TestIteratorsReturnZeroBeforeNextAndAfterClose(t *testing.T) {
 	if err := rows.Close(); err != nil {
 		t.Fatalf("row Close() error = %v", err)
 	}
+
+	var nilColumns columnIterator
+	if nilColumns.Next() {
+		t.Fatal("nil column iterator Next() = true, want false")
+	}
+	if got := nilColumns.Column(); got.SeriesID != 0 {
+		t.Fatalf("nil column iterator Column() = %#v, want zero", got)
+	}
+	if err := nilColumns.Err(); err != nil {
+		t.Fatalf("nil column iterator Err() = %v, want nil", err)
+	}
+	if err := nilColumns.Close(); err != nil {
+		t.Fatalf("nil column iterator Close() = %v, want nil", err)
+	}
+
+	var nilRows rowIterator
+	if nilRows.Next() {
+		t.Fatal("nil row iterator Next() = true, want false")
+	}
+	if got := nilRows.Row(); got.SeriesID != 0 {
+		t.Fatalf("nil row iterator Row() = %#v, want zero", got)
+	}
+	if err := nilRows.Err(); err != nil {
+		t.Fatalf("nil row iterator Err() = %v, want nil", err)
+	}
+	if err := nilRows.Close(); err != nil {
+		t.Fatalf("nil row iterator Close() = %v, want nil", err)
+	}
 }
 
-func TestQueryColumnIteratorDecoratesLazily(t *testing.T) {
+func TestColumnIteratorStreamsWithoutPreDecoratingAllColumns(t *testing.T) {
 	ctx := context.Background()
 	eng, err := Open(ctx, model.Options{
 		Path:               t.TempDir(),
@@ -1644,6 +2238,94 @@ func TestQueryColumnIteratorDecoratesLazily(t *testing.T) {
 	if err := iter.Close(); err != nil {
 		closeErr := eng.Close(ctx)
 		t.Fatalf("iterator Close() error = %v engine close = %v", err, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestQueryColumnIteratorStreamsMemTableSSTableAndShards(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 100,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{
+		columnStreamPointForTest(10, 1),
+	}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write(initial) error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Flush(ctx); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Flush() error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Write(ctx, []model.Point{
+		columnStreamPointForTest(10, 2),
+		columnStreamPointForTest(int64(time.Hour)+10, 3),
+	}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write(overwrite) error = %v close = %v", err, closeErr)
+	}
+	iter, err := eng.QueryColumnIterator(ctx, model.Query{
+		Measurement: "stream",
+		StartTime:   0,
+		EndTime:     int64(2 * time.Hour),
+	})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryColumnIterator() error = %v close = %v", err, closeErr)
+	}
+	if !iter.Next() {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("Next() = false, want true close = %v", closeErr)
+	}
+	column := iter.Column()
+	if len(column.Values) != 2 {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("value count = %d, want 2 close = %v", len(column.Values), closeErr)
+	}
+	if column.Values[0].Float64 != 2 || column.Values[1].Float64 != 3 {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("values = %#v, want 2 and 3 close = %v", column.Values, closeErr)
+	}
+	if iter.Next() {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("second Next() = true, want false close = %v", closeErr)
+	}
+	if err := iter.Close(); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("iterator Close() error = %v engine close = %v", err, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestQueryColumnIteratorReturnsContextErrorWhenCanceled(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 100,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = eng.QueryColumnIterator(canceled, model.Query{
+		Measurement: "cpu",
+		StartTime:   0,
+		EndTime:     10,
+	})
+	if !errors.Is(err, context.Canceled) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryColumnIterator() error = %v, want context.Canceled close = %v", err, closeErr)
 	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -1874,6 +2556,10 @@ func (f *fakeWalStore) ReplayRecords() ([]wal.Record, error) {
 	return nil, nil
 }
 
+func (f *fakeWalStore) ApproxMemoryBytes() int64 {
+	return int64(len(f.points)*64 + len(f.tombstones)*32)
+}
+
 func (f *fakeWalStore) Checkpoint() error {
 	f.checkpointCalled = true
 	return nil
@@ -1906,6 +2592,14 @@ func (f *fakeMemStore) SampleCount() int {
 	return f.samples
 }
 
+func (f *fakeMemStore) ApproxMemorySamples() int {
+	return f.samples
+}
+
+func (f *fakeMemStore) ApproxMemoryBytes() int64 {
+	return int64(f.samples * 32)
+}
+
 func (f *fakeMemStore) SnapshotAndReset() memSnapshot {
 	f.samples = 0
 	f.snapshot.onRelease = func() {
@@ -1920,6 +2614,10 @@ func (f *fakeMemStore) Snapshot() memSnapshot {
 
 func (f *fakeMemStore) Query(memtable.Query) []model.ColumnData {
 	return f.snapshot.columns
+}
+
+func (f *fakeMemStore) ScanColumns(query memtable.Query) queryexec.ColumnDataStream {
+	return queryexec.NewSliceColumnDataStream(f.Query(query))
 }
 
 func (f *fakeMemStore) Restore(snapshot memSnapshot) {
@@ -1944,6 +2642,10 @@ func (f *fakeMemSnapshot) Query(query memtable.Query) []model.ColumnData {
 
 func (f *fakeMemSnapshot) SampleCount() int {
 	return f.samples
+}
+
+func (f *fakeMemSnapshot) ApproxMemoryBytes() int64 {
+	return int64(f.samples * 32)
 }
 
 func (f *fakeMemSnapshot) Release() {
@@ -2016,6 +2718,14 @@ func (f fakePartReader) Query(sstable.Query) ([]model.ColumnData, error) {
 	return nil, nil
 }
 
+func (f fakePartReader) ScanColumns(query sstable.Query) (queryexec.ColumnDataStream, error) {
+	columns, err := f.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	return queryexec.NewSliceColumnDataStream(columns), nil
+}
+
 func (f fakePartReader) QuerySeriesIDs(sstable.Query, []uint64) ([]model.ColumnData, error) {
 	return nil, nil
 }
@@ -2036,6 +2746,26 @@ func (f *fakePartWriter) Close() (sstable.PartMeta, error) {
 
 func (f *fakePartWriter) Abort() error {
 	return nil
+}
+
+type failingColumnDataStream struct {
+	err error
+}
+
+func (f failingColumnDataStream) Next() bool {
+	return false
+}
+
+func (f failingColumnDataStream) ColumnData() model.ColumnData {
+	return model.ColumnData{}
+}
+
+func (f failingColumnDataStream) Err() error {
+	return nil
+}
+
+func (f failingColumnDataStream) Close() error {
+	return f.err
 }
 
 type fakeSeriesBatchReader struct{}

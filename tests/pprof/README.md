@@ -14,6 +14,14 @@ rm -f storage_engine cpu.prof mem.prof
 约定：默认使用临时数据目录并自动清理；如需复查磁盘文件，可通过 `-data-dir` 指定目录。
 运行结束会输出 `metrics sstable_count=... data_dir_bytes=... heap_alloc_bytes=... heap_sys_bytes=... heap_total_alloc_bytes=... mallocs=... frees=... num_gc=... pause_total_ns=... rss_bytes=... rss_peak_bytes=...`，用于固定参数下对比 SSTable 数、落盘体积、运行时 heap、GC 和 RSS 峰值。
 
+规模化 gate 位于 `tests/scale`：
+
+```bash
+go test -count=1 ./tests/scale/... -timeout 600s
+go run ./tests/scale/storage_10m -mode=write -points=1000000 -batch-size=4096
+go run ./tests/scale/storage_soak -seed=7 -duration=30s
+```
+
 1M wide10 写入时建议显式放大 MemTable，避免默认 `8192` samples 触发过多小 SSTable：
 
 ```bash

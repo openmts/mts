@@ -8,6 +8,8 @@ import (
 	"sort"
 
 	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/queryexec"
+	"codeberg.org/mts/mts/internal/storagefs"
 )
 
 func OpenPart(path string) (*Part, error) {
@@ -27,26 +29,35 @@ func OpenPart(path string) (*Part, error) {
 		}
 		return nil, err
 	}
+	seriesRows, err := loadPartSeriesIndex(path, meta.SeriesIndexRef)
+	if err != nil {
+		closeErr := files.close()
+		if closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
+		return nil, err
+	}
 	return &Part{
-		path:     filepath.Clean(path),
-		metadata: meta,
-		metaRows: metaRows,
-		files:    files,
+		path:       filepath.Clean(path),
+		metadata:   meta,
+		metaRows:   metaRows,
+		seriesRows: seriesRows,
+		files:      files,
 	}, nil
 }
 
 func openPartReadFiles(path string) (*partReadFiles, error) {
 	clean := filepath.Clean(path)
-	index, err := os.Open(filepath.Join(clean, indexFile))
+	index, err := storagefs.Open(filepath.Join(clean, indexFile))
 	if err != nil {
 		return nil, fmt.Errorf("open part index: %w", err)
 	}
-	timestamps, err := os.Open(filepath.Join(clean, timestampsFile))
+	timestamps, err := storagefs.Open(filepath.Join(clean, timestampsFile))
 	if err != nil {
 		closeErr := index.Close()
 		return nil, errors.Join(fmt.Errorf("open part timestamps: %w", err), closeErr)
 	}
-	values, err := os.Open(filepath.Join(clean, valuesFile))
+	values, err := storagefs.Open(filepath.Join(clean, valuesFile))
 	if err != nil {
 		indexErr := index.Close()
 		timeErr := timestamps.Close()
@@ -104,7 +115,21 @@ func (p *Part) Query(query Query) ([]model.ColumnData, error) {
 	if !partMatches(p.metadata.Part, p.metaRows, query) {
 		return []model.ColumnData{}, nil
 	}
+	if len(query.SeriesIDs) > 0 {
+		seriesIDs := make([]uint64, 0, len(query.SeriesIDs))
+		for seriesID := range query.SeriesIDs {
+			seriesIDs = append(seriesIDs, seriesID)
+		}
+		sort.Slice(seriesIDs, func(i int, j int) bool {
+			return seriesIDs[i] < seriesIDs[j]
+		})
+		return p.querySeriesIndexRows(query, seriesIDs)
+	}
 	return p.queryIndexRows(query, nil)
+}
+
+func (p *Part) ScanColumns(query Query) (queryexec.ColumnDataStream, error) {
+	return newPartColumnDataStream(p, query)
 }
 
 func (p *Part) SeriesIDs(query Query) ([]uint64, error) {
@@ -138,6 +163,85 @@ func (p *Part) queryIndexRows(query Query, seriesIDs []uint64) ([]model.ColumnDa
 	}
 	sortColumns(columns)
 	return columns, nil
+}
+
+func (p *Part) querySeriesIndexRows(query Query, seriesIDs []uint64) ([]model.ColumnData, error) {
+	rows := p.matchingSeriesIndexRows(query, seriesIDs)
+	if len(rows) == 0 {
+		return []model.ColumnData{}, nil
+	}
+	columns := make([]model.ColumnData, 0, len(rows))
+	for _, row := range rows {
+		indexRow, err := p.readIndexRowBlock(row.IndexRef)
+		if err != nil {
+			return nil, err
+		}
+		if !rowMatches(indexRow, query) {
+			continue
+		}
+		got, err := p.queryRow(indexRow, query)
+		if err != nil {
+			return nil, err
+		}
+		columns = append(columns, got...)
+	}
+	sortColumns(columns)
+	return columns, nil
+}
+
+func (p *Part) matchingSeriesIndexRows(query Query, seriesIDs []uint64) []seriesIndexRow {
+	if len(seriesIDs) == 0 || len(p.seriesRows) == 0 {
+		return nil
+	}
+	rows := make([]seriesIndexRow, 0, len(seriesIDs))
+	for _, seriesID := range seriesIDs {
+		index := sort.Search(len(p.seriesRows), func(index int) bool {
+			return p.seriesRows[index].SeriesID >= seriesID
+		})
+		if index >= len(p.seriesRows) || p.seriesRows[index].SeriesID != seriesID {
+			continue
+		}
+		row := p.seriesRows[index]
+		if !seriesIndexRowMatches(row, query) {
+			continue
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+func seriesIndexRowMatches(row seriesIndexRow, query Query) bool {
+	if row.MaxTime < query.Start || row.MinTime > query.End {
+		return false
+	}
+	if len(query.FieldIDs) == 0 {
+		return true
+	}
+	for _, fieldID := range row.FieldIDs {
+		if _, ok := query.FieldIDs[fieldID]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Part) readIndexRowBlock(ref blockRef) (indexRow, error) {
+	payload, err := p.readBlockPayload(indexFile, ref)
+	if err != nil {
+		return indexRow{}, err
+	}
+	if p.stats != nil {
+		p.stats.IndexRowsRead++
+	}
+	rows, err := decodeIndexRows(payload.Bytes())
+	payload.Release()
+	if err != nil {
+		return indexRow{}, fmt.Errorf("decode part index row: %w", err)
+	}
+	if len(rows) != 1 {
+		return indexRow{}, fmt.Errorf("decode part index row: got %d rows, want 1", len(rows))
+	}
+	return rows[0], nil
 }
 
 func (p *Part) openIndexRowStream() (*indexRowStream, blockPayload, error) {
@@ -341,6 +445,9 @@ func (p *Part) readValuePagesFromIndexPayload(
 		return model.ColumnData{}, err
 	}
 	for range header.pageCount {
+		if err := queryContextErr(query); err != nil {
+			return model.ColumnData{}, err
+		}
 		page, err := readValuePageRef(reader)
 		if err != nil {
 			return model.ColumnData{}, err
@@ -370,6 +477,9 @@ func (p *Part) readValuePagesFromRefs(
 	query Query,
 ) (model.ColumnData, error) {
 	for _, page := range pages {
+		if err := queryContextErr(query); err != nil {
+			return model.ColumnData{}, err
+		}
 		block, err := p.readValuePage(page.Ref, rowTimestamps, query)
 		if err != nil {
 			return model.ColumnData{}, err
@@ -546,7 +656,7 @@ func partFieldsMatch(rows []metaIndexRow, filter map[uint32]struct{}) bool {
 }
 
 func loadPartMetadata(path string) (metadata, error) {
-	data, err := os.ReadFile(filepath.Join(path, metadataFile))
+	data, err := storagefs.ReadFile(filepath.Join(path, metadataFile))
 	if err != nil {
 		return metadata{}, fmt.Errorf("read part metadata: %w", err)
 	}
@@ -565,6 +675,18 @@ func loadPartMetaIndex(path string, ref blockRef) ([]metaIndexRow, error) {
 	rows, err := decodeMetaIndexRows(payload)
 	if err != nil {
 		return nil, fmt.Errorf("decode part metaindex: %w", err)
+	}
+	return rows, nil
+}
+
+func loadPartSeriesIndex(path string, ref blockRef) ([]seriesIndexRow, error) {
+	payload, err := readBlock(filepath.Join(path, seriesIndexFile), ref)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := decodeSeriesIndexRows(payload)
+	if err != nil {
+		return nil, fmt.Errorf("decode part series index: %w", err)
 	}
 	return rows, nil
 }

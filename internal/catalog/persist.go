@@ -30,7 +30,7 @@ func (c *Catalog) walPath() string {
 }
 
 func (c *Catalog) loadSnapshot() error {
-	data, err := os.ReadFile(c.snapshotPath())
+	data, err := storagefs.ReadFile(c.snapshotPath())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -80,7 +80,7 @@ func (c *Catalog) checkpointSnapshotLocked(force bool) error {
 	if _, err := c.wal.Seek(0, 0); err != nil {
 		return fmt.Errorf("seek catalog wal after snapshot: %w", err)
 	}
-	if err := c.wal.Sync(); err != nil {
+	if err := storagefs.Sync(c.wal); err != nil {
 		return fmt.Errorf("sync truncated catalog wal: %w", err)
 	}
 	c.snapshotDirtyRecords = 0
@@ -88,7 +88,7 @@ func (c *Catalog) checkpointSnapshotLocked(force bool) error {
 }
 
 func (c *Catalog) replayWAL() error {
-	data, err := os.ReadFile(c.walPath())
+	data, err := storagefs.ReadFile(c.walPath())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -117,10 +117,10 @@ func (c *Catalog) appendEntryLocked(entry walEntry) error {
 	frame := codec.MarshalEnvelope(nil, catalogMagic, 0, payload)
 	encoded := binary.AppendUvarint(nil, uint64(len(frame)))
 	encoded = append(encoded, frame...)
-	if _, err := c.wal.Write(encoded); err != nil {
+	if _, err := storagefs.Write(c.wal, encoded); err != nil {
 		return fmt.Errorf("write catalog wal: %w", err)
 	}
-	if err := c.wal.Sync(); err != nil {
+	if err := storagefs.Sync(c.wal); err != nil {
 		return fmt.Errorf("sync catalog wal: %w", err)
 	}
 	return nil

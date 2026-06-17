@@ -77,6 +77,9 @@ func compactionTriggered(
 	if len(parts) > opts.PartLimit {
 		return true, nil
 	}
+	if computeSingleLevelHealth(opts.Level, append([]sstable.PartMeta(nil), parts...)).OverlapCount > 0 {
+		return true, nil
+	}
 	if opts.SizeLimit <= 0 {
 		return false, nil
 	}

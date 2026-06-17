@@ -212,6 +212,31 @@ func metaIndexFromRows(meta PartMeta, ref blockRef, rows []indexRow) metaIndexRo
 	}
 }
 
+func seriesIndexFromRows(rows []indexRow, refs []blockRef) []seriesIndexRow {
+	out := make([]seriesIndexRow, 0, len(rows))
+	for index, row := range rows {
+		out = append(out, seriesIndexRow{
+			SeriesID: row.SeriesID,
+			MinTime:  row.MinTime,
+			MaxTime:  row.MaxTime,
+			FieldIDs: collectRowFieldIDs(row),
+			IndexRef: refs[index],
+		})
+	}
+	return out
+}
+
+func collectRowFieldIDs(row indexRow) []uint32 {
+	ids := make([]uint32, 0, len(row.Columns))
+	for _, column := range row.Columns {
+		ids = append(ids, column.FieldID)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		return ids[i] < ids[j]
+	})
+	return ids
+}
+
 func collectFieldIDs(rows []indexRow) []uint32 {
 	seen := make(map[uint32]struct{})
 	for _, row := range rows {

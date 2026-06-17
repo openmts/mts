@@ -28,11 +28,17 @@ func appendCodecPayloadWithCompression(
 	codec byte,
 	payload []byte,
 	algorithm string,
+	budget ...CompressionMemoryBudget,
 ) ([]byte, error) {
 	algorithmID, err := payloadCompressionAlgorithmID(algorithm)
 	if err != nil {
 		return nil, err
 	}
+	release, err := reservePayloadCompressionMemory(firstCompressionBudget(budget), algorithmID, len(payload))
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	storedAlgorithmID, stored, err := compressPayload(algorithmID, payload)
 	if err != nil {
 		return nil, err
@@ -41,6 +47,37 @@ func appendCodecPayloadWithCompression(
 	dst = binary.AppendUvarint(dst, uint64(len(payload)))
 	dst = binary.AppendUvarint(dst, uint64(len(stored)))
 	return append(dst, stored...), nil
+}
+
+func firstCompressionBudget(budgets []CompressionMemoryBudget) CompressionMemoryBudget {
+	if len(budgets) == 0 {
+		return nil
+	}
+	return budgets[0]
+}
+
+func reservePayloadCompressionMemory(
+	budget CompressionMemoryBudget,
+	algorithmID byte,
+	payloadBytes int,
+) (func(), error) {
+	if budget == nil || algorithmID == payloadCompressionNone || payloadBytes <= 0 {
+		return func() {}, nil
+	}
+	return budget.ReserveCompressionBytes(estimatePayloadCompressionBytes(algorithmID, payloadBytes))
+}
+
+func estimatePayloadCompressionBytes(algorithmID byte, payloadBytes int) int64 {
+	switch algorithmID {
+	case payloadCompressionSnappy:
+		return int64(payloadBytes*2 + 64)
+	case payloadCompressionLZ4:
+		return int64(lz4.CompressBlockBound(payloadBytes) + payloadBytes)
+	case payloadCompressionZSTD:
+		return int64(payloadBytes*3 + 1<<20)
+	default:
+		return int64(payloadBytes)
+	}
 }
 
 func payloadCompressionAlgorithmID(algorithm string) (byte, error) {

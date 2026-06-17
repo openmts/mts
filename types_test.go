@@ -102,3 +102,28 @@ func TestPublicTypesAreIndependentDTOs(t *testing.T) {
 		})
 	}
 }
+
+func TestStorageMemoryOptionsArePublicAndInternalDTOs(t *testing.T) {
+	if _, ok := reflect.TypeOf(mts.Options{}).FieldByName("StorageMemory"); !ok {
+		t.Fatal("public Options missing StorageMemory field")
+	}
+	if _, ok := reflect.TypeOf(model.Options{}).FieldByName("StorageMemory"); !ok {
+		t.Fatal("model Options missing StorageMemory field")
+	}
+	if reflect.TypeOf(mts.StorageMemoryOptions{}) == reflect.TypeOf(model.StorageMemoryOptions{}) {
+		t.Fatal("StorageMemoryOptions is an alias of internal model type; want independent public DTO")
+	}
+	publicType := reflect.TypeOf(mts.StorageMemoryOptions{})
+	for _, field := range []string{
+		"SoftBytesLimit",
+		"HardBytesLimit",
+		"QueryBytesLimit",
+		"FlushBytesLimit",
+		"CompactionBytesLimit",
+		"CompressionBytesLimit",
+	} {
+		if _, ok := publicType.FieldByName(field); !ok {
+			t.Fatalf("public StorageMemoryOptions missing %s", field)
+		}
+	}
+}

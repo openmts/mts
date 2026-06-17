@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	partMagic      = codec.Magic("MTSPRT2")
-	indexMagic     = codec.Magic("MTSIDX2")
-	metaIndexMagic = codec.Magic("MTSMIX2")
+	partMagic        = codec.Magic("MTSPRT2")
+	indexMagic       = codec.Magic("MTSIDX2")
+	metaIndexMagic   = codec.Magic("MTSMIX2")
+	seriesIndexMagic = codec.Magic("MTSSIX2")
 )
 
 func encodeMetadata(meta metadata) ([]byte, error) {
@@ -29,6 +30,10 @@ func encodeMetadata(meta metadata) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	payload, err = appendBlockRef(payload, meta.SeriesIndexRef)
+	if err != nil {
+		return nil, err
+	}
 	payload = binary.AppendVarint(payload, meta.CreatedUnix)
 	return codec.MarshalEnvelope(nil, partMagic, 0, payload), nil
 }
@@ -43,27 +48,37 @@ func decodeMetadata(data []byte) (metadata, error) {
 	if err != nil {
 		return metadata{}, err
 	}
-	indexRef, metaIndexRef, createdUnix, err := readMetadataTail(reader)
+	indexRef, metaIndexRef, seriesIndexRef, createdUnix, err := readMetadataTail(reader)
 	if err != nil {
 		return metadata{}, err
 	}
 	if err := reader.done("part metadata"); err != nil {
 		return metadata{}, err
 	}
-	return metadata{Part: part, IndexRef: indexRef, MetaIndexRef: metaIndexRef, CreatedUnix: createdUnix}, nil
+	return metadata{
+		Part:           part,
+		IndexRef:       indexRef,
+		MetaIndexRef:   metaIndexRef,
+		SeriesIndexRef: seriesIndexRef,
+		CreatedUnix:    createdUnix,
+	}, nil
 }
 
-func readMetadataTail(reader *blockReader) (blockRef, blockRef, int64, error) {
+func readMetadataTail(reader *blockReader) (blockRef, blockRef, blockRef, int64, error) {
 	indexRef, err := readBlockRef(reader)
 	if err != nil {
-		return blockRef{}, blockRef{}, 0, err
+		return blockRef{}, blockRef{}, blockRef{}, 0, err
 	}
 	metaIndexRef, err := readBlockRef(reader)
 	if err != nil {
-		return blockRef{}, blockRef{}, 0, err
+		return blockRef{}, blockRef{}, blockRef{}, 0, err
+	}
+	seriesIndexRef, err := readBlockRef(reader)
+	if err != nil {
+		return blockRef{}, blockRef{}, blockRef{}, 0, err
 	}
 	createdUnix, err := reader.varint("created unix")
-	return indexRef, metaIndexRef, createdUnix, err
+	return indexRef, metaIndexRef, seriesIndexRef, createdUnix, err
 }
 
 func encodeIndexRows(rows []indexRow) ([]byte, error) {
@@ -182,6 +197,39 @@ func decodeMetaIndexRows(data []byte) ([]metaIndexRow, error) {
 		rows = append(rows, row)
 	}
 	return rows, reader.done("metaindex rows")
+}
+
+func encodeSeriesIndexRows(rows []seriesIndexRow) ([]byte, error) {
+	payload := binary.AppendUvarint(nil, uint64(len(rows)))
+	var err error
+	for _, row := range rows {
+		payload, err = appendSeriesIndexRow(payload, row)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return codec.MarshalEnvelope(nil, seriesIndexMagic, 0, payload), nil
+}
+
+func decodeSeriesIndexRows(data []byte) ([]seriesIndexRow, error) {
+	env, err := codec.UnmarshalEnvelope(data, seriesIndexMagic)
+	if err != nil {
+		return nil, err
+	}
+	reader := newBlockReader(env.Payload)
+	count, err := reader.intCount("series index row count")
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]seriesIndexRow, 0, count)
+	for range count {
+		row, err := readSeriesIndexRow(reader)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	return rows, reader.done("series index rows")
 }
 
 func appendPartMeta(dst []byte, meta PartMeta) ([]byte, error) {
@@ -477,6 +525,41 @@ func readMetaIndexBounds(reader *blockReader) (uint64, uint64, int64, int64, err
 	}
 	maxTime, err := reader.varint("metaindex max time")
 	return minSeries, maxSeries, minTime, maxTime, err
+}
+
+func appendSeriesIndexRow(dst []byte, row seriesIndexRow) ([]byte, error) {
+	dst = binary.AppendUvarint(dst, row.SeriesID)
+	dst = binary.AppendVarint(dst, row.MinTime)
+	dst = binary.AppendVarint(dst, row.MaxTime)
+	dst = appendUint32Slice(dst, row.FieldIDs)
+	return appendBlockRef(dst, row.IndexRef)
+}
+
+func readSeriesIndexRow(reader *blockReader) (seriesIndexRow, error) {
+	seriesID, err := reader.uvarint("series index series id")
+	if err != nil {
+		return seriesIndexRow{}, err
+	}
+	minTime, err := reader.varint("series index min time")
+	if err != nil {
+		return seriesIndexRow{}, err
+	}
+	maxTime, err := reader.varint("series index max time")
+	if err != nil {
+		return seriesIndexRow{}, err
+	}
+	fieldIDs, err := readUint32Slice(reader, "series index field id count")
+	if err != nil {
+		return seriesIndexRow{}, err
+	}
+	indexRef, err := readBlockRef(reader)
+	return seriesIndexRow{
+		SeriesID: seriesID,
+		MinTime:  minTime,
+		MaxTime:  maxTime,
+		FieldIDs: fieldIDs,
+		IndexRef: indexRef,
+	}, err
 }
 
 func appendUint32Slice(dst []byte, values []uint32) []byte {

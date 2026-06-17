@@ -1238,6 +1238,52 @@ func TestValuePageIndexFullRangeUsesSinglePass(t *testing.T) {
 	}
 }
 
+func TestPartSeriesIndexReadsOnlyMatchingIndexRows(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-series-index", []model.ColumnData{
+		streamTestColumn(1, 1, 10),
+		streamTestColumn(2, 1, 20),
+		streamTestColumn(3, 1, 30),
+		streamTestColumn(4, 1, 40),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	defer func() {
+		if err := part.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+
+	stats := part.resetReadStatsForTest()
+	got, err := part.QuerySeriesIDs(Query{Start: 0, End: 100}, []uint64{3})
+	if err != nil {
+		t.Fatalf("QuerySeriesIDs() error = %v", err)
+	}
+	if len(got) != 1 || got[0].SeriesID != 3 {
+		t.Fatalf("QuerySeriesIDs() = %#v, want only series 3", got)
+	}
+	if stats.IndexRowsRead != 1 {
+		t.Fatalf("IndexRowsRead = %d, want 1", stats.IndexRowsRead)
+	}
+
+	stats = part.resetReadStatsForTest()
+	missing, err := part.QuerySeriesIDs(Query{Start: 0, End: 100}, []uint64{99})
+	if err != nil {
+		t.Fatalf("QuerySeriesIDs(missing) error = %v", err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("QuerySeriesIDs(missing) = %#v, want empty", missing)
+	}
+	if stats.IndexRowsRead != 0 {
+		t.Fatalf("missing IndexRowsRead = %d, want 0", stats.IndexRowsRead)
+	}
+}
+
 func TestPartCloseIsIdempotentAndNilSafe(t *testing.T) {
 	if err := (*Part)(nil).Close(); err != nil {
 		t.Fatalf("nil Part Close() error = %v", err)
@@ -1608,10 +1654,27 @@ func TestPartQueryRejectsBadLazyIndexBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeBinaryBlock(metaindex) error = %v", err)
 	}
+	seriesIndexPayload, err := encodeSeriesIndexRows([]seriesIndexRow{
+		{
+			SeriesID: 1,
+			MinTime:  0,
+			MaxTime:  10,
+			FieldIDs: []uint32{1},
+			IndexRef: indexRef,
+		},
+	})
+	if err != nil {
+		t.Fatalf("encodeSeriesIndexRows() error = %v", err)
+	}
+	seriesIndexRef, err := writeBinaryBlock(filepath.Join(dir, seriesIndexFile), seriesIndexPayload)
+	if err != nil {
+		t.Fatalf("writeBinaryBlock(series index) error = %v", err)
+	}
 	meta := metadata{
-		Part:         PartMeta{ID: "bad-index", MinTime: 0, MaxTime: 10, MinSeriesID: 1, MaxSeriesID: 1},
-		IndexRef:     indexRef,
-		MetaIndexRef: metaIndexRef,
+		Part:           PartMeta{ID: "bad-index", MinTime: 0, MaxTime: 10, MinSeriesID: 1, MaxSeriesID: 1},
+		IndexRef:       indexRef,
+		MetaIndexRef:   metaIndexRef,
+		SeriesIndexRef: seriesIndexRef,
 	}
 	if err := writeMetadata(dir, meta); err != nil {
 		t.Fatalf("writeMetadata() error = %v", err)

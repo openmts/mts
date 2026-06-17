@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"io/fs"
-	"path/filepath"
 	"sort"
 	"time"
 
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/sstable"
+	"codeberg.org/mts/mts/internal/storagefs"
 )
 
 const streamingCompactionSeriesBatchSize = 256
@@ -104,29 +104,36 @@ func (s *Shard) compactPartsLocked(plan compactionPlan) error {
 	if len(candidateParts) == 0 {
 		return nil
 	}
+	attempt := s.compactionStats.begin(plan.candidates)
 	newParts, newMeta, err := s.writeStreamingCompactionOutputsLocked(
 		plan.outputLevel,
 		plan.output,
 		candidateParts,
 	)
 	if err != nil {
+		attempt.finish(nil, err)
 		return err
 	}
 	keptParts, keptMeta := s.keepUnselectedParts(plan.candidates)
 	nextManifest := sstable.Manifest{Parts: append(keptMeta, newMeta...)}
 	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
 		closeErr := closeParts(newParts)
-		return errors.Join(err, closeErr)
+		joined := errors.Join(err, closeErr)
+		attempt.finish(nil, joined)
+		return joined
 	}
 	oldParts := s.parts
 	s.parts = append(keptParts, newParts...)
 	s.manifest = nextManifest
 	if err := closeSelectedParts(oldParts, plan.candidates); err != nil {
+		attempt.finish(nil, err)
 		return err
 	}
 	if err := s.removeOldParts(plan.candidates); err != nil {
+		attempt.finish(nil, err)
 		return err
 	}
+	attempt.finish(newMeta, nil)
 	if hadTombstones {
 		s.tombstones = nil
 		return s.wal.Checkpoint()
@@ -356,6 +363,11 @@ func (o *compactionOutput) addSeries(columns []model.ColumnData) error {
 
 func (o *compactionOutput) addSeriesGroup(columns []model.ColumnData) error {
 	columnsBytes := estimateColumnsBytes(columns)
+	release, err := o.reserveCompactionMemory(columnsBytes)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if o.shouldRoll(columnsBytes) {
 		if err := o.closeCurrent(); err != nil {
 			return err
@@ -363,7 +375,8 @@ func (o *compactionOutput) addSeriesGroup(columns []model.ColumnData) error {
 	}
 	if o.writer == nil {
 		writer, err := o.shard.deps.parts.NewWriter(o.shard.opts.Dir, o.outputLevel, o.shard.nextPartID(), sstable.WriteOptions{
-			Compression: o.outputOpts.compression,
+			Compression:  o.outputOpts.compression,
+			MemoryBudget: storageCompressionBudget{memory: o.shard.opts.Memory},
 		})
 		if err != nil {
 			return err
@@ -375,6 +388,13 @@ func (o *compactionOutput) addSeriesGroup(columns []model.ColumnData) error {
 	}
 	o.currentBytes += columnsBytes
 	return nil
+}
+
+func (o *compactionOutput) reserveCompactionMemory(bytes int64) (func(), error) {
+	if o.shard == nil || o.shard.opts.Memory == nil {
+		return func() {}, nil
+	}
+	return o.shard.opts.Memory.Reserve(storageMemoryCompaction, 0, bytes)
 }
 
 func (o *compactionOutput) shouldRoll(seriesBytes int64) bool {
@@ -506,7 +526,7 @@ func partIDSet(parts []sstable.PartMeta) map[string]struct{} {
 
 func directorySize(root string) (int64, error) {
 	var total int64
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+	err := storagefs.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil || entry.IsDir() {
 			return walkErr
 		}

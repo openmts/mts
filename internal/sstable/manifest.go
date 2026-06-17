@@ -14,7 +14,7 @@ import (
 var manifestMagic = codec.Magic("MTSMAN2")
 
 func LoadManifest(dir string) (Manifest, error) {
-	data, err := os.ReadFile(filepath.Join(dir, manifestFile))
+	data, err := storagefs.ReadFile(filepath.Join(dir, manifestFile))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return loadMissingManifest(dir)

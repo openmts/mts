@@ -88,14 +88,14 @@ func (l *Log) appendFrameLocked(recordType byte, payload []byte, syncWrite bool)
 	if err := l.rollIfNeeded(int64(len(frame))); err != nil {
 		return err
 	}
-	if _, err := l.file.Write(frame); err != nil {
+	if _, err := storagefs.Write(l.file, frame); err != nil {
 		return fmt.Errorf("write wal record: %w", err)
 	}
 	l.size += int64(len(frame))
 	l.pendingRecords++
 	l.pendingBytes += int64(len(frame))
 	if l.shouldSync(syncWrite) {
-		if err := l.file.Sync(); err != nil {
+		if err := storagefs.Sync(l.file); err != nil {
 			return fmt.Errorf("sync wal: %w", err)
 		}
 		l.pendingRecords = 0
@@ -145,6 +145,12 @@ func (l *Log) ReplayRecords() ([]Record, error) {
 	return records, nil
 }
 
+func (l *Log) ApproxMemoryBytes() int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.pendingBytes + int64(l.pendingRecords)*16
+}
+
 func (l *Log) TruncateAll() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -159,7 +165,7 @@ func (l *Log) TruncateAll() error {
 		return err
 	}
 	for _, segment := range segments {
-		if err := os.Remove(segment.path); err != nil {
+		if err := storagefs.Remove(segment.path); err != nil {
 			return fmt.Errorf("remove wal segment: %w", err)
 		}
 	}
@@ -206,7 +212,7 @@ func (l *Log) Checkpoint() error {
 		if segment.number > oldSegment {
 			continue
 		}
-		if err := os.Remove(segment.path); err != nil {
+		if err := storagefs.Remove(segment.path); err != nil {
 			return fmt.Errorf("remove checkpointed wal segment: %w", err)
 		}
 	}
@@ -234,7 +240,7 @@ func (l *Log) openLastSegment() error {
 
 func (l *Log) openSegment(number int) error {
 	path := segmentPath(l.dir, number)
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, storagefs.FileMode)
+	file, err := storagefs.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, storagefs.FileMode)
 	if err != nil {
 		return fmt.Errorf("open wal segment: %w", err)
 	}
@@ -274,7 +280,7 @@ func (l *Log) syncPendingLocked() error {
 	if l.file == nil || l.pendingRecords == 0 {
 		return nil
 	}
-	if err := l.file.Sync(); err != nil {
+	if err := storagefs.Sync(l.file); err != nil {
 		return fmt.Errorf("sync wal: %w", err)
 	}
 	l.pendingRecords = 0
@@ -332,7 +338,7 @@ type segmentInfo struct {
 }
 
 func listSegments(dir string) ([]segmentInfo, error) {
-	entries, err := os.ReadDir(dir)
+	entries, err := storagefs.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("read wal directory: %w", err)
 	}
@@ -361,7 +367,7 @@ func segmentPath(dir string, number int) string {
 }
 
 func replaySegment(path string, isLast bool) ([]Record, error) {
-	file, err := os.OpenFile(path, os.O_RDWR, storagefs.FileMode)
+	file, err := storagefs.OpenFile(path, os.O_RDWR, storagefs.FileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open wal segment for replay: %w", err)
 	}

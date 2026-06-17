@@ -31,7 +31,42 @@ func normalizeOptions(opts model.Options) model.Options {
 	if opts.MemTableMaxSamples <= 0 {
 		opts.MemTableMaxSamples = defaultMemTableSamples
 	}
+	opts.StorageMemory = normalizeStorageMemoryOptions(opts.StorageMemory)
 	opts.Compaction = normalizeCompactionOptions(opts.Compaction, opts.Compression)
+	return opts
+}
+
+func normalizeStorageMemoryOptions(opts model.StorageMemoryOptions) model.StorageMemoryOptions {
+	if opts.SoftSampleLimit < 0 {
+		opts.SoftSampleLimit = 0
+	}
+	if opts.HardSampleLimit < 0 {
+		opts.HardSampleLimit = 0
+	}
+	if opts.HardSampleLimit > 0 && opts.SoftSampleLimit > opts.HardSampleLimit {
+		opts.SoftSampleLimit = opts.HardSampleLimit
+	}
+	if opts.SoftBytesLimit < 0 {
+		opts.SoftBytesLimit = 0
+	}
+	if opts.HardBytesLimit < 0 {
+		opts.HardBytesLimit = 0
+	}
+	if opts.QueryBytesLimit < 0 {
+		opts.QueryBytesLimit = 0
+	}
+	if opts.FlushBytesLimit < 0 {
+		opts.FlushBytesLimit = 0
+	}
+	if opts.CompactionBytesLimit < 0 {
+		opts.CompactionBytesLimit = 0
+	}
+	if opts.CompressionBytesLimit < 0 {
+		opts.CompressionBytesLimit = 0
+	}
+	if opts.HardBytesLimit > 0 && opts.SoftBytesLimit > opts.HardBytesLimit {
+		opts.SoftBytesLimit = opts.HardBytesLimit
+	}
 	return opts
 }
 

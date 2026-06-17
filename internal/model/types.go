@@ -64,6 +64,22 @@ type Query struct {
 	Fields          []string          `json:"fields"`
 	StartTime       int64             `json:"start_time"`
 	EndTime         int64             `json:"end_time"`
+	Aggregates      []AggregateSpec   `json:"aggregates"`
+	Window          time.Duration     `json:"window"`
+	Limit           int               `json:"limit"`
+	Offset          int               `json:"offset"`
+	Budget          QueryBudget       `json:"budget"`
+}
+
+type AggregateSpec struct {
+	Field    string `json:"field"`
+	Function string `json:"function"`
+}
+
+type QueryBudget struct {
+	MaxShards  int `json:"max_shards"`
+	MaxParts   int `json:"max_parts"`
+	MaxSamples int `json:"max_samples"`
 }
 
 type Options struct {
@@ -76,6 +92,18 @@ type Options struct {
 	WAL                    WALOptions
 	Compaction             CompactionOptions
 	Compression            CompressionOptions
+	StorageMemory          StorageMemoryOptions
+}
+
+type StorageMemoryOptions struct {
+	SoftSampleLimit       int
+	HardSampleLimit       int
+	SoftBytesLimit        int64
+	HardBytesLimit        int64
+	QueryBytesLimit       int64
+	FlushBytesLimit       int64
+	CompactionBytesLimit  int64
+	CompressionBytesLimit int64
 }
 
 type WALOptions struct {

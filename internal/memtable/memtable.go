@@ -1,13 +1,18 @@
 package memtable
 
 import (
+	"context"
 	"sort"
 	"sync"
+	"unsafe"
 
 	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/queryexec"
 )
 
 type Query struct {
+	Context   context.Context
+	Budget    model.QueryBudget
 	SeriesIDs map[uint64]struct{}
 	FieldIDs  map[uint32]struct{}
 	Start     int64
@@ -52,6 +57,11 @@ type columnReservation struct {
 
 const maxPooledReservations = 1 << 15
 
+const (
+	tableDataBaseBytes  = int(unsafe.Sizeof(tableData{}))
+	mapEntryApproxBytes = int(unsafe.Sizeof(columnKey{}) + unsafe.Sizeof(&columnBuffer{}))
+)
+
 var reservationMapPool = sync.Pool{
 	New: func() any {
 		reservations := make(map[columnKey]columnReservation)
@@ -90,6 +100,12 @@ func (m *MemTable) SampleCount() int {
 	return m.sampleCount
 }
 
+func (m *MemTable) ApproxMemoryBytes() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return approxTableDataBytes(m.data)
+}
+
 func (m *MemTable) SnapshotAndReset() *Snapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -115,6 +131,15 @@ func (m *MemTable) Query(query Query) []model.ColumnData {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return columnsFromData(m.data, query)
+}
+
+func (m *MemTable) ScanColumns(query Query) queryexec.ColumnDataStream {
+	if query.Context != nil {
+		if err := query.Context.Err(); err != nil {
+			return queryexec.NewErrorColumnDataStream(err)
+		}
+	}
+	return queryexec.WithContextColumnDataStream(query.Context, queryexec.NewSliceColumnDataStream(m.Query(query)))
 }
 
 func (s *Snapshot) Query(query Query) []model.ColumnData {
@@ -154,6 +179,13 @@ func (s *Snapshot) SampleCount() int {
 		return 0
 	}
 	return s.sampleCount
+}
+
+func (s *Snapshot) ApproxMemoryBytes() int64 {
+	if s == nil {
+		return 0
+	}
+	return approxTableDataBytes(s.data)
 }
 
 func (s *Snapshot) Release() {
@@ -370,6 +402,36 @@ func (c *columnBuffer) clear() {
 	c.ints = nil
 	c.strings = nil
 	c.boolBits = nil
+}
+
+func approxTableDataBytes(data tableData) int64 {
+	if data == nil {
+		return 0
+	}
+	total := int64(tableDataBaseBytes + len(data)*mapEntryApproxBytes)
+	for _, column := range data {
+		if column != nil {
+			total += column.approxMemoryBytes()
+		}
+	}
+	return total
+}
+
+func (c *columnBuffer) approxMemoryBytes() int64 {
+	if c == nil {
+		return 0
+	}
+	total := int64(unsafe.Sizeof(*c))
+	total += int64(cap(c.times)) * int64(unsafe.Sizeof(int64(0)))
+	total += int64(cap(c.writeSeqs)) * int64(unsafe.Sizeof(uint64(0)))
+	total += int64(cap(c.floats)) * int64(unsafe.Sizeof(float64(0)))
+	total += int64(cap(c.ints)) * int64(unsafe.Sizeof(int64(0)))
+	total += int64(cap(c.strings)) * int64(unsafe.Sizeof(""))
+	total += int64(cap(c.boolBits)) * int64(unsafe.Sizeof(uint64(0)))
+	for _, value := range c.strings[:min(c.count, len(c.strings))] {
+		total += int64(len(value))
+	}
+	return total
 }
 
 func growInt64s(values []int64, target int, additional int) []int64 {

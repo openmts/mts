@@ -2,27 +2,41 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"sort"
 
 	"codeberg.org/mts/mts/internal/catalog"
 	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/queryexec"
 )
 
 type columnIterator struct {
-	raw       []model.ColumnData
-	snapshot  catalog.Snapshot
-	decorated []model.ColumnSeries
-	index     int
+	stream queryexec.ColumnStream
 }
 
 type rowIterator struct {
-	rows  []model.Row
-	index int
+	stream queryexec.RowStream
 }
 
-func (e *Engine) QueryColumns(_ context.Context, query model.Query) ([]model.ColumnSeries, error) {
-	iter, err := e.QueryColumnIterator(context.Background(), query)
+type queryMemoryColumnDataStream struct {
+	source  queryexec.ColumnDataStream
+	memory  *storageMemoryLimiter
+	current model.ColumnData
+	release func()
+	err     error
+}
+
+func newColumnIterator(stream queryexec.ColumnStream) *columnIterator {
+	return &columnIterator{stream: stream}
+}
+
+func newRowIterator(stream queryexec.RowStream) *rowIterator {
+	return &rowIterator{stream: stream}
+}
+
+func (e *Engine) QueryColumns(ctx context.Context, query model.Query) ([]model.ColumnSeries, error) {
+	iter, err := e.QueryColumnIterator(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -30,31 +44,59 @@ func (e *Engine) QueryColumns(_ context.Context, query model.Query) ([]model.Col
 		_ = iter.Close()
 	}()
 	columns := make([]model.ColumnSeries, 0)
+	var queryBytes int64
 	for iter.Next() {
-		columns = append(columns, iter.Column())
+		column := iter.Column()
+		queryBytes += estimateColumnSeriesBytes(column)
+		if err := e.checkQueryMemoryBudget(queryBytes); err != nil {
+			return nil, err
+		}
+		columns = append(columns, column)
 	}
 	return columns, iter.Err()
 }
 
-func (e *Engine) QueryColumnIterator(_ context.Context, query model.Query) (*columnIterator, error) {
+func (e *Engine) QueryColumnIterator(ctx context.Context, query model.Query) (*columnIterator, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	query = normalizeQuery(e.opts, query)
 	seriesIDs := e.catalog.MatchSeries(query.Measurement, query.Tags)
 	if len(seriesIDs) == 0 {
-		return &columnIterator{}, nil
+		return newColumnIterator(queryexec.NewSliceColumnSeriesStream(nil)), nil
 	}
 	fieldIDs := e.catalog.FieldIDs(query.Measurement, query.Fields)
 	if len(query.Fields) > 0 && len(fieldIDs) == 0 {
-		return &columnIterator{}, nil
+		return newColumnIterator(queryexec.NewSliceColumnSeriesStream(nil)), nil
 	}
 	snapshot := e.catalog.Snapshot()
-	raw, err := e.queryColumnData(query, idSet(seriesIDs), fieldIDs)
+	raw, err := e.queryColumnDataStream(ctx, query, idSet(seriesIDs), fieldIDs)
 	if err != nil {
 		return nil, err
 	}
-	return &columnIterator{
-		raw:      filterDecoratableColumns(raw, snapshot),
-		snapshot: snapshot,
-	}, nil
+	raw = newQueryMemoryColumnDataStream(raw, e.memory, e.opts.StorageMemory.QueryBytesLimit)
+	stream := queryexec.NewDecoratedColumnStream(raw, columnDecorator(snapshot))
+	if len(query.Aggregates) > 0 {
+		stream = queryexec.NewAggregateColumnStream(stream, query.Aggregates, query.Window)
+	}
+	if query.Budget.MaxSamples > 0 {
+		stream = queryexec.NewBudgetColumnStream(stream, query.Budget)
+	}
+	if query.Limit > 0 || query.Offset > 0 {
+		stream = queryexec.NewPaginatedColumnStream(stream, query.Limit, query.Offset)
+	}
+	return newColumnIterator(stream), nil
+}
+
+func newQueryMemoryColumnDataStream(
+	source queryexec.ColumnDataStream,
+	memory *storageMemoryLimiter,
+	limit int64,
+) queryexec.ColumnDataStream {
+	if limit <= 0 && memory == nil {
+		return source
+	}
+	return &queryMemoryColumnDataStream{source: source, memory: memory}
 }
 
 func (e *Engine) QueryRows(ctx context.Context, query model.Query) ([]model.Row, error) {
@@ -77,29 +119,38 @@ func (e *Engine) QueryRowIterator(ctx context.Context, query model.Query) (*rowI
 	if err != nil {
 		return nil, err
 	}
-	return &rowIterator{rows: columnsToRows(columns)}, nil
+	return newRowIterator(queryexec.NewSliceRowStream(columnsToRows(columns))), nil
 }
 
-func (e *Engine) queryColumnData(
+func (e *Engine) queryColumnDataStream(
+	ctx context.Context,
 	query model.Query,
 	seriesIDs map[uint64]struct{},
 	fieldIDs map[uint32]struct{},
-) ([]model.ColumnData, error) {
+) (queryexec.ColumnDataStream, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	shards := e.queryShards(query)
-	columns := make([]model.ColumnData, 0)
+	if query.Budget.MaxShards > 0 && len(shards) > query.Budget.MaxShards {
+		return nil, queryexec.NewReadBudgetError("shards", len(shards), query.Budget.MaxShards)
+	}
+	streams := make([]queryexec.ColumnDataStream, 0, len(shards))
 	for _, shard := range shards {
-		got, err := shard.Query(memtable.Query{
+		stream, err := shard.ScanColumns(memtable.Query{
+			Context:   ctx,
+			Budget:    query.Budget,
 			SeriesIDs: seriesIDs,
 			FieldIDs:  fieldIDs,
 			Start:     query.StartTime,
 			End:       query.EndTime,
 		})
 		if err != nil {
-			return nil, err
+			return nil, errors.Join(err, closeColumnDataStreams(streams))
 		}
-		columns = append(columns, got...)
+		streams = append(streams, stream)
 	}
-	return mergeColumnData(columns), nil
+	return queryexec.MergeColumnDataStreams(streams...), nil
 }
 
 func (e *Engine) queryShards(query model.Query) []*Shard {
@@ -125,16 +176,6 @@ func decorateColumns(columns []model.ColumnData, snapshot catalog.Snapshot) []mo
 	return out
 }
 
-func filterDecoratableColumns(columns []model.ColumnData, snapshot catalog.Snapshot) []model.ColumnData {
-	out := columns[:0]
-	for _, column := range columns {
-		if canDecorateColumn(column, snapshot) {
-			out = append(out, column)
-		}
-	}
-	return out
-}
-
 func canDecorateColumn(column model.ColumnData, snapshot catalog.Snapshot) bool {
 	if _, ok := snapshot.Series[column.SeriesID]; !ok {
 		return false
@@ -143,6 +184,15 @@ func canDecorateColumn(column model.ColumnData, snapshot catalog.Snapshot) bool 
 		return false
 	}
 	return true
+}
+
+func columnDecorator(snapshot catalog.Snapshot) queryexec.ColumnDecorator {
+	return func(column model.ColumnData) (model.ColumnSeries, bool) {
+		if !canDecorateColumn(column, snapshot) {
+			return model.ColumnSeries{}, false
+		}
+		return decorateColumnData(column, snapshot), true
+	}
 }
 
 var decorateColumnDataHook func()
@@ -163,65 +213,114 @@ func decorateColumnData(column model.ColumnData, snapshot catalog.Snapshot) mode
 }
 
 func (i *columnIterator) Next() bool {
-	if i.decorated != nil {
-		if i.index >= len(i.decorated) {
-			return false
-		}
-		i.index++
-		return true
-	}
-	if i.index >= len(i.raw) {
+	if i.stream == nil {
 		return false
 	}
-	i.index++
-	return true
+	return i.stream.Next()
 }
 
 func (i *columnIterator) Column() model.ColumnSeries {
-	if i.decorated != nil {
-		if i.index == 0 || i.index > len(i.decorated) {
-			return model.ColumnSeries{}
-		}
-		return i.decorated[i.index-1]
-	}
-	if i.index == 0 || i.index > len(i.raw) {
+	if i.stream == nil {
 		return model.ColumnSeries{}
 	}
-	return decorateColumnData(i.raw[i.index-1], i.snapshot)
+	return i.stream.Column()
 }
 
 func (i *columnIterator) Err() error {
-	return nil
+	if i.stream == nil {
+		return nil
+	}
+	return i.stream.Err()
 }
 
 func (i *columnIterator) Close() error {
-	i.raw = nil
-	i.decorated = nil
-	return nil
+	if i.stream == nil {
+		return nil
+	}
+	return i.stream.Close()
 }
 
-func (i *rowIterator) Next() bool {
-	if i.index >= len(i.rows) {
+func (s *queryMemoryColumnDataStream) Next() bool {
+	s.releaseCurrent()
+	if s.err != nil || s.source == nil || !s.source.Next() {
 		return false
 	}
-	i.index++
+	column := s.source.ColumnData()
+	release, err := s.reserve(column)
+	if err != nil {
+		s.err = err
+		return false
+	}
+	s.current = column
+	s.release = release
 	return true
 }
 
+func (s *queryMemoryColumnDataStream) ColumnData() model.ColumnData {
+	return s.current
+}
+
+func (s *queryMemoryColumnDataStream) Err() error {
+	if s.err != nil {
+		return s.err
+	}
+	if s.source == nil {
+		return nil
+	}
+	return s.source.Err()
+}
+
+func (s *queryMemoryColumnDataStream) Close() error {
+	s.releaseCurrent()
+	if s.source == nil {
+		return nil
+	}
+	return s.source.Close()
+}
+
+func (s *queryMemoryColumnDataStream) reserve(column model.ColumnData) (func(), error) {
+	bytes := estimateColumnBytes(column)
+	if s.memory == nil {
+		return func() {}, nil
+	}
+	return s.memory.Reserve(storageMemoryQuery, 0, bytes)
+}
+
+func (s *queryMemoryColumnDataStream) releaseCurrent() {
+	if s.release == nil {
+		return
+	}
+	s.release()
+	s.release = nil
+	s.current = model.ColumnData{}
+}
+
+func (i *rowIterator) Next() bool {
+	if i.stream == nil {
+		return false
+	}
+	return i.stream.Next()
+}
+
 func (i *rowIterator) Row() model.Row {
-	if i.index == 0 || i.index > len(i.rows) {
+	if i.stream == nil {
 		return model.Row{}
 	}
-	return i.rows[i.index-1]
+	return i.stream.Row()
 }
 
 func (i *rowIterator) Err() error {
-	return nil
+	if i.stream == nil {
+		return nil
+	}
+	return i.stream.Err()
 }
 
 func (i *rowIterator) Close() error {
-	i.rows = nil
-	return nil
+	if i.stream == nil {
+		return nil
+	}
+	return i.stream.Close()
 }
 
 func decorateColumn(
@@ -245,6 +344,39 @@ func decorateColumn(
 		series.Values = append(series.Values, sample.Value)
 	}
 	return series
+}
+
+func (e *Engine) checkQueryMemoryBudget(queryBytes int64) error {
+	limit := e.opts.StorageMemory.QueryBytesLimit
+	if limit <= 0 || queryBytes <= limit {
+		return nil
+	}
+	return storageMemoryLimitError(storageMemoryQuery, queryBytes, limit)
+}
+
+func estimateColumnSeriesBytes(column model.ColumnSeries) int64 {
+	total := int64(64 + len(column.Measurement) + len(column.FieldName))
+	for key, value := range column.Tags {
+		total += int64(len(key) + len(value) + 32)
+	}
+	total += int64(cap(column.Timestamps)) * 8
+	for _, value := range column.Values {
+		total += estimateFieldValueBytes(value)
+	}
+	return total
+}
+
+func estimateFieldValueBytes(value model.FieldValue) int64 {
+	switch value.Type {
+	case model.FieldFloat64, model.FieldInt64:
+		return 8
+	case model.FieldString:
+		return 16 + int64(len(value.String))
+	case model.FieldBool:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func columnsToRows(columns []model.ColumnSeries) []model.Row {

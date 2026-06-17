@@ -6,6 +6,7 @@ import (
 
 	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/queryexec"
 	"codeberg.org/mts/mts/internal/sstable"
 	"codeberg.org/mts/mts/internal/storagefs"
 	"codeberg.org/mts/mts/internal/wal"
@@ -15,6 +16,7 @@ type walStore interface {
 	Append(records []model.ResolvedPoint, syncWrite bool) error
 	AppendTombstones(tombstones []model.Tombstone, syncWrite bool) error
 	ReplayRecords() ([]wal.Record, error)
+	ApproxMemoryBytes() int64
 	Checkpoint() error
 	Close() error
 }
@@ -23,9 +25,12 @@ type memStore interface {
 	Apply(point model.ResolvedPoint) error
 	ApplyBatch(points []model.ResolvedPoint) error
 	SampleCount() int
+	ApproxMemorySamples() int
+	ApproxMemoryBytes() int64
 	SnapshotAndReset() memSnapshot
 	Snapshot() memSnapshot
 	Query(query memtable.Query) []model.ColumnData
+	ScanColumns(query memtable.Query) queryexec.ColumnDataStream
 	Restore(snapshot memSnapshot)
 }
 
@@ -33,6 +38,7 @@ type memSnapshot interface {
 	Columns(query memtable.Query) []model.ColumnData
 	Query(query memtable.Query) []model.ColumnData
 	SampleCount() int
+	ApproxMemoryBytes() int64
 	Release()
 }
 
@@ -40,6 +46,7 @@ type partReader interface {
 	Close() error
 	Meta() sstable.PartMeta
 	Query(query sstable.Query) ([]model.ColumnData, error)
+	ScanColumns(query sstable.Query) (queryexec.ColumnDataStream, error)
 	QuerySeriesIDs(query sstable.Query, seriesIDs []uint64) ([]model.ColumnData, error)
 	SeriesIDs(query sstable.Query) ([]uint64, error)
 }
@@ -170,6 +177,14 @@ func (m memTableStore) SampleCount() int {
 	return m.inner.SampleCount()
 }
 
+func (m memTableStore) ApproxMemorySamples() int {
+	return m.inner.SampleCount()
+}
+
+func (m memTableStore) ApproxMemoryBytes() int64 {
+	return m.inner.ApproxMemoryBytes()
+}
+
 func (m memTableStore) SnapshotAndReset() memSnapshot {
 	return m.inner.SnapshotAndReset()
 }
@@ -180,6 +195,10 @@ func (m memTableStore) Snapshot() memSnapshot {
 
 func (m memTableStore) Query(query memtable.Query) []model.ColumnData {
 	return m.inner.Query(query)
+}
+
+func (m memTableStore) ScanColumns(query memtable.Query) queryexec.ColumnDataStream {
+	return m.inner.ScanColumns(query)
 }
 
 func (m memTableStore) Restore(snapshot memSnapshot) {

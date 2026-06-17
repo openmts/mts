@@ -1,6 +1,7 @@
 package memtable_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -130,6 +131,71 @@ func TestApplyBatchMatchesApply(t *testing.T) {
 	got := batched.Snapshot().Query(memtable.Query{Start: 0, End: 20})
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ApplyBatch() columns = %#v, want %#v", got, want)
+	}
+}
+
+func TestMemTableScanColumns(t *testing.T) {
+	mt := memtable.New()
+	if err := mt.Apply(resolvedPoint(1, 10, 1, model.Float64Value(1))); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	stream := mt.ScanColumns(memtable.Query{Start: 0, End: 20})
+	if !stream.Next() {
+		t.Fatalf("Next() = false, want true err=%v", stream.Err())
+	}
+	if got := stream.ColumnData(); got.SeriesID != 1 || len(got.Samples) != 1 {
+		t.Fatalf("ColumnData() = %#v, want series 1 one sample", got)
+	}
+	if stream.Next() {
+		t.Fatal("Next(after column) = true, want false")
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	canceled := mt.ScanColumns(memtable.Query{Context: ctx, Start: 0, End: 20})
+	if canceled.Next() {
+		t.Fatal("canceled Next() = true, want false")
+	}
+	if err := canceled.Err(); err == nil {
+		t.Fatal("canceled Err() = nil, want context error")
+	}
+	if err := canceled.Close(); err != nil {
+		t.Fatalf("canceled Close() error = %v", err)
+	}
+}
+
+func TestMemTableApproxMemoryBytesAccountsForColumnBuffersAndStrings(t *testing.T) {
+	mt := memtable.New()
+	emptyBytes := mt.ApproxMemoryBytes()
+	points := []model.ResolvedPoint{
+		resolvedPoint(1, 1, 1, model.Float64Value(1)),
+		resolvedPoint(1, 2, 2, model.Int64Value(2)),
+		resolvedPoint(1, 3, 3, model.BoolValue(true)),
+		resolvedPoint(1, 4, 4, model.StringValue("0123456789abcdefghijklmnopqrstuvwxyz")),
+	}
+	if err := mt.ApplyBatch(points); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+	usedBytes := mt.ApproxMemoryBytes()
+	if usedBytes <= emptyBytes+int64(len(points)) {
+		t.Fatalf("ApproxMemoryBytes() = %d, want greater than empty %d plus sample count", usedBytes, emptyBytes)
+	}
+	if usedBytes < int64(len("0123456789abcdefghijklmnopqrstuvwxyz")) {
+		t.Fatalf("ApproxMemoryBytes() = %d, want at least string payload bytes", usedBytes)
+	}
+	snapshot := mt.SnapshotAndReset()
+	if mt.ApproxMemoryBytes() >= usedBytes {
+		t.Fatalf("active ApproxMemoryBytes after reset = %d, want below previous %d", mt.ApproxMemoryBytes(), usedBytes)
+	}
+	if snapshot.ApproxMemoryBytes() < usedBytes {
+		t.Fatalf("snapshot ApproxMemoryBytes = %d, want at least previous active %d", snapshot.ApproxMemoryBytes(), usedBytes)
+	}
+	snapshot.Release()
+	if snapshot.ApproxMemoryBytes() != 0 {
+		t.Fatalf("released snapshot ApproxMemoryBytes = %d, want 0", snapshot.ApproxMemoryBytes())
 	}
 }
 
