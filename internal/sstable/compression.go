@@ -45,8 +45,7 @@ func marshalCompressedValueBlock(
 	column model.ColumnData,
 	opts model.CompressionOptions,
 ) ([]byte, error) {
-	timestamps, writeSeqs := splitSampleMetadata(column.Samples)
-	timeCodec, timePayload, err := encodeTimestamps(timestamps, opts.Timestamp)
+	timeCodec, timePayload, err := encodeSampleTimestamps(column.Samples, opts.Timestamp)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +58,7 @@ func marshalCompressedValueBlock(
 	dst = append(dst, byte(column.FieldType))
 	dst = binary.AppendUvarint(dst, uint64(len(column.Samples)))
 	dst = appendCodecPayload(dst, timeCodec, timePayload)
-	dst = appendWriteSeqsPayload(dst, writeSeqs)
+	dst = appendSampleWriteSeqsPayload(dst, column.Samples)
 	dst = appendCodecPayload(dst, valueCodec, valuePayload)
 	return dst, nil
 }
@@ -139,16 +138,6 @@ func filterSamplesByTime(samples []model.VersionedSample, query Query) []model.V
 	return out
 }
 
-func splitSampleMetadata(samples []model.VersionedSample) ([]int64, []uint64) {
-	timestamps := make([]int64, len(samples))
-	writeSeqs := make([]uint64, len(samples))
-	for index, sample := range samples {
-		timestamps[index] = sample.Timestamp
-		writeSeqs[index] = sample.WriteSeq
-	}
-	return timestamps, writeSeqs
-}
-
 func appendCodecPayload(dst []byte, codec byte, payload []byte) []byte {
 	dst = append(dst, codec)
 	dst = binary.AppendUvarint(dst, uint64(len(payload)))
@@ -159,6 +148,14 @@ func appendWriteSeqsPayload(dst []byte, writeSeqs []uint64) []byte {
 	payload := make([]byte, 0, len(writeSeqs))
 	for _, seq := range writeSeqs {
 		payload = binary.AppendUvarint(payload, seq)
+	}
+	return appendCodecPayload(dst, compressionPlain, payload)
+}
+
+func appendSampleWriteSeqsPayload(dst []byte, samples []model.VersionedSample) []byte {
+	payload := make([]byte, 0, len(samples)*binary.MaxVarintLen64)
+	for _, sample := range samples {
+		payload = binary.AppendUvarint(payload, sample.WriteSeq)
 	}
 	return appendCodecPayload(dst, compressionPlain, payload)
 }

@@ -1,0 +1,191 @@
+package engine
+
+import (
+	"fmt"
+	"path/filepath"
+
+	"codeberg.org/mts/mts/internal/memtable"
+	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/sstable"
+	"codeberg.org/mts/mts/internal/storagefs"
+	"codeberg.org/mts/mts/internal/wal"
+)
+
+type walStore interface {
+	Append(records []model.ResolvedPoint, syncWrite bool) error
+	AppendTombstones(tombstones []model.Tombstone, syncWrite bool) error
+	ReplayRecords() ([]wal.Record, error)
+	Checkpoint() error
+	Close() error
+}
+
+type memStore interface {
+	Apply(point model.ResolvedPoint) error
+	ApplyBatch(points []model.ResolvedPoint) error
+	SampleCount() int
+	SnapshotAndReset() memSnapshot
+	Snapshot() memSnapshot
+	Query(query memtable.Query) []model.ColumnData
+	Restore(snapshot memSnapshot)
+}
+
+type memSnapshot interface {
+	Columns(query memtable.Query) []model.ColumnData
+	Query(query memtable.Query) []model.ColumnData
+	SampleCount() int
+	Release()
+}
+
+type partReader interface {
+	Close() error
+	Meta() sstable.PartMeta
+	Query(query sstable.Query) ([]model.ColumnData, error)
+	QuerySeriesIDs(query sstable.Query, seriesIDs []uint64) ([]model.ColumnData, error)
+	SeriesIDs(query sstable.Query) ([]uint64, error)
+}
+
+type partWriter interface {
+	AddSeries(columns []model.ColumnData) error
+	Close() (sstable.PartMeta, error)
+	Abort() error
+}
+
+type seriesBatchReader interface {
+	SeriesIDs() []uint64
+	SeriesCount() int
+	AppendSeriesIDs(dst []uint64) []uint64
+	QuerySeriesIDs(seriesIDs []uint64) ([]model.ColumnData, error)
+	QuerySeriesID(seriesID uint64) ([]model.ColumnData, error)
+}
+
+type partManager interface {
+	LoadManifest(dir string) (sstable.Manifest, error)
+	WriteManifest(dir string, manifest sstable.Manifest) error
+	OpenPart(path string) (partReader, error)
+	WritePart(
+		root string,
+		level int,
+		id string,
+		columns []model.ColumnData,
+		opts sstable.WriteOptions,
+	) (sstable.PartMeta, error)
+	NewWriter(root string, level int, id string, opts sstable.WriteOptions) (partWriter, error)
+	NewSeriesBatchReader(part partReader, query sstable.Query) (seriesBatchReader, error)
+}
+
+type fileOps interface {
+	RemoveAll(path string) error
+}
+
+type shardDeps struct {
+	openWAL func(dir string, opts model.WALOptions) (walStore, error)
+	newMem  func() memStore
+	parts   partManager
+	files   fileOps
+}
+
+type defaultPartManager struct{}
+
+type defaultFileOps struct{}
+
+type memTableStore struct {
+	inner *memtable.MemTable
+}
+
+func normalizeShardDeps(deps shardDeps) shardDeps {
+	if deps.openWAL == nil {
+		deps.openWAL = func(dir string, opts model.WALOptions) (walStore, error) {
+			return wal.Open(filepath.Join(dir, "wal"), wal.Options(opts))
+		}
+	}
+	if deps.newMem == nil {
+		deps.newMem = func() memStore {
+			return memTableStore{inner: memtable.New()}
+		}
+	}
+	if deps.parts == nil {
+		deps.parts = defaultPartManager{}
+	}
+	if deps.files == nil {
+		deps.files = defaultFileOps{}
+	}
+	return deps
+}
+
+func (defaultPartManager) LoadManifest(dir string) (sstable.Manifest, error) {
+	return sstable.LoadManifest(dir)
+}
+
+func (defaultPartManager) WriteManifest(dir string, manifest sstable.Manifest) error {
+	return sstable.WriteManifest(dir, manifest)
+}
+
+func (defaultPartManager) OpenPart(path string) (partReader, error) {
+	return sstable.OpenPart(path)
+}
+
+func (defaultPartManager) WritePart(
+	root string,
+	level int,
+	id string,
+	columns []model.ColumnData,
+	opts sstable.WriteOptions,
+) (sstable.PartMeta, error) {
+	return sstable.WritePartWithOptions(root, level, id, columns, opts)
+}
+
+func (defaultPartManager) NewWriter(
+	root string,
+	level int,
+	id string,
+	opts sstable.WriteOptions,
+) (partWriter, error) {
+	return sstable.NewPartWriter(root, level, id, opts)
+}
+
+func (defaultPartManager) NewSeriesBatchReader(
+	reader partReader,
+	query sstable.Query,
+) (seriesBatchReader, error) {
+	part, ok := reader.(*sstable.Part)
+	if !ok {
+		return nil, fmt.Errorf("part reader does not support batch reader")
+	}
+	return sstable.NewSeriesBatchReader(part, query)
+}
+
+func (defaultFileOps) RemoveAll(path string) error {
+	return storagefs.RemoveAll(path)
+}
+
+func (m memTableStore) Apply(point model.ResolvedPoint) error {
+	return m.inner.Apply(point)
+}
+
+func (m memTableStore) ApplyBatch(points []model.ResolvedPoint) error {
+	return m.inner.ApplyBatch(points)
+}
+
+func (m memTableStore) SampleCount() int {
+	return m.inner.SampleCount()
+}
+
+func (m memTableStore) SnapshotAndReset() memSnapshot {
+	return m.inner.SnapshotAndReset()
+}
+
+func (m memTableStore) Snapshot() memSnapshot {
+	return m.inner.Snapshot()
+}
+
+func (m memTableStore) Query(query memtable.Query) []model.ColumnData {
+	return m.inner.Query(query)
+}
+
+func (m memTableStore) Restore(snapshot memSnapshot) {
+	memSnapshot, ok := snapshot.(*memtable.Snapshot)
+	if !ok {
+		return
+	}
+	m.inner.Restore(memSnapshot)
+}

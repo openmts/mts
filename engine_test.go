@@ -66,6 +66,9 @@ func TestEngineWriteFlushReopenQueryRows(t *testing.T) {
 	}
 	iterCount := 0
 	for iter.Next() {
+		if iter.Column().SeriesID == 0 {
+			t.Fatal("column iterator returned zero column")
+		}
 		iterCount++
 	}
 	if err := iter.Err(); err != nil {
@@ -100,6 +103,9 @@ func TestEngineWriteFlushReopenQueryRows(t *testing.T) {
 	}
 	rowCount := 0
 	for rowIter.Next() {
+		if rowIter.Row().SeriesID == 0 {
+			t.Fatal("row iterator returned zero row")
+		}
 		rowCount++
 	}
 	if err := rowIter.Err(); err != nil {

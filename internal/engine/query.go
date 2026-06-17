@@ -10,8 +10,10 @@ import (
 )
 
 type columnIterator struct {
-	columns []model.ColumnSeries
-	index   int
+	raw       []model.ColumnData
+	snapshot  catalog.Snapshot
+	decorated []model.ColumnSeries
+	index     int
 }
 
 type rowIterator struct {
@@ -49,7 +51,10 @@ func (e *Engine) QueryColumnIterator(_ context.Context, query model.Query) (*col
 	if err != nil {
 		return nil, err
 	}
-	return &columnIterator{columns: decorateColumns(raw, snapshot)}, nil
+	return &columnIterator{
+		raw:      filterDecoratableColumns(raw, snapshot),
+		snapshot: snapshot,
+	}, nil
 }
 
 func (e *Engine) QueryRows(ctx context.Context, query model.Query) ([]model.Row, error) {
@@ -112,21 +117,60 @@ func (e *Engine) queryShards(query model.Query) []*Shard {
 func decorateColumns(columns []model.ColumnData, snapshot catalog.Snapshot) []model.ColumnSeries {
 	out := make([]model.ColumnSeries, 0, len(columns))
 	for _, column := range columns {
-		series, ok := snapshot.Series[column.SeriesID]
-		if !ok {
+		if !canDecorateColumn(column, snapshot) {
 			continue
 		}
-		field, ok := snapshot.Fields[column.FieldID]
-		if !ok {
-			continue
-		}
-		out = append(out, decorateColumn(column, series.Measurement, series.Tags, field.Name))
+		out = append(out, decorateColumnData(column, snapshot))
 	}
 	return out
 }
 
+func filterDecoratableColumns(columns []model.ColumnData, snapshot catalog.Snapshot) []model.ColumnData {
+	out := columns[:0]
+	for _, column := range columns {
+		if canDecorateColumn(column, snapshot) {
+			out = append(out, column)
+		}
+	}
+	return out
+}
+
+func canDecorateColumn(column model.ColumnData, snapshot catalog.Snapshot) bool {
+	if _, ok := snapshot.Series[column.SeriesID]; !ok {
+		return false
+	}
+	if _, ok := snapshot.Fields[column.FieldID]; !ok {
+		return false
+	}
+	return true
+}
+
+var decorateColumnDataHook func()
+
+func decorateColumnData(column model.ColumnData, snapshot catalog.Snapshot) model.ColumnSeries {
+	if decorateColumnDataHook != nil {
+		decorateColumnDataHook()
+	}
+	series, ok := snapshot.Series[column.SeriesID]
+	if !ok {
+		return model.ColumnSeries{}
+	}
+	field, ok := snapshot.Fields[column.FieldID]
+	if !ok {
+		return model.ColumnSeries{}
+	}
+	return decorateColumn(column, series.Measurement, series.Tags, field.Name)
+}
+
 func (i *columnIterator) Next() bool {
-	if i.index >= len(i.columns) {
+	if i.decorated != nil {
+		if i.index >= len(i.decorated) {
+			return false
+		}
+		i.index++
+		return true
+	}
+	if i.index >= len(i.raw) {
 		return false
 	}
 	i.index++
@@ -134,10 +178,16 @@ func (i *columnIterator) Next() bool {
 }
 
 func (i *columnIterator) Column() model.ColumnSeries {
-	if i.index == 0 || i.index > len(i.columns) {
+	if i.decorated != nil {
+		if i.index == 0 || i.index > len(i.decorated) {
+			return model.ColumnSeries{}
+		}
+		return i.decorated[i.index-1]
+	}
+	if i.index == 0 || i.index > len(i.raw) {
 		return model.ColumnSeries{}
 	}
-	return i.columns[i.index-1]
+	return decorateColumnData(i.raw[i.index-1], i.snapshot)
 }
 
 func (i *columnIterator) Err() error {
@@ -145,7 +195,8 @@ func (i *columnIterator) Err() error {
 }
 
 func (i *columnIterator) Close() error {
-	i.columns = nil
+	i.raw = nil
+	i.decorated = nil
 	return nil
 }
 

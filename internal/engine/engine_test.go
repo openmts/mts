@@ -15,6 +15,7 @@ import (
 	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/sstable"
+	"codeberg.org/mts/mts/internal/wal"
 )
 
 func TestEngineLifecycleAndQueries(t *testing.T) {
@@ -741,7 +742,7 @@ func TestStreamingCompactionAbortsOpenOutputOnBatchQueryError(t *testing.T) {
 	}
 	corruptValuesFileAtPath(t, corruptMeta.Path)
 
-	_, _, err = shard.writeStreamingCompactionOutputsLocked(1, []*sstable.Part{validPart, corruptPart})
+	_, _, err = shard.writeStreamingCompactionOutputsLocked(1, []partReader{validPart, corruptPart})
 	if err == nil {
 		validCloseErr := validPart.Close()
 		corruptCloseErr := corruptPart.Close()
@@ -825,7 +826,7 @@ func TestCompactionStreamsOneSeriesAtATime(t *testing.T) {
 		closeErr := errors.Join(partOne.Close(), shard.Close())
 		t.Fatalf("OpenPart(two) error = %v close = %v", err, closeErr)
 	}
-	inputs, err := newCompactionInputs([]*sstable.Part{partOne, partTwo}, 0, int64(time.Hour))
+	inputs, err := newCompactionInputs(defaultPartManager{}, []partReader{partOne, partTwo}, 0, int64(time.Hour))
 	if err != nil {
 		closeErr := errors.Join(partOne.Close(), partTwo.Close(), shard.Close())
 		t.Fatalf("newCompactionInputs() error = %v close = %v", err, closeErr)
@@ -1380,9 +1381,63 @@ func TestMergeColumnDataKeepsNewestSequence(t *testing.T) {
 	if shardMatches(&Shard{opts: ShardOptions{Database: "a", RetentionPolicy: "b"}}, model.Query{Database: "x", RetentionPolicy: "b"}) {
 		t.Fatal("shardMatches() matched wrong database")
 	}
-	empty := &Shard{mem: memtable.New()}
+	empty := &Shard{mem: memStoreForTest()}
 	if err := empty.Flush(); err != nil {
 		t.Fatalf("empty Flush() error = %v", err)
+	}
+}
+
+func TestShardUsesInjectedStoragePorts(t *testing.T) {
+	mem := &fakeMemStore{
+		snapshot: &fakeMemSnapshot{
+			columns: []model.ColumnData{columnForMergeTest(1, 1, 0, 1)},
+			samples: 1,
+		},
+		samples: 1,
+	}
+	walLog := &fakeWalStore{}
+	parts := &fakePartManager{}
+	files := &fakeFileOps{}
+	shard, _, err := OpenShard(ShardOptions{
+		Dir:                t.TempDir(),
+		Start:              0,
+		End:                100,
+		MemTableMaxSamples: 10,
+		deps: shardDeps{
+			openWAL: func(string, model.WALOptions) (walStore, error) {
+				return walLog, nil
+			},
+			newMem: func() memStore {
+				return mem
+			},
+			parts: parts,
+			files: files,
+		},
+	})
+	if err != nil {
+		t.Fatalf("OpenShard() error = %v", err)
+	}
+	if err := shard.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+	if !parts.writePartCalled || !parts.openPartCalled || !parts.writeManifestCalled {
+		t.Fatalf("part manager calls write=%v open=%v manifest=%v, want all true",
+			parts.writePartCalled, parts.openPartCalled, parts.writeManifestCalled)
+	}
+	if !walLog.checkpointCalled {
+		t.Fatal("wal checkpoint called = false, want true")
+	}
+	if !mem.snapshotReleased {
+		t.Fatal("snapshot released = false, want true")
+	}
+	if err := shard.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if !walLog.closed {
+		t.Fatal("wal closed = false, want true")
+	}
+	if files.removeAllCalls != 0 {
+		t.Fatalf("file RemoveAll calls = %d, want 0", files.removeAllCalls)
 	}
 }
 
@@ -1415,7 +1470,7 @@ func TestColumnsToRowsFallsBackForUnalignedColumns(t *testing.T) {
 }
 
 func TestIteratorsReturnZeroBeforeNextAndAfterClose(t *testing.T) {
-	columns := &columnIterator{columns: []model.ColumnSeries{{SeriesID: 1}}}
+	columns := &columnIterator{decorated: []model.ColumnSeries{{SeriesID: 1}}}
 	if got := columns.Column(); got.SeriesID != 0 {
 		t.Fatalf("Column(before Next) = %#v, want zero", got)
 	}
@@ -1441,6 +1496,73 @@ func TestIteratorsReturnZeroBeforeNextAndAfterClose(t *testing.T) {
 	}
 	if err := rows.Close(); err != nil {
 		t.Fatalf("row Close() error = %v", err)
+	}
+}
+
+func TestQueryColumnIteratorDecoratesLazily(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 100,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "cpu",
+		Tags:        map[string]string{"host": "a"},
+		Timestamp:   1,
+		Fields: map[string]model.FieldValue{
+			"f0": model.Float64Value(1),
+			"f1": model.Float64Value(2),
+		},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	decorations := 0
+	decorateColumnDataHook = func() {
+		decorations++
+	}
+	defer func() {
+		decorateColumnDataHook = nil
+	}()
+	iter, err := eng.QueryColumnIterator(ctx, model.Query{
+		Measurement: "cpu",
+		StartTime:   0,
+		EndTime:     10,
+	})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryColumnIterator() error = %v close = %v", err, closeErr)
+	}
+	if decorations != 0 {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("decorations after iterator creation = %d, want 0 close = %v", decorations, closeErr)
+	}
+	if !iter.Next() {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("Next() = false, want true close = %v", closeErr)
+	}
+	if decorations != 0 {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("decorations after Next = %d, want 0 close = %v", decorations, closeErr)
+	}
+	if got := iter.Column(); got.SeriesID == 0 {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("Column() = %#v, want decorated column close = %v", got, closeErr)
+	}
+	if decorations != 1 {
+		closeErr := errors.Join(iter.Close(), eng.Close(ctx))
+		t.Fatalf("decorations after Column = %d, want 1 close = %v", decorations, closeErr)
+	}
+	if err := iter.Close(); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("iterator Close() error = %v engine close = %v", err, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
 	}
 }
 
@@ -1610,6 +1732,257 @@ func columnForMergeTest(seriesID uint64, fieldID uint32, start int64, count int)
 		FieldType: model.FieldFloat64,
 		Samples:   samples,
 	}
+}
+
+func memStoreForTest() memStore {
+	return memTableStore{inner: memtable.New()}
+}
+
+func TestMemTableStoreAdapterSnapshotAndRestore(t *testing.T) {
+	store := memTableStore{inner: memtable.New()}
+	point := model.ResolvedPoint{
+		SeriesID:  1,
+		Timestamp: 1,
+		Fields: []model.ResolvedField{
+			{FieldID: 1, Type: model.FieldFloat64, Value: model.Float64Value(1)},
+		},
+	}
+	if err := store.Apply(point); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	snapshot := store.Snapshot()
+	if snapshot.SampleCount() != 1 {
+		t.Fatalf("Snapshot sample count = %d, want 1", snapshot.SampleCount())
+	}
+	reset := store.SnapshotAndReset()
+	if store.SampleCount() != 0 {
+		t.Fatalf("SampleCount after reset = %d, want 0", store.SampleCount())
+	}
+	store.Restore(reset)
+	if store.SampleCount() != 1 {
+		t.Fatalf("SampleCount after restore = %d, want 1", store.SampleCount())
+	}
+	store.Restore(&fakeMemSnapshot{samples: 10})
+	if store.SampleCount() != 1 {
+		t.Fatalf("SampleCount after unsupported restore = %d, want unchanged 1", store.SampleCount())
+	}
+	snapshot.Release()
+}
+
+type fakeWalStore struct {
+	points           []model.ResolvedPoint
+	tombstones       []model.Tombstone
+	checkpointCalled bool
+	closed           bool
+}
+
+func (f *fakeWalStore) Append(points []model.ResolvedPoint, _ bool) error {
+	f.points = append(f.points, points...)
+	return nil
+}
+
+func (f *fakeWalStore) AppendTombstones(tombstones []model.Tombstone, _ bool) error {
+	f.tombstones = append(f.tombstones, tombstones...)
+	return nil
+}
+
+func (f *fakeWalStore) ReplayRecords() ([]wal.Record, error) {
+	return nil, nil
+}
+
+func (f *fakeWalStore) Checkpoint() error {
+	f.checkpointCalled = true
+	return nil
+}
+
+func (f *fakeWalStore) Close() error {
+	f.closed = true
+	return nil
+}
+
+type fakeMemStore struct {
+	snapshot         *fakeMemSnapshot
+	samples          int
+	snapshotReleased bool
+}
+
+func (f *fakeMemStore) Apply(point model.ResolvedPoint) error {
+	f.samples += len(point.Fields)
+	return nil
+}
+
+func (f *fakeMemStore) ApplyBatch(points []model.ResolvedPoint) error {
+	for _, point := range points {
+		f.samples += len(point.Fields)
+	}
+	return nil
+}
+
+func (f *fakeMemStore) SampleCount() int {
+	return f.samples
+}
+
+func (f *fakeMemStore) SnapshotAndReset() memSnapshot {
+	f.samples = 0
+	f.snapshot.onRelease = func() {
+		f.snapshotReleased = true
+	}
+	return f.snapshot
+}
+
+func (f *fakeMemStore) Snapshot() memSnapshot {
+	return f.snapshot
+}
+
+func (f *fakeMemStore) Query(memtable.Query) []model.ColumnData {
+	return f.snapshot.columns
+}
+
+func (f *fakeMemStore) Restore(snapshot memSnapshot) {
+	if snapshot != nil {
+		f.samples = snapshot.SampleCount()
+	}
+}
+
+type fakeMemSnapshot struct {
+	columns   []model.ColumnData
+	samples   int
+	onRelease func()
+}
+
+func (f *fakeMemSnapshot) Columns(memtable.Query) []model.ColumnData {
+	return f.columns
+}
+
+func (f *fakeMemSnapshot) Query(query memtable.Query) []model.ColumnData {
+	return f.Columns(query)
+}
+
+func (f *fakeMemSnapshot) SampleCount() int {
+	return f.samples
+}
+
+func (f *fakeMemSnapshot) Release() {
+	if f.onRelease != nil {
+		f.onRelease()
+	}
+}
+
+type fakePartManager struct {
+	writePartCalled     bool
+	openPartCalled      bool
+	writeManifestCalled bool
+}
+
+func (f *fakePartManager) LoadManifest(string) (sstable.Manifest, error) {
+	return sstable.Manifest{}, nil
+}
+
+func (f *fakePartManager) WriteManifest(_ string, _ sstable.Manifest) error {
+	f.writeManifestCalled = true
+	return nil
+}
+
+func (f *fakePartManager) OpenPart(string) (partReader, error) {
+	f.openPartCalled = true
+	return fakePartReader{meta: sstable.PartMeta{ID: "sst-000001", Path: "fake"}}, nil
+}
+
+func (f *fakePartManager) WritePart(
+	_ string,
+	_ int,
+	id string,
+	columns []model.ColumnData,
+	_ sstable.WriteOptions,
+) (sstable.PartMeta, error) {
+	f.writePartCalled = true
+	return sstable.PartMeta{
+		ID:          id,
+		Path:        "fake",
+		MinTime:     columns[0].Samples[0].Timestamp,
+		MaxTime:     columns[0].Samples[0].Timestamp,
+		MinSeriesID: columns[0].SeriesID,
+		MaxSeriesID: columns[0].SeriesID,
+		SeriesCount: 1,
+		RowsCount:   1,
+	}, nil
+}
+
+func (f *fakePartManager) NewWriter(string, int, string, sstable.WriteOptions) (partWriter, error) {
+	return &fakePartWriter{}, nil
+}
+
+func (f *fakePartManager) NewSeriesBatchReader(partReader, sstable.Query) (seriesBatchReader, error) {
+	return fakeSeriesBatchReader{}, nil
+}
+
+type fakePartReader struct {
+	meta sstable.PartMeta
+}
+
+func (f fakePartReader) Close() error {
+	return nil
+}
+
+func (f fakePartReader) Meta() sstable.PartMeta {
+	return f.meta
+}
+
+func (f fakePartReader) Query(sstable.Query) ([]model.ColumnData, error) {
+	return nil, nil
+}
+
+func (f fakePartReader) QuerySeriesIDs(sstable.Query, []uint64) ([]model.ColumnData, error) {
+	return nil, nil
+}
+
+func (f fakePartReader) SeriesIDs(sstable.Query) ([]uint64, error) {
+	return nil, nil
+}
+
+type fakePartWriter struct{}
+
+func (f *fakePartWriter) AddSeries([]model.ColumnData) error {
+	return nil
+}
+
+func (f *fakePartWriter) Close() (sstable.PartMeta, error) {
+	return sstable.PartMeta{ID: "sst-000002", Path: "fake-2"}, nil
+}
+
+func (f *fakePartWriter) Abort() error {
+	return nil
+}
+
+type fakeSeriesBatchReader struct{}
+
+func (fakeSeriesBatchReader) SeriesIDs() []uint64 {
+	return nil
+}
+
+func (fakeSeriesBatchReader) SeriesCount() int {
+	return 0
+}
+
+func (fakeSeriesBatchReader) AppendSeriesIDs(dst []uint64) []uint64 {
+	return dst
+}
+
+func (fakeSeriesBatchReader) QuerySeriesIDs([]uint64) ([]model.ColumnData, error) {
+	return nil, nil
+}
+
+func (fakeSeriesBatchReader) QuerySeriesID(uint64) ([]model.ColumnData, error) {
+	return nil, nil
+}
+
+type fakeFileOps struct {
+	removeAllCalls int
+}
+
+func (f *fakeFileOps) RemoveAll(string) error {
+	f.removeAllCalls++
+	return nil
 }
 
 func TestDecorateColumnsSkipsMissingCatalogEntries(t *testing.T) {

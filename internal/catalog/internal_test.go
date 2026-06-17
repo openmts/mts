@@ -71,6 +71,24 @@ func TestSeriesKeyMultiTagUsesSingleAllocationClass(t *testing.T) {
 	}
 }
 
+func TestResolveSeriesSinglePointMultiTagUsesScratch(t *testing.T) {
+	cat := newCatalog(t.TempDir())
+	tags := map[string]string{"host": "a", "region": "west", "rack": "r1"}
+	cat.applySeries(Series{ID: 1, Measurement: "cpu", Tags: tags})
+	allocs := testing.AllocsPerRun(100, func() {
+		series, changed, err := cat.resolveSeriesNoSnapshotLocked("cpu", tags)
+		if err != nil {
+			t.Fatalf("resolveSeriesNoSnapshotLocked() error = %v", err)
+		}
+		if changed || series.ID != 1 {
+			t.Fatalf("series = %#v changed=%v, want existing id 1 unchanged", series, changed)
+		}
+	})
+	if allocs > 1 {
+		t.Fatalf("single point multi tag resolve allocs/run = %.2f, want <= 1", allocs)
+	}
+}
+
 func TestFieldSchemaCachesSortedFieldsAndDetectsConflicts(t *testing.T) {
 	cat, err := Open(t.TempDir())
 	if err != nil {

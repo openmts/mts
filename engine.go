@@ -3,6 +3,8 @@ package mts
 import (
 	"context"
 	"time"
+
+	"codeberg.org/mts/mts/internal/model"
 )
 
 func (e *Engine) Close(ctx context.Context) error {
@@ -10,7 +12,7 @@ func (e *Engine) Close(ctx context.Context) error {
 }
 
 func (e *Engine) Write(ctx context.Context, points []Point, opts WriteOptions) error {
-	return e.inner.Write(ctx, points, opts)
+	return e.inner.Write(ctx, toModelPoints(points), toModelWriteOptions(opts))
 }
 
 func (e *Engine) Flush(ctx context.Context) error {
@@ -18,19 +20,35 @@ func (e *Engine) Flush(ctx context.Context) error {
 }
 
 func (e *Engine) QueryColumns(ctx context.Context, query Query) ([]ColumnSeries, error) {
-	return e.inner.QueryColumns(ctx, query)
+	columns, err := e.inner.QueryColumns(ctx, toModelQuery(query))
+	if err != nil {
+		return nil, err
+	}
+	return fromModelColumnSeriesList(columns), nil
 }
 
 func (e *Engine) QueryColumnIterator(ctx context.Context, query Query) (ColumnIterator, error) {
-	return e.inner.QueryColumnIterator(ctx, query)
+	inner, err := e.inner.QueryColumnIterator(ctx, toModelQuery(query))
+	if err != nil {
+		return nil, err
+	}
+	return columnIterator{inner: inner}, nil
 }
 
 func (e *Engine) QueryRows(ctx context.Context, query Query) ([]Row, error) {
-	return e.inner.QueryRows(ctx, query)
+	rows, err := e.inner.QueryRows(ctx, toModelQuery(query))
+	if err != nil {
+		return nil, err
+	}
+	return fromModelRows(rows), nil
 }
 
 func (e *Engine) QueryRowIterator(ctx context.Context, query Query) (RowIterator, error) {
-	return e.inner.QueryRowIterator(ctx, query)
+	inner, err := e.inner.QueryRowIterator(ctx, toModelQuery(query))
+	if err != nil {
+		return nil, err
+	}
+	return rowIterator{inner: inner}, nil
 }
 
 func (e *Engine) Compact(ctx context.Context) error {
@@ -54,11 +72,15 @@ func (e *Engine) DropDatabase(ctx context.Context, name string) error {
 }
 
 func (e *Engine) CreateRetentionPolicy(ctx context.Context, database string, policy RetentionPolicy) error {
-	return e.inner.CreateRetentionPolicy(ctx, database, policy)
+	return e.inner.CreateRetentionPolicy(ctx, database, toModelRetentionPolicy(policy))
 }
 
 func (e *Engine) ListRetentionPolicies(ctx context.Context, database string) ([]RetentionPolicy, error) {
-	return e.inner.ListRetentionPolicies(ctx, database)
+	policies, err := e.inner.ListRetentionPolicies(ctx, database)
+	if err != nil {
+		return nil, err
+	}
+	return fromModelRetentionPolicies(policies), nil
 }
 
 func (e *Engine) ListMeasurements(ctx context.Context, database string) ([]string, error) {
@@ -66,7 +88,11 @@ func (e *Engine) ListMeasurements(ctx context.Context, database string) ([]strin
 }
 
 func (e *Engine) ListFields(ctx context.Context, database string, measurement string) ([]FieldSchema, error) {
-	return e.inner.ListFields(ctx, database, measurement)
+	fields, err := e.inner.ListFields(ctx, database, measurement)
+	if err != nil {
+		return nil, err
+	}
+	return fromModelFieldSchemas(fields), nil
 }
 
 func (e *Engine) ListSeries(
@@ -75,5 +101,49 @@ func (e *Engine) ListSeries(
 	measurement string,
 	tags map[string]string,
 ) ([]Series, error) {
-	return e.inner.ListSeries(ctx, database, measurement, tags)
+	series, err := e.inner.ListSeries(ctx, database, measurement, tags)
+	if err != nil {
+		return nil, err
+	}
+	return fromModelSeriesList(series), nil
+}
+
+type columnIterator struct {
+	inner model.ColumnIterator
+}
+
+type rowIterator struct {
+	inner model.RowIterator
+}
+
+func (i columnIterator) Next() bool {
+	return i.inner.Next()
+}
+
+func (i columnIterator) Column() ColumnSeries {
+	return fromModelColumnSeries(i.inner.Column())
+}
+
+func (i columnIterator) Err() error {
+	return i.inner.Err()
+}
+
+func (i columnIterator) Close() error {
+	return i.inner.Close()
+}
+
+func (i rowIterator) Next() bool {
+	return i.inner.Next()
+}
+
+func (i rowIterator) Row() Row {
+	return fromModelRow(i.inner.Row())
+}
+
+func (i rowIterator) Err() error {
+	return i.inner.Err()
+}
+
+func (i rowIterator) Close() error {
+	return i.inner.Close()
 }

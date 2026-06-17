@@ -44,8 +44,14 @@ func batchIdentities(records []model.ResolvedPoint) ([]batchIdentity, []int) {
 	identities := make([]batchIdentity, 0)
 	refs := make([]int, len(records))
 	seen := make(map[string]int)
+	keyScratch := make([]byte, 0)
 	for index, record := range records {
-		key := identityKey(record)
+		if ref, ok := lastIdentityRef(record, identities); ok {
+			refs[index] = ref
+			continue
+		}
+		var key string
+		key, keyScratch = identityKeyWithScratch(record, keyScratch[:0])
 		ref, ok := seen[key]
 		if !ok {
 			ref = len(identities)
@@ -62,21 +68,49 @@ func batchIdentities(records []model.ResolvedPoint) ([]batchIdentity, []int) {
 	return identities, refs
 }
 
-func identityKey(point model.ResolvedPoint) string {
-	dst := make([]byte, 0, stringSize(point.Database)+stringSize(point.RetentionPolicy)+stringSize(point.Measurement)+estimateTagsSize(point.Tags))
+func lastIdentityRef(point model.ResolvedPoint, identities []batchIdentity) (int, bool) {
+	if len(identities) == 0 {
+		return 0, false
+	}
+	ref := len(identities) - 1
+	return ref, identityMatches(point, identities[ref])
+}
+
+func identityMatches(point model.ResolvedPoint, identity batchIdentity) bool {
+	if point.Database != identity.database ||
+		point.RetentionPolicy != identity.retentionPolicy ||
+		point.Measurement != identity.measurement ||
+		len(point.Tags) != len(identity.tags) {
+		return false
+	}
+	for key, value := range point.Tags {
+		if identity.tags[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func identityKeyWithScratch(point model.ResolvedPoint, dst []byte) (string, []byte) {
+	if cap(dst) == 0 {
+		dst = make([]byte, 0, stringSize(point.Database)+stringSize(point.RetentionPolicy)+stringSize(point.Measurement)+estimateTagsSize(point.Tags))
+	}
 	dst = codec.AppendString(dst, point.Database)
 	dst = codec.AppendString(dst, point.RetentionPolicy)
 	dst = codec.AppendString(dst, point.Measurement)
 	dst = appendTags(dst, point.Tags)
-	return string(dst)
+	return string(dst), dst
 }
 
 func batchFieldNames(records []model.ResolvedPoint) ([]string, [][]int) {
 	names := make([]string, 0)
 	refs := make([][]int, len(records))
+	arena := make([]int, totalFieldCount(records))
+	offset := 0
 	seen := make(map[string]int)
 	for pointIndex, record := range records {
-		pointRefs := make([]int, len(record.Fields))
+		pointRefs := arena[offset : offset+len(record.Fields)]
+		offset += len(record.Fields)
 		for fieldIndex, field := range record.Fields {
 			ref, ok := seen[field.FieldName]
 			if !ok {
@@ -89,6 +123,14 @@ func batchFieldNames(records []model.ResolvedPoint) ([]string, [][]int) {
 		refs[pointIndex] = pointRefs
 	}
 	return names, refs
+}
+
+func totalFieldCount(records []model.ResolvedPoint) int {
+	total := 0
+	for _, record := range records {
+		total += len(record.Fields)
+	}
+	return total
 }
 
 func appendIdentity(dst []byte, identity batchIdentity) []byte {

@@ -37,6 +37,7 @@ type Catalog struct {
 	policies     map[string]map[string]model.RetentionPolicy
 
 	snapshotDirtyRecords int
+	seriesKeyScratch     []string
 }
 
 type Snapshot struct {

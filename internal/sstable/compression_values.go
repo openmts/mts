@@ -26,11 +26,11 @@ func encodeTypedValues(column model.ColumnData, opts model.CompressionOptions) (
 }
 
 func encodeFloatValues(samples []model.VersionedSample, policy string) (byte, []byte, error) {
-	plain := appendFloatValues(nil, samples)
+	plain := appendFloatValues(make([]byte, 0, len(samples)*8), samples)
 	if compressionPolicy(policy, "xor") == "plain" {
 		return compressionPlain, plain, nil
 	}
-	candidate := appendXORFloatValues(nil, samples)
+	candidate := appendXORFloatValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), samples)
 	if len(candidate) < len(plain) {
 		return compressionXOR, candidate, nil
 	}
@@ -52,11 +52,11 @@ func appendXORFloatValues(dst []byte, samples []model.VersionedSample) []byte {
 }
 
 func encodeIntValues(samples []model.VersionedSample, policy string) (byte, []byte, error) {
-	plain := appendIntValues(nil, samples)
+	plain := appendIntValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), samples)
 	if compressionPolicy(policy, "delta") == "plain" {
 		return compressionPlain, plain, nil
 	}
-	candidate := appendDeltaIntValues(nil, samples)
+	candidate := appendDeltaIntValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), samples)
 	if len(candidate) < len(plain) {
 		return compressionDelta, candidate, nil
 	}
@@ -78,15 +78,23 @@ func appendDeltaIntValues(dst []byte, samples []model.VersionedSample) []byte {
 }
 
 func encodeStringValues(samples []model.VersionedSample, policy string) (byte, []byte, error) {
-	plain := appendStringValues(nil, samples)
+	plain := appendStringValues(make([]byte, 0, estimateStringValuesSize(samples)), samples)
 	if compressionPolicy(policy, "dictionary") == "plain" {
 		return compressionPlain, plain, nil
 	}
-	candidate := appendDictionaryStringValues(nil, samples)
+	candidate := appendDictionaryStringValues(make([]byte, 0, estimateStringValuesSize(samples)), samples)
 	if len(candidate) < len(plain) {
 		return compressionDictionary, candidate, nil
 	}
 	return compressionPlain, plain, nil
+}
+
+func estimateStringValuesSize(samples []model.VersionedSample) int {
+	size := 0
+	for _, sample := range samples {
+		size += binary.MaxVarintLen64 + len(sample.Value.String)
+	}
+	return size
 }
 
 func appendDictionaryStringValues(dst []byte, samples []model.VersionedSample) []byte {
@@ -201,6 +209,14 @@ func readCodecPayloadSamples(
 ) ([]model.VersionedSample, error) {
 	if codecID == compressionPlain {
 		return readSamples(reader, fieldType, timestamps, writeSeqs, query)
+	}
+	switch fieldType {
+	case model.FieldFloat64:
+		return readXORFloatSampleValues(reader, codecID, timestamps, writeSeqs, query)
+	case model.FieldInt64:
+		return readDeltaIntSampleValues(reader, codecID, timestamps, writeSeqs, query)
+	case model.FieldString:
+		return readDictionaryStringSampleValues(reader, codecID, timestamps, writeSeqs, query)
 	}
 	values, err := readCompressedValues(reader, fieldType, codecID, len(timestamps))
 	if err != nil {
@@ -481,6 +497,54 @@ func readXORFloatValues(
 	return values, nil
 }
 
+func readXORFloatSampleValues(
+	reader *blockReader,
+	codecID byte,
+	timestamps []int64,
+	writeSeqs []uint64,
+	query Query,
+) ([]model.VersionedSample, error) {
+	if codecID != compressionXOR {
+		return nil, fmt.Errorf("unknown float compression %d", codecID)
+	}
+	samples := make([]model.VersionedSample, 0, compressedQueryCapacity(len(timestamps), query))
+	if len(timestamps) == 0 {
+		return samples, nil
+	}
+	first, err := reader.fixedInt64("first float bits")
+	if err != nil {
+		return nil, err
+	}
+	prev := uint64(first)
+	samples = appendCompressedFloatSample(samples, timestamps[0], writeSeqs[0], prev, query)
+	for index := 1; index < len(timestamps); index++ {
+		xor, err := reader.uvarint("float xor")
+		if err != nil {
+			return nil, err
+		}
+		prev ^= xor
+		samples = appendCompressedFloatSample(samples, timestamps[index], writeSeqs[index], prev, query)
+	}
+	return samples, nil
+}
+
+func appendCompressedFloatSample(
+	samples []model.VersionedSample,
+	timestamp int64,
+	writeSeq uint64,
+	bits uint64,
+	query Query,
+) []model.VersionedSample {
+	if timestamp < query.Start || timestamp > query.End {
+		return samples
+	}
+	return append(samples, model.VersionedSample{
+		Timestamp: timestamp,
+		WriteSeq:  writeSeq,
+		Value:     model.Float64Value(math.Float64frombits(bits)),
+	})
+}
+
 func readDeltaIntValues(
 	reader *blockReader,
 	codecID byte,
@@ -509,6 +573,53 @@ func readDeltaIntValues(
 	return values, nil
 }
 
+func readDeltaIntSampleValues(
+	reader *blockReader,
+	codecID byte,
+	timestamps []int64,
+	writeSeqs []uint64,
+	query Query,
+) ([]model.VersionedSample, error) {
+	if codecID != compressionDelta {
+		return nil, fmt.Errorf("unknown int compression %d", codecID)
+	}
+	samples := make([]model.VersionedSample, 0, compressedQueryCapacity(len(timestamps), query))
+	if len(timestamps) == 0 {
+		return samples, nil
+	}
+	prev, err := reader.varint("first int value")
+	if err != nil {
+		return nil, err
+	}
+	samples = appendCompressedIntSample(samples, timestamps[0], writeSeqs[0], prev, query)
+	for index := 1; index < len(timestamps); index++ {
+		delta, err := reader.uvarint("int delta")
+		if err != nil {
+			return nil, err
+		}
+		prev += unzigZag64(delta)
+		samples = appendCompressedIntSample(samples, timestamps[index], writeSeqs[index], prev, query)
+	}
+	return samples, nil
+}
+
+func appendCompressedIntSample(
+	samples []model.VersionedSample,
+	timestamp int64,
+	writeSeq uint64,
+	value int64,
+	query Query,
+) []model.VersionedSample {
+	if timestamp < query.Start || timestamp > query.End {
+		return samples
+	}
+	return append(samples, model.VersionedSample{
+		Timestamp: timestamp,
+		WriteSeq:  writeSeq,
+		Value:     model.Int64Value(value),
+	})
+}
+
 func readDictionaryStringValues(
 	reader *blockReader,
 	codecID byte,
@@ -522,6 +633,41 @@ func readDictionaryStringValues(
 		return nil, err
 	}
 	return readStringDictionaryOrdinals(reader, dict, count)
+}
+
+func readDictionaryStringSampleValues(
+	reader *blockReader,
+	codecID byte,
+	timestamps []int64,
+	writeSeqs []uint64,
+	query Query,
+) ([]model.VersionedSample, error) {
+	if codecID != compressionDictionary {
+		return nil, fmt.Errorf("unknown string compression %d", codecID)
+	}
+	dict, err := readStringDictionary(reader)
+	if err != nil {
+		return nil, err
+	}
+	samples := make([]model.VersionedSample, 0, compressedQueryCapacity(len(timestamps), query))
+	for index, timestamp := range timestamps {
+		ordinal, err := reader.intCount("string dictionary ordinal")
+		if err != nil {
+			return nil, err
+		}
+		if ordinal >= len(dict) {
+			return nil, fmt.Errorf("string dictionary ordinal %d out of range", ordinal)
+		}
+		if timestamp < query.Start || timestamp > query.End {
+			continue
+		}
+		samples = append(samples, model.VersionedSample{
+			Timestamp: timestamp,
+			WriteSeq:  writeSeqs[index],
+			Value:     model.StringValue(dict[ordinal]),
+		})
+	}
+	return samples, nil
 }
 
 func readStringDictionary(reader *blockReader) ([]string, error) {

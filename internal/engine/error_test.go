@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/sstable"
 	"codeberg.org/mts/mts/internal/wal"
@@ -24,8 +23,9 @@ func TestShardWriteAndFlushErrors(t *testing.T) {
 	}
 	shard := &Shard{
 		wal:  mustOpenWAL(t),
-		mem:  memtable.New(),
+		mem:  memStoreForTest(),
 		opts: ShardOptions{Dir: "bad\x00path", Start: 0, End: int64(time.Hour), MemTableMaxSamples: 1},
+		deps: normalizeShardDeps(shardDeps{}),
 	}
 	if err := shard.Write(point, false); err == nil {
 		t.Fatal("Shard.Write() error = nil, want invalid flush path error")
@@ -54,7 +54,8 @@ func TestOpenShardManifestErrors(t *testing.T) {
 	if _, _, err := OpenShard(ShardOptions{Dir: dir, Start: 0, End: 1}); err == nil {
 		t.Fatal("OpenShard(missing part) error = nil, want error")
 	}
-	if err := removeOldParts([]sstable.PartMeta{{ID: "bad", Path: "bad\x00path"}}); err == nil {
+	shard := &Shard{deps: normalizeShardDeps(shardDeps{})}
+	if err := shard.removeOldParts([]sstable.PartMeta{{ID: "bad", Path: "bad\x00path"}}); err == nil {
 		t.Fatal("removeOldParts(invalid) error = nil, want error")
 	}
 }
@@ -82,8 +83,9 @@ func TestEngineOpenFlushAndCompactErrors(t *testing.T) {
 	}
 	badFlush := &Shard{
 		wal:  mustOpenWAL(t),
-		mem:  memtable.New(),
+		mem:  memStoreForTest(),
 		opts: ShardOptions{Dir: "bad\x00path", Start: 0, End: int64(time.Hour)},
+		deps: normalizeShardDeps(shardDeps{}),
 	}
 	if err := badFlush.mem.Apply(point); err != nil {
 		t.Fatalf("mem.Apply() error = %v", err)
@@ -98,8 +100,9 @@ func TestEngineOpenFlushAndCompactErrors(t *testing.T) {
 
 	badCompact := &Shard{
 		wal:  mustOpenWAL(t),
-		mem:  memtable.New(),
+		mem:  memStoreForTest(),
 		opts: ShardOptions{Dir: "bad\x00path", Start: 0, End: int64(time.Hour)},
+		deps: normalizeShardDeps(shardDeps{}),
 	}
 	if err := badCompact.mem.Apply(point); err != nil {
 		t.Fatalf("mem.Apply() compact error = %v", err)

@@ -10,7 +10,6 @@ import (
 
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/sstable"
-	"codeberg.org/mts/mts/internal/storagefs"
 )
 
 const streamingCompactionSeriesBatchSize = 256
@@ -44,7 +43,7 @@ func (e *Engine) ApplyRetention(_ context.Context, now time.Time) error {
 			shard.lifecycleMu.Unlock()
 			return err
 		}
-		if err := storagefs.RemoveAll(shard.opts.Dir); err != nil {
+		if err := shard.deps.files.RemoveAll(shard.opts.Dir); err != nil {
 			shard.lifecycleMu.Unlock()
 			return err
 		}
@@ -92,7 +91,7 @@ func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel in
 	}
 	keptParts, keptMeta := s.keepUnselectedParts(candidates)
 	nextManifest := sstable.Manifest{Parts: append(keptMeta, newMeta...)}
-	if err := sstable.WriteManifest(s.opts.Dir, nextManifest); err != nil {
+	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
 		closeErr := closeParts(newParts)
 		return errors.Join(err, closeErr)
 	}
@@ -102,7 +101,7 @@ func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel in
 	if err := closeSelectedParts(oldParts, candidates); err != nil {
 		return err
 	}
-	if err := removeOldParts(candidates); err != nil {
+	if err := s.removeOldParts(candidates); err != nil {
 		return err
 	}
 	if hadTombstones {
@@ -112,9 +111,9 @@ func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel in
 	return nil
 }
 
-func (s *Shard) selectedParts(candidates []sstable.PartMeta) []*sstable.Part {
+func (s *Shard) selectedParts(candidates []sstable.PartMeta) []partReader {
 	selected := partIDSet(candidates)
-	parts := make([]*sstable.Part, 0, len(candidates))
+	parts := make([]partReader, 0, len(candidates))
 	for _, part := range s.parts {
 		if _, ok := selected[part.Meta().ID]; ok {
 			parts = append(parts, part)
@@ -125,9 +124,9 @@ func (s *Shard) selectedParts(candidates []sstable.PartMeta) []*sstable.Part {
 
 func (s *Shard) writeStreamingCompactionOutputsLocked(
 	outputLevel int,
-	candidateParts []*sstable.Part,
-) ([]*sstable.Part, []sstable.PartMeta, error) {
-	inputs, err := newCompactionInputs(candidateParts, s.opts.Start, s.opts.End)
+	candidateParts []partReader,
+) ([]partReader, []sstable.PartMeta, error) {
+	inputs, err := newCompactionInputs(s.deps.parts, candidateParts, s.opts.Start, s.opts.End)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -159,19 +158,24 @@ func (s *Shard) writeStreamingCompactionOutputsLocked(
 }
 
 type compactionInput struct {
-	part   *sstable.Part
+	part   partReader
 	query  sstable.Query
-	reader *sstable.SeriesBatchReader
+	reader seriesBatchReader
 }
 
-func newCompactionInputs(parts []*sstable.Part, start int64, end int64) ([]compactionInput, error) {
+func newCompactionInputs(
+	manager partManager,
+	parts []partReader,
+	start int64,
+	end int64,
+) ([]compactionInput, error) {
 	cacheReaders := shouldCacheCompactionReaders(parts)
 	inputs := make([]compactionInput, 0, len(parts))
 	for _, part := range parts {
 		query := sstable.Query{Start: start, End: end}
 		input := compactionInput{part: part, query: query}
 		if cacheReaders {
-			reader, err := sstable.NewSeriesBatchReader(part, query)
+			reader, err := manager.NewSeriesBatchReader(part, query)
 			if err != nil {
 				return nil, err
 			}
@@ -182,7 +186,7 @@ func newCompactionInputs(parts []*sstable.Part, start int64, end int64) ([]compa
 	return inputs, nil
 }
 
-func shouldCacheCompactionReaders(parts []*sstable.Part) bool {
+func shouldCacheCompactionReaders(parts []partReader) bool {
 	total := 0
 	for _, part := range parts {
 		total += part.Meta().SeriesCount
@@ -281,9 +285,9 @@ func forEachCompactionSeriesGroup(
 type compactionOutput struct {
 	shard        *Shard
 	outputLevel  int
-	writer       *sstable.PartWriter
+	writer       partWriter
 	currentBytes int64
-	parts        []*sstable.Part
+	parts        []partReader
 	metas        []sstable.PartMeta
 }
 
@@ -291,7 +295,7 @@ func newCompactionOutput(shard *Shard, outputLevel int) *compactionOutput {
 	return &compactionOutput{
 		shard:       shard,
 		outputLevel: outputLevel,
-		parts:       make([]*sstable.Part, 0),
+		parts:       make([]partReader, 0),
 		metas:       make([]sstable.PartMeta, 0),
 	}
 }
@@ -316,7 +320,7 @@ func (o *compactionOutput) addSeriesGroup(columns []model.ColumnData) error {
 		}
 	}
 	if o.writer == nil {
-		writer, err := sstable.NewPartWriter(o.shard.opts.Dir, o.outputLevel, o.shard.nextPartID(), sstable.WriteOptions{
+		writer, err := o.shard.deps.parts.NewWriter(o.shard.opts.Dir, o.outputLevel, o.shard.nextPartID(), sstable.WriteOptions{
 			Compression: o.shard.opts.Compression,
 		})
 		if err != nil {
@@ -336,7 +340,7 @@ func (o *compactionOutput) shouldRoll(seriesBytes int64) bool {
 	return target > 0 && o.writer != nil && o.currentBytes > 0 && o.currentBytes+seriesBytes > target
 }
 
-func (o *compactionOutput) close() ([]*sstable.Part, []sstable.PartMeta, error) {
+func (o *compactionOutput) close() ([]partReader, []sstable.PartMeta, error) {
 	if err := o.closeCurrent(); err != nil {
 		return nil, nil, err
 	}
@@ -353,7 +357,7 @@ func (o *compactionOutput) closeCurrent() error {
 	if err != nil {
 		return err
 	}
-	part, err := sstable.OpenPart(meta.Path)
+	part, err := o.shard.deps.parts.OpenPart(meta.Path)
 	if err != nil {
 		return err
 	}
@@ -370,7 +374,7 @@ func (o *compactionOutput) abort() error {
 	}
 	err = errors.Join(err, closeParts(o.parts))
 	for _, meta := range o.metas {
-		err = errors.Join(err, storagefs.RemoveAll(meta.Path))
+		err = errors.Join(err, o.shard.deps.files.RemoveAll(meta.Path))
 	}
 	o.parts = nil
 	o.metas = nil
@@ -451,9 +455,9 @@ func (s *Shard) level0CompactionCandidates() ([]sstable.PartMeta, error) {
 	return nil, nil
 }
 
-func (s *Shard) keepUnselectedParts(candidates []sstable.PartMeta) ([]*sstable.Part, []sstable.PartMeta) {
+func (s *Shard) keepUnselectedParts(candidates []sstable.PartMeta) ([]partReader, []sstable.PartMeta) {
 	selected := partIDSet(candidates)
-	keptParts := make([]*sstable.Part, 0, len(s.parts))
+	keptParts := make([]partReader, 0, len(s.parts))
 	keptMeta := make([]sstable.PartMeta, 0, len(s.manifest.Parts))
 	for _, part := range s.parts {
 		if _, ok := selected[part.Meta().ID]; !ok {
@@ -468,7 +472,7 @@ func (s *Shard) keepUnselectedParts(candidates []sstable.PartMeta) ([]*sstable.P
 	return keptParts, keptMeta
 }
 
-func closeSelectedParts(parts []*sstable.Part, selectedMeta []sstable.PartMeta) error {
+func closeSelectedParts(parts []partReader, selectedMeta []sstable.PartMeta) error {
 	selected := partIDSet(selectedMeta)
 	var err error
 	for _, part := range parts {
@@ -506,9 +510,9 @@ func directorySize(root string) (int64, error) {
 	return total, nil
 }
 
-func removeOldParts(parts []sstable.PartMeta) error {
+func (s *Shard) removeOldParts(parts []sstable.PartMeta) error {
 	for _, part := range parts {
-		if err := storagefs.RemoveAll(part.Path); err != nil {
+		if err := s.deps.files.RemoveAll(part.Path); err != nil {
 			return err
 		}
 	}

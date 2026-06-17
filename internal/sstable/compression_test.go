@@ -251,6 +251,9 @@ func TestCompressedPlainStreamingRejectsMalformedPayloads(t *testing.T) {
 	if got := compressedQueryCapacity(10, Query{Start: 10, End: 1}); got != 0 {
 		t.Fatalf("compressedQueryCapacity(reversed) = %d, want 0", got)
 	}
+	if got := timestampPayloadCapacity(0); got != 0 {
+		t.Fatalf("timestampPayloadCapacity(0) = %d, want 0", got)
+	}
 	if got := compressedQueryCapacity(10, Query{Start: 0, End: 100}); got != 10 {
 		t.Fatalf("compressedQueryCapacity(wide) = %d, want 10", got)
 	}
@@ -278,6 +281,19 @@ func TestCompressedPlainStreamingRejectsMalformedPayloads(t *testing.T) {
 	}
 	if _, err := decodeCodecTimestamps(99, nil, 1); err == nil {
 		t.Fatal("decodeCodecTimestamps(unknown) error = nil, want error")
+	}
+	if _, err := readXORFloatSampleValues(newBlockReader(nil), compressionPlain, []int64{1}, []uint64{1}, Query{Start: 0, End: 2}); err == nil {
+		t.Fatal("readXORFloatSampleValues(wrong codec) error = nil, want error")
+	}
+	if _, err := readDeltaIntSampleValues(newBlockReader(nil), compressionPlain, []int64{1}, []uint64{1}, Query{Start: 0, End: 2}); err == nil {
+		t.Fatal("readDeltaIntSampleValues(wrong codec) error = nil, want error")
+	}
+	if _, err := readDictionaryStringSampleValues(newBlockReader(nil), compressionPlain, []int64{1}, []uint64{1}, Query{Start: 0, End: 2}); err == nil {
+		t.Fatal("readDictionaryStringSampleValues(wrong codec) error = nil, want error")
+	}
+	badDict := []byte{1, 1, 'a', 1}
+	if _, err := readDictionaryStringSampleValues(newBlockReader(badDict), compressionDictionary, []int64{1}, []uint64{1}, Query{Start: 0, End: 2}); err == nil {
+		t.Fatal("readDictionaryStringSampleValues(bad ordinal) error = nil, want error")
 	}
 }
 
@@ -387,6 +403,169 @@ func TestReadCodecSamplesCompressedFallback(t *testing.T) {
 	}
 	if samples[0].Value.Int64 != 1_001 || samples[1].Value.Int64 != 1_002 {
 		t.Fatalf("samples = %#v, want compressed int values 1001 and 1002", samples)
+	}
+}
+
+func TestCompressedValueReaderBoundaries(t *testing.T) {
+	floatSamples := makeSamples(model.FieldFloat64, 3, func(index int) model.FieldValue {
+		return model.Float64Value(float64(index) + 0.5)
+	})
+	floatPayload := appendXORFloatValues(nil, floatSamples)
+	floatValues, err := readXORFloatValues(newBlockReader(floatPayload), compressionXOR, len(floatSamples))
+	if err != nil {
+		t.Fatalf("readXORFloatValues() error = %v", err)
+	}
+	if len(floatValues) != 3 || floatValues[2].Float64 != 2.5 {
+		t.Fatalf("float values = %#v, want decoded xor values", floatValues)
+	}
+	if _, err := readXORFloatValues(newBlockReader(floatPayload), compressionPlain, len(floatSamples)); err == nil {
+		t.Fatal("readXORFloatValues(wrong codec) error = nil, want error")
+	}
+	if _, err := readXORFloatValues(newBlockReader(floatPayload[:1]), compressionXOR, len(floatSamples)); err == nil {
+		t.Fatal("readXORFloatValues(truncated) error = nil, want error")
+	}
+
+	timestamps := []int64{1, 2}
+	writeSeqs := []uint64{10, 20}
+	if _, err := readCodecPayloadSamples(newBlockReader(nil), model.FieldBool, compressionXOR, timestamps, writeSeqs, Query{Start: 0, End: 3}); err == nil {
+		t.Fatal("readCodecPayloadSamples(bool xor) error = nil, want error")
+	}
+	if _, err := readCompressedValues(newBlockReader(nil), model.FieldBool, compressionXOR, 1); err == nil {
+		t.Fatal("readCompressedValues(bool xor) error = nil, want error")
+	}
+
+	irregular := makeSamples(model.FieldInt64, 4, func(index int) model.FieldValue {
+		return model.Int64Value(int64(index))
+	})
+	irregular[0].Timestamp = 1
+	irregular[1].Timestamp = 3
+	irregular[2].Timestamp = 8
+	irregular[3].Timestamp = 9
+	codecID, payload, err := encodeSampleTimestamps(irregular, "delta-of-delta")
+	if err != nil {
+		t.Fatalf("encodeSampleTimestamps() error = %v", err)
+	}
+	gotTimes, err := decodeCodecTimestamps(codecID, payload, len(irregular))
+	if err != nil {
+		t.Fatalf("decodeCodecTimestamps() error = %v", err)
+	}
+	if !reflect.DeepEqual(gotTimes, []int64{1, 3, 8, 9}) {
+		t.Fatalf("timestamps = %#v, want irregular timestamps", gotTimes)
+	}
+}
+
+func TestCompressedCodecStreamingAllocations(t *testing.T) {
+	column := model.ColumnData{
+		FieldID:   21,
+		FieldType: model.FieldInt64,
+		Samples: makeSamples(model.FieldInt64, 128, func(index int) model.FieldValue {
+			return model.Int64Value(1_000_000 + int64(index))
+		}),
+	}
+	payload, err := marshalCompressedValueBlock(nil, column, model.CompressionOptions{
+		Enabled:       true,
+		MinPageValues: 1,
+		Timestamp:     "plain",
+		Int:           "delta",
+	})
+	if err != nil {
+		t.Fatalf("marshalCompressedValueBlock() error = %v", err)
+	}
+	allocs := testing.AllocsPerRun(100, func() {
+		got, err := unmarshalCompressedValueBlock(payload, Query{Start: 64, End: 64})
+		if err != nil {
+			t.Fatalf("unmarshalCompressedValueBlock() error = %v", err)
+		}
+		if len(got.Samples) != 1 || got.Samples[0].Value.Int64 != 1_000_064 {
+			t.Fatalf("samples = %#v, want one delta-decoded int sample", got.Samples)
+		}
+	})
+	if allocs > 3 {
+		t.Fatalf("compressed delta int allocs/run = %.2f, want <= 3", allocs)
+	}
+}
+
+func TestMarshalCompressedValueBlockAvoidsMetadataSplitAllocations(t *testing.T) {
+	column := model.ColumnData{
+		FieldID:   24,
+		FieldType: model.FieldInt64,
+		Samples: makeSamples(model.FieldInt64, 128, func(index int) model.FieldValue {
+			return model.Int64Value(1000 + int64(index))
+		}),
+	}
+	opts := model.CompressionOptions{
+		Enabled:       true,
+		MinPageValues: 1,
+		Timestamp:     "delta-of-delta",
+		Int:           "delta",
+	}
+	dst := make([]byte, 0, 4096)
+	allocs := testing.AllocsPerRun(100, func() {
+		payload, err := marshalCompressedValueBlock(dst[:0], column, opts)
+		if err != nil {
+			t.Fatalf("marshalCompressedValueBlock() error = %v", err)
+		}
+		if len(payload) == 0 {
+			t.Fatal("payload is empty")
+		}
+	})
+	if allocs > 7 {
+		t.Fatalf("marshal compressed page allocs/run = %.2f, want <= 7", allocs)
+	}
+}
+
+func TestCompressedCodecStreamingCorrectness(t *testing.T) {
+	cases := []struct {
+		name    string
+		column  model.ColumnData
+		options model.CompressionOptions
+		want    model.FieldValue
+	}{
+		{
+			name: "xor float",
+			column: model.ColumnData{
+				FieldID:   22,
+				FieldType: model.FieldFloat64,
+				Samples: makeSamples(model.FieldFloat64, 32, func(index int) model.FieldValue {
+					return model.Float64Value(42)
+				}),
+			},
+			options: model.CompressionOptions{Float: "xor"},
+			want:    model.Float64Value(42),
+		},
+		{
+			name: "dictionary string",
+			column: model.ColumnData{
+				FieldID:   23,
+				FieldType: model.FieldString,
+				Samples: makeSamples(model.FieldString, 32, func(index int) model.FieldValue {
+					return model.StringValue([]string{"alpha", "beta", "gamma"}[index%3])
+				}),
+			},
+			options: model.CompressionOptions{String: "dictionary"},
+			want:    model.StringValue("beta"),
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.options.Enabled = true
+			tt.options.MinPageValues = 1
+			tt.options.Timestamp = "plain"
+			payload, err := marshalCompressedValueBlock(nil, tt.column, tt.options)
+			if err != nil {
+				t.Fatalf("marshalCompressedValueBlock() error = %v", err)
+			}
+			got, err := unmarshalCompressedValueBlock(payload, Query{Start: 10, End: 10})
+			if err != nil {
+				t.Fatalf("unmarshalCompressedValueBlock() error = %v", err)
+			}
+			if len(got.Samples) != 1 {
+				t.Fatalf("sample count = %d, want 1", len(got.Samples))
+			}
+			if !reflect.DeepEqual(got.Samples[0].Value, tt.want) {
+				t.Fatalf("value = %#v, want %#v", got.Samples[0].Value, tt.want)
+			}
+		})
 	}
 }
 

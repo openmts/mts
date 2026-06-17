@@ -12,7 +12,6 @@ import (
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/sstable"
 	"codeberg.org/mts/mts/internal/storagefs"
-	"codeberg.org/mts/mts/internal/wal"
 )
 
 type ShardOptions struct {
@@ -25,19 +24,21 @@ type ShardOptions struct {
 	MemTableMaxSamples int
 	Compaction         model.CompactionOptions
 	Compression        model.CompressionOptions
+	deps               shardDeps
 }
 
 type Shard struct {
 	lifecycleMu sync.RWMutex
 
 	opts           ShardOptions
-	wal            *wal.Log
-	mem            *memtable.MemTable
-	parts          []*sstable.Part
+	wal            walStore
+	mem            memStore
+	parts          []partReader
 	manifest       sstable.Manifest
 	tombstones     []model.Tombstone
 	nextPart       int
 	maintenanceErr error
+	deps           shardDeps
 	testHooks      shardTestHooks
 }
 
@@ -50,15 +51,17 @@ func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 	if err := storagefs.MkdirAll(opts.Dir); err != nil {
 		return nil, 0, err
 	}
-	manifest, err := sstable.LoadManifest(opts.Dir)
+	deps := normalizeShardDeps(opts.deps)
+	manifest, err := deps.parts.LoadManifest(opts.Dir)
 	if err != nil {
 		return nil, 0, err
 	}
 	shard := &Shard{
 		opts:     opts,
-		mem:      memtable.New(),
+		mem:      deps.newMem(),
 		manifest: manifest,
-		parts:    make([]*sstable.Part, 0, len(manifest.Parts)),
+		parts:    make([]partReader, 0, len(manifest.Parts)),
+		deps:     deps,
 	}
 	maxSeq, err := shard.openParts()
 	if err != nil {
@@ -69,7 +72,7 @@ func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 		return nil, 0, err
 	}
 	shard.maintenanceErr = shard.cleanupOrphanParts()
-	log, err := wal.Open(filepath.Join(opts.Dir, "wal"), wal.Options(opts.WAL))
+	log, err := deps.openWAL(opts.Dir, opts.WAL)
 	if err != nil {
 		closeErr := closeParts(shard.parts)
 		return nil, 0, errors.Join(err, closeErr)
@@ -157,7 +160,7 @@ func (s *Shard) flushLocked() error {
 		s.mem.Restore(snapshot)
 		return nil
 	}
-	meta, err := sstable.WritePartWithOptions(s.opts.Dir, 0, s.nextPartID(), columns, sstable.WriteOptions{
+	meta, err := s.deps.parts.WritePart(s.opts.Dir, 0, s.nextPartID(), columns, sstable.WriteOptions{
 		Compression: s.opts.Compression,
 	})
 	if err != nil {
@@ -170,14 +173,14 @@ func (s *Shard) flushLocked() error {
 			return err
 		}
 	}
-	part, err := sstable.OpenPart(meta.Path)
+	part, err := s.deps.parts.OpenPart(meta.Path)
 	if err != nil {
 		s.mem.Restore(snapshot)
 		return err
 	}
 	nextManifest := sstable.Manifest{Parts: append([]sstable.PartMeta{}, s.manifest.Parts...)}
 	nextManifest.Parts = append(nextManifest.Parts, meta)
-	if err := sstable.WriteManifest(s.opts.Dir, nextManifest); err != nil {
+	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
 		s.mem.Restore(snapshot)
 		return err
 	}
@@ -234,7 +237,7 @@ func (s *Shard) closeLocked() error {
 	return errors.Join(partErr, walErr)
 }
 
-func closeParts(parts []*sstable.Part) error {
+func closeParts(parts []partReader) error {
 	var err error
 	for _, part := range parts {
 		err = errors.Join(err, part.Close())
@@ -245,7 +248,7 @@ func closeParts(parts []*sstable.Part) error {
 func (s *Shard) openParts() (uint64, error) {
 	var maxSeq uint64
 	for _, meta := range s.manifest.Parts {
-		part, err := sstable.OpenPart(meta.Path)
+		part, err := s.deps.parts.OpenPart(meta.Path)
 		if err != nil {
 			return 0, err
 		}
@@ -278,7 +281,7 @@ func (s *Shard) cleanupOrphanParts() error {
 		if _, ok := referenced[entry.Name()]; ok {
 			continue
 		}
-		err := storagefs.RemoveAll(filepath.Join(s.opts.Dir, entry.Name()))
+		err := s.deps.files.RemoveAll(filepath.Join(s.opts.Dir, entry.Name()))
 		if err != nil {
 			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove orphan part %s: %w", entry.Name(), err))
 		}

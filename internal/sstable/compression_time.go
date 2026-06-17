@@ -3,18 +3,39 @@ package sstable
 import (
 	"encoding/binary"
 	"fmt"
+
+	"codeberg.org/mts/mts/internal/model"
 )
 
 func encodeTimestamps(timestamps []int64, policy string) (byte, []byte, error) {
-	plain := appendPlainTimestamps(nil, timestamps)
+	plain := appendPlainTimestamps(make([]byte, 0, timestampPayloadCapacity(len(timestamps))), timestamps)
 	if compressionPolicy(policy, "delta-of-delta") == "plain" {
 		return compressionPlain, plain, nil
 	}
-	candidate := appendDeltaOfDeltaTimestamps(nil, timestamps)
+	candidate := appendDeltaOfDeltaTimestamps(make([]byte, 0, timestampPayloadCapacity(len(timestamps))), timestamps)
 	if len(candidate) < len(plain) {
 		return compressionDeltaOfDelta, candidate, nil
 	}
 	return compressionPlain, plain, nil
+}
+
+func encodeSampleTimestamps(samples []model.VersionedSample, policy string) (byte, []byte, error) {
+	plain := appendPlainSampleTimestamps(make([]byte, 0, timestampPayloadCapacity(len(samples))), samples)
+	if compressionPolicy(policy, "delta-of-delta") == "plain" {
+		return compressionPlain, plain, nil
+	}
+	candidate := appendDeltaOfDeltaSampleTimestamps(make([]byte, 0, timestampPayloadCapacity(len(samples))), samples)
+	if len(candidate) < len(plain) {
+		return compressionDeltaOfDelta, candidate, nil
+	}
+	return compressionPlain, plain, nil
+}
+
+func timestampPayloadCapacity(count int) int {
+	if count == 0 {
+		return 0
+	}
+	return 8 + (count-1)*binary.MaxVarintLen64
 }
 
 func appendPlainTimestamps(dst []byte, timestamps []int64) []byte {
@@ -24,6 +45,17 @@ func appendPlainTimestamps(dst []byte, timestamps []int64) []byte {
 	dst = binary.LittleEndian.AppendUint64(dst, uint64(timestamps[0]))
 	for index := 1; index < len(timestamps); index++ {
 		dst = binary.AppendVarint(dst, timestamps[index]-timestamps[index-1])
+	}
+	return dst
+}
+
+func appendPlainSampleTimestamps(dst []byte, samples []model.VersionedSample) []byte {
+	if len(samples) == 0 {
+		return dst
+	}
+	dst = binary.LittleEndian.AppendUint64(dst, uint64(samples[0].Timestamp))
+	for index := 1; index < len(samples); index++ {
+		dst = binary.AppendVarint(dst, samples[index].Timestamp-samples[index-1].Timestamp)
 	}
 	return dst
 }
@@ -53,6 +85,45 @@ func appendDeltaOfDeltaTimestamps(dst []byte, timestamps []int64) []byte {
 		index += run
 	}
 	return dst
+}
+
+func appendDeltaOfDeltaSampleTimestamps(dst []byte, samples []model.VersionedSample) []byte {
+	if len(samples) == 0 {
+		return dst
+	}
+	dst = binary.LittleEndian.AppendUint64(dst, uint64(samples[0].Timestamp))
+	if len(samples) == 1 {
+		return dst
+	}
+	prevDelta := samples[1].Timestamp - samples[0].Timestamp
+	dst = binary.AppendVarint(dst, prevDelta)
+	for index := 2; index < len(samples); {
+		delta := samples[index].Timestamp - samples[index-1].Timestamp
+		dd := delta - prevDelta
+		if dd != 0 {
+			dst = binary.AppendUvarint(dst, zigZag64(dd)<<1|1)
+			prevDelta = delta
+			index++
+			continue
+		}
+		run := countEqualSampleDeltaRun(samples, index, prevDelta)
+		dst = append(dst, 0)
+		dst = binary.AppendUvarint(dst, uint64(run))
+		index += run
+	}
+	return dst
+}
+
+func countEqualSampleDeltaRun(samples []model.VersionedSample, index int, prevDelta int64) int {
+	run := 1
+	for index+run < len(samples) {
+		nextDelta := samples[index+run].Timestamp - samples[index+run-1].Timestamp
+		if nextDelta != prevDelta {
+			break
+		}
+		run++
+	}
+	return run
 }
 
 func countEqualDeltaRun(timestamps []int64, index int, prevDelta int64) int {

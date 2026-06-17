@@ -75,7 +75,12 @@ func (c *Catalog) resolveSeriesNoSnapshotCachedLocked(
 	if id, ok := c.lookupSeriesID(measurement, tags); ok {
 		return c.series[id], false, nil
 	}
-	key := seriesKey(measurement, tags)
+	var key string
+	if len(tags) > 1 {
+		key, c.seriesKeyScratch = seriesKeyWithScratch(measurement, tags, c.seriesKeyScratch)
+	} else {
+		key = seriesKey(measurement, tags)
+	}
 	if id, ok := c.seriesByKey[key]; ok {
 		return c.series[id], false, nil
 	}

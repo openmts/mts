@@ -2,9 +2,11 @@ package mts_test
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	mts "codeberg.org/mts/mts"
+	"codeberg.org/mts/mts/internal/model"
 )
 
 func TestFieldValueConstructors(t *testing.T) {
@@ -77,5 +79,26 @@ func TestFieldValueConstructors(t *testing.T) {
 func TestOpenInvalidPathReturnsError(t *testing.T) {
 	if _, err := mts.Open(context.Background(), mts.Options{Path: "bad\x00path"}); err == nil {
 		t.Fatal("Open(invalid) error = nil, want error")
+	}
+}
+
+func TestPublicTypesAreIndependentDTOs(t *testing.T) {
+	cases := []struct {
+		name   string
+		public reflect.Type
+		model  reflect.Type
+	}{
+		{name: "Point", public: reflect.TypeOf(mts.Point{}), model: reflect.TypeOf(model.Point{})},
+		{name: "Query", public: reflect.TypeOf(mts.Query{}), model: reflect.TypeOf(model.Query{})},
+		{name: "Options", public: reflect.TypeOf(mts.Options{}), model: reflect.TypeOf(model.Options{})},
+		{name: "ColumnSeries", public: reflect.TypeOf(mts.ColumnSeries{}), model: reflect.TypeOf(model.ColumnSeries{})},
+		{name: "Row", public: reflect.TypeOf(mts.Row{}), model: reflect.TypeOf(model.Row{})},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.public == tt.model {
+				t.Fatalf("%s is an alias of internal model type; want independent public DTO", tt.name)
+			}
+		})
 	}
 }

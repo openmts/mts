@@ -211,6 +211,45 @@ func TestWALBatchDictionaryRoundTripAndSize(t *testing.T) {
 	}
 }
 
+func TestEncodeBatchUsesScratchRefsArena(t *testing.T) {
+	records := make([]model.ResolvedPoint, 64)
+	for index := range records {
+		records[index] = walWidePointForTest(uint64(index + 1))
+	}
+	allocs := testing.AllocsPerRun(100, func() {
+		payload, err := encodeBatch(records)
+		if err != nil {
+			t.Fatalf("encodeBatch() error = %v", err)
+		}
+		if len(payload) == 0 {
+			t.Fatal("payload is empty")
+		}
+	})
+	if allocs > 80 {
+		t.Fatalf("encodeBatch allocs/run = %.2f, want <= 80", allocs)
+	}
+}
+
+func TestBatchIdentityScratchFallbacks(t *testing.T) {
+	first := walWidePointForTest(1)
+	second := walWidePointForTest(2)
+	second.Tags = map[string]string{"host": "b", "region": "west"}
+	identities, refs := batchIdentities([]model.ResolvedPoint{first, second, first})
+	if len(identities) != 2 {
+		t.Fatalf("identity count = %d, want 2", len(identities))
+	}
+	if !reflect.DeepEqual(refs, []int{0, 1, 0}) {
+		t.Fatalf("refs = %#v, want [0 1 0]", refs)
+	}
+	if _, ok := lastIdentityRef(second, identities[:1]); ok {
+		t.Fatal("lastIdentityRef(mismatch) ok = true, want false")
+	}
+	key, scratch := identityKeyWithScratch(first, nil)
+	if key == "" || len(scratch) == 0 {
+		t.Fatalf("identityKeyWithScratch() key=%q scratch len=%d, want populated", key, len(scratch))
+	}
+}
+
 func TestWALBatchEmptyBatchRoundTrips(t *testing.T) {
 	payload, err := encodeBatch(nil)
 	if err != nil {
@@ -335,6 +374,29 @@ func walDictionaryPointForTest(seriesID uint64, timestamp int64, writeSeq uint64
 			{FieldID: 2, FieldName: "state", Type: model.FieldString, Value: model.StringValue("ok")},
 			{FieldID: 3, FieldName: "active", Type: model.FieldBool, Value: model.BoolValue(true)},
 		},
+	}
+}
+
+func walWidePointForTest(seq uint64) model.ResolvedPoint {
+	fields := make([]model.ResolvedField, 10)
+	for index := range fields {
+		fieldID := uint32(index + 1)
+		fields[index] = model.ResolvedField{
+			FieldID:   fieldID,
+			FieldName: "field_" + string(rune('a'+index)),
+			Type:      model.FieldInt64,
+			Value:     model.Int64Value(int64(seq) + int64(index)),
+		}
+	}
+	return model.ResolvedPoint{
+		Database:        "db",
+		RetentionPolicy: "rp",
+		Measurement:     "cpu",
+		Tags:            map[string]string{"host": "a", "region": "west"},
+		SeriesID:        seq,
+		Timestamp:       int64(seq),
+		WriteSeq:        seq,
+		Fields:          fields,
 	}
 }
 
