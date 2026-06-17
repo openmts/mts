@@ -117,6 +117,7 @@ type CompressionOptions struct {
 	Float         string
 	Int           string
 	String        string
+	Algorithm     string
 	MinPageValues int
 }
 

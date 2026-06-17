@@ -1,6 +1,7 @@
 package sstable
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"reflect"
@@ -8,6 +9,126 @@ import (
 
 	"codeberg.org/mts/mts/internal/model"
 )
+
+func TestPayloadCompressionAlgorithmsRoundTrip(t *testing.T) {
+	source := bytes.Repeat([]byte("mts-payload-compression-"), 64)
+	algorithms := []string{"", "none", "snappy", "lz4", "zstd"}
+	for _, algorithm := range algorithms {
+		t.Run(algorithm, func(t *testing.T) {
+			payload, err := appendCodecPayloadWithCompression(nil, compressionDelta, source, algorithm)
+			if err != nil {
+				t.Fatalf("appendCodecPayloadWithCompression(%q) error = %v", algorithm, err)
+			}
+			codecID, got, err := readCodecPayload(newBlockReader(payload), "test payload")
+			if err != nil {
+				t.Fatalf("readCodecPayload(%q) error = %v", algorithm, err)
+			}
+			if codecID != compressionDelta {
+				t.Fatalf("codecID = %d, want %d", codecID, compressionDelta)
+			}
+			if !bytes.Equal(got, source) {
+				t.Fatalf("payload mismatch for %q", algorithm)
+			}
+		})
+	}
+}
+
+func TestPayloadCompressionRejectsUnknownAlgorithm(t *testing.T) {
+	_, err := appendCodecPayloadWithCompression(nil, compressionPlain, []byte("payload"), "gzip")
+	if err == nil {
+		t.Fatal("appendCodecPayloadWithCompression(gzip) error = nil, want error")
+	}
+}
+
+func TestCompressedPayloadRejectsCorruptSize(t *testing.T) {
+	payload := []byte{compressionPlain, payloadCompressionNone}
+	payload = binary.AppendUvarint(payload, 4)
+	payload = binary.AppendUvarint(payload, 3)
+	payload = append(payload, "abc"...)
+	if _, _, err := readCodecPayload(newBlockReader(payload), "corrupt payload"); err == nil {
+		t.Fatal("readCodecPayload(corrupt size) error = nil, want error")
+	}
+}
+
+func TestCompressedPayloadRejectsUnknownAlgorithmID(t *testing.T) {
+	payload := []byte{compressionPlain, 99}
+	payload = binary.AppendUvarint(payload, 1)
+	payload = binary.AppendUvarint(payload, 1)
+	payload = append(payload, 'x')
+	if _, _, err := readCodecPayload(newBlockReader(payload), "unknown payload"); err == nil {
+		t.Fatal("readCodecPayload(unknown algorithm) error = nil, want error")
+	}
+}
+
+func TestPayloadCompressionRejectsMalformedHeaders(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload []byte
+	}{
+		{name: "missing algorithm", payload: []byte{compressionPlain}},
+		{name: "bad raw size", payload: []byte{compressionPlain, payloadCompressionNone, 0x80}},
+		{name: "bad stored size", payload: []byte{compressionPlain, payloadCompressionNone, 1, 0x80}},
+		{name: "truncated payload", payload: []byte{compressionPlain, payloadCompressionNone, 1, 2, 'a'}},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, _, err := readCodecPayload(newBlockReader(tt.payload), tt.name); err == nil {
+				t.Fatal("readCodecPayload() error = nil, want error")
+			}
+		})
+	}
+}
+
+func TestPayloadCompressionInternalErrorBranches(t *testing.T) {
+	if _, err := compressPayload(99, []byte("payload")); err == nil {
+		t.Fatal("compressPayload(unknown) error = nil, want error")
+	}
+	if _, err := decompressPayload(payloadCompressionSnappy, []byte("bad"), 10); err == nil {
+		t.Fatal("decompressPayload(bad snappy) error = nil, want error")
+	}
+	if _, err := decompressPayload(payloadCompressionLZ4, []byte{0x10, 'a'}, 2); err == nil {
+		t.Fatal("decompressPayload(bad lz4) error = nil, want error")
+	}
+}
+
+func TestLZ4BlockRejectsMalformedPayloads(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload []byte
+		rawSize int
+	}{
+		{name: "literal too long", payload: []byte{0x20, 'a'}, rawSize: 2},
+		{name: "truncated offset", payload: []byte{0x00, 0x01}, rawSize: 4},
+		{name: "zero offset", payload: []byte{0x00, 0x00, 0x00}, rawSize: 4},
+		{name: "offset beyond output", payload: []byte{0x00, 0x01, 0x00}, rawSize: 4},
+		{name: "match too long", payload: []byte{0x1f, 'a', 0x01, 0x00, 0x00}, rawSize: 2},
+		{name: "truncated extended length", payload: []byte{0xf0, 0xff}, rawSize: 20},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := decodeLZ4Block(nil, tt.payload, tt.rawSize); err == nil {
+				t.Fatal("decodeLZ4Block() error = nil, want error")
+			}
+		})
+	}
+}
+
+func TestAppendSampleWriteSeqsPayloadRoundTrip(t *testing.T) {
+	samples := makeSamples(model.FieldInt64, 3, func(index int) model.FieldValue {
+		return model.Int64Value(int64(index))
+	})
+	codecID, payload, err := readCodecPayload(newBlockReader(appendSampleWriteSeqsPayload(nil, samples)), "write seqs")
+	if err != nil {
+		t.Fatalf("readCodecPayload(write seqs) error = %v", err)
+	}
+	got, err := decodeCodecWriteSeqs(codecID, payload, len(samples))
+	if err != nil {
+		t.Fatalf("decodeCodecWriteSeqs() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, []uint64{1, 2, 3}) {
+		t.Fatalf("write seqs = %#v, want [1 2 3]", got)
+	}
+}
 
 func TestTimestampDeltaOfDeltaIsSmallerForRegularSeries(t *testing.T) {
 	timestamps := make([]int64, 128)

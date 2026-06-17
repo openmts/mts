@@ -95,6 +95,7 @@ type CompressionOptions struct {
 	Float         string
 	Int           string
 	String        string
+	Algorithm     string
 	MinPageValues int
 }
 
@@ -281,6 +282,7 @@ func toModelCompressionOptions(opts CompressionOptions) model.CompressionOptions
 		Float:         opts.Float,
 		Int:           opts.Int,
 		String:        opts.String,
+		Algorithm:     opts.Algorithm,
 		MinPageValues: opts.MinPageValues,
 	}
 }

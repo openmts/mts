@@ -57,10 +57,15 @@ func marshalCompressedValueBlock(
 	dst = binary.AppendUvarint(dst, uint64(column.FieldID))
 	dst = append(dst, byte(column.FieldType))
 	dst = binary.AppendUvarint(dst, uint64(len(column.Samples)))
-	dst = appendCodecPayload(dst, timeCodec, timePayload)
-	dst = appendSampleWriteSeqsPayload(dst, column.Samples)
-	dst = appendCodecPayload(dst, valueCodec, valuePayload)
-	return dst, nil
+	dst, err = appendCodecPayloadWithCompression(dst, timeCodec, timePayload, opts.Algorithm)
+	if err != nil {
+		return nil, err
+	}
+	dst, err = appendSampleWriteSeqsPayloadWithCompression(dst, column.Samples, opts.Algorithm)
+	if err != nil {
+		return nil, err
+	}
+	return appendCodecPayloadWithCompression(dst, valueCodec, valuePayload, opts.Algorithm)
 }
 
 func unmarshalCompressedValueBlock(payload []byte, query Query) (valueBlock, error) {
@@ -139,7 +144,8 @@ func filterSamplesByTime(samples []model.VersionedSample, query Query) []model.V
 }
 
 func appendCodecPayload(dst []byte, codec byte, payload []byte) []byte {
-	dst = append(dst, codec)
+	dst = append(dst, codec, payloadCompressionNone)
+	dst = binary.AppendUvarint(dst, uint64(len(payload)))
 	dst = binary.AppendUvarint(dst, uint64(len(payload)))
 	return append(dst, payload...)
 }
@@ -160,28 +166,47 @@ func appendSampleWriteSeqsPayload(dst []byte, samples []model.VersionedSample) [
 	return appendCodecPayload(dst, compressionPlain, payload)
 }
 
+func appendSampleWriteSeqsPayloadWithCompression(
+	dst []byte,
+	samples []model.VersionedSample,
+	algorithm string,
+) ([]byte, error) {
+	payload := make([]byte, 0, len(samples)*binary.MaxVarintLen64)
+	for _, sample := range samples {
+		payload = binary.AppendUvarint(payload, sample.WriteSeq)
+	}
+	return appendCodecPayloadWithCompression(dst, compressionPlain, payload, algorithm)
+}
+
 func readCodecPayload(reader *blockReader, name string) (byte, []byte, error) {
 	if len(reader.rest) == 0 {
 		return 0, nil, fmt.Errorf("decode sstable %s codec: missing byte", name)
 	}
 	codecID := reader.rest[0]
 	reader.rest = reader.rest[1:]
-	sizeValue, sizeBytes := binary.Uvarint(reader.rest)
-	if sizeBytes <= 0 {
-		return 0, nil, fmt.Errorf("decode sstable %s size: invalid uvarint", name)
+	if len(reader.rest) == 0 {
+		return 0, nil, fmt.Errorf("decode sstable %s payload compression: missing byte", name)
 	}
-	reader.rest = reader.rest[sizeBytes:]
-	maxInt := uint64(int(^uint(0) >> 1))
-	if sizeValue > maxInt {
-		return 0, nil, fmt.Errorf("decode sstable %s size: count %d overflows int", name, sizeValue)
+	algorithmID := reader.rest[0]
+	reader.rest = reader.rest[1:]
+	rawSize, err := readPayloadSize(reader, name, "raw")
+	if err != nil {
+		return 0, nil, err
 	}
-	size := int(sizeValue)
-	if size > len(reader.rest) {
+	storedSize, err := readPayloadSize(reader, name, "stored")
+	if err != nil {
+		return 0, nil, err
+	}
+	if storedSize > len(reader.rest) {
 		return 0, nil, fmt.Errorf("decode sstable %s: truncated payload", name)
 	}
-	payload := reader.rest[:size]
-	reader.rest = reader.rest[size:]
-	return codecID, payload, nil
+	payload := reader.rest[:storedSize]
+	reader.rest = reader.rest[storedSize:]
+	decoded, err := decompressPayload(algorithmID, payload, rawSize)
+	if err != nil {
+		return 0, nil, fmt.Errorf("decode sstable %s payload: %w", name, err)
+	}
+	return codecID, decoded, nil
 }
 
 type codecPayload struct {

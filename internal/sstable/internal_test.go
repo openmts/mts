@@ -953,6 +953,131 @@ func TestWritePartWithCompressionOptionsRoundTrips(t *testing.T) {
 	}
 }
 
+func TestWritePartWithPayloadCompressionAlgorithmsRoundTrip(t *testing.T) {
+	algorithms := []string{"snappy", "lz4", "zstd"}
+	for _, algorithm := range algorithms {
+		t.Run(algorithm, func(t *testing.T) {
+			dir := t.TempDir()
+			columns := payloadCompressionColumns()
+			meta, err := WritePartWithOptions(dir, 0, "sst-000001", columns, WriteOptions{
+				Compression: model.CompressionOptions{
+					Enabled:       true,
+					MinPageValues: 1,
+					Algorithm:     algorithm,
+				},
+			})
+			if err != nil {
+				t.Fatalf("WritePartWithOptions(%s) error = %v", algorithm, err)
+			}
+			part, err := OpenPart(meta.Path)
+			if err != nil {
+				t.Fatalf("OpenPart(%s) error = %v", algorithm, err)
+			}
+			got, err := part.Query(Query{Start: 10, End: 12})
+			if err != nil {
+				closeErr := part.Close()
+				t.Fatalf("Query(%s) error = %v close = %v", algorithm, err, closeErr)
+			}
+			if err := part.Close(); err != nil {
+				t.Fatalf("Close(%s) error = %v", algorithm, err)
+			}
+			assertPayloadCompressionQuery(t, got)
+		})
+	}
+}
+
+func TestWritePartWithPayloadCompressionReducesValuesFileSize(t *testing.T) {
+	columns := payloadCompressionColumns()
+	plainDir := t.TempDir()
+	plainMeta, err := WritePartWithOptions(plainDir, 0, "sst-plain", columns, WriteOptions{
+		Compression: model.CompressionOptions{Enabled: true, MinPageValues: 1},
+	})
+	if err != nil {
+		t.Fatalf("WritePartWithOptions(plain) error = %v", err)
+	}
+	zstdDir := t.TempDir()
+	zstdMeta, err := WritePartWithOptions(zstdDir, 0, "sst-zstd", columns, WriteOptions{
+		Compression: model.CompressionOptions{
+			Enabled:       true,
+			MinPageValues: 1,
+			Algorithm:     "zstd",
+		},
+	})
+	if err != nil {
+		t.Fatalf("WritePartWithOptions(zstd) error = %v", err)
+	}
+	plainSize := fileSizeForTest(t, filepath.Join(plainMeta.Path, valuesFile))
+	zstdSize := fileSizeForTest(t, filepath.Join(zstdMeta.Path, valuesFile))
+	if zstdSize >= plainSize {
+		t.Fatalf("zstd values.bin size = %d, want smaller than plain %d", zstdSize, plainSize)
+	}
+}
+
+func payloadCompressionColumns() []model.ColumnData {
+	count := 512
+	return []model.ColumnData{
+		payloadCompressionColumn(1, 1, model.FieldFloat64, count, func(index int) model.FieldValue {
+			return model.Float64Value(42.25)
+		}),
+		payloadCompressionColumn(1, 2, model.FieldInt64, count, func(index int) model.FieldValue {
+			return model.Int64Value(1_000_000 + int64(index%4))
+		}),
+		payloadCompressionColumn(1, 3, model.FieldString, count, func(index int) model.FieldValue {
+			return model.StringValue("payload-compression-value-payload-compression-value")
+		}),
+		payloadCompressionColumn(1, 4, model.FieldBool, count, func(index int) model.FieldValue {
+			return model.BoolValue(index%2 == 0)
+		}),
+	}
+}
+
+func payloadCompressionColumn(
+	seriesID uint64,
+	fieldID uint32,
+	fieldType model.FieldType,
+	count int,
+	value func(index int) model.FieldValue,
+) model.ColumnData {
+	samples := make([]model.VersionedSample, count)
+	for index := range count {
+		samples[index] = model.VersionedSample{
+			Timestamp: int64(index),
+			WriteSeq:  uint64(index + 1),
+			Value:     value(index),
+		}
+	}
+	return model.ColumnData{
+		SeriesID:  seriesID,
+		FieldID:   fieldID,
+		FieldType: fieldType,
+		Samples:   samples,
+	}
+}
+
+func assertPayloadCompressionQuery(t *testing.T, got []model.ColumnData) {
+	t.Helper()
+	if len(got) != 4 {
+		t.Fatalf("column count = %d, want 4", len(got))
+	}
+	for _, column := range got {
+		if len(column.Samples) != 3 {
+			t.Fatalf("field %d sample count = %d, want 3", column.FieldID, len(column.Samples))
+		}
+		if column.Samples[0].Timestamp != 10 || column.Samples[2].Timestamp != 12 {
+			t.Fatalf("field %d samples = %#v, want timestamps 10..12", column.FieldID, column.Samples)
+		}
+	}
+}
+
+func fileSizeForTest(t *testing.T, path string) int64 {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat(%s) error = %v", path, err)
+	}
+	return info.Size()
+}
+
 func TestOpenPartQueriesWithAlreadyOpenedBlockFiles(t *testing.T) {
 	dir := t.TempDir()
 	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
