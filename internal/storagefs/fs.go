@@ -279,6 +279,24 @@ func Stat(path string) (os.FileInfo, error) {
 	return info, nil
 }
 
+func ValidateStrictPermissions(path string) error {
+	info, err := Stat(path)
+	if err != nil {
+		return err
+	}
+	perm := info.Mode().Perm()
+	limit := FileMode
+	kind := "file"
+	if info.IsDir() {
+		limit = DirMode
+		kind = "directory"
+	}
+	if perm&^limit != 0 {
+		return fmt.Errorf("%s permissions too wide: got %04o want no wider than %04o", kind, perm, limit)
+	}
+	return nil
+}
+
 func ReadDir(path string) ([]os.DirEntry, error) {
 	clean := filepath.Clean(path)
 	if err := before(OpWalk); err != nil {

@@ -1107,6 +1107,68 @@ func TestOpenPartQueriesWithAlreadyOpenedBlockFiles(t *testing.T) {
 	}
 }
 
+func TestOpenPartRejectsOutOfBoundsMetadataRefs(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+		columnWithField(1, 2, model.Float64Value(42)),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	decoded, err := loadPartMetadata(meta.Path)
+	if err != nil {
+		t.Fatalf("loadPartMetadata() error = %v", err)
+	}
+	decoded.IndexRef.Offset = fileSizeForTest(t, filepath.Join(meta.Path, indexFile)) + 1
+	if err := writeMetadata(meta.Path, decoded); err != nil {
+		t.Fatalf("writeMetadata() error = %v", err)
+	}
+	if _, err := OpenPart(meta.Path); err == nil {
+		t.Fatal("OpenPart(out-of-bounds metadata refs) error = nil, want error")
+	}
+}
+
+func TestOpenPartRejectsMissingComponent(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+		columnWithField(1, 2, model.Float64Value(42)),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	if err := os.Remove(filepath.Join(meta.Path, stringsFile)); err != nil {
+		t.Fatalf("Remove(strings) error = %v", err)
+	}
+	if _, err := OpenPart(meta.Path); err == nil {
+		t.Fatal("OpenPart(missing strings component) error = nil, want error")
+	}
+}
+
+func TestOpenPartRejectsComponentChecksumCorruption(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, 300),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	path := filepath.Join(meta.Path, valuesFile)
+	file, err := os.OpenFile(path, os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatalf("OpenFile(values) error = %v", err)
+	}
+	if _, err := file.WriteAt([]byte{0xff}, 16); err != nil {
+		closeErr := file.Close()
+		t.Fatalf("WriteAt(values) error = %v close = %v", err, closeErr)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close(values) error = %v", err)
+	}
+	if _, err := OpenPart(meta.Path); err == nil {
+		t.Fatal("OpenPart(corrupt values component) error = nil, want checksum error")
+	}
+}
+
 func TestPartQueryFallsBackToPathAfterClose(t *testing.T) {
 	dir := t.TempDir()
 	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
@@ -1605,7 +1667,7 @@ func assertEnvelopePayloadPrefixes(t *testing.T, frame []byte, magic codec.Magic
 		t.Fatalf("UnmarshalEnvelope() error = %v", err)
 	}
 	for size := 0; size < len(env.Payload); size++ {
-		prefixFrame := codec.MarshalEnvelope(nil, magic, 0, env.Payload[:size])
+		prefixFrame := codec.MarshalEnvelope(nil, magic, env.Flags, env.Payload[:size])
 		if err := decode(prefixFrame); err == nil {
 			t.Fatalf("decode(inner prefix %d/%d) error = nil, want error", size, len(env.Payload))
 		}
@@ -1636,6 +1698,9 @@ func TestPartQueryRejectsBadLazyIndexBlock(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, valuesFile), nil, 0600); err != nil {
 		t.Fatalf("WriteFile(values) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, stringsFile), nil, 0600); err != nil {
+		t.Fatalf("WriteFile(strings) error = %v", err)
 	}
 	metaIndexPayload, err := encodeMetaIndexRows([]metaIndexRow{
 		{
@@ -1679,12 +1744,8 @@ func TestPartQueryRejectsBadLazyIndexBlock(t *testing.T) {
 	if err := writeMetadata(dir, meta); err != nil {
 		t.Fatalf("writeMetadata() error = %v", err)
 	}
-	part, err := OpenPart(dir)
-	if err != nil {
-		t.Fatalf("OpenPart() error = %v", err)
-	}
-	if _, err := part.Query(Query{Start: 0, End: 10}); err == nil {
-		t.Fatal("Query(bad lazy index block) error = nil, want error")
+	if _, err := OpenPart(dir); err == nil {
+		t.Fatal("OpenPart(bad lazy index block) error = nil, want error")
 	}
 }
 

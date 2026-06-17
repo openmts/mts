@@ -148,7 +148,7 @@ func TestReplayRejectsUnsupportedTypeBadPayloadAndSmallLength(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
-			if err := os.WriteFile(filepath.Join(dir, "000001.wal"), tt.frame, 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, "000001.wal"), testSegment(tt.frame), 0600); err != nil {
 				t.Fatalf("WriteFile() error = %v", err)
 			}
 			log, err := Open(dir, Options{})
@@ -162,6 +162,73 @@ func TestReplayRejectsUnsupportedTypeBadPayloadAndSmallLength(t *testing.T) {
 				t.Fatalf("Close() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestWALSegmentHasHeaderAndRejectsUnknownFormat(t *testing.T) {
+	dir := t.TempDir()
+	log, err := Open(dir, Options{Sync: true})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := log.Append([]model.ResolvedPoint{{SeriesID: 1, Timestamp: 1, WriteSeq: 1}}, true); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "000001.wal"))
+	if err != nil {
+		t.Fatalf("ReadFile(segment) error = %v", err)
+	}
+	if len(data) < walSegmentHeaderLen || !bytes.Equal(data[:len(walSegmentMagic)], []byte(walSegmentMagic)) {
+		t.Fatalf("segment header prefix = %q, want magic %q", data[:min(len(data), len(walSegmentMagic))], walSegmentMagic)
+	}
+
+	data[len(walSegmentMagic)] = 0xff
+	if err := os.WriteFile(filepath.Join(dir, "000001.wal"), data, 0600); err != nil {
+		t.Fatalf("WriteFile(corrupt format) error = %v", err)
+	}
+	log, err = Open(dir, Options{})
+	if err != nil {
+		t.Fatalf("Open(corrupt format) error = %v", err)
+	}
+	if _, err := log.Replay(); err == nil {
+		t.Fatal("Replay(corrupt format) error = nil, want unknown format error")
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close(corrupt format) error = %v", err)
+	}
+}
+
+func TestWALReplayTruncatesPartialLastRecordAfterHeader(t *testing.T) {
+	dir := t.TempDir()
+	frame := encodeFrame(recordWriteBatch, mustBatch(t, []model.ResolvedPoint{{SeriesID: 1, Timestamp: 1, WriteSeq: 1}}))
+	data := append(testSegment(frame), 1, 2, 3)
+	path := filepath.Join(dir, "000001.wal")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("WriteFile(partial segment) error = %v", err)
+	}
+	log, err := Open(dir, Options{})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	got, err := log.Replay()
+	if err != nil {
+		t.Fatalf("Replay() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Replay() count = %d, want 1", len(got))
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat(segment) error = %v", err)
+	}
+	if info.Size() != int64(len(testSegment(frame))) {
+		t.Fatalf("segment size after truncate = %d, want %d", info.Size(), len(testSegment(frame)))
 	}
 }
 
@@ -425,7 +492,7 @@ func TestOpenIgnoresNonSegmentsAndReusesLastSegment(t *testing.T) {
 		t.Fatalf("Mkdir(non-segment dir) error = %v", err)
 	}
 	record := model.ResolvedPoint{SeriesID: 10, Timestamp: 20, WriteSeq: 30}
-	if err := os.WriteFile(filepath.Join(dir, "000003.wal"), encodeFrame(recordWriteBatch, mustBatch(t, []model.ResolvedPoint{record})), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "000003.wal"), testSegment(encodeFrame(recordWriteBatch, mustBatch(t, []model.ResolvedPoint{record}))), 0600); err != nil {
 		t.Fatalf("WriteFile(segment) error = %v", err)
 	}
 
@@ -454,10 +521,10 @@ func TestOpenIgnoresNonSegmentsAndReusesLastSegment(t *testing.T) {
 
 func TestReplayRejectsPartialNonLastSegment(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "000001.wal"), []byte{1, 2, 3}, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "000001.wal"), append(testSegment(nil), 1, 2, 3), 0600); err != nil {
 		t.Fatalf("WriteFile(partial) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "000002.wal"), nil, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "000002.wal"), testSegment(nil), 0600); err != nil {
 		t.Fatalf("WriteFile(empty) error = %v", err)
 	}
 	log, err := Open(dir, Options{})
@@ -532,4 +599,12 @@ func smallLengthFrame() []byte {
 	frame := make([]byte, 4)
 	binary.BigEndian.PutUint32(frame, 1)
 	return frame
+}
+
+func testSegment(frames ...[]byte) []byte {
+	out := appendSegmentHeader(nil)
+	for _, frame := range frames {
+		out = append(out, frame...)
+	}
+	return out
 }

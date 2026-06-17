@@ -1179,6 +1179,19 @@ func TestOpenRejectsEmptyPathAndShardStartFloorsNegativeTime(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsUnsafeStoragePermissions(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "mts")
+	if err := os.Mkdir(root, 0755); err != nil {
+		t.Fatalf("Mkdir(root) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "marker"), []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile(marker) error = %v", err)
+	}
+	if _, err := Open(context.Background(), model.Options{Path: root}); err == nil {
+		t.Fatal("Open(unsafe root permissions) error = nil, want error")
+	}
+}
+
 func TestNormalizeCompactionLevelsSortsAndInheritsDefaults(t *testing.T) {
 	opts := normalizeOptions(model.Options{
 		Compression: model.CompressionOptions{Enabled: true, Algorithm: "snappy", MinPageValues: 1},
@@ -1912,6 +1925,10 @@ func countWALFrames(path string) (int, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return 0, err
+	}
+	if _, err := file.Seek(15, io.SeekStart); err != nil {
+		closeErr := file.Close()
+		return 0, errors.Join(err, closeErr)
 	}
 	count, readErr := countOpenWALFrames(file)
 	closeErr := file.Close()

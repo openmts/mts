@@ -238,7 +238,7 @@ func (s *Shard) compactPartsLocked(plan compactionPlan) error {
 		return err
 	}
 	keptParts, keptMeta := s.keepUnselectedParts(plan.candidates)
-	nextManifest := sstable.Manifest{Parts: append(keptMeta, newMeta...)}
+	nextManifest := s.nextManifest(append(keptMeta, newMeta...))
 	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
 		closeErr := s.cleanupCompactionOutputs(newParts, newMeta)
 		joined := errors.Join(err, closeErr)

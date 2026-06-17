@@ -44,7 +44,8 @@ type PartMeta struct {
 }
 
 type Manifest struct {
-	Parts []PartMeta `json:"parts"`
+	Sequence uint64     `json:"sequence"`
+	Parts    []PartMeta `json:"parts"`
 }
 
 type metadata struct {
@@ -52,6 +53,7 @@ type metadata struct {
 	IndexRef       blockRef `json:"index_ref"`
 	MetaIndexRef   blockRef `json:"metaindex_ref"`
 	SeriesIndexRef blockRef `json:"series_index_ref"`
+	Components     []string `json:"components"`
 	CreatedUnix    int64    `json:"created_unix"`
 }
 

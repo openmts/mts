@@ -21,6 +21,12 @@ const (
 	recordTombstone     byte  = 2
 )
 
+const (
+	walSegmentMagic     = "MTSWAL2"
+	walSegmentFormatID  = uint16(1)
+	walSegmentHeaderLen = len(walSegmentMagic) + 2 + 2 + 4
+)
+
 var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
 
 type Options struct {
@@ -249,9 +255,17 @@ func (l *Log) openSegment(number int) error {
 		closeErr := file.Close()
 		return fmt.Errorf("stat wal segment: %w close: %v", err, closeErr)
 	}
+	size := info.Size()
+	if size == 0 {
+		if err := writeSegmentHeader(file); err != nil {
+			closeErr := file.Close()
+			return fmt.Errorf("write wal segment header: %w close: %v", err, closeErr)
+		}
+		size = int64(walSegmentHeaderLen)
+	}
 	l.file = file
 	l.segment = number
-	l.size = info.Size()
+	l.size = size
 	return nil
 }
 
@@ -384,6 +398,9 @@ func replaySegment(path string, isLast bool) ([]Record, error) {
 
 func replayOpenSegment(file *os.File, isLast bool) ([]Record, error) {
 	records := make([]Record, 0)
+	if err := readSegmentHeader(file); err != nil {
+		return nil, err
+	}
 	for {
 		offset, err := file.Seek(0, io.SeekCurrent)
 		if err != nil {
@@ -430,6 +447,44 @@ func readFrame(reader io.Reader) (Record, error) {
 		return Record{}, fmt.Errorf("decode wal payload: %w", err)
 	}
 	return record, nil
+}
+
+func appendSegmentHeader(dst []byte) []byte {
+	start := len(dst)
+	dst = append(dst, walSegmentMagic...)
+	dst = binary.LittleEndian.AppendUint16(dst, walSegmentFormatID)
+	dst = binary.LittleEndian.AppendUint16(dst, uint16(walSegmentHeaderLen))
+	sum := crc32.Checksum(dst[start:], castagnoliTable)
+	return binary.LittleEndian.AppendUint32(dst, sum)
+}
+
+func writeSegmentHeader(file *os.File) error {
+	return storagefs.WriteFull(file, appendSegmentHeader(nil))
+}
+
+func readSegmentHeader(reader io.Reader) error {
+	header := make([]byte, walSegmentHeaderLen)
+	if _, err := io.ReadFull(reader, header); err != nil {
+		return normalizeReadError(err)
+	}
+	if string(header[:len(walSegmentMagic)]) != walSegmentMagic {
+		return fmt.Errorf("wal segment magic mismatch")
+	}
+	formatID := binary.LittleEndian.Uint16(header[len(walSegmentMagic):])
+	if formatID != walSegmentFormatID {
+		return fmt.Errorf("wal segment format id %d is unsupported", formatID)
+	}
+	headerLenOffset := len(walSegmentMagic) + 2
+	headerLen := binary.LittleEndian.Uint16(header[headerLenOffset:])
+	if headerLen != uint16(walSegmentHeaderLen) {
+		return fmt.Errorf("wal segment header length %d is invalid", headerLen)
+	}
+	want := binary.LittleEndian.Uint32(header[len(header)-4:])
+	got := crc32.Checksum(header[:len(header)-4], castagnoliTable)
+	if got != want {
+		return fmt.Errorf("wal segment header crc mismatch")
+	}
+	return nil
 }
 
 func decodeFramePayload(recordType byte, payload []byte) (Record, error) {

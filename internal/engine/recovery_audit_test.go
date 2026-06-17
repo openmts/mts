@@ -108,6 +108,9 @@ func TestOpenShardRecordsMaintenanceIssueForRemovedTempManifestFile(t *testing.T
 	if err := os.WriteFile(tempPath, []byte("partial"), 0600); err != nil {
 		t.Fatalf("WriteFile(temp) error = %v", err)
 	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatalf("Chmod(dir) error = %v", err)
+	}
 
 	shard, _, err := OpenShard(ShardOptions{Dir: dir, Start: 0, End: 100})
 	if err != nil {

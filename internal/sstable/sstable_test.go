@@ -221,18 +221,8 @@ func TestPartQueryDetectsValueBlockCorruption(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 
-	part, err := sstable.OpenPart(filepath.Join(dir, meta.ID))
-	if err != nil {
-		t.Fatalf("OpenPart() error = %v", err)
-	}
-	_, err = part.Query(sstable.Query{
-		SeriesIDs: map[uint64]struct{}{1: {}},
-		FieldIDs:  map[uint32]struct{}{2: {}},
-		Start:     0,
-		End:       20,
-	})
-	if err == nil {
-		t.Fatal("Query() corruption error = nil, want error")
+	if _, err := sstable.OpenPart(filepath.Join(dir, meta.ID)); err == nil {
+		t.Fatal("OpenPart() corruption error = nil, want error")
 	}
 }
 

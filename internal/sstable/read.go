@@ -37,13 +37,21 @@ func OpenPart(path string) (*Part, error) {
 		}
 		return nil, err
 	}
-	return &Part{
+	part := &Part{
 		path:       filepath.Clean(path),
 		metadata:   meta,
 		metaRows:   metaRows,
 		seriesRows: seriesRows,
 		files:      files,
-	}, nil
+	}
+	if err := validatePartForOpen(part); err != nil {
+		closeErr := files.close()
+		if closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
+		return nil, err
+	}
+	return part, nil
 }
 
 func openPartReadFiles(path string) (*partReadFiles, error) {

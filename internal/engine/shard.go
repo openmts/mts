@@ -53,7 +53,7 @@ type shardTestHooks struct {
 }
 
 func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
-	if err := storagefs.MkdirAll(opts.Dir); err != nil {
+	if err := prepareStorageRoot(opts.Dir); err != nil {
 		return nil, 0, err
 	}
 	deps := normalizeShardDeps(opts.deps)
@@ -225,7 +225,7 @@ func (s *Shard) flushLocked() error {
 		s.mem.Restore(snapshot)
 		return errors.Join(err, cleanupErr)
 	}
-	nextManifest := sstable.Manifest{Parts: append([]sstable.PartMeta{}, s.manifest.Parts...)}
+	nextManifest := s.nextManifest(append([]sstable.PartMeta{}, s.manifest.Parts...))
 	nextManifest.Parts = append(nextManifest.Parts, meta)
 	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
 		cleanupErr := s.cleanupUncommittedPart(meta, part)
@@ -252,6 +252,13 @@ func (s *Shard) flushLocked() error {
 	snapshot.Release()
 	release()
 	return nil
+}
+
+func (s *Shard) nextManifest(parts []sstable.PartMeta) sstable.Manifest {
+	return sstable.Manifest{
+		Sequence: s.manifest.Sequence + 1,
+		Parts:    parts,
+	}
 }
 
 func (s *Shard) reserveFlushMemory(snapshot memSnapshot) (func(), error) {

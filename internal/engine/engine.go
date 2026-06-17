@@ -48,7 +48,7 @@ func Open(_ context.Context, opts model.Options) (*Engine, error) {
 	if opts.Path == "" {
 		return nil, fmt.Errorf("engine path is empty")
 	}
-	if err := storagefs.MkdirAll(opts.Path); err != nil {
+	if err := prepareStorageRoot(opts.Path); err != nil {
 		return nil, err
 	}
 	cat, err := catalog.Open(catalogDir(opts.Path))
@@ -68,6 +68,30 @@ func Open(_ context.Context, opts model.Options) (*Engine, error) {
 	}
 	eng.startBackgroundCompaction()
 	return eng, nil
+}
+
+func prepareStorageRoot(path string) error {
+	if _, err := storagefs.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return storagefs.MkdirAll(path)
+		}
+		return err
+	}
+	if err := storagefs.ValidateStrictPermissions(path); err != nil {
+		if tightenEmptyDirectory(path) {
+			return storagefs.ValidateStrictPermissions(path)
+		}
+		return err
+	}
+	return nil
+}
+
+func tightenEmptyDirectory(path string) bool {
+	entries, err := os.ReadDir(path)
+	if err != nil || len(entries) != 0 {
+		return false
+	}
+	return os.Chmod(path, storagefs.DirMode) == nil
 }
 
 func (e *Engine) Close(_ context.Context) error {
@@ -469,6 +493,9 @@ func (e *Engine) loadExistingShards() error {
 		}
 		return fmt.Errorf("stat data root: %w", err)
 	}
+	if err := storagefs.ValidateStrictPermissions(root); err != nil {
+		return fmt.Errorf("validate data root permissions: %w", err)
+	}
 	return storagefs.WalkDir(root, e.openShardDir)
 }
 
@@ -478,6 +505,9 @@ func (e *Engine) openShardDir(path string, entry os.DirEntry, err error) error {
 	}
 	if !entry.IsDir() || filepath.Base(filepath.Dir(path)) != "shards" {
 		return nil
+	}
+	if err := storagefs.ValidateStrictPermissions(path); err != nil {
+		return fmt.Errorf("validate shard permissions: %w", err)
 	}
 	start, err := strconv.ParseInt(filepath.Base(path), 10, 64)
 	if err != nil {

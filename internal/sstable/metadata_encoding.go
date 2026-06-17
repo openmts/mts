@@ -15,6 +15,18 @@ var (
 	seriesIndexMagic = codec.Magic("MTSSIX2")
 )
 
+const partMetadataFlagComponents uint16 = 1
+
+var defaultPartComponents = []string{
+	metadataFile,
+	metaindexFile,
+	indexFile,
+	seriesIndexFile,
+	timestampsFile,
+	valuesFile,
+	stringsFile,
+}
+
 func encodeMetadata(meta metadata) ([]byte, error) {
 	payload := make([]byte, 0)
 	var err error
@@ -35,7 +47,8 @@ func encodeMetadata(meta metadata) ([]byte, error) {
 		return nil, err
 	}
 	payload = binary.AppendVarint(payload, meta.CreatedUnix)
-	return codec.MarshalEnvelope(nil, partMagic, 0, payload), nil
+	payload = appendStringSlice(payload, metadataComponents(meta.Components))
+	return codec.MarshalEnvelope(nil, partMagic, partMetadataFlagComponents, payload), nil
 }
 
 func decodeMetadata(data []byte) (metadata, error) {
@@ -48,7 +61,7 @@ func decodeMetadata(data []byte) (metadata, error) {
 	if err != nil {
 		return metadata{}, err
 	}
-	indexRef, metaIndexRef, seriesIndexRef, createdUnix, err := readMetadataTail(reader)
+	indexRef, metaIndexRef, seriesIndexRef, createdUnix, components, err := readMetadataTail(reader, env.Flags)
 	if err != nil {
 		return metadata{}, err
 	}
@@ -60,25 +73,33 @@ func decodeMetadata(data []byte) (metadata, error) {
 		IndexRef:       indexRef,
 		MetaIndexRef:   metaIndexRef,
 		SeriesIndexRef: seriesIndexRef,
+		Components:     metadataComponents(components),
 		CreatedUnix:    createdUnix,
 	}, nil
 }
 
-func readMetadataTail(reader *blockReader) (blockRef, blockRef, blockRef, int64, error) {
+func readMetadataTail(reader *blockReader, flags uint16) (blockRef, blockRef, blockRef, int64, []string, error) {
 	indexRef, err := readBlockRef(reader)
 	if err != nil {
-		return blockRef{}, blockRef{}, blockRef{}, 0, err
+		return blockRef{}, blockRef{}, blockRef{}, 0, nil, err
 	}
 	metaIndexRef, err := readBlockRef(reader)
 	if err != nil {
-		return blockRef{}, blockRef{}, blockRef{}, 0, err
+		return blockRef{}, blockRef{}, blockRef{}, 0, nil, err
 	}
 	seriesIndexRef, err := readBlockRef(reader)
 	if err != nil {
-		return blockRef{}, blockRef{}, blockRef{}, 0, err
+		return blockRef{}, blockRef{}, blockRef{}, 0, nil, err
 	}
 	createdUnix, err := reader.varint("created unix")
-	return indexRef, metaIndexRef, seriesIndexRef, createdUnix, err
+	if err != nil {
+		return blockRef{}, blockRef{}, blockRef{}, 0, nil, err
+	}
+	if flags&partMetadataFlagComponents == 0 && len(reader.rest) == 0 {
+		return indexRef, metaIndexRef, seriesIndexRef, createdUnix, nil, nil
+	}
+	components, err := readStringSlice(reader, "part component count")
+	return indexRef, metaIndexRef, seriesIndexRef, createdUnix, components, err
 }
 
 func encodeIndexRows(rows []indexRow) ([]byte, error) {
@@ -568,6 +589,37 @@ func appendUint32Slice(dst []byte, values []uint32) []byte {
 		dst = binary.AppendUvarint(dst, uint64(value))
 	}
 	return dst
+}
+
+func appendStringSlice(dst []byte, values []string) []byte {
+	dst = binary.AppendUvarint(dst, uint64(len(values)))
+	for _, value := range values {
+		dst = codec.AppendString(dst, value)
+	}
+	return dst
+}
+
+func readStringSlice(reader *blockReader, name string) ([]string, error) {
+	count, err := reader.intCount(name)
+	if err != nil {
+		return nil, err
+	}
+	values := make([]string, 0, count)
+	for range count {
+		value, err := reader.string("string slice value")
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, nil
+}
+
+func metadataComponents(values []string) []string {
+	if len(values) == 0 {
+		return append([]string(nil), defaultPartComponents...)
+	}
+	return append([]string(nil), values...)
 }
 
 func readUint32Slice(reader *blockReader, name string) ([]uint32, error) {

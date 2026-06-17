@@ -71,3 +71,33 @@ func TestSyncDirMissingPathReturnsError(t *testing.T) {
 		t.Fatal("WriteFileAtomic(directory target) error = nil, want error")
 	}
 }
+
+func TestValidateStrictPermissionsRejectsWideModes(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "wide-dir")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatalf("Mkdir(wide-dir) error = %v", err)
+	}
+	if err := storagefs.ValidateStrictPermissions(dir); err == nil {
+		t.Fatal("ValidateStrictPermissions(wide dir) error = nil, want error")
+	}
+	file := filepath.Join(root, "wide-file")
+	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
+		t.Fatalf("WriteFile(wide-file) error = %v", err)
+	}
+	if err := storagefs.ValidateStrictPermissions(file); err == nil {
+		t.Fatal("ValidateStrictPermissions(wide file) error = nil, want error")
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatalf("Chmod(dir) error = %v", err)
+	}
+	if err := os.Chmod(file, 0600); err != nil {
+		t.Fatalf("Chmod(file) error = %v", err)
+	}
+	if err := storagefs.ValidateStrictPermissions(dir); err != nil {
+		t.Fatalf("ValidateStrictPermissions(strict dir) error = %v", err)
+	}
+	if err := storagefs.ValidateStrictPermissions(file); err != nil {
+		t.Fatalf("ValidateStrictPermissions(strict file) error = %v", err)
+	}
+}
