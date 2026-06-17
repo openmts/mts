@@ -273,4 +273,4 @@
 - [x] `timeout 60s git diff --check`
 - [x] `timeout 60s find . -type f \( -name testbin -o -name "*.prof" -o -name "*.cover" -o -name coverage.out \) -print`
 - [x] 更新本计划所有任务状态与实现备注。
-- [ ] 提交：`feat(storage): 完善 compaction 长稳控制`
+- [x] 提交：`feat(storage): 完善 compaction 长稳控制`，提交哈希 `507b04a`。
