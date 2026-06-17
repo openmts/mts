@@ -3,8 +3,10 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"codeberg.org/mts/mts/internal/memtable"
@@ -38,6 +40,7 @@ type Shard struct {
 	tombstones      []model.Tombstone
 	nextPart        int
 	maintenanceErr  error
+	recoveryReport  RecoveryReport
 	compactionStats compactionStatsRecorder
 	deps            shardDeps
 	testHooks       shardTestHooks
@@ -72,7 +75,8 @@ func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 		}
 		return nil, 0, err
 	}
-	shard.maintenanceErr = shard.cleanupOrphanParts()
+	shard.recoveryReport.Merge(shard.cleanupOrphanParts())
+	shard.maintenanceErr = shard.recoveryReport.MaintenanceError()
 	log, err := deps.openWAL(opts.Dir, opts.WAL)
 	if err != nil {
 		closeErr := closeParts(shard.parts)
@@ -207,23 +211,26 @@ func (s *Shard) flushLocked() error {
 	}
 	if s.testHooks.afterPartWriteBeforeManifest != nil {
 		if err := s.testHooks.afterPartWriteBeforeManifest(); err != nil {
+			cleanupErr := s.cleanupUncommittedPart(meta, nil)
 			release()
 			s.mem.Restore(snapshot)
-			return err
+			return errors.Join(err, cleanupErr)
 		}
 	}
 	part, err := s.deps.parts.OpenPart(meta.Path)
 	if err != nil {
+		cleanupErr := s.cleanupUncommittedPart(meta, nil)
 		release()
 		s.mem.Restore(snapshot)
-		return err
+		return errors.Join(err, cleanupErr)
 	}
 	nextManifest := sstable.Manifest{Parts: append([]sstable.PartMeta{}, s.manifest.Parts...)}
 	nextManifest.Parts = append(nextManifest.Parts, meta)
 	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
+		cleanupErr := s.cleanupUncommittedPart(meta, part)
 		release()
 		s.mem.Restore(snapshot)
-		return err
+		return errors.Join(err, cleanupErr)
 	}
 	s.parts = append(s.parts, part)
 	s.manifest = nextManifest
@@ -289,6 +296,12 @@ func (s *Shard) CompactionStatsSnapshot() CompactionStats {
 	return s.compactionStats.snapshot()
 }
 
+func (s *Shard) RecoveryReport() RecoveryReport {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	return s.recoveryReport.Clone()
+}
+
 func (s *Shard) closeLocked() error {
 	partErr := closeParts(s.parts)
 	if s.wal == nil {
@@ -312,7 +325,13 @@ func (s *Shard) openParts() (uint64, error) {
 	for _, meta := range s.manifest.Parts {
 		part, err := s.deps.parts.OpenPart(meta.Path)
 		if err != nil {
-			return 0, err
+			s.recoveryReport.Add(partOpenRecoveryIssue(meta, err))
+			return 0, s.recoveryReport.FatalError()
+		}
+		if issue, ok := partMetadataMismatchIssue(meta, part.Meta()); ok {
+			closeErr := part.Close()
+			s.recoveryReport.Add(issue)
+			return 0, errors.Join(s.recoveryReport.FatalError(), closeErr)
 		}
 		s.parts = append(s.parts, part)
 		if meta.MaxWriteSeq > maxSeq {
@@ -325,7 +344,7 @@ func (s *Shard) openParts() (uint64, error) {
 	return maxSeq, nil
 }
 
-func (s *Shard) cleanupOrphanParts() error {
+func (s *Shard) cleanupOrphanParts() RecoveryReport {
 	referenced := make(map[string]struct{}, len(s.manifest.Parts))
 	for _, meta := range s.manifest.Parts {
 		referenced[filepath.Base(meta.Path)] = struct{}{}
@@ -333,26 +352,101 @@ func (s *Shard) cleanupOrphanParts() error {
 	}
 	entries, err := storagefs.ReadDir(s.opts.Dir)
 	if err != nil {
-		return fmt.Errorf("read shard dir for orphan cleanup: %w", err)
+		return RecoveryReport{Issues: []RecoveryIssue{{
+			Kind:    RecoveryIssueCleanupScanFailed,
+			Path:    s.opts.Dir,
+			Message: "scan shard dir for cleanup failed",
+			Err:     err,
+		}}}
 	}
-	var cleanupErr error
+	var report RecoveryReport
 	for _, entry := range entries {
-		if !entry.IsDir() || !isPartDirName(entry.Name()) {
+		if !isCleanupCandidate(entry, referenced) {
 			continue
 		}
-		if _, ok := referenced[entry.Name()]; ok {
-			continue
-		}
-		err := s.deps.files.RemoveAll(filepath.Join(s.opts.Dir, entry.Name()))
-		if err != nil {
-			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove orphan part %s: %w", entry.Name(), err))
-		}
+		report.Add(s.removeCleanupCandidate(entry))
 	}
-	return cleanupErr
+	return report
+}
+
+func (s *Shard) cleanupUncommittedPart(meta sstable.PartMeta, part partReader) error {
+	closeErr := closePartReader(part)
+	removeErr := s.removeUnreferencedPart(meta.Path, "remove uncommitted part failed")
+	return errors.Join(closeErr, removeErr)
+}
+
+func closePartReader(part partReader) error {
+	if part == nil {
+		return nil
+	}
+	return part.Close()
+}
+
+func (s *Shard) removeUnreferencedPart(path string, message string) error {
+	if path == "" {
+		return nil
+	}
+	if err := s.deps.files.RemoveAll(path); err != nil {
+		s.recordRecoveryIssue(RecoveryIssue{
+			Kind:    RecoveryIssueOrphanRemoveFailed,
+			Path:    path,
+			Message: message,
+			Err:     err,
+		})
+		return err
+	}
+	return nil
+}
+
+func (s *Shard) recordRecoveryIssue(issue RecoveryIssue) {
+	s.recoveryReport.Add(issue)
+	s.maintenanceErr = s.recoveryReport.MaintenanceError()
 }
 
 func isPartDirName(name string) bool {
 	return len(name) == len("sst-000000") && name[:4] == "sst-"
+}
+
+func isCleanupCandidate(entry os.DirEntry, referenced map[string]struct{}) bool {
+	name := entry.Name()
+	if entry.IsDir() && isPartDirName(name) {
+		_, ok := referenced[name]
+		return !ok
+	}
+	return !entry.IsDir() && strings.HasPrefix(name, ".tmp-")
+}
+
+func (s *Shard) removeCleanupCandidate(entry os.DirEntry) RecoveryIssue {
+	name := entry.Name()
+	path := filepath.Join(s.opts.Dir, name)
+	kind := cleanupRemovedKind(entry)
+	failKind := cleanupRemoveFailedKind(entry)
+	message := cleanupRemovedMessage(entry)
+	if err := s.deps.files.RemoveAll(path); err != nil {
+		return RecoveryIssue{Kind: failKind, Path: path, Message: message + " failed", Err: err}
+	}
+	return RecoveryIssue{Kind: kind, Path: path, Message: message}
+}
+
+func cleanupRemovedKind(entry os.DirEntry) RecoveryIssueKind {
+	if entry.IsDir() {
+		return RecoveryIssueOrphanPartRemoved
+	}
+	return RecoveryIssueTempRemoved
+}
+
+func cleanupRemoveFailedKind(entry os.DirEntry) RecoveryIssueKind {
+	if entry.IsDir() {
+		return RecoveryIssueOrphanRemoveFailed
+	}
+	return RecoveryIssueTempRemoveFailed
+}
+
+func cleanupRemovedMessage(entry os.DirEntry) string {
+	if entry.IsDir() {
+		return "removed orphan part"
+	}
+	return "removed temp file"
 }
 
 func (s *Shard) nextPartID() string {

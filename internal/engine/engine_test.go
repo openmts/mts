@@ -286,6 +286,11 @@ func TestFlushFailureBeforeManifestDoesNotExposePart(t *testing.T) {
 	if err := shard.Write(testResolvedPoint(1, 10, 1), true); err == nil {
 		t.Fatal("Write() error = nil, want injected flush error")
 	}
+	partPath := filepath.Join(dir, "sst-000001")
+	if _, err := os.Stat(partPath); !errors.Is(err, os.ErrNotExist) {
+		closeErr := shard.Close()
+		t.Fatalf("uncommitted part stat = %v, want not exist close = %v", err, closeErr)
+	}
 	if err := shard.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
@@ -940,9 +945,15 @@ func TestOpenShardCleansOrphanParts(t *testing.T) {
 		closeErr := reopened.Close(ctx)
 		t.Fatalf("orphan stat error = %v, want not exist close = %v", err, closeErr)
 	}
-	if errs := reopened.MaintenanceErrors(ctx); len(errs) != 0 {
+	errs := reopened.MaintenanceErrors(ctx)
+	if len(errs) != 1 {
 		closeErr := reopened.Close(ctx)
-		t.Fatalf("MaintenanceErrors() = %v, want none close = %v", errs, closeErr)
+		t.Fatalf("MaintenanceErrors() = %v, want one cleanup issue close = %v", errs, closeErr)
+	}
+	var issue *RecoveryIssue
+	if !errors.As(errs[0], &issue) || issue.Kind != RecoveryIssueOrphanPartRemoved {
+		closeErr := reopened.Close(ctx)
+		t.Fatalf("MaintenanceErrors()[0] = %v, want orphan cleanup issue close = %v", errs[0], closeErr)
 	}
 	if err := reopened.Close(ctx); err != nil {
 		t.Fatalf("Close(reopened) error = %v", err)
@@ -2792,11 +2803,14 @@ func (fakeSeriesBatchReader) QuerySeriesID(uint64) ([]model.ColumnData, error) {
 
 type fakeFileOps struct {
 	removeAllCalls int
+	paths          []string
+	err            error
 }
 
-func (f *fakeFileOps) RemoveAll(string) error {
+func (f *fakeFileOps) RemoveAll(path string) error {
 	f.removeAllCalls++
-	return nil
+	f.paths = append(f.paths, path)
+	return f.err
 }
 
 func TestDecorateColumnsSkipsMissingCatalogEntries(t *testing.T) {

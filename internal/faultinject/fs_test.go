@@ -4,7 +4,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
+
+	"codeberg.org/mts/mts/internal/storagefs"
 )
 
 func TestFSInjectsOperationFailure(t *testing.T) {
@@ -54,6 +57,54 @@ func TestFSOperations(t *testing.T) {
 	}
 	if err := fs.RemoveAll(next); err != nil {
 		t.Fatalf("RemoveAll() error = %v", err)
+	}
+}
+
+func TestFSShortWriteNext(t *testing.T) {
+	fs := NewFS()
+	path := filepath.Join(t.TempDir(), "short")
+	file, err := fs.Create(path)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	fs.ShortWriteNext(OpWrite, 2)
+	written, err := fs.Write(file, []byte("abcdef"))
+	closeErr := file.Close()
+	if err != nil {
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	if written != 2 {
+		t.Fatalf("Write() written = %d, want 2", written)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if string(got) != "ab" {
+		t.Fatalf("file data = %q, want ab", string(got))
+	}
+	if closeErr != nil {
+		t.Fatalf("Close() error = %v", closeErr)
+	}
+}
+
+func TestFSFailNextENOSPCPropagatesThroughStorageFS(t *testing.T) {
+	fs := NewFS()
+	fs.FailNext(OpWrite, syscall.ENOSPC)
+	path := filepath.Join(t.TempDir(), "segment.wal")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, storagefs.FileMode)
+	if err != nil {
+		t.Fatalf("OpenFile() error = %v", err)
+	}
+	restore := storagefs.SetFaultController(fs)
+	err = storagefs.WriteFull(file, []byte("record"))
+	restore()
+	closeErr := file.Close()
+	if !storagefs.IsNoSpace(err) {
+		t.Fatalf("WriteFull() error = %v, want ENOSPC close = %v", err, closeErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("Close() error = %v", closeErr)
 	}
 }
 

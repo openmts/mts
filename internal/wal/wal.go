@@ -88,7 +88,7 @@ func (l *Log) appendFrameLocked(recordType byte, payload []byte, syncWrite bool)
 	if err := l.rollIfNeeded(int64(len(frame))); err != nil {
 		return err
 	}
-	if _, err := storagefs.Write(l.file, frame); err != nil {
+	if err := storagefs.WriteFull(l.file, frame); err != nil {
 		return fmt.Errorf("write wal record: %w", err)
 	}
 	l.size += int64(len(frame))

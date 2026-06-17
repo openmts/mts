@@ -2,6 +2,7 @@ package sstable
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ var manifestMagic = codec.Magic("MTSMAN2")
 func LoadManifest(dir string) (Manifest, error) {
 	data, err := storagefs.ReadFile(filepath.Join(dir, manifestFile))
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return loadMissingManifest(dir)
 		}
 		return Manifest{}, fmt.Errorf("read manifest: %w", err)

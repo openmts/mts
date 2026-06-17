@@ -3,13 +3,16 @@ package wal_test
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
+	"codeberg.org/mts/mts/internal/faultinject"
 	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/storagefs"
 	"codeberg.org/mts/mts/internal/wal"
 )
 
@@ -189,6 +192,56 @@ func TestWALRolloverBatchSyncAndTruncateAll(t *testing.T) {
 	}
 }
 
+func TestWALCheckpointRemoveFailurePreservesReplay(t *testing.T) {
+	dir := t.TempDir()
+	log, err := wal.Open(dir, wal.Options{Sync: true})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	record := walRecordForFaultTest()
+	if err := log.Append([]model.ResolvedPoint{record}, true); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+	fs := faultinject.NewFS()
+	fs.FailNext(faultinject.OpRemove, errors.New("remove failed"))
+	restore := storagefs.SetFaultController(fs)
+	err = log.Checkpoint()
+	restore()
+	if err == nil {
+		closeErr := log.Close()
+		t.Fatalf("Checkpoint() error = nil, want remove failure close = %v", closeErr)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	assertWALReplaysRecords(t, dir, []model.ResolvedPoint{record})
+}
+
+func TestWALCheckpointSyncFailurePreservesReplay(t *testing.T) {
+	dir := t.TempDir()
+	log, err := wal.Open(dir, wal.Options{})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	record := walRecordForFaultTest()
+	if err := log.Append([]model.ResolvedPoint{record}, false); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+	fs := faultinject.NewFS()
+	fs.FailNext(faultinject.OpSync, errors.New("sync failed"))
+	restore := storagefs.SetFaultController(fs)
+	err = log.Checkpoint()
+	restore()
+	if err == nil {
+		closeErr := log.Close()
+		t.Fatalf("Checkpoint() error = nil, want sync failure close = %v", closeErr)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	assertWALReplaysRecords(t, dir, []model.ResolvedPoint{record})
+}
+
 func TestWALReplayRejectsUnsupportedRecordType(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "000001.wal")
@@ -218,6 +271,36 @@ func unsupportedRecordTypeFrame() []byte {
 	binary.BigEndian.PutUint32(frame, uint32(len(body)+4))
 	frame = append(frame, body...)
 	return binary.BigEndian.AppendUint32(frame, sum)
+}
+
+func walRecordForFaultTest() model.ResolvedPoint {
+	return model.ResolvedPoint{
+		SeriesID:  1,
+		Timestamp: 10,
+		WriteSeq:  1,
+		Fields: []model.ResolvedField{
+			{FieldID: 1, FieldName: "v", Type: model.FieldFloat64, Value: model.Float64Value(1)},
+		},
+	}
+}
+
+func assertWALReplaysRecords(t *testing.T, dir string, want []model.ResolvedPoint) {
+	t.Helper()
+	log, err := wal.Open(dir, wal.Options{})
+	if err != nil {
+		t.Fatalf("Open(replay) error = %v", err)
+	}
+	got, replayErr := log.Replay()
+	closeErr := log.Close()
+	if replayErr != nil {
+		t.Fatalf("Replay() error = %v close = %v", replayErr, closeErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("Close(replay) error = %v", closeErr)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Replay() = %#v, want %#v", got, want)
+	}
 }
 
 func TestWALOpenInvalidPathReturnsError(t *testing.T) {

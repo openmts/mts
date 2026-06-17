@@ -2,6 +2,7 @@ package faultinject
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -20,15 +21,17 @@ const (
 )
 
 type FS struct {
-	mu       sync.Mutex
-	failures map[Operation]error
-	next     map[Operation][]error
+	mu          sync.Mutex
+	failures    map[Operation]error
+	next        map[Operation][]error
+	shortWrites map[Operation][]int
 }
 
 func NewFS() *FS {
 	return &FS{
-		failures: make(map[Operation]error),
-		next:     make(map[Operation][]error),
+		failures:    make(map[Operation]error),
+		next:        make(map[Operation][]error),
+		shortWrites: make(map[Operation][]int),
 	}
 }
 
@@ -44,8 +47,23 @@ func (fs *FS) FailNext(op Operation, err error) {
 	fs.next[op] = append(fs.next[op], err)
 }
 
+func (fs *FS) ShortWriteNext(op Operation, bytes int) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	fs.shortWrites[op] = append(fs.shortWrites[op], bytes)
+}
+
 func (fs *FS) Before(operation string) error {
 	return fs.err(Operation(operation))
+}
+
+func (fs *FS) BeforeWrite(file *os.File, data []byte) (int, bool, error) {
+	limit, ok := fs.nextShortWrite(OpWrite)
+	if !ok {
+		return 0, false, nil
+	}
+	written, err := writePrefix(file, data, limit)
+	return written, true, err
 }
 
 func (fs *FS) Create(path string) (*os.File, error) {
@@ -58,6 +76,9 @@ func (fs *FS) Create(path string) (*os.File, error) {
 func (fs *FS) Write(file *os.File, data []byte) (int, error) {
 	if err := fs.err(OpWrite); err != nil {
 		return 0, err
+	}
+	if limit, ok := fs.nextShortWrite(OpWrite); ok {
+		return writePrefix(file, data, limit)
 	}
 	return file.Write(data)
 }
@@ -114,4 +135,33 @@ func (fs *FS) err(op Operation) error {
 		return nil
 	}
 	return fmt.Errorf("fault %s: %w", op, err)
+}
+
+func (fs *FS) nextShortWrite(op Operation) (int, bool) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	queue := fs.shortWrites[op]
+	if len(queue) == 0 {
+		return 0, false
+	}
+	limit := queue[0]
+	copy(queue, queue[1:])
+	fs.shortWrites[op] = queue[:len(queue)-1]
+	return limit, true
+}
+
+func writePrefix(file *os.File, data []byte, limit int) (int, error) {
+	if file == nil {
+		return 0, iofs.ErrInvalid
+	}
+	if limit < 0 {
+		limit = 0
+	}
+	if limit > len(data) {
+		limit = len(data)
+	}
+	if limit == 0 {
+		return 0, nil
+	}
+	return file.Write(data[:limit])
 }

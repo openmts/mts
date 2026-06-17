@@ -12,7 +12,9 @@ import (
 
 	mts "codeberg.org/mts/mts"
 	"codeberg.org/mts/mts/internal/faultinject"
+	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/storagefs"
+	"codeberg.org/mts/mts/internal/wal"
 )
 
 type faultReport struct {
@@ -21,15 +23,26 @@ type faultReport struct {
 }
 
 type faultCaseReport struct {
-	Name      string `json:"name"`
-	Operation string `json:"operation"`
-	Recovered bool   `json:"recovered"`
+	Name              string `json:"name"`
+	Operation         string `json:"operation"`
+	Stage             string `json:"stage"`
+	Expected          string `json:"expected"`
+	Recovered         bool   `json:"recovered"`
+	Rows              int    `json:"rows"`
+	MaintenanceIssues int    `json:"maintenance_issues"`
 }
 
 type faultCase struct {
 	name      string
 	operation faultinject.Operation
+	stage     string
+	expected  string
 	run       func(context.Context, string, faultinject.Operation) error
+}
+
+type recoveryResult struct {
+	rows              int
+	maintenanceIssues int
 }
 
 func main() {
@@ -61,13 +74,17 @@ func run() (err error) {
 
 func runMatrix(ctx context.Context, root string) (faultReport, error) {
 	cases := []faultCase{
-		{name: "open-create-failure", operation: faultinject.OpCreate, run: runOpenCreateFailure},
-		{name: "write-failure", operation: faultinject.OpWrite, run: runWriteFailure},
-		{name: "sync-failure", operation: faultinject.OpSync, run: runWriteFailure},
-		{name: "flush-rename-failure", operation: faultinject.OpRename, run: runFlushRenameFailure},
-		{name: "compact-remove-failure", operation: faultinject.OpRemove, run: runCompactRemoveFailure},
-		{name: "reopen-stat-failure", operation: faultinject.OpStat, run: runReopenFailure},
-		{name: "reopen-walk-failure", operation: faultinject.OpWalk, run: runReopenFailure},
+		{name: "open-create-failure", operation: faultinject.OpCreate, stage: "engine_open", expected: "open rejects create fault", run: runOpenCreateFailure},
+		{name: "write-failure", operation: faultinject.OpWrite, stage: "engine_write", expected: "write rejects WAL fault", run: runWriteFailure},
+		{name: "sync-failure", operation: faultinject.OpSync, stage: "engine_write_sync", expected: "sync write rejects fsync fault", run: runWriteFailure},
+		{name: "wal-write-failure", operation: faultinject.OpWrite, stage: "wal_append", expected: "WAL append rejects write fault", run: runWALAppendFailure},
+		{name: "wal-sync-failure", operation: faultinject.OpSync, stage: "wal_append_sync", expected: "WAL append rejects sync fault", run: runWALAppendFailure},
+		{name: "wal-checkpoint-remove-failure", operation: faultinject.OpRemove, stage: "wal_checkpoint_remove", expected: "checkpoint failure preserves replay", run: runWALCheckpointRemoveFailure},
+		{name: "wal-checkpoint-sync-failure", operation: faultinject.OpSync, stage: "wal_checkpoint_sync", expected: "checkpoint sync failure preserves replay", run: runWALCheckpointSyncFailure},
+		{name: "flush-rename-failure", operation: faultinject.OpRename, stage: "flush_manifest", expected: "flush rejects manifest rename fault", run: runFlushRenameFailure},
+		{name: "compact-remove-failure", operation: faultinject.OpRemove, stage: "compaction_cleanup", expected: "compaction records cleanup issue", run: runCompactRemoveFailure},
+		{name: "reopen-stat-failure", operation: faultinject.OpStat, stage: "recovery_stat", expected: "reopen rejects stat fault", run: runReopenFailure},
+		{name: "reopen-walk-failure", operation: faultinject.OpWalk, stage: "recovery_walk", expected: "reopen rejects walk fault", run: runReopenFailure},
 	}
 	report := faultReport{Cases: make([]faultCaseReport, 0, len(cases)), OK: true}
 	for _, item := range cases {
@@ -81,13 +98,18 @@ func runMatrix(ctx context.Context, root string) (faultReport, error) {
 		if err := item.run(ctx, caseDir, item.operation); err != nil {
 			return faultReport{}, fmt.Errorf("%s engine fault: %w", item.name, err)
 		}
-		if err := verifyEngineRecovery(ctx, caseDir); err != nil {
+		recovery, err := verifyEngineRecovery(ctx, caseDir)
+		if err != nil {
 			return faultReport{}, fmt.Errorf("%s recovery: %w", item.name, err)
 		}
 		report.Cases = append(report.Cases, faultCaseReport{
-			Name:      item.name,
-			Operation: string(item.operation),
-			Recovered: true,
+			Name:              item.name,
+			Operation:         string(item.operation),
+			Stage:             item.stage,
+			Expected:          item.expected,
+			Recovered:         true,
+			Rows:              recovery.rows,
+			MaintenanceIssues: recovery.maintenanceIssues,
 		})
 	}
 	return report, nil
@@ -156,6 +178,54 @@ func runWriteFailure(ctx context.Context, dir string, op faultinject.Operation) 
 	return nil
 }
 
+func runWALAppendFailure(_ context.Context, dir string, op faultinject.Operation) error {
+	log, err := wal.Open(filepath.Join(dir, "wal-append"), wal.Options{Sync: op == faultinject.OpSync})
+	if err != nil {
+		return fmt.Errorf("open wal append case: %w", err)
+	}
+	faultErr := withFault(op, func() error {
+		return log.Append([]model.ResolvedPoint{walFaultPoint()}, true)
+	})
+	closeErr := log.Close()
+	return errors.Join(faultErr, closeErr)
+}
+
+func runWALCheckpointRemoveFailure(_ context.Context, dir string, op faultinject.Operation) error {
+	walDir := filepath.Join(dir, "wal-checkpoint-remove")
+	log, err := wal.Open(walDir, wal.Options{Sync: true})
+	if err != nil {
+		return fmt.Errorf("open wal checkpoint remove case: %w", err)
+	}
+	if err := log.Append([]model.ResolvedPoint{walFaultPoint()}, true); err != nil {
+		closeErr := log.Close()
+		return errors.Join(fmt.Errorf("append wal checkpoint remove case: %w", err), closeErr)
+	}
+	faultErr := withFault(op, log.Checkpoint)
+	closeErr := log.Close()
+	if err := errors.Join(faultErr, closeErr); err != nil {
+		return err
+	}
+	return verifyWALReplay(walDir)
+}
+
+func runWALCheckpointSyncFailure(_ context.Context, dir string, op faultinject.Operation) error {
+	walDir := filepath.Join(dir, "wal-checkpoint-sync")
+	log, err := wal.Open(walDir, wal.Options{})
+	if err != nil {
+		return fmt.Errorf("open wal checkpoint sync case: %w", err)
+	}
+	if err := log.Append([]model.ResolvedPoint{walFaultPoint()}, false); err != nil {
+		closeErr := log.Close()
+		return errors.Join(fmt.Errorf("append wal checkpoint sync case: %w", err), closeErr)
+	}
+	faultErr := withFault(op, log.Checkpoint)
+	closeErr := log.Close()
+	if err := errors.Join(faultErr, closeErr); err != nil {
+		return err
+	}
+	return verifyWALReplay(walDir)
+}
+
 func runFlushRenameFailure(ctx context.Context, dir string, op faultinject.Operation) error {
 	eng, err := mts.Open(ctx, options(dir))
 	if err != nil {
@@ -191,12 +261,19 @@ func runCompactRemoveFailure(ctx context.Context, dir string, op faultinject.Ope
 			return errors.Join(fmt.Errorf("flush compact input: %w", err), closeErr)
 		}
 	}
-	faultErr := withFault(op, func() error {
-		return eng.Compact(ctx)
-	})
+	fs := faultinject.NewFS()
+	fs.FailNext(op, errors.New("injected"))
+	restore := storagefs.SetFaultController(fs)
+	compactErr := eng.Compact(ctx)
+	restore()
+	if compactErr != nil {
+		closeErr := eng.Close(ctx)
+		return errors.Join(fmt.Errorf("compact remove fault: %w", compactErr), closeErr)
+	}
+	maintenance := eng.MaintenanceErrors(ctx)
 	closeErr := eng.Close(ctx)
-	if faultErr != nil {
-		return errors.Join(faultErr, closeErr)
+	if len(maintenance) == 0 {
+		return errors.Join(fmt.Errorf("maintenance issues = 0, want compact cleanup fault"), closeErr)
 	}
 	return closeErr
 }
@@ -215,30 +292,50 @@ func runReopenFailure(ctx context.Context, dir string, op faultinject.Operation)
 	})
 }
 
-func verifyEngineRecovery(ctx context.Context, dir string) error {
+func verifyEngineRecovery(ctx context.Context, dir string) (recoveryResult, error) {
 	if err := writeStableDataset(ctx, dir, "recover"); err != nil {
-		return err
+		return recoveryResult{}, err
 	}
 	eng, err := mts.Open(ctx, options(dir))
 	if err != nil {
-		return fmt.Errorf("reopen after fault: %w", err)
+		return recoveryResult{}, fmt.Errorf("reopen after fault: %w", err)
 	}
 	rows, queryErr := eng.QueryRows(ctx, mts.Query{Measurement: "recover", StartTime: 0, EndTime: 50})
+	maintenanceIssues := len(eng.MaintenanceErrors(ctx))
 	closeErr := eng.Close(ctx)
 	if queryErr != nil {
-		return errors.Join(fmt.Errorf("query after fault: %w", queryErr), closeErr)
+		return recoveryResult{}, errors.Join(fmt.Errorf("query after fault: %w", queryErr), closeErr)
 	}
 	if closeErr != nil {
-		return closeErr
+		return recoveryResult{}, closeErr
 	}
 	if len(rows) != 5 {
-		return fmt.Errorf("recovered rows=%d want=5", len(rows))
+		return recoveryResult{}, fmt.Errorf("recovered rows=%d want=5", len(rows))
 	}
 	for _, row := range rows {
 		value := row.Fields["v"]
 		if value.Type != mts.FieldInt64 || value.Int64 != row.Timestamp {
-			return fmt.Errorf("recovered row=%#v has invalid value", row)
+			return recoveryResult{}, fmt.Errorf("recovered row=%#v has invalid value", row)
 		}
+	}
+	return recoveryResult{rows: len(rows), maintenanceIssues: maintenanceIssues}, nil
+}
+
+func verifyWALReplay(dir string) error {
+	log, err := wal.Open(dir, wal.Options{})
+	if err != nil {
+		return fmt.Errorf("reopen wal after checkpoint fault: %w", err)
+	}
+	points, replayErr := log.Replay()
+	closeErr := log.Close()
+	if replayErr != nil {
+		return errors.Join(fmt.Errorf("replay wal after checkpoint fault: %w", replayErr), closeErr)
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if len(points) != 1 || points[0].SeriesID != 1 || points[0].Timestamp != 10 {
+		return fmt.Errorf("wal replay points=%#v want one checkpoint survivor", points)
 	}
 	return nil
 }
@@ -309,4 +406,15 @@ func faultPoints(measurement string, start int64, count int) []mts.Point {
 		})
 	}
 	return points
+}
+
+func walFaultPoint() model.ResolvedPoint {
+	return model.ResolvedPoint{
+		SeriesID:  1,
+		Timestamp: 10,
+		WriteSeq:  1,
+		Fields: []model.ResolvedField{
+			{FieldID: 1, FieldName: "v", Type: model.FieldInt64, Value: model.Int64Value(10)},
+		},
+	}
 }

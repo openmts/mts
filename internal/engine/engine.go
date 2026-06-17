@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -300,6 +301,19 @@ func (e *Engine) MaintenanceErrors(_ context.Context) []error {
 	return errs
 }
 
+func (e *Engine) RecoveryReports(_ context.Context) []RecoveryReport {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	reports := make([]RecoveryReport, 0, len(e.shards))
+	for _, shard := range e.shards {
+		report := shard.RecoveryReport()
+		if len(report.Issues) > 0 {
+			reports = append(reports, report)
+		}
+	}
+	return reports
+}
+
 func (e *Engine) StorageMemorySnapshot() StorageMemorySnapshot {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -401,7 +415,7 @@ func (e *Engine) shardForStartLocked(database string, policy string, start int64
 func (e *Engine) loadExistingShards() error {
 	root := filepath.Join(e.opts.Path, "data")
 	if _, err := storagefs.Stat(root); err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return fmt.Errorf("stat data root: %w", err)

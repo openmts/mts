@@ -119,15 +119,8 @@ func releaseBlockFrameHandle(frame *blockFrame) {
 }
 
 func writeAll(file *os.File, data []byte) error {
-	for len(data) > 0 {
-		written, err := storagefs.Write(file, data)
-		if err != nil {
-			return fmt.Errorf("write block: %w", err)
-		}
-		if written == 0 {
-			return fmt.Errorf("write block: wrote zero bytes")
-		}
-		data = data[written:]
+	if err := storagefs.WriteFull(file, data); err != nil {
+		return fmt.Errorf("write block: %w", err)
 	}
 	return nil
 }

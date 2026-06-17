@@ -16,6 +16,40 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestRunMatrixReportSchema(t *testing.T) {
+	report, err := runMatrix(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatalf("runMatrix() error = %v", err)
+	}
+	if !report.OK {
+		t.Fatal("report.OK = false, want true")
+	}
+	if len(report.Cases) == 0 {
+		t.Fatal("report cases = 0, want cases")
+	}
+	seen := make(map[string]struct{}, len(report.Cases))
+	for _, item := range report.Cases {
+		seen[item.Name] = struct{}{}
+		if item.Name == "" || item.Operation == "" || item.Stage == "" || item.Expected == "" {
+			t.Fatalf("case has empty schema field: %#v", item)
+		}
+		if !item.Recovered {
+			t.Fatalf("case %s recovered = false, want true", item.Name)
+		}
+		if item.Rows != 5 {
+			t.Fatalf("case %s rows = %d, want 5", item.Name, item.Rows)
+		}
+		if item.MaintenanceIssues < 0 {
+			t.Fatalf("case %s maintenance issues = %d, want non-negative", item.Name, item.MaintenanceIssues)
+		}
+	}
+	for _, name := range []string{"wal-checkpoint-remove-failure", "wal-checkpoint-sync-failure"} {
+		if _, ok := seen[name]; !ok {
+			t.Fatalf("report missing case %s", name)
+		}
+	}
+}
+
 func TestMainFunction(t *testing.T) {
 	main()
 }
@@ -54,7 +88,7 @@ func TestRecoveryHelpersRejectInvalidDirectory(t *testing.T) {
 	if err := writeStableDataset(context.Background(), badDir, "bad"); err == nil {
 		t.Fatal("writeStableDataset(invalid) error = nil, want error")
 	}
-	if err := verifyEngineRecovery(context.Background(), badDir); err == nil {
+	if _, err := verifyEngineRecovery(context.Background(), badDir); err == nil {
 		t.Fatal("verifyEngineRecovery(invalid) error = nil, want error")
 	}
 }

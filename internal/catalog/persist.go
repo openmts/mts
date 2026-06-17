@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ func (c *Catalog) walPath() string {
 func (c *Catalog) loadSnapshot() error {
 	data, err := storagefs.ReadFile(c.snapshotPath())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return fmt.Errorf("read catalog snapshot: %w", err)
@@ -90,7 +91,7 @@ func (c *Catalog) checkpointSnapshotLocked(force bool) error {
 func (c *Catalog) replayWAL() error {
 	data, err := storagefs.ReadFile(c.walPath())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return fmt.Errorf("read catalog wal for replay: %w", err)
@@ -117,7 +118,7 @@ func (c *Catalog) appendEntryLocked(entry walEntry) error {
 	frame := codec.MarshalEnvelope(nil, catalogMagic, 0, payload)
 	encoded := binary.AppendUvarint(nil, uint64(len(frame)))
 	encoded = append(encoded, frame...)
-	if _, err := storagefs.Write(c.wal, encoded); err != nil {
+	if err := storagefs.WriteFull(c.wal, encoded); err != nil {
 		return fmt.Errorf("write catalog wal: %w", err)
 	}
 	if err := storagefs.Sync(c.wal); err != nil {

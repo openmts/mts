@@ -2,8 +2,10 @@ package storagefs
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
 
@@ -17,6 +19,18 @@ func (c testFaultController) Before(operation string) error {
 		return c.err
 	}
 	return nil
+}
+
+type testWriteFaultController struct {
+	maxBytes int
+}
+
+func (c testWriteFaultController) Before(string) error {
+	return nil
+}
+
+func (c testWriteFaultController) BeforeWrite(_ *os.File, _ []byte) (int, bool, error) {
+	return c.maxBytes, true, nil
 }
 
 func TestWriteAndCloseSuccessAndClosedFile(t *testing.T) {
@@ -45,6 +59,48 @@ func TestWriteAndCloseSuccessAndClosedFile(t *testing.T) {
 	}
 	if err := writeAndClose(closed, []byte("x")); err == nil {
 		t.Fatal("writeAndClose(closed) error = nil, want error")
+	}
+}
+
+func TestWriteFullDetectsShortWriteAndWrapsOperation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "short")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, FileMode)
+	if err != nil {
+		t.Fatalf("OpenFile() error = %v", err)
+	}
+	restore := SetFaultController(testWriteFaultController{maxBytes: 2})
+	err = WriteFull(file, []byte("abcdef"))
+	restore()
+	closeErr := file.Close()
+	if !errors.Is(err, ErrShortWrite) {
+		t.Fatalf("WriteFull() error = %v, want ErrShortWrite close = %v", err, closeErr)
+	}
+	var opErr *OpError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("WriteFull() error = %T, want *OpError", err)
+	}
+	if opErr.Operation != OpWrite {
+		t.Fatalf("OpError.Operation = %q, want %q", opErr.Operation, OpWrite)
+	}
+	if opErr.Path != path {
+		t.Fatalf("OpError.Path = %q, want %q", opErr.Path, path)
+	}
+	if closeErr != nil {
+		t.Fatalf("Close() error = %v", closeErr)
+	}
+}
+
+func TestIsNoSpaceRecognizesWrappedENOSPC(t *testing.T) {
+	err := fmt.Errorf("outer: %w", &OpError{
+		Operation: OpWrite,
+		Path:      "segment.wal",
+		Err:       syscall.ENOSPC,
+	})
+	if !IsNoSpace(err) {
+		t.Fatalf("IsNoSpace(%v) = false, want true", err)
+	}
+	if IsNoSpace(ErrShortWrite) {
+		t.Fatal("IsNoSpace(ErrShortWrite) = true, want false")
 	}
 }
 

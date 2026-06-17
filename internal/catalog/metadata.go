@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func (c *Catalog) metadataPath() string {
 func (c *Catalog) loadMetadata() error {
 	data, err := storagefs.ReadFile(c.metadataPath())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return fmt.Errorf("read catalog metadata: %w", err)

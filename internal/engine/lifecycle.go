@@ -117,7 +117,7 @@ func (s *Shard) compactPartsLocked(plan compactionPlan) error {
 	keptParts, keptMeta := s.keepUnselectedParts(plan.candidates)
 	nextManifest := sstable.Manifest{Parts: append(keptMeta, newMeta...)}
 	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
-		closeErr := closeParts(newParts)
+		closeErr := s.cleanupCompactionOutputs(newParts, newMeta)
 		joined := errors.Join(err, closeErr)
 		attempt.finish(nil, joined)
 		return joined
@@ -129,16 +129,44 @@ func (s *Shard) compactPartsLocked(plan compactionPlan) error {
 		attempt.finish(nil, err)
 		return err
 	}
-	if err := s.removeOldParts(plan.candidates); err != nil {
-		attempt.finish(nil, err)
-		return err
+	removeErr := s.removeOldParts(plan.candidates)
+	if removeErr != nil {
+		attempt.finish(newMeta, removeErr)
+	} else {
+		attempt.finish(newMeta, nil)
 	}
-	attempt.finish(newMeta, nil)
 	if hadTombstones {
 		s.tombstones = nil
-		return s.wal.Checkpoint()
+		if err := s.wal.Checkpoint(); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func (s *Shard) cleanupCompactionOutputs(parts []partReader, metas []sstable.PartMeta) error {
+	err := closeParts(parts)
+	for _, meta := range metas {
+		err = errors.Join(err, s.removeUnreferencedPart(meta.Path, "remove compaction output failed"))
+	}
+	return err
+}
+
+func (s *Shard) removeOldParts(parts []sstable.PartMeta) error {
+	var joined error
+	for _, part := range parts {
+		if err := s.deps.files.RemoveAll(part.Path); err != nil {
+			issue := RecoveryIssue{
+				Kind:    RecoveryIssueOrphanRemoveFailed,
+				Path:    part.Path,
+				Message: "remove compacted input part failed",
+				Err:     err,
+			}
+			s.recordRecoveryIssue(issue)
+			joined = errors.Join(joined, &issue)
+		}
+	}
+	return joined
 }
 
 func (s *Shard) resolveCompactionOutputOptions(
@@ -541,13 +569,4 @@ func directorySize(root string) (int64, error) {
 		return 0, err
 	}
 	return total, nil
-}
-
-func (s *Shard) removeOldParts(parts []sstable.PartMeta) error {
-	for _, part := range parts {
-		if err := s.deps.files.RemoveAll(part.Path); err != nil {
-			return err
-		}
-	}
-	return nil
 }
