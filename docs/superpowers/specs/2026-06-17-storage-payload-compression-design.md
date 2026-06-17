@@ -12,8 +12,8 @@
 - 当配置了未知压缩算法时，系统应返回明确错误，禁止静默回退。
 - 当读取到未知压缩算法 ID、截断 header、截断 payload 或解压后长度不等于 header 中的原始长度时，系统应返回明确的数据损坏错误。
 - 当显式配置 `snappy` 或 `zstd` 时，系统应使用 `github.com/klauspost/compress` 的 pure Go 实现。
-- 当显式配置 `lz4` 时，由于 `github.com/klauspost/compress` 没有公开可导入的 lz4 包，系统应使用本仓库内的 pure Go LZ4 block codec，不引入 cgo 和额外 lz4 依赖。
-- 如果通用压缩后的 payload 比原始 payload 更大，系统仍应保留压缩结果，因为显式算法配置代表用户要求压缩效果优先于单页局部择优。
+- 当显式配置 `lz4` 时，系统应使用 `github.com/pierrec/lz4/v4` 的 pure Go LZ4 block codec，不引入 cgo。
+- 如果 `lz4` block codec 判断单段 payload 不可压缩，系统应把该段 payload 算法标记为 `none` 并存储原文，避免为了显式算法扩大单段落盘。
 
 ## 方案对比
 
@@ -62,7 +62,7 @@ stored payload bytes
 
 写入时，typed encoder 先产生原始 payload，然后按 `Algorithm` 压缩 payload 并写入 wrapper。读取时，先解析 wrapper 和算法 ID，解压得到原始 typed payload，再走现有 decoder。`readCompressedSamples`、`readCodecSamples` 和直接 reader 不感知通用压缩算法。
 
-`snappy` 与 `zstd` 使用 `github.com/klauspost/compress`。`zstd` 编解码器通过 `sync.Once` 初始化复用，避免热路径反复创建大型 encoder/decoder。`lz4` 使用仓库内 block codec，支持标准 LZ4 block token/literal/match/offset 编码，解码时严格校验 offset、长度和截断。
+`snappy` 与 `zstd` 使用 `github.com/klauspost/compress`。`zstd` 编解码器通过 `sync.Pool` 复用，避免热路径反复创建大型 encoder/decoder。`lz4` 使用 `github.com/pierrec/lz4/v4` 的 block codec，并通过 `sync.Pool` 复用 compressor。LZ4 block 压缩返回 0 时，该 payload 使用 `none` 存储原始字节。
 
 ## 测试策略
 
@@ -71,4 +71,3 @@ stored payload bytes
 - SSTable round trip 测试覆盖四种字段类型和 query 过滤。
 - 尺寸测试使用重复字符串/规律数值验证开启 payload 压缩后 `values.bin` 小于未启用通用压缩。
 - 全量验证执行 `go test ./...`、覆盖率、`goimports-reviser`、`golangci-lint` 和 `tests/e2e`。
-

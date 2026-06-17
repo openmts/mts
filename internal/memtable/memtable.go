@@ -34,8 +34,12 @@ type columnBuffer struct {
 	seriesID  uint64
 	fieldID   uint32
 	fieldType model.FieldType
-	first     model.VersionedSample
-	samples   []model.VersionedSample
+	times     []int64
+	writeSeqs []uint64
+	floats    []float64
+	ints      []int64
+	strings   []string
+	boolBits  []uint64
 	count     int
 }
 
@@ -110,7 +114,7 @@ func (m *MemTable) Snapshot() *Snapshot {
 func (m *MemTable) Query(query Query) []model.ColumnData {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return columnsFromData(m.data, query, true)
+	return columnsFromData(m.data, query)
 }
 
 func (s *Snapshot) Query(query Query) []model.ColumnData {
@@ -121,10 +125,10 @@ func (s *Snapshot) Columns(query Query) []model.ColumnData {
 	if s == nil {
 		return []model.ColumnData{}
 	}
-	return columnsFromData(s.data, query, false)
+	return columnsFromData(s.data, query)
 }
 
-func columnsFromData(data tableData, query Query, detach bool) []model.ColumnData {
+func columnsFromData(data tableData, query Query) []model.ColumnData {
 	if query.End < query.Start {
 		return []model.ColumnData{}
 	}
@@ -136,7 +140,7 @@ func columnsFromData(data tableData, query Query, detach bool) []model.ColumnDat
 		if !containsField(query.FieldIDs, column.fieldID) {
 			continue
 		}
-		out := columnDataFromBuffer(column, query, detach)
+		out := columnDataFromBuffer(column, query)
 		if len(out.Samples) > 0 {
 			columns = append(columns, out)
 		}
@@ -159,8 +163,7 @@ func (s *Snapshot) Release() {
 	data := s.data
 	for _, column := range s.data {
 		if column != nil {
-			column.first = model.VersionedSample{}
-			column.samples = nil
+			column.clear()
 			column.count = 0
 		}
 	}
@@ -270,52 +273,146 @@ func ensureColumn(
 	return column
 }
 
-func columnDataFromBuffer(column *columnBuffer, query Query, detach bool) model.ColumnData {
+func columnDataFromBuffer(column *columnBuffer, query Query) model.ColumnData {
 	return model.ColumnData{
 		SeriesID:  column.seriesID,
 		FieldID:   column.fieldID,
 		FieldType: column.fieldType,
-		Samples:   compactSamples(column, query, detach),
+		Samples:   compactSamples(column, query),
 	}
 }
 
 func (c *columnBuffer) appendSample(sample model.VersionedSample) {
-	if c.count == 0 && cap(c.samples) == 0 {
-		c.first = sample
-		c.count = 1
-		return
+	if c.fieldType == 0 {
+		c.fieldType = sample.Value.Type
 	}
-	if c.count == 1 && len(c.samples) == 0 {
-		c.samples = append(c.samples, c.first, sample)
-		c.first = model.VersionedSample{}
-		c.count = 2
-		return
-	}
-	c.samples = append(c.samples, sample)
+	c.times = append(c.times, sample.Timestamp)
+	c.writeSeqs = append(c.writeSeqs, sample.WriteSeq)
+	c.appendValue(sample.Value)
 	c.count++
+}
+
+func (c *columnBuffer) appendValue(value model.FieldValue) {
+	switch c.fieldType {
+	case model.FieldFloat64:
+		c.floats = append(c.floats, value.Float64)
+	case model.FieldInt64:
+		c.ints = append(c.ints, value.Int64)
+	case model.FieldString:
+		c.strings = append(c.strings, value.String)
+	case model.FieldBool:
+		c.appendBool(value.Bool)
+	}
+}
+
+func (c *columnBuffer) appendBool(value bool) {
+	word := c.count / 64
+	if word >= len(c.boolBits) {
+		c.boolBits = append(c.boolBits, 0)
+	}
+	if value {
+		c.boolBits[word] |= 1 << uint(c.count%64)
+	}
+}
+
+func (c *columnBuffer) sampleAt(index int) model.VersionedSample {
+	return model.VersionedSample{
+		Timestamp: c.times[index],
+		WriteSeq:  c.writeSeqs[index],
+		Value:     c.valueAt(index),
+	}
+}
+
+func (c *columnBuffer) valueAt(index int) model.FieldValue {
+	switch c.fieldType {
+	case model.FieldFloat64:
+		return model.Float64Value(c.floats[index])
+	case model.FieldInt64:
+		return model.Int64Value(c.ints[index])
+	case model.FieldString:
+		return model.StringValue(c.strings[index])
+	case model.FieldBool:
+		word := index / 64
+		bit := uint(index % 64)
+		return model.BoolValue(word < len(c.boolBits) && c.boolBits[word]&(1<<bit) != 0)
+	default:
+		return model.FieldValue{Type: c.fieldType}
+	}
 }
 
 func (c *columnBuffer) reserve(additional int) {
 	if additional <= 0 {
 		return
 	}
-	target := len(c.samples) + additional
-	if c.count == 0 && additional == 1 {
-		target--
-	}
-	if c.count == 1 && len(c.samples) == 0 {
-		target++
-	}
-	if target <= cap(c.samples) {
-		return
-	}
-	samples := make([]model.VersionedSample, len(c.samples), c.nextCapacity(target, additional))
-	copy(samples, c.samples)
-	c.samples = samples
+	target := c.count + additional
+	c.times = growInt64s(c.times, target, additional)
+	c.writeSeqs = growUint64s(c.writeSeqs, target, additional)
+	c.reserveValues(target, additional)
 }
 
-func (c *columnBuffer) nextCapacity(target int, additional int) int {
-	current := cap(c.samples)
+func (c *columnBuffer) reserveValues(target int, additional int) {
+	switch c.fieldType {
+	case model.FieldFloat64:
+		c.floats = growFloat64s(c.floats, target, additional)
+	case model.FieldInt64:
+		c.ints = growInt64s(c.ints, target, additional)
+	case model.FieldString:
+		c.strings = growStrings(c.strings, target, additional)
+	case model.FieldBool:
+		c.boolBits = growUint64s(c.boolBits, boolWords(target), boolWords(additional))
+	}
+}
+
+func (c *columnBuffer) clear() {
+	c.times = nil
+	c.writeSeqs = nil
+	c.floats = nil
+	c.ints = nil
+	c.strings = nil
+	c.boolBits = nil
+}
+
+func growInt64s(values []int64, target int, additional int) []int64 {
+	if target <= cap(values) {
+		return values
+	}
+	next := nextSliceCapacity(cap(values), target, additional)
+	out := make([]int64, len(values), next)
+	copy(out, values)
+	return out
+}
+
+func growUint64s(values []uint64, target int, additional int) []uint64 {
+	if target <= cap(values) {
+		return values
+	}
+	next := nextSliceCapacity(cap(values), target, additional)
+	out := make([]uint64, len(values), next)
+	copy(out, values)
+	return out
+}
+
+func growFloat64s(values []float64, target int, additional int) []float64 {
+	if target <= cap(values) {
+		return values
+	}
+	next := nextSliceCapacity(cap(values), target, additional)
+	out := make([]float64, len(values), next)
+	copy(out, values)
+	return out
+}
+
+func growStrings(values []string, target int, additional int) []string {
+	if target <= cap(values) {
+		return values
+	}
+	next := nextSliceCapacity(cap(values), target, additional)
+	out := make([]string, len(values), next)
+	copy(out, values)
+	return out
+}
+
+func nextSliceCapacity(current int, target int, additional int) int {
 	if current == 0 || additional > current {
 		return target
 	}
@@ -333,59 +430,88 @@ func (c *columnBuffer) nextCapacity(target int, additional int) int {
 	return next
 }
 
+func boolWords(count int) int {
+	if count <= 0 {
+		return 0
+	}
+	return (count + 63) / 64
+}
+
 func (c *columnBuffer) appendColumn(src *columnBuffer) {
 	if src.count == 0 {
 		return
 	}
-	if len(src.samples) != src.count {
-		c.appendSample(src.first)
+	if c.fieldType == 0 {
+		c.fieldType = src.fieldType
 	}
-	for _, sample := range src.samples {
-		c.appendSample(sample)
+	c.reserve(src.count)
+	for index := range src.count {
+		c.appendSample(src.sampleAt(index))
 	}
 }
 
-func compactSamples(column *columnBuffer, query Query, detach bool) []model.VersionedSample {
+func compactSamples(column *columnBuffer, query Query) []model.VersionedSample {
 	if column.count == 0 {
 		return []model.VersionedSample{}
 	}
-	if len(column.samples) == column.count {
-		return compactDenseSamples(column.samples, query, detach)
+	if columnTimesSortedUnique(column) {
+		return materializeSortedColumnSamples(column, query)
 	}
-	samples := make([]model.VersionedSample, 0, column.count)
-	samples = appendMatchingSample(samples, column.first, query)
-	for _, sample := range column.samples {
+	matches := countMatchingSamples(column, query)
+	if matches == 0 {
+		return []model.VersionedSample{}
+	}
+	samples := make([]model.VersionedSample, 0, matches)
+	for index := range column.count {
+		sample := column.sampleAt(index)
 		samples = appendMatchingSample(samples, sample, query)
 	}
 	return compactMaterializedSamples(samples)
 }
 
-func compactDenseSamples(samples []model.VersionedSample, query Query, detach bool) []model.VersionedSample {
-	if denseSamplesInRangeSortedUnique(samples, query) {
-		if detach {
-			return cloneSamples(samples)
-		}
-		return samples
+func materializeSortedColumnSamples(column *columnBuffer, query Query) []model.VersionedSample {
+	start, end := sortedRangeBounds(column.times[:column.count], query)
+	samples := make([]model.VersionedSample, end-start)
+	for index := start; index < end; index++ {
+		samples[index-start] = column.sampleAt(index)
 	}
-	filtered := make([]model.VersionedSample, 0, len(samples))
-	for _, sample := range samples {
-		filtered = appendMatchingSample(filtered, sample, query)
-	}
-	return compactMaterializedSamples(filtered)
+	return samples
 }
 
-func denseSamplesInRangeSortedUnique(samples []model.VersionedSample, query Query) bool {
+func sortedRangeBounds(times []int64, query Query) (int, int) {
+	start := sort.Search(len(times), func(index int) bool {
+		return times[index] >= query.Start
+	})
+	end := sort.Search(len(times), func(index int) bool {
+		return times[index] > query.End
+	})
+	if end < start {
+		return start, start
+	}
+	return start, end
+}
+
+func columnTimesSortedUnique(column *columnBuffer) bool {
 	var previous int64
-	for index, sample := range samples {
-		if sample.Timestamp < query.Start || sample.Timestamp > query.End {
+	for index := range column.count {
+		timestamp := column.times[index]
+		if index > 0 && timestamp <= previous {
 			return false
 		}
-		if index > 0 && sample.Timestamp <= previous {
-			return false
-		}
-		previous = sample.Timestamp
+		previous = timestamp
 	}
 	return true
+}
+
+func countMatchingSamples(column *columnBuffer, query Query) int {
+	count := 0
+	for index := range column.count {
+		timestamp := column.times[index]
+		if timestamp >= query.Start && timestamp <= query.End {
+			count++
+		}
+	}
+	return count
 }
 
 func compactMaterializedSamples(samples []model.VersionedSample) []model.VersionedSample {
@@ -464,14 +590,36 @@ func cloneColumn(src *columnBuffer) *columnBuffer {
 		seriesID:  src.seriesID,
 		fieldID:   src.fieldID,
 		fieldType: src.fieldType,
-		first:     src.first,
-		samples:   cloneSamples(src.samples),
+		times:     cloneInt64s(src.times),
+		writeSeqs: cloneUint64s(src.writeSeqs),
+		floats:    cloneFloat64s(src.floats),
+		ints:      cloneInt64s(src.ints),
+		strings:   cloneStrings(src.strings),
+		boolBits:  cloneUint64s(src.boolBits),
 		count:     src.count,
 	}
 }
 
-func cloneSamples(src []model.VersionedSample) []model.VersionedSample {
-	dst := make([]model.VersionedSample, len(src))
+func cloneInt64s(src []int64) []int64 {
+	dst := make([]int64, len(src))
+	copy(dst, src)
+	return dst
+}
+
+func cloneUint64s(src []uint64) []uint64 {
+	dst := make([]uint64, len(src))
+	copy(dst, src)
+	return dst
+}
+
+func cloneFloat64s(src []float64) []float64 {
+	dst := make([]float64, len(src))
+	copy(dst, src)
+	return dst
+}
+
+func cloneStrings(src []string) []string {
+	dst := make([]string, len(src))
 	copy(dst, src)
 	return dst
 }

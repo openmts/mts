@@ -7,6 +7,7 @@ import (
 
 	"github.com/klauspost/compress/snappy"
 	"github.com/klauspost/compress/zstd"
+	"github.com/pierrec/lz4/v4"
 )
 
 const (
@@ -17,8 +18,9 @@ const (
 )
 
 var (
-	zstdEncoders = sync.Pool{}
-	zstdDecoders = sync.Pool{}
+	lz4Compressors = sync.Pool{}
+	zstdEncoders   = sync.Pool{}
+	zstdDecoders   = sync.Pool{}
 )
 
 func appendCodecPayloadWithCompression(
@@ -31,11 +33,11 @@ func appendCodecPayloadWithCompression(
 	if err != nil {
 		return nil, err
 	}
-	stored, err := compressPayload(algorithmID, payload)
+	storedAlgorithmID, stored, err := compressPayload(algorithmID, payload)
 	if err != nil {
 		return nil, err
 	}
-	dst = append(dst, codec, algorithmID)
+	dst = append(dst, codec, storedAlgorithmID)
 	dst = binary.AppendUvarint(dst, uint64(len(payload)))
 	dst = binary.AppendUvarint(dst, uint64(len(stored)))
 	return append(dst, stored...), nil
@@ -56,18 +58,19 @@ func payloadCompressionAlgorithmID(algorithm string) (byte, error) {
 	}
 }
 
-func compressPayload(algorithmID byte, payload []byte) ([]byte, error) {
+func compressPayload(algorithmID byte, payload []byte) (byte, []byte, error) {
 	switch algorithmID {
 	case payloadCompressionNone:
-		return payload, nil
+		return payloadCompressionNone, payload, nil
 	case payloadCompressionSnappy:
-		return snappy.Encode(nil, payload), nil
+		return payloadCompressionSnappy, snappy.Encode(nil, payload), nil
 	case payloadCompressionLZ4:
-		return encodeLZ4Block(nil, payload), nil
+		return encodeLZ4(payload)
 	case payloadCompressionZSTD:
-		return encodeZSTD(payload)
+		encoded, err := encodeZSTD(payload)
+		return payloadCompressionZSTD, encoded, err
 	default:
-		return nil, fmt.Errorf("unknown payload compression id %d", algorithmID)
+		return 0, nil, fmt.Errorf("unknown payload compression id %d", algorithmID)
 	}
 }
 
@@ -82,7 +85,7 @@ func decompressPayload(algorithmID byte, payload []byte, rawSize int) ([]byte, e
 	case payloadCompressionSnappy:
 		decoded, err = snappy.Decode(make([]byte, 0, rawSize), payload)
 	case payloadCompressionLZ4:
-		decoded, err = decodeLZ4Block(make([]byte, 0, rawSize), payload, rawSize)
+		decoded, err = decodeLZ4(payload, rawSize)
 	case payloadCompressionZSTD:
 		decoded, err = decodeZSTD(payload, rawSize)
 	default:
@@ -108,6 +111,36 @@ func readPayloadSize(reader *blockReader, name string, kind string) (int, error)
 		return 0, fmt.Errorf("decode sstable %s %s size: count %d overflows int", name, kind, sizeValue)
 	}
 	return int(sizeValue), nil
+}
+
+func encodeLZ4(payload []byte) (byte, []byte, error) {
+	compressor := getLZ4Compressor()
+	defer lz4Compressors.Put(compressor)
+	dst := make([]byte, lz4.CompressBlockBound(len(payload)))
+	size, err := compressor.CompressBlock(payload, dst)
+	if err != nil {
+		return 0, nil, err
+	}
+	if size == 0 {
+		return payloadCompressionNone, payload, nil
+	}
+	return payloadCompressionLZ4, dst[:size], nil
+}
+
+func decodeLZ4(payload []byte, rawSize int) ([]byte, error) {
+	dst := make([]byte, rawSize)
+	size, err := lz4.UncompressBlock(payload, dst)
+	if err != nil {
+		return nil, err
+	}
+	return dst[:size], nil
+}
+
+func getLZ4Compressor() *lz4.Compressor {
+	if value := lz4Compressors.Get(); value != nil {
+		return value.(*lz4.Compressor)
+	}
+	return &lz4.Compressor{}
 }
 
 func encodeZSTD(payload []byte) ([]byte, error) {

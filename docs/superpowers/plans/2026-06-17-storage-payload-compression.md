@@ -4,9 +4,9 @@
 
 **Goal:** 在 SSTable typed encoding 之后增加 snappy、lz4、zstd payload 级通用压缩。
 
-**Architecture:** 新增 `payload_compression.go` 封装算法解析、压缩、解压和 header 读写；新增 `lz4_block.go` 提供 pure Go LZ4 block codec。`compression.go` 的 `appendCodecPayload/readCodecPayload` 负责套用 wrapper，typed decoder 保持原有职责。
+**Architecture:** 新增 `payload_compression.go` 封装算法解析、压缩、解压和 header 读写；LZ4 使用 `github.com/pierrec/lz4/v4` 的 pure Go block codec。`compression.go` 的 `appendCodecPayload/readCodecPayload` 负责套用 wrapper，typed decoder 保持原有职责。
 
-**Tech Stack:** Go 1.26.2、`github.com/klauspost/compress/snappy`、`github.com/klauspost/compress/zstd`、仓库内 pure Go LZ4 block codec。
+**Tech Stack:** Go 1.26.2、`github.com/klauspost/compress/snappy`、`github.com/klauspost/compress/zstd`、`github.com/pierrec/lz4/v4`。
 
 ---
 
@@ -81,23 +81,23 @@ TestCompressedPayloadRejectsUnknownAlgorithmID
 
 实现备注：已新增 `payload_compression.go`，wrapper header 包含 typed codec、payload 算法、原始长度、存储长度和存储 payload。
 
-### Task 4: 实现 pure Go LZ4 block codec
+### Task 4: 接入 pure Go LZ4 block codec
 
 **Files:**
-- Create: `internal/sstable/lz4_block.go`
+- Modify: `internal/sstable/payload_compression.go`
 - Test: `internal/sstable/compression_test.go`
 
-- [x] **Step 1: 实现 LZ4 block encode**
+- [x] **Step 1: 接入 LZ4 block encode**
 
-实现标准 LZ4 block token：literal length、offset、match length。使用固定 hash table 查找 4 字节 match，避免 map 分配。
+使用 `github.com/pierrec/lz4/v4` 的 `Compressor.CompressBlock` 和 `CompressBlockBound`。compressor 通过 `sync.Pool` 复用，避免反复分配内部表。
 
-- [x] **Step 2: 实现 LZ4 block decode**
+- [x] **Step 2: 接入 LZ4 block decode**
 
-严格校验 token、literal 截断、offset 为 0、offset 超出已写数据、match 越界等错误。
+使用 `github.com/pierrec/lz4/v4` 的 `UncompressBlock`，并保留 payload header 的 raw size 校验。
 
 验收：`go test -count=1 ./internal/sstable -run 'TestPayloadCompressionAlgorithmsRoundTrip|TestCompressedPayload' -timeout 180s` 通过。
 
-实现备注：已新增 pure Go LZ4 block codec，编码使用固定 hash table，解码严格校验 offset、截断和 raw size。
+实现备注：已改为使用 `github.com/pierrec/lz4/v4`。LZ4 block 不可压缩返回 0 时，单段 payload 回退为 `none` 存原文，避免扩大落盘。
 
 ### Task 5: SSTable 集成与尺寸验证
 

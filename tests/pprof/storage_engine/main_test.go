@@ -84,6 +84,7 @@ func TestRunWithStorageParameters(t *testing.T) {
 		"-compaction-level0-size-limit", "1024",
 		"-compaction-max-output-part-bytes", "2048",
 		"-compaction-background-interval", "10ms",
+		"-compression-algorithm", "lz4",
 		"-flush-on-exit",
 	})
 	if err != nil {
@@ -100,6 +101,7 @@ func TestParseConfigStorageParameters(t *testing.T) {
 		"-compaction-level0-size-limit", "1048576",
 		"-compaction-max-output-part-bytes", "268435456",
 		"-compaction-background-interval", "250ms",
+		"-compression-algorithm", "zstd",
 		"-flush-on-exit",
 	})
 	if err != nil {
@@ -126,6 +128,9 @@ func TestParseConfigStorageParameters(t *testing.T) {
 	if cfg.compactionBackgroundInterval != 250*time.Millisecond {
 		t.Fatalf("compactionBackgroundInterval = %s, want 250ms", cfg.compactionBackgroundInterval)
 	}
+	if cfg.compressionAlgorithm != "zstd" {
+		t.Fatalf("compressionAlgorithm = %q, want zstd", cfg.compressionAlgorithm)
+	}
 	if !cfg.flushOnExit {
 		t.Fatal("flushOnExit = false, want true")
 	}
@@ -139,6 +144,7 @@ func TestStorageOptions(t *testing.T) {
 		compactionLevel0SizeLimit:    4096,
 		compactionMaxOutputPartBytes: 8192,
 		compactionBackgroundInterval: time.Second,
+		compressionAlgorithm:         "snappy",
 	}
 	opts := storageOptions("/tmp/mts-test", cfg)
 	if opts.Path != "/tmp/mts-test" {
@@ -162,9 +168,26 @@ func TestStorageOptions(t *testing.T) {
 	if opts.Compaction.BackgroundInterval != time.Second {
 		t.Fatalf("BackgroundInterval = %s, want 1s", opts.Compaction.BackgroundInterval)
 	}
+	if !opts.Compression.Enabled || opts.Compression.Algorithm != "snappy" {
+		t.Fatalf("Compression = %#v, want enabled snappy", opts.Compression)
+	}
+	if compressionOptions(compressionOff).Enabled {
+		t.Fatal("compressionOptions(off).Enabled = true, want false")
+	}
 }
 
 func TestCollectRunMetrics(t *testing.T) {
+	emptyMetrics, err := collectRunMetrics("")
+	if err != nil {
+		t.Fatalf("collectRunMetrics(empty) error = %v", err)
+	}
+	if emptyMetrics.heapSysBytes == 0 {
+		t.Fatal("collectRunMetrics(empty).heapSysBytes = 0, want runtime metric")
+	}
+	if err := logStageMetrics("test", ""); err != nil {
+		t.Fatalf("logStageMetrics(empty) error = %v", err)
+	}
+
 	root := t.TempDir()
 	partDir := filepath.Join(root, "data", "db", "rp", "shards", "0", "sst-000001")
 	if err := os.MkdirAll(partDir, 0700); err != nil {
@@ -248,6 +271,34 @@ func TestRunModes(t *testing.T) {
 	}
 }
 
+func TestRunReadMode(t *testing.T) {
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "data")
+	err := run([]string{
+		"-data-dir", dataDir,
+		"-mode", "write",
+		"-points", "200",
+		"-series", "10",
+		"-query-repeat", "2",
+		"-compression-algorithm", "lz4",
+		"-flush-on-exit",
+	})
+	if err != nil {
+		t.Fatalf("run(write) error = %v", err)
+	}
+	err = run([]string{
+		"-data-dir", dataDir,
+		"-mode", "read",
+		"-points", "200",
+		"-series", "10",
+		"-query-repeat", "2",
+		"-compression-algorithm", "lz4",
+	})
+	if err != nil {
+		t.Fatalf("run(read) error = %v", err)
+	}
+}
+
 func TestRunRejectsBadInputs(t *testing.T) {
 	tests := []struct {
 		name string
@@ -256,6 +307,7 @@ func TestRunRejectsBadInputs(t *testing.T) {
 		{name: "bad flag", args: []string{"-unknown"}},
 		{name: "invalid config", args: []string{"-points", "1", "-series", "2"}},
 		{name: "bad field layout", args: []string{"-field-layout", "bad", "-points", "1", "-series", "1"}},
+		{name: "bad compression algorithm", args: []string{"-compression-algorithm", "gzip", "-points", "1", "-series", "1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

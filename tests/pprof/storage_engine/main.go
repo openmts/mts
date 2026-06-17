@@ -32,6 +32,7 @@ type config struct {
 	compactionLevel0SizeLimit    int64
 	compactionMaxOutputPartBytes int64
 	compactionBackgroundInterval time.Duration
+	compressionAlgorithm         string
 	flushOnExit                  bool
 	cpuProfile                   string
 	memProfile                   string
@@ -42,6 +43,8 @@ type config struct {
 const (
 	fieldLayoutDefault        = "default"
 	fieldLayoutWide10         = "wide10"
+	compressionOff            = "off"
+	compressionNone           = "none"
 	defaultWriteBatchSize     = 1024
 	defaultMemTableMaxSamples = 8192
 )
@@ -66,6 +69,9 @@ func run(args []string) (err error) {
 		cfg.prebuilt = buildWorkloadPoints(cfg)
 		runtime.GC()
 		runtime.MemProfileRate = rate
+		if err := logStageMetrics("after_prebuild", ""); err != nil {
+			return err
+		}
 	}
 	dir, cleanup, err := prepareDataDir(cfg.dataDir)
 	if err != nil {
@@ -91,15 +97,26 @@ func run(args []string) (err error) {
 		err = errors.Join(err, eng.Close(ctx))
 	}()
 
+	if err := logStageMetrics("before_workload", dir); err != nil {
+		return err
+	}
+	workloadStarted := time.Now()
 	if err := runWorkloadWithDir(ctx, eng, cfg, dir); err != nil {
 		return err
 	}
+	workloadDuration := time.Since(workloadStarted)
 	if cfg.flushOnExit && cfg.mode != "replay" {
 		if err := eng.Flush(ctx); err != nil {
 			return fmt.Errorf("flush on exit: %w", err)
 		}
 	}
+	if err := logStageMetrics("after_workload", dir); err != nil {
+		return err
+	}
 	if err := writeMemProfile(cfg.memProfile); err != nil {
+		return err
+	}
+	if err := logStageMetrics("after_profile", dir); err != nil {
 		return err
 	}
 	metrics, err := collectRunMetrics(dir)
@@ -107,7 +124,7 @@ func run(args []string) (err error) {
 		return err
 	}
 	log.Printf(
-		"mode=%s field_layout=%s points=%d series=%d query_repeat=%d write_batch_size=%d memtable_max_samples=%d compaction_enabled=%t data_dir=%s",
+		"mode=%s field_layout=%s points=%d series=%d query_repeat=%d write_batch_size=%d memtable_max_samples=%d compaction_enabled=%t compression_algorithm=%s data_dir=%s",
 		cfg.mode,
 		normalizedFieldLayout(cfg.fieldLayout),
 		cfg.points,
@@ -116,10 +133,12 @@ func run(args []string) (err error) {
 		normalizedWriteBatchSize(cfg),
 		normalizedMemTableMaxSamples(cfg),
 		cfg.compactionEnabled,
+		normalizedCompressionAlgorithm(cfg.compressionAlgorithm),
 		dir,
 	)
 	log.Printf(
-		"metrics sstable_count=%d data_dir_bytes=%d heap_alloc_bytes=%d heap_sys_bytes=%d heap_total_alloc_bytes=%d mallocs=%d frees=%d num_gc=%d pause_total_ns=%d rss_bytes=%d rss_peak_bytes=%d",
+		"metrics workload_duration_ms=%d sstable_count=%d data_dir_bytes=%d heap_alloc_bytes=%d heap_sys_bytes=%d heap_total_alloc_bytes=%d mallocs=%d frees=%d num_gc=%d pause_total_ns=%d rss_bytes=%d rss_peak_bytes=%d",
+		workloadDuration.Milliseconds(),
 		metrics.sstableCount,
 		metrics.dataDirBytes,
 		metrics.heapAllocBytes,
@@ -129,6 +148,27 @@ func run(args []string) (err error) {
 		metrics.frees,
 		metrics.numGC,
 		metrics.pauseTotalNs,
+		metrics.rssBytes,
+		metrics.rssPeakBytes,
+	)
+	return nil
+}
+
+func logStageMetrics(stage string, dir string) error {
+	metrics, err := collectRunMetrics(dir)
+	if err != nil {
+		return err
+	}
+	log.Printf(
+		"stage=%s data_dir_bytes=%d heap_alloc_bytes=%d heap_sys_bytes=%d heap_total_alloc_bytes=%d mallocs=%d frees=%d num_gc=%d rss_bytes=%d rss_peak_bytes=%d",
+		stage,
+		metrics.dataDirBytes,
+		metrics.heapAllocBytes,
+		metrics.heapSysBytes,
+		metrics.heapTotalAllocBytes,
+		metrics.mallocs,
+		metrics.frees,
+		metrics.numGC,
 		metrics.rssBytes,
 		metrics.rssPeakBytes,
 	)
@@ -152,6 +192,7 @@ func parseConfig(args []string) (config, error) {
 	flags.Int64Var(&cfg.compactionLevel0SizeLimit, "compaction-level0-size-limit", 0, "Level-0 part 总大小超过该值时触发 compaction；0 表示不按大小触发")
 	flags.Int64Var(&cfg.compactionMaxOutputPartBytes, "compaction-max-output-part-bytes", 0, "compaction 输出 part 目标大小；0 表示单 part 输出")
 	flags.DurationVar(&cfg.compactionBackgroundInterval, "compaction-background-interval", 0, "后台 compaction 间隔；0 表示不启动后台循环")
+	flags.StringVar(&cfg.compressionAlgorithm, "compression-algorithm", compressionOff, "压缩算法：off/none/snappy/lz4/zstd；off 完全关闭，none 仅启用 typed encoding")
 	flags.BoolVar(&cfg.flushOnExit, "flush-on-exit", false, "workload 结束后强制 Flush，便于统计完整落盘后的 SSTable 数量")
 	flags.StringVar(&cfg.cpuProfile, "cpu-profile", "", "CPU profile 输出文件")
 	flags.StringVar(&cfg.memProfile, "mem-profile", "", "heap profile 输出文件")
@@ -164,7 +205,7 @@ func parseConfig(args []string) (config, error) {
 
 func validateConfig(cfg config) error {
 	switch cfg.mode {
-	case "write", "query", "compact", "replay":
+	case "write", "query", "compact", "replay", "read":
 	default:
 		return fmt.Errorf("unsupported mode %q", cfg.mode)
 	}
@@ -203,6 +244,11 @@ func validateConfig(cfg config) error {
 	default:
 		return fmt.Errorf("unsupported field layout %q", cfg.fieldLayout)
 	}
+	switch normalizedCompressionAlgorithm(cfg.compressionAlgorithm) {
+	case compressionOff, compressionNone, "snappy", "lz4", "zstd":
+	default:
+		return fmt.Errorf("unsupported compression algorithm %q", cfg.compressionAlgorithm)
+	}
 	return nil
 }
 
@@ -225,7 +271,27 @@ func storageOptions(path string, cfg config) mts.Options {
 			MaxOutputPartBytes: cfg.compactionMaxOutputPartBytes,
 			BackgroundInterval: cfg.compactionBackgroundInterval,
 		},
+		Compression: compressionOptions(cfg.compressionAlgorithm),
 	}
+}
+
+func compressionOptions(algorithm string) mts.CompressionOptions {
+	normalized := normalizedCompressionAlgorithm(algorithm)
+	if normalized == compressionOff {
+		return mts.CompressionOptions{}
+	}
+	return mts.CompressionOptions{
+		Enabled:       true,
+		Algorithm:     normalized,
+		MinPageValues: 1,
+	}
+}
+
+func normalizedCompressionAlgorithm(algorithm string) string {
+	if algorithm == "" {
+		return compressionOff
+	}
+	return algorithm
 }
 
 func normalizedWriteBatchSize(cfg config) int {
@@ -282,25 +348,27 @@ type runMetrics struct {
 
 func collectRunMetrics(root string) (runMetrics, error) {
 	var metrics runMetrics
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() {
-			if strings.HasPrefix(entry.Name(), "sst-") {
-				metrics.sstableCount++
+	if root != "" {
+		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
+			if entry.IsDir() {
+				if strings.HasPrefix(entry.Name(), "sst-") {
+					metrics.sstableCount++
+				}
+				return nil
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			metrics.dataDirBytes += info.Size()
 			return nil
-		}
-		info, err := entry.Info()
+		})
 		if err != nil {
-			return err
+			return runMetrics{}, fmt.Errorf("collect run metrics: %w", err)
 		}
-		metrics.dataDirBytes += info.Size()
-		return nil
-	})
-	if err != nil {
-		return runMetrics{}, fmt.Errorf("collect run metrics: %w", err)
 	}
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
@@ -390,6 +458,8 @@ func runWorkloadWithDir(ctx context.Context, eng *mts.Engine, cfg config, dir st
 	switch cfg.mode {
 	case "write":
 		return writePoints(ctx, eng, cfg)
+	case "read":
+		return queryRows(ctx, eng, cfg)
 	case "query":
 		return queryWorkload(ctx, eng, cfg)
 	case "compact":

@@ -80,7 +80,7 @@ func TestPayloadCompressionRejectsMalformedHeaders(t *testing.T) {
 }
 
 func TestPayloadCompressionInternalErrorBranches(t *testing.T) {
-	if _, err := compressPayload(99, []byte("payload")); err == nil {
+	if _, _, err := compressPayload(99, []byte("payload")); err == nil {
 		t.Fatal("compressPayload(unknown) error = nil, want error")
 	}
 	if _, err := decompressPayload(payloadCompressionSnappy, []byte("bad"), 10); err == nil {
@@ -91,25 +91,21 @@ func TestPayloadCompressionInternalErrorBranches(t *testing.T) {
 	}
 }
 
-func TestLZ4BlockRejectsMalformedPayloads(t *testing.T) {
-	cases := []struct {
-		name    string
-		payload []byte
-		rawSize int
-	}{
-		{name: "literal too long", payload: []byte{0x20, 'a'}, rawSize: 2},
-		{name: "truncated offset", payload: []byte{0x00, 0x01}, rawSize: 4},
-		{name: "zero offset", payload: []byte{0x00, 0x00, 0x00}, rawSize: 4},
-		{name: "offset beyond output", payload: []byte{0x00, 0x01, 0x00}, rawSize: 4},
-		{name: "match too long", payload: []byte{0x1f, 'a', 0x01, 0x00, 0x00}, rawSize: 2},
-		{name: "truncated extended length", payload: []byte{0xf0, 0xff}, rawSize: 20},
+func TestLZ4PayloadUsesPierrecBlockCompression(t *testing.T) {
+	source := bytes.Repeat([]byte("lz4-pierrec-payload-"), 128)
+	payload, err := appendCodecPayloadWithCompression(nil, compressionPlain, source, "lz4")
+	if err != nil {
+		t.Fatalf("appendCodecPayloadWithCompression(lz4) error = %v", err)
 	}
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, err := decodeLZ4Block(nil, tt.payload, tt.rawSize); err == nil {
-				t.Fatal("decodeLZ4Block() error = nil, want error")
-			}
-		})
+	if len(payload) < 2 || payload[1] != payloadCompressionLZ4 {
+		t.Fatalf("payload algorithm id = %v, want lz4", payload)
+	}
+	codecID, got, err := readCodecPayload(newBlockReader(payload), "lz4 payload")
+	if err != nil {
+		t.Fatalf("readCodecPayload(lz4) error = %v", err)
+	}
+	if codecID != compressionPlain || !bytes.Equal(got, source) {
+		t.Fatalf("decoded lz4 payload mismatch")
 	}
 }
 
