@@ -8,17 +8,23 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"time"
 
 	mts "codeberg.org/mts/mts"
+	"codeberg.org/mts/mts/internal/sstable"
 )
 
 type soakReport struct {
-	Seed       int64         `json:"seed"`
-	Duration   time.Duration `json:"duration"`
-	Iterations int           `json:"iterations"`
-	Rows       int           `json:"rows"`
-	OK         bool          `json:"ok"`
+	Seed              int64         `json:"seed"`
+	Duration          time.Duration `json:"duration"`
+	Iterations        int           `json:"iterations"`
+	Rows              int           `json:"rows"`
+	OK                bool          `json:"ok"`
+	PartCount         int           `json:"part_count"`
+	LevelDistribution map[int]int   `json:"level_distribution"`
+	HealthDegraded    bool          `json:"health_degraded"`
+	CompactionBacklog int           `json:"compaction_backlog"`
 }
 
 func main() {
@@ -101,10 +107,30 @@ func runSoak(dir string, seed int64, duration time.Duration) (soakReport, error)
 		}
 		iterations++
 	}
+	stats := eng.CompactionStatsSnapshot()
+	health := eng.HealthSnapshot()
 	if err := eng.Close(ctx); err != nil {
 		return soakReport{}, err
 	}
-	return soakReport{Seed: seed, Duration: duration, Iterations: iterations, Rows: len(expected), OK: true}, nil
+	partCount, err := countSoakSSTables(dir)
+	if err != nil {
+		return soakReport{}, err
+	}
+	levels, err := soakLevelDistribution(dir)
+	if err != nil {
+		return soakReport{}, err
+	}
+	return soakReport{
+		Seed:              seed,
+		Duration:          duration,
+		Iterations:        iterations,
+		Rows:              len(expected),
+		OK:                true,
+		PartCount:         partCount,
+		LevelDistribution: levels,
+		HealthDegraded:    !health.Healthy || !health.Ready,
+		CompactionBacklog: stats.Backlog,
+	}, nil
 }
 
 func verifyRows(rows []mts.Row, expected map[int64]int64, seed int64) error {
@@ -145,4 +171,37 @@ func soakPoints(iteration int, count int) []mts.Point {
 		})
 	}
 	return points
+}
+
+func countSoakSSTables(root string) (int, error) {
+	count := 0
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || !info.IsDir() {
+			return err
+		}
+		if len(info.Name()) >= 4 && info.Name()[:4] == "sst-" {
+			count++
+		}
+		_ = path
+		return nil
+	})
+	return count, err
+}
+
+func soakLevelDistribution(root string) (map[int]int, error) {
+	levels := make(map[int]int)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() || info.Name() != "MANIFEST.bin" {
+			return err
+		}
+		manifest, err := sstable.LoadManifest(filepath.Dir(path))
+		if err != nil {
+			return err
+		}
+		for _, part := range manifest.Parts {
+			levels[part.Level]++
+		}
+		return nil
+	})
+	return levels, err
 }

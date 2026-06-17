@@ -119,13 +119,17 @@ type WALOptions struct {
 }
 
 type CompactionOptions struct {
-	Enabled            bool
-	Level0PartLimit    int
-	Level0SizeLimit    int64
-	MaxOutputPartBytes int64
-	Levels             []CompactionLevelOptions
-	MaxCascadeSteps    int
-	BackgroundInterval time.Duration
+	Enabled                    bool
+	Level0PartLimit            int
+	Level0SizeLimit            int64
+	MaxOutputPartBytes         int64
+	Levels                     []CompactionLevelOptions
+	MaxCascadeSteps            int
+	BackgroundInterval         time.Duration
+	ReadAmplificationPartLimit int
+	BacklogDegradedThreshold   int
+	DiskSpaceReserveBytes      int64
+	MinFreeBytes               int64
 }
 
 type CompactionLevelOptions struct {
@@ -165,6 +169,67 @@ type CompressionOptions struct {
 
 type WriteOptions struct {
 	Sync bool
+}
+
+type CompactionTaskStatus struct {
+	ID          string
+	State       string
+	Level       int
+	OutputLevel int
+	Reason      string
+	Score       float64
+	StartedAt   time.Time
+	FinishedAt  time.Time
+	Duration    time.Duration
+	InputParts  int
+	OutputParts int
+	InputBytes  int64
+	OutputBytes int64
+	DroppedRows int
+	Error       string
+}
+
+type CompactionStats struct {
+	Active          int
+	Backlog         int
+	Skipped         int
+	Total           int
+	Success         int
+	Failure         int
+	InputParts      int
+	OutputParts     int
+	InputBytes      int64
+	OutputBytes     int64
+	DroppedRows     int
+	OverlapCount    int
+	MaxScore        float64
+	LastReason      string
+	LastLevel       int
+	LastOutputLevel int
+	LastDuration    time.Duration
+	LastError       string
+	LastSkipReason  string
+	LastTask        CompactionTaskStatus
+	SafeDeleteParts int
+}
+
+type CompactionResult struct {
+	State       string
+	Duration    time.Duration
+	Shards      int
+	InputParts  int
+	OutputParts int
+	InputBytes  int64
+	OutputBytes int64
+	DroppedRows int
+	Error       string
+	LastTask    CompactionTaskStatus
+}
+
+type HealthSnapshot struct {
+	Healthy bool
+	Ready   bool
+	Reasons []string
 }
 
 type ColumnSeries struct {
@@ -379,13 +444,17 @@ func toModelCompactionOptions(opts CompactionOptions) model.CompactionOptions {
 		}
 	}
 	return model.CompactionOptions{
-		Enabled:            opts.Enabled,
-		Level0PartLimit:    opts.Level0PartLimit,
-		Level0SizeLimit:    opts.Level0SizeLimit,
-		MaxOutputPartBytes: opts.MaxOutputPartBytes,
-		Levels:             levels,
-		MaxCascadeSteps:    opts.MaxCascadeSteps,
-		BackgroundInterval: opts.BackgroundInterval,
+		Enabled:                    opts.Enabled,
+		Level0PartLimit:            opts.Level0PartLimit,
+		Level0SizeLimit:            opts.Level0SizeLimit,
+		MaxOutputPartBytes:         opts.MaxOutputPartBytes,
+		Levels:                     levels,
+		MaxCascadeSteps:            opts.MaxCascadeSteps,
+		BackgroundInterval:         opts.BackgroundInterval,
+		ReadAmplificationPartLimit: opts.ReadAmplificationPartLimit,
+		BacklogDegradedThreshold:   opts.BacklogDegradedThreshold,
+		DiskSpaceReserveBytes:      opts.DiskSpaceReserveBytes,
+		MinFreeBytes:               opts.MinFreeBytes,
 	}
 }
 
@@ -430,6 +499,67 @@ func fromStorageMemorySnapshot(snapshot storageengine.StorageMemorySnapshot) Sto
 		RuntimeHeapAllocBytes: snapshot.RuntimeHeapAllocBytes,
 		RuntimeRSSBytes:       snapshot.RuntimeRSSBytes,
 		RuntimeGapBytes:       snapshot.RuntimeGapBytes,
+	}
+}
+
+func fromCompactionTaskStatus(status storageengine.CompactionTaskStatus) CompactionTaskStatus {
+	return CompactionTaskStatus{
+		ID:          status.ID,
+		State:       status.State,
+		Level:       status.Level,
+		OutputLevel: status.OutputLevel,
+		Reason:      status.Reason,
+		Score:       status.Score,
+		StartedAt:   status.StartedAt,
+		FinishedAt:  status.FinishedAt,
+		Duration:    status.Duration,
+		InputParts:  status.InputParts,
+		OutputParts: status.OutputParts,
+		InputBytes:  status.InputBytes,
+		OutputBytes: status.OutputBytes,
+		DroppedRows: status.DroppedRows,
+		Error:       status.Error,
+	}
+}
+
+func fromCompactionStats(stats storageengine.CompactionStats) CompactionStats {
+	return CompactionStats{
+		Active:          stats.Active,
+		Backlog:         stats.Backlog,
+		Skipped:         stats.Skipped,
+		Total:           stats.Total,
+		Success:         stats.Success,
+		Failure:         stats.Failure,
+		InputParts:      stats.InputParts,
+		OutputParts:     stats.OutputParts,
+		InputBytes:      stats.InputBytes,
+		OutputBytes:     stats.OutputBytes,
+		DroppedRows:     stats.DroppedRows,
+		OverlapCount:    stats.OverlapCount,
+		MaxScore:        stats.MaxScore,
+		LastReason:      stats.LastReason,
+		LastLevel:       stats.LastLevel,
+		LastOutputLevel: stats.LastOutputLevel,
+		LastDuration:    stats.LastDuration,
+		LastError:       stats.LastError,
+		LastSkipReason:  stats.LastSkipReason,
+		LastTask:        fromCompactionTaskStatus(stats.LastTask),
+		SafeDeleteParts: stats.SafeDeleteParts,
+	}
+}
+
+func fromCompactionResult(result storageengine.CompactionResult) CompactionResult {
+	return CompactionResult{
+		State:       result.State,
+		Duration:    result.Duration,
+		Shards:      result.Shards,
+		InputParts:  result.InputParts,
+		OutputParts: result.OutputParts,
+		InputBytes:  result.InputBytes,
+		OutputBytes: result.OutputBytes,
+		DroppedRows: result.DroppedRows,
+		Error:       result.Error,
+		LastTask:    fromCompactionTaskStatus(result.LastTask),
 	}
 }
 

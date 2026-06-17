@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"path/filepath"
+	"syscall"
 
 	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
@@ -82,6 +83,7 @@ type partManager interface {
 
 type fileOps interface {
 	RemoveAll(path string) error
+	AvailableBytes(path string) (int64, error)
 }
 
 type shardDeps struct {
@@ -163,6 +165,14 @@ func (defaultPartManager) NewSeriesBatchReader(
 
 func (defaultFileOps) RemoveAll(path string) error {
 	return storagefs.RemoveAll(path)
+}
+
+func (defaultFileOps) AvailableBytes(path string) (int64, error) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return 0, err
+	}
+	return int64(stat.Bavail) * int64(stat.Bsize), nil
 }
 
 func (m memTableStore) Apply(point model.ResolvedPoint) error {

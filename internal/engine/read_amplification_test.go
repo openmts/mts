@@ -24,6 +24,17 @@ func TestComputeLevelHealthDetectsOverlaps(t *testing.T) {
 	}
 }
 
+func TestLevelHealthExposesOverlapAndScore(t *testing.T) {
+	health := ComputeLevelHealth([]sstable.PartMeta{
+		{ID: "a", Level: 2, MinTime: 0, MaxTime: 10, MinSeriesID: 1, MaxSeriesID: 5, RowsCount: 1, BlockCount: 2},
+		{ID: "b", Level: 2, MinTime: 5, MaxTime: 20, MinSeriesID: 3, MaxSeriesID: 7, RowsCount: 1, BlockCount: 3},
+	})
+	level := health.Levels[2]
+	if level.Bytes != 5 || level.OverlapCount != 1 || level.Score <= 1 {
+		t.Fatalf("level health = %#v, want bytes, overlap and score", level)
+	}
+}
+
 func TestEngineCompactionStatsSnapshotAggregatesShards(t *testing.T) {
 	engine := &Engine{shards: map[string]*Shard{
 		"a": {},

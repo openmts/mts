@@ -31,9 +31,41 @@ func (e *Engine) backgroundCompactionLoop(interval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			_ = e.Compact(context.Background())
+			_ = e.compactBackground(context.Background())
 		case <-e.compactStop:
 			return
 		}
 	}
+}
+
+func (e *Engine) compactBackground(ctx context.Context) error {
+	e.mu.Lock()
+	if skipped, reason := e.shouldSkipBackgroundCompactionLocked(); skipped {
+		e.mu.Unlock()
+		e.recordBackgroundCompactionSkip(reason)
+		return nil
+	}
+	e.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return e.Compact(ctx)
+}
+
+func (e *Engine) shouldSkipBackgroundCompactionLocked() (bool, string) {
+	if e == nil || e.memory == nil {
+		return false, ""
+	}
+	snapshot := e.memory.Snapshot(e.storageMemoryActiveLocked())
+	if snapshot.SoftBytesLimit > 0 && snapshot.CurrentBytes >= snapshot.SoftBytesLimit {
+		return true, compactionSkipMemoryBusy
+	}
+	return false, ""
+}
+
+func (e *Engine) recordBackgroundCompactionSkip(reason string) {
+	if e == nil || e.compactionScheduler == nil {
+		return
+	}
+	e.compactionScheduler.recordSkip(reason)
 }

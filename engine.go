@@ -55,6 +55,11 @@ func (e *Engine) Compact(ctx context.Context) error {
 	return e.inner.Compact(ctx)
 }
 
+func (e *Engine) CompactWithResult(ctx context.Context) (CompactionResult, error) {
+	result, err := e.inner.CompactWithResult(ctx)
+	return fromCompactionResult(result), err
+}
+
 func (e *Engine) ApplyRetention(ctx context.Context, now time.Time) error {
 	return e.inner.ApplyRetention(ctx, now)
 }
@@ -65,6 +70,19 @@ func (e *Engine) MaintenanceErrors(ctx context.Context) []error {
 
 func (e *Engine) StorageMemorySnapshot() StorageMemorySnapshot {
 	return fromStorageMemorySnapshot(e.inner.StorageMemorySnapshot())
+}
+
+func (e *Engine) CompactionStatsSnapshot() CompactionStats {
+	return fromCompactionStats(e.inner.CompactionStatsSnapshot())
+}
+
+func (e *Engine) HealthSnapshot() HealthSnapshot {
+	health := e.inner.HealthSnapshot()
+	return HealthSnapshot{
+		Healthy: health.Healthy,
+		Ready:   health.Ready,
+		Reasons: append([]string(nil), health.Reasons...),
+	}
 }
 
 func (e *Engine) CreateDatabase(ctx context.Context, name string) error {

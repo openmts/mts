@@ -14,23 +14,30 @@ import (
 	"time"
 
 	mts "codeberg.org/mts/mts"
+	"codeberg.org/mts/mts/internal/sstable"
 )
 
 type report struct {
-	Mode         string        `json:"mode"`
-	Points       int           `json:"points"`
-	Duration     time.Duration `json:"duration"`
-	Throughput   float64       `json:"throughput"`
-	HeapAlloc    uint64        `json:"heap_alloc"`
-	HeapSys      uint64        `json:"heap_sys"`
-	TotalAlloc   uint64        `json:"total_alloc"`
-	Mallocs      uint64        `json:"mallocs"`
-	Frees        uint64        `json:"frees"`
-	NumGC        uint32        `json:"num_gc"`
-	RSSPeakBytes int64         `json:"rss_peak_bytes"`
-	Rows         int           `json:"rows"`
-	DataBytes    int64         `json:"data_bytes"`
-	SSTableCount int           `json:"sstable_count"`
+	Mode               string              `json:"mode"`
+	Points             int                 `json:"points"`
+	Duration           time.Duration       `json:"duration"`
+	Throughput         float64             `json:"throughput"`
+	HeapAlloc          uint64              `json:"heap_alloc"`
+	HeapSys            uint64              `json:"heap_sys"`
+	TotalAlloc         uint64              `json:"total_alloc"`
+	Mallocs            uint64              `json:"mallocs"`
+	Frees              uint64              `json:"frees"`
+	NumGC              uint32              `json:"num_gc"`
+	RSSPeakBytes       int64               `json:"rss_peak_bytes"`
+	Rows               int                 `json:"rows"`
+	DataBytes          int64               `json:"data_bytes"`
+	SSTableCount       int                 `json:"sstable_count"`
+	LevelDistribution  map[int]int         `json:"level_distribution"`
+	ReadAmplification  float64             `json:"read_amplification"`
+	WriteAmplification float64             `json:"write_amplification"`
+	SpaceAmplification float64             `json:"space_amplification"`
+	QueryLatencyNanos  int64               `json:"query_latency_nanos"`
+	CompactionStats    mts.CompactionStats `json:"compaction_stats"`
 }
 
 type config struct {
@@ -62,7 +69,7 @@ func run(args []string) (err error) {
 		err = errors.Join(err, cleanup())
 	}()
 	started := time.Now()
-	rows, err := runWorkload(dir, cfg)
+	workload, err := runWorkloadDetailed(dir, cfg)
 	if err != nil {
 		return err
 	}
@@ -77,21 +84,32 @@ func run(args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	levelDistribution, err := levelDistribution(dir)
+	if err != nil {
+		return err
+	}
+	logicalBytes := logicalInputBytes(cfg.points)
 	out := report{
-		Mode:         cfg.mode,
-		Points:       cfg.points,
-		Duration:     duration,
-		Throughput:   float64(cfg.points) / duration.Seconds(),
-		HeapAlloc:    mem.HeapAlloc,
-		HeapSys:      mem.HeapSys,
-		TotalAlloc:   mem.TotalAlloc,
-		Mallocs:      mem.Mallocs,
-		Frees:        mem.Frees,
-		NumGC:        mem.NumGC,
-		RSSPeakBytes: rssPeakBytes(),
-		Rows:         rows,
-		DataBytes:    dataBytes,
-		SSTableCount: tableCount,
+		Mode:               cfg.mode,
+		Points:             cfg.points,
+		Duration:           duration,
+		Throughput:         float64(cfg.points) / duration.Seconds(),
+		HeapAlloc:          mem.HeapAlloc,
+		HeapSys:            mem.HeapSys,
+		TotalAlloc:         mem.TotalAlloc,
+		Mallocs:            mem.Mallocs,
+		Frees:              mem.Frees,
+		NumGC:              mem.NumGC,
+		RSSPeakBytes:       rssPeakBytes(),
+		Rows:               workload.rows,
+		DataBytes:          dataBytes,
+		SSTableCount:       tableCount,
+		LevelDistribution:  levelDistribution,
+		ReadAmplification:  readAmplification(tableCount, workload.rows),
+		WriteAmplification: amplificationRatio(dataBytes, logicalBytes),
+		SpaceAmplification: amplificationRatio(dataBytes, logicalBytes),
+		QueryLatencyNanos:  workload.queryLatency.Nanoseconds(),
+		CompactionStats:    workload.compactionStats,
 	}
 	if err := compareBaseline(cfg, out); err != nil {
 		return err
@@ -147,10 +165,21 @@ func prepareDir(path string) (string, func() error, error) {
 }
 
 func runWorkload(dir string, cfg config) (int, error) {
+	result, err := runWorkloadDetailed(dir, cfg)
+	return result.rows, err
+}
+
+type workloadResult struct {
+	rows            int
+	queryLatency    time.Duration
+	compactionStats mts.CompactionStats
+}
+
+func runWorkloadDetailed(dir string, cfg config) (workloadResult, error) {
 	ctx := context.Background()
 	eng, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 8192})
 	if err != nil {
-		return 0, fmt.Errorf("open engine: %w", err)
+		return workloadResult{}, fmt.Errorf("open engine: %w", err)
 	}
 	for start := 0; start < cfg.points; start += cfg.batchSize {
 		end := start + cfg.batchSize
@@ -159,44 +188,50 @@ func runWorkload(dir string, cfg config) (int, error) {
 		}
 		if err := eng.Write(ctx, scalePoints(start, end), mts.WriteOptions{}); err != nil {
 			closeErr := eng.Close(ctx)
-			return 0, errors.Join(fmt.Errorf("write batch: %w", err), closeErr)
+			return workloadResult{}, errors.Join(fmt.Errorf("write batch: %w", err), closeErr)
 		}
 	}
 	if err := eng.Flush(ctx); err != nil {
 		closeErr := eng.Close(ctx)
-		return 0, errors.Join(fmt.Errorf("flush: %w", err), closeErr)
+		return workloadResult{}, errors.Join(fmt.Errorf("flush: %w", err), closeErr)
 	}
 	if cfg.mode == "compact" {
 		if err := eng.Compact(ctx); err != nil {
 			closeErr := eng.Close(ctx)
-			return 0, errors.Join(fmt.Errorf("compact: %w", err), closeErr)
+			return workloadResult{}, errors.Join(fmt.Errorf("compact: %w", err), closeErr)
 		}
 	}
+	var queryLatency time.Duration
 	rows := 0
 	if cfg.mode == "query" || cfg.mode == "compact" || cfg.mode == "restart" {
+		queryStarted := time.Now()
 		got, err := eng.QueryRows(ctx, mts.Query{Measurement: "scale", StartTime: 0, EndTime: int64(cfg.points)})
+		queryLatency = time.Since(queryStarted)
 		if err != nil {
 			closeErr := eng.Close(ctx)
-			return 0, errors.Join(fmt.Errorf("query rows: %w", err), closeErr)
+			return workloadResult{}, errors.Join(fmt.Errorf("query rows: %w", err), closeErr)
 		}
 		rows = len(got)
 	}
+	stats := eng.CompactionStatsSnapshot()
 	if err := eng.Close(ctx); err != nil {
-		return 0, err
+		return workloadResult{}, err
 	}
 	if cfg.mode != "restart" {
-		return rows, nil
+		return workloadResult{rows: rows, queryLatency: queryLatency, compactionStats: stats}, nil
 	}
 	reopened, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 8192})
 	if err != nil {
-		return 0, fmt.Errorf("reopen engine: %w", err)
+		return workloadResult{}, fmt.Errorf("reopen engine: %w", err)
 	}
+	queryStarted := time.Now()
 	got, err := reopened.QueryRows(ctx, mts.Query{Measurement: "scale", StartTime: 0, EndTime: int64(cfg.points)})
+	queryLatency = time.Since(queryStarted)
 	closeErr := reopened.Close(ctx)
 	if err != nil {
-		return 0, errors.Join(fmt.Errorf("query reopened: %w", err), closeErr)
+		return workloadResult{}, errors.Join(fmt.Errorf("query reopened: %w", err), closeErr)
 	}
-	return len(got), closeErr
+	return workloadResult{rows: len(got), queryLatency: queryLatency, compactionStats: stats}, closeErr
 }
 
 func scalePoints(start int, end int) []mts.Point {
@@ -249,6 +284,46 @@ func countSSTables(root string) (int, error) {
 		return nil
 	})
 	return count, err
+}
+
+func levelDistribution(root string) (map[int]int, error) {
+	levels := make(map[int]int)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() || info.Name() != "MANIFEST.bin" {
+			return err
+		}
+		manifest, err := sstable.LoadManifest(filepath.Dir(path))
+		if err != nil {
+			return err
+		}
+		for _, part := range manifest.Parts {
+			levels[part.Level]++
+		}
+		return nil
+	})
+	return levels, err
+}
+
+func logicalInputBytes(points int) int64 {
+	const wide10ValueBytes = int64(5*8 + 3*8 + 2 + 1 + 8)
+	if points <= 0 {
+		return 0
+	}
+	return int64(points) * wide10ValueBytes
+}
+
+func readAmplification(sstableCount int, rows int) float64 {
+	if rows <= 0 {
+		return 0
+	}
+	return float64(sstableCount)
+}
+
+func amplificationRatio(actual int64, logical int64) float64 {
+	if actual <= 0 || logical <= 0 {
+		return 0
+	}
+	return float64(actual) / float64(logical)
 }
 
 func rssPeakBytes() int64 {

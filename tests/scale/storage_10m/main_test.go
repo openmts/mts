@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"codeberg.org/mts/mts/internal/faultinject"
@@ -73,6 +74,33 @@ func TestRunWorkloadModes(t *testing.T) {
 				t.Fatalf("runWorkload(%s) rows = %d, want 16", mode, rows)
 			}
 		})
+	}
+}
+
+func TestReportIncludesAmplificationAndLevelDistribution(t *testing.T) {
+	out := report{
+		LevelDistribution:  map[int]int{1: 2},
+		ReadAmplification:  1.5,
+		WriteAmplification: 2.5,
+		SpaceAmplification: 0.75,
+		QueryLatencyNanos:  123,
+	}
+	data, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	text := string(data)
+	for _, key := range []string{
+		"level_distribution",
+		"read_amplification",
+		"write_amplification",
+		"space_amplification",
+		"query_latency_nanos",
+		"compaction_stats",
+	} {
+		if !strings.Contains(text, key) {
+			t.Fatalf("report json %s missing %s", text, key)
+		}
 	}
 }
 

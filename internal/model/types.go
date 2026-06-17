@@ -115,13 +115,17 @@ type WALOptions struct {
 }
 
 type CompactionOptions struct {
-	Enabled            bool
-	Level0PartLimit    int
-	Level0SizeLimit    int64
-	MaxOutputPartBytes int64
-	Levels             []CompactionLevelOptions
-	MaxCascadeSteps    int
-	BackgroundInterval time.Duration
+	Enabled                    bool
+	Level0PartLimit            int
+	Level0SizeLimit            int64
+	MaxOutputPartBytes         int64
+	Levels                     []CompactionLevelOptions
+	MaxCascadeSteps            int
+	BackgroundInterval         time.Duration
+	ReadAmplificationPartLimit int
+	BacklogDegradedThreshold   int
+	DiskSpaceReserveBytes      int64
+	MinFreeBytes               int64
 }
 
 type CompactionLevelOptions struct {

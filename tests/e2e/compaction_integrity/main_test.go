@@ -31,3 +31,18 @@ func TestRunWithDirRejectsInvalidPath(t *testing.T) {
 		t.Fatal("runWithDir(invalid) error = nil, want error")
 	}
 }
+
+func TestReaderCorruptAndOrphanScenarios(t *testing.T) {
+	for name, scenario := range map[string]func(string) error{
+		"reader":    runReaderCompactionScenario,
+		"corrupt":   runCorruptCompactionScenario,
+		"orphan":    runOrphanCleanupScenario,
+		"tombstone": runTombstoneCompactionScenario,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := scenario(t.TempDir()); err != nil {
+				t.Fatalf("%s scenario error = %v", name, err)
+			}
+		})
+	}
+}

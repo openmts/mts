@@ -23,3 +23,19 @@ func recordStorageMemoryMetrics(registry *observability.Registry, snapshot Stora
 	registry.AddCounter("mts_storage_memory_rejected_reservations_total", "Temporary storage reservations rejected by memory budget.", float64(snapshot.RejectedReservations))
 	registry.AddCounter("mts_storage_memory_flush_triggered_total", "Flushes triggered by storage memory budget.", float64(snapshot.FlushTriggered))
 }
+
+func recordCompactionMetrics(registry *observability.Registry, stats CompactionStats) {
+	registry.SetGauge("mts_compaction_active", "Active compaction tasks.", float64(stats.Active))
+	registry.SetGauge("mts_compaction_backlog", "Pending compaction plans.", float64(stats.Backlog))
+	registry.SetGauge("mts_compaction_overlap_count", "Detected compaction level overlaps.", float64(stats.OverlapCount))
+	registry.SetGauge("mts_compaction_last_score", "Last or highest observed compaction score.", stats.MaxScore)
+	registry.SetGauge("mts_compaction_last_duration_seconds", "Last compaction duration in seconds.", stats.LastDuration.Seconds())
+	registry.AddCounter("mts_compaction_total", "Total compaction attempts.", float64(stats.Total))
+	registry.AddCounter("mts_compaction_success_total", "Successful compaction attempts.", float64(stats.Success))
+	registry.AddCounter("mts_compaction_errors_total", "Failed compaction attempts.", float64(stats.Failure))
+	registry.AddCounter("mts_compaction_input_bytes_total", "Compaction input bytes.", float64(stats.InputBytes))
+	registry.AddCounter("mts_compaction_output_bytes_total", "Compaction output bytes.", float64(stats.OutputBytes))
+	registry.AddCounter("mts_compaction_dropped_rows_total", "Rows dropped by compaction merge or tombstones.", float64(stats.DroppedRows))
+	registry.AddCounter("mts_compaction_skipped_total", "Skipped compaction scheduler attempts.", float64(stats.Skipped))
+	registry.AddCounter("mts_compaction_safe_delete_parts_total", "Input parts safely removed after manifest commit.", float64(stats.SafeDeleteParts))
+}

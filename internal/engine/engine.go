@@ -18,11 +18,12 @@ import (
 type Engine struct {
 	mu sync.Mutex
 
-	opts     model.Options
-	catalog  *catalog.Catalog
-	shards   map[string]*Shard
-	writeSeq uint64
-	memory   *storageMemoryLimiter
+	opts                model.Options
+	catalog             *catalog.Catalog
+	shards              map[string]*Shard
+	writeSeq            uint64
+	memory              *storageMemoryLimiter
+	compactionScheduler *compactionScheduler
 
 	compactStopOnce sync.Once
 	compactStop     chan struct{}
@@ -53,10 +54,11 @@ func Open(_ context.Context, opts model.Options) (*Engine, error) {
 		return nil, err
 	}
 	eng := &Engine{
-		opts:    opts,
-		catalog: cat,
-		shards:  make(map[string]*Shard),
-		memory:  newStorageMemoryLimiter(opts.StorageMemory),
+		opts:                opts,
+		catalog:             cat,
+		shards:              make(map[string]*Shard),
+		memory:              newStorageMemoryLimiter(opts.StorageMemory),
+		compactionScheduler: newCompactionScheduler(),
 	}
 	if err := eng.loadExistingShards(); err != nil {
 		closeErr := cat.Close()
@@ -322,8 +324,10 @@ func (e *Engine) StorageMemorySnapshot() StorageMemorySnapshot {
 
 func (e *Engine) MetricsSnapshot() []observability.Metric {
 	snapshot := e.StorageMemorySnapshot()
+	stats := e.CompactionStatsSnapshot()
 	registry := observability.NewRegistry()
 	recordStorageMemoryMetrics(registry, snapshot)
+	recordCompactionMetrics(registry, stats)
 	return registry.Snapshot()
 }
 
@@ -333,8 +337,50 @@ func (e *Engine) CompactionStatsSnapshot() CompactionStats {
 	var out CompactionStats
 	for _, shard := range e.shards {
 		out = mergeCompactionStats(out, shard.CompactionStatsSnapshot())
+		backlog, err := shard.compactionBacklogSnapshot(e.opts.Compaction)
+		if err != nil {
+			out.LastError = err.Error()
+			continue
+		}
+		out.Backlog += backlog.PendingPlans
+		out.OverlapCount += backlog.OverlapCount
+		if backlog.MaxScore > out.MaxScore {
+			out.MaxScore = backlog.MaxScore
+		}
 	}
+	out = mergeCompactionSchedulerStats(out, e.compactionScheduler.snapshotCopy())
 	return out
+}
+
+type HealthSnapshot struct {
+	Healthy bool
+	Ready   bool
+	Reasons []string
+}
+
+func (e *Engine) HealthSnapshot() HealthSnapshot {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	health := HealthSnapshot{Healthy: true, Ready: true, Reasons: []string{}}
+	for id, shard := range e.shards {
+		backlog, err := shard.compactionBacklogSnapshot(e.opts.Compaction)
+		if err != nil {
+			health.Healthy = false
+			health.Ready = false
+			health.Reasons = append(health.Reasons, "compaction backlog check failed: "+err.Error())
+			continue
+		}
+		if backlog.Degraded {
+			health.Healthy = false
+			health.Ready = false
+			health.Reasons = append(health.Reasons, "compaction degraded on shard "+id)
+		}
+		if shard.maintenanceErr != nil {
+			health.Healthy = false
+			health.Reasons = append(health.Reasons, "maintenance error on shard "+id+": "+shard.maintenanceErr.Error())
+		}
+	}
+	return health
 }
 
 func (e *Engine) groupByShardLocked(points []model.ResolvedPoint) ([]shardBatch, error) {
@@ -401,6 +447,7 @@ func (e *Engine) shardForStartLocked(database string, policy string, start int64
 		Compaction:         e.opts.Compaction,
 		Compression:        e.opts.Compression,
 		Memory:             e.memory,
+		scheduler:          e.compactionScheduler,
 	})
 	if err != nil {
 		return nil, err
@@ -447,6 +494,7 @@ func (e *Engine) openShardDir(path string, entry os.DirEntry, err error) error {
 		Compaction:         e.opts.Compaction,
 		Compression:        e.opts.Compression,
 		Memory:             e.memory,
+		scheduler:          e.compactionScheduler,
 	})
 	if err != nil {
 		return err

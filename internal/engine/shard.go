@@ -26,6 +26,7 @@ type ShardOptions struct {
 	Compaction         model.CompactionOptions
 	Compression        model.CompressionOptions
 	Memory             *storageMemoryLimiter
+	scheduler          *compactionScheduler
 	deps               shardDeps
 }
 
@@ -294,6 +295,21 @@ func (s *Shard) Close() error {
 
 func (s *Shard) CompactionStatsSnapshot() CompactionStats {
 	return s.compactionStats.snapshot()
+}
+
+func (s *Shard) compactionBacklogSnapshot(fallback model.CompactionOptions) (compactionBacklogSnapshot, error) {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	opts := s.opts.Compaction
+	if compactionOptionsEmpty(opts) {
+		opts = fallback
+	}
+	return buildCompactionBacklog(s.manifest.Parts, s.tombstones, opts)
+}
+
+func compactionOptionsEmpty(opts model.CompactionOptions) bool {
+	return opts.Level0PartLimit == 0 && opts.Level0SizeLimit == 0 &&
+		opts.MaxOutputPartBytes == 0 && len(opts.Levels) == 0
 }
 
 func (s *Shard) RecoveryReport() RecoveryReport {

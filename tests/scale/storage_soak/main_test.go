@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +38,30 @@ func TestSoakPoints(t *testing.T) {
 	}
 	if points[0].Timestamp != 2000 || points[2].Fields["value"].Int64 != 2002 {
 		t.Fatalf("soakPoints() = %#v, want iteration timestamps", points)
+	}
+}
+
+func TestSoakReportIncludesCompactionHealth(t *testing.T) {
+	report := soakReport{
+		PartCount:         3,
+		LevelDistribution: map[int]int{0: 1, 1: 2},
+		HealthDegraded:    true,
+		CompactionBacklog: 2,
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	text := string(data)
+	for _, key := range []string{
+		"part_count",
+		"level_distribution",
+		"health_degraded",
+		"compaction_backlog",
+	} {
+		if !strings.Contains(text, key) {
+			t.Fatalf("soak report json %s missing %s", text, key)
+		}
 	}
 }
 

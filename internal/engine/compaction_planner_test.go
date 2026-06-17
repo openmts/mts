@@ -119,6 +119,95 @@ func TestOutputOptionsForLevelUsesLevelCompression(t *testing.T) {
 	}
 }
 
+func TestNextCompactionPlanReportsReasonScoreAndEstimates(t *testing.T) {
+	dir := t.TempDir()
+	first := writePlannerPartFile(t, dir, "a", "1234")
+	second := writePlannerPartFile(t, dir, "b", "5678")
+	opts := model.CompactionOptions{
+		Levels: []model.CompactionLevelOptions{
+			{Level: 0, PartLimit: 1, MaxOutputPartBytes: 1024},
+			{Level: 1, PartLimit: 4, MaxOutputPartBytes: 2048},
+		},
+	}
+	plan, err := nextCompactionPlan([]sstable.PartMeta{
+		{ID: "a", Level: 0, Path: first, RowsCount: 10, MinSeriesID: 1, MaxSeriesID: 1, MinTime: 1, MaxTime: 10},
+		{ID: "b", Level: 0, Path: second, RowsCount: 10, MinSeriesID: 2, MaxSeriesID: 2, MinTime: 1, MaxTime: 10},
+	}, nil, opts)
+	if err != nil {
+		t.Fatalf("nextCompactionPlan() error = %v", err)
+	}
+	if plan == nil {
+		t.Fatal("nextCompactionPlan() = nil, want plan")
+	}
+	if plan.reason != compactionReasonPartLimit {
+		t.Fatalf("reason = %q, want %q", plan.reason, compactionReasonPartLimit)
+	}
+	if plan.score <= 1 {
+		t.Fatalf("score = %f, want greater than 1", plan.score)
+	}
+	if plan.inputBytes != 8 || plan.outputEstimateBytes != 8 {
+		t.Fatalf("bytes input=%d output=%d, want 8/8", plan.inputBytes, plan.outputEstimateBytes)
+	}
+	if plan.candidateSignature == "" {
+		t.Fatal("candidate signature is empty")
+	}
+}
+
+func TestNextCompactionPlanPrioritizesReadAmplificationLevel(t *testing.T) {
+	dir := t.TempDir()
+	l0a := writePlannerPartFile(t, dir, "l0a", "1")
+	l0b := writePlannerPartFile(t, dir, "l0b", "2")
+	l1a := writePlannerPartFile(t, dir, "l1a", "3333")
+	l1b := writePlannerPartFile(t, dir, "l1b", "4444")
+	opts := model.CompactionOptions{
+		ReadAmplificationPartLimit: 1,
+		Levels: []model.CompactionLevelOptions{
+			{Level: 0, PartLimit: 1},
+			{Level: 1, PartLimit: 100},
+		},
+	}
+	plan, err := nextCompactionPlan([]sstable.PartMeta{
+		{ID: "l0a", Level: 0, Path: l0a, RowsCount: 1, MinSeriesID: 1, MaxSeriesID: 1, MinTime: 1, MaxTime: 1},
+		{ID: "l0b", Level: 0, Path: l0b, RowsCount: 1, MinSeriesID: 2, MaxSeriesID: 2, MinTime: 1, MaxTime: 1},
+		{ID: "l1a", Level: 1, Path: l1a, RowsCount: 1, MinSeriesID: 1, MaxSeriesID: 3, MinTime: 1, MaxTime: 10},
+		{ID: "l1b", Level: 1, Path: l1b, RowsCount: 1, MinSeriesID: 2, MaxSeriesID: 4, MinTime: 2, MaxTime: 11},
+	}, nil, opts)
+	if err != nil {
+		t.Fatalf("nextCompactionPlan() error = %v", err)
+	}
+	if plan == nil {
+		t.Fatal("nextCompactionPlan() = nil, want plan")
+	}
+	if plan.level != 1 || plan.reason != compactionReasonReadAmplification {
+		t.Fatalf("plan level=%d reason=%q, want L1 read amplification", plan.level, plan.reason)
+	}
+}
+
+func TestCompactionBacklogSnapshotCountsLevelsAndOverlaps(t *testing.T) {
+	opts := model.CompactionOptions{
+		BacklogDegradedThreshold: 2,
+		Levels: []model.CompactionLevelOptions{
+			{Level: 0, PartLimit: 1},
+			{Level: 1, PartLimit: 4},
+		},
+	}
+	snapshot, err := buildCompactionBacklog([]sstable.PartMeta{
+		{ID: "l0a", Level: 0, BlockCount: 2, RowsCount: 1, MinSeriesID: 1, MaxSeriesID: 1, MinTime: 1, MaxTime: 1},
+		{ID: "l0b", Level: 0, BlockCount: 2, RowsCount: 1, MinSeriesID: 2, MaxSeriesID: 2, MinTime: 1, MaxTime: 1},
+		{ID: "l1a", Level: 1, BlockCount: 3, RowsCount: 1, MinSeriesID: 1, MaxSeriesID: 3, MinTime: 1, MaxTime: 10},
+		{ID: "l1b", Level: 1, BlockCount: 3, RowsCount: 1, MinSeriesID: 2, MaxSeriesID: 4, MinTime: 2, MaxTime: 11},
+	}, nil, opts)
+	if err != nil {
+		t.Fatalf("buildCompactionBacklog() error = %v", err)
+	}
+	if snapshot.PendingPlans != 2 || snapshot.OverlapCount != 1 || !snapshot.Degraded {
+		t.Fatalf("snapshot = %#v, want two pending plans, one overlap, degraded", snapshot)
+	}
+	if snapshot.Levels[1].Reason != compactionReasonOverlap || snapshot.Levels[1].Score <= 1 {
+		t.Fatalf("level 1 backlog = %#v, want overlap reason and score", snapshot.Levels[1])
+	}
+}
+
 func writePlannerPartFile(t *testing.T, root string, name string, data string) string {
 	t.Helper()
 	dir := filepath.Join(root, name)

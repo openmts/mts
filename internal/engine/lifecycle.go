@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"sort"
 	"time"
@@ -16,15 +17,36 @@ const streamingCompactionSeriesBatchSize = 256
 
 const maxCachedCompactionIndexRows = 65536
 
-func (e *Engine) Compact(_ context.Context) error {
+var ErrCompactionDiskSpaceExceeded = errors.New("compaction disk space exceeded")
+
+func (e *Engine) Compact(ctx context.Context) error {
+	_, err := e.CompactWithResult(ctx)
+	return err
+}
+
+func (e *Engine) CompactWithResult(ctx context.Context) (CompactionResult, error) {
+	if err := ctx.Err(); err != nil {
+		return CompactionResult{State: compactionTaskFailed, Error: err.Error()}, err
+	}
+	started := time.Now()
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	result := CompactionResult{State: compactionTaskNoop}
 	for _, shard := range e.shards {
-		if err := shard.Compact(); err != nil {
-			return err
+		shardResult, err := shard.CompactWithResult()
+		result = mergeCompactionResult(result, shardResult)
+		if err != nil {
+			result.State = compactionTaskFailed
+			result.Duration = time.Since(started)
+			result.Error = err.Error()
+			return result, err
 		}
 	}
-	return nil
+	result.Duration = time.Since(started)
+	if result.Shards > 0 && result.State == compactionTaskNoop {
+		result.State = compactionTaskSucceeded
+	}
+	return result, nil
 }
 
 func (e *Engine) ApplyRetention(_ context.Context, now time.Time) error {
@@ -54,24 +76,98 @@ func (e *Engine) ApplyRetention(_ context.Context, now time.Time) error {
 }
 
 func (s *Shard) Compact() error {
+	_, err := s.CompactWithResult()
+	return err
+}
+
+func (s *Shard) CompactWithResult() (CompactionResult, error) {
+	started := time.Now()
+	before := s.CompactionStatsSnapshot()
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
 	if err := s.flushLocked(); err != nil {
-		return err
+		return failedCompactionResult(started, before, s.CompactionStatsSnapshot(), err)
 	}
 	if len(s.parts) <= 1 && len(s.tombstones) == 0 {
-		return nil
+		return noopCompactionResult(started), nil
 	}
 	if s.opts.Compaction.Enabled {
 		if err := s.runCompactionCascadeLocked(); err != nil {
-			return err
+			return failedCompactionResult(started, before, s.CompactionStatsSnapshot(), err)
 		}
 	}
 	plan := fullCompactionPlan(s.manifest.Parts, s.tombstones, s.opts.Compaction)
 	if plan == nil {
-		return nil
+		return resultFromCompactionStats(started, before, s.CompactionStatsSnapshot(), nil), nil
 	}
-	return s.compactPartsLocked(*plan)
+	err := s.compactPartsLocked(*plan)
+	if err != nil {
+		return failedCompactionResult(started, before, s.CompactionStatsSnapshot(), err)
+	}
+	return resultFromCompactionStats(started, before, s.CompactionStatsSnapshot(), nil), nil
+}
+
+func mergeCompactionResult(left CompactionResult, right CompactionResult) CompactionResult {
+	if right.State == compactionTaskNoop {
+		return left
+	}
+	left.Shards++
+	left.InputParts += right.InputParts
+	left.OutputParts += right.OutputParts
+	left.InputBytes += right.InputBytes
+	left.OutputBytes += right.OutputBytes
+	left.DroppedRows += right.DroppedRows
+	left.LastTask = right.LastTask
+	if right.State == compactionTaskFailed {
+		left.State = compactionTaskFailed
+		left.Error = right.Error
+		return left
+	}
+	if left.State == compactionTaskNoop {
+		left.State = compactionTaskSucceeded
+	}
+	return left
+}
+
+func noopCompactionResult(started time.Time) CompactionResult {
+	return CompactionResult{State: compactionTaskNoop, Duration: time.Since(started)}
+}
+
+func failedCompactionResult(
+	started time.Time,
+	before CompactionStats,
+	after CompactionStats,
+	err error,
+) (CompactionResult, error) {
+	result := resultFromCompactionStats(started, before, after, err)
+	return result, err
+}
+
+func resultFromCompactionStats(
+	started time.Time,
+	before CompactionStats,
+	after CompactionStats,
+	err error,
+) CompactionResult {
+	result := CompactionResult{
+		State:       compactionTaskNoop,
+		Duration:    time.Since(started),
+		InputParts:  after.InputParts - before.InputParts,
+		OutputParts: after.OutputParts - before.OutputParts,
+		InputBytes:  after.InputBytes - before.InputBytes,
+		OutputBytes: after.OutputBytes - before.OutputBytes,
+		DroppedRows: after.DroppedRows - before.DroppedRows,
+		LastTask:    after.LastTask,
+	}
+	if err != nil {
+		result.State = compactionTaskFailed
+		result.Error = err.Error()
+		return result
+	}
+	if after.Total > before.Total {
+		result.State = compactionTaskSucceeded
+	}
+	return result
 }
 
 func (s *Shard) maybeCompactLocked() error {
@@ -90,11 +186,34 @@ func (s *Shard) runCompactionCascadeLocked() error {
 		if plan == nil {
 			return nil
 		}
+		if !s.startCompactionPlan(plan.candidateSignature) {
+			return nil
+		}
 		if err := s.compactPartsLocked(*plan); err != nil {
+			s.finishCompactionPlan(plan.candidateSignature)
 			return err
 		}
+		s.finishCompactionPlan(plan.candidateSignature)
 	}
 	return nil
+}
+
+func (s *Shard) startCompactionPlan(signature string) bool {
+	if s.opts.scheduler == nil {
+		return true
+	}
+	started := s.opts.scheduler.start(signature)
+	if !started {
+		s.compactionStats.recordSkip(compactionSkipDuplicateCandidate)
+	}
+	return started
+}
+
+func (s *Shard) finishCompactionPlan(signature string) {
+	if s.opts.scheduler == nil {
+		return
+	}
+	s.opts.scheduler.finish(signature)
 }
 
 func (s *Shard) compactPartsLocked(plan compactionPlan) error {
@@ -104,14 +223,18 @@ func (s *Shard) compactPartsLocked(plan compactionPlan) error {
 	if len(candidateParts) == 0 {
 		return nil
 	}
-	attempt := s.compactionStats.begin(plan.candidates)
-	newParts, newMeta, err := s.writeStreamingCompactionOutputsLocked(
+	attempt := s.compactionStats.beginPlan(plan)
+	if err := s.preflightCompactionDiskSpace(plan); err != nil {
+		attempt.finishWithRows(nil, 0, err)
+		return err
+	}
+	newParts, newMeta, droppedRows, err := s.writeStreamingCompactionOutputsLocked(
 		plan.outputLevel,
 		plan.output,
 		candidateParts,
 	)
 	if err != nil {
-		attempt.finish(nil, err)
+		attempt.finishWithRows(nil, droppedRows, err)
 		return err
 	}
 	keptParts, keptMeta := s.keepUnselectedParts(plan.candidates)
@@ -119,21 +242,22 @@ func (s *Shard) compactPartsLocked(plan compactionPlan) error {
 	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
 		closeErr := s.cleanupCompactionOutputs(newParts, newMeta)
 		joined := errors.Join(err, closeErr)
-		attempt.finish(nil, joined)
+		attempt.finishWithRows(nil, droppedRows, joined)
 		return joined
 	}
 	oldParts := s.parts
 	s.parts = append(keptParts, newParts...)
 	s.manifest = nextManifest
 	if err := closeSelectedParts(oldParts, plan.candidates); err != nil {
-		attempt.finish(nil, err)
+		attempt.finishWithRows(nil, droppedRows, err)
 		return err
 	}
 	removeErr := s.removeOldParts(plan.candidates)
 	if removeErr != nil {
-		attempt.finish(newMeta, removeErr)
+		attempt.finishWithRows(newMeta, droppedRows, removeErr)
 	} else {
-		attempt.finish(newMeta, nil)
+		s.compactionStats.recordSafeDeleteParts(len(plan.candidates))
+		attempt.finishWithRows(newMeta, droppedRows, nil)
 	}
 	if hadTombstones {
 		s.tombstones = nil
@@ -142,6 +266,29 @@ func (s *Shard) compactPartsLocked(plan compactionPlan) error {
 		}
 	}
 	return nil
+}
+
+func (s *Shard) preflightCompactionDiskSpace(plan compactionPlan) error {
+	if s.deps.files == nil {
+		return nil
+	}
+	required := plan.outputEstimateBytes + s.opts.Compaction.DiskSpaceReserveBytes + s.opts.Compaction.MinFreeBytes
+	if required <= 0 {
+		return nil
+	}
+	available, err := s.deps.files.AvailableBytes(s.opts.Dir)
+	if err != nil {
+		return fmt.Errorf("check compaction disk space: %w", err)
+	}
+	if available >= required {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: available_bytes=%d required_bytes=%d",
+		ErrCompactionDiskSpaceExceeded,
+		available,
+		required,
+	)
 }
 
 func (s *Shard) cleanupCompactionOutputs(parts []partReader, metas []sstable.PartMeta) error {
@@ -196,36 +343,38 @@ func (s *Shard) writeStreamingCompactionOutputsLocked(
 	outputLevel int,
 	outputOpts compactionOutputOptions,
 	candidateParts []partReader,
-) ([]partReader, []sstable.PartMeta, error) {
+) ([]partReader, []sstable.PartMeta, int, error) {
 	inputs, err := newCompactionInputs(s.deps.parts, candidateParts, s.opts.Start, s.opts.End)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	seriesIDs, err := compactionSeriesIDs(inputs)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	if len(seriesIDs) == 0 {
-		return nil, nil, nil
+		return nil, nil, 0, nil
 	}
 	output := newCompactionOutput(s, outputLevel, outputOpts)
+	droppedRows := 0
 	for _, seriesID := range seriesIDs {
-		columns, err := s.queryCompactionSeries(inputs, seriesID)
+		columns, inputRows, outputRows, err := s.queryCompactionSeriesWithStats(inputs, seriesID)
 		if err != nil {
 			abortErr := output.abort()
-			return nil, nil, errors.Join(err, abortErr)
+			return nil, nil, droppedRows, errors.Join(err, abortErr)
 		}
+		droppedRows += inputRows - outputRows
 		if err := output.addSeries(columns); err != nil {
 			abortErr := output.abort()
-			return nil, nil, errors.Join(err, abortErr)
+			return nil, nil, droppedRows, errors.Join(err, abortErr)
 		}
 	}
 	parts, metas, err := output.close()
 	if err != nil {
 		abortErr := output.abort()
-		return nil, nil, errors.Join(err, abortErr)
+		return nil, nil, droppedRows, errors.Join(err, abortErr)
 	}
-	return parts, metas, nil
+	return parts, metas, droppedRows, nil
 }
 
 type compactionInput struct {
@@ -314,6 +463,14 @@ func (s *Shard) queryCompactionSeries(
 	inputs []compactionInput,
 	seriesID uint64,
 ) ([]model.ColumnData, error) {
+	columns, _, _, err := s.queryCompactionSeriesWithStats(inputs, seriesID)
+	return columns, err
+}
+
+func (s *Shard) queryCompactionSeriesWithStats(
+	inputs []compactionInput,
+	seriesID uint64,
+) ([]model.ColumnData, int, int, error) {
 	columns := make([]model.ColumnData, 0)
 	for _, input := range inputs {
 		var got []model.ColumnData
@@ -324,12 +481,14 @@ func (s *Shard) queryCompactionSeries(
 			got, err = input.part.QuerySeriesIDs(input.query, []uint64{seriesID})
 		}
 		if err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
 		columns = append(columns, got...)
 	}
+	inputRows := countColumnSamples(columns)
 	merged := mergeColumnData(columns)
-	return applyTombstones(merged, s.tombstones), nil
+	output := applyTombstones(merged, s.tombstones)
+	return output, inputRows, countColumnSamples(output), nil
 }
 
 func forEachCompactionSeriesGroup(
@@ -475,6 +634,14 @@ func estimateColumnsBytes(columns []model.ColumnData) int64 {
 	var total int64
 	for _, column := range columns {
 		total += estimateColumnBytes(column)
+	}
+	return total
+}
+
+func countColumnSamples(columns []model.ColumnData) int {
+	total := 0
+	for _, column := range columns {
+		total += len(column.Samples)
 	}
 	return total
 }

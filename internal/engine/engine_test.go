@@ -14,6 +14,7 @@ import (
 	"codeberg.org/mts/mts/internal/catalog"
 	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/observability"
 	"codeberg.org/mts/mts/internal/queryexec"
 	"codeberg.org/mts/mts/internal/sstable"
 	"codeberg.org/mts/mts/internal/wal"
@@ -796,7 +797,7 @@ func TestStreamingCompactionAbortsOpenOutputOnBatchQueryError(t *testing.T) {
 	}
 	corruptValuesFileAtPath(t, corruptMeta.Path)
 
-	_, _, err = shard.writeStreamingCompactionOutputsLocked(1, compactionOutputOptions{}, []partReader{validPart, corruptPart})
+	_, _, _, err = shard.writeStreamingCompactionOutputsLocked(1, compactionOutputOptions{}, []partReader{validPart, corruptPart})
 	if err == nil {
 		validCloseErr := validPart.Close()
 		corruptCloseErr := corruptPart.Close()
@@ -1599,6 +1600,82 @@ func TestEngineStorageMemoryMetricsSnapshotIncludesSources(t *testing.T) {
 	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineMetricsSnapshotIncludesCompactionSignals(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	for index := range 2 {
+		if err := eng.Write(ctx, []model.Point{{
+			Measurement: "metrics",
+			Timestamp:   int64(index),
+			Fields:      map[string]model.FieldValue{"value": model.Int64Value(int64(index))},
+		}}, model.WriteOptions{}); err != nil {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("Write(%d) error = %v close = %v", index, err, closeErr)
+		}
+	}
+	if _, err := eng.CompactWithResult(ctx); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("CompactWithResult() error = %v close = %v", err, closeErr)
+	}
+	names := metricNameSet(eng.MetricsSnapshot())
+	for _, name := range []string{
+		"mts_compaction_active",
+		"mts_compaction_backlog",
+		"mts_compaction_last_score",
+		"mts_compaction_errors_total",
+		"mts_compaction_dropped_rows_total",
+	} {
+		if _, ok := names[name]; !ok {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("metric %s missing in %#v close = %v", name, names, closeErr)
+		}
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func metricNameSet(metrics []observability.Metric) map[string]struct{} {
+	names := make(map[string]struct{}, len(metrics))
+	for _, metric := range metrics {
+		names[metric.Name] = struct{}{}
+	}
+	return names
+}
+
+func TestEngineHealthSnapshotDegradedByCompactionBacklog(t *testing.T) {
+	engine := &Engine{
+		opts: model.Options{Compaction: model.CompactionOptions{
+			BacklogDegradedThreshold: 1,
+			Levels: []model.CompactionLevelOptions{
+				{Level: 0, PartLimit: 1},
+			},
+		}},
+		shards: map[string]*Shard{
+			"s": {
+				manifest: sstable.Manifest{Parts: []sstable.PartMeta{
+					{ID: "a", Level: 0, RowsCount: 1, BlockCount: 1, MinSeriesID: 1, MaxSeriesID: 1, MinTime: 1, MaxTime: 1},
+					{ID: "b", Level: 0, RowsCount: 1, BlockCount: 1, MinSeriesID: 2, MaxSeriesID: 2, MinTime: 1, MaxTime: 1},
+				}},
+			},
+		},
+	}
+	health := engine.HealthSnapshot()
+	if health.Healthy || health.Ready {
+		t.Fatalf("HealthSnapshot() = %#v, want degraded", health)
+	}
+	if len(health.Reasons) == 0 {
+		t.Fatalf("HealthSnapshot() = %#v, want reason", health)
 	}
 }
 
@@ -2805,12 +2882,22 @@ type fakeFileOps struct {
 	removeAllCalls int
 	paths          []string
 	err            error
+	availableBytes int64
+	availableSet   bool
+	availableErr   error
 }
 
 func (f *fakeFileOps) RemoveAll(path string) error {
 	f.removeAllCalls++
 	f.paths = append(f.paths, path)
 	return f.err
+}
+
+func (f *fakeFileOps) AvailableBytes(string) (int64, error) {
+	if !f.availableSet {
+		return 1 << 62, f.availableErr
+	}
+	return f.availableBytes, f.availableErr
 }
 
 func TestDecorateColumnsSkipsMissingCatalogEntries(t *testing.T) {

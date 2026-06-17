@@ -28,3 +28,53 @@ func TestCompactionStatsRecorderSnapshotAndMerge(t *testing.T) {
 		t.Fatalf("merged stats = %#v, want totals combined", merged)
 	}
 }
+
+func TestCompactionStatsRecorderTracksPlanAndDroppedRows(t *testing.T) {
+	var recorder compactionStatsRecorder
+	plan := compactionPlan{
+		level:               1,
+		outputLevel:         2,
+		candidates:          []sstable.PartMeta{{ID: "a", BlockCount: 10}, {ID: "b", BlockCount: 12}},
+		reason:              compactionReasonReadAmplification,
+		score:               1002,
+		inputBytes:          22,
+		outputEstimateBytes: 18,
+		candidateSignature:  "level:1|a|b",
+	}
+	attempt := recorder.beginPlan(plan)
+	attempt.finishWithRows([]sstable.PartMeta{{ID: "out", BlockCount: 7}}, 3, nil)
+	stats := recorder.snapshot()
+	if stats.LastReason != compactionReasonReadAmplification || stats.LastLevel != 1 || stats.LastOutputLevel != 2 {
+		t.Fatalf("stats = %#v, want last plan metadata", stats)
+	}
+	if stats.InputBytes != 22 || stats.OutputBytes != 7 || stats.DroppedRows != 3 {
+		t.Fatalf("bytes/dropped = %d/%d/%d, want 22/7/3", stats.InputBytes, stats.OutputBytes, stats.DroppedRows)
+	}
+	if stats.MaxScore != 1002 {
+		t.Fatalf("MaxScore = %f, want 1002", stats.MaxScore)
+	}
+}
+
+func TestCompactionTaskStatusSnapshotReportsLastTask(t *testing.T) {
+	var recorder compactionStatsRecorder
+	plan := compactionPlan{
+		level:              0,
+		outputLevel:        1,
+		candidates:         []sstable.PartMeta{{ID: "in", BlockCount: 5}},
+		reason:             compactionReasonPartLimit,
+		score:              2,
+		candidateSignature: "level:0|in",
+	}
+	attempt := recorder.beginPlan(plan)
+	attempt.finishWithRows(nil, 0, errors.New("corrupt part"))
+	stats := recorder.snapshot()
+	if stats.LastTask.ID == "" || stats.LastTask.State != compactionTaskFailed {
+		t.Fatalf("LastTask = %#v, want failed task with id", stats.LastTask)
+	}
+	if stats.LastTask.Reason != compactionReasonPartLimit || stats.LastTask.Error != "corrupt part" {
+		t.Fatalf("LastTask = %#v, want reason and error", stats.LastTask)
+	}
+	if stats.LastTask.Duration <= 0 {
+		t.Fatalf("LastTask.Duration = %s, want positive", stats.LastTask.Duration)
+	}
+}
