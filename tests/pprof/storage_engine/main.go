@@ -31,6 +31,9 @@ type config struct {
 	compactionLevel0PartLimit    int
 	compactionLevel0SizeLimit    int64
 	compactionMaxOutputPartBytes int64
+	compactionLevelsSpec         string
+	compactionLevels             []mts.CompactionLevelOptions
+	compactionMaxCascadeSteps    int
 	compactionBackgroundInterval time.Duration
 	compressionAlgorithm         string
 	flushOnExit                  bool
@@ -191,6 +194,8 @@ func parseConfig(args []string) (config, error) {
 	flags.IntVar(&cfg.compactionLevel0PartLimit, "compaction-level0-part-limit", 0, "Level-0 part 数超过该值时触发 compaction；0 使用引擎默认值")
 	flags.Int64Var(&cfg.compactionLevel0SizeLimit, "compaction-level0-size-limit", 0, "Level-0 part 总大小超过该值时触发 compaction；0 表示不按大小触发")
 	flags.Int64Var(&cfg.compactionMaxOutputPartBytes, "compaction-max-output-part-bytes", 0, "compaction 输出 part 目标大小；0 表示单 part 输出")
+	flags.StringVar(&cfg.compactionLevelsSpec, "compaction-levels", "", "逐层 compaction 配置，格式 level:part_limit:size_limit:max_output_bytes，多层用逗号分隔")
+	flags.IntVar(&cfg.compactionMaxCascadeSteps, "compaction-max-cascade-steps", 0, "单次触发允许的最大级联 compaction 步数；0 使用引擎默认值")
 	flags.DurationVar(&cfg.compactionBackgroundInterval, "compaction-background-interval", 0, "后台 compaction 间隔；0 表示不启动后台循环")
 	flags.StringVar(&cfg.compressionAlgorithm, "compression-algorithm", compressionOff, "压缩算法：off/none/snappy/lz4/zstd；off 完全关闭，none 仅启用 typed encoding")
 	flags.BoolVar(&cfg.flushOnExit, "flush-on-exit", false, "workload 结束后强制 Flush，便于统计完整落盘后的 SSTable 数量")
@@ -200,6 +205,11 @@ func parseConfig(args []string) (config, error) {
 	if err := flags.Parse(args); err != nil {
 		return config{}, fmt.Errorf("parse flags: %w", err)
 	}
+	levels, err := parseCompactionLevels(cfg.compactionLevelsSpec)
+	if err != nil {
+		return config{}, err
+	}
+	cfg.compactionLevels = levels
 	return cfg, nil
 }
 
@@ -236,6 +246,9 @@ func validateConfig(cfg config) error {
 	if cfg.compactionMaxOutputPartBytes < 0 {
 		return fmt.Errorf("compaction-max-output-part-bytes must be non-negative")
 	}
+	if cfg.compactionMaxCascadeSteps < 0 {
+		return fmt.Errorf("compaction-max-cascade-steps must be non-negative")
+	}
 	if cfg.compactionBackgroundInterval < 0 {
 		return fmt.Errorf("compaction-background-interval must be non-negative")
 	}
@@ -250,6 +263,73 @@ func validateConfig(cfg config) error {
 		return fmt.Errorf("unsupported compression algorithm %q", cfg.compressionAlgorithm)
 	}
 	return nil
+}
+
+func parseCompactionLevels(spec string) ([]mts.CompactionLevelOptions, error) {
+	if strings.TrimSpace(spec) == "" {
+		return nil, nil
+	}
+	items := strings.Split(spec, ",")
+	levels := make([]mts.CompactionLevelOptions, 0, len(items))
+	for _, item := range items {
+		level, err := parseCompactionLevel(item)
+		if err != nil {
+			return nil, err
+		}
+		levels = append(levels, level)
+	}
+	return levels, nil
+}
+
+func parseCompactionLevel(item string) (mts.CompactionLevelOptions, error) {
+	fields := strings.Split(strings.TrimSpace(item), ":")
+	if len(fields) != 4 {
+		return mts.CompactionLevelOptions{}, fmt.Errorf("invalid compaction level %q", item)
+	}
+	level, err := parseNonNegativeInt(fields[0], "compaction level")
+	if err != nil {
+		return mts.CompactionLevelOptions{}, err
+	}
+	partLimit, err := parseNonNegativeInt(fields[1], "compaction part limit")
+	if err != nil {
+		return mts.CompactionLevelOptions{}, err
+	}
+	sizeLimit, err := parseNonNegativeInt64(fields[2], "compaction size limit")
+	if err != nil {
+		return mts.CompactionLevelOptions{}, err
+	}
+	maxOutputBytes, err := parseNonNegativeInt64(fields[3], "compaction max output bytes")
+	if err != nil {
+		return mts.CompactionLevelOptions{}, err
+	}
+	return mts.CompactionLevelOptions{
+		Level:              level,
+		PartLimit:          partLimit,
+		SizeLimit:          sizeLimit,
+		MaxOutputPartBytes: maxOutputBytes,
+	}, nil
+}
+
+func parseNonNegativeInt(value string, name string) (int, error) {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, fmt.Errorf("parse %s: %w", name, err)
+	}
+	if parsed < 0 {
+		return 0, fmt.Errorf("%s must be non-negative", name)
+	}
+	return parsed, nil
+}
+
+func parseNonNegativeInt64(value string, name string) (int64, error) {
+	parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse %s: %w", name, err)
+	}
+	if parsed < 0 {
+		return 0, fmt.Errorf("%s must be non-negative", name)
+	}
+	return parsed, nil
 }
 
 func normalizedFieldLayout(layout string) string {
@@ -269,6 +349,8 @@ func storageOptions(path string, cfg config) mts.Options {
 			Level0PartLimit:    cfg.compactionLevel0PartLimit,
 			Level0SizeLimit:    cfg.compactionLevel0SizeLimit,
 			MaxOutputPartBytes: cfg.compactionMaxOutputPartBytes,
+			Levels:             cfg.compactionLevels,
+			MaxCascadeSteps:    cfg.compactionMaxCascadeSteps,
 			BackgroundInterval: cfg.compactionBackgroundInterval,
 		},
 		Compression: compressionOptions(cfg.compressionAlgorithm),

@@ -69,7 +69,17 @@ type CompactionOptions struct {
 	Level0PartLimit    int
 	Level0SizeLimit    int64
 	MaxOutputPartBytes int64
+	Levels             []CompactionLevelOptions
+	MaxCascadeSteps    int
 	BackgroundInterval time.Duration
+}
+
+type CompactionLevelOptions struct {
+	Level              int
+	PartLimit          int
+	SizeLimit          int64
+	MaxOutputPartBytes int64
+	Compression        CompressionOptions
 }
 
 type RetentionPolicy struct {
@@ -266,11 +276,23 @@ func toModelWALOptions(opts WALOptions) model.WALOptions {
 }
 
 func toModelCompactionOptions(opts CompactionOptions) model.CompactionOptions {
+	levels := make([]model.CompactionLevelOptions, len(opts.Levels))
+	for index, level := range opts.Levels {
+		levels[index] = model.CompactionLevelOptions{
+			Level:              level.Level,
+			PartLimit:          level.PartLimit,
+			SizeLimit:          level.SizeLimit,
+			MaxOutputPartBytes: level.MaxOutputPartBytes,
+			Compression:        toModelCompressionOptions(level.Compression),
+		}
+	}
 	return model.CompactionOptions{
 		Enabled:            opts.Enabled,
 		Level0PartLimit:    opts.Level0PartLimit,
 		Level0SizeLimit:    opts.Level0SizeLimit,
 		MaxOutputPartBytes: opts.MaxOutputPartBytes,
+		Levels:             levels,
+		MaxCascadeSteps:    opts.MaxCascadeSteps,
 		BackgroundInterval: opts.BackgroundInterval,
 	}
 }

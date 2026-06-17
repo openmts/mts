@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	mts "codeberg.org/mts/mts"
+	"codeberg.org/mts/mts/internal/sstable"
 )
 
 func main() {
@@ -35,11 +37,24 @@ func run() (err error) {
 
 func runWithDir(dir string) error {
 	ctx := context.Background()
-	eng, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 1})
+	eng, err := mts.Open(ctx, mts.Options{
+		Path:               dir,
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+		Compaction: mts.CompactionOptions{
+			Enabled:         true,
+			MaxCascadeSteps: 4,
+			Levels: []mts.CompactionLevelOptions{
+				{Level: 0, PartLimit: 1},
+				{Level: 1, PartLimit: 1},
+				{Level: 2, PartLimit: 4},
+			},
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("open engine: %w", err)
 	}
-	for value := 1; value <= 3; value++ {
+	for value := 1; value <= 4; value++ {
 		if err := eng.Write(ctx, []mts.Point{point(float64(value))}, mts.WriteOptions{Sync: true}); err != nil {
 			closeErr := eng.Close(ctx)
 			return errors.Join(fmt.Errorf("write value %d: %w", value, err), closeErr)
@@ -48,6 +63,10 @@ func runWithDir(dir string) error {
 	if err := eng.Compact(ctx); err != nil {
 		closeErr := eng.Close(ctx)
 		return errors.Join(fmt.Errorf("compact: %w", err), closeErr)
+	}
+	if err := assertLevelTwoPart(dir); err != nil {
+		closeErr := eng.Close(ctx)
+		return errors.Join(err, closeErr)
 	}
 	rows, err := eng.QueryRows(ctx, mts.Query{Measurement: "compact", StartTime: 0, EndTime: 20})
 	closeErr := eng.Close(ctx)
@@ -60,6 +79,19 @@ func runWithDir(dir string) error {
 	return assertCompactedRows(rows)
 }
 
+func assertLevelTwoPart(root string) error {
+	manifest, err := sstable.LoadManifest(filepath.Join(root, "data", "default", "autogen", "shards", "0"))
+	if err != nil {
+		return fmt.Errorf("load manifest: %w", err)
+	}
+	for _, part := range manifest.Parts {
+		if part.Level >= 2 {
+			return nil
+		}
+	}
+	return fmt.Errorf("manifest parts = %#v, want at least one L2 part", manifest.Parts)
+}
+
 func point(value float64) mts.Point {
 	return mts.Point{
 		Measurement: "compact",
@@ -69,8 +101,8 @@ func point(value float64) mts.Point {
 }
 
 func assertCompactedRows(rows []mts.Row) error {
-	if len(rows) != 1 || rows[0].Fields["v"].Float64 != 3 {
-		return fmt.Errorf("rows = %#v, want compacted LWW value 3", rows)
+	if len(rows) != 1 || rows[0].Fields["v"].Float64 != 4 {
+		return fmt.Errorf("rows = %#v, want compacted LWW value 4", rows)
 	}
 	return nil
 }

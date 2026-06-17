@@ -83,6 +83,8 @@ func TestRunWithStorageParameters(t *testing.T) {
 		"-compaction-level0-part-limit", "2",
 		"-compaction-level0-size-limit", "1024",
 		"-compaction-max-output-part-bytes", "2048",
+		"-compaction-levels", "0:2:0:2048,1:2:0:4096",
+		"-compaction-max-cascade-steps", "4",
 		"-compaction-background-interval", "10ms",
 		"-compression-algorithm", "lz4",
 		"-flush-on-exit",
@@ -100,6 +102,8 @@ func TestParseConfigStorageParameters(t *testing.T) {
 		"-compaction-level0-part-limit", "8",
 		"-compaction-level0-size-limit", "1048576",
 		"-compaction-max-output-part-bytes", "268435456",
+		"-compaction-levels", "0:8:1048576:268435456,1:4:0:536870912",
+		"-compaction-max-cascade-steps", "6",
 		"-compaction-background-interval", "250ms",
 		"-compression-algorithm", "zstd",
 		"-flush-on-exit",
@@ -125,6 +129,15 @@ func TestParseConfigStorageParameters(t *testing.T) {
 	if cfg.compactionMaxOutputPartBytes != 268435456 {
 		t.Fatalf("compactionMaxOutputPartBytes = %d, want 268435456", cfg.compactionMaxOutputPartBytes)
 	}
+	if len(cfg.compactionLevels) != 2 || cfg.compactionLevels[1].Level != 1 {
+		t.Fatalf("compactionLevels = %#v, want two parsed levels", cfg.compactionLevels)
+	}
+	if cfg.compactionLevels[1].MaxOutputPartBytes != 536870912 {
+		t.Fatalf("level 1 max output = %d, want 536870912", cfg.compactionLevels[1].MaxOutputPartBytes)
+	}
+	if cfg.compactionMaxCascadeSteps != 6 {
+		t.Fatalf("compactionMaxCascadeSteps = %d, want 6", cfg.compactionMaxCascadeSteps)
+	}
 	if cfg.compactionBackgroundInterval != 250*time.Millisecond {
 		t.Fatalf("compactionBackgroundInterval = %s, want 250ms", cfg.compactionBackgroundInterval)
 	}
@@ -143,6 +156,11 @@ func TestStorageOptions(t *testing.T) {
 		compactionLevel0PartLimit:    3,
 		compactionLevel0SizeLimit:    4096,
 		compactionMaxOutputPartBytes: 8192,
+		compactionLevels: []mts.CompactionLevelOptions{
+			{Level: 0, PartLimit: 3, SizeLimit: 4096, MaxOutputPartBytes: 8192},
+			{Level: 1, PartLimit: 2, MaxOutputPartBytes: 16384},
+		},
+		compactionMaxCascadeSteps:    5,
 		compactionBackgroundInterval: time.Second,
 		compressionAlgorithm:         "snappy",
 	}
@@ -164,6 +182,12 @@ func TestStorageOptions(t *testing.T) {
 	}
 	if opts.Compaction.MaxOutputPartBytes != 8192 {
 		t.Fatalf("MaxOutputPartBytes = %d, want 8192", opts.Compaction.MaxOutputPartBytes)
+	}
+	if len(opts.Compaction.Levels) != 2 || opts.Compaction.Levels[1].Level != 1 {
+		t.Fatalf("Levels = %#v, want two levels", opts.Compaction.Levels)
+	}
+	if opts.Compaction.MaxCascadeSteps != 5 {
+		t.Fatalf("MaxCascadeSteps = %d, want 5", opts.Compaction.MaxCascadeSteps)
 	}
 	if opts.Compaction.BackgroundInterval != time.Second {
 		t.Fatalf("BackgroundInterval = %s, want 1s", opts.Compaction.BackgroundInterval)
@@ -637,12 +661,30 @@ func TestValidateConfigRejectsInvalidValues(t *testing.T) {
 		{name: "negative level0 part limit", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 1, compactionLevel0PartLimit: -1}},
 		{name: "negative level0 size limit", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 1, compactionLevel0SizeLimit: -1}},
 		{name: "negative max output part bytes", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 1, compactionMaxOutputPartBytes: -1}},
+		{name: "negative max cascade steps", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 1, compactionMaxCascadeSteps: -1}},
 		{name: "negative background interval", cfg: config{mode: "query", points: 1, series: 1, writeBatchSize: 1, memTableMaxSamples: 1, compactionBackgroundInterval: -time.Second}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := validateConfig(tt.cfg); err == nil {
 				t.Fatal("validateConfig() error = nil, want error")
+			}
+		})
+	}
+}
+
+func TestParseCompactionLevelsRejectsInvalidSpec(t *testing.T) {
+	tests := []string{
+		"0:1:2",
+		"x:1:2:3",
+		"0:-1:2:3",
+		"0:1:-2:3",
+		"0:1:2:-3",
+	}
+	for _, spec := range tests {
+		t.Run(spec, func(t *testing.T) {
+			if _, err := parseCompactionLevels(spec); err == nil {
+				t.Fatal("parseCompactionLevels() error = nil, want error")
 			}
 		})
 	}

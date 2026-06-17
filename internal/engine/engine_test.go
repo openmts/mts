@@ -496,6 +496,53 @@ func TestSizeTieredCompactionTriggersByPartCount(t *testing.T) {
 	}
 }
 
+func TestLevelCompactionCascadesToLevelTwo(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+		Compaction: model.CompactionOptions{
+			Enabled:         true,
+			MaxCascadeSteps: 4,
+			Levels: []model.CompactionLevelOptions{
+				{Level: 0, PartLimit: 1},
+				{Level: 1, PartLimit: 1},
+				{Level: 2, PartLimit: 4},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	for index := range 4 {
+		if err := eng.Write(ctx, []model.Point{{
+			Measurement: "cascade",
+			Timestamp:   int64(index),
+			Fields:      map[string]model.FieldValue{"v": model.Int64Value(int64(index))},
+		}}, model.WriteOptions{Sync: true}); err != nil {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("Write(%d) error = %v close = %v", index, err, closeErr)
+		}
+	}
+	shard := onlyShardForTest(t, eng)
+	if len(shard.manifest.Parts) != 1 || shard.manifest.Parts[0].Level != 2 {
+		t.Fatalf("manifest parts = %#v, want single L2 part", shard.manifest.Parts)
+	}
+	rows, err := eng.QueryRows(ctx, model.Query{Measurement: "cascade", StartTime: 0, EndTime: 3})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows() error = %v close = %v", err, closeErr)
+	}
+	if len(rows) != 4 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("rows = %#v, want 4 rows close = %v", rows, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestDirectorySizeAndCompactionSizeLimit(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "data.bin")
@@ -641,7 +688,8 @@ func TestCompactionOutputCloseAndAbortCleanup(t *testing.T) {
 		t.Fatalf("OpenShard() error = %v", err)
 	}
 
-	emptyOutput := newCompactionOutput(shard, 1)
+	outputOpts := compactionOutputOptions{maxOutputPartBytes: shard.opts.Compaction.MaxOutputPartBytes}
+	emptyOutput := newCompactionOutput(shard, 1, outputOpts)
 	parts, metas, err := emptyOutput.close()
 	if err != nil {
 		closeErr := shard.Close()
@@ -652,7 +700,7 @@ func TestCompactionOutputCloseAndAbortCleanup(t *testing.T) {
 		t.Fatalf("empty close() = %d parts %d metas, want none close = %v", len(parts), len(metas), closeErr)
 	}
 
-	output := newCompactionOutput(shard, 1)
+	output := newCompactionOutput(shard, 1, outputOpts)
 	first := []model.ColumnData{
 		wideColumnForCompactionOutputTest(1, 1, "alpha"),
 		wideColumnForCompactionOutputTest(1, 2, "beta"),
@@ -742,7 +790,7 @@ func TestStreamingCompactionAbortsOpenOutputOnBatchQueryError(t *testing.T) {
 	}
 	corruptValuesFileAtPath(t, corruptMeta.Path)
 
-	_, _, err = shard.writeStreamingCompactionOutputsLocked(1, []partReader{validPart, corruptPart})
+	_, _, err = shard.writeStreamingCompactionOutputsLocked(1, compactionOutputOptions{}, []partReader{validPart, corruptPart})
 	if err == nil {
 		validCloseErr := validPart.Close()
 		corruptCloseErr := corruptPart.Close()
@@ -1100,6 +1148,12 @@ func TestOpenRejectsEmptyPathAndShardStartFloorsNegativeTime(t *testing.T) {
 	if opts.Compaction.Level0PartLimit != 4 {
 		t.Fatalf("default Level0PartLimit = %d, want 4", opts.Compaction.Level0PartLimit)
 	}
+	if len(opts.Compaction.Levels) != 1 || opts.Compaction.Levels[0].Level != 0 {
+		t.Fatalf("default compaction levels = %#v, want only L0", opts.Compaction.Levels)
+	}
+	if opts.Compaction.MaxCascadeSteps != defaultCascadeSteps {
+		t.Fatalf("default MaxCascadeSteps = %d, want %d", opts.Compaction.MaxCascadeSteps, defaultCascadeSteps)
+	}
 	if got := shardStart(-1, time.Hour); got != -int64(time.Hour) {
 		t.Fatalf("shardStart(-1) = %d, want %d", got, -int64(time.Hour))
 	}
@@ -1109,6 +1163,36 @@ func TestOpenRejectsEmptyPathAndShardStartFloorsNegativeTime(t *testing.T) {
 	}
 	if partNumber("bad") != 0 {
 		t.Fatal("partNumber(bad) != 0")
+	}
+}
+
+func TestNormalizeCompactionLevelsSortsAndInheritsDefaults(t *testing.T) {
+	opts := normalizeOptions(model.Options{
+		Compression: model.CompressionOptions{Enabled: true, Algorithm: "snappy", MinPageValues: 1},
+		Compaction: model.CompactionOptions{
+			Enabled:            true,
+			MaxOutputPartBytes: 4096,
+			Levels: []model.CompactionLevelOptions{
+				{Level: 2, PartLimit: 8},
+				{Level: 1, SizeLimit: 1024, MaxOutputPartBytes: 2048},
+			},
+		},
+	})
+	levels := opts.Compaction.Levels
+	if len(levels) != 3 {
+		t.Fatalf("levels = %#v, want L0 plus configured L1/L2", levels)
+	}
+	if levels[0].Level != 0 || levels[1].Level != 1 || levels[2].Level != 2 {
+		t.Fatalf("levels order = %#v, want 0,1,2", levels)
+	}
+	if levels[0].MaxOutputPartBytes != 4096 || levels[2].MaxOutputPartBytes != 4096 {
+		t.Fatalf("inherited output bytes = %#v, want 4096 for L0/L2", levels)
+	}
+	if levels[1].MaxOutputPartBytes != 2048 {
+		t.Fatalf("level 1 output bytes = %d, want 2048", levels[1].MaxOutputPartBytes)
+	}
+	if !levels[2].Compression.Enabled || levels[2].Compression.Algorithm != "snappy" {
+		t.Fatalf("level 2 compression = %#v, want inherited snappy", levels[2].Compression)
 	}
 }
 

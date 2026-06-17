@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"codeberg.org/mts/mts/internal/model"
@@ -13,6 +14,8 @@ const (
 	defaultRetentionPolicy = "autogen"
 	defaultShardDuration   = time.Hour
 	defaultMemTableSamples = 10000
+	defaultLevelPartLimit  = 4
+	defaultCascadeSteps    = 8
 )
 
 func normalizeOptions(opts model.Options) model.Options {
@@ -28,10 +31,75 @@ func normalizeOptions(opts model.Options) model.Options {
 	if opts.MemTableMaxSamples <= 0 {
 		opts.MemTableMaxSamples = defaultMemTableSamples
 	}
-	if opts.Compaction.Enabled && opts.Compaction.Level0PartLimit <= 0 {
-		opts.Compaction.Level0PartLimit = 4
-	}
+	opts.Compaction = normalizeCompactionOptions(opts.Compaction, opts.Compression)
 	return opts
+}
+
+func normalizeCompactionOptions(
+	opts model.CompactionOptions,
+	globalCompression model.CompressionOptions,
+) model.CompactionOptions {
+	if opts.Level0PartLimit <= 0 {
+		opts.Level0PartLimit = defaultLevelPartLimit
+	}
+	if opts.MaxCascadeSteps <= 0 {
+		opts.MaxCascadeSteps = defaultCascadeSteps
+	}
+	levels := append([]model.CompactionLevelOptions(nil), opts.Levels...)
+	if len(levels) == 0 {
+		levels = append(levels, legacyLevel0Options(opts))
+	}
+	if !hasCompactionLevel(levels, 0) {
+		levels = append(levels, legacyLevel0Options(opts))
+	}
+	for index := range levels {
+		levels[index] = normalizeCompactionLevel(levels[index], opts, globalCompression)
+	}
+	sort.Slice(levels, func(i, j int) bool {
+		return levels[i].Level < levels[j].Level
+	})
+	opts.Levels = levels
+	return opts
+}
+
+func legacyLevel0Options(opts model.CompactionOptions) model.CompactionLevelOptions {
+	return model.CompactionLevelOptions{
+		Level:              0,
+		PartLimit:          opts.Level0PartLimit,
+		SizeLimit:          opts.Level0SizeLimit,
+		MaxOutputPartBytes: opts.MaxOutputPartBytes,
+	}
+}
+
+func hasCompactionLevel(levels []model.CompactionLevelOptions, level int) bool {
+	for _, candidate := range levels {
+		if candidate.Level == level {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeCompactionLevel(
+	level model.CompactionLevelOptions,
+	opts model.CompactionOptions,
+	globalCompression model.CompressionOptions,
+) model.CompactionLevelOptions {
+	if level.PartLimit <= 0 {
+		level.PartLimit = defaultLevelPartLimit
+	}
+	if level.MaxOutputPartBytes <= 0 {
+		level.MaxOutputPartBytes = opts.MaxOutputPartBytes
+	}
+	if !compressionConfigured(level.Compression) {
+		level.Compression = globalCompression
+	}
+	return level
+}
+
+func compressionConfigured(opts model.CompressionOptions) bool {
+	return opts.Enabled || opts.Timestamp != "" || opts.Float != "" ||
+		opts.Int != "" || opts.String != "" || opts.Algorithm != "" || opts.MinPageValues > 0
 }
 
 func normalizePoint(opts model.Options, point model.Point) model.Point {

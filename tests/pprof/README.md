@@ -28,5 +28,7 @@ rm -f storage_engine cpu.prof mem.prof
 ./storage_engine -mode=query -field-layout=wide10 -points=1000000 -series=10000 -query-repeat=1 \
   -memtable-max-samples=1000000 -compaction-enabled -compaction-level0-part-limit=4 -flush-on-exit \
   -compaction-max-output-part-bytes=268435456 \
+  -compaction-levels=0:4:0:268435456,1:4:0:536870912,2:4:0:1073741824 \
+  -compaction-max-cascade-steps=8 \
   -data-dir=/tmp/mts-pprof-wide10-compact
 ```

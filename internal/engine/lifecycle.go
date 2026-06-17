@@ -62,34 +62,57 @@ func (s *Shard) Compact() error {
 	if len(s.parts) <= 1 && len(s.tombstones) == 0 {
 		return nil
 	}
-	return s.compactPartsLocked(s.manifest.Parts, 1)
+	if s.opts.Compaction.Enabled {
+		if err := s.runCompactionCascadeLocked(); err != nil {
+			return err
+		}
+	}
+	plan := fullCompactionPlan(s.manifest.Parts, s.tombstones, s.opts.Compaction)
+	if plan == nil {
+		return nil
+	}
+	return s.compactPartsLocked(*plan)
 }
 
 func (s *Shard) maybeCompactLocked() error {
 	if !s.opts.Compaction.Enabled {
 		return nil
 	}
-	candidates, err := s.level0CompactionCandidates()
-	if err != nil {
-		return err
-	}
-	if len(candidates) == 0 {
-		return nil
-	}
-	return s.compactPartsLocked(candidates, 1)
+	return s.runCompactionCascadeLocked()
 }
 
-func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel int) error {
+func (s *Shard) runCompactionCascadeLocked() error {
+	for step := 0; step < s.opts.Compaction.MaxCascadeSteps; step++ {
+		plan, err := nextCompactionPlan(s.manifest.Parts, s.tombstones, s.opts.Compaction)
+		if err != nil {
+			return err
+		}
+		if plan == nil {
+			return nil
+		}
+		if err := s.compactPartsLocked(*plan); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Shard) compactPartsLocked(plan compactionPlan) error {
+	plan.output = s.resolveCompactionOutputOptions(plan.output)
 	hadTombstones := len(s.tombstones) > 0
-	candidateParts := s.selectedParts(candidates)
+	candidateParts := s.selectedParts(plan.candidates)
 	if len(candidateParts) == 0 {
 		return nil
 	}
-	newParts, newMeta, err := s.writeStreamingCompactionOutputsLocked(outputLevel, candidateParts)
+	newParts, newMeta, err := s.writeStreamingCompactionOutputsLocked(
+		plan.outputLevel,
+		plan.output,
+		candidateParts,
+	)
 	if err != nil {
 		return err
 	}
-	keptParts, keptMeta := s.keepUnselectedParts(candidates)
+	keptParts, keptMeta := s.keepUnselectedParts(plan.candidates)
 	nextManifest := sstable.Manifest{Parts: append(keptMeta, newMeta...)}
 	if err := s.deps.parts.WriteManifest(s.opts.Dir, nextManifest); err != nil {
 		closeErr := closeParts(newParts)
@@ -98,10 +121,10 @@ func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel in
 	oldParts := s.parts
 	s.parts = append(keptParts, newParts...)
 	s.manifest = nextManifest
-	if err := closeSelectedParts(oldParts, candidates); err != nil {
+	if err := closeSelectedParts(oldParts, plan.candidates); err != nil {
 		return err
 	}
-	if err := s.removeOldParts(candidates); err != nil {
+	if err := s.removeOldParts(plan.candidates); err != nil {
 		return err
 	}
 	if hadTombstones {
@@ -109,6 +132,18 @@ func (s *Shard) compactPartsLocked(candidates []sstable.PartMeta, outputLevel in
 		return s.wal.Checkpoint()
 	}
 	return nil
+}
+
+func (s *Shard) resolveCompactionOutputOptions(
+	output compactionOutputOptions,
+) compactionOutputOptions {
+	if !compressionConfigured(output.compression) {
+		output.compression = s.opts.Compression
+	}
+	if output.maxOutputPartBytes <= 0 {
+		output.maxOutputPartBytes = s.opts.Compaction.MaxOutputPartBytes
+	}
+	return output
 }
 
 func (s *Shard) selectedParts(candidates []sstable.PartMeta) []partReader {
@@ -124,6 +159,7 @@ func (s *Shard) selectedParts(candidates []sstable.PartMeta) []partReader {
 
 func (s *Shard) writeStreamingCompactionOutputsLocked(
 	outputLevel int,
+	outputOpts compactionOutputOptions,
 	candidateParts []partReader,
 ) ([]partReader, []sstable.PartMeta, error) {
 	inputs, err := newCompactionInputs(s.deps.parts, candidateParts, s.opts.Start, s.opts.End)
@@ -137,7 +173,7 @@ func (s *Shard) writeStreamingCompactionOutputsLocked(
 	if len(seriesIDs) == 0 {
 		return nil, nil, nil
 	}
-	output := newCompactionOutput(s, outputLevel)
+	output := newCompactionOutput(s, outputLevel, outputOpts)
 	for _, seriesID := range seriesIDs {
 		columns, err := s.queryCompactionSeries(inputs, seriesID)
 		if err != nil {
@@ -285,16 +321,22 @@ func forEachCompactionSeriesGroup(
 type compactionOutput struct {
 	shard        *Shard
 	outputLevel  int
+	outputOpts   compactionOutputOptions
 	writer       partWriter
 	currentBytes int64
 	parts        []partReader
 	metas        []sstable.PartMeta
 }
 
-func newCompactionOutput(shard *Shard, outputLevel int) *compactionOutput {
+func newCompactionOutput(
+	shard *Shard,
+	outputLevel int,
+	outputOpts compactionOutputOptions,
+) *compactionOutput {
 	return &compactionOutput{
 		shard:       shard,
 		outputLevel: outputLevel,
+		outputOpts:  outputOpts,
 		parts:       make([]partReader, 0),
 		metas:       make([]sstable.PartMeta, 0),
 	}
@@ -304,7 +346,7 @@ func (o *compactionOutput) addSeries(columns []model.ColumnData) error {
 	if len(columns) == 0 {
 		return nil
 	}
-	for _, group := range splitLargeSeriesColumns(columns, o.shard.opts.Compaction.MaxOutputPartBytes) {
+	for _, group := range splitLargeSeriesColumns(columns, o.outputOpts.maxOutputPartBytes) {
 		if err := o.addSeriesGroup(group); err != nil {
 			return err
 		}
@@ -321,7 +363,7 @@ func (o *compactionOutput) addSeriesGroup(columns []model.ColumnData) error {
 	}
 	if o.writer == nil {
 		writer, err := o.shard.deps.parts.NewWriter(o.shard.opts.Dir, o.outputLevel, o.shard.nextPartID(), sstable.WriteOptions{
-			Compression: o.shard.opts.Compression,
+			Compression: o.outputOpts.compression,
 		})
 		if err != nil {
 			return err
@@ -336,7 +378,7 @@ func (o *compactionOutput) addSeriesGroup(columns []model.ColumnData) error {
 }
 
 func (o *compactionOutput) shouldRoll(seriesBytes int64) bool {
-	target := o.shard.opts.Compaction.MaxOutputPartBytes
+	target := o.outputOpts.maxOutputPartBytes
 	return target > 0 && o.writer != nil && o.currentBytes > 0 && o.currentBytes+seriesBytes > target
 }
 
@@ -424,35 +466,6 @@ func estimateColumnBytes(column model.ColumnData) int64 {
 		}
 	}
 	return bytes
-}
-
-func (s *Shard) level0CompactionCandidates() ([]sstable.PartMeta, error) {
-	candidates := make([]sstable.PartMeta, 0)
-	var size int64
-	for _, part := range s.manifest.Parts {
-		if part.Level != 0 {
-			continue
-		}
-		candidates = append(candidates, part)
-		if s.opts.Compaction.Level0SizeLimit > 0 {
-			partBytes, err := directorySize(part.Path)
-			if err != nil {
-				return nil, err
-			}
-			size += partBytes
-		}
-	}
-	limit := s.opts.Compaction.Level0PartLimit
-	if limit <= 0 {
-		limit = 4
-	}
-	if len(candidates) > limit {
-		return candidates, nil
-	}
-	if s.opts.Compaction.Level0SizeLimit > 0 && size > s.opts.Compaction.Level0SizeLimit {
-		return candidates, nil
-	}
-	return nil, nil
 }
 
 func (s *Shard) keepUnselectedParts(candidates []sstable.PartMeta) ([]partReader, []sstable.PartMeta) {

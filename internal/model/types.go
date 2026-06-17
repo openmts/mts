@@ -91,7 +91,17 @@ type CompactionOptions struct {
 	Level0PartLimit    int
 	Level0SizeLimit    int64
 	MaxOutputPartBytes int64
+	Levels             []CompactionLevelOptions
+	MaxCascadeSteps    int
 	BackgroundInterval time.Duration
+}
+
+type CompactionLevelOptions struct {
+	Level              int
+	PartLimit          int
+	SizeLimit          int64
+	MaxOutputPartBytes int64
+	Compression        CompressionOptions
 }
 
 type RetentionPolicy struct {
