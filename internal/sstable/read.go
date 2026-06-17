@@ -172,11 +172,13 @@ func (p *Part) querySeriesIndexRows(query Query, seriesIDs []uint64) ([]model.Co
 	}
 	columns := make([]model.ColumnData, 0, len(rows))
 	for _, row := range rows {
+		recordIndexRowRead(query)
 		indexRow, err := p.readIndexRowBlock(row.IndexRef)
 		if err != nil {
 			return nil, err
 		}
 		if !rowMatches(indexRow, query) {
+			recordIndexRowSkipped(query)
 			continue
 		}
 		got, err := p.queryRow(indexRow, query)
@@ -296,11 +298,13 @@ func (p *Part) queryIndexRowStream(
 			break
 		}
 		if !rowHeaderMatches(header, query) || !containsSortedSeriesIDOrAll(seriesIDs, header.seriesID) {
+			recordIndexRowSkipped(query)
 			if err := stream.skipColumnRefs(); err != nil {
 				return nil, fmt.Errorf("decode part index: %w", err)
 			}
 			continue
 		}
+		recordIndexRowRead(query)
 		got, nextRefs, err := p.queryIndexRowFromStream(stream, header, query, refs)
 		if err != nil {
 			return nil, err
@@ -349,6 +353,7 @@ func (p *Part) loadIndexRows() ([]indexRow, error) {
 }
 
 func (p *Part) queryRow(row indexRow, query Query) ([]model.ColumnData, error) {
+	recordTimeBlockRead(query)
 	timeBlock, err := p.readTimeBlock(row.TimeRef)
 	if err != nil {
 		return nil, err
@@ -363,6 +368,7 @@ func (p *Part) queryRow(row indexRow, query Query) ([]model.ColumnData, error) {
 			return nil, err
 		}
 		if len(column.Samples) > 0 {
+			recordSamplesRead(query, len(column.Samples))
 			columns = append(columns, column)
 		}
 	}
@@ -394,6 +400,7 @@ func (p *Part) readValueColumn(
 	if p.stats != nil {
 		p.stats.ValueBlocksRead++
 	}
+	recordValueBlockRead(query)
 	payload, err := p.readBlockPayload(valuesFile, ref.ValueRef)
 	if err != nil {
 		return model.ColumnData{}, err
@@ -435,8 +442,20 @@ func (p *Part) readValuePagesFromIndexPayload(
 		Samples:   make([]model.VersionedSample, 0, capacity),
 	}
 	if matches == 0 {
+		recordValuePagesSkipped(query, header.pageCount)
 		return column, nil
 	}
+	if boundaryModeEnabled(query.Boundary) {
+		pages, err := matchingBoundaryPageRefs(payload, fullPages, fullRange, query)
+		if err != nil {
+			return model.ColumnData{}, err
+		}
+		selected := selectBoundaryPageRefs(pages, query.Boundary)
+		recordValuePagesSkipped(query, header.pageCount-len(selected))
+		column.Samples = make([]model.VersionedSample, 0, matchingValuePageCapacity(header, len(selected)))
+		return p.readValuePagesFromRefs(column, selected, rowTimestamps, query)
+	}
+	recordValuePagesSkipped(query, header.pageCount-matches)
 	if fullRange {
 		return p.readValuePagesFromRefs(column, fullPages, rowTimestamps, query)
 	}
@@ -550,6 +569,67 @@ func matchingValuePageIndexHeader(payload []byte, query Query) (valuePageIndexHe
 	return header, matches, nil
 }
 
+func matchingBoundaryPageRefs(
+	payload []byte,
+	fullPages []valuePageRef,
+	fullRange bool,
+	query Query,
+) ([]valuePageRef, error) {
+	if fullRange {
+		return fullPages, nil
+	}
+	return matchingValuePageRefs(payload, query)
+}
+
+func matchingValuePageRefs(payload []byte, query Query) ([]valuePageRef, error) {
+	reader := newBlockReader(payload)
+	header, err := readValuePageIndexHeader(reader)
+	if err != nil {
+		return nil, err
+	}
+	pages := make([]valuePageRef, 0, header.pageCount)
+	for range header.pageCount {
+		page, err := readValuePageRef(reader)
+		if err != nil {
+			return nil, err
+		}
+		if page.MaxTime >= query.Start && page.MinTime <= query.End {
+			pages = append(pages, page)
+		}
+	}
+	if err := reader.done("value page index"); err != nil {
+		return nil, err
+	}
+	return pages, nil
+}
+
+func selectBoundaryPageRefs(pages []valuePageRef, mode model.QueryBoundaryMode) []valuePageRef {
+	if len(pages) == 0 {
+		return nil
+	}
+	switch mode {
+	case model.QueryBoundaryFirst:
+		return pages[:1]
+	case model.QueryBoundaryLast:
+		return pages[len(pages)-1:]
+	case model.QueryBoundaryBoth:
+		return firstAndLastPageRefs(pages)
+	default:
+		return pages
+	}
+}
+
+func firstAndLastPageRefs(pages []valuePageRef) []valuePageRef {
+	if len(pages) == 1 {
+		return pages[:1]
+	}
+	return []valuePageRef{pages[0], pages[len(pages)-1]}
+}
+
+func boundaryModeEnabled(mode model.QueryBoundaryMode) bool {
+	return mode == model.QueryBoundaryFirst || mode == model.QueryBoundaryLast || mode == model.QueryBoundaryBoth
+}
+
 func matchingValuePageCapacity(header valuePageIndexHeader, matches int) int {
 	if header.pageCount == 0 || header.count == 0 || matches == 0 {
 		return 0
@@ -570,6 +650,7 @@ func (p *Part) readValuePage(ref blockRef, rowTimestamps []int64, query Query) (
 	if p.stats != nil {
 		p.stats.ValuePagesRead++
 	}
+	recordValuePageRead(query)
 	block, err := unmarshalValueBlockWithTimestamps(payload.Bytes(), rowTimestamps, query)
 	payload.Release()
 	if err != nil {

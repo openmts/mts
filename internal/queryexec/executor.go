@@ -25,9 +25,10 @@ type errorColumnDataStream struct {
 }
 
 type contextColumnDataStream struct {
-	ctx   context.Context
-	inner ColumnDataStream
-	err   error
+	ctx    context.Context
+	inner  ColumnDataStream
+	err    error
+	closed bool
 }
 
 type sliceColumnSeriesStream struct {
@@ -167,6 +168,7 @@ func (s *contextColumnDataStream) Next() bool {
 	}
 	if err := s.ctx.Err(); err != nil {
 		s.err = err
+		_ = s.Close()
 		return false
 	}
 	return s.inner.Next()
@@ -183,6 +185,11 @@ func (s *contextColumnDataStream) Err() error {
 	if s.err != nil {
 		return s.err
 	}
+	if s.ctx != nil {
+		if err := s.ctx.Err(); err != nil {
+			return err
+		}
+	}
 	if s.inner == nil {
 		return nil
 	}
@@ -190,9 +197,10 @@ func (s *contextColumnDataStream) Err() error {
 }
 
 func (s *contextColumnDataStream) Close() error {
-	if s.inner == nil {
+	if s.closed || s.inner == nil {
 		return nil
 	}
+	s.closed = true
 	return s.inner.Close()
 }
 

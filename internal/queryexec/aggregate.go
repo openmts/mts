@@ -2,6 +2,7 @@ package queryexec
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -86,18 +87,63 @@ func aggregateColumn(
 	specs []model.AggregateSpec,
 	window time.Duration,
 ) ([]model.ColumnSeries, error) {
+	normalized, err := normalizeAggregateColumn(column)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]model.ColumnSeries, 0, len(specs))
 	for _, spec := range specs {
-		if spec.Field != "" && spec.Field != column.FieldName {
+		if spec.Field != "" && spec.Field != normalized.FieldName {
 			continue
 		}
-		aggregated, err := aggregateColumnBySpec(column, spec, window)
+		aggregated, err := aggregateColumnBySpec(normalized, spec, window)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, aggregated)
 	}
 	return out, nil
+}
+
+type aggregatePoint struct {
+	timestamp int64
+	value     model.FieldValue
+}
+
+func normalizeAggregateColumn(column model.ColumnSeries) (model.ColumnSeries, error) {
+	if len(column.Timestamps) != len(column.Values) {
+		return model.ColumnSeries{}, fmt.Errorf("column %s has %d timestamps and %d values", column.FieldName, len(column.Timestamps), len(column.Values))
+	}
+	if aggregateColumnOrdered(column) {
+		return column, nil
+	}
+	points := make([]aggregatePoint, len(column.Values))
+	for index, timestamp := range column.Timestamps {
+		points[index] = aggregatePoint{timestamp: timestamp, value: column.Values[index]}
+	}
+	sort.SliceStable(points, func(i int, j int) bool {
+		return points[i].timestamp < points[j].timestamp
+	})
+	column.Timestamps = column.Timestamps[:0]
+	column.Values = column.Values[:0]
+	for _, point := range points {
+		if len(column.Timestamps) > 0 && column.Timestamps[len(column.Timestamps)-1] == point.timestamp {
+			column.Values[len(column.Values)-1] = point.value
+			continue
+		}
+		column.Timestamps = append(column.Timestamps, point.timestamp)
+		column.Values = append(column.Values, point.value)
+	}
+	return column, nil
+}
+
+func aggregateColumnOrdered(column model.ColumnSeries) bool {
+	for index := 1; index < len(column.Timestamps); index++ {
+		if column.Timestamps[index-1] >= column.Timestamps[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func aggregateColumnBySpec(

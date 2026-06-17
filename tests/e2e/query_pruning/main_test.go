@@ -31,13 +31,13 @@ func TestAssertNoJSONStorageRejectsMarkersAndMissingPath(t *testing.T) {
 	}
 }
 
-func TestAssertPrunedRowsRejectsMismatch(t *testing.T) {
-	if err := assertPrunedRows(nil); err == nil {
-		t.Fatal("assertPrunedRows(empty) error = nil, want error")
+func TestAssertPrunedColumnsRejectsMismatch(t *testing.T) {
+	if err := assertPrunedColumns(nil); err == nil {
+		t.Fatal("assertPrunedColumns(empty) error = nil, want error")
 	}
-	rows := []mts.Row{{Fields: map[string]mts.FieldValue{"f2": mts.Int64Value(41)}}}
-	if err := assertPrunedRows(rows); err == nil {
-		t.Fatal("assertPrunedRows(wrong value) error = nil, want error")
+	columns := []mts.ColumnSeries{{Values: []mts.FieldValue{mts.Int64Value(41)}}}
+	if err := assertPrunedColumns(columns); err == nil {
+		t.Fatal("assertPrunedColumns(wrong value) error = nil, want error")
 	}
 }
 

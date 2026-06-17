@@ -40,6 +40,8 @@ func (s *Shard) openColumnStreamsLocked(query memtable.Query) ([]queryexec.Colum
 	partQuery := sstable.Query{
 		Context:   query.Context,
 		Budget:    query.Budget,
+		Stats:     query.Stats,
+		Boundary:  query.Boundary,
 		SeriesIDs: query.SeriesIDs,
 		FieldIDs:  query.FieldIDs,
 		Start:     query.Start,

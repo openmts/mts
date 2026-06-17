@@ -772,9 +772,11 @@ func wide10WorkloadPoint(index int, series int) mts.Point {
 }
 
 func queryRows(ctx context.Context, eng *mts.Engine, cfg config) error {
+	var totalStats mts.QueryStats
+	totalRows := 0
 	for repeat := range cfg.queryRepeat {
 		host := fmt.Sprintf("host-%04d", repeat%cfg.series)
-		rows, err := eng.QueryRows(ctx, mts.Query{
+		iter, err := eng.QueryRowIterator(ctx, mts.Query{
 			Measurement: "pprof",
 			Tags:        map[string]string{"host": host},
 			StartTime:   0,
@@ -783,11 +785,52 @@ func queryRows(ctx context.Context, eng *mts.Engine, cfg config) error {
 		if err != nil {
 			return fmt.Errorf("query rows: %w", err)
 		}
-		if len(rows) == 0 {
+		rows, err := drainRowIterator(iter)
+		if err != nil {
+			return fmt.Errorf("query rows: %w", err)
+		}
+		if rows == 0 {
 			return fmt.Errorf("query host %s returned no rows", host)
 		}
+		totalRows += rows
+		totalStats = mergeQueryStats(totalStats, eng.QueryStatsSnapshot())
 	}
+	log.Printf(
+		"query_stats query_rows_streamed=%d query_stats_samples=%d query_stats_value_pages=%d query_stats_parts=%d query_stats_errors=%d",
+		totalRows,
+		totalStats.SamplesReturned,
+		totalStats.ValuePagesRead,
+		totalStats.PartsScanned,
+		totalStats.Errors,
+	)
 	return nil
+}
+
+func drainRowIterator(iter mts.RowIterator) (int, error) {
+	rows := 0
+	for iter.Next() {
+		rows++
+	}
+	err := errors.Join(iter.Err(), iter.Close())
+	return rows, err
+}
+
+func mergeQueryStats(left mts.QueryStats, right mts.QueryStats) mts.QueryStats {
+	left.CandidateShards += right.CandidateShards
+	left.ShardsScanned += right.ShardsScanned
+	left.ShardsSkipped += right.ShardsSkipped
+	left.PartsScanned += right.PartsScanned
+	left.PartsSkipped += right.PartsSkipped
+	left.IndexRowsRead += right.IndexRowsRead
+	left.IndexRowsSkipped += right.IndexRowsSkipped
+	left.TimeBlocksRead += right.TimeBlocksRead
+	left.ValueBlocksRead += right.ValueBlocksRead
+	left.ValuePagesRead += right.ValuePagesRead
+	left.ValuePagesSkipped += right.ValuePagesSkipped
+	left.SamplesRead += right.SamplesRead
+	left.SamplesReturned += right.SamplesReturned
+	left.Errors += right.Errors
+	return left
 }
 
 func writeMemProfile(path string) error {

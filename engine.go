@@ -35,6 +35,22 @@ func (e *Engine) QueryColumnIterator(ctx context.Context, query Query) (ColumnIt
 	return columnIterator{inner: inner}, nil
 }
 
+func (e *Engine) QueryWithExplain(ctx context.Context, query Query) (QueryResult, error) {
+	columns, explain, stats, err := e.inner.QueryWithExplain(ctx, toModelQuery(query))
+	if err != nil {
+		return QueryResult{}, err
+	}
+	return QueryResult{
+		Columns: fromModelColumnSeriesList(columns),
+		Explain: fromModelQueryExplain(explain),
+		Stats:   fromModelQueryStats(stats),
+	}, nil
+}
+
+func (e *Engine) QueryStatsSnapshot() QueryStats {
+	return fromModelQueryStats(e.inner.QueryStatsSnapshot())
+}
+
 func (e *Engine) QueryRows(ctx context.Context, query Query) ([]Row, error) {
 	rows, err := e.inner.QueryRows(ctx, toModelQuery(query))
 	if err != nil {

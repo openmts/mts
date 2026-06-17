@@ -13,6 +13,7 @@ import (
 
 type columnIterator struct {
 	stream queryexec.ColumnStream
+	stats  *model.QueryStats
 }
 
 type rowIterator struct {
@@ -27,8 +28,12 @@ type queryMemoryColumnDataStream struct {
 	err     error
 }
 
-func newColumnIterator(stream queryexec.ColumnStream) *columnIterator {
-	return &columnIterator{stream: stream}
+func newColumnIterator(stream queryexec.ColumnStream, stats ...*model.QueryStats) *columnIterator {
+	iterator := &columnIterator{stream: stream}
+	if len(stats) > 0 {
+		iterator.stats = stats[0]
+	}
+	return iterator
 }
 
 func newRowIterator(stream queryexec.RowStream) *rowIterator {
@@ -56,23 +61,66 @@ func (e *Engine) QueryColumns(ctx context.Context, query model.Query) ([]model.C
 	return columns, iter.Err()
 }
 
+func (e *Engine) QueryWithExplain(
+	ctx context.Context,
+	query model.Query,
+) ([]model.ColumnSeries, model.QueryExplain, model.QueryStats, error) {
+	plan, err := e.BuildQueryPlan(ctx, query)
+	if err != nil {
+		return nil, model.QueryExplain{}, model.QueryStats{}, err
+	}
+	iter, err := e.queryColumnIteratorFromPlan(ctx, plan)
+	if err != nil {
+		return nil, plan.Explain, model.QueryStats{}, err
+	}
+	columns, err := e.collectQueryColumns(iter)
+	return columns, plan.Explain, iter.Stats(), err
+}
+
+func (e *Engine) collectQueryColumns(iter *columnIterator) ([]model.ColumnSeries, error) {
+	columns := make([]model.ColumnSeries, 0)
+	var queryBytes int64
+	for iter.Next() {
+		column := iter.Column()
+		queryBytes += estimateColumnSeriesBytes(column)
+		if err := e.checkQueryMemoryBudget(queryBytes); err != nil {
+			return columns, errors.Join(err, iter.Close())
+		}
+		columns = append(columns, column)
+	}
+	return columns, errors.Join(iter.Err(), iter.Close())
+}
+
 func (e *Engine) QueryColumnIterator(ctx context.Context, query model.Query) (*columnIterator, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	query = normalizeQuery(e.opts, query)
-	seriesIDs := e.catalog.MatchSeries(query.Measurement, query.Tags)
-	if len(seriesIDs) == 0 {
-		return newColumnIterator(queryexec.NewSliceColumnSeriesStream(nil)), nil
-	}
-	fieldIDs := e.catalog.FieldIDs(query.Measurement, query.Fields)
-	if len(query.Fields) > 0 && len(fieldIDs) == 0 {
-		return newColumnIterator(queryexec.NewSliceColumnSeriesStream(nil)), nil
-	}
-	snapshot := e.catalog.Snapshot()
-	raw, err := e.queryColumnDataStream(ctx, query, idSet(seriesIDs), fieldIDs)
+	plan, err := e.BuildQueryPlan(ctx, query)
 	if err != nil {
 		return nil, err
+	}
+	return e.queryColumnIteratorFromPlan(ctx, plan)
+}
+
+func (e *Engine) queryColumnIteratorFromPlan(ctx context.Context, plan QueryPlan) (*columnIterator, error) {
+	stats := e.beginQueryStats(plan)
+	query := plan.Query
+	if plan.Empty {
+		stream := queryexec.NewSliceColumnSeriesStream(nil)
+		stream = queryexec.WithContextColumnStream(ctx, stream)
+		stream = newQueryStatsColumnStream(stream, stats, e.finishQueryStats)
+		return newColumnIterator(stream, stats), nil
+	}
+	if err := ctx.Err(); err != nil {
+		e.finishQueryStats(stats, err)
+		return nil, err
+	}
+	snapshot := e.catalog.Snapshot()
+	raw, err := e.queryColumnDataStream(ctx, plan, stats)
+	if err != nil {
+		e.finishQueryStats(stats, err)
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		e.finishQueryStats(stats, err)
+		return nil, errors.Join(err, raw.Close())
 	}
 	raw = newQueryMemoryColumnDataStream(raw, e.memory, e.opts.StorageMemory.QueryBytesLimit)
 	stream := queryexec.NewDecoratedColumnStream(raw, columnDecorator(snapshot))
@@ -85,7 +133,9 @@ func (e *Engine) QueryColumnIterator(ctx context.Context, query model.Query) (*c
 	if query.Limit > 0 || query.Offset > 0 {
 		stream = queryexec.NewPaginatedColumnStream(stream, query.Limit, query.Offset)
 	}
-	return newColumnIterator(stream), nil
+	stream = queryexec.WithContextColumnStream(ctx, stream)
+	stream = newQueryStatsColumnStream(stream, stats, e.finishQueryStats)
+	return newColumnIterator(stream, stats), nil
 }
 
 func newQueryMemoryColumnDataStream(
@@ -115,33 +165,42 @@ func (e *Engine) QueryRows(ctx context.Context, query model.Query) ([]model.Row,
 }
 
 func (e *Engine) QueryRowIterator(ctx context.Context, query model.Query) (*rowIterator, error) {
-	columns, err := e.QueryColumns(ctx, query)
+	columnQuery := query
+	columnQuery.Limit = 0
+	columnQuery.Offset = 0
+	columns, err := e.QueryColumnIterator(ctx, columnQuery)
 	if err != nil {
 		return nil, err
 	}
-	return newRowIterator(queryexec.NewSliceRowStream(columnsToRows(columns))), nil
+	if err := ctx.Err(); err != nil {
+		_ = columns.Close()
+		return nil, err
+	}
+	stream := queryexec.NewRowMergeStream(columns, query)
+	return newRowIterator(queryexec.WithContextRowStream(ctx, stream)), nil
 }
 
 func (e *Engine) queryColumnDataStream(
 	ctx context.Context,
-	query model.Query,
-	seriesIDs map[uint64]struct{},
-	fieldIDs map[uint32]struct{},
+	plan QueryPlan,
+	stats *model.QueryStats,
 ) (queryexec.ColumnDataStream, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	shards := e.queryShards(query)
-	if query.Budget.MaxShards > 0 && len(shards) > query.Budget.MaxShards {
-		return nil, queryexec.NewReadBudgetError("shards", len(shards), query.Budget.MaxShards)
+	query := plan.Query
+	if query.Budget.MaxShards > 0 && len(plan.Shards) > query.Budget.MaxShards {
+		return nil, queryexec.NewReadBudgetError("shards", len(plan.Shards), query.Budget.MaxShards)
 	}
-	streams := make([]queryexec.ColumnDataStream, 0, len(shards))
-	for _, shard := range shards {
+	streams := make([]queryexec.ColumnDataStream, 0, len(plan.Shards))
+	for _, shard := range plan.Shards {
 		stream, err := shard.ScanColumns(memtable.Query{
 			Context:   ctx,
 			Budget:    query.Budget,
-			SeriesIDs: seriesIDs,
-			FieldIDs:  fieldIDs,
+			Stats:     stats,
+			Boundary:  queryBoundaryMode(query),
+			SeriesIDs: plan.SeriesIDs,
+			FieldIDs:  plan.FieldIDs,
 			Start:     query.StartTime,
 			End:       query.EndTime,
 		})
@@ -153,16 +212,20 @@ func (e *Engine) queryColumnDataStream(
 	return queryexec.MergeColumnDataStreams(streams...), nil
 }
 
-func (e *Engine) queryShards(query model.Query) []*Shard {
+func (e *Engine) queryShardsWithCandidates(query model.Query) ([]*Shard, int) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	shards := make([]*Shard, 0, len(e.shards))
+	candidates := 0
 	for _, shard := range e.shards {
+		if shard.opts.Database == query.Database && shard.opts.RetentionPolicy == query.RetentionPolicy {
+			candidates++
+		}
 		if shardMatches(shard, query) {
 			shards = append(shards, shard)
 		}
 	}
-	return shards
+	return shards, candidates
 }
 
 func decorateColumns(columns []model.ColumnData, snapshot catalog.Snapshot) []model.ColumnSeries {
@@ -231,6 +294,13 @@ func (i *columnIterator) Err() error {
 		return nil
 	}
 	return i.stream.Err()
+}
+
+func (i *columnIterator) Stats() model.QueryStats {
+	if i.stats == nil {
+		return model.QueryStats{}
+	}
+	return *i.stats
 }
 
 func (i *columnIterator) Close() error {

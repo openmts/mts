@@ -21,6 +21,8 @@ const (
 type Query struct {
 	Context   context.Context
 	Budget    model.QueryBudget
+	Stats     *model.QueryStats
+	Boundary  model.QueryBoundaryMode
 	SeriesIDs map[uint64]struct{}
 	FieldIDs  map[uint32]struct{}
 	Start     int64

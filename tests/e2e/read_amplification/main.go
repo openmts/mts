@@ -9,7 +9,6 @@ import (
 	"time"
 
 	mts "codeberg.org/mts/mts"
-	"codeberg.org/mts/mts/internal/queryexec"
 )
 
 func main() {
@@ -54,17 +53,21 @@ func runWithDir(dir string) (err error) {
 		EndTime:     10,
 		Budget:      mts.QueryBudget{MaxParts: 1},
 	})
-	if !errors.Is(err, queryexec.ErrReadBudgetExceeded) {
+	if !errors.Is(err, mts.ErrReadBudgetExceeded) {
 		return fmt.Errorf("parts budget error = %v, want read budget exceeded", err)
 	}
-	_, err = eng.QueryColumns(ctx, mts.Query{
+	columns, err := eng.QueryColumns(ctx, mts.Query{
 		Measurement: "read_amp",
 		StartTime:   0,
 		EndTime:     10,
 		Budget:      mts.QueryBudget{MaxSamples: 1},
 	})
-	if !errors.Is(err, queryexec.ErrReadBudgetExceeded) {
-		return fmt.Errorf("sample budget error = %v, want read budget exceeded", err)
+	if !errors.Is(err, mts.ErrReadBudgetExceeded) {
+		stats := eng.QueryStatsSnapshot()
+		return fmt.Errorf("sample budget error = %v columns=%#v stats=%#v, want read budget exceeded", err, columns, stats)
+	}
+	if stats := eng.QueryStatsSnapshot(); stats.Errors == 0 {
+		return fmt.Errorf("query stats = %#v, want recorded budget error", stats)
 	}
 	return nil
 }

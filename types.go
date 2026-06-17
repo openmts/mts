@@ -60,6 +60,44 @@ type QueryBudget struct {
 	MaxSamples int `json:"max_samples"`
 }
 
+type QueryExplain struct {
+	Database        string            `json:"database"`
+	RetentionPolicy string            `json:"retention_policy"`
+	Measurement     string            `json:"measurement"`
+	TagFilters      map[string]string `json:"tag_filters"`
+	FieldFilters    []string          `json:"field_filters"`
+	SeriesCount     int               `json:"series_count"`
+	FieldCount      int               `json:"field_count"`
+	CandidateShards int               `json:"candidate_shards"`
+	MatchedShards   int               `json:"matched_shards"`
+	SkippedShards   int               `json:"skipped_shards"`
+	Pushdowns       []string          `json:"pushdowns"`
+	Budget          QueryBudget       `json:"budget"`
+}
+
+type QueryStats struct {
+	CandidateShards   int `json:"candidate_shards"`
+	ShardsScanned     int `json:"shards_scanned"`
+	ShardsSkipped     int `json:"shards_skipped"`
+	PartsScanned      int `json:"parts_scanned"`
+	PartsSkipped      int `json:"parts_skipped"`
+	IndexRowsRead     int `json:"index_rows_read"`
+	IndexRowsSkipped  int `json:"index_rows_skipped"`
+	TimeBlocksRead    int `json:"time_blocks_read"`
+	ValueBlocksRead   int `json:"value_blocks_read"`
+	ValuePagesRead    int `json:"value_pages_read"`
+	ValuePagesSkipped int `json:"value_pages_skipped"`
+	SamplesRead       int `json:"samples_read"`
+	SamplesReturned   int `json:"samples_returned"`
+	Errors            int `json:"errors"`
+}
+
+type QueryResult struct {
+	Columns []ColumnSeries `json:"columns"`
+	Explain QueryExplain   `json:"explain"`
+	Stats   QueryStats     `json:"stats"`
+}
+
 type Options struct {
 	Path                   string
 	DefaultDatabase        string
@@ -391,6 +429,50 @@ func toModelQueryBudget(budget QueryBudget) model.QueryBudget {
 		MaxShards:  budget.MaxShards,
 		MaxParts:   budget.MaxParts,
 		MaxSamples: budget.MaxSamples,
+	}
+}
+
+func fromModelQueryBudget(budget model.QueryBudget) QueryBudget {
+	return QueryBudget{
+		MaxShards:  budget.MaxShards,
+		MaxParts:   budget.MaxParts,
+		MaxSamples: budget.MaxSamples,
+	}
+}
+
+func fromModelQueryExplain(explain model.QueryExplain) QueryExplain {
+	return QueryExplain{
+		Database:        explain.Database,
+		RetentionPolicy: explain.RetentionPolicy,
+		Measurement:     explain.Measurement,
+		TagFilters:      cloneStringMap(explain.TagFilters),
+		FieldFilters:    append([]string(nil), explain.FieldFilters...),
+		SeriesCount:     explain.SeriesCount,
+		FieldCount:      explain.FieldCount,
+		CandidateShards: explain.CandidateShards,
+		MatchedShards:   explain.MatchedShards,
+		SkippedShards:   explain.SkippedShards,
+		Pushdowns:       append([]string(nil), explain.Pushdowns...),
+		Budget:          fromModelQueryBudget(explain.Budget),
+	}
+}
+
+func fromModelQueryStats(stats model.QueryStats) QueryStats {
+	return QueryStats{
+		CandidateShards:   stats.CandidateShards,
+		ShardsScanned:     stats.ShardsScanned,
+		ShardsSkipped:     stats.ShardsSkipped,
+		PartsScanned:      stats.PartsScanned,
+		PartsSkipped:      stats.PartsSkipped,
+		IndexRowsRead:     stats.IndexRowsRead,
+		IndexRowsSkipped:  stats.IndexRowsSkipped,
+		TimeBlocksRead:    stats.TimeBlocksRead,
+		ValueBlocksRead:   stats.ValueBlocksRead,
+		ValuePagesRead:    stats.ValuePagesRead,
+		ValuePagesSkipped: stats.ValuePagesSkipped,
+		SamplesRead:       stats.SamplesRead,
+		SamplesReturned:   stats.SamplesReturned,
+		Errors:            stats.Errors,
 	}
 }
 

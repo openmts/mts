@@ -82,6 +82,47 @@ type QueryBudget struct {
 	MaxSamples int `json:"max_samples"`
 }
 
+type QueryBoundaryMode uint8
+
+const (
+	QueryBoundaryNone QueryBoundaryMode = iota
+	QueryBoundaryFirst
+	QueryBoundaryLast
+	QueryBoundaryBoth
+)
+
+type QueryExplain struct {
+	Database        string            `json:"database"`
+	RetentionPolicy string            `json:"retention_policy"`
+	Measurement     string            `json:"measurement"`
+	TagFilters      map[string]string `json:"tag_filters"`
+	FieldFilters    []string          `json:"field_filters"`
+	SeriesCount     int               `json:"series_count"`
+	FieldCount      int               `json:"field_count"`
+	CandidateShards int               `json:"candidate_shards"`
+	MatchedShards   int               `json:"matched_shards"`
+	SkippedShards   int               `json:"skipped_shards"`
+	Pushdowns       []string          `json:"pushdowns"`
+	Budget          QueryBudget       `json:"budget"`
+}
+
+type QueryStats struct {
+	CandidateShards   int `json:"candidate_shards"`
+	ShardsScanned     int `json:"shards_scanned"`
+	ShardsSkipped     int `json:"shards_skipped"`
+	PartsScanned      int `json:"parts_scanned"`
+	PartsSkipped      int `json:"parts_skipped"`
+	IndexRowsRead     int `json:"index_rows_read"`
+	IndexRowsSkipped  int `json:"index_rows_skipped"`
+	TimeBlocksRead    int `json:"time_blocks_read"`
+	ValueBlocksRead   int `json:"value_blocks_read"`
+	ValuePagesRead    int `json:"value_pages_read"`
+	ValuePagesSkipped int `json:"value_pages_skipped"`
+	SamplesRead       int `json:"samples_read"`
+	SamplesReturned   int `json:"samples_returned"`
+	Errors            int `json:"errors"`
+}
+
 type Options struct {
 	Path                   string
 	DefaultDatabase        string

@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -579,6 +582,43 @@ func TestQueryRowsRejectsEmptyResult(t *testing.T) {
 	}
 	if err == nil {
 		t.Fatal("queryRows(empty) error = nil, want error")
+	}
+}
+
+func TestQueryRowsStreamingLogsQueryStats(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 32,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := writePoints(ctx, eng, config{points: 20, series: 1, writeBatchSize: 5}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("writePoints() error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Flush(ctx); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Flush() error = %v close = %v", err, closeErr)
+	}
+	var logs bytes.Buffer
+	previousOutput := log.Writer()
+	log.SetOutput(&logs)
+	err = queryRows(ctx, eng, config{points: 20, series: 1, queryRepeat: 1})
+	log.SetOutput(previousOutput)
+	if closeErr := eng.Close(ctx); closeErr != nil {
+		t.Fatalf("Close() error = %v", closeErr)
+	}
+	if err != nil {
+		t.Fatalf("queryRows() error = %v", err)
+	}
+	output := logs.String()
+	for _, field := range []string{"query_rows_streamed=", "query_stats_samples=", "query_stats_value_pages="} {
+		if !strings.Contains(output, field) {
+			t.Fatalf("queryRows log = %q, want field %s", output, field)
+		}
 	}
 }
 

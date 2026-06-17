@@ -24,6 +24,8 @@ type Engine struct {
 	writeSeq            uint64
 	memory              *storageMemoryLimiter
 	compactionScheduler *compactionScheduler
+	queryStatsMu        sync.Mutex
+	lastQueryStats      model.QueryStats
 
 	compactStopOnce sync.Once
 	compactStop     chan struct{}

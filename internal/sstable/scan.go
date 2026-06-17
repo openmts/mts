@@ -26,8 +26,10 @@ func newPartColumnDataStream(part *Part, query Query) (queryexec.ColumnDataStrea
 		return queryexec.NewErrorColumnDataStream(err), nil
 	}
 	if query.End < query.Start || !partMatches(part.metadata.Part, part.metaRows, query) {
+		recordPartSkipped(query)
 		return queryexec.NewSliceColumnDataStream(nil), nil
 	}
+	recordPartScanned(query)
 	if len(query.SeriesIDs) > 0 {
 		seriesIDs := make([]uint64, 0, len(query.SeriesIDs))
 		for seriesID := range query.SeriesIDs {
@@ -131,9 +133,11 @@ func (s *partColumnDataStream) loadRowColumns(header indexRowHeader) bool {
 		return false
 	}
 	if !rowHeaderMatches(header, s.query) {
+		recordIndexRowSkipped(s.query)
 		s.err = skipIndexColumnRefs(s.rows)
 		return false
 	}
+	recordIndexRowRead(s.query)
 	refs, err := s.rows.appendFilteredColumnRefs(s.refs[:0], s.query.FieldIDs)
 	if err != nil {
 		s.err = fmt.Errorf("decode part index: %w", err)
