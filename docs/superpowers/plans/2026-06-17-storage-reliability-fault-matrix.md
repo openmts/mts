@@ -107,6 +107,7 @@
 - flush manifest 写失败时不会 checkpoint WAL，并会移除新 part，保证重启仍可通过 WAL replay 恢复。
 - compaction manifest 写失败会关闭新输出 part 并删除输出目录，输入 parts 保持可查询。
 - compaction manifest 切换成功后，旧 part 删除失败不再让已切换的新 manifest 回滚；删除失败作为 maintenance issue 记录，查询继续走新 part。
+- 补齐 `sstable.WritePartWithOptions` 自身失败清理：part 创建后任一数据块、索引、metadata、strings 写入或编码失败都会删除未提交 part 目录。
 - 验证：`go test ./internal/engine -run 'TestFlushManifestFailure|TestCompactionManifestFailure|TestCompactionOldPartDeleteFailure|TestFlushFailureBeforeManifest' -timeout 240s` 通过；`go test ./internal/engine -timeout 240s` 通过。
 
 ## Task 4: WAL replay 和 checkpoint 矩阵闭环
@@ -169,6 +170,7 @@
 **实现备注：**
 - `faultReport` 已扩展为输出 `name`、`operation`、`stage`、`expected`、`recovered`、`rows`、`maintenance_issues`。
 - `tests/fault/storage_fault_matrix` 新增 schema 测试，校验所有 case 的报告字段、恢复行数和 WAL checkpoint case 覆盖。
+- 补齐 fault matrix 的 `partwriter-write-failure` 和 `retention-remove-failure`，覆盖 PartWriter 写失败清理和 Retention 删除失败返回。
 - `tests/README.md` 已补充 fault matrix 单独执行命令和 JSON 字段说明。
 - 验证：`go test ./tests/fault/... -timeout 600s` 通过；`goimports-reviser -rm-unused -format ./...` 通过；`go test ./... -timeout 10m` 通过；`golangci-lint run --timeout 10m` 通过；独立 e2e 二进制用例全部通过。
 - 清理：未发现 `testbin`、`*.prof`、`*.cover`、`coverage.out` 临时产物。

@@ -1,6 +1,7 @@
 package sstable
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ func WritePartWithOptions(
 	id string,
 	columns []model.ColumnData,
 	opts WriteOptions,
-) (PartMeta, error) {
+) (out PartMeta, err error) {
 	if len(columns) == 0 {
 		return PartMeta{}, fmt.Errorf("columns are empty")
 	}
@@ -40,17 +41,21 @@ func WritePartWithOptions(
 	if err := storagefs.MkdirAll(partPath); err != nil {
 		return PartMeta{}, err
 	}
+	committed := false
+	defer func() {
+		if committed || err == nil {
+			return
+		}
+		err = errors.Join(err, storagefs.RemoveAll(partPath))
+	}()
 	files, err := openPartFiles(partPath)
 	if err != nil {
 		return PartMeta{}, err
 	}
 	rows, meta, writeErr := writeColumns(files, level, id, columns, opts)
 	closeErr := files.close()
-	if writeErr != nil {
-		return PartMeta{}, writeErr
-	}
-	if closeErr != nil {
-		return PartMeta{}, closeErr
+	if writeErr != nil || closeErr != nil {
+		return PartMeta{}, errors.Join(writeErr, closeErr)
 	}
 	if err := writePartIndexes(partPath, &meta, rows); err != nil {
 		return PartMeta{}, err
@@ -59,6 +64,7 @@ func WritePartWithOptions(
 		return PartMeta{}, err
 	}
 	meta.Part.Path = partPath
+	committed = true
 	return meta.Part, nil
 }
 

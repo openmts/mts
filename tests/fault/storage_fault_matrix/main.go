@@ -13,6 +13,7 @@ import (
 	mts "codeberg.org/mts/mts"
 	"codeberg.org/mts/mts/internal/faultinject"
 	"codeberg.org/mts/mts/internal/model"
+	"codeberg.org/mts/mts/internal/sstable"
 	"codeberg.org/mts/mts/internal/storagefs"
 	"codeberg.org/mts/mts/internal/wal"
 )
@@ -81,8 +82,10 @@ func runMatrix(ctx context.Context, root string) (faultReport, error) {
 		{name: "wal-sync-failure", operation: faultinject.OpSync, stage: "wal_append_sync", expected: "WAL append rejects sync fault", run: runWALAppendFailure},
 		{name: "wal-checkpoint-remove-failure", operation: faultinject.OpRemove, stage: "wal_checkpoint_remove", expected: "checkpoint failure preserves replay", run: runWALCheckpointRemoveFailure},
 		{name: "wal-checkpoint-sync-failure", operation: faultinject.OpSync, stage: "wal_checkpoint_sync", expected: "checkpoint sync failure preserves replay", run: runWALCheckpointSyncFailure},
+		{name: "partwriter-write-failure", operation: faultinject.OpWrite, stage: "part_writer", expected: "part writer abort removes partial output", run: runPartWriterFailure},
 		{name: "flush-rename-failure", operation: faultinject.OpRename, stage: "flush_manifest", expected: "flush rejects manifest rename fault", run: runFlushRenameFailure},
 		{name: "compact-remove-failure", operation: faultinject.OpRemove, stage: "compaction_cleanup", expected: "compaction records cleanup issue", run: runCompactRemoveFailure},
+		{name: "retention-remove-failure", operation: faultinject.OpRemove, stage: "retention_cleanup", expected: "retention rejects remove fault", run: runRetentionRemoveFailure},
 		{name: "reopen-stat-failure", operation: faultinject.OpStat, stage: "recovery_stat", expected: "reopen rejects stat fault", run: runReopenFailure},
 		{name: "reopen-walk-failure", operation: faultinject.OpWalk, stage: "recovery_walk", expected: "reopen rejects walk fault", run: runReopenFailure},
 	}
@@ -226,6 +229,25 @@ func runWALCheckpointSyncFailure(_ context.Context, dir string, op faultinject.O
 	return verifyWALReplay(walDir)
 }
 
+func runPartWriterFailure(_ context.Context, dir string, op faultinject.Operation) error {
+	writer, err := sstable.NewPartWriter(dir, 0, "sst-partwriter-fault", sstable.WriteOptions{})
+	if err != nil {
+		return fmt.Errorf("create part writer: %w", err)
+	}
+	faultErr := withFault(op, func() error {
+		return writer.AddSeries(partWriterFaultColumns())
+	})
+	abortErr := writer.Abort()
+	if err := errors.Join(faultErr, abortErr); err != nil {
+		return err
+	}
+	partPath := filepath.Join(dir, "sst-partwriter-fault")
+	if _, err := os.Stat(partPath); !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("part writer output stat=%v want not exist", err)
+	}
+	return nil
+}
+
 func runFlushRenameFailure(ctx context.Context, dir string, op faultinject.Operation) error {
 	eng, err := mts.Open(ctx, options(dir))
 	if err != nil {
@@ -276,6 +298,28 @@ func runCompactRemoveFailure(ctx context.Context, dir string, op faultinject.Ope
 		return errors.Join(fmt.Errorf("maintenance issues = 0, want compact cleanup fault"), closeErr)
 	}
 	return closeErr
+}
+
+func runRetentionRemoveFailure(ctx context.Context, dir string, op faultinject.Operation) error {
+	opts := options(dir)
+	opts.Retention = time.Hour
+	eng, err := mts.Open(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("open retention case: %w", err)
+	}
+	if err := eng.Write(ctx, faultPoints("fault", 0, 2), mts.WriteOptions{Sync: true}); err != nil {
+		closeErr := eng.Close(ctx)
+		return errors.Join(fmt.Errorf("write retention input: %w", err), closeErr)
+	}
+	if err := eng.Flush(ctx); err != nil {
+		closeErr := eng.Close(ctx)
+		return errors.Join(fmt.Errorf("flush retention input: %w", err), closeErr)
+	}
+	faultErr := withFault(op, func() error {
+		return eng.ApplyRetention(ctx, time.Unix(0, int64(2*time.Hour)))
+	})
+	closeErr := eng.Close(ctx)
+	return errors.Join(faultErr, closeErr)
 }
 
 func runReopenFailure(ctx context.Context, dir string, op faultinject.Operation) error {
@@ -417,4 +461,15 @@ func walFaultPoint() model.ResolvedPoint {
 			{FieldID: 1, FieldName: "v", Type: model.FieldInt64, Value: model.Int64Value(10)},
 		},
 	}
+}
+
+func partWriterFaultColumns() []model.ColumnData {
+	return []model.ColumnData{{
+		SeriesID:  1,
+		FieldID:   1,
+		FieldType: model.FieldFloat64,
+		Samples: []model.VersionedSample{
+			{Timestamp: 1, WriteSeq: 1, Value: model.Float64Value(1)},
+		},
+	}}
 }

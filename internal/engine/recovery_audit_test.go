@@ -101,3 +101,32 @@ func TestOpenShardRecordsMaintenanceIssueForRemovedOrphanPart(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 }
+
+func TestOpenShardRecordsMaintenanceIssueForRemovedTempManifestFile(t *testing.T) {
+	dir := t.TempDir()
+	tempPath := filepath.Join(dir, ".tmp-manifest")
+	if err := os.WriteFile(tempPath, []byte("partial"), 0600); err != nil {
+		t.Fatalf("WriteFile(temp) error = %v", err)
+	}
+
+	shard, _, err := OpenShard(ShardOptions{Dir: dir, Start: 0, End: 100})
+	if err != nil {
+		t.Fatalf("OpenShard() error = %v", err)
+	}
+	if _, err := os.Stat(tempPath); !errors.Is(err, os.ErrNotExist) {
+		closeErr := shard.Close()
+		t.Fatalf("temp stat = %v, want not exist close = %v", err, closeErr)
+	}
+	var issue *RecoveryIssue
+	if !errors.As(shard.maintenanceErr, &issue) {
+		closeErr := shard.Close()
+		t.Fatalf("maintenanceErr = %v, want RecoveryIssue close = %v", shard.maintenanceErr, closeErr)
+	}
+	if issue.Kind != RecoveryIssueTempRemoved {
+		closeErr := shard.Close()
+		t.Fatalf("RecoveryIssue.Kind = %q, want %q close = %v", issue.Kind, RecoveryIssueTempRemoved, closeErr)
+	}
+	if err := shard.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}

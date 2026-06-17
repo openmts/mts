@@ -43,7 +43,12 @@ func TestRunMatrixReportSchema(t *testing.T) {
 			t.Fatalf("case %s maintenance issues = %d, want non-negative", item.Name, item.MaintenanceIssues)
 		}
 	}
-	for _, name := range []string{"wal-checkpoint-remove-failure", "wal-checkpoint-sync-failure"} {
+	for _, name := range []string{
+		"wal-checkpoint-remove-failure",
+		"wal-checkpoint-sync-failure",
+		"partwriter-write-failure",
+		"retention-remove-failure",
+	} {
 		if _, ok := seen[name]; !ok {
 			t.Fatalf("report missing case %s", name)
 		}
