@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	mts "github.com/openmts/mts"
@@ -401,14 +400,6 @@ func amplificationRatio(actual int64, logical int64) float64 {
 		return 0
 	}
 	return float64(actual) / float64(logical)
-}
-
-func rssPeakBytes() int64 {
-	var usage syscall.Rusage
-	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
-		return 0
-	}
-	return usage.Maxrss * 1024
 }
 
 func compareBaseline(cfg config, out report) error {

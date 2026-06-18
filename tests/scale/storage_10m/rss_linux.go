@@ -1,0 +1,13 @@
+//go:build linux
+
+package main
+
+import "syscall"
+
+func rssPeakBytes() int64 {
+	var usage syscall.Rusage
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
+		return 0
+	}
+	return usage.Maxrss * 1024
+}

@@ -3,7 +3,6 @@ package engine
 import (
 	"fmt"
 	"path/filepath"
-	"syscall"
 
 	"github.com/openmts/mts/internal/memtable"
 	"github.com/openmts/mts/internal/model"
@@ -172,11 +171,7 @@ func (defaultFileOps) RemoveAll(path string) error {
 }
 
 func (defaultFileOps) AvailableBytes(path string) (int64, error) {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(path, &stat); err != nil {
-		return 0, err
-	}
-	return int64(stat.Bavail) * int64(stat.Bsize), nil
+	return availableBytes(path)
 }
 
 func (m memTableStore) Apply(point model.ResolvedPoint) error {
