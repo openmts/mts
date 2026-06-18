@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 func TestSecureDirsAndAtomicFile(t *testing.T) {

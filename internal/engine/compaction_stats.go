@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"codeberg.org/mts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 type CompactionStats struct {

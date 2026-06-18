@@ -5,9 +5,9 @@ import (
 	"runtime"
 	"time"
 
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/observability"
-	"codeberg.org/mts/mts/internal/wal"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/observability"
+	"github.com/openmts/mts/internal/wal"
 )
 
 type runtimeMetrics struct {

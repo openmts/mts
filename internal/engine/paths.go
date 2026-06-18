@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 const (

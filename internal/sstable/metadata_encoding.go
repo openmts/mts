@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"codeberg.org/mts/mts/internal/codec"
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/codec"
+	"github.com/openmts/mts/internal/model"
 )
 
 var (

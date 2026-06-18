@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 func TestFSInjectsOperationFailure(t *testing.T) {

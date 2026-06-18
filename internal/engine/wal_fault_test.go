@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"codeberg.org/mts/mts/internal/faultinject"
-	"codeberg.org/mts/mts/internal/memtable"
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/faultinject"
+	"github.com/openmts/mts/internal/memtable"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 func TestShardWriteWALAppendFailureDoesNotApplyMemTable(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 func TestCompactionStatsRecorderSnapshotAndMerge(t *testing.T) {

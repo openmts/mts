@@ -3,7 +3,7 @@ package engine
 import (
 	"strings"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 func queryBoundaryMode(query model.Query) model.QueryBoundaryMode {

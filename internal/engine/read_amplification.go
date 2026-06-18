@@ -3,7 +3,7 @@ package engine
 import (
 	"sort"
 
-	"codeberg.org/mts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 type ReadAmplificationOptions struct {

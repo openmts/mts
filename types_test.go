@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	mts "codeberg.org/mts/mts"
-	"codeberg.org/mts/mts/internal/model"
+	mts "github.com/openmts/mts"
+	"github.com/openmts/mts/internal/model"
 )
 
 func TestFieldValueConstructors(t *testing.T) {

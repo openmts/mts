@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/sstable"
-	"codeberg.org/mts/mts/internal/wal"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/wal"
 )
 
 func TestShardWriteAndFlushErrors(t *testing.T) {

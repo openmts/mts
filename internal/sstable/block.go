@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)

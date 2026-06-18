@@ -342,7 +342,7 @@
 每个 phase 完成时必须执行：
 
 ```bash
-goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .
+goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
 go test -count=1 ./... -coverprofile=coverage.out -timeout 600s
 go tool cover -func=coverage.out | tail -1
 golangci-lint run --timeout 12m

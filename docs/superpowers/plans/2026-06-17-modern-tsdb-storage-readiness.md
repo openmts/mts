@@ -519,7 +519,7 @@
   - 实现备注：已更新 `tests/README.md`、`tests/e2e/README.md`、`tests/pprof/README.md`。
 - [x] 更新本计划每个 task 的完成备注。
   - 实现备注：Task 6-14 已补实现备注，最终验证结果待门禁执行后刷新。
-- [x] 运行 `goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`，超时 300s。
+- [x] 运行 `goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`，超时 300s。
   - 验证备注：已通过。
 - [x] 运行 `go test -count=1 ./... -coverprofile=coverage.out -timeout 600s`。
   - 验证备注：已通过。

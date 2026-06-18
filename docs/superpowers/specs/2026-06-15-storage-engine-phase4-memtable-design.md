@@ -122,7 +122,7 @@ Restore 策略：
 - `timeout 1200s go run ./tests/pprof/storage_engine -mode=write -field-layout=wide10 -points 1000000 -series 10000 -mem-profile /tmp/mts-wide10-phase4-mem.prof`
 - `go test ./... -coverprofile=coverage.out -timeout 600s`
 - `go tool cover -func=coverage.out | tail -1`
-- `goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`
+- `goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`
 - `gofmt -w` on touched Go files
 - `golangci-lint run --timeout 12m`
 - `tests/e2e/*` 每个目录执行 `go build && ./binary`，并清理二进制产物。

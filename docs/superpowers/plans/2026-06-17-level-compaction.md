@@ -75,7 +75,7 @@
 **Files:**
 - Modify: `docs/superpowers/plans/2026-06-17-level-compaction.md`
 
-- [x] 运行 `goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`。
+- [x] 运行 `goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`。
 - [x] 运行 `go test -count=1 ./... -coverprofile=coverage.out -timeout 600s`。
 - [x] 运行 `go tool cover -func=coverage.out | tail -1`，覆盖率需要 `>=90.0%`。
 - [x] 运行 `golangci-lint run --timeout 12m`。

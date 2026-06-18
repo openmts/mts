@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"codeberg.org/mts/mts/internal/codec"
+	"github.com/openmts/mts/internal/codec"
 )
 
 type blockReader struct {

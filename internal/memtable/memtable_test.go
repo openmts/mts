@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/memtable"
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/memtable"
+	"github.com/openmts/mts/internal/model"
 )
 
 func TestMemTableLWWAndSnapshot(t *testing.T) {

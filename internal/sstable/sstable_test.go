@@ -8,10 +8,10 @@ import (
 	"reflect"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/faultinject"
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/sstable"
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/faultinject"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 func TestPartWriteReadFieldPruneAndManifest(t *testing.T) {

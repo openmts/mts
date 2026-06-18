@@ -111,7 +111,7 @@
 
 - [x] **Step 2: 运行格式化和 lint**
 
-运行：`goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`
+运行：`goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`
 运行：`golangci-lint run --timeout 12m`
 
 实现备注：`goimports-reviser` 已完成，`golangci-lint run --timeout 12m` 输出 `0 issues.`。

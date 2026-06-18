@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	mts "codeberg.org/mts/mts"
+	mts "github.com/openmts/mts"
 )
 
 func TestRun(t *testing.T) {

@@ -1,6 +1,6 @@
 package engine
 
-import "codeberg.org/mts/mts/internal/model"
+import "github.com/openmts/mts/internal/model"
 
 func applyTombstones(
 	columns []model.ColumnData,

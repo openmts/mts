@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	mts "codeberg.org/mts/mts"
-	"codeberg.org/mts/mts/internal/faultinject"
-	"codeberg.org/mts/mts/internal/storagefs"
+	mts "github.com/openmts/mts"
+	"github.com/openmts/mts/internal/faultinject"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 func TestRunSmoke(t *testing.T) {

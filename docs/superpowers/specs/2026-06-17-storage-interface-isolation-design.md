@@ -41,7 +41,7 @@ Compaction 保持当前 streaming 与分批输出行为，但 `compactionInput`�
 - `go test -count=1 ./internal/engine -run 'TestShardUsesInjectedStoragePorts|TestQueryColumnIteratorDecoratesLazily' -timeout 180s`
 - `go test -count=1 ./... -coverprofile=coverage.out -timeout 600s`
 - `go tool cover -func=coverage.out | tail -1`，总覆盖率不低于 `90.0%`
-- `timeout 300s goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`
+- `timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`
 - `golangci-lint run --timeout 12m`
 - 逐个 build/run `tests/e2e/*` 并删除二进制。
 

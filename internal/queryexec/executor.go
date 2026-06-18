@@ -3,7 +3,7 @@ package queryexec
 import (
 	"context"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 type decoratedColumnStream struct {

@@ -3,7 +3,7 @@ package sstable
 import (
 	"testing"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 func TestPartScanStatsRecordsSkippedPagesAndIndexRows(t *testing.T) {

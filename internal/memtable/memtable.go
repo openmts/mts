@@ -6,8 +6,8 @@ import (
 	"sync"
 	"unsafe"
 
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/queryexec"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/queryexec"
 )
 
 type Query struct {

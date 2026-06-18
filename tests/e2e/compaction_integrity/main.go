@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"time"
 
-	mts "codeberg.org/mts/mts"
-	storageengine "codeberg.org/mts/mts/internal/engine"
-	"codeberg.org/mts/mts/internal/memtable"
-	storagemodel "codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/sstable"
+	mts "github.com/openmts/mts"
+	storageengine "github.com/openmts/mts/internal/engine"
+	"github.com/openmts/mts/internal/memtable"
+	storagemodel "github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 func main() {

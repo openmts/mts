@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 const (

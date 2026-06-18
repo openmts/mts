@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 type aggregateColumnStream struct {

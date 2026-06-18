@@ -98,7 +98,7 @@
 - Modify: `docs/superpowers/plans/2026-06-17-storage-interface-isolation.md`
 
 - [x] **Step 1: goimports-reviser**
-  - Run: `timeout 300s goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`
+  - Run: `timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`
   - Result: 通过。
 - [x] **Step 2: 定向包测试**
   - Run: `go test -count=1 ./internal/engine ./internal/sstable ./internal/wal ./internal/catalog ./internal/memtable . -timeout 180s`

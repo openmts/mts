@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 func encodeTimestamps(timestamps []int64, policy string) (byte, []byte, error) {

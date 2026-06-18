@@ -9,7 +9,7 @@ timeout 120s ./testbin
 rm -f testbin
 ```
 
-约定：用例只导入 `codeberg.org/mts/mts` 公共 API，失败时返回非零退出码。
+约定：用例只导入 `github.com/openmts/mts` 公共 API，失败时返回非零退出码。
 
 新增覆盖：
 

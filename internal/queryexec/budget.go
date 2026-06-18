@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 var ErrReadBudgetExceeded = errors.New("read budget exceeded")

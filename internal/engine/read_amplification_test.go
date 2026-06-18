@@ -3,7 +3,7 @@ package engine
 import (
 	"testing"
 
-	"codeberg.org/mts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 func TestComputeLevelHealthDetectsOverlaps(t *testing.T) {

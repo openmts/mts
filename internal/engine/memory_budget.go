@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 var ErrStorageMemoryLimitExceeded = errors.New("storage memory limit exceeded")

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/faultinject"
+	"github.com/openmts/mts/internal/faultinject"
 )
 
 func TestRun(t *testing.T) {

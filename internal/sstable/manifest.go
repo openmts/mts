@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"codeberg.org/mts/mts/internal/codec"
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/codec"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 var manifestMagic = codec.Magic("MTSMAN2")

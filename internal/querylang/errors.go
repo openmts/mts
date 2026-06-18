@@ -1,0 +1,34 @@
+package querylang
+
+import (
+	"errors"
+	"fmt"
+)
+
+type Code string
+
+const (
+	ErrInvalidMeasurement Code = "invalid-measurement"
+	ErrInvalidTimeRange   Code = "invalid-time-range"
+)
+
+type Error struct {
+	Code    Code
+	Message string
+}
+
+func (e Error) Error() string {
+	return fmt.Sprintf("querylang %s: %s", e.Code, e.Message)
+}
+
+func IsCode(err error, code Code) bool {
+	var queryErr Error
+	if errors.As(err, &queryErr) {
+		return queryErr.Code == code
+	}
+	return false
+}
+
+func newError(code Code, message string) error {
+	return Error{Code: code, Message: message}
+}

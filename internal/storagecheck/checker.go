@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"codeberg.org/mts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 type Severity string

@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 type RepairOptions struct {

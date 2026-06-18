@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"codeberg.org/mts/mts/internal/observability"
+	"github.com/openmts/mts/internal/observability"
 )
 
 type fakeOps struct {

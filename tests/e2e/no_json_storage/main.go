@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
-	mts "codeberg.org/mts/mts"
+	mts "github.com/openmts/mts"
 )
 
 func main() {

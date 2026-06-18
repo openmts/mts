@@ -3,10 +3,10 @@ package engine
 import (
 	"errors"
 
-	"codeberg.org/mts/mts/internal/memtable"
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/queryexec"
-	"codeberg.org/mts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/memtable"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/queryexec"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 type shardColumnDataStream struct {

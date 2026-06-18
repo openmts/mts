@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 func TestBuildQueryPlanExplainsCatalogAndShardPruning(t *testing.T) {

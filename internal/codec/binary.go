@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 func AppendString(dst []byte, value string) []byte {

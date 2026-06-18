@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/storagecheck"
+	"github.com/openmts/mts/internal/storagecheck"
 )
 
 func TestRun(t *testing.T) {

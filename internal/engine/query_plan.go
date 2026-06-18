@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 type QueryPlan struct {

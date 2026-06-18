@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/mts/mts/internal/observability"
-	"codeberg.org/mts/mts/internal/service"
+	"github.com/openmts/mts/internal/observability"
+	"github.com/openmts/mts/internal/service"
 )
 
 type ops struct {

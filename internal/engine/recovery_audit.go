@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"codeberg.org/mts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 var ErrRecoveryFatal = errors.New("recovery fatal")

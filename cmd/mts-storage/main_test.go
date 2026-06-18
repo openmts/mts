@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 func TestStorageToolCheckRepairCommands(t *testing.T) {

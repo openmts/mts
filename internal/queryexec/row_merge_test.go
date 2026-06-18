@@ -3,7 +3,7 @@ package queryexec
 import (
 	"testing"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 func TestRowMergeStreamMergesColumnsBySeriesAndTimestamp(t *testing.T) {

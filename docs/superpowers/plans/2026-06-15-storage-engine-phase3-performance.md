@@ -512,7 +512,7 @@ Expected: PASS and total coverage `>=90.0%`.
 Run:
 
 ```bash
-goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .
+goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
 gofmt -w $(git ls-files '*.go')
 golangci-lint run --timeout 12m
 ```

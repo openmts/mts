@@ -122,7 +122,7 @@ v2 与 v5 解码保留兼容；v5 可复用新 filter helper，但不在本轮�
 
 - [x] **Step 1: 格式化**
 
-运行：`goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`
+运行：`goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`
 
 - [x] **Step 2: 定向回归**
 
@@ -146,7 +146,7 @@ v2 与 v5 解码保留兼容；v5 可复用新 filter helper，但不在本轮�
 
 删除 `coverage.out`、临时 pprof 二进制和本轮 `/tmp` profile 文件。
 
-实现备注：已执行 `goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`；`go test -count=1 ./internal/wal ./internal/sstable ./internal/engine -timeout 180s` 通过；`go test -count=1 ./... -coverprofile=coverage.out -timeout 600s` 通过，总覆盖率 `90.0%`；`golangci-lint run --timeout 12m` 输出 `0 issues.`；逐个 build/run `tests/e2e/*` 全部通过并清理二进制。100K wide10 pprof smoke：write `sstable_count=1 data_dir_bytes=8622275 heap_alloc_bytes=349786552 heap_sys_bytes=439418880`；query `sstable_count=1 data_dir_bytes=8622275 heap_alloc_bytes=375349736 heap_sys_bytes=426803200`；compact `sstable_count=1 data_dir_bytes=8622277 heap_alloc_bytes=180416440 heap_sys_bytes=359694336`。已删除 `/tmp/mts-p1-smoke` 和 `coverage.out`。
+实现备注：已执行 `goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`；`go test -count=1 ./internal/wal ./internal/sstable ./internal/engine -timeout 180s` 通过；`go test -count=1 ./... -coverprofile=coverage.out -timeout 600s` 通过，总覆盖率 `90.0%`；`golangci-lint run --timeout 12m` 输出 `0 issues.`；逐个 build/run `tests/e2e/*` 全部通过并清理二进制。100K wide10 pprof smoke：write `sstable_count=1 data_dir_bytes=8622275 heap_alloc_bytes=349786552 heap_sys_bytes=439418880`；query `sstable_count=1 data_dir_bytes=8622275 heap_alloc_bytes=375349736 heap_sys_bytes=426803200`；compact `sstable_count=1 data_dir_bytes=8622277 heap_alloc_bytes=180416440 heap_sys_bytes=359694336`。已删除 `/tmp/mts-p1-smoke` 和 `coverage.out`。
 
 ## 自检
 

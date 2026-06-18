@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"codeberg.org/mts/mts/internal/memtable"
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/queryexec"
-	"codeberg.org/mts/mts/internal/sstable"
-	"codeberg.org/mts/mts/internal/storagefs"
-	"codeberg.org/mts/mts/internal/wal"
+	"github.com/openmts/mts/internal/memtable"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/queryexec"
+	"github.com/openmts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/wal"
 )
 
 type walStore interface {

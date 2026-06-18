@@ -3,8 +3,8 @@ package engine
 import (
 	"context"
 
-	"codeberg.org/mts/mts/internal/catalog"
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/catalog"
+	"github.com/openmts/mts/internal/model"
 )
 
 type MetadataStore interface {

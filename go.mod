@@ -1,4 +1,4 @@
-module codeberg.org/mts/mts
+module github.com/openmts/mts
 
 go 1.26.2
 

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	mts "codeberg.org/mts/mts"
+	mts "github.com/openmts/mts"
 )
 
 func TestMainFunction(t *testing.T) {

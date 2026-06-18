@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	mts "codeberg.org/mts/mts"
+	mts "github.com/openmts/mts"
 )
 
 type config struct {

@@ -152,7 +152,7 @@ Create `docs/benchmarks/storage-engine-phase5.md`.
 - [x] **Step 1: Format**
 
 ```bash
-goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .
+goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
 gofmt -w internal/sstable/*.go
 ```
 
@@ -179,4 +179,4 @@ For each directory under `tests/e2e`, run `go build`, execute the binary, then r
 
 Remove `coverage.out`, `/tmp/mts-wide10-phase5-mem.prof`, and any e2e binaries.
 
-实现备注：已执行 `goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .` 和 `gofmt`。已执行 `go test ./... -coverprofile=coverage.out -timeout 600s`，总覆盖率 `90.0%`。已执行 `golangci-lint run --timeout 12m`，结果 `0 issues`。已逐个 build/run `tests/e2e` 现有目录：`compaction_integrity`、`flush_manifest_recovery`、`no_json_storage`、`query_pruning`、`retention`、`simple_integrity`、`wal_recovery`，全部通过。已清理 `coverage.out`、pprof/coverage 临时文件、`/tmp/mts-phase5-size` 和 e2e 临时二进制。
+实现备注：已执行 `goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .` 和 `gofmt`。已执行 `go test ./... -coverprofile=coverage.out -timeout 600s`，总覆盖率 `90.0%`。已执行 `golangci-lint run --timeout 12m`，结果 `0 issues`。已逐个 build/run `tests/e2e` 现有目录：`compaction_integrity`、`flush_manifest_recovery`、`no_json_storage`、`query_pruning`、`retention`、`simple_integrity`、`wal_recovery`，全部通过。已清理 `coverage.out`、pprof/coverage 临时文件、`/tmp/mts-phase5-size` 和 e2e 临时二进制。

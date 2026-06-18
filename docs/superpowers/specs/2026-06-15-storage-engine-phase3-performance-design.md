@@ -113,7 +113,7 @@ benchmark 增加 `BenchmarkEngineWriteWideBatch`，使用固定 series 数和 10
 - `go tool cover -func=coverage.out | tail -1`
 - `go test ./internal/bench -bench=. -benchmem -count=3 -timeout 900s`
 - `go run ./tests/pprof/storage_engine -mode=write -field-layout=wide10 -points 100000 -series 1000 -mem-profile /tmp/mts-wide10-mem.prof`
-- `goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`
+- `goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`
 - `gofmt -w` on touched Go files
 - `golangci-lint run --timeout 12m`
 - 按项目规则运行 `tests/e2e` 下每个目录的 build/run，并清理二进制产物。

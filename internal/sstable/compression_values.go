@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math"
 
-	"codeberg.org/mts/mts/internal/codec"
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/codec"
+	"github.com/openmts/mts/internal/model"
 )
 
 func encodeTypedValues(column model.ColumnData, opts model.CompressionOptions) (byte, []byte, error) {

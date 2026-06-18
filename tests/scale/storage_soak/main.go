@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"time"
 
-	mts "codeberg.org/mts/mts"
-	"codeberg.org/mts/mts/internal/sstable"
+	mts "github.com/openmts/mts"
+	"github.com/openmts/mts/internal/sstable"
 )
 
 type soakReport struct {

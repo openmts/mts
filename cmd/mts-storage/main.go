@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"codeberg.org/mts/mts/internal/storagecheck"
+	"github.com/openmts/mts/internal/storagecheck"
 )
 
 func main() {

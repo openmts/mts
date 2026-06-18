@@ -228,7 +228,7 @@ Write Phase 4 benchmark and pprof summary to `docs/benchmarks/storage-engine-pha
 Run:
 
 ```bash
-goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .
+goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
 gofmt -w internal/memtable/memtable.go internal/memtable/memtable_test.go internal/engine/shard.go internal/engine/engine_test.go internal/bench/storage_bench_test.go tests/pprof/storage_engine/main.go tests/pprof/storage_engine/main_test.go
 ```
 
@@ -276,4 +276,4 @@ find tests/e2e -maxdepth 2 -type f -perm /111 -delete
 
 Expected: no coverage/profile/e2e binary artifacts remain.
 
-实现备注：已执行 `goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`、`gofmt`、`go test ./... -coverprofile=coverage.out -timeout 600s`、`go tool cover -func=coverage.out | tail -1`，总覆盖率 `90.0%`。`golangci-lint run --timeout 12m` 输出 `0 issues.`。`tests/e2e` 下 7 个用例均已 build/run 通过，临时二进制、`coverage.out` 和 `/tmp/mts-wide10-phase4-mem.prof` 已清理。
+实现备注：已执行 `goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`、`gofmt`、`go test ./... -coverprofile=coverage.out -timeout 600s`、`go tool cover -func=coverage.out | tail -1`，总覆盖率 `90.0%`。`golangci-lint run --timeout 12m` 输出 `0 issues.`。`tests/e2e` 下 7 个用例均已 build/run 通过，临时二进制、`coverage.out` 和 `/tmp/mts-wide10-phase4-mem.prof` 已清理。

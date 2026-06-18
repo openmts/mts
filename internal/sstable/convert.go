@@ -3,7 +3,7 @@ package sstable
 import (
 	"sort"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 type columnGroup struct {

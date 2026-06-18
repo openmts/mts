@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 type PartWriter struct {

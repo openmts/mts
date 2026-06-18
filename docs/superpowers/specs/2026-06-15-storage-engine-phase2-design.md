@@ -198,7 +198,7 @@ Engine 保留全局 shard map 锁，但 shard 内增加生命周期互斥，确�
 
 - `go test ./... -coverprofile=coverage.out -timeout 600s` 通过，总覆盖率 `>=90%`。
 - `golangci-lint run --timeout 12m` 通过。
-- `goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .` 通过。
+- `goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .` 通过。
 - 所有新增 e2e 用例可以按 `cd tests/e2e/<case> && go build && ./<binary>` 方式运行通过。
 - `tests/pprof/storage_engine` 能生成 CPU 和 heap profile，运行后无残留产物。
 - 对 WAL/SSTable/query/compaction 的核心改动有 benchmark 或 pprof 结果。

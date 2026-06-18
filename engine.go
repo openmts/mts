@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	storageengine "codeberg.org/mts/mts/internal/engine"
-	"codeberg.org/mts/mts/internal/model"
+	storageengine "github.com/openmts/mts/internal/engine"
+	"github.com/openmts/mts/internal/model"
 )
 
 func (e *Engine) Close(ctx context.Context) error {

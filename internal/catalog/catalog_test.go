@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/catalog"
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/catalog"
+	"github.com/openmts/mts/internal/model"
 )
 
 func TestCatalogResolveReopenAndTypeConflict(t *testing.T) {

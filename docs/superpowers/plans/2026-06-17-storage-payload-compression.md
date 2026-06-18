@@ -144,7 +144,7 @@ go mod tidy
 运行：
 
 ```bash
-timeout 300s goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .
+timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
 ```
 
 实现备注：已执行，命令退出码 0。

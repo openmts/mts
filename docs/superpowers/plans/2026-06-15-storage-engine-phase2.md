@@ -70,7 +70,7 @@ import (
 	"testing"
 	"time"
 
-	mts "codeberg.org/mts/mts"
+	mts "github.com/openmts/mts"
 )
 
 func BenchmarkEngineWriteBatch(b *testing.B) {
@@ -144,7 +144,7 @@ import (
 	"path/filepath"
 	"time"
 
-	mts "codeberg.org/mts/mts"
+	mts "github.com/openmts/mts"
 )
 
 func main() {
@@ -238,7 +238,7 @@ import (
 	"bytes"
 	"testing"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 func TestEnvelopeRoundTripAndCorruption(t *testing.T) {
@@ -1050,7 +1050,7 @@ Expected: PASS and total coverage `>=90%`.
 Run:
 
 ```bash
-timeout 300s goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .
+timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
 timeout 300s gofmt -w $(find . -name '*.go' -not -path './.git/*')
 timeout 720s golangci-lint run --timeout 12m
 ```

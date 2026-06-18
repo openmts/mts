@@ -76,7 +76,7 @@
 - Optional Modify: related docs that state compatibility as current behavior
 
 - [x] **Step 1: 运行 goimports-reviser**
-  - 验证结果：`goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .` 通过。
+  - 验证结果：`goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .` 通过。
 - [x] **Step 2: 运行定向包测试**
   - 验证结果：`go test -count=1 ./internal/codec ./internal/wal ./internal/sstable ./internal/catalog ./internal/engine -timeout 180s` 通过。
 - [x] **Step 3: 运行全量测试与覆盖率**

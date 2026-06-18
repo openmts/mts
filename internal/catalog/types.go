@@ -1,6 +1,6 @@
 package catalog
 
-import "codeberg.org/mts/mts/internal/model"
+import "github.com/openmts/mts/internal/model"
 
 type Series struct {
 	ID          uint64            `json:"id"`

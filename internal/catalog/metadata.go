@@ -9,9 +9,9 @@ import (
 	"sort"
 	"time"
 
-	"codeberg.org/mts/mts/internal/codec"
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/codec"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 var metadataMagic = codec.Magic("MTSMETA")

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sort"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 type mergeColumnDataStream struct {

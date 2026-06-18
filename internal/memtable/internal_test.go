@@ -3,7 +3,7 @@ package memtable
 import (
 	"testing"
 
-	"codeberg.org/mts/mts/internal/model"
+	"github.com/openmts/mts/internal/model"
 )
 
 func TestColumnBufferHelpers(t *testing.T) {

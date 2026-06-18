@@ -33,7 +33,7 @@ benchmark gate 脚本增加 `--update-baseline`，在本地确认性能基线时
 - `go test -count=1 ./internal/wal -timeout 180s`
 - `go test -count=1 ./internal/catalog -timeout 180s`
 - `go test -count=1 ./internal/bench ./tests/pprof/storage_engine -timeout 180s`
-- `timeout 300s goimports-reviser -project-name codeberg.org/mts/mts -recursive -format -rm-unused .`
+- `timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .`
 - `go test -count=1 ./... -coverprofile=coverage.out -timeout 600s`
 - `go tool cover -func=coverage.out | tail -1`，总覆盖率不低于 `90.0%`
 - `golangci-lint run --timeout 12m`

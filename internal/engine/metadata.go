@@ -5,8 +5,8 @@ import (
 	"errors"
 	"path/filepath"
 
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 func (e *Engine) CreateDatabase(ctx context.Context, name string) error {

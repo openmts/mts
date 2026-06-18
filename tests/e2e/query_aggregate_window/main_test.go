@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	mts "codeberg.org/mts/mts"
+	mts "github.com/openmts/mts"
 )
 
 func TestMainSmoke(t *testing.T) {

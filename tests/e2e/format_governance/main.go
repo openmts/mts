@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"time"
 
-	mts "codeberg.org/mts/mts"
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/sstable"
-	"codeberg.org/mts/mts/internal/storagecheck"
+	mts "github.com/openmts/mts"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/storagecheck"
 )
 
 func main() {

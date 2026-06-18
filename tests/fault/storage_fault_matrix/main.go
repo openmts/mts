@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	mts "codeberg.org/mts/mts"
-	"codeberg.org/mts/mts/internal/faultinject"
-	"codeberg.org/mts/mts/internal/model"
-	"codeberg.org/mts/mts/internal/sstable"
-	"codeberg.org/mts/mts/internal/storagefs"
-	"codeberg.org/mts/mts/internal/wal"
+	mts "github.com/openmts/mts"
+	"github.com/openmts/mts/internal/faultinject"
+	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/storagefs"
+	"github.com/openmts/mts/internal/wal"
 )
 
 type faultReport struct {
