@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -11,7 +12,24 @@ type adminResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
-func compactHandler(timeout time.Duration, compact CompactFunc) http.HandlerFunc {
+type adminCompactResponse struct {
+	OK             bool   `json:"ok"`
+	TaskID         string `json:"task_id,omitempty"`
+	State          string `json:"state"`
+	DurationMillis int64  `json:"duration_ms"`
+	Error          string `json:"error,omitempty"`
+}
+
+type AdminAuditEvent struct {
+	Action          string        `json:"action"`
+	TaskID          string        `json:"task_id"`
+	State           string        `json:"state"`
+	Duration        time.Duration `json:"duration"`
+	Error           string        `json:"error,omitempty"`
+	StartedUnixNano int64         `json:"started_unix_nano"`
+}
+
+func compactHandler(timeout time.Duration, audit AuditLogger, compact CompactFunc) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			writeJSON(writer, http.StatusMethodNotAllowed, adminResponse{OK: false, Error: "method not allowed"})
@@ -21,6 +39,12 @@ func compactHandler(timeout time.Duration, compact CompactFunc) http.HandlerFunc
 			writeJSON(writer, http.StatusServiceUnavailable, adminResponse{OK: false, Error: "compact unavailable"})
 			return
 		}
+		if timeout <= 0 && !hasDeadline(request.Context()) {
+			writeJSON(writer, http.StatusBadRequest, adminResponse{OK: false, Error: "admin compact timeout required"})
+			return
+		}
+		started := time.Now()
+		taskID := newCompactTaskID(started)
 		ctx := request.Context()
 		cancel := func() {}
 		if timeout > 0 {
@@ -28,9 +52,55 @@ func compactHandler(timeout time.Duration, compact CompactFunc) http.HandlerFunc
 		}
 		defer cancel()
 		if err := compact(ctx); err != nil {
-			writeJSON(writer, http.StatusInternalServerError, adminResponse{OK: false, Error: err.Error()})
+			response := failedCompactResponse(taskID, started, err.Error())
+			logCompactAudit(audit, response, started)
+			writeJSON(writer, http.StatusInternalServerError, response)
 			return
 		}
-		writeJSON(writer, http.StatusOK, adminResponse{OK: true})
+		response := succeededCompactResponse(taskID, started)
+		logCompactAudit(audit, response, started)
+		writeJSON(writer, http.StatusOK, response)
 	}
+}
+
+func hasDeadline(ctx context.Context) bool {
+	_, ok := ctx.Deadline()
+	return ok
+}
+
+func newCompactTaskID(started time.Time) string {
+	return "compact-" + strconv.FormatInt(started.UnixNano(), 10)
+}
+
+func succeededCompactResponse(taskID string, started time.Time) adminCompactResponse {
+	return adminCompactResponse{
+		OK:             true,
+		TaskID:         taskID,
+		State:          "succeeded",
+		DurationMillis: time.Since(started).Milliseconds(),
+	}
+}
+
+func failedCompactResponse(taskID string, started time.Time, message string) adminCompactResponse {
+	return adminCompactResponse{
+		OK:             false,
+		TaskID:         taskID,
+		State:          "failed",
+		DurationMillis: time.Since(started).Milliseconds(),
+		Error:          message,
+	}
+}
+
+func logCompactAudit(audit AuditLogger, response adminCompactResponse, started time.Time) {
+	if audit == nil {
+		return
+	}
+	audit.LogAdminAction(AdminAuditEvent{
+		Action:          "compact",
+		TaskID:          response.TaskID,
+		State:           response.State,
+		Duration:        time.Duration(response.DurationMillis) * time.Millisecond,
+		Error:           response.Error,
+		StartedUnixNano: started.UnixNano(),
+	})
 }

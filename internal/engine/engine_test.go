@@ -1658,6 +1658,97 @@ func TestEngineMetricsSnapshotIncludesCompactionSignals(t *testing.T) {
 	}
 }
 
+func TestEngineMetricsSnapshotIncludesWALSignals(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:          t.TempDir(),
+		ShardDuration: time.Hour,
+		WAL:           model.WALOptions{Sync: true},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "walmetrics",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"value": model.Int64Value(1)},
+	}}, model.WriteOptions{Sync: true}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	names := metricNameSet(eng.MetricsSnapshot())
+	for _, name := range []string{
+		"mts_wal_append_records_total",
+		"mts_wal_sync_total",
+		"mts_wal_pending_bytes",
+		"mts_wal_segments",
+		"mts_wal_append_latency_seconds_sum",
+	} {
+		if _, ok := names[name]; !ok {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("metric %s missing in %#v close = %v", name, names, closeErr)
+		}
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineMetricsSnapshotIncludesProductionSignals(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 10,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "prodmetrics",
+		Timestamp:   1,
+		Fields: map[string]model.FieldValue{
+			"f": model.Float64Value(1),
+			"i": model.Int64Value(1),
+		},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	if _, err := eng.QueryRows(ctx, model.Query{Measurement: "prodmetrics", StartTime: 0, EndTime: 2}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows() error = %v close = %v", err, closeErr)
+	}
+	if err := eng.Flush(ctx); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Flush() error = %v close = %v", err, closeErr)
+	}
+	names := metricNameSet(eng.MetricsSnapshot())
+	for _, name := range []string{
+		"mts_memtable_samples",
+		"mts_memtable_estimated_bytes",
+		"mts_sstable_parts",
+		"mts_sstable_rows",
+		"mts_sstable_blocks",
+		"mts_query_samples_returned_total",
+		"mts_query_parts_scanned_total",
+		"mts_retention_expired_parts_total",
+		"mts_recovery_errors_total",
+		"mts_runtime_heap_alloc_bytes",
+		"mts_runtime_gc_total",
+		"mts_runtime_goroutines",
+		"mts_runtime_fd_open",
+	} {
+		if _, ok := names[name]; !ok {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("metric %s missing in %#v close = %v", name, names, closeErr)
+		}
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func metricNameSet(metrics []observability.Metric) map[string]struct{} {
 	names := make(map[string]struct{}, len(metrics))
 	for _, metric := range metrics {

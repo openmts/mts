@@ -53,11 +53,30 @@ type Log struct {
 	syncStopOnce sync.Once
 	syncStop     chan struct{}
 	syncWG       sync.WaitGroup
+
+	metrics Metrics
 }
 
 type Record struct {
 	Points     []model.ResolvedPoint
 	Tombstones []model.Tombstone
+}
+
+type Metrics struct {
+	AppendRecords      uint64
+	AppendErrors       uint64
+	AppendLatencyNanos int64
+	SyncCount          uint64
+	SyncErrors         uint64
+	SyncLatencyNanos   int64
+	CheckpointCount    uint64
+	CheckpointErrors   uint64
+	ReplayRecords      uint64
+	ReplayErrors       uint64
+	ReplayLatencyNanos int64
+	SegmentCount       int
+	PendingRecords     int
+	PendingBytes       int64
 }
 
 func Open(dir string, opts Options) (*Log, error) {
@@ -80,13 +99,17 @@ func Open(dir string, opts Options) (*Log, error) {
 }
 
 func (l *Log) Append(records []model.ResolvedPoint, syncWrite bool) error {
+	started := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	payload, err := encodeBatch(records)
 	if err != nil {
+		l.recordAppendMetricsLocked(started, 0, err)
 		return fmt.Errorf("encode wal record: %w", err)
 	}
-	return l.appendFrameLocked(recordWriteBatch, payload, syncWrite)
+	err = l.appendFrameLocked(recordWriteBatch, payload, syncWrite)
+	l.recordAppendMetricsLocked(started, len(records), err)
+	return err
 }
 
 func (l *Log) appendFrameLocked(recordType byte, payload []byte, syncWrite bool) error {
@@ -101,9 +124,12 @@ func (l *Log) appendFrameLocked(recordType byte, payload []byte, syncWrite bool)
 	l.pendingRecords++
 	l.pendingBytes += int64(len(frame))
 	if l.shouldSync(syncWrite) {
+		started := time.Now()
 		if err := storagefs.Sync(l.file); err != nil {
+			l.recordSyncMetricsLocked(started, err)
 			return fmt.Errorf("sync wal: %w", err)
 		}
+		l.recordSyncMetricsLocked(started, nil)
 		l.pendingRecords = 0
 		l.pendingBytes = 0
 	}
@@ -111,13 +137,17 @@ func (l *Log) appendFrameLocked(recordType byte, payload []byte, syncWrite bool)
 }
 
 func (l *Log) AppendTombstones(tombstones []model.Tombstone, syncWrite bool) error {
+	started := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	payload, err := encodeTombstones(tombstones)
 	if err != nil {
+		l.recordAppendMetricsLocked(started, 0, err)
 		return fmt.Errorf("encode wal tombstone: %w", err)
 	}
-	return l.appendFrameLocked(recordTombstone, payload, syncWrite)
+	err = l.appendFrameLocked(recordTombstone, payload, syncWrite)
+	l.recordAppendMetricsLocked(started, len(tombstones), err)
+	return err
 }
 
 func (l *Log) Replay() ([]model.ResolvedPoint, error) {
@@ -133,10 +163,12 @@ func (l *Log) Replay() ([]model.ResolvedPoint, error) {
 }
 
 func (l *Log) ReplayRecords() ([]Record, error) {
+	started := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	segments, err := listSegments(l.dir)
 	if err != nil {
+		l.recordReplayMetricsLocked(started, 0, err)
 		return nil, err
 	}
 	records := make([]Record, 0)
@@ -144,10 +176,12 @@ func (l *Log) ReplayRecords() ([]Record, error) {
 		isLast := index == len(segments)-1
 		replayed, err := replaySegment(segment.path, isLast)
 		if err != nil {
+			l.recordReplayMetricsLocked(started, len(records), err)
 			return nil, err
 		}
 		records = append(records, replayed...)
 	}
+	l.recordReplayMetricsLocked(started, len(records), nil)
 	return records, nil
 }
 
@@ -198,6 +232,7 @@ func (l *Log) Checkpoint() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if err := l.syncPendingLocked(); err != nil {
+		l.metrics.CheckpointErrors++
 		return err
 	}
 	oldSegment := l.segment
@@ -208,10 +243,12 @@ func (l *Log) Checkpoint() error {
 		l.file = nil
 	}
 	if err := l.openSegment(oldSegment + 1); err != nil {
+		l.metrics.CheckpointErrors++
 		return err
 	}
 	segments, err := listSegments(l.dir)
 	if err != nil {
+		l.metrics.CheckpointErrors++
 		return err
 	}
 	for _, segment := range segments {
@@ -219,9 +256,11 @@ func (l *Log) Checkpoint() error {
 			continue
 		}
 		if err := storagefs.Remove(segment.path); err != nil {
+			l.metrics.CheckpointErrors++
 			return fmt.Errorf("remove checkpointed wal segment: %w", err)
 		}
 	}
+	l.metrics.CheckpointCount++
 	return nil
 }
 
@@ -294,12 +333,54 @@ func (l *Log) syncPendingLocked() error {
 	if l.file == nil || l.pendingRecords == 0 {
 		return nil
 	}
+	started := time.Now()
 	if err := storagefs.Sync(l.file); err != nil {
+		l.recordSyncMetricsLocked(started, err)
 		return fmt.Errorf("sync wal: %w", err)
 	}
+	l.recordSyncMetricsLocked(started, nil)
 	l.pendingRecords = 0
 	l.pendingBytes = 0
 	return nil
+}
+
+func (l *Log) MetricsSnapshot() Metrics {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	snapshot := l.metrics
+	snapshot.PendingRecords = l.pendingRecords
+	snapshot.PendingBytes = l.pendingBytes
+	segments, err := listSegments(l.dir)
+	if err == nil {
+		snapshot.SegmentCount = len(segments)
+	}
+	return snapshot
+}
+
+func (l *Log) recordAppendMetricsLocked(started time.Time, records int, err error) {
+	if records > 0 {
+		l.metrics.AppendRecords += uint64(records)
+	}
+	l.metrics.AppendLatencyNanos += time.Since(started).Nanoseconds()
+	if err != nil {
+		l.metrics.AppendErrors++
+	}
+}
+
+func (l *Log) recordSyncMetricsLocked(started time.Time, err error) {
+	l.metrics.SyncCount++
+	l.metrics.SyncLatencyNanos += time.Since(started).Nanoseconds()
+	if err != nil {
+		l.metrics.SyncErrors++
+	}
+}
+
+func (l *Log) recordReplayMetricsLocked(started time.Time, records int, err error) {
+	l.metrics.ReplayRecords += uint64(records)
+	l.metrics.ReplayLatencyNanos += time.Since(started).Nanoseconds()
+	if err != nil {
+		l.metrics.ReplayErrors++
+	}
 }
 
 func (l *Log) startIntervalSync() {

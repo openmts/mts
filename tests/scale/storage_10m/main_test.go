@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	mts "codeberg.org/mts/mts"
 	"codeberg.org/mts/mts/internal/faultinject"
 	"codeberg.org/mts/mts/internal/storagefs"
 )
@@ -29,10 +30,45 @@ func TestParseConfigRejectsInvalidInput(t *testing.T) {
 		{"-points", "0"},
 		{"-batch-size", "0"},
 		{"-mode", "bad"},
+		{"-profile", "bad"},
 	} {
 		if _, err := parseConfig(args); err == nil {
 			t.Fatalf("parseConfig(%v) error = nil, want error", args)
 		}
+	}
+}
+
+func TestParseConfigProfilesAndThresholds(t *testing.T) {
+	cfg, err := parseConfig([]string{
+		"-profile", "quick",
+		"-max-rss-bytes", "1024",
+		"-max-sstable-count", "3",
+		"-max-compaction-backlog", "1",
+	})
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.profile != "quick" || cfg.points != 10000 || cfg.maxRSSBytes != 1024 {
+		t.Fatalf("config = %#v, want quick profile and rss threshold", cfg)
+	}
+	if cfg.maxSSTableCount != 3 || cfg.maxCompactionBacklog != 1 {
+		t.Fatalf("config thresholds = %#v, want sstable/backlog thresholds", cfg)
+	}
+}
+
+func TestRunFailsWhenThresholdExceeded(t *testing.T) {
+	cfg := config{
+		maxRSSBytes:          1024,
+		maxSSTableCount:      1,
+		maxCompactionBacklog: 0,
+	}
+	out := report{
+		RSSPeakBytes:    2048,
+		SSTableCount:    2,
+		CompactionStats: structCompactionStats(1),
+	}
+	if err := enforceThresholds(cfg, out); err == nil {
+		t.Fatal("enforceThresholds() error = nil, want threshold error")
 	}
 }
 
@@ -96,12 +132,20 @@ func TestReportIncludesAmplificationAndLevelDistribution(t *testing.T) {
 		"write_amplification",
 		"space_amplification",
 		"query_latency_nanos",
+		"cold_query_latency_nanos",
+		"hot_query_latency_nanos",
+		"backlog_drain_nanos",
 		"compaction_stats",
+		"errors",
 	} {
 		if !strings.Contains(text, key) {
 			t.Fatalf("report json %s missing %s", text, key)
 		}
 	}
+}
+
+func structCompactionStats(backlog int) mts.CompactionStats {
+	return mts.CompactionStats{Backlog: backlog}
 }
 
 func TestRunWorkloadRejectsInvalidDirectory(t *testing.T) {

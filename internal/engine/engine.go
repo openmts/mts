@@ -12,7 +12,9 @@ import (
 	"codeberg.org/mts/mts/internal/catalog"
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/observability"
+	"codeberg.org/mts/mts/internal/sstable"
 	"codeberg.org/mts/mts/internal/storagefs"
+	"codeberg.org/mts/mts/internal/wal"
 )
 
 type Engine struct {
@@ -26,6 +28,7 @@ type Engine struct {
 	compactionScheduler *compactionScheduler
 	queryStatsMu        sync.Mutex
 	lastQueryStats      model.QueryStats
+	retentionExpired    uint64
 
 	compactStopOnce sync.Once
 	compactStop     chan struct{}
@@ -351,10 +354,123 @@ func (e *Engine) StorageMemorySnapshot() StorageMemorySnapshot {
 func (e *Engine) MetricsSnapshot() []observability.Metric {
 	snapshot := e.StorageMemorySnapshot()
 	stats := e.CompactionStatsSnapshot()
+	production := e.productionMetricsSnapshot()
+	queryStats := e.QueryStatsSnapshot()
 	registry := observability.NewRegistry()
 	recordStorageMemoryMetrics(registry, snapshot)
 	recordCompactionMetrics(registry, stats)
+	recordWALMetrics(registry, e.walMetricsSnapshot())
+	recordMemTableMetrics(registry, production)
+	recordSSTableMetrics(registry, production)
+	recordQueryMetrics(registry, queryStats)
+	recordRetentionMetrics(registry, production)
+	recordRecoveryMetrics(registry, production)
+	recordRuntimeMetrics(registry, runtimeMetricsSnapshot())
 	return registry.Snapshot()
+}
+
+type productionMetrics struct {
+	MemTableSamples       int
+	MemTableBytes         int64
+	SSTableParts          int
+	SSTableRows           int
+	SSTableSeries         int
+	SSTableBlocks         int
+	SSTableMaxLevel       int
+	SSTableLevel0Parts    int
+	SSTableMaxWriteSeq    uint64
+	RetentionExpiredParts uint64
+	RecoveryIssues        int
+	RecoveryErrors        int
+	RecoveryFatalErrors   int
+}
+
+func (e *Engine) productionMetricsSnapshot() productionMetrics {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := productionMetrics{RetentionExpiredParts: e.retentionExpired}
+	for _, shard := range e.shards {
+		out.MemTableSamples += shard.mem.SampleCount()
+		out.MemTableBytes += shard.mem.ApproxMemoryBytes()
+		out.RecoveryIssues += len(shard.recoveryReport.Issues)
+		out.RecoveryErrors += recoveryErrorCount(shard.recoveryReport)
+		out.RecoveryFatalErrors += recoveryFatalCount(shard.recoveryReport)
+		for _, part := range shard.manifest.Parts {
+			mergePartMetrics(&out, part)
+		}
+	}
+	return out
+}
+
+func mergePartMetrics(out *productionMetrics, part sstable.PartMeta) {
+	out.SSTableParts++
+	out.SSTableRows += part.RowsCount
+	out.SSTableSeries += part.SeriesCount
+	out.SSTableBlocks += part.BlockCount
+	if part.Level > out.SSTableMaxLevel {
+		out.SSTableMaxLevel = part.Level
+	}
+	if part.Level == 0 {
+		out.SSTableLevel0Parts++
+	}
+	if part.MaxWriteSeq > out.SSTableMaxWriteSeq {
+		out.SSTableMaxWriteSeq = part.MaxWriteSeq
+	}
+}
+
+func recoveryErrorCount(report RecoveryReport) int {
+	total := 0
+	for _, issue := range report.Issues {
+		if issue.Err != nil {
+			total++
+		}
+	}
+	return total
+}
+
+func recoveryFatalCount(report RecoveryReport) int {
+	total := 0
+	for _, issue := range report.Issues {
+		if issue.Fatal {
+			total++
+		}
+	}
+	return total
+}
+
+func (e *Engine) walMetricsSnapshot() wal.Metrics {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var out wal.Metrics
+	for _, shard := range e.shards {
+		if shard.wal == nil {
+			continue
+		}
+		provider, ok := shard.wal.(walMetricsProvider)
+		if !ok {
+			continue
+		}
+		out = mergeWALMetrics(out, provider.MetricsSnapshot())
+	}
+	return out
+}
+
+func mergeWALMetrics(left wal.Metrics, right wal.Metrics) wal.Metrics {
+	left.AppendRecords += right.AppendRecords
+	left.AppendErrors += right.AppendErrors
+	left.AppendLatencyNanos += right.AppendLatencyNanos
+	left.SyncCount += right.SyncCount
+	left.SyncErrors += right.SyncErrors
+	left.SyncLatencyNanos += right.SyncLatencyNanos
+	left.CheckpointCount += right.CheckpointCount
+	left.CheckpointErrors += right.CheckpointErrors
+	left.ReplayRecords += right.ReplayRecords
+	left.ReplayErrors += right.ReplayErrors
+	left.ReplayLatencyNanos += right.ReplayLatencyNanos
+	left.SegmentCount += right.SegmentCount
+	left.PendingRecords += right.PendingRecords
+	left.PendingBytes += right.PendingBytes
+	return left
 }
 
 func (e *Engine) CompactionStatsSnapshot() CompactionStats {

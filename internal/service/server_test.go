@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -20,12 +21,20 @@ type fakeOps struct {
 	compacts int
 }
 
+type fakeAuditLogger struct {
+	events []AdminAuditEvent
+}
+
 func (f *fakeOps) MetricsSnapshot() []observability.Metric {
 	return f.registry.Snapshot()
 }
 
 func (f *fakeOps) HealthSnapshot() Health {
 	return f.health
+}
+
+func (f *fakeAuditLogger) LogAdminAction(event AdminAuditEvent) {
+	f.events = append(f.events, event)
 }
 
 func TestServerHandlers(t *testing.T) {
@@ -35,7 +44,7 @@ func TestServerHandlers(t *testing.T) {
 		registry: registry,
 		health:   Health{Healthy: true, Ready: true, Reasons: []string{}},
 	}
-	server := NewServer(Options{}, ops, ops, func(context.Context) error {
+	server := NewServer(Options{AdminTimeout: time.Second}, ops, ops, func(context.Context) error {
 		ops.compacts++
 		return nil
 	})
@@ -66,7 +75,7 @@ func TestServerHandlersCoverErrorPathsAndPprof(t *testing.T) {
 		registry: observability.NewRegistry(),
 		health:   Health{Healthy: true, Ready: false, Reasons: []string{"compaction backlog"}},
 	}
-	server := NewServer(Options{EnablePprof: true}, nil, ops, func(context.Context) error {
+	server := NewServer(Options{AdminTimeout: time.Second, EnablePprof: true}, nil, ops, func(context.Context) error {
 		return errors.New("compact failed")
 	})
 
@@ -98,7 +107,7 @@ func TestServerHandlersCoverErrorPathsAndPprof(t *testing.T) {
 		t.Fatalf("compact failure status = %d, want 500", recorder.Code)
 	}
 
-	nilCompactServer := NewServer(Options{}, nil, nil, nil)
+	nilCompactServer := NewServer(Options{AdminTimeout: time.Second}, nil, nil, nil)
 	recorder = httptest.NewRecorder()
 	request = httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
 	nilCompactServer.server.Handler.ServeHTTP(recorder, request)
@@ -111,6 +120,93 @@ func TestServerHandlersCoverErrorPathsAndPprof(t *testing.T) {
 	server.server.Handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("pprof status = %d, want 200", recorder.Code)
+	}
+}
+
+func TestReadyzReturnsStructuredChecks(t *testing.T) {
+	ops := &fakeOps{
+		registry: observability.NewRegistry(),
+		health: Health{
+			Healthy: true,
+			Ready:   false,
+			Reasons: []string{"memory hard limit exceeded"},
+			Checks: []HealthCheck{
+				{Name: "wal", Status: "ok"},
+				{Name: "memory", Status: "failed", Reason: "hard limit exceeded"},
+			},
+		},
+	}
+	server := NewServer(Options{AdminTimeout: time.Second}, ops, ops, nil)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	server.server.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("ready status = %d, want 503", recorder.Code)
+	}
+	var health Health
+	if err := json.NewDecoder(recorder.Body).Decode(&health); err != nil {
+		t.Fatalf("Decode ready response error = %v", err)
+	}
+	if len(health.Checks) != 2 || health.Checks[1].Name != "memory" || health.Checks[1].Status != "failed" {
+		t.Fatalf("ready checks = %#v, want structured memory failure", health.Checks)
+	}
+}
+
+func TestAdminCompactRequiresTimeoutAndReturnsTaskStatus(t *testing.T) {
+	server := NewServer(Options{}, nil, nil, func(ctx context.Context) error {
+		if _, ok := ctx.Deadline(); !ok {
+			return errors.New("deadline missing")
+		}
+		return nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	server.server.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("compact without timeout status = %d, want 400", recorder.Code)
+	}
+
+	server = NewServer(Options{AdminTimeout: time.Second}, nil, nil, func(ctx context.Context) error {
+		if _, ok := ctx.Deadline(); !ok {
+			return errors.New("deadline missing")
+		}
+		return nil
+	})
+	recorder = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	server.server.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("compact status = %d, want 200 body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response adminCompactResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("Decode compact response error = %v", err)
+	}
+	if !response.OK || response.TaskID == "" || response.State != "succeeded" || response.DurationMillis < 0 {
+		t.Fatalf("compact response = %#v, want task status", response)
+	}
+}
+
+func TestAdminCompactWritesAuditLog(t *testing.T) {
+	audit := &fakeAuditLogger{}
+	server := NewServer(
+		Options{AdminTimeout: time.Second, AuditLogger: audit},
+		nil,
+		nil,
+		func(context.Context) error { return errors.New("boom") },
+	)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	server.server.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("compact status = %d, want 500", recorder.Code)
+	}
+	if len(audit.events) != 1 {
+		t.Fatalf("audit events = %d, want 1", len(audit.events))
+	}
+	event := audit.events[0]
+	if event.Action != "compact" || event.TaskID == "" || event.State != "failed" || event.Error != "boom" {
+		t.Fatalf("audit event = %#v, want failed compact event", event)
 	}
 }
 

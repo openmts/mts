@@ -85,6 +85,37 @@ func TestBatchIntervalSyncAndCheckpoint(t *testing.T) {
 	}
 }
 
+func TestWALMetricsSnapshotRecordsAppendSyncCheckpointReplay(t *testing.T) {
+	dir := t.TempDir()
+	log, err := Open(dir, Options{Sync: true})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	record := model.ResolvedPoint{SeriesID: 1, Timestamp: 1, WriteSeq: 1}
+	if err := log.Append([]model.ResolvedPoint{record}, true); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+	if _, err := log.ReplayRecords(); err != nil {
+		t.Fatalf("ReplayRecords() error = %v", err)
+	}
+	if err := log.Checkpoint(); err != nil {
+		t.Fatalf("Checkpoint() error = %v", err)
+	}
+	snapshot := log.MetricsSnapshot()
+	if snapshot.AppendRecords != 1 || snapshot.SyncCount == 0 || snapshot.CheckpointCount != 1 {
+		t.Fatalf("MetricsSnapshot() = %#v, want append=1 sync>0 checkpoint=1", snapshot)
+	}
+	if snapshot.ReplayRecords != 1 || snapshot.SegmentCount != 1 {
+		t.Fatalf("MetricsSnapshot() replay/segments = %#v, want replay=1 segment=1", snapshot)
+	}
+	if snapshot.AppendLatencyNanos == 0 || snapshot.SyncLatencyNanos == 0 {
+		t.Fatalf("MetricsSnapshot() latencies = %#v, want non-zero append and sync latency", snapshot)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestWALTombstoneReplayRecords(t *testing.T) {
 	dir := t.TempDir()
 	log, err := Open(dir, Options{Sync: true})

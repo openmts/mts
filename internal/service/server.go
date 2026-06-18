@@ -15,6 +15,7 @@ type Options struct {
 	Addr         string
 	AdminTimeout time.Duration
 	EnablePprof  bool
+	AuditLogger  AuditLogger
 }
 
 type MetricsProvider interface {
@@ -22,6 +23,10 @@ type MetricsProvider interface {
 }
 
 type CompactFunc func(ctx context.Context) error
+
+type AuditLogger interface {
+	LogAdminAction(event AdminAuditEvent)
+}
 
 type Server struct {
 	options Options
@@ -33,7 +38,7 @@ func NewServer(options Options, metrics MetricsProvider, health HealthProvider, 
 	mux.HandleFunc("/metrics", metricsHandler(metrics))
 	mux.HandleFunc("/healthz", healthHandler(health, false))
 	mux.HandleFunc("/readyz", healthHandler(health, true))
-	mux.HandleFunc("/admin/compact", compactHandler(options.AdminTimeout, compact))
+	mux.HandleFunc("/admin/compact", compactHandler(options.AdminTimeout, options.AuditLogger, compact))
 	if options.EnablePprof {
 		registerPprof(mux)
 	}

@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"time"
 
 	"codeberg.org/mts/mts/internal/observability"
 	"codeberg.org/mts/mts/internal/service"
@@ -16,6 +18,7 @@ import (
 type ops struct {
 	registry *observability.Registry
 	compacts int
+	audits   []service.AdminAuditEvent
 }
 
 func main() {
@@ -28,7 +31,11 @@ func main() {
 func run() error {
 	operations := &ops{registry: observability.NewRegistry()}
 	operations.registry.SetGauge("mts_ready", "Ready.", 1)
-	server := service.NewServer(service.Options{}, operations, operations, func(context.Context) error {
+	server := service.NewServer(service.Options{
+		AdminTimeout: time.Second,
+		EnablePprof:  true,
+		AuditLogger:  operations,
+	}, operations, operations, func(context.Context) error {
 		operations.compacts++
 		return nil
 	})
@@ -39,11 +46,21 @@ func run() error {
 	if err := assertGET(handler, "/healthz", `"healthy":true`); err != nil {
 		return err
 	}
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
-	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK || operations.compacts != 1 {
-		return fmt.Errorf("compact status=%d count=%d, want 200 and 1", recorder.Code, operations.compacts)
+	if err := assertGET(handler, "/readyz", `"checks":[`); err != nil {
+		return err
+	}
+	if err := assertGET(handler, "/debug/pprof/", "Types of profiles available"); err != nil {
+		return err
+	}
+	response, err := assertCompact(handler)
+	if err != nil {
+		return err
+	}
+	if operations.compacts != 1 || len(operations.audits) != 1 {
+		return fmt.Errorf("compact count=%d audits=%d, want 1 and 1", operations.compacts, len(operations.audits))
+	}
+	if response.TaskID == "" || operations.audits[0].TaskID != response.TaskID {
+		return fmt.Errorf("compact task id response=%q audit=%q", response.TaskID, operations.audits[0].TaskID)
 	}
 	return nil
 }
@@ -53,7 +70,23 @@ func (o *ops) MetricsSnapshot() []observability.Metric {
 }
 
 func (o *ops) HealthSnapshot() service.Health {
-	return service.Health{Healthy: true, Ready: true, Reasons: []string{}}
+	return service.Health{
+		Healthy: true,
+		Ready:   true,
+		Reasons: []string{},
+		Checks: []service.HealthCheck{
+			{Name: "wal", Status: "ok"},
+			{Name: "manifest", Status: "ok"},
+			{Name: "disk", Status: "ok"},
+			{Name: "compaction", Status: "ok"},
+			{Name: "memory", Status: "ok"},
+			{Name: "maintenance", Status: "ok"},
+		},
+	}
+}
+
+func (o *ops) LogAdminAction(event service.AdminAuditEvent) {
+	o.audits = append(o.audits, event)
 }
 
 func assertGET(handler http.Handler, path string, contains string) error {
@@ -74,6 +107,34 @@ func assertGET(handler http.Handler, path string, contains string) error {
 		return fmt.Errorf("%s body=%q, want %q", path, string(body), contains)
 	}
 	return nil
+}
+
+func assertCompact(handler http.Handler) (serviceAdminCompactResponse, error) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		return serviceAdminCompactResponse{}, fmt.Errorf("compact status=%d, want 200", recorder.Code)
+	}
+	var response serviceAdminCompactResponse
+	if err := json.NewDecoder(recorder.Result().Body).Decode(&response); err != nil {
+		return serviceAdminCompactResponse{}, fmt.Errorf("decode compact response: %w", err)
+	}
+	if err := recorder.Result().Body.Close(); err != nil {
+		return serviceAdminCompactResponse{}, fmt.Errorf("close compact body: %w", err)
+	}
+	if !response.OK || response.State != "succeeded" || response.TaskID == "" {
+		return serviceAdminCompactResponse{}, fmt.Errorf("compact response=%#v, want succeeded task", response)
+	}
+	return response, nil
+}
+
+type serviceAdminCompactResponse struct {
+	OK             bool   `json:"ok"`
+	TaskID         string `json:"task_id"`
+	State          string `json:"state"`
+	DurationMillis int64  `json:"duration_ms"`
+	Error          string `json:"error"`
 }
 
 func serverHandler(server *service.Server) http.Handler {

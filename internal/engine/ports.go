@@ -22,6 +22,10 @@ type walStore interface {
 	Close() error
 }
 
+type walMetricsProvider interface {
+	MetricsSnapshot() wal.Metrics
+}
+
 type memStore interface {
 	Apply(point model.ResolvedPoint) error
 	ApplyBatch(points []model.ResolvedPoint) error

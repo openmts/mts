@@ -7,9 +7,16 @@ type HealthProvider interface {
 }
 
 type Health struct {
-	Healthy bool     `json:"healthy"`
-	Ready   bool     `json:"ready"`
-	Reasons []string `json:"reasons"`
+	Healthy bool          `json:"healthy"`
+	Ready   bool          `json:"ready"`
+	Reasons []string      `json:"reasons"`
+	Checks  []HealthCheck `json:"checks"`
+}
+
+type HealthCheck struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
 }
 
 func healthHandler(provider HealthProvider, readiness bool) http.HandlerFunc {

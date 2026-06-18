@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"strings"
@@ -15,6 +16,35 @@ import (
 func TestRunSmoke(t *testing.T) {
 	if err := run([]string{"-seed", "7", "-duration", time.Millisecond.String()}); err != nil {
 		t.Fatalf("run() error = %v", err)
+	}
+}
+
+func TestSoakPeriodicReportsAndWorkloadCoverage(t *testing.T) {
+	var buffer bytes.Buffer
+	report, err := runSoakWithReports(t.TempDir(), soakConfig{
+		seed:           9,
+		duration:       2 * time.Millisecond,
+		reportInterval: time.Nanosecond,
+	}, &buffer)
+	if err != nil {
+		t.Fatalf("runSoakWithReports() error = %v", err)
+	}
+	if report.Writes == 0 || report.Queries == 0 || report.Compactions == 0 {
+		t.Fatalf("workload counts = %#v, want write/query/compact coverage", report)
+	}
+	if report.Restarts == 0 || report.Recoveries == 0 {
+		t.Fatalf("restart/recovery counts = %#v, want restart and recovery coverage", report)
+	}
+	lines := strings.Split(strings.TrimSpace(buffer.String()), "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		t.Fatalf("periodic reports = %q, want jsonl records", buffer.String())
+	}
+	var periodic periodicSoakReport
+	if err := json.Unmarshal([]byte(lines[0]), &periodic); err != nil {
+		t.Fatalf("Unmarshal(periodic) error = %v", err)
+	}
+	if periodic.Writes == 0 || periodic.Queries == 0 {
+		t.Fatalf("periodic report = %#v, want workload counts", periodic)
 	}
 }
 
@@ -58,6 +88,11 @@ func TestSoakReportIncludesCompactionHealth(t *testing.T) {
 		"level_distribution",
 		"health_degraded",
 		"compaction_backlog",
+		"writes",
+		"queries",
+		"compactions",
+		"restarts",
+		"recoveries",
 	} {
 		if !strings.Contains(text, key) {
 			t.Fatalf("soak report json %s missing %s", text, key)

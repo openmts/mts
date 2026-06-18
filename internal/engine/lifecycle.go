@@ -69,6 +69,7 @@ func (e *Engine) ApplyRetention(_ context.Context, now time.Time) error {
 			shard.lifecycleMu.Unlock()
 			return err
 		}
+		e.retentionExpired += uint64(len(shard.manifest.Parts))
 		shard.lifecycleMu.Unlock()
 		delete(e.shards, id)
 	}
