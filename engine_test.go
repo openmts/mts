@@ -216,6 +216,50 @@ func TestPublicAPIReturnsErrorsForInvalidPathAndCanceledQuery(t *testing.T) {
 	}
 }
 
+func TestPublicHealthSnapshotIncludesStructuredChecksAndQueryStatsDetails(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{
+		Path:          t.TempDir(),
+		ShardDuration: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []mts.Point{{
+		Measurement: "public",
+		Timestamp:   1,
+		Fields: map[string]mts.FieldValue{
+			"f0": mts.Float64Value(1),
+			"f1": mts.Float64Value(2),
+		},
+	}}, mts.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	if _, err := eng.QueryRows(ctx, mts.Query{
+		Measurement: "public",
+		StartTime:   0,
+		EndTime:     10,
+		Budget:      mts.QueryBudget{MaxSamples: 1},
+	}); !errors.Is(err, mts.ErrReadBudgetExceeded) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows() error = %v, want ErrReadBudgetExceeded close = %v", err, closeErr)
+	}
+	health := eng.HealthSnapshot()
+	if len(health.Checks) == 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("HealthSnapshot().Checks empty close = %v", closeErr)
+	}
+	stats := eng.QueryStatsSnapshot()
+	if stats.DurationNanos == 0 || stats.BudgetErrors == 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryStatsSnapshot() = %#v, want duration and budget errors close = %v", stats, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestPublicMetadataAPIs(t *testing.T) {
 	ctx := context.Background()
 	eng, err := mts.Open(ctx, mts.Options{

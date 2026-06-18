@@ -199,6 +199,10 @@ func (m memTableStore) ApproxMemoryBytes() int64 {
 	return m.inner.ApproxMemoryBytes()
 }
 
+func (m memTableStore) StatsSnapshot() memtable.Stats {
+	return m.inner.StatsSnapshot()
+}
+
 func (m memTableStore) SnapshotAndReset() memSnapshot {
 	return m.inner.SnapshotAndReset()
 }

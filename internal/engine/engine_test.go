@@ -1783,6 +1783,114 @@ func TestEngineHealthSnapshotDegradedByCompactionBacklog(t *testing.T) {
 	}
 }
 
+func TestEngineHealthSnapshotIncludesStructuredOperationalChecks(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:          t.TempDir(),
+		ShardDuration: time.Hour,
+		StorageMemory: model.StorageMemoryOptions{
+			SoftBytesLimit: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "ready",
+		Timestamp:   1,
+		Fields:      map[string]model.FieldValue{"value": model.StringValue("pressure")},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	health := eng.HealthSnapshot()
+	checks := healthCheckMap(health.Checks)
+	for _, name := range []string{"wal", "manifest", "disk", "compaction", "memory", "maintenance"} {
+		if _, ok := checks[name]; !ok {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("check %s missing in %#v close = %v", name, health.Checks, closeErr)
+		}
+	}
+	if checks["memory"].Status != "degraded" {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("memory check = %#v, want degraded close = %v", checks["memory"], closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestEngineMetricsSnapshotIncludesCommercialSignalDetails(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 10,
+		StorageMemory: model.StorageMemoryOptions{
+			SoftBytesLimit: 1 << 20,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []model.Point{{
+		Measurement: "metrics",
+		Timestamp:   1,
+		Fields: map[string]model.FieldValue{
+			"f0": model.Float64Value(1),
+			"f1": model.StringValue("value"),
+		},
+	}}, model.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	if _, err := eng.QueryRows(ctx, model.Query{
+		Measurement: "metrics",
+		StartTime:   0,
+		EndTime:     10,
+		Budget:      model.QueryBudget{MaxSamples: 1},
+	}); err == nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows() error = nil, want budget error close = %v", closeErr)
+	}
+	if err := eng.Flush(ctx); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Flush() error = %v close = %v", err, closeErr)
+	}
+	names := metricNameSet(eng.MetricsSnapshot())
+	for _, name := range []string{
+		"mts_memtable_series",
+		"mts_memtable_fields",
+		"mts_memtable_flush_triggered_total",
+		"mts_sstable_data_bytes",
+		"mts_sstable_index_bytes",
+		"mts_sstable_total_bytes",
+		"mts_sstable_compression_ratio",
+		"mts_query_duration_seconds_sum",
+		"mts_query_budget_errors_total",
+		"mts_query_cancellations_total",
+		"mts_retention_deleted_bytes_total",
+		"mts_retention_delete_errors_total",
+		"mts_runtime_gc_pause_total_seconds",
+	} {
+		if _, ok := names[name]; !ok {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("metric %s missing in %#v close = %v", name, names, closeErr)
+		}
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func healthCheckMap(checks []HealthCheck) map[string]HealthCheck {
+	out := make(map[string]HealthCheck, len(checks))
+	for _, check := range checks {
+		out[check.Name] = check
+	}
+	return out
+}
+
 func TestEngineStorageMemoryCompressionBytesLimitRestoresMemTable(t *testing.T) {
 	ctx := context.Background()
 	eng, err := Open(ctx, model.Options{

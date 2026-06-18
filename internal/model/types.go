@@ -107,20 +107,24 @@ type QueryExplain struct {
 }
 
 type QueryStats struct {
-	CandidateShards   int `json:"candidate_shards"`
-	ShardsScanned     int `json:"shards_scanned"`
-	ShardsSkipped     int `json:"shards_skipped"`
-	PartsScanned      int `json:"parts_scanned"`
-	PartsSkipped      int `json:"parts_skipped"`
-	IndexRowsRead     int `json:"index_rows_read"`
-	IndexRowsSkipped  int `json:"index_rows_skipped"`
-	TimeBlocksRead    int `json:"time_blocks_read"`
-	ValueBlocksRead   int `json:"value_blocks_read"`
-	ValuePagesRead    int `json:"value_pages_read"`
-	ValuePagesSkipped int `json:"value_pages_skipped"`
-	SamplesRead       int `json:"samples_read"`
-	SamplesReturned   int `json:"samples_returned"`
-	Errors            int `json:"errors"`
+	CandidateShards   int   `json:"candidate_shards"`
+	ShardsScanned     int   `json:"shards_scanned"`
+	ShardsSkipped     int   `json:"shards_skipped"`
+	PartsScanned      int   `json:"parts_scanned"`
+	PartsSkipped      int   `json:"parts_skipped"`
+	IndexRowsRead     int   `json:"index_rows_read"`
+	IndexRowsSkipped  int   `json:"index_rows_skipped"`
+	TimeBlocksRead    int   `json:"time_blocks_read"`
+	ValueBlocksRead   int   `json:"value_blocks_read"`
+	ValuePagesRead    int   `json:"value_pages_read"`
+	ValuePagesSkipped int   `json:"value_pages_skipped"`
+	SamplesRead       int   `json:"samples_read"`
+	SamplesReturned   int   `json:"samples_returned"`
+	Errors            int   `json:"errors"`
+	DurationNanos     int64 `json:"duration_nanos"`
+	BudgetErrors      int   `json:"budget_errors"`
+	Cancellations     int   `json:"cancellations"`
+	StartedUnixNanos  int64 `json:"started_unix_nanos"`
 }
 
 type Options struct {

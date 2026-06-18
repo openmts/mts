@@ -61,15 +61,22 @@ func (e *Engine) ApplyRetention(_ context.Context, now time.Time) error {
 			continue
 		}
 		shard.lifecycleMu.Lock()
+		deletedBytes, sizeErr := directorySize(shard.opts.Dir)
+		if sizeErr != nil {
+			deletedBytes = 0
+		}
 		if err := shard.closeLocked(); err != nil {
+			e.retentionDeleteErrors++
 			shard.lifecycleMu.Unlock()
 			return err
 		}
 		if err := shard.deps.files.RemoveAll(shard.opts.Dir); err != nil {
+			e.retentionDeleteErrors++
 			shard.lifecycleMu.Unlock()
 			return err
 		}
 		e.retentionExpired += uint64(len(shard.manifest.Parts))
+		e.retentionDeletedBytes += uint64(deletedBytes)
 		shard.lifecycleMu.Unlock()
 		delete(e.shards, id)
 	}

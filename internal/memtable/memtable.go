@@ -32,6 +32,14 @@ type Snapshot struct {
 	sampleCount int
 }
 
+type Stats struct {
+	Samples int
+	Series  int
+	Fields  int
+	Columns int
+	Bytes   int64
+}
+
 type columnKey struct {
 	seriesID uint64
 	fieldID  uint32
@@ -106,6 +114,12 @@ func (m *MemTable) ApproxMemoryBytes() int64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return approxTableDataBytes(m.data)
+}
+
+func (m *MemTable) StatsSnapshot() Stats {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return statsFromData(m.data, m.sampleCount)
 }
 
 func (m *MemTable) SnapshotAndReset() *Snapshot {
@@ -188,6 +202,29 @@ func (s *Snapshot) ApproxMemoryBytes() int64 {
 		return 0
 	}
 	return approxTableDataBytes(s.data)
+}
+
+func (s *Snapshot) StatsSnapshot() Stats {
+	if s == nil {
+		return Stats{}
+	}
+	return statsFromData(s.data, s.sampleCount)
+}
+
+func statsFromData(data tableData, samples int) Stats {
+	series := make(map[uint64]struct{})
+	fields := make(map[uint32]struct{})
+	for key := range data {
+		series[key.seriesID] = struct{}{}
+		fields[key.fieldID] = struct{}{}
+	}
+	return Stats{
+		Samples: samples,
+		Series:  len(series),
+		Fields:  len(fields),
+		Columns: len(data),
+		Bytes:   approxTableDataBytes(data),
+	}
 }
 
 func (s *Snapshot) Release() {

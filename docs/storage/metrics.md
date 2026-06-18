@@ -26,6 +26,9 @@
 | --- | --- | --- | --- |
 | `mts_memtable_samples` | gauge | 当前 MemTable sample 数 | 接近硬阈值告警 |
 | `mts_memtable_estimated_bytes` | gauge | 当前 MemTable 估算内存 | 接近内存预算告警 |
+| `mts_memtable_series` | gauge | 当前 MemTable series 数 | 基数快速增长时排查 tag 维度 |
+| `mts_memtable_fields` | gauge | 当前 MemTable field 数 | 字段数异常增长时排查 schema |
+| `mts_memtable_columns` | gauge | 当前 MemTable typed column 数 | column 数持续增长时排查 series/field 基数 |
 | `mts_memtable_flush_triggered_total` | counter | 内存压力触发 flush 次数 | 快速增长说明写入内存预算偏小 |
 | `mts_sstable_parts` | gauge | manifest 引用的 SSTable 数 | 超过读放大预算告警 |
 | `mts_sstable_rows` | gauge | SSTable 行数 | 容量趋势 |
@@ -34,6 +37,10 @@
 | `mts_sstable_max_level` | gauge | 当前最高 compaction level | 层级异常停留排查 compaction |
 | `mts_sstable_level0_parts` | gauge | L0 part 数 | 超过 L0 阈值告警 |
 | `mts_sstable_max_write_seq` | gauge | SSTable 最大写序号 | 恢复和持久化进度辅助判断 |
+| `mts_sstable_data_bytes` | gauge | SSTable data 组件字节数 | 结合 logical bytes 判断压缩效果 |
+| `mts_sstable_index_bytes` | gauge | SSTable index/metadata 组件字节数 | 过高时排查 block/page 切分 |
+| `mts_sstable_total_bytes` | gauge | SSTable 总组件字节数 | 容量趋势 |
+| `mts_sstable_compression_ratio` | gauge | 估算逻辑数据字节 / data 组件字节 | 低于预期时排查压缩策略 |
 
 ## Query、Compaction、Retention、Recovery
 
@@ -44,10 +51,15 @@
 | `mts_query_parts_scanned_total` | counter | 最近查询扫描 part 数 | 超过预算告警 |
 | `mts_query_parts_skipped_total` | counter | 最近查询跳过 part 数 | 用于确认索引过滤效果 |
 | `mts_query_errors_total` | counter | 最近查询错误数 | 大于 0 持续增长告警 |
+| `mts_query_duration_seconds_sum/count` | counter | 最近查询累计耗时和次数 | 延迟升高时结合 stats 定位读放大 |
+| `mts_query_budget_errors_total` | counter | 查询预算错误数 | 大于 0 说明查询预算触顶 |
+| `mts_query_cancellations_total` | counter | 查询取消和 deadline 次数 | 持续增长排查客户端或超时配置 |
 | `mts_compaction_active` | gauge | 活跃 compaction 任务数 | 长期为 0 且 backlog 增长时告警 |
 | `mts_compaction_backlog` | gauge | 待 compaction 计划数 | 超过 degraded 阈值告警 |
 | `mts_compaction_errors_total` | counter | compaction 失败数 | 大于 0 告警 |
 | `mts_retention_expired_parts_total` | counter | retention 删除的 part 数 | 删除失败需结合日志和 recovery 指标 |
+| `mts_retention_deleted_bytes_total` | counter | retention 删除字节数 | 容量回收趋势 |
+| `mts_retention_delete_errors_total` | counter | retention 删除失败数 | 大于 0 告警 |
 | `mts_recovery_issues_total` | counter | recovery 发现的问题数 | 大于 0 排查启动恢复日志 |
 | `mts_recovery_errors_total` | counter | 带底层错误的 recovery 问题数 | 大于 0 告警 |
 | `mts_recovery_fatal_errors_total` | counter | 致命 recovery 问题数 | 大于 0 立即告警 |
@@ -64,5 +76,6 @@
 | `mts_runtime_heap_alloc_bytes` | gauge | Go heap alloc | GC 和内存趋势 |
 | `mts_runtime_heap_inuse_bytes` | gauge | Go heap in-use | 堆占用趋势 |
 | `mts_runtime_gc_total` | counter | GC 次数 | 与延迟结合判断 GC 压力 |
+| `mts_runtime_gc_pause_total_seconds` | counter | GC 累计暂停秒数 | pause 增速异常时排查分配热点 |
 | `mts_runtime_goroutines` | gauge | goroutine 数 | 持续增长排查泄漏 |
 | `mts_runtime_fd_open` | gauge | 打开文件描述符数 | 接近系统限制告警 |

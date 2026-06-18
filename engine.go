@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	storageengine "codeberg.org/mts/mts/internal/engine"
 	"codeberg.org/mts/mts/internal/model"
 )
 
@@ -98,7 +99,20 @@ func (e *Engine) HealthSnapshot() HealthSnapshot {
 		Healthy: health.Healthy,
 		Ready:   health.Ready,
 		Reasons: append([]string(nil), health.Reasons...),
+		Checks:  fromHealthChecks(health.Checks),
 	}
+}
+
+func fromHealthChecks(checks []storageengine.HealthCheck) []HealthCheck {
+	out := make([]HealthCheck, len(checks))
+	for index, check := range checks {
+		out[index] = HealthCheck{
+			Name:   check.Name,
+			Status: check.Status,
+			Reason: check.Reason,
+		}
+	}
+	return out
 }
 
 func (e *Engine) CreateDatabase(ctx context.Context, name string) error {

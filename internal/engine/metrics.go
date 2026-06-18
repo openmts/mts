@@ -11,11 +11,12 @@ import (
 )
 
 type runtimeMetrics struct {
-	HeapAllocBytes uint64
-	HeapInuseBytes uint64
-	GCTotal        uint32
-	Goroutines     int
-	FDOpen         int
+	HeapAllocBytes    uint64
+	HeapInuseBytes    uint64
+	GCTotal           uint32
+	GCPauseTotalNanos uint64
+	Goroutines        int
+	FDOpen            int
 }
 
 func recordStorageMemoryMetrics(registry *observability.Registry, snapshot StorageMemorySnapshot) {
@@ -76,7 +77,10 @@ func recordWALMetrics(registry *observability.Registry, snapshot wal.Metrics) {
 func recordMemTableMetrics(registry *observability.Registry, snapshot productionMetrics) {
 	registry.SetGauge("mts_memtable_samples", "MemTable samples currently buffered.", float64(snapshot.MemTableSamples))
 	registry.SetGauge("mts_memtable_estimated_bytes", "Estimated MemTable bytes currently buffered.", float64(snapshot.MemTableBytes))
-	registry.AddCounter("mts_memtable_flush_triggered_total", "MemTable flushes triggered by memory pressure.", float64(0))
+	registry.SetGauge("mts_memtable_series", "MemTable series currently buffered.", float64(snapshot.MemTableSeries))
+	registry.SetGauge("mts_memtable_fields", "MemTable fields currently buffered.", float64(snapshot.MemTableFields))
+	registry.SetGauge("mts_memtable_columns", "MemTable typed columns currently buffered.", float64(snapshot.MemTableColumns))
+	registry.AddCounter("mts_memtable_flush_triggered_total", "MemTable flushes triggered by memory pressure.", float64(snapshot.MemTableFlushTriggered))
 }
 
 func recordSSTableMetrics(registry *observability.Registry, snapshot productionMetrics) {
@@ -87,14 +91,21 @@ func recordSSTableMetrics(registry *observability.Registry, snapshot productionM
 	registry.SetGauge("mts_sstable_max_level", "Highest SSTable compaction level currently referenced.", float64(snapshot.SSTableMaxLevel))
 	registry.SetGauge("mts_sstable_level0_parts", "Level-0 SSTable parts currently referenced.", float64(snapshot.SSTableLevel0Parts))
 	registry.SetGauge("mts_sstable_max_write_seq", "Highest write sequence persisted in SSTables.", float64(snapshot.SSTableMaxWriteSeq))
+	registry.SetGauge("mts_sstable_data_bytes", "SSTable data component bytes.", float64(snapshot.SSTableDataBytes))
+	registry.SetGauge("mts_sstable_index_bytes", "SSTable index and metadata component bytes.", float64(snapshot.SSTableIndexBytes))
+	registry.SetGauge("mts_sstable_total_bytes", "SSTable total component bytes.", float64(snapshot.SSTableTotalBytes))
+	registry.SetGauge("mts_sstable_compression_ratio", "Estimated logical data bytes divided by stored data bytes.", snapshot.SSTableCompressionRatio)
 }
 
 func recordQueryMetrics(registry *observability.Registry, snapshot model.QueryStats) {
+	registry.ObserveHistogram("mts_query_duration_seconds", "Latest query duration.", nanosToSeconds(snapshot.DurationNanos))
 	registry.AddCounter("mts_query_samples_returned_total", "Samples returned by the latest query snapshot.", float64(snapshot.SamplesReturned))
 	registry.AddCounter("mts_query_samples_read_total", "Samples read by the latest query snapshot.", float64(snapshot.SamplesRead))
 	registry.AddCounter("mts_query_parts_scanned_total", "SSTable parts scanned by the latest query snapshot.", float64(snapshot.PartsScanned))
 	registry.AddCounter("mts_query_parts_skipped_total", "SSTable parts skipped by the latest query snapshot.", float64(snapshot.PartsSkipped))
 	registry.AddCounter("mts_query_errors_total", "Query errors observed in the latest query snapshot.", float64(snapshot.Errors))
+	registry.AddCounter("mts_query_budget_errors_total", "Query read budget errors.", float64(snapshot.BudgetErrors))
+	registry.AddCounter("mts_query_cancellations_total", "Query cancellations and deadline expirations.", float64(snapshot.Cancellations))
 	registry.SetGauge("mts_query_shards_scanned", "Shards scanned by the latest query snapshot.", float64(snapshot.ShardsScanned))
 	registry.SetGauge("mts_query_shards_skipped", "Shards skipped by the latest query snapshot.", float64(snapshot.ShardsSkipped))
 	registry.SetGauge("mts_query_index_rows_read", "Index rows read by the latest query snapshot.", float64(snapshot.IndexRowsRead))
@@ -104,6 +115,8 @@ func recordQueryMetrics(registry *observability.Registry, snapshot model.QuerySt
 
 func recordRetentionMetrics(registry *observability.Registry, snapshot productionMetrics) {
 	registry.AddCounter("mts_retention_expired_parts_total", "SSTable parts deleted by retention.", float64(snapshot.RetentionExpiredParts))
+	registry.AddCounter("mts_retention_deleted_bytes_total", "Bytes deleted by retention.", float64(snapshot.RetentionDeletedBytes))
+	registry.AddCounter("mts_retention_delete_errors_total", "Retention delete errors.", float64(snapshot.RetentionDeleteErrors))
 }
 
 func recordRecoveryMetrics(registry *observability.Registry, snapshot productionMetrics) {
@@ -116,6 +129,7 @@ func recordRuntimeMetrics(registry *observability.Registry, snapshot runtimeMetr
 	registry.SetGauge("mts_runtime_heap_alloc_bytes", "Go runtime heap allocation bytes.", float64(snapshot.HeapAllocBytes))
 	registry.SetGauge("mts_runtime_heap_inuse_bytes", "Go runtime heap in-use bytes.", float64(snapshot.HeapInuseBytes))
 	registry.AddCounter("mts_runtime_gc_total", "Go runtime completed GC cycles.", float64(snapshot.GCTotal))
+	registry.AddCounter("mts_runtime_gc_pause_total_seconds", "Go runtime cumulative GC pause seconds.", nanosToSeconds(int64(snapshot.GCPauseTotalNanos)))
 	registry.SetGauge("mts_runtime_goroutines", "Current goroutine count.", float64(snapshot.Goroutines))
 	registry.SetGauge("mts_runtime_fd_open", "Current open file descriptor count.", float64(snapshot.FDOpen))
 }
@@ -124,11 +138,12 @@ func runtimeMetricsSnapshot() runtimeMetrics {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	return runtimeMetrics{
-		HeapAllocBytes: mem.HeapAlloc,
-		HeapInuseBytes: mem.HeapInuse,
-		GCTotal:        mem.NumGC,
-		Goroutines:     runtime.NumGoroutine(),
-		FDOpen:         countOpenFDs(),
+		HeapAllocBytes:    mem.HeapAlloc,
+		HeapInuseBytes:    mem.HeapInuse,
+		GCTotal:           mem.NumGC,
+		GCPauseTotalNanos: mem.PauseTotalNs,
+		Goroutines:        runtime.NumGoroutine(),
+		FDOpen:            countOpenFDs(),
 	}
 }
 

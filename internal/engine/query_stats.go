@@ -1,6 +1,10 @@
 package engine
 
 import (
+	"context"
+	"errors"
+	"time"
+
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/queryexec"
 )
@@ -18,9 +22,10 @@ type queryStatsColumnStream struct {
 
 func (e *Engine) beginQueryStats(plan QueryPlan) *model.QueryStats {
 	stats := &model.QueryStats{
-		CandidateShards: plan.Explain.CandidateShards,
-		ShardsScanned:   len(plan.Shards),
-		ShardsSkipped:   plan.Explain.SkippedShards,
+		CandidateShards:  plan.Explain.CandidateShards,
+		ShardsScanned:    len(plan.Shards),
+		ShardsSkipped:    plan.Explain.SkippedShards,
+		StartedUnixNanos: time.Now().UnixNano(),
 	}
 	e.storeQueryStats(*stats)
 	return stats
@@ -30,8 +35,17 @@ func (e *Engine) finishQueryStats(stats *model.QueryStats, err error) {
 	if stats == nil {
 		return
 	}
+	if stats.StartedUnixNanos > 0 {
+		stats.DurationNanos = time.Now().UnixNano() - stats.StartedUnixNanos
+	}
 	if err != nil {
 		stats.Errors++
+		if errors.Is(err, queryexec.ErrReadBudgetExceeded) {
+			stats.BudgetErrors++
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			stats.Cancellations++
+		}
 	}
 	e.storeQueryStats(*stats)
 }
