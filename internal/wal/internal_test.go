@@ -348,6 +348,41 @@ func TestBatchIdentityScratchFallbacks(t *testing.T) {
 	}
 }
 
+func TestBatchIdentityUsesSeriesIDFastPathWithCollisionFallback(t *testing.T) {
+	first := walWidePointForTest(1)
+	second := walWidePointForTest(1)
+	second.Tags = map[string]string{"host": "b"}
+	identities, refs := batchIdentities([]model.ResolvedPoint{first, second, first, second})
+	if len(identities) != 2 {
+		t.Fatalf("identity count = %d, want 2", len(identities))
+	}
+	if !reflect.DeepEqual(refs, []int{0, 1, 0, 1}) {
+		t.Fatalf("refs = %#v, want [0 1 0 1]", refs)
+	}
+}
+
+func TestSeriesRefIndexUsesDenseAndSparseLayouts(t *testing.T) {
+	dense := newSeriesRefIndex([]model.ResolvedPoint{{SeriesID: 10}, {SeriesID: 12}})
+	if len(dense.dense) != 3 || dense.sparse != nil {
+		t.Fatalf("dense index = %#v, want dense span 3", dense)
+	}
+	dense.setIfAbsent(11, 7)
+	ref, ok := dense.lookup(11)
+	if !ok || ref != 7 {
+		t.Fatalf("dense lookup = %d %t, want 7 true", ref, ok)
+	}
+
+	sparse := newSeriesRefIndex([]model.ResolvedPoint{{SeriesID: 1}, {SeriesID: 1000}})
+	if sparse.sparse == nil || len(sparse.dense) != 0 {
+		t.Fatalf("sparse index = %#v, want sparse map", sparse)
+	}
+	sparse.setIfAbsent(1000, 9)
+	ref, ok = sparse.lookup(1000)
+	if !ok || ref != 9 {
+		t.Fatalf("sparse lookup = %d %t, want 9 true", ref, ok)
+	}
+}
+
 func TestWALBatchEmptyBatchRoundTrips(t *testing.T) {
 	payload, err := encodeBatch(nil)
 	if err != nil {

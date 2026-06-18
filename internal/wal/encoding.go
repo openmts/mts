@@ -40,32 +40,140 @@ type batchIdentity struct {
 	tags            map[string]string
 }
 
+const denseSeriesRefMaxSpanFactor = 4
+
 func batchIdentities(records []model.ResolvedPoint) ([]batchIdentity, []int) {
 	identities := make([]batchIdentity, 0)
 	refs := make([]int, len(records))
-	seen := make(map[string]int)
+	seenSeries := newSeriesRefIndex(records)
+	seenIdentity := make(map[string]int)
 	keyScratch := make([]byte, 0)
 	for index, record := range records {
 		if ref, ok := lastIdentityRef(record, identities); ok {
 			refs[index] = ref
 			continue
 		}
-		var key string
-		key, keyScratch = identityKeyWithScratch(record, keyScratch[:0])
-		ref, ok := seen[key]
-		if !ok {
-			ref = len(identities)
-			seen[key] = ref
-			identities = append(identities, batchIdentity{
-				database:        record.Database,
-				retentionPolicy: record.RetentionPolicy,
-				measurement:     record.Measurement,
-				tags:            record.Tags,
-			})
+
+		if record.SeriesID != 0 {
+			if ref, ok := seenSeries.lookup(record.SeriesID); ok {
+				if identityMatches(record, identities[ref]) {
+					refs[index] = ref
+					continue
+				}
+			} else {
+				ref = len(identities)
+				seenSeries.setIfAbsent(record.SeriesID, ref)
+				identities = append(identities, newBatchIdentity(record))
+				refs[index] = ref
+				continue
+			}
+		}
+
+		ref, scratch := identityRefByKey(record, seenIdentity, identities, keyScratch)
+		keyScratch = scratch
+		if ref == len(identities) {
+			identities = append(identities, newBatchIdentity(record))
 		}
 		refs[index] = ref
+		if record.SeriesID != 0 {
+			seenSeries.setIfAbsent(record.SeriesID, ref)
+		}
 	}
 	return identities, refs
+}
+
+type seriesRefIndex struct {
+	sparse map[uint64]int
+	base   uint64
+	dense  []int
+}
+
+func newSeriesRefIndex(records []model.ResolvedPoint) seriesRefIndex {
+	minID, maxID, ok := seriesIDRange(records)
+	if !ok {
+		return seriesRefIndex{}
+	}
+	span := maxID - minID + 1
+	maxDenseSpan := uint64(len(records) * denseSeriesRefMaxSpanFactor)
+	if span <= maxDenseSpan {
+		return seriesRefIndex{base: minID, dense: make([]int, int(span))}
+	}
+	return seriesRefIndex{sparse: make(map[uint64]int, len(records))}
+}
+
+func seriesIDRange(records []model.ResolvedPoint) (uint64, uint64, bool) {
+	var minID uint64
+	var maxID uint64
+	found := false
+	for _, record := range records {
+		if record.SeriesID == 0 {
+			continue
+		}
+		if !found || record.SeriesID < minID {
+			minID = record.SeriesID
+		}
+		if record.SeriesID > maxID {
+			maxID = record.SeriesID
+		}
+		found = true
+	}
+	return minID, maxID, found
+}
+
+func (i seriesRefIndex) lookup(seriesID uint64) (int, bool) {
+	if len(i.dense) > 0 {
+		if seriesID < i.base || seriesID-i.base >= uint64(len(i.dense)) {
+			return 0, false
+		}
+		ref := i.dense[seriesID-i.base]
+		return ref - 1, ref != 0
+	}
+	ref, ok := i.sparse[seriesID]
+	return ref, ok
+}
+
+func (i seriesRefIndex) setIfAbsent(seriesID uint64, ref int) {
+	if len(i.dense) > 0 {
+		if seriesID < i.base || seriesID-i.base >= uint64(len(i.dense)) {
+			return
+		}
+		slot := &i.dense[seriesID-i.base]
+		if *slot == 0 {
+			*slot = ref + 1
+		}
+		return
+	}
+	if i.sparse == nil {
+		return
+	}
+	if _, ok := i.sparse[seriesID]; !ok {
+		i.sparse[seriesID] = ref
+	}
+}
+
+func identityRefByKey(
+	record model.ResolvedPoint,
+	seen map[string]int,
+	identities []batchIdentity,
+	scratch []byte,
+) (int, []byte) {
+	key, scratch := identityKeyWithScratch(record, scratch[:0])
+	ref, ok := seen[key]
+	if ok {
+		return ref, scratch
+	}
+	ref = len(identities)
+	seen[key] = ref
+	return ref, scratch
+}
+
+func newBatchIdentity(record model.ResolvedPoint) batchIdentity {
+	return batchIdentity{
+		database:        record.Database,
+		retentionPolicy: record.RetentionPolicy,
+		measurement:     record.Measurement,
+		tags:            record.Tags,
+	}
 }
 
 func lastIdentityRef(point model.ResolvedPoint, identities []batchIdentity) (int, bool) {
