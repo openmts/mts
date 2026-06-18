@@ -7,7 +7,7 @@ import (
 
 	"github.com/klauspost/compress/snappy"
 	"github.com/klauspost/compress/zstd"
-	"github.com/pierrec/lz4/v4"
+	lz4 "github.com/pierrec/lz4/v4"
 )
 
 const (

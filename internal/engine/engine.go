@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"sync"
 
-	"codeberg.org/mts/mts/internal/catalog"
 	"codeberg.org/mts/mts/internal/memtable"
 	"codeberg.org/mts/mts/internal/model"
 	"codeberg.org/mts/mts/internal/observability"
@@ -22,7 +21,7 @@ type Engine struct {
 	mu sync.Mutex
 
 	opts                  model.Options
-	catalog               *catalog.Catalog
+	metadata              MetadataStore
 	shards                map[string]*Shard
 	writeSeq              uint64
 	memory                *storageMemoryLimiter
@@ -57,20 +56,20 @@ func Open(_ context.Context, opts model.Options) (*Engine, error) {
 	if err := prepareStorageRoot(opts.Path); err != nil {
 		return nil, err
 	}
-	cat, err := catalog.Open(catalogDir(opts.Path))
+	metadata, err := OpenLocalMetadataStore(catalogDir(opts.Path))
 	if err != nil {
 		return nil, err
 	}
 	eng := &Engine{
 		opts:                opts,
-		catalog:             cat,
+		metadata:            metadata,
 		shards:              make(map[string]*Shard),
 		memory:              newStorageMemoryLimiter(opts.StorageMemory),
 		compactionScheduler: newCompactionScheduler(),
 	}
 	if err := eng.loadExistingShards(); err != nil {
-		closeErr := cat.Close()
-		return nil, fmt.Errorf("load shards: %w close catalog: %v", err, closeErr)
+		closeErr := metadata.Close()
+		return nil, fmt.Errorf("load shards: %w close metadata: %v", err, closeErr)
 	}
 	eng.startBackgroundCompaction()
 	return eng, nil
@@ -109,13 +108,13 @@ func (e *Engine) Close(_ context.Context) error {
 			return err
 		}
 	}
-	if err := e.catalog.Close(); err != nil {
+	if err := e.metadata.Close(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (e *Engine) Write(_ context.Context, points []model.Point, opts model.WriteOptions) error {
+func (e *Engine) Write(ctx context.Context, points []model.Point, opts model.WriteOptions) error {
 	if len(points) == 0 {
 		return nil
 	}
@@ -123,7 +122,7 @@ func (e *Engine) Write(_ context.Context, points []model.Point, opts model.Write
 	for index, point := range points {
 		normalized[index] = normalizePoint(e.opts, point)
 	}
-	resolved, err := e.catalog.ResolvePoints(normalized)
+	resolved, err := e.metadata.ResolvePoints(ctx, normalized)
 	if err != nil {
 		return err
 	}

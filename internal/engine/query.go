@@ -112,7 +112,11 @@ func (e *Engine) queryColumnIteratorFromPlan(ctx context.Context, plan QueryPlan
 		e.finishQueryStats(stats, err)
 		return nil, err
 	}
-	snapshot := e.catalog.Snapshot()
+	snapshot, err := e.metadata.Snapshot(ctx)
+	if err != nil {
+		e.finishQueryStats(stats, err)
+		return nil, err
+	}
 	raw, err := e.queryColumnDataStream(ctx, plan, stats)
 	if err != nil {
 		e.finishQueryStats(stats, err)

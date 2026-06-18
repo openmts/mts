@@ -28,7 +28,10 @@ func (e *Engine) BuildQueryPlan(ctx context.Context, query model.Query) (QueryPl
 		FieldFilters:    append([]string(nil), query.Fields...),
 		Budget:          query.Budget,
 	}
-	seriesIDs := e.catalog.MatchSeries(query.Measurement, query.Tags)
+	seriesIDs, err := e.metadata.MatchSeries(ctx, query.Measurement, query.Tags)
+	if err != nil {
+		return QueryPlan{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return QueryPlan{}, err
 	}
@@ -38,7 +41,10 @@ func (e *Engine) BuildQueryPlan(ctx context.Context, query model.Query) (QueryPl
 		explain.Pushdowns = append(explain.Pushdowns, "catalog_empty")
 		return QueryPlan{Query: query, Explain: explain, Empty: true}, nil
 	}
-	fieldIDs := e.catalog.FieldIDs(query.Measurement, query.Fields)
+	fieldIDs, err := e.metadata.FieldIDs(ctx, query.Measurement, query.Fields)
+	if err != nil {
+		return QueryPlan{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return QueryPlan{}, err
 	}
