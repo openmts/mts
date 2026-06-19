@@ -160,6 +160,10 @@ func (m *manifestFailurePartManager) OpenPart(string) (partReader, error) {
 	return fakePartReader{meta: m.meta}, nil
 }
 
+func (m *manifestFailurePartManager) OpenPartTrusted(string) (partReader, error) {
+	return m.OpenPart("")
+}
+
 func (m *manifestFailurePartManager) WritePart(
 	root string,
 	level int,
@@ -183,8 +187,15 @@ func (m *manifestFailurePartManager) WritePart(
 	return m.meta, nil
 }
 
-func (m *manifestFailurePartManager) NewWriter(string, int, string, sstable.WriteOptions) (partWriter, error) {
-	return &fakePartWriter{}, nil
+func (m *manifestFailurePartManager) NewWriter(root string, level int, id string, _ sstable.WriteOptions) (partWriter, error) {
+	return &fakePartWriter{
+		level: level,
+		id:    id,
+		path:  filepath.Join(root, id),
+		onClose: func(meta sstable.PartMeta) {
+			m.meta = meta
+		},
+	}, nil
 }
 
 func (m *manifestFailurePartManager) NewSeriesBatchReader(partReader, sstable.Query) (seriesBatchReader, error) {

@@ -121,12 +121,13 @@ type valuePageIndex struct {
 }
 
 type Part struct {
-	path       string
-	metadata   metadata
-	metaRows   []metaIndexRow
-	seriesRows []seriesIndexRow
-	files      *partReadFiles
-	stats      *readStats
+	path           string
+	metadata       metadata
+	metaRows       []metaIndexRow
+	seriesRows     []seriesIndexRow
+	files          *partReadFiles
+	componentSizes map[string]int64
+	stats          *readStats
 }
 
 type partReadFiles struct {

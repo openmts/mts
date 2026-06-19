@@ -52,6 +52,8 @@ type shardTestHooks struct {
 	afterManifestBeforeWALTrunc  func() error
 }
 
+var errFlushSnapshotEmpty = errors.New("flush snapshot has no columns")
+
 func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 	if err := prepareStorageRoot(opts.Dir); err != nil {
 		return nil, 0, err
@@ -136,6 +138,123 @@ func (s *Shard) WriteBatch(points []model.ResolvedPoint, syncWrite bool) error {
 	return nil
 }
 
+func (s *Shard) WriteTypedBatch(
+	batch model.ResolvedTypedBatch,
+	rows []int,
+	syncWrite bool,
+) error {
+	if typedBatchRowCount(batch, rows) == 0 {
+		return nil
+	}
+	release, err := s.reserveTypedWriteMemory(batch, rows)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := s.appendTypedWAL(batch, rows, syncWrite); err != nil {
+		return err
+	}
+	if err := s.applyTypedMemTable(batch, rows); err != nil {
+		return err
+	}
+	if s.mem.SampleCount() >= s.opts.MemTableMaxSamples {
+		if err := s.Flush(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Shard) appendTypedWAL(
+	batch model.ResolvedTypedBatch,
+	rows []int,
+	syncWrite bool,
+) error {
+	if typed, ok := s.wal.(typedWalStore); ok {
+		return typed.AppendTyped(batch, rows, syncWrite)
+	}
+	return s.wal.Append(resolvedPointsFromTypedBatch(batch, rows), syncWrite)
+}
+
+func (s *Shard) applyTypedMemTable(batch model.ResolvedTypedBatch, rows []int) error {
+	if typed, ok := s.mem.(typedMemStore); ok {
+		return typed.ApplyTypedBatch(batch, rows)
+	}
+	return s.mem.ApplyBatch(resolvedPointsFromTypedBatch(batch, rows))
+}
+
+func resolvedPointsFromTypedBatch(
+	batch model.ResolvedTypedBatch,
+	rows []int,
+) []model.ResolvedPoint {
+	count := typedBatchRowCount(batch, rows)
+	points := make([]model.ResolvedPoint, count)
+	fieldArena := make([]model.ResolvedField, count*len(batch.Fields))
+	offset := 0
+	for position := range count {
+		row := typedBatchRowIndex(rows, position)
+		fields := fieldArena[offset : offset+len(batch.Fields)]
+		offset += len(batch.Fields)
+		for index, column := range batch.Fields {
+			fields[index] = resolvedTypedFieldAt(column, row)
+		}
+		points[position] = resolvedTypedPointAt(batch, row, fields)
+	}
+	return points
+}
+
+func resolvedTypedPointAt(
+	batch model.ResolvedTypedBatch,
+	row int,
+	fields []model.ResolvedField,
+) model.ResolvedPoint {
+	return model.ResolvedPoint{
+		Database:        batch.Database,
+		RetentionPolicy: batch.RetentionPolicy,
+		Measurement:     batch.Measurement,
+		Tags:            typedTagMapAt(batch.Tags, row),
+		SeriesID:        batch.SeriesIDs[row],
+		Timestamp:       batch.Timestamps[row],
+		WriteSeq:        batch.WriteSeqs[row],
+		Fields:          fields,
+	}
+}
+
+func resolvedTypedFieldAt(column model.ResolvedTypedFieldColumn, row int) model.ResolvedField {
+	return model.ResolvedField{
+		FieldID:   column.FieldID,
+		FieldName: column.Name,
+		Type:      column.Type,
+		Value:     typedFieldValueAt(column, row),
+	}
+}
+
+func typedTagMapAt(tags []model.TagColumn, row int) map[string]string {
+	if len(tags) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(tags))
+	for _, tag := range tags {
+		out[tag.Name] = tag.Values[row]
+	}
+	return out
+}
+
+func typedFieldValueAt(column model.ResolvedTypedFieldColumn, row int) model.FieldValue {
+	switch column.Type {
+	case model.FieldFloat64:
+		return model.Float64Value(column.Float64Values[row])
+	case model.FieldInt64:
+		return model.Int64Value(column.Int64Values[row])
+	case model.FieldString:
+		return model.StringValue(column.StringValues[row])
+	case model.FieldBool:
+		return model.BoolValue(column.BoolValues[row])
+	default:
+		return model.FieldValue{Type: column.Type}
+	}
+}
+
 func (s *Shard) ApproxMemorySamples() int {
 	s.lifecycleMu.RLock()
 	defer s.lifecycleMu.RUnlock()
@@ -192,19 +311,12 @@ func (s *Shard) flushLocked() error {
 		s.mem.Restore(snapshot)
 		return err
 	}
-	columns := snapshot.Columns(memtable.Query{
-		Start: s.opts.Start,
-		End:   s.opts.End,
-	})
-	if len(columns) == 0 {
+	meta, err := s.writeSnapshotPart(snapshot)
+	if errors.Is(err, errFlushSnapshotEmpty) {
 		release()
 		s.mem.Restore(snapshot)
 		return nil
 	}
-	meta, err := s.deps.parts.WritePart(s.opts.Dir, 0, s.nextPartID(), columns, sstable.WriteOptions{
-		Compression:  s.opts.Compression,
-		MemoryBudget: storageCompressionBudget{memory: s.opts.Memory},
-	})
 	if err != nil {
 		release()
 		s.mem.Restore(snapshot)
@@ -218,7 +330,7 @@ func (s *Shard) flushLocked() error {
 			return errors.Join(err, cleanupErr)
 		}
 	}
-	part, err := s.deps.parts.OpenPart(meta.Path)
+	part, err := s.deps.parts.OpenPartTrusted(meta.Path)
 	if err != nil {
 		cleanupErr := s.cleanupUncommittedPart(meta, nil)
 		release()
@@ -254,6 +366,57 @@ func (s *Shard) flushLocked() error {
 	return nil
 }
 
+func (s *Shard) writeSnapshotPart(snapshot memSnapshot) (sstable.PartMeta, error) {
+	var writer partWriter
+	wroteSeries := false
+	query := memtable.Query{
+		Start: s.opts.Start,
+		End:   s.opts.End,
+	}
+	err := snapshot.ForEachSeries(query, func(_ uint64, columns []model.ColumnData) error {
+		if len(columns) == 0 {
+			return nil
+		}
+		if writer == nil {
+			nextWriter, writerErr := s.deps.parts.NewWriter(s.opts.Dir, 0, s.nextPartID(), s.flushWriteOptions())
+			if writerErr != nil {
+				return writerErr
+			}
+			writer = nextWriter
+		}
+		if err := writer.AddSeries(columns); err != nil {
+			return err
+		}
+		wroteSeries = true
+		return nil
+	})
+	if err != nil {
+		return sstable.PartMeta{}, errors.Join(err, abortPartWriter(writer))
+	}
+	if writer == nil || !wroteSeries {
+		return sstable.PartMeta{}, errFlushSnapshotEmpty
+	}
+	meta, err := writer.Close()
+	if err != nil {
+		return sstable.PartMeta{}, errors.Join(err, abortPartWriter(writer))
+	}
+	return meta, nil
+}
+
+func (s *Shard) flushWriteOptions() sstable.WriteOptions {
+	return sstable.WriteOptions{
+		Compression:  s.opts.Compression,
+		MemoryBudget: storageCompressionBudget{memory: s.opts.Memory},
+	}
+}
+
+func abortPartWriter(writer partWriter) error {
+	if writer == nil {
+		return nil
+	}
+	return writer.Abort()
+}
+
 func (s *Shard) nextManifest(parts []sstable.PartMeta) sstable.Manifest {
 	return sstable.Manifest{
 		Sequence: s.manifest.Sequence + 1,
@@ -273,6 +436,16 @@ func (s *Shard) reserveWriteMemory(points []model.ResolvedPoint) (func(), error)
 		return func() {}, nil
 	}
 	return s.opts.Memory.Reserve(storageMemoryWrite, 0, estimateWALFrameBytes(points))
+}
+
+func (s *Shard) reserveTypedWriteMemory(
+	batch model.ResolvedTypedBatch,
+	rows []int,
+) (func(), error) {
+	if s.opts.Memory == nil {
+		return func() {}, nil
+	}
+	return s.opts.Memory.Reserve(storageMemoryWrite, 0, estimateTypedWALFrameBytes(batch, rows))
 }
 
 func (s *Shard) approxMemoryBytesLocked() int64 {

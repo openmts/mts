@@ -21,6 +21,10 @@ type walStore interface {
 	Close() error
 }
 
+type typedWalStore interface {
+	AppendTyped(batch model.ResolvedTypedBatch, rows []int, syncWrite bool) error
+}
+
 type walMetricsProvider interface {
 	MetricsSnapshot() wal.Metrics
 }
@@ -38,8 +42,13 @@ type memStore interface {
 	Restore(snapshot memSnapshot)
 }
 
+type typedMemStore interface {
+	ApplyTypedBatch(batch model.ResolvedTypedBatch, rows []int) error
+}
+
 type memSnapshot interface {
 	Columns(query memtable.Query) []model.ColumnData
+	ForEachSeries(query memtable.Query, fn func(uint64, []model.ColumnData) error) error
 	Query(query memtable.Query) []model.ColumnData
 	SampleCount() int
 	ApproxMemoryBytes() int64
@@ -73,6 +82,7 @@ type partManager interface {
 	LoadManifest(dir string) (sstable.Manifest, error)
 	WriteManifest(dir string, manifest sstable.Manifest) error
 	OpenPart(path string) (partReader, error)
+	OpenPartTrusted(path string) (partReader, error)
 	WritePart(
 		root string,
 		level int,
@@ -136,6 +146,10 @@ func (defaultPartManager) OpenPart(path string) (partReader, error) {
 	return sstable.OpenPart(path)
 }
 
+func (defaultPartManager) OpenPartTrusted(path string) (partReader, error) {
+	return sstable.OpenPartTrusted(path)
+}
+
 func (defaultPartManager) WritePart(
 	root string,
 	level int,
@@ -180,6 +194,10 @@ func (m memTableStore) Apply(point model.ResolvedPoint) error {
 
 func (m memTableStore) ApplyBatch(points []model.ResolvedPoint) error {
 	return m.inner.ApplyBatch(points)
+}
+
+func (m memTableStore) ApplyTypedBatch(batch model.ResolvedTypedBatch, rows []int) error {
+	return m.inner.ApplyTypedBatch(batch, rows)
 }
 
 func (m memTableStore) SampleCount() int {

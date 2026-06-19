@@ -379,6 +379,39 @@ func TestCatalogCheckpointAndFieldResolveBranches(t *testing.T) {
 	}
 }
 
+func TestCatalogCheckpointThresholdScalesWithSeriesCount(t *testing.T) {
+	cat, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	cat.mu.Lock()
+	for id := 1; id <= snapshotCheckpointRecords*4; id++ {
+		cat.series[uint64(id)] = Series{ID: uint64(id), Measurement: "cpu"}
+	}
+	cat.snapshotDirtyRecords = snapshotCheckpointRecords
+	if err := cat.checkpointSnapshotLocked(false); err != nil {
+		cat.mu.Unlock()
+		t.Fatalf("checkpoint scaled below threshold error = %v", err)
+	}
+	if cat.snapshotDirtyRecords != snapshotCheckpointRecords {
+		cat.mu.Unlock()
+		t.Fatalf("dirty records after scaled checkpoint = %d, want deferred", cat.snapshotDirtyRecords)
+	}
+	cat.snapshotDirtyRecords = snapshotCheckpointRecords * 2
+	if err := cat.checkpointSnapshotLocked(false); err != nil {
+		cat.mu.Unlock()
+		t.Fatalf("checkpoint scaled threshold error = %v", err)
+	}
+	if cat.snapshotDirtyRecords != 0 {
+		cat.mu.Unlock()
+		t.Fatalf("dirty records after scaled threshold = %d, want 0", cat.snapshotDirtyRecords)
+	}
+	cat.mu.Unlock()
+	if err := cat.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestEnsureMetadataBranches(t *testing.T) {
 	cat := newCatalog(t.TempDir())
 	if cat.ensureMetadataLocked("", "hot") {

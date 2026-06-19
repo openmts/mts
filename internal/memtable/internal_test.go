@@ -79,6 +79,91 @@ func TestApplyBatchReservesColumnCapacity(t *testing.T) {
 	}
 }
 
+func TestApplyBatchSkipsReservationMapForMostlyUniqueLargeBatch(t *testing.T) {
+	mt := New()
+	points := make([]model.ResolvedPoint, 256)
+	for index := range points {
+		points[index] = memtableResolvedPoint(uint64(index+1), int64(index), uint64(index+1), model.Float64Value(1))
+	}
+	borrows := 0
+	borrowReservationMapHook = func() {
+		borrows++
+	}
+	t.Cleanup(func() {
+		borrowReservationMapHook = nil
+	})
+
+	if err := mt.ApplyBatch(points); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+	if borrows != 0 {
+		t.Fatalf("reservation map borrows = %d, want 0 for mostly unique large batch", borrows)
+	}
+	if mt.SampleCount() != len(points) {
+		t.Fatalf("sample count = %d, want %d", mt.SampleCount(), len(points))
+	}
+}
+
+func TestApplyTypedBatchWritesColumnValues(t *testing.T) {
+	mt := New()
+	batch := model.ResolvedTypedBatch{
+		Measurement: "cpu",
+		Timestamps:  []int64{10, 20},
+		SeriesIDs:   []uint64{1, 1},
+		WriteSeqs:   []uint64{3, 4},
+		Fields: []model.ResolvedTypedFieldColumn{
+			{
+				FieldID:       1,
+				Name:          "usage",
+				Type:          model.FieldFloat64,
+				Float64Values: []float64{1.5, 2.5},
+			},
+			{
+				FieldID:    2,
+				Name:       "active",
+				Type:       model.FieldBool,
+				BoolValues: []bool{true, false},
+			},
+		},
+	}
+
+	if err := mt.ApplyTypedBatch(batch, nil); err != nil {
+		t.Fatalf("ApplyTypedBatch() error = %v", err)
+	}
+	columns := mt.Query(Query{Start: 0, End: 30})
+	if len(columns) != 2 {
+		t.Fatalf("columns len = %d, want 2: %#v", len(columns), columns)
+	}
+	if columns[0].FieldID != 1 || columns[0].Samples[1].Value.Float64 != 2.5 {
+		t.Fatalf("float column = %#v, want field 1 second value 2.5", columns[0])
+	}
+	if columns[1].FieldID != 2 || columns[1].Samples[0].Value.Bool != true || columns[1].Samples[1].Value.Bool != false {
+		t.Fatalf("bool column = %#v, want true/false values", columns[1])
+	}
+}
+
+func TestApplyBatchKeepsReservationMapForRepeatedSeries(t *testing.T) {
+	mt := New()
+	points := make([]model.ResolvedPoint, 16)
+	for index := range points {
+		points[index] = memtableResolvedPoint(1, int64(index), uint64(index+1), model.Float64Value(1))
+	}
+	borrows := 0
+	borrowReservationMapHook = func() {
+		borrows++
+	}
+	t.Cleanup(func() {
+		borrowReservationMapHook = nil
+	})
+
+	if err := mt.ApplyBatch(points); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+	if borrows == 0 {
+		t.Fatal("reservation map was not borrowed for repeated-series batch")
+	}
+}
+
 func TestColumnBufferReserveGrowsForSmallIncrementalBatches(t *testing.T) {
 	column := columnBuffer{fieldType: model.FieldFloat64}
 	column.reserve(8)
@@ -99,6 +184,27 @@ func TestColumnBufferReserveGrowsForSmallIncrementalBatches(t *testing.T) {
 	}
 	if cap(column.times) > firstCapacity+3 {
 		t.Fatalf("grown capacity = %d, want bounded slack over %d", cap(column.times), firstCapacity)
+	}
+}
+
+func TestColumnBufferAppendUsesBoundedCapacityGrowth(t *testing.T) {
+	var column columnBuffer
+	column.fieldType = model.FieldFloat64
+	for index := range 1024 {
+		column.appendSample(model.VersionedSample{
+			Timestamp: int64(index),
+			WriteSeq:  uint64(index + 1),
+			Value:     model.Float64Value(float64(index)),
+		})
+	}
+	if extra := cap(column.times) - column.count; extra > 8 {
+		t.Fatalf("time capacity extra = %d, want <= 8", extra)
+	}
+	if extra := cap(column.writeSeqs) - column.count; extra > 8 {
+		t.Fatalf("writeSeq capacity extra = %d, want <= 8", extra)
+	}
+	if extra := cap(column.floats) - column.count; extra > 8 {
+		t.Fatalf("float capacity extra = %d, want <= 8", extra)
 	}
 }
 
@@ -279,6 +385,74 @@ func TestMemTableQueryAvoidsSnapshotClone(t *testing.T) {
 	}
 }
 
+func TestMemTableApproxMemoryBytesAvoidsFullScan(t *testing.T) {
+	mt := New()
+	if err := mt.ApplyBatch([]model.ResolvedPoint{
+		memtableResolvedPoint(1, 10, 1, model.Float64Value(1)),
+		memtableResolvedPoint(2, 20, 2, model.StringValue("payload")),
+		memtableResolvedPoint(3, 30, 3, model.BoolValue(true)),
+	}); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+
+	scans := 0
+	approxDataHook = func() {
+		scans++
+	}
+	t.Cleanup(func() {
+		approxDataHook = nil
+	})
+
+	if got := mt.ApproxMemoryBytes(); got <= 0 {
+		t.Fatalf("ApproxMemoryBytes() = %d, want positive", got)
+	}
+	if scans != 0 {
+		t.Fatalf("ApproxMemoryBytes() full scans = %d, want 0", scans)
+	}
+
+	snapshot := mt.SnapshotAndReset()
+	if got := snapshot.ApproxMemoryBytes(); got <= 0 {
+		t.Fatalf("snapshot ApproxMemoryBytes() = %d, want positive", got)
+	}
+	if scans != 0 {
+		t.Fatalf("snapshot ApproxMemoryBytes() full scans = %d, want 0", scans)
+	}
+}
+
+func TestMemTableTrackedMemoryMatchesFullCalculation(t *testing.T) {
+	mt := New()
+	points := []model.ResolvedPoint{
+		memtableResolvedPoint(1, 10, 1, model.Float64Value(1)),
+		memtableResolvedPoint(1, 20, 2, model.Float64Value(2)),
+		memtableResolvedPoint(2, 30, 3, model.StringValue("payload-a")),
+		memtableResolvedPoint(2, 40, 4, model.StringValue("payload-b")),
+		memtableResolvedPoint(3, 50, 5, model.BoolValue(true)),
+		memtableResolvedPoint(3, 60, 6, model.BoolValue(false)),
+	}
+	if err := mt.ApplyBatch(points); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+	if got, want := mt.ApproxMemoryBytes(), approxTableDataBytes(mt.data); got != want {
+		t.Fatalf("ApproxMemoryBytes() = %d, want full calculation %d", got, want)
+	}
+	cloned := mt.Snapshot()
+	if got, want := cloned.ApproxMemoryBytes(), approxTableDataBytes(cloned.data); got != want {
+		t.Fatalf("cloned snapshot ApproxMemoryBytes() = %d, want full calculation %d", got, want)
+	}
+
+	snapshot := mt.SnapshotAndReset()
+	if got, want := snapshot.ApproxMemoryBytes(), approxTableDataBytes(snapshot.data); got != want {
+		t.Fatalf("snapshot ApproxMemoryBytes() = %d, want full calculation %d", got, want)
+	}
+	if err := mt.Apply(memtableResolvedPoint(4, 70, 7, model.Int64Value(7))); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	mt.Restore(snapshot)
+	if got, want := mt.ApproxMemoryBytes(), approxTableDataBytes(mt.data); got != want {
+		t.Fatalf("restored ApproxMemoryBytes() = %d, want full calculation %d", got, want)
+	}
+}
+
 func TestReservationMapPoolRejectsInvalidAndLargeEntries(t *testing.T) {
 	releaseReservationMap(nil)
 
@@ -307,6 +481,90 @@ func TestReleaseTableDataRejectsLargeMaps(t *testing.T) {
 	releaseTableData(large)
 	if len(large) != 0 {
 		t.Fatalf("released large table len = %d, want cleared", len(large))
+	}
+}
+
+func TestReleaseTableDataRetainsReusableWideMaps(t *testing.T) {
+	resetTableDataPoolForTest()
+	t.Cleanup(resetTableDataPoolForTest)
+	data := make(tableData, maxPooledTableColumns)
+	releaseTableData(data)
+	if got := tableDataPoolLenForTest(); got != 1 {
+		t.Fatalf("table data pool len = %d, want 1", got)
+	}
+	_ = borrowTableData()
+	if got := tableDataPoolLenForTest(); got != 0 {
+		t.Fatalf("table data pool len after borrow = %d, want 0", got)
+	}
+}
+
+func TestColumnKeyFreeListBoundsRetainedSlices(t *testing.T) {
+	resetColumnKeyPoolForTest()
+	t.Cleanup(resetColumnKeyPoolForTest)
+	keys := make([]columnKey, maxPooledColumnKeys)
+	releaseColumnKeys(keys)
+	if got := columnKeyPoolLenForTest(); got != 1 {
+		t.Fatalf("column key pool len = %d, want 1", got)
+	}
+	reused := borrowColumnKeys(maxPooledColumnKeys)
+	if cap(reused) < maxPooledColumnKeys {
+		t.Fatalf("reused cap = %d, want at least %d", cap(reused), maxPooledColumnKeys)
+	}
+	if got := columnKeyPoolLenForTest(); got != 0 {
+		t.Fatalf("column key pool len after borrow = %d, want 0", got)
+	}
+}
+
+func TestSnapshotReleaseAllowsColumnBufferReuse(t *testing.T) {
+	mt := New()
+	if err := mt.Apply(memtableResolvedPoint(1, 10, 1, model.Float64Value(1))); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	reused := 0
+	borrowColumnBufferHook = func(fromPool bool) {
+		if fromPool {
+			reused++
+		}
+	}
+	t.Cleanup(func() {
+		borrowColumnBufferHook = nil
+	})
+
+	mt.SnapshotAndReset().Release()
+	if err := mt.Apply(memtableResolvedPoint(2, 20, 2, model.Float64Value(2))); err != nil {
+		t.Fatalf("Apply(reuse) error = %v", err)
+	}
+	if reused == 0 {
+		t.Fatal("column buffer was not reused after snapshot release")
+	}
+}
+
+func TestReleaseColumnBufferDropsLargeBackingArrays(t *testing.T) {
+	column := &columnBuffer{fieldType: model.FieldFloat64}
+	column.reserve(maxPooledColumnCapacity + 1)
+	releaseColumnBuffer(column)
+
+	reused := borrowColumnBuffer(1, 2, model.FieldFloat64)
+	if cap(reused.times) > maxPooledColumnCapacity {
+		t.Fatalf("reused time cap = %d, want <= %d", cap(reused.times), maxPooledColumnCapacity)
+	}
+	releaseColumnBuffer(reused)
+}
+
+func TestColumnBufferFreeListBoundsRetainedObjects(t *testing.T) {
+	resetColumnBufferPoolForTest()
+	t.Cleanup(resetColumnBufferPoolForTest)
+	for range maxPooledColumnBuffers + 1 {
+		releaseColumnBuffer(&columnBuffer{})
+	}
+	if got := columnBufferPoolLenForTest(); got != maxPooledColumnBuffers {
+		t.Fatalf("column buffer pool len = %d, want %d", got, maxPooledColumnBuffers)
+	}
+	for range maxPooledColumnBuffers {
+		_ = borrowColumnBuffer(1, 1, model.FieldFloat64)
+	}
+	if got := columnBufferPoolLenForTest(); got != 0 {
+		t.Fatalf("column buffer pool len after borrow = %d, want 0", got)
 	}
 }
 

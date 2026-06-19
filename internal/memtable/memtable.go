@@ -1,7 +1,9 @@
 package memtable
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"unsafe"
@@ -25,11 +27,13 @@ type MemTable struct {
 	mu          sync.RWMutex
 	data        tableData
 	sampleCount int
+	approxBytes int64
 }
 
 type Snapshot struct {
 	data        tableData
 	sampleCount int
+	approxBytes int64
 }
 
 type Stats struct {
@@ -56,6 +60,7 @@ type columnBuffer struct {
 	strings   []string
 	boolBits  []uint64
 	count     int
+	memBytes  int64
 }
 
 type tableData map[columnKey]*columnBuffer
@@ -67,9 +72,16 @@ type columnReservation struct {
 
 const maxPooledReservations = 1 << 15
 
+const uniqueSeriesReservationBypassMinPoints = 128
+
 const (
-	tableDataBaseBytes  = int(unsafe.Sizeof(tableData{}))
-	mapEntryApproxBytes = int(unsafe.Sizeof(columnKey{}) + unsafe.Sizeof(&columnBuffer{}))
+	tableDataBaseBytes    = int64(unsafe.Sizeof(tableData{}))
+	mapEntryApproxBytes   = int64(unsafe.Sizeof(columnKey{}) + unsafe.Sizeof(&columnBuffer{}))
+	columnBufferBaseBytes = int64(unsafe.Sizeof(columnBuffer{}))
+	int64Bytes            = int64(unsafe.Sizeof(int64(0)))
+	uint64Bytes           = int64(unsafe.Sizeof(uint64(0)))
+	float64Bytes          = int64(unsafe.Sizeof(float64(0)))
+	stringHeaderBytes     = int64(unsafe.Sizeof(""))
 )
 
 var reservationMapPool = sync.Pool{
@@ -81,9 +93,14 @@ var reservationMapPool = sync.Pool{
 
 var cloneDataHook func()
 
+var approxDataHook func()
+
+var borrowReservationMapHook func()
+
 func New() *MemTable {
 	return &MemTable{
-		data: borrowTableData(),
+		data:        borrowTableData(),
+		approxBytes: tableDataBaseBytes,
 	}
 }
 
@@ -104,6 +121,16 @@ func (m *MemTable) ApplyBatch(points []model.ResolvedPoint) error {
 	return nil
 }
 
+func (m *MemTable) ApplyTypedBatch(batch model.ResolvedTypedBatch, rows []int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.reserveTypedBatchLocked(batch, rows)
+	for position := range typedBatchRowCount(batch, rows) {
+		m.applyTypedRowLocked(batch, typedBatchRowIndex(rows, position))
+	}
+	return nil
+}
+
 func (m *MemTable) SampleCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -113,13 +140,13 @@ func (m *MemTable) SampleCount() int {
 func (m *MemTable) ApproxMemoryBytes() int64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return approxTableDataBytes(m.data)
+	return m.approxBytes
 }
 
 func (m *MemTable) StatsSnapshot() Stats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return statsFromData(m.data, m.sampleCount)
+	return statsFromData(m.data, m.sampleCount, m.approxBytes)
 }
 
 func (m *MemTable) SnapshotAndReset() *Snapshot {
@@ -128,18 +155,22 @@ func (m *MemTable) SnapshotAndReset() *Snapshot {
 	snapshot := &Snapshot{
 		data:        m.data,
 		sampleCount: m.sampleCount,
+		approxBytes: m.approxBytes,
 	}
 	m.data = borrowTableData()
 	m.sampleCount = 0
+	m.approxBytes = tableDataBaseBytes
 	return snapshot
 }
 
 func (m *MemTable) Snapshot() *Snapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	data := cloneData(m.data)
 	return &Snapshot{
-		data:        cloneData(m.data),
+		data:        data,
 		sampleCount: m.sampleCount,
+		approxBytes: trackedTableDataBytes(data),
 	}
 }
 
@@ -169,6 +200,40 @@ func (s *Snapshot) Columns(query Query) []model.ColumnData {
 	return columnsFromData(s.data, query)
 }
 
+func (s *Snapshot) ForEachSeries(
+	query Query,
+	fn func(seriesID uint64, columns []model.ColumnData) error,
+) error {
+	if s == nil || query.End < query.Start {
+		return nil
+	}
+	if err := queryContextErr(query); err != nil {
+		return err
+	}
+	keys := sortedColumnKeys(s.data, query)
+	defer releaseColumnKeys(keys)
+	columns := make([]model.ColumnData, 0, 8)
+	samples := make([][]model.VersionedSample, 0, 8)
+	for start := 0; start < len(keys); {
+		seriesID := keys[start].seriesID
+		end := start + 1
+		for end < len(keys) && keys[end].seriesID == seriesID {
+			end++
+		}
+		columns, samples = seriesColumnsFromKeys(s.data, keys[start:end], query, columns, samples)
+		if len(columns) > 0 {
+			if err := fn(seriesID, columns); err != nil {
+				return err
+			}
+		}
+		if err := queryContextErr(query); err != nil {
+			return err
+		}
+		start = end
+	}
+	return nil
+}
+
 func columnsFromData(data tableData, query Query) []model.ColumnData {
 	if query.End < query.Start {
 		return []model.ColumnData{}
@@ -190,6 +255,65 @@ func columnsFromData(data tableData, query Query) []model.ColumnData {
 	return columns
 }
 
+func sortedColumnKeys(data tableData, query Query) []columnKey {
+	keys := borrowColumnKeys(len(data))
+	for key, column := range data {
+		if column == nil || !containsSeries(query.SeriesIDs, column.seriesID) {
+			continue
+		}
+		if !containsField(query.FieldIDs, column.fieldID) {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	slices.SortFunc(keys, func(left columnKey, right columnKey) int {
+		if left.seriesID != right.seriesID {
+			return cmp.Compare(left.seriesID, right.seriesID)
+		}
+		return cmp.Compare(left.fieldID, right.fieldID)
+	})
+	return keys
+}
+
+func seriesColumnsFromKeys(
+	data tableData,
+	keys []columnKey,
+	query Query,
+	columns []model.ColumnData,
+	samples [][]model.VersionedSample,
+) ([]model.ColumnData, [][]model.VersionedSample) {
+	columns = columns[:0]
+	if cap(samples) < len(keys) {
+		samples = make([][]model.VersionedSample, len(keys))
+	} else {
+		samples = samples[:len(keys)]
+	}
+	for index, key := range keys {
+		column := data[key]
+		if column == nil {
+			continue
+		}
+		columnSamples := compactSamplesInto(samples[index][:0], column, query)
+		samples[index] = columnSamples
+		if len(columnSamples) > 0 {
+			columns = append(columns, model.ColumnData{
+				SeriesID:  column.seriesID,
+				FieldID:   column.fieldID,
+				FieldType: column.fieldType,
+				Samples:   columnSamples,
+			})
+		}
+	}
+	return columns, samples
+}
+
+func queryContextErr(query Query) error {
+	if query.Context == nil {
+		return nil
+	}
+	return query.Context.Err()
+}
+
 func (s *Snapshot) SampleCount() int {
 	if s == nil {
 		return 0
@@ -201,17 +325,17 @@ func (s *Snapshot) ApproxMemoryBytes() int64 {
 	if s == nil {
 		return 0
 	}
-	return approxTableDataBytes(s.data)
+	return s.approxBytes
 }
 
 func (s *Snapshot) StatsSnapshot() Stats {
 	if s == nil {
 		return Stats{}
 	}
-	return statsFromData(s.data, s.sampleCount)
+	return statsFromData(s.data, s.sampleCount, s.approxBytes)
 }
 
-func statsFromData(data tableData, samples int) Stats {
+func statsFromData(data tableData, samples int, bytes int64) Stats {
 	series := make(map[uint64]struct{})
 	fields := make(map[uint32]struct{})
 	for key := range data {
@@ -223,7 +347,7 @@ func statsFromData(data tableData, samples int) Stats {
 		Series:  len(series),
 		Fields:  len(fields),
 		Columns: len(data),
-		Bytes:   approxTableDataBytes(data),
+		Bytes:   bytes,
 	}
 }
 
@@ -233,14 +357,12 @@ func (s *Snapshot) Release() {
 	}
 	data := s.data
 	for _, column := range s.data {
-		if column != nil {
-			column.clear()
-			column.count = 0
-		}
+		releaseColumnBuffer(column)
 	}
 	releaseTableData(data)
 	s.data = nil
 	s.sampleCount = 0
+	s.approxBytes = 0
 }
 
 func (m *MemTable) Restore(snapshot *Snapshot) {
@@ -262,7 +384,7 @@ func (m *MemTable) applyPointLocked(point model.ResolvedPoint) {
 }
 
 func (m *MemTable) reserveBatchLocked(points []model.ResolvedPoint) {
-	if len(points) <= 1 {
+	if !shouldReserveBatch(points) {
 		return
 	}
 	reservations := borrowReservationMap()
@@ -276,13 +398,95 @@ func (m *MemTable) reserveBatchLocked(points []model.ResolvedPoint) {
 		}
 	}
 	for key, reservation := range reservations {
-		column := ensureColumn(m.data, key.seriesID, key.fieldID, reservation.fieldType)
-		column.reserve(reservation.count)
+		column, delta := ensureColumn(m.data, key.seriesID, key.fieldID, reservation.fieldType)
+		delta += column.reserve(reservation.count)
+		m.approxBytes += delta
 	}
 	releaseReservationMap(reservations)
 }
 
+func (m *MemTable) reserveTypedBatchLocked(batch model.ResolvedTypedBatch, rows []int) {
+	if !shouldReserveTypedBatch(batch, rows) {
+		return
+	}
+	reservations := borrowReservationMap()
+	for position := range typedBatchRowCount(batch, rows) {
+		row := typedBatchRowIndex(rows, position)
+		for _, field := range batch.Fields {
+			key := columnKey{seriesID: batch.SeriesIDs[row], fieldID: field.FieldID}
+			reservation := reservations[key]
+			reservation.fieldType = field.Type
+			reservation.count++
+			reservations[key] = reservation
+		}
+	}
+	for key, reservation := range reservations {
+		column, delta := ensureColumn(m.data, key.seriesID, key.fieldID, reservation.fieldType)
+		delta += column.reserve(reservation.count)
+		m.approxBytes += delta
+	}
+	releaseReservationMap(reservations)
+}
+
+func shouldReserveBatch(points []model.ResolvedPoint) bool {
+	if len(points) <= 1 {
+		return false
+	}
+	if len(points) < uniqueSeriesReservationBypassMinPoints {
+		return true
+	}
+	return !hasUniqueSeriesPrefix(points, uniqueSeriesReservationBypassMinPoints)
+}
+
+func hasUniqueSeriesPrefix(points []model.ResolvedPoint, limit int) bool {
+	if limit > len(points) {
+		limit = len(points)
+	}
+	for index := 0; index < limit; index++ {
+		seriesID := points[index].SeriesID
+		for previous := 0; previous < index; previous++ {
+			if points[previous].SeriesID == seriesID {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func shouldReserveTypedBatch(batch model.ResolvedTypedBatch, rows []int) bool {
+	count := typedBatchRowCount(batch, rows)
+	if count <= 1 {
+		return false
+	}
+	if count < uniqueSeriesReservationBypassMinPoints {
+		return true
+	}
+	return !hasUniqueTypedSeriesPrefix(batch, rows, uniqueSeriesReservationBypassMinPoints)
+}
+
+func hasUniqueTypedSeriesPrefix(
+	batch model.ResolvedTypedBatch,
+	rows []int,
+	limit int,
+) bool {
+	if limit > typedBatchRowCount(batch, rows) {
+		limit = typedBatchRowCount(batch, rows)
+	}
+	for index := 0; index < limit; index++ {
+		seriesID := batch.SeriesIDs[typedBatchRowIndex(rows, index)]
+		for previous := 0; previous < index; previous++ {
+			if batch.SeriesIDs[typedBatchRowIndex(rows, previous)] == seriesID {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func borrowReservationMap() map[columnKey]columnReservation {
+	if borrowReservationMapHook != nil {
+		borrowReservationMapHook()
+	}
 	ptr, ok := reservationMapPool.Get().(*map[columnKey]columnReservation)
 	if !ok || ptr == nil {
 		return make(map[columnKey]columnReservation)
@@ -303,20 +507,35 @@ func releaseReservationMap(reservations map[columnKey]columnReservation) {
 }
 
 func (m *MemTable) applyField(point model.ResolvedPoint, field model.ResolvedField) {
-	column := ensureColumn(m.data, point.SeriesID, field.FieldID, field.Type)
-	column.appendSample(model.VersionedSample{
+	column, delta := ensureColumn(m.data, point.SeriesID, field.FieldID, field.Type)
+	delta += column.appendSample(model.VersionedSample{
 		Timestamp: point.Timestamp,
 		WriteSeq:  point.WriteSeq,
 		Value:     field.Value,
 	})
+	m.approxBytes += delta
+}
+
+func (m *MemTable) applyTypedRowLocked(batch model.ResolvedTypedBatch, row int) {
+	for _, field := range batch.Fields {
+		column, delta := ensureColumn(m.data, batch.SeriesIDs[row], field.FieldID, field.Type)
+		delta += column.appendSample(model.VersionedSample{
+			Timestamp: batch.Timestamps[row],
+			WriteSeq:  batch.WriteSeqs[row],
+			Value:     typedFieldValueAt(field, row),
+		})
+		m.approxBytes += delta
+		m.sampleCount++
+	}
 }
 
 func (m *MemTable) restoreColumnLocked(src *columnBuffer) {
 	if src == nil || src.count == 0 {
 		return
 	}
-	dst := ensureColumn(m.data, src.seriesID, src.fieldID, src.fieldType)
-	dst.appendColumn(src)
+	dst, delta := ensureColumn(m.data, src.seriesID, src.fieldID, src.fieldType)
+	delta += dst.appendColumn(src)
+	m.approxBytes += delta
 	m.sampleCount += src.count
 }
 
@@ -325,23 +544,19 @@ func ensureColumn(
 	seriesID uint64,
 	fieldID uint32,
 	fieldType model.FieldType,
-) *columnBuffer {
+) (*columnBuffer, int64) {
 	key := columnKey{
 		seriesID: seriesID,
 		fieldID:  fieldID,
 	}
 	column, ok := data[key]
 	if !ok {
-		column = &columnBuffer{
-			seriesID:  seriesID,
-			fieldID:   fieldID,
-			fieldType: fieldType,
-		}
+		column = borrowColumnBuffer(seriesID, fieldID, fieldType)
 		data[key] = column
-		return column
+		return column, mapEntryApproxBytes + column.memBytes
 	}
 	column.fieldType = fieldType
-	return column
+	return column, 0
 }
 
 func columnDataFromBuffer(column *columnBuffer, query Query) model.ColumnData {
@@ -353,37 +568,54 @@ func columnDataFromBuffer(column *columnBuffer, query Query) model.ColumnData {
 	}
 }
 
-func (c *columnBuffer) appendSample(sample model.VersionedSample) {
+func (c *columnBuffer) appendSample(sample model.VersionedSample) int64 {
 	if c.fieldType == 0 {
 		c.fieldType = sample.Value.Type
 	}
+	delta := c.reserve(1)
+	appendDelta := int64(0)
+	oldTimesCap := cap(c.times)
 	c.times = append(c.times, sample.Timestamp)
+	appendDelta += int64(cap(c.times)-oldTimesCap) * int64Bytes
+	oldSeqsCap := cap(c.writeSeqs)
 	c.writeSeqs = append(c.writeSeqs, sample.WriteSeq)
-	c.appendValue(sample.Value)
+	appendDelta += int64(cap(c.writeSeqs)-oldSeqsCap) * uint64Bytes
+	appendDelta += c.appendValue(sample.Value)
 	c.count++
+	c.memBytes += appendDelta
+	return delta + appendDelta
 }
 
-func (c *columnBuffer) appendValue(value model.FieldValue) {
+func (c *columnBuffer) appendValue(value model.FieldValue) int64 {
 	switch c.fieldType {
 	case model.FieldFloat64:
+		oldCap := cap(c.floats)
 		c.floats = append(c.floats, value.Float64)
+		return int64(cap(c.floats)-oldCap) * float64Bytes
 	case model.FieldInt64:
+		oldCap := cap(c.ints)
 		c.ints = append(c.ints, value.Int64)
+		return int64(cap(c.ints)-oldCap) * int64Bytes
 	case model.FieldString:
+		oldCap := cap(c.strings)
 		c.strings = append(c.strings, value.String)
+		return int64(cap(c.strings)-oldCap)*stringHeaderBytes + int64(len(value.String))
 	case model.FieldBool:
-		c.appendBool(value.Bool)
+		return c.appendBool(value.Bool)
 	}
+	return 0
 }
 
-func (c *columnBuffer) appendBool(value bool) {
+func (c *columnBuffer) appendBool(value bool) int64 {
 	word := c.count / 64
+	oldCap := cap(c.boolBits)
 	if word >= len(c.boolBits) {
 		c.boolBits = append(c.boolBits, 0)
 	}
 	if value {
 		c.boolBits[word] |= 1 << uint(c.count%64)
 	}
+	return int64(cap(c.boolBits)-oldCap) * uint64Bytes
 }
 
 func (c *columnBuffer) sampleAt(index int) model.VersionedSample {
@@ -411,14 +643,18 @@ func (c *columnBuffer) valueAt(index int) model.FieldValue {
 	}
 }
 
-func (c *columnBuffer) reserve(additional int) {
+func (c *columnBuffer) reserve(additional int) int64 {
 	if additional <= 0 {
-		return
+		return 0
 	}
+	before := c.capacityBytes()
 	target := c.count + additional
 	c.times = growInt64s(c.times, target, additional)
 	c.writeSeqs = growUint64s(c.writeSeqs, target, additional)
 	c.reserveValues(target, additional)
+	delta := c.capacityBytes() - before
+	c.memBytes += delta
+	return delta
 }
 
 func (c *columnBuffer) reserveValues(target int, additional int) {
@@ -444,13 +680,29 @@ func (c *columnBuffer) clear() {
 }
 
 func approxTableDataBytes(data tableData) int64 {
+	if approxDataHook != nil {
+		approxDataHook()
+	}
 	if data == nil {
 		return 0
 	}
-	total := int64(tableDataBaseBytes + len(data)*mapEntryApproxBytes)
+	total := tableDataBaseBytes + int64(len(data))*mapEntryApproxBytes
 	for _, column := range data {
 		if column != nil {
 			total += column.approxMemoryBytes()
+		}
+	}
+	return total
+}
+
+func trackedTableDataBytes(data tableData) int64 {
+	if data == nil {
+		return 0
+	}
+	total := tableDataBaseBytes + int64(len(data))*mapEntryApproxBytes
+	for _, column := range data {
+		if column != nil {
+			total += column.memBytes
 		}
 	}
 	return total
@@ -460,16 +712,23 @@ func (c *columnBuffer) approxMemoryBytes() int64 {
 	if c == nil {
 		return 0
 	}
-	total := int64(unsafe.Sizeof(*c))
-	total += int64(cap(c.times)) * int64(unsafe.Sizeof(int64(0)))
-	total += int64(cap(c.writeSeqs)) * int64(unsafe.Sizeof(uint64(0)))
-	total += int64(cap(c.floats)) * int64(unsafe.Sizeof(float64(0)))
-	total += int64(cap(c.ints)) * int64(unsafe.Sizeof(int64(0)))
-	total += int64(cap(c.strings)) * int64(unsafe.Sizeof(""))
-	total += int64(cap(c.boolBits)) * int64(unsafe.Sizeof(uint64(0)))
+	total := columnBufferBaseBytes + c.capacityBytes()
 	for _, value := range c.strings[:min(c.count, len(c.strings))] {
 		total += int64(len(value))
 	}
+	return total
+}
+
+func (c *columnBuffer) capacityBytes() int64 {
+	if c == nil {
+		return 0
+	}
+	total := int64(cap(c.times)) * int64Bytes
+	total += int64(cap(c.writeSeqs)) * uint64Bytes
+	total += int64(cap(c.floats)) * float64Bytes
+	total += int64(cap(c.ints)) * int64Bytes
+	total += int64(cap(c.strings)) * stringHeaderBytes
+	total += int64(cap(c.boolBits)) * uint64Bytes
 	return total
 }
 
@@ -538,17 +797,47 @@ func boolWords(count int) int {
 	return (count + 63) / 64
 }
 
-func (c *columnBuffer) appendColumn(src *columnBuffer) {
+func typedBatchRowCount(batch model.ResolvedTypedBatch, rows []int) int {
+	if len(rows) > 0 {
+		return len(rows)
+	}
+	return len(batch.Timestamps)
+}
+
+func typedBatchRowIndex(rows []int, position int) int {
+	if len(rows) > 0 {
+		return rows[position]
+	}
+	return position
+}
+
+func typedFieldValueAt(field model.ResolvedTypedFieldColumn, row int) model.FieldValue {
+	switch field.Type {
+	case model.FieldFloat64:
+		return model.Float64Value(field.Float64Values[row])
+	case model.FieldInt64:
+		return model.Int64Value(field.Int64Values[row])
+	case model.FieldString:
+		return model.StringValue(field.StringValues[row])
+	case model.FieldBool:
+		return model.BoolValue(field.BoolValues[row])
+	default:
+		return model.FieldValue{Type: field.Type}
+	}
+}
+
+func (c *columnBuffer) appendColumn(src *columnBuffer) int64 {
 	if src.count == 0 {
-		return
+		return 0
 	}
 	if c.fieldType == 0 {
 		c.fieldType = src.fieldType
 	}
-	c.reserve(src.count)
+	delta := c.reserve(src.count)
 	for index := range src.count {
-		c.appendSample(src.sampleAt(index))
+		delta += c.appendSample(src.sampleAt(index))
 	}
+	return delta
 }
 
 func compactSamples(column *columnBuffer, query Query) []model.VersionedSample {
@@ -570,6 +859,33 @@ func compactSamples(column *columnBuffer, query Query) []model.VersionedSample {
 	return compactMaterializedSamples(samples)
 }
 
+func compactSamplesInto(
+	dst []model.VersionedSample,
+	column *columnBuffer,
+	query Query,
+) []model.VersionedSample {
+	if column.count == 0 {
+		return dst[:0]
+	}
+	if columnTimesSortedUnique(column) {
+		return materializeSortedColumnSamplesInto(dst, column, query)
+	}
+	matches := countMatchingSamples(column, query)
+	if matches == 0 {
+		return dst[:0]
+	}
+	if cap(dst) < matches {
+		dst = make([]model.VersionedSample, 0, matches)
+	} else {
+		dst = dst[:0]
+	}
+	for index := range column.count {
+		sample := column.sampleAt(index)
+		dst = appendMatchingSample(dst, sample, query)
+	}
+	return compactMaterializedSamples(dst)
+}
+
 func materializeSortedColumnSamples(column *columnBuffer, query Query) []model.VersionedSample {
 	start, end := sortedRangeBounds(column.times[:column.count], query)
 	samples := make([]model.VersionedSample, end-start)
@@ -577,6 +893,24 @@ func materializeSortedColumnSamples(column *columnBuffer, query Query) []model.V
 		samples[index-start] = column.sampleAt(index)
 	}
 	return samples
+}
+
+func materializeSortedColumnSamplesInto(
+	dst []model.VersionedSample,
+	column *columnBuffer,
+	query Query,
+) []model.VersionedSample {
+	start, end := sortedRangeBounds(column.times[:column.count], query)
+	needed := end - start
+	if cap(dst) < needed {
+		dst = make([]model.VersionedSample, needed)
+	} else {
+		dst = dst[:needed]
+	}
+	for index := start; index < end; index++ {
+		dst[index-start] = column.sampleAt(index)
+	}
+	return dst
 }
 
 func sortedRangeBounds(times []int64, query Query) (int, int) {
@@ -619,11 +953,11 @@ func compactMaterializedSamples(samples []model.VersionedSample) []model.Version
 	if len(samples) <= 1 {
 		return samples
 	}
-	sort.Slice(samples, func(i, j int) bool {
-		if samples[i].Timestamp != samples[j].Timestamp {
-			return samples[i].Timestamp < samples[j].Timestamp
+	slices.SortFunc(samples, func(left model.VersionedSample, right model.VersionedSample) int {
+		if left.Timestamp != right.Timestamp {
+			return cmp.Compare(left.Timestamp, right.Timestamp)
 		}
-		return samples[i].WriteSeq > samples[j].WriteSeq
+		return cmp.Compare(right.WriteSeq, left.WriteSeq)
 	})
 	write := 0
 	for _, sample := range samples {
@@ -648,11 +982,11 @@ func appendMatchingSample(
 }
 
 func sortColumns(columns []model.ColumnData) {
-	sort.Slice(columns, func(i, j int) bool {
-		if columns[i].SeriesID != columns[j].SeriesID {
-			return columns[i].SeriesID < columns[j].SeriesID
+	slices.SortFunc(columns, func(left model.ColumnData, right model.ColumnData) int {
+		if left.SeriesID != right.SeriesID {
+			return cmp.Compare(left.SeriesID, right.SeriesID)
 		}
-		return columns[i].FieldID < columns[j].FieldID
+		return cmp.Compare(left.FieldID, right.FieldID)
 	})
 }
 
@@ -687,7 +1021,7 @@ func cloneColumn(src *columnBuffer) *columnBuffer {
 	if src == nil {
 		return nil
 	}
-	return &columnBuffer{
+	clone := &columnBuffer{
 		seriesID:  src.seriesID,
 		fieldID:   src.fieldID,
 		fieldType: src.fieldType,
@@ -699,6 +1033,8 @@ func cloneColumn(src *columnBuffer) *columnBuffer {
 		boolBits:  cloneUint64s(src.boolBits),
 		count:     src.count,
 	}
+	clone.memBytes = clone.approxMemoryBytes()
+	return clone
 }
 
 func cloneInt64s(src []int64) []int64 {

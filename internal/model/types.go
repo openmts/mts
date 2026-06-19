@@ -56,6 +56,50 @@ type Point struct {
 	Fields          map[string]FieldValue `json:"fields"`
 }
 
+type TagColumn struct {
+	Name   string   `json:"name"`
+	Values []string `json:"values"`
+}
+
+type TypedFieldColumn struct {
+	Name          string    `json:"name"`
+	Type          FieldType `json:"type"`
+	Float64Values []float64 `json:"float64_values,omitempty"`
+	Int64Values   []int64   `json:"int64_values,omitempty"`
+	StringValues  []string  `json:"string_values,omitempty"`
+	BoolValues    []bool    `json:"bool_values,omitempty"`
+}
+
+type TypedBatch struct {
+	Database        string             `json:"database"`
+	RetentionPolicy string             `json:"retention_policy"`
+	Measurement     string             `json:"measurement"`
+	Tags            []TagColumn        `json:"tags"`
+	Timestamps      []int64            `json:"timestamps"`
+	Fields          []TypedFieldColumn `json:"fields"`
+}
+
+type ResolvedTypedFieldColumn struct {
+	FieldID       uint32    `json:"field_id"`
+	Name          string    `json:"name"`
+	Type          FieldType `json:"type"`
+	Float64Values []float64 `json:"float64_values,omitempty"`
+	Int64Values   []int64   `json:"int64_values,omitempty"`
+	StringValues  []string  `json:"string_values,omitempty"`
+	BoolValues    []bool    `json:"bool_values,omitempty"`
+}
+
+type ResolvedTypedBatch struct {
+	Database        string                     `json:"database"`
+	RetentionPolicy string                     `json:"retention_policy"`
+	Measurement     string                     `json:"measurement"`
+	Tags            []TagColumn                `json:"tags"`
+	Timestamps      []int64                    `json:"timestamps"`
+	SeriesIDs       []uint64                   `json:"series_ids"`
+	WriteSeqs       []uint64                   `json:"write_seqs"`
+	Fields          []ResolvedTypedFieldColumn `json:"fields"`
+}
+
 type Query struct {
 	Database        string            `json:"database"`
 	RetentionPolicy string            `json:"retention_policy"`

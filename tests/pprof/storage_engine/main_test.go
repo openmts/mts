@@ -138,6 +138,9 @@ func TestParseConfigStorageParameters(t *testing.T) {
 	if cfg.writeBatchSize != 2048 {
 		t.Fatalf("writeBatchSize = %d, want 2048", cfg.writeBatchSize)
 	}
+	if cfg.ingestPath != ingestPathTyped {
+		t.Fatalf("ingestPath = %q, want typed", cfg.ingestPath)
+	}
 	if cfg.memTableMaxSamples != 1000000 {
 		t.Fatalf("memTableMaxSamples = %d, want 1000000", cfg.memTableMaxSamples)
 	}
@@ -362,6 +365,7 @@ func TestRunRejectsBadInputs(t *testing.T) {
 		{name: "bad flag", args: []string{"-unknown"}},
 		{name: "invalid config", args: []string{"-points", "1", "-series", "2"}},
 		{name: "bad field layout", args: []string{"-field-layout", "bad", "-points", "1", "-series", "1"}},
+		{name: "bad ingest path", args: []string{"-ingest-path", "bad", "-points", "1", "-series", "1"}},
 		{name: "bad compression algorithm", args: []string{"-compression-algorithm", "gzip", "-points", "1", "-series", "1"}},
 	}
 	for _, tt := range tests {
@@ -493,6 +497,26 @@ func TestWide10WorkloadPointHasExpectedFields(t *testing.T) {
 	}
 	if counts[mts.FieldBool] != 1 {
 		t.Fatalf("bool field count = %d, want 1", counts[mts.FieldBool])
+	}
+}
+
+func TestTypedWorkloadBatchHasExpectedFields(t *testing.T) {
+	cfg := config{fieldLayout: fieldLayoutWide10, series: 8}
+	batch := typedWorkloadBatch(2, 5, cfg, workloadHostCache(cfg.series))
+	if len(batch.Timestamps) != 3 {
+		t.Fatalf("typed timestamps len = %d, want 3", len(batch.Timestamps))
+	}
+	if len(batch.Tags) != 1 || batch.Tags[0].Values[0] != "host-0002" {
+		t.Fatalf("typed tags = %#v, want first host-0002", batch.Tags)
+	}
+	if len(batch.Fields) != 10 {
+		t.Fatalf("typed fields len = %d, want 10", len(batch.Fields))
+	}
+	if batch.Fields[1].Float64Values[2] != 4 {
+		t.Fatalf("f0 last value = %v, want 4", batch.Fields[1].Float64Values[2])
+	}
+	if !batch.Fields[0].BoolValues[0] {
+		t.Fatal("active first value = false, want true")
 	}
 }
 

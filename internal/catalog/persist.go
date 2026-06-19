@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	catalogRecordSeries = 1
-	catalogRecordField  = 2
+	catalogRecordSeries          = 1
+	catalogRecordField           = 2
+	maxSnapshotCheckpointRecords = 65536
 
 	snapshotCheckpointRecords = 4096
 )
@@ -65,7 +66,7 @@ func (c *Catalog) checkpointSnapshotLocked(force bool) error {
 	if c.snapshotDirtyRecords == 0 {
 		return nil
 	}
-	if !force && c.snapshotDirtyRecords < snapshotCheckpointRecords {
+	if !force && c.snapshotDirtyRecords < c.snapshotCheckpointThresholdLocked() {
 		return nil
 	}
 	if err := c.saveSnapshotLocked(); err != nil {
@@ -86,6 +87,18 @@ func (c *Catalog) checkpointSnapshotLocked(force bool) error {
 	}
 	c.snapshotDirtyRecords = 0
 	return nil
+}
+
+func (c *Catalog) snapshotCheckpointThresholdLocked() int {
+	threshold := snapshotCheckpointRecords
+	scaled := (len(c.series) + len(c.fields)) / 2
+	if scaled > threshold {
+		threshold = scaled
+	}
+	if threshold > maxSnapshotCheckpointRecords {
+		return maxSnapshotCheckpointRecords
+	}
+	return threshold
 }
 
 func (c *Catalog) replayWAL() error {

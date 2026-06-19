@@ -16,6 +16,10 @@ func (e *Engine) Write(ctx context.Context, points []Point, opts WriteOptions) e
 	return e.inner.Write(ctx, toModelPoints(points), toModelWriteOptions(opts))
 }
 
+func (e *Engine) WriteTypedBatch(ctx context.Context, batch TypedBatch, opts WriteOptions) error {
+	return e.inner.WriteTypedBatch(ctx, toModelTypedBatch(batch), toModelWriteOptions(opts))
+}
+
 func (e *Engine) Flush(ctx context.Context) error {
 	return e.inner.Flush(ctx)
 }

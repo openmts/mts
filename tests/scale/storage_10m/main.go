@@ -19,6 +19,7 @@ import (
 type report struct {
 	Profile            string              `json:"profile"`
 	Mode               string              `json:"mode"`
+	IngestPath         string              `json:"ingest_path"`
 	Points             int                 `json:"points"`
 	Duration           time.Duration       `json:"duration"`
 	Throughput         float64             `json:"throughput"`
@@ -47,6 +48,7 @@ type report struct {
 type config struct {
 	profile              string
 	mode                 string
+	ingestPath           string
 	points               int
 	batchSize            int
 	dataDir              string
@@ -100,6 +102,7 @@ func run(args []string) (err error) {
 	out := report{
 		Profile:            cfg.profile,
 		Mode:               cfg.mode,
+		IngestPath:         cfg.ingestPath,
 		Points:             cfg.points,
 		Duration:           duration,
 		Throughput:         float64(cfg.points) / duration.Seconds(),
@@ -137,6 +140,7 @@ func parseConfig(args []string) (config, error) {
 	flags := flag.NewFlagSet("storage_10m", flag.ContinueOnError)
 	profile := flags.String("profile", "quick", "profile: quick|standard|soak")
 	mode := flags.String("mode", "write", "mode")
+	ingestPath := flags.String("ingest-path", "typed", "ingest path: typed|public")
 	points := flags.Int("points", 0, "points")
 	batchSize := flags.Int("batch-size", 1024, "batch size")
 	dataDir := flags.String("data-dir", "", "data directory")
@@ -158,6 +162,9 @@ func parseConfig(args []string) (config, error) {
 	if !validProfile(*profile) {
 		return config{}, fmt.Errorf("unsupported profile %q", *profile)
 	}
+	if !validIngestPath(*ingestPath) {
+		return config{}, fmt.Errorf("unsupported ingest path %q", *ingestPath)
+	}
 	if *maxRSSBytes < 0 || *maxSSTables < 0 || *maxBacklog < 0 {
 		return config{}, fmt.Errorf("thresholds must be non-negative")
 	}
@@ -169,6 +176,7 @@ func parseConfig(args []string) (config, error) {
 	return config{
 		profile:              *profile,
 		mode:                 *mode,
+		ingestPath:           *ingestPath,
 		points:               *points,
 		batchSize:            *batchSize,
 		dataDir:              *dataDir,
@@ -190,6 +198,10 @@ func visitedFlags(flags *flag.FlagSet) map[string]struct{} {
 
 func validProfile(profile string) bool {
 	return profile == "quick" || profile == "standard" || profile == "soak"
+}
+
+func validIngestPath(path string) bool {
+	return path == "typed" || path == "public"
 }
 
 func profilePoints(profile string) int {
@@ -242,15 +254,9 @@ func runWorkloadDetailed(dir string, cfg config) (workloadResult, error) {
 	if err != nil {
 		return workloadResult{}, fmt.Errorf("open engine: %w", err)
 	}
-	for start := 0; start < cfg.points; start += cfg.batchSize {
-		end := start + cfg.batchSize
-		if end > cfg.points {
-			end = cfg.points
-		}
-		if err := eng.Write(ctx, scalePoints(start, end), mts.WriteOptions{}); err != nil {
-			closeErr := eng.Close(ctx)
-			return workloadResult{}, errors.Join(fmt.Errorf("write batch: %w", err), closeErr)
-		}
+	if err := writeScaleBatches(ctx, eng, cfg); err != nil {
+		closeErr := eng.Close(ctx)
+		return workloadResult{}, errors.Join(err, closeErr)
 	}
 	if err := eng.Flush(ctx); err != nil {
 		closeErr := eng.Close(ctx)
@@ -310,6 +316,27 @@ func timedQueryRows(ctx context.Context, eng *mts.Engine, points int) ([]mts.Row
 	return rows, time.Since(started), err
 }
 
+func writeScaleBatches(ctx context.Context, eng *mts.Engine, cfg config) error {
+	hostCache := scaleHostCache(100)
+	builder := newScaleTypedBatchBuilder(cfg.batchSize)
+	for start := 0; start < cfg.points; start += cfg.batchSize {
+		end := start + cfg.batchSize
+		if end > cfg.points {
+			end = cfg.points
+		}
+		if cfg.ingestPath == "public" {
+			if err := eng.Write(ctx, scalePoints(start, end), mts.WriteOptions{}); err != nil {
+				return fmt.Errorf("write public batch: %w", err)
+			}
+			continue
+		}
+		if err := eng.WriteTypedBatch(ctx, builder.Build(start, end, hostCache), mts.WriteOptions{}); err != nil {
+			return fmt.Errorf("write typed batch: %w", err)
+		}
+	}
+	return nil
+}
+
 func scalePoints(start int, end int) []mts.Point {
 	points := make([]mts.Point, 0, end-start)
 	for index := start; index < end; index++ {
@@ -332,6 +359,115 @@ func scalePoints(start int, end int) []mts.Point {
 		})
 	}
 	return points
+}
+
+func scaleTypedBatch(start int, end int, hostCache []string) mts.TypedBatch {
+	return newScaleTypedBatchBuilder(end-start).Build(start, end, hostCache)
+}
+
+type scaleTypedBatchBuilder struct {
+	timestamps []int64
+	hosts      []string
+	f0         []float64
+	f1         []float64
+	f2         []float64
+	f3         []float64
+	f4         []float64
+	i0         []int64
+	i1         []int64
+	i2         []int64
+	s0         []string
+	b0         []bool
+	batch      mts.TypedBatch
+}
+
+func newScaleTypedBatchBuilder(capacity int) *scaleTypedBatchBuilder {
+	builder := &scaleTypedBatchBuilder{}
+	builder.ensureCapacity(capacity)
+	builder.batch = mts.TypedBatch{
+		Measurement: "scale",
+		Tags:        []mts.TagColumn{{Name: "host"}},
+		Fields: []mts.TypedFieldColumn{
+			{Name: "f0", Type: mts.FieldFloat64},
+			{Name: "f1", Type: mts.FieldFloat64},
+			{Name: "f2", Type: mts.FieldFloat64},
+			{Name: "f3", Type: mts.FieldFloat64},
+			{Name: "f4", Type: mts.FieldFloat64},
+			{Name: "i0", Type: mts.FieldInt64},
+			{Name: "i1", Type: mts.FieldInt64},
+			{Name: "i2", Type: mts.FieldInt64},
+			{Name: "s0", Type: mts.FieldString},
+			{Name: "b0", Type: mts.FieldBool},
+		},
+	}
+	return builder
+}
+
+func (b *scaleTypedBatchBuilder) Build(start int, end int, hostCache []string) mts.TypedBatch {
+	count := end - start
+	b.ensureCapacity(count)
+	b.resize(count)
+	for offset := range count {
+		index := start + offset
+		b.fillRow(offset, index, hostCache)
+	}
+	return b.batch
+}
+
+func (b *scaleTypedBatchBuilder) fillRow(offset int, index int, hostCache []string) {
+	b.timestamps[offset] = int64(index)
+	b.hosts[offset] = hostCache[index%len(hostCache)]
+	b.f0[offset] = float64(index)
+	b.f1[offset] = float64(index) * 1.1
+	b.f2[offset] = float64(index) * 1.2
+	b.f3[offset] = float64(index) * 1.3
+	b.f4[offset] = float64(index) * 1.4
+	b.i0[offset] = int64(index)
+	b.i1[offset] = int64(index + 1)
+	b.i2[offset] = int64(index + 2)
+	b.s0[offset] = "ok"
+	b.b0[offset] = index%2 == 0
+}
+
+func (b *scaleTypedBatchBuilder) ensureCapacity(count int) {
+	if cap(b.timestamps) >= count {
+		return
+	}
+	b.timestamps = make([]int64, count)
+	b.hosts = make([]string, count)
+	b.f0 = make([]float64, count)
+	b.f1 = make([]float64, count)
+	b.f2 = make([]float64, count)
+	b.f3 = make([]float64, count)
+	b.f4 = make([]float64, count)
+	b.i0 = make([]int64, count)
+	b.i1 = make([]int64, count)
+	b.i2 = make([]int64, count)
+	b.s0 = make([]string, count)
+	b.b0 = make([]bool, count)
+}
+
+func (b *scaleTypedBatchBuilder) resize(count int) {
+	b.batch.Timestamps = b.timestamps[:count]
+	b.batch.Tags[0].Values = b.hosts[:count]
+	b.batch.Fields[0].Float64Values = b.f0[:count]
+	b.batch.Fields[1].Float64Values = b.f1[:count]
+	b.batch.Fields[2].Float64Values = b.f2[:count]
+	b.batch.Fields[3].Float64Values = b.f3[:count]
+	b.batch.Fields[4].Float64Values = b.f4[:count]
+	b.batch.Fields[5].Int64Values = b.i0[:count]
+	b.batch.Fields[6].Int64Values = b.i1[:count]
+	b.batch.Fields[7].Int64Values = b.i2[:count]
+	b.batch.Fields[8].StringValues = b.s0[:count]
+	b.batch.Fields[9].BoolValues = b.b0[:count]
+}
+
+func scaleHostCache(count int) []string {
+	hosts := make([]string, count)
+	for index := range count {
+		hosts[index] = fmt.Sprintf("host-%03d", index)
+	}
+	return hosts
 }
 
 func dirSize(root string) (int64, error) {

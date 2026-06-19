@@ -245,6 +245,49 @@ func TestSnapshotColumnsAreSortedAndCompacted(t *testing.T) {
 	}
 }
 
+func TestSnapshotForEachSeriesStreamsSortedSeries(t *testing.T) {
+	mt := memtable.New()
+	points := []model.ResolvedPoint{
+		resolvedPointWithFields(2, 20, 1, []model.ResolvedField{
+			{FieldID: 3, Type: model.FieldInt64, Value: model.Int64Value(20)},
+		}),
+		resolvedPointWithFields(1, 10, 1, []model.ResolvedField{
+			{FieldID: 4, Type: model.FieldBool, Value: model.BoolValue(true)},
+			{FieldID: 2, Type: model.FieldFloat64, Value: model.Float64Value(1)},
+		}),
+		resolvedPointWithFields(1, 10, 2, []model.ResolvedField{
+			{FieldID: 2, Type: model.FieldFloat64, Value: model.Float64Value(2)},
+		}),
+	}
+	if err := mt.ApplyBatch(points); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+
+	var gotSeries []uint64
+	var gotFields [][]uint32
+	err := mt.Snapshot().ForEachSeries(memtable.Query{Start: 0, End: 30}, func(seriesID uint64, columns []model.ColumnData) error {
+		gotSeries = append(gotSeries, seriesID)
+		fields := make([]uint32, 0, len(columns))
+		for _, column := range columns {
+			fields = append(fields, column.FieldID)
+			if len(column.Samples) == 0 {
+				t.Fatalf("series %d field %d has empty samples", seriesID, column.FieldID)
+			}
+		}
+		gotFields = append(gotFields, fields)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ForEachSeries() error = %v", err)
+	}
+	if !reflect.DeepEqual(gotSeries, []uint64{1, 2}) {
+		t.Fatalf("series order = %v, want [1 2]", gotSeries)
+	}
+	if !reflect.DeepEqual(gotFields, [][]uint32{{2, 4}, {3}}) {
+		t.Fatalf("field groups = %v, want [[2 4] [3]]", gotFields)
+	}
+}
+
 func TestSnapshotAndResetKeepsSnapshotStable(t *testing.T) {
 	mt := memtable.New()
 	if err := mt.Apply(resolvedPoint(1, 10, 1, model.Float64Value(1))); err != nil {
@@ -296,17 +339,26 @@ func TestRestoreMergesSnapshotWithCurrentData(t *testing.T) {
 }
 
 func resolvedPoint(seriesID uint64, timestamp int64, seq uint64, value model.FieldValue) model.ResolvedPoint {
+	return resolvedPointWithFields(seriesID, timestamp, seq, []model.ResolvedField{
+		{
+			FieldID:   2,
+			FieldName: "usage",
+			Type:      value.Type,
+			Value:     value,
+		},
+	})
+}
+
+func resolvedPointWithFields(
+	seriesID uint64,
+	timestamp int64,
+	seq uint64,
+	fields []model.ResolvedField,
+) model.ResolvedPoint {
 	return model.ResolvedPoint{
 		SeriesID:  seriesID,
 		Timestamp: timestamp,
 		WriteSeq:  seq,
-		Fields: []model.ResolvedField{
-			{
-				FieldID:   2,
-				FieldName: "usage",
-				Type:      value.Type,
-				Value:     value,
-			},
-		},
+		Fields:    fields,
 	}
 }

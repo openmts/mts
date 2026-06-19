@@ -178,6 +178,94 @@ func TestEngineReplaysUnflushedWAL(t *testing.T) {
 	}
 }
 
+func TestEngineWriteTypedBatchFlushReopenQueryRows(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	opts := mts.Options{
+		Path:               dir,
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 100,
+	}
+	eng, err := mts.Open(ctx, opts)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	batch := mts.TypedBatch{
+		Measurement: "typed",
+		Tags: []mts.TagColumn{
+			{Name: "host", Values: []string{"a", "a", "b"}},
+		},
+		Timestamps: []int64{10, 20, 30},
+		Fields: []mts.TypedFieldColumn{
+			{Name: "usage", Type: mts.FieldFloat64, Float64Values: []float64{1.5, 2.5, 3.5}},
+			{Name: "count", Type: mts.FieldInt64, Int64Values: []int64{1, 2, 3}},
+			{Name: "state", Type: mts.FieldString, StringValues: []string{"ok", "warn", "ok"}},
+			{Name: "active", Type: mts.FieldBool, BoolValues: []bool{true, false, true}},
+		},
+	}
+	if err := eng.WriteTypedBatch(ctx, batch, mts.WriteOptions{Sync: true}); err != nil {
+		t.Fatalf("WriteTypedBatch() error = %v", err)
+	}
+	if err := eng.Flush(ctx); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := mts.Open(ctx, opts)
+	if err != nil {
+		t.Fatalf("Open(reopen) error = %v", err)
+	}
+	rows, err := reopened.QueryRows(ctx, mts.Query{
+		Measurement: "typed",
+		Tags:        map[string]string{"host": "a"},
+		StartTime:   0,
+		EndTime:     100,
+	})
+	if err != nil {
+		closeErr := reopened.Close(ctx)
+		t.Fatalf("QueryRows() error = %v close = %v", err, closeErr)
+	}
+	if len(rows) != 2 {
+		closeErr := reopened.Close(ctx)
+		t.Fatalf("row count = %d, want 2 close = %v", len(rows), closeErr)
+	}
+	if rows[0].Fields["usage"].Float64 != 1.5 || rows[1].Fields["state"].String != "warn" {
+		closeErr := reopened.Close(ctx)
+		t.Fatalf("rows = %#v, want typed field values close = %v", rows, closeErr)
+	}
+	if err := reopened.Close(ctx); err != nil {
+		t.Fatalf("Close(reopened) error = %v", err)
+	}
+}
+
+func TestEngineWriteTypedBatchRejectsInvalidColumnLength(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 100,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	err = eng.WriteTypedBatch(ctx, mts.TypedBatch{
+		Measurement: "typed",
+		Timestamps:  []int64{10, 20},
+		Fields: []mts.TypedFieldColumn{
+			{Name: "usage", Type: mts.FieldFloat64, Float64Values: []float64{1.5}},
+		},
+	}, mts.WriteOptions{})
+	closeErr := eng.Close(ctx)
+	if err == nil {
+		t.Fatalf("WriteTypedBatch() error = nil, want length error close = %v", closeErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("Close() error = %v", closeErr)
+	}
+}
+
 func TestPublicAPIReturnsErrorsForInvalidPathAndCanceledQuery(t *testing.T) {
 	ctx := context.Background()
 	if _, err := mts.Open(ctx, mts.Options{Path: "bad\x00path"}); err == nil {

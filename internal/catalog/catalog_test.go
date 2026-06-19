@@ -396,6 +396,55 @@ func TestCatalogResolvePointClonesTagsAndResolvePointsBorrowsTags(t *testing.T) 
 	}
 }
 
+func TestCatalogResolveTypedBatchColumnsBorrowsValues(t *testing.T) {
+	cat, err := catalog.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := cat.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+
+	batch := model.TypedBatch{
+		Database:        "db",
+		RetentionPolicy: "rp",
+		Measurement:     "cpu",
+		Tags: []model.TagColumn{
+			{Name: "host", Values: []string{"a", "b", "a"}},
+		},
+		Timestamps: []int64{10, 20, 30},
+		Fields: []model.TypedFieldColumn{
+			{Name: "usage", Type: model.FieldFloat64, Float64Values: []float64{1.1, 2.2, 3.3}},
+			{Name: "state", Type: model.FieldString, StringValues: []string{"ok", "warn", "ok"}},
+		},
+	}
+
+	resolved, err := cat.ResolveTypedBatchColumns(batch)
+	if err != nil {
+		t.Fatalf("ResolveTypedBatchColumns() error = %v", err)
+	}
+	if len(resolved.SeriesIDs) != len(batch.Timestamps) {
+		t.Fatalf("series ids len = %d, want %d", len(resolved.SeriesIDs), len(batch.Timestamps))
+	}
+	if resolved.SeriesIDs[0] == 0 || resolved.SeriesIDs[0] != resolved.SeriesIDs[2] {
+		t.Fatalf("series ids = %#v, want repeated host to reuse series", resolved.SeriesIDs)
+	}
+	if len(resolved.Fields) != 2 {
+		t.Fatalf("fields len = %d, want 2", len(resolved.Fields))
+	}
+	if resolved.Fields[0].FieldID == 0 || resolved.Fields[0].Type != model.FieldFloat64 {
+		t.Fatalf("first field = %#v, want resolved float field", resolved.Fields[0])
+	}
+	if &resolved.Fields[0].Float64Values[0] != &batch.Fields[0].Float64Values[0] {
+		t.Fatal("float values were copied, want typed resolver to borrow batch column")
+	}
+	if &resolved.Fields[1].StringValues[0] != &batch.Fields[1].StringValues[0] {
+		t.Fatal("string values were copied, want typed resolver to borrow batch column")
+	}
+}
+
 func TestCatalogResolvePointsRejectsInvalidPoint(t *testing.T) {
 	cat, err := catalog.Open(t.TempDir())
 	if err != nil {

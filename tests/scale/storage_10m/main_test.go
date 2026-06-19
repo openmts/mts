@@ -31,6 +31,7 @@ func TestParseConfigRejectsInvalidInput(t *testing.T) {
 		{"-batch-size", "0"},
 		{"-mode", "bad"},
 		{"-profile", "bad"},
+		{"-ingest-path", "bad"},
 	} {
 		if _, err := parseConfig(args); err == nil {
 			t.Fatalf("parseConfig(%v) error = nil, want error", args)
@@ -50,6 +51,9 @@ func TestParseConfigProfilesAndThresholds(t *testing.T) {
 	}
 	if cfg.profile != "quick" || cfg.points != 10000 || cfg.maxRSSBytes != 1024 {
 		t.Fatalf("config = %#v, want quick profile and rss threshold", cfg)
+	}
+	if cfg.ingestPath != "typed" {
+		t.Fatalf("ingestPath = %q, want typed", cfg.ingestPath)
 	}
 	if cfg.maxSSTableCount != 3 || cfg.maxCompactionBacklog != 1 {
 		t.Fatalf("config thresholds = %#v, want sstable/backlog thresholds", cfg)
@@ -146,6 +150,48 @@ func TestReportIncludesAmplificationAndLevelDistribution(t *testing.T) {
 
 func structCompactionStats(backlog int) mts.CompactionStats {
 	return mts.CompactionStats{Backlog: backlog}
+}
+
+func TestScaleTypedBatch(t *testing.T) {
+	batch := scaleTypedBatch(2, 5, scaleHostCache(100))
+	if len(batch.Timestamps) != 3 {
+		t.Fatalf("typed timestamps len = %d, want 3", len(batch.Timestamps))
+	}
+	if len(batch.Tags) != 1 || batch.Tags[0].Values[0] != "host-002" {
+		t.Fatalf("typed tags = %#v, want first host-002", batch.Tags)
+	}
+	if len(batch.Fields) != 10 {
+		t.Fatalf("typed fields len = %d, want 10", len(batch.Fields))
+	}
+	if batch.Fields[0].Float64Values[2] != 4 {
+		t.Fatalf("f0 last value = %v, want 4", batch.Fields[0].Float64Values[2])
+	}
+	if !batch.Fields[9].BoolValues[0] {
+		t.Fatalf("b0 first value = false, want true")
+	}
+}
+
+func TestScaleTypedBatchBuilderReusesBackingArrays(t *testing.T) {
+	builder := newScaleTypedBatchBuilder(4)
+	hosts := scaleHostCache(100)
+	first := builder.Build(0, 4, hosts)
+	second := builder.Build(4, 8, hosts)
+	if len(first.Timestamps) == 0 || len(second.Timestamps) == 0 {
+		t.Fatal("typed batches are empty")
+	}
+	if &first.Timestamps[0] != &second.Timestamps[0] {
+		t.Fatal("timestamp backing array was not reused")
+	}
+	if &first.Tags[0].Values[0] != &second.Tags[0].Values[0] {
+		t.Fatal("tag backing array was not reused")
+	}
+	if &first.Fields[0].Float64Values[0] != &second.Fields[0].Float64Values[0] {
+		t.Fatal("field backing array was not reused")
+	}
+	if second.Timestamps[0] != 4 || second.Fields[0].Float64Values[0] != 4 {
+		t.Fatalf("second batch first row = time %d f0 %v, want 4",
+			second.Timestamps[0], second.Fields[0].Float64Values[0])
+	}
 }
 
 func TestRunWorkloadRejectsInvalidDirectory(t *testing.T) {

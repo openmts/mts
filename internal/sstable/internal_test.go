@@ -382,6 +382,33 @@ func TestIndexRowStreamSkipsAndReportsUndrainedRows(t *testing.T) {
 	}
 }
 
+func TestEncodeIndexRowsIntoReusesDestination(t *testing.T) {
+	row := indexRow{
+		SeriesID: 1,
+		MinTime:  10,
+		MaxTime:  20,
+		TimeRef:  blockRef{Offset: 1, Size: 2},
+		Columns: []columnRef{
+			{FieldID: 1, FieldType: model.FieldFloat64, ValueRef: blockRef{Offset: 3, Size: 4}},
+		},
+	}
+	dst := make([]byte, 0, 256)
+	encoded, err := encodeIndexRowsInto(dst, []indexRow{row})
+	if err != nil {
+		t.Fatalf("encodeIndexRowsInto() error = %v", err)
+	}
+	if cap(encoded) != cap(dst) {
+		t.Fatalf("encoded cap = %d, want reused cap %d", cap(encoded), cap(dst))
+	}
+	decoded, err := decodeIndexRows(encoded)
+	if err != nil {
+		t.Fatalf("decodeIndexRows() error = %v", err)
+	}
+	if len(decoded) != 1 || decoded[0].SeriesID != row.SeriesID {
+		t.Fatalf("decoded rows = %#v, want row %#v", decoded, row)
+	}
+}
+
 func TestSeriesBatchReaderCachesIndexRows(t *testing.T) {
 	dir := t.TempDir()
 	meta, err := WritePart(dir, 0, "sst-series-reader", []model.ColumnData{
@@ -1169,6 +1196,38 @@ func TestOpenPartRejectsComponentChecksumCorruption(t *testing.T) {
 	}
 }
 
+func TestOpenPartTrustedSkipsDeepValueValidation(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, 300),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	path := filepath.Join(meta.Path, valuesFile)
+	file, err := os.OpenFile(path, os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatalf("OpenFile(values) error = %v", err)
+	}
+	if _, err := file.WriteAt([]byte{0xff}, 16); err != nil {
+		closeErr := file.Close()
+		t.Fatalf("WriteAt(values) error = %v close = %v", err, closeErr)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close(values) error = %v", err)
+	}
+	if _, err := OpenPart(meta.Path); err == nil {
+		t.Fatal("OpenPart(corrupt values component) error = nil, want checksum error")
+	}
+	part, err := OpenPartTrusted(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPartTrusted(corrupt values component) error = %v, want trusted warm open", err)
+	}
+	if closeErr := part.Close(); closeErr != nil {
+		t.Fatalf("trusted Close() error = %v", closeErr)
+	}
+}
+
 func TestPartQueryFallsBackToPathAfterClose(t *testing.T) {
 	dir := t.TempDir()
 	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
@@ -1419,6 +1478,29 @@ func TestPartReadBlockRejectsUnknownFile(t *testing.T) {
 	}
 	if err := closeFile(nil, "nil"); err != nil {
 		t.Fatalf("closeFile(nil) error = %v", err)
+	}
+}
+
+func TestValidateBlockRefWithinSize(t *testing.T) {
+	if err := validateBlockRefWithinSize(100, blockRef{Offset: 10, Size: 20}); err != nil {
+		t.Fatalf("validateBlockRefWithinSize(valid) error = %v", err)
+	}
+	for _, item := range []struct {
+		name string
+		size int64
+		ref  blockRef
+	}{
+		{name: "negative offset", size: 100, ref: blockRef{Offset: -1, Size: 1}},
+		{name: "negative size", size: 100, ref: blockRef{Offset: 0, Size: -1}},
+		{name: "zero size", size: 100, ref: blockRef{Offset: 0, Size: 0}},
+		{name: "past end", size: 100, ref: blockRef{Offset: 101, Size: 1}},
+		{name: "spans end", size: 100, ref: blockRef{Offset: 99, Size: 2}},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			if err := validateBlockRefWithinSize(item.size, item.ref); err == nil {
+				t.Fatal("validateBlockRefWithinSize() error = nil, want error")
+			}
+		})
 	}
 }
 

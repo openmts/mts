@@ -11,9 +11,18 @@ import (
 )
 
 func encodeBatch(records []model.ResolvedPoint) ([]byte, error) {
+	return encodeBatchInto(nil, records)
+}
+
+func encodeBatchInto(dst []byte, records []model.ResolvedPoint) ([]byte, error) {
 	identities, identityRefs := batchIdentities(records)
 	fieldNames, fieldNameRefs := batchFieldNames(records)
-	dst := make([]byte, 0, estimateBatchSize(records))
+	size := estimateBatchSize(records)
+	if cap(dst) < size {
+		dst = make([]byte, 0, size)
+	} else {
+		dst = dst[:0]
+	}
 	dst = binary.AppendUvarint(dst, uint64(len(identities)))
 	for _, identity := range identities {
 		dst = appendIdentity(dst, identity)
@@ -31,6 +40,57 @@ func encodeBatch(records []model.ResolvedPoint) ([]byte, error) {
 		}
 	}
 	return dst, nil
+}
+
+func encodeTypedBatchInto(
+	dst []byte,
+	batch model.ResolvedTypedBatch,
+	rows []int,
+) ([]byte, error) {
+	if err := validateResolvedTypedBatch(batch, rows); err != nil {
+		return nil, err
+	}
+	identityRows, identityRefs := typedBatchIdentities(batch, rows)
+	size := estimateTypedBatchSize(batch, rows, identityRows)
+	if cap(dst) < size {
+		dst = make([]byte, 0, size)
+	} else {
+		dst = dst[:0]
+	}
+	tagOrder := typedTagOrder(batch.Tags)
+	dst = binary.AppendUvarint(dst, uint64(len(identityRows)))
+	for _, row := range identityRows {
+		dst = appendTypedIdentity(dst, batch, row, tagOrder)
+	}
+	dst = appendTypedFieldNames(dst, batch.Fields)
+	dst = binary.AppendUvarint(dst, uint64(typedRowCount(batch, rows)))
+	for position, ref := range identityRefs {
+		row := typedRowIndex(rows, position)
+		var err error
+		dst, err = appendTypedPoint(dst, batch, row, ref)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+func validateResolvedTypedBatch(batch model.ResolvedTypedBatch, rows []int) error {
+	count := len(batch.Timestamps)
+	if len(batch.SeriesIDs) != count || len(batch.WriteSeqs) != count {
+		return fmt.Errorf("resolved typed batch row metadata length mismatch")
+	}
+	for _, row := range rows {
+		if row < 0 || row >= count {
+			return fmt.Errorf("resolved typed row index %d out of range", row)
+		}
+	}
+	for _, field := range batch.Fields {
+		if typedResolvedFieldLen(field) != count {
+			return fmt.Errorf("resolved typed field %s length mismatch", field.Name)
+		}
+	}
+	return nil
 }
 
 type batchIdentity struct {
@@ -151,6 +211,59 @@ func (i seriesRefIndex) setIfAbsent(seriesID uint64, ref int) {
 	}
 }
 
+func typedBatchIdentities(batch model.ResolvedTypedBatch, rows []int) ([]int, []int) {
+	count := typedRowCount(batch, rows)
+	identityRows := make([]int, 0)
+	refs := make([]int, count)
+	seen := newTypedSeriesRefIndex(batch, rows)
+	for position := range count {
+		row := typedRowIndex(rows, position)
+		seriesID := batch.SeriesIDs[row]
+		if ref, ok := seen.lookup(seriesID); ok {
+			refs[position] = ref
+			continue
+		}
+		ref := len(identityRows)
+		seen.setIfAbsent(seriesID, ref)
+		identityRows = append(identityRows, row)
+		refs[position] = ref
+	}
+	return identityRows, refs
+}
+
+func newTypedSeriesRefIndex(batch model.ResolvedTypedBatch, rows []int) seriesRefIndex {
+	minID, maxID, ok := typedSeriesIDRange(batch, rows)
+	if !ok {
+		return seriesRefIndex{}
+	}
+	span := maxID - minID + 1
+	maxDenseSpan := uint64(typedRowCount(batch, rows) * denseSeriesRefMaxSpanFactor)
+	if span <= maxDenseSpan {
+		return seriesRefIndex{base: minID, dense: make([]int, int(span))}
+	}
+	return seriesRefIndex{sparse: make(map[uint64]int, typedRowCount(batch, rows))}
+}
+
+func typedSeriesIDRange(batch model.ResolvedTypedBatch, rows []int) (uint64, uint64, bool) {
+	var minID uint64
+	var maxID uint64
+	found := false
+	for position := range typedRowCount(batch, rows) {
+		seriesID := batch.SeriesIDs[typedRowIndex(rows, position)]
+		if seriesID == 0 {
+			continue
+		}
+		if !found || seriesID < minID {
+			minID = seriesID
+		}
+		if seriesID > maxID {
+			maxID = seriesID
+		}
+		found = true
+	}
+	return minID, maxID, found
+}
+
 func identityRefByKey(
 	record model.ResolvedPoint,
 	seen map[string]int,
@@ -248,12 +361,88 @@ func appendIdentity(dst []byte, identity batchIdentity) []byte {
 	return appendTags(dst, identity.tags)
 }
 
+func appendTypedIdentity(
+	dst []byte,
+	batch model.ResolvedTypedBatch,
+	row int,
+	tagOrder []int,
+) []byte {
+	dst = codec.AppendString(dst, batch.Database)
+	dst = codec.AppendString(dst, batch.RetentionPolicy)
+	dst = codec.AppendString(dst, batch.Measurement)
+	return appendTypedTags(dst, batch.Tags, row, tagOrder)
+}
+
+func appendTypedFieldNames(dst []byte, fields []model.ResolvedTypedFieldColumn) []byte {
+	dst = binary.AppendUvarint(dst, uint64(len(fields)))
+	for _, field := range fields {
+		dst = codec.AppendString(dst, field.Name)
+	}
+	return dst
+}
+
 func estimateBatchSize(records []model.ResolvedPoint) int {
 	size := uvarintSize(uint64(len(records)))
 	for _, record := range records {
 		size += estimatePointSize(record)
 	}
 	return size
+}
+
+func estimateTypedBatchSize(
+	batch model.ResolvedTypedBatch,
+	rows []int,
+	identityRows []int,
+) int {
+	size := uvarintSize(uint64(len(identityRows)))
+	for _, row := range identityRows {
+		size += estimateTypedIdentitySize(batch, row)
+	}
+	size += uvarintSize(uint64(len(batch.Fields)))
+	for _, field := range batch.Fields {
+		size += stringSize(field.Name)
+	}
+	for position := range typedRowCount(batch, rows) {
+		size += estimateTypedPointSize(batch, typedRowIndex(rows, position))
+	}
+	return size
+}
+
+func estimateTypedIdentitySize(batch model.ResolvedTypedBatch, row int) int {
+	size := stringSize(batch.Database)
+	size += stringSize(batch.RetentionPolicy)
+	size += stringSize(batch.Measurement)
+	for _, tag := range batch.Tags {
+		size += stringSize(tag.Name) + stringSize(tag.Values[row])
+	}
+	return size + uvarintSize(uint64(len(batch.Tags)))
+}
+
+func estimateTypedPointSize(batch model.ResolvedTypedBatch, row int) int {
+	size := uvarintSize(0) + uvarintSize(batch.SeriesIDs[row])
+	size += varintSize(batch.Timestamps[row])
+	size += uvarintSize(batch.WriteSeqs[row])
+	size += uvarintSize(uint64(len(batch.Fields)))
+	for _, field := range batch.Fields {
+		size += estimateTypedFieldSize(field, row)
+	}
+	return size
+}
+
+func estimateTypedFieldSize(field model.ResolvedTypedFieldColumn, row int) int {
+	size := uvarintSize(uint64(field.FieldID)) + uvarintSize(0) + 1
+	switch field.Type {
+	case model.FieldFloat64:
+		return size + 8
+	case model.FieldInt64:
+		return size + varintSize(field.Int64Values[row])
+	case model.FieldString:
+		return size + stringSize(field.StringValues[row])
+	case model.FieldBool:
+		return size + 1
+	default:
+		return size
+	}
 }
 
 func estimatePointSize(point model.ResolvedPoint) int {
@@ -545,6 +734,27 @@ func appendPoint(
 	return dst, nil
 }
 
+func appendTypedPoint(
+	dst []byte,
+	batch model.ResolvedTypedBatch,
+	row int,
+	identityRef int,
+) ([]byte, error) {
+	dst = binary.AppendUvarint(dst, uint64(identityRef))
+	dst = binary.AppendUvarint(dst, batch.SeriesIDs[row])
+	dst = binary.AppendVarint(dst, batch.Timestamps[row])
+	dst = binary.AppendUvarint(dst, batch.WriteSeqs[row])
+	dst = binary.AppendUvarint(dst, uint64(len(batch.Fields)))
+	for fieldNameRef, field := range batch.Fields {
+		var err error
+		dst, err = appendTypedField(dst, field, row, fieldNameRef)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
 func readPoint(
 	reader *batchReader,
 	identities []batchIdentity,
@@ -599,6 +809,18 @@ func appendField(dst []byte, field model.ResolvedField, fieldNameRef int) ([]byt
 	dst = binary.AppendUvarint(dst, uint64(fieldNameRef))
 	dst = append(dst, byte(field.Type))
 	return appendValuePayload(dst, field.Value)
+}
+
+func appendTypedField(
+	dst []byte,
+	field model.ResolvedTypedFieldColumn,
+	row int,
+	fieldNameRef int,
+) ([]byte, error) {
+	dst = binary.AppendUvarint(dst, uint64(field.FieldID))
+	dst = binary.AppendUvarint(dst, uint64(fieldNameRef))
+	dst = append(dst, byte(field.Type))
+	return appendTypedValuePayload(dst, field, row)
 }
 
 func readFields(reader *batchReader, fieldNames []string) ([]model.ResolvedField, error) {
@@ -677,6 +899,38 @@ func appendTags(dst []byte, tags map[string]string) []byte {
 	return dst
 }
 
+func appendTypedTags(dst []byte, tags []model.TagColumn, row int, order []int) []byte {
+	if len(tags) == 0 {
+		return binary.AppendUvarint(dst, 0)
+	}
+	dst = binary.AppendUvarint(dst, uint64(len(tags)))
+	if len(tags) == 1 {
+		tag := tags[0]
+		dst = codec.AppendString(dst, tag.Name)
+		return codec.AppendString(dst, tag.Values[row])
+	}
+	for _, index := range order {
+		tag := tags[index]
+		dst = codec.AppendString(dst, tag.Name)
+		dst = codec.AppendString(dst, tag.Values[row])
+	}
+	return dst
+}
+
+func typedTagOrder(tags []model.TagColumn) []int {
+	if len(tags) <= 1 {
+		return nil
+	}
+	order := make([]int, len(tags))
+	for index := range tags {
+		order[index] = index
+	}
+	sort.Slice(order, func(i int, j int) bool {
+		return tags[order[i]].Name < tags[order[j]].Name
+	})
+	return order
+}
+
 func readTags(reader *batchReader) (map[string]string, error) {
 	count, err := reader.intCount("tag count")
 	if err != nil {
@@ -735,6 +989,57 @@ func appendValuePayload(dst []byte, value model.FieldValue) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("unsupported field value type %d", value.Type)
 	}
+}
+
+func appendTypedValuePayload(
+	dst []byte,
+	field model.ResolvedTypedFieldColumn,
+	row int,
+) ([]byte, error) {
+	switch field.Type {
+	case model.FieldFloat64:
+		return binary.LittleEndian.AppendUint64(dst, math.Float64bits(field.Float64Values[row])), nil
+	case model.FieldInt64:
+		return binary.AppendVarint(dst, field.Int64Values[row]), nil
+	case model.FieldString:
+		return codec.AppendString(dst, field.StringValues[row]), nil
+	case model.FieldBool:
+		if field.BoolValues[row] {
+			return append(dst, 1), nil
+		}
+		return append(dst, 0), nil
+	default:
+		return nil, fmt.Errorf("unsupported typed field value type %d", field.Type)
+	}
+}
+
+func typedResolvedFieldLen(field model.ResolvedTypedFieldColumn) int {
+	switch field.Type {
+	case model.FieldFloat64:
+		return len(field.Float64Values)
+	case model.FieldInt64:
+		return len(field.Int64Values)
+	case model.FieldString:
+		return len(field.StringValues)
+	case model.FieldBool:
+		return len(field.BoolValues)
+	default:
+		return -1
+	}
+}
+
+func typedRowCount(batch model.ResolvedTypedBatch, rows []int) int {
+	if len(rows) > 0 {
+		return len(rows)
+	}
+	return len(batch.Timestamps)
+}
+
+func typedRowIndex(rows []int, position int) int {
+	if len(rows) > 0 {
+		return rows[position]
+	}
+	return position
 }
 
 func readValuePayload(fieldType model.FieldType, reader *batchReader) (model.FieldValue, error) {

@@ -1,11 +1,12 @@
 package sstable
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/openmts/mts/internal/model"
@@ -151,8 +152,8 @@ func writeSeries(
 	columns []model.ColumnData,
 	opts WriteOptions,
 ) (indexRow, error) {
-	sort.Slice(columns, func(i, j int) bool {
-		return columns[i].FieldID < columns[j].FieldID
+	slices.SortFunc(columns, func(left model.ColumnData, right model.ColumnData) int {
+		return cmp.Compare(left.FieldID, right.FieldID)
 	})
 	timestamps := collectTimestamps(columns)
 	timePayload := marshalTimeBlock(nil, timestamps)
@@ -286,7 +287,7 @@ func writeIndexBlocks(path string, rows []indexRow) (blockRef, []blockRef, error
 		closeErr := file.Close()
 		return blockRef{}, nil, fmt.Errorf("open index block writer: %w close index: %v", err, closeErr)
 	}
-	indexPayload, err := encodeIndexRows(rows)
+	indexPayload, err := encodeIndexRowsInto(nil, rows)
 	if err != nil {
 		closeErr := file.Close()
 		return blockRef{}, nil, errorsWithClose(err, closeErr)
@@ -297,8 +298,9 @@ func writeIndexBlocks(path string, rows []indexRow) (blockRef, []blockRef, error
 		return blockRef{}, nil, errorsWithClose(err, closeErr)
 	}
 	rowRefs := make([]blockRef, 0, len(rows))
+	rowPayload := make([]byte, 0)
 	for _, row := range rows {
-		rowPayload, err := encodeIndexRows([]indexRow{row})
+		rowPayload, err = encodeIndexRowsInto(rowPayload[:0], []indexRow{row})
 		if err != nil {
 			closeErr := file.Close()
 			return blockRef{}, nil, errorsWithClose(err, closeErr)

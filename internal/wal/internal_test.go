@@ -328,6 +328,39 @@ func TestEncodeBatchUsesScratchRefsArena(t *testing.T) {
 	}
 }
 
+func TestEncodeBatchIntoReusesDestination(t *testing.T) {
+	records := []model.ResolvedPoint{
+		walDictionaryPointForTest(1, 10, 1),
+		walDictionaryPointForTest(2, 11, 2),
+	}
+	first, err := encodeBatchInto(make([]byte, 0, 1024), records)
+	if err != nil {
+		t.Fatalf("encodeBatchInto(first) error = %v", err)
+	}
+	second, err := encodeBatchInto(first[:0], records)
+	if err != nil {
+		t.Fatalf("encodeBatchInto(second) error = %v", err)
+	}
+	if len(first) == 0 || len(second) == 0 {
+		t.Fatal("encoded payload is empty")
+	}
+	if &first[:cap(first)][0] != &second[:cap(second)][0] {
+		t.Fatal("encodeBatchInto did not reuse destination backing array")
+	}
+}
+
+func TestEncodeFrameIntoReusesDestination(t *testing.T) {
+	payload := []byte{1, 2, 3, 4}
+	first := encodeFrameInto(make([]byte, 0, 64), recordWriteBatch, payload)
+	second := encodeFrameInto(first[:0], recordWriteBatch, payload)
+	if len(first) == 0 || len(second) == 0 {
+		t.Fatal("encoded frame is empty")
+	}
+	if &first[:cap(first)][0] != &second[:cap(second)][0] {
+		t.Fatal("encodeFrameInto did not reuse destination backing array")
+	}
+}
+
 func TestBatchIdentityScratchFallbacks(t *testing.T) {
 	first := walWidePointForTest(1)
 	second := walWidePointForTest(2)
@@ -418,6 +451,75 @@ func TestWALBatchRejectsBadReferences(t *testing.T) {
 		}
 	}
 	t.Fatal("decodeBatch(corrupt refs) error = nil, want error")
+}
+
+func TestEncodeTypedBatchIntoDecodesAsResolvedPoints(t *testing.T) {
+	batch := model.ResolvedTypedBatch{
+		Database:        "db",
+		RetentionPolicy: "rp",
+		Measurement:     "cpu",
+		Tags: []model.TagColumn{
+			{Name: "region", Values: []string{"west", "east"}},
+			{Name: "host", Values: []string{"a", "b"}},
+		},
+		Timestamps: []int64{10, 20},
+		SeriesIDs:  []uint64{1, 2},
+		WriteSeqs:  []uint64{7, 8},
+		Fields: []model.ResolvedTypedFieldColumn{
+			{
+				FieldID:       1,
+				Name:          "usage",
+				Type:          model.FieldFloat64,
+				Float64Values: []float64{1.5, 2.5},
+			},
+			{
+				FieldID:      2,
+				Name:         "state",
+				Type:         model.FieldString,
+				StringValues: []string{"ok", "warn"},
+			},
+		},
+	}
+
+	payload, err := encodeTypedBatchInto(nil, batch, nil)
+	if err != nil {
+		t.Fatalf("encodeTypedBatchInto() error = %v", err)
+	}
+	got, err := decodeBatch(payload)
+	if err != nil {
+		t.Fatalf("decodeBatch(typed payload) error = %v", err)
+	}
+	want := []model.ResolvedPoint{
+		{
+			Database:        "db",
+			RetentionPolicy: "rp",
+			Measurement:     "cpu",
+			Tags:            map[string]string{"host": "a", "region": "west"},
+			SeriesID:        1,
+			Timestamp:       10,
+			WriteSeq:        7,
+			Fields: []model.ResolvedField{
+				{FieldID: 1, FieldName: "usage", Type: model.FieldFloat64, Value: model.Float64Value(1.5)},
+				{FieldID: 2, FieldName: "state", Type: model.FieldString, Value: model.StringValue("ok")},
+			},
+		},
+		{
+			Database:        "db",
+			RetentionPolicy: "rp",
+			Measurement:     "cpu",
+			Tags:            map[string]string{"host": "b", "region": "east"},
+			SeriesID:        2,
+			Timestamp:       20,
+			WriteSeq:        8,
+			Fields: []model.ResolvedField{
+				{FieldID: 1, FieldName: "usage", Type: model.FieldFloat64, Value: model.Float64Value(2.5)},
+				{FieldID: 2, FieldName: "state", Type: model.FieldString, Value: model.StringValue("warn")},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("decoded typed payload = %#v, want %#v", got, want)
+	}
 }
 
 func TestAppendTagsFastPathsAndStableMultiTagOrder(t *testing.T) {

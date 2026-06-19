@@ -3,6 +3,7 @@ package sstable
 import (
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 
 	"github.com/openmts/mts/internal/codec"
 	"github.com/openmts/mts/internal/model"
@@ -13,9 +14,13 @@ var (
 	indexMagic       = codec.Magic("MTSIDX2")
 	metaIndexMagic   = codec.Magic("MTSMIX2")
 	seriesIndexMagic = codec.Magic("MTSSIX2")
+	envelopeCRCTable = crc32.MakeTable(crc32.Castagnoli)
 )
 
-const partMetadataFlagComponents uint16 = 1
+const (
+	partMetadataFlagComponents uint16 = 1
+	envelopeReservedLenBytes          = binary.MaxVarintLen64
+)
 
 var defaultPartComponents = []string{
 	metadataFile,
@@ -25,6 +30,27 @@ var defaultPartComponents = []string{
 	timestampsFile,
 	valuesFile,
 	stringsFile,
+}
+
+func appendEnvelopePrefix(dst []byte, magic codec.Magic) []byte {
+	var fixed [7]byte
+	copy(fixed[:], string(magic))
+	dst = append(dst, fixed[:]...)
+	dst = binary.LittleEndian.AppendUint16(dst, 0)
+	return append(dst, make([]byte, envelopeReservedLenBytes)...)
+}
+
+func finishEnvelope(dst []byte, payloadStart int) []byte {
+	payloadLen := len(dst) - payloadStart
+	var length [binary.MaxVarintLen64]byte
+	size := binary.PutUvarint(length[:], uint64(payloadLen))
+	lengthStart := payloadStart - envelopeReservedLenBytes
+	finalPayloadStart := lengthStart + size
+	copy(dst[finalPayloadStart:], dst[payloadStart:])
+	dst = dst[:len(dst)-(envelopeReservedLenBytes-size)]
+	copy(dst[lengthStart:], length[:size])
+	sum := crc32.Checksum(dst, envelopeCRCTable)
+	return binary.LittleEndian.AppendUint32(dst, sum)
 }
 
 func encodeMetadata(meta metadata) ([]byte, error) {
@@ -103,7 +129,13 @@ func readMetadataTail(reader *blockReader, flags uint16) (blockRef, blockRef, bl
 }
 
 func encodeIndexRows(rows []indexRow) ([]byte, error) {
-	payload := binary.AppendUvarint(nil, uint64(len(rows)))
+	return encodeIndexRowsInto(nil, rows)
+}
+
+func encodeIndexRowsInto(dst []byte, rows []indexRow) ([]byte, error) {
+	payload := appendEnvelopePrefix(dst[:0], indexMagic)
+	payloadStart := len(payload)
+	payload = binary.AppendUvarint(payload, uint64(len(rows)))
 	var err error
 	for _, row := range rows {
 		payload, err = appendIndexRow(payload, row)
@@ -111,7 +143,7 @@ func encodeIndexRows(rows []indexRow) ([]byte, error) {
 			return nil, err
 		}
 	}
-	return codec.MarshalEnvelope(nil, indexMagic, 0, payload), nil
+	return finishEnvelope(payload, payloadStart), nil
 }
 
 func decodeIndexRows(data []byte) ([]indexRow, error) {

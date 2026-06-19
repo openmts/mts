@@ -21,6 +21,7 @@ import (
 type config struct {
 	dataDir                      string
 	mode                         string
+	ingestPath                   string
 	fieldLayout                  string
 	points                       int
 	series                       int
@@ -52,6 +53,8 @@ type config struct {
 const (
 	fieldLayoutDefault        = "default"
 	fieldLayoutWide10         = "wide10"
+	ingestPathPublic          = "public"
+	ingestPathTyped           = "typed"
 	compressionOff            = "off"
 	compressionNone           = "none"
 	defaultWriteBatchSize     = 1024
@@ -208,6 +211,7 @@ func parseConfig(args []string) (config, error) {
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&cfg.dataDir, "data-dir", "", "数据目录；为空时使用临时目录并自动清理")
 	flags.StringVar(&cfg.mode, "mode", "query", "workload 模式：write/query/compact/replay")
+	flags.StringVar(&cfg.ingestPath, "ingest-path", ingestPathTyped, "写入路径：typed/public")
 	flags.StringVar(&cfg.fieldLayout, "field-layout", fieldLayoutDefault, "字段布局：default/wide10")
 	flags.IntVar(&cfg.points, "points", 10000, "写入点数")
 	flags.IntVar(&cfg.series, "series", 100, "series 数量")
@@ -305,6 +309,11 @@ func validateConfig(cfg config) error {
 	default:
 		return fmt.Errorf("unsupported field layout %q", cfg.fieldLayout)
 	}
+	switch normalizedIngestPath(cfg.ingestPath) {
+	case ingestPathPublic, ingestPathTyped:
+	default:
+		return fmt.Errorf("unsupported ingest path %q", cfg.ingestPath)
+	}
 	switch normalizedCompressionAlgorithm(cfg.compressionAlgorithm) {
 	case compressionOff, compressionNone, "snappy", "lz4", "zstd":
 	default:
@@ -385,6 +394,13 @@ func normalizedFieldLayout(layout string) string {
 		return fieldLayoutDefault
 	}
 	return layout
+}
+
+func normalizedIngestPath(path string) string {
+	if path == "" {
+		return ingestPathTyped
+	}
+	return path
 }
 
 func storageOptions(path string, cfg config) mts.Options {
@@ -672,6 +688,9 @@ func replayWorkload(ctx context.Context, eng *mts.Engine, cfg config, dir string
 }
 
 func writePoints(ctx context.Context, eng *mts.Engine, cfg config) error {
+	if normalizedIngestPath(cfg.ingestPath) == ingestPathTyped {
+		return writeTypedPoints(ctx, eng, cfg, false)
+	}
 	batchSize := normalizedWriteBatchSize(cfg)
 	batch := make([]mts.Point, 0, batchSize)
 	for index := range cfg.points {
@@ -693,6 +712,9 @@ func writePoints(ctx context.Context, eng *mts.Engine, cfg config) error {
 }
 
 func writePointsSynced(ctx context.Context, eng *mts.Engine, cfg config) error {
+	if normalizedIngestPath(cfg.ingestPath) == ingestPathTyped {
+		return writeTypedPoints(ctx, eng, cfg, true)
+	}
 	batchSize := normalizedWriteBatchSize(cfg)
 	batch := make([]mts.Point, 0, batchSize)
 	for index := range cfg.points {
@@ -713,12 +735,127 @@ func writePointsSynced(ctx context.Context, eng *mts.Engine, cfg config) error {
 	return nil
 }
 
+func writeTypedPoints(ctx context.Context, eng *mts.Engine, cfg config, syncWrite bool) error {
+	batchSize := normalizedWriteBatchSize(cfg)
+	hostCache := workloadHostCache(cfg.series)
+	for start := 0; start < cfg.points; start += batchSize {
+		end := start + batchSize
+		if end > cfg.points {
+			end = cfg.points
+		}
+		if err := eng.WriteTypedBatch(ctx, typedWorkloadBatch(start, end, cfg, hostCache), mts.WriteOptions{Sync: syncWrite}); err != nil {
+			return fmt.Errorf("write typed batch: %w", err)
+		}
+	}
+	return nil
+}
+
 func buildWorkloadPoints(cfg config) []mts.Point {
 	points := make([]mts.Point, cfg.points)
 	for index := range cfg.points {
 		points[index] = workloadPoint(index, cfg.series, cfg.fieldLayout)
 	}
 	return points
+}
+
+func typedWorkloadBatch(start int, end int, cfg config, hostCache []string) mts.TypedBatch {
+	if normalizedFieldLayout(cfg.fieldLayout) == fieldLayoutWide10 {
+		return wide10TypedWorkloadBatch(start, end, hostCache)
+	}
+	return defaultTypedWorkloadBatch(start, end, hostCache)
+}
+
+func defaultTypedWorkloadBatch(start int, end int, hostCache []string) mts.TypedBatch {
+	count := end - start
+	timestamps, hosts := typedBatchIdentityColumns(start, end, hostCache)
+	active := make([]bool, count)
+	countValues := make([]int64, count)
+	states := make([]string, count)
+	values := make([]float64, count)
+	for offset := range count {
+		index := start + offset
+		active[offset] = index%2 == 0
+		countValues[offset] = int64(index)
+		states[offset] = "ok"
+		values[offset] = float64(index)
+	}
+	return mts.TypedBatch{
+		Measurement: "pprof",
+		Tags:        []mts.TagColumn{{Name: "host", Values: hosts}},
+		Timestamps:  timestamps,
+		Fields: []mts.TypedFieldColumn{
+			{Name: "active", Type: mts.FieldBool, BoolValues: active},
+			{Name: "count", Type: mts.FieldInt64, Int64Values: countValues},
+			{Name: "state", Type: mts.FieldString, StringValues: states},
+			{Name: "value", Type: mts.FieldFloat64, Float64Values: values},
+		},
+	}
+}
+
+func wide10TypedWorkloadBatch(start int, end int, hostCache []string) mts.TypedBatch {
+	count := end - start
+	timestamps, hosts := typedBatchIdentityColumns(start, end, hostCache)
+	active := make([]bool, count)
+	f0 := make([]float64, count)
+	f1 := make([]float64, count)
+	f2 := make([]float64, count)
+	f3 := make([]float64, count)
+	f4 := make([]float64, count)
+	i0 := make([]int64, count)
+	i1 := make([]int64, count)
+	i2 := make([]int64, count)
+	states := make([]string, count)
+	for offset := range count {
+		index := start + offset
+		seriesID := index % len(hostCache)
+		active[offset] = index%2 == 0
+		f0[offset] = float64(index)
+		f1[offset] = float64(index) + 0.1
+		f2[offset] = float64(index) + 0.2
+		f3[offset] = float64(index) + 0.3
+		f4[offset] = float64(index) + 0.4
+		i0[offset] = int64(index)
+		i1[offset] = int64(seriesID)
+		i2[offset] = int64(index % 86400)
+		states[offset] = "ok"
+	}
+	return mts.TypedBatch{
+		Measurement: "pprof",
+		Tags:        []mts.TagColumn{{Name: "host", Values: hosts}},
+		Timestamps:  timestamps,
+		Fields: []mts.TypedFieldColumn{
+			{Name: "active", Type: mts.FieldBool, BoolValues: active},
+			{Name: "f0", Type: mts.FieldFloat64, Float64Values: f0},
+			{Name: "f1", Type: mts.FieldFloat64, Float64Values: f1},
+			{Name: "f2", Type: mts.FieldFloat64, Float64Values: f2},
+			{Name: "f3", Type: mts.FieldFloat64, Float64Values: f3},
+			{Name: "f4", Type: mts.FieldFloat64, Float64Values: f4},
+			{Name: "i0", Type: mts.FieldInt64, Int64Values: i0},
+			{Name: "i1", Type: mts.FieldInt64, Int64Values: i1},
+			{Name: "i2", Type: mts.FieldInt64, Int64Values: i2},
+			{Name: "state", Type: mts.FieldString, StringValues: states},
+		},
+	}
+}
+
+func typedBatchIdentityColumns(start int, end int, hostCache []string) ([]int64, []string) {
+	count := end - start
+	timestamps := make([]int64, count)
+	hosts := make([]string, count)
+	for offset := range count {
+		index := start + offset
+		timestamps[offset] = int64(index)
+		hosts[offset] = hostCache[index%len(hostCache)]
+	}
+	return timestamps, hosts
+}
+
+func workloadHostCache(series int) []string {
+	hosts := make([]string, series)
+	for index := range series {
+		hosts[index] = fmt.Sprintf("host-%04d", index)
+	}
+	return hosts
 }
 
 func workloadPointAt(cfg config, index int) mts.Point {

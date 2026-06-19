@@ -150,6 +150,16 @@ func normalizePoint(opts model.Options, point model.Point) model.Point {
 	return point
 }
 
+func normalizeTypedBatch(opts model.Options, batch model.TypedBatch) model.TypedBatch {
+	if batch.Database == "" {
+		batch.Database = opts.DefaultDatabase
+	}
+	if batch.RetentionPolicy == "" {
+		batch.RetentionPolicy = opts.DefaultRetentionPolicy
+	}
+	return batch
+}
+
 func normalizeQuery(opts model.Options, query model.Query) model.Query {
 	if query.Database == "" {
 		query.Database = opts.DefaultDatabase

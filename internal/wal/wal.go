@@ -55,6 +55,9 @@ type Log struct {
 	syncWG       sync.WaitGroup
 
 	metrics Metrics
+
+	encodeScratch []byte
+	frameScratch  []byte
 }
 
 type Record struct {
@@ -102,7 +105,8 @@ func (l *Log) Append(records []model.ResolvedPoint, syncWrite bool) error {
 	started := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	payload, err := encodeBatch(records)
+	payload, err := encodeBatchInto(l.encodeScratch, records)
+	l.encodeScratch = retainWALScratch(payload)
 	if err != nil {
 		l.recordAppendMetricsLocked(started, 0, err)
 		return fmt.Errorf("encode wal record: %w", err)
@@ -112,8 +116,28 @@ func (l *Log) Append(records []model.ResolvedPoint, syncWrite bool) error {
 	return err
 }
 
+func (l *Log) AppendTyped(
+	batch model.ResolvedTypedBatch,
+	rows []int,
+	syncWrite bool,
+) error {
+	started := time.Now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	payload, err := encodeTypedBatchInto(l.encodeScratch, batch, rows)
+	l.encodeScratch = retainWALScratch(payload)
+	if err != nil {
+		l.recordAppendMetricsLocked(started, 0, err)
+		return fmt.Errorf("encode typed wal record: %w", err)
+	}
+	err = l.appendFrameLocked(recordWriteBatch, payload, syncWrite)
+	l.recordAppendMetricsLocked(started, typedRowCount(batch, rows), err)
+	return err
+}
+
 func (l *Log) appendFrameLocked(recordType byte, payload []byte, syncWrite bool) error {
-	frame := encodeFrame(recordType, payload)
+	frame := encodeFrameInto(l.frameScratch, recordType, payload)
+	l.frameScratch = retainWALScratch(frame)
 	if err := l.rollIfNeeded(int64(len(frame))); err != nil {
 		return err
 	}
@@ -417,14 +441,32 @@ func (l *Log) intervalSyncLoop(interval time.Duration) {
 }
 
 func encodeFrame(recordType byte, payload []byte) []byte {
+	return encodeFrameInto(nil, recordType, payload)
+}
+
+func encodeFrameInto(dst []byte, recordType byte, payload []byte) []byte {
 	bodyLen := 1 + len(payload) + 4
-	frame := make([]byte, 4+bodyLen)
+	frameLen := 4 + bodyLen
+	var frame []byte
+	if cap(dst) < frameLen {
+		frame = make([]byte, frameLen)
+	} else {
+		frame = dst[:frameLen]
+	}
 	binary.BigEndian.PutUint32(frame[:4], uint32(bodyLen))
 	frame[4] = recordType
 	copy(frame[5:], payload)
 	checksum := crc32.Checksum(frame[4:4+bodyLen-4], castagnoliTable)
 	binary.BigEndian.PutUint32(frame[4+bodyLen-4:], checksum)
 	return frame
+}
+
+func retainWALScratch(buf []byte) []byte {
+	const maxRetainedWALScratchBytes = 8 << 20
+	if cap(buf) > maxRetainedWALScratchBytes {
+		return nil
+	}
+	return buf[:0]
 }
 
 type segmentInfo struct {

@@ -2303,6 +2303,10 @@ func (m *errorPartManager) OpenPart(string) (partReader, error) {
 	return fakePartReader{meta: sstable.PartMeta{ID: "opened", Path: "opened"}}, nil
 }
 
+func (m *errorPartManager) OpenPartTrusted(string) (partReader, error) {
+	return m.OpenPart("")
+}
+
 func (m *errorPartManager) WritePart(string, int, string, []model.ColumnData, sstable.WriteOptions) (sstable.PartMeta, error) {
 	return sstable.PartMeta{}, nil
 }
@@ -2374,9 +2378,15 @@ func TestShardUsesInjectedStoragePorts(t *testing.T) {
 	if err := shard.Flush(); err != nil {
 		t.Fatalf("Flush() error = %v", err)
 	}
-	if !parts.writePartCalled || !parts.openPartCalled || !parts.writeManifestCalled {
-		t.Fatalf("part manager calls write=%v open=%v manifest=%v, want all true",
-			parts.writePartCalled, parts.openPartCalled, parts.writeManifestCalled)
+	if parts.writePartCalled {
+		t.Fatal("WritePart called during flush, want streaming writer path")
+	}
+	if parts.openPartCalled {
+		t.Fatal("cold OpenPart called during flush, want trusted warm open")
+	}
+	if !parts.newWriterCalled || parts.addSeriesCalls != 1 || !parts.trustedOpenPartCalled || !parts.writeManifestCalled {
+		t.Fatalf("part manager calls writer=%v addSeries=%d trustedOpen=%v manifest=%v, want streaming flush path",
+			parts.newWriterCalled, parts.addSeriesCalls, parts.trustedOpenPartCalled, parts.writeManifestCalled)
 	}
 	if !walLog.checkpointCalled {
 		t.Fatal("wal checkpoint called = false, want true")
@@ -2392,6 +2402,62 @@ func TestShardUsesInjectedStoragePorts(t *testing.T) {
 	}
 	if files.removeAllCalls != 0 {
 		t.Fatalf("file RemoveAll calls = %d, want 0", files.removeAllCalls)
+	}
+}
+
+func TestShardFlushStreamsSnapshotBySeries(t *testing.T) {
+	mem := &fakeMemStore{
+		snapshot: &fakeMemSnapshot{
+			columns: []model.ColumnData{
+				columnForMergeTest(2, 1, 0, 1),
+				columnForMergeTest(1, 2, 0, 1),
+				columnForMergeTest(1, 1, 0, 1),
+			},
+			samples: 3,
+		},
+		samples: 3,
+	}
+	parts := &fakePartManager{}
+	shard, _, err := OpenShard(ShardOptions{
+		Dir:                t.TempDir(),
+		Start:              0,
+		End:                100,
+		MemTableMaxSamples: 10,
+		deps: shardDeps{
+			openWAL: func(string, model.WALOptions) (walStore, error) {
+				return &fakeWalStore{}, nil
+			},
+			newMem: func() memStore {
+				return mem
+			},
+			parts: parts,
+		},
+	})
+	if err != nil {
+		t.Fatalf("OpenShard() error = %v", err)
+	}
+	if err := shard.Flush(); err != nil {
+		closeErr := shard.Close()
+		t.Fatalf("Flush() error = %v close = %v", err, closeErr)
+	}
+	if parts.writePartCalled {
+		closeErr := shard.Close()
+		t.Fatalf("WritePart called, want NewWriter/AddSeries close = %v", closeErr)
+	}
+	if len(parts.writerColumns) != 2 {
+		closeErr := shard.Close()
+		t.Fatalf("AddSeries calls = %d, want 2 close = %v", len(parts.writerColumns), closeErr)
+	}
+	if got := parts.writerColumns[0]; len(got) != 2 || got[0].SeriesID != 1 || got[0].FieldID != 1 || got[1].FieldID != 2 {
+		closeErr := shard.Close()
+		t.Fatalf("first AddSeries columns = %#v, want series 1 fields 1,2 close = %v", got, closeErr)
+	}
+	if got := parts.writerColumns[1]; len(got) != 1 || got[0].SeriesID != 2 {
+		closeErr := shard.Close()
+		t.Fatalf("second AddSeries columns = %#v, want series 2 close = %v", got, closeErr)
+	}
+	if err := shard.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
 	}
 }
 
@@ -2940,6 +3006,26 @@ func (f *fakeMemSnapshot) Columns(memtable.Query) []model.ColumnData {
 	return f.columns
 }
 
+func (f *fakeMemSnapshot) ForEachSeries(
+	query memtable.Query,
+	fn func(uint64, []model.ColumnData) error,
+) error {
+	columns := append([]model.ColumnData(nil), f.Columns(query)...)
+	sortColumnData(columns)
+	for start := 0; start < len(columns); {
+		seriesID := columns[start].SeriesID
+		end := start + 1
+		for end < len(columns) && columns[end].SeriesID == seriesID {
+			end++
+		}
+		if err := fn(seriesID, columns[start:end]); err != nil {
+			return err
+		}
+		start = end
+	}
+	return nil
+}
+
 func (f *fakeMemSnapshot) Query(query memtable.Query) []model.ColumnData {
 	return f.Columns(query)
 }
@@ -2959,9 +3045,13 @@ func (f *fakeMemSnapshot) Release() {
 }
 
 type fakePartManager struct {
-	writePartCalled     bool
-	openPartCalled      bool
-	writeManifestCalled bool
+	writePartCalled       bool
+	newWriterCalled       bool
+	openPartCalled        bool
+	trustedOpenPartCalled bool
+	writeManifestCalled   bool
+	addSeriesCalls        int
+	writerColumns         [][]model.ColumnData
 }
 
 func (f *fakePartManager) LoadManifest(string) (sstable.Manifest, error) {
@@ -2975,6 +3065,11 @@ func (f *fakePartManager) WriteManifest(_ string, _ sstable.Manifest) error {
 
 func (f *fakePartManager) OpenPart(string) (partReader, error) {
 	f.openPartCalled = true
+	return fakePartReader{meta: sstable.PartMeta{ID: "sst-000001", Path: "fake"}}, nil
+}
+
+func (f *fakePartManager) OpenPartTrusted(string) (partReader, error) {
+	f.trustedOpenPartCalled = true
 	return fakePartReader{meta: sstable.PartMeta{ID: "sst-000001", Path: "fake"}}, nil
 }
 
@@ -2998,8 +3093,14 @@ func (f *fakePartManager) WritePart(
 	}, nil
 }
 
-func (f *fakePartManager) NewWriter(string, int, string, sstable.WriteOptions) (partWriter, error) {
-	return &fakePartWriter{}, nil
+func (f *fakePartManager) NewWriter(root string, level int, id string, _ sstable.WriteOptions) (partWriter, error) {
+	f.newWriterCalled = true
+	return &fakePartWriter{
+		manager: f,
+		level:   level,
+		id:      id,
+		path:    filepath.Join(root, id),
+	}, nil
 }
 
 func (f *fakePartManager) NewSeriesBatchReader(partReader, sstable.Query) (seriesBatchReader, error) {
@@ -3038,18 +3139,83 @@ func (f fakePartReader) SeriesIDs(sstable.Query) ([]uint64, error) {
 	return nil, nil
 }
 
-type fakePartWriter struct{}
+type fakePartWriter struct {
+	manager *fakePartManager
+	level   int
+	id      string
+	path    string
+	columns [][]model.ColumnData
+	onClose func(sstable.PartMeta)
+}
 
-func (f *fakePartWriter) AddSeries([]model.ColumnData) error {
+func (f *fakePartWriter) AddSeries(columns []model.ColumnData) error {
+	copied := append([]model.ColumnData(nil), columns...)
+	f.columns = append(f.columns, copied)
+	if f.manager != nil {
+		f.manager.addSeriesCalls++
+		f.manager.writerColumns = append(f.manager.writerColumns, copied)
+	}
 	return nil
 }
 
 func (f *fakePartWriter) Close() (sstable.PartMeta, error) {
-	return sstable.PartMeta{ID: "sst-000002", Path: "fake-2"}, nil
+	meta := fakePartMetaFromSeriesGroups(f.id, f.path, f.level, f.columns)
+	if meta.ID == "" {
+		meta = sstable.PartMeta{ID: "sst-000002", Path: "fake-2"}
+	}
+	if f.onClose != nil {
+		f.onClose(meta)
+	}
+	return meta, nil
 }
 
 func (f *fakePartWriter) Abort() error {
 	return nil
+}
+
+func fakePartMetaFromSeriesGroups(
+	id string,
+	path string,
+	level int,
+	groups [][]model.ColumnData,
+) sstable.PartMeta {
+	if len(groups) == 0 {
+		return sstable.PartMeta{}
+	}
+	meta := sstable.PartMeta{
+		ID:    id,
+		Path:  path,
+		Level: level,
+	}
+	for _, columns := range groups {
+		if len(columns) == 0 {
+			continue
+		}
+		meta.SeriesCount++
+		meta.BlockCount++
+		seriesID := columns[0].SeriesID
+		if meta.SeriesCount == 1 || seriesID < meta.MinSeriesID {
+			meta.MinSeriesID = seriesID
+		}
+		if seriesID > meta.MaxSeriesID {
+			meta.MaxSeriesID = seriesID
+		}
+		for _, column := range columns {
+			for _, sample := range column.Samples {
+				if meta.RowsCount == 0 || sample.Timestamp < meta.MinTime {
+					meta.MinTime = sample.Timestamp
+				}
+				if sample.Timestamp > meta.MaxTime {
+					meta.MaxTime = sample.Timestamp
+				}
+				if sample.WriteSeq > meta.MaxWriteSeq {
+					meta.MaxWriteSeq = sample.WriteSeq
+				}
+				meta.RowsCount++
+			}
+		}
+	}
+	return meta
 }
 
 type failingColumnDataStream struct {

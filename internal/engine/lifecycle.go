@@ -614,7 +614,7 @@ func (o *compactionOutput) closeCurrent() error {
 	if err != nil {
 		return err
 	}
-	part, err := o.shard.deps.parts.OpenPart(meta.Path)
+	part, err := o.shard.deps.parts.OpenPartTrusted(meta.Path)
 	if err != nil {
 		return err
 	}

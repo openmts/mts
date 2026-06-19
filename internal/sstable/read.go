@@ -13,6 +13,14 @@ import (
 )
 
 func OpenPart(path string) (*Part, error) {
+	return openPart(path, true)
+}
+
+func OpenPartTrusted(path string) (*Part, error) {
+	return openPart(path, false)
+}
+
+func openPart(path string, validateDeep bool) (*Part, error) {
 	meta, err := loadPartMetadata(path)
 	if err != nil {
 		return nil, err
@@ -37,14 +45,23 @@ func OpenPart(path string) (*Part, error) {
 		}
 		return nil, err
 	}
-	part := &Part{
-		path:       filepath.Clean(path),
-		metadata:   meta,
-		metaRows:   metaRows,
-		seriesRows: seriesRows,
-		files:      files,
+	componentSizes, err := loadPartComponentSizes(path, meta.Components, files)
+	if err != nil {
+		closeErr := files.close()
+		if closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
+		return nil, err
 	}
-	if err := validatePartForOpen(part); err != nil {
+	part := &Part{
+		path:           filepath.Clean(path),
+		metadata:       meta,
+		metaRows:       metaRows,
+		seriesRows:     seriesRows,
+		files:          files,
+		componentSizes: componentSizes,
+	}
+	if err := validateOpenedPart(part, validateDeep); err != nil {
 		closeErr := files.close()
 		if closeErr != nil {
 			return nil, errors.Join(err, closeErr)
@@ -52,6 +69,62 @@ func OpenPart(path string) (*Part, error) {
 		return nil, err
 	}
 	return part, nil
+}
+
+func loadPartComponentSizes(
+	path string,
+	components []string,
+	files *partReadFiles,
+) (map[string]int64, error) {
+	clean := filepath.Clean(path)
+	names := metadataComponents(components)
+	sizes := make(map[string]int64, len(names))
+	for _, name := range names {
+		size, err := partComponentSize(clean, name, files)
+		if err != nil {
+			return nil, fmt.Errorf("validate part component %s: %w", name, err)
+		}
+		sizes[name] = size
+	}
+	return sizes, nil
+}
+
+func partComponentSize(path string, name string, files *partReadFiles) (int64, error) {
+	file := readFileForComponent(name, files)
+	if file != nil {
+		info, err := file.Stat()
+		if err != nil {
+			return 0, err
+		}
+		if info.IsDir() {
+			return 0, fmt.Errorf("component is directory")
+		}
+		return info.Size(), nil
+	}
+	info, err := storagefs.Stat(filepath.Join(path, name))
+	if err != nil {
+		return 0, err
+	}
+	if info.IsDir() {
+		return 0, fmt.Errorf("component is directory")
+	}
+	return info.Size(), nil
+}
+
+func readFileForComponent(name string, files *partReadFiles) *os.File {
+	if files == nil {
+		return nil
+	}
+	switch name {
+	case indexFile:
+		return files.index
+	case timestampsFile:
+		return files.timestamps
+	case valuesFile:
+		return files.values
+	default:
+		return nil
+	}
 }
 
 func openPartReadFiles(path string) (*partReadFiles, error) {

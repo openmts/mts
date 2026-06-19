@@ -16,6 +16,8 @@ type MetadataStore interface {
 
 type MetadataResolver interface {
 	ResolvePoints(context.Context, []model.Point) ([]model.ResolvedPoint, error)
+	ResolveTypedBatch(context.Context, model.TypedBatch) ([]model.ResolvedPoint, error)
+	ResolveTypedBatchColumns(context.Context, model.TypedBatch) (model.ResolvedTypedBatch, error)
 }
 
 type MetadataQuerier interface {
@@ -56,6 +58,26 @@ func (s *LocalMetadataStore) ResolvePoints(
 		return nil, err
 	}
 	return s.catalog.ResolvePoints(points)
+}
+
+func (s *LocalMetadataStore) ResolveTypedBatch(
+	ctx context.Context,
+	batch model.TypedBatch,
+) ([]model.ResolvedPoint, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.catalog.ResolveTypedBatch(batch)
+}
+
+func (s *LocalMetadataStore) ResolveTypedBatchColumns(
+	ctx context.Context,
+	batch model.TypedBatch,
+) (model.ResolvedTypedBatch, error) {
+	if err := ctx.Err(); err != nil {
+		return model.ResolvedTypedBatch{}, err
+	}
+	return s.catalog.ResolveTypedBatchColumns(batch)
 }
 
 func (s *LocalMetadataStore) MatchSeries(

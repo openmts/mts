@@ -34,6 +34,29 @@ type Point struct {
 	Fields          map[string]FieldValue `json:"fields"`
 }
 
+type TagColumn struct {
+	Name   string   `json:"name"`
+	Values []string `json:"values"`
+}
+
+type TypedFieldColumn struct {
+	Name          string    `json:"name"`
+	Type          FieldType `json:"type"`
+	Float64Values []float64 `json:"float64_values,omitempty"`
+	Int64Values   []int64   `json:"int64_values,omitempty"`
+	StringValues  []string  `json:"string_values,omitempty"`
+	BoolValues    []bool    `json:"bool_values,omitempty"`
+}
+
+type TypedBatch struct {
+	Database        string             `json:"database"`
+	RetentionPolicy string             `json:"retention_policy"`
+	Measurement     string             `json:"measurement"`
+	Tags            []TagColumn        `json:"tags"`
+	Timestamps      []int64            `json:"timestamps"`
+	Fields          []TypedFieldColumn `json:"fields"`
+}
+
 type Query struct {
 	Database        string            `json:"database"`
 	RetentionPolicy string            `json:"retention_policy"`
@@ -404,6 +427,35 @@ func toModelPoints(points []Point) []model.Point {
 		out[index] = toModelPoint(point)
 	}
 	return out
+}
+
+func toModelTypedBatch(batch TypedBatch) model.TypedBatch {
+	tags := make([]model.TagColumn, len(batch.Tags))
+	for index, tag := range batch.Tags {
+		tags[index] = model.TagColumn{
+			Name:   tag.Name,
+			Values: tag.Values,
+		}
+	}
+	fields := make([]model.TypedFieldColumn, len(batch.Fields))
+	for index, field := range batch.Fields {
+		fields[index] = model.TypedFieldColumn{
+			Name:          field.Name,
+			Type:          toModelFieldType(field.Type),
+			Float64Values: field.Float64Values,
+			Int64Values:   field.Int64Values,
+			StringValues:  field.StringValues,
+			BoolValues:    field.BoolValues,
+		}
+	}
+	return model.TypedBatch{
+		Database:        batch.Database,
+		RetentionPolicy: batch.RetentionPolicy,
+		Measurement:     batch.Measurement,
+		Tags:            tags,
+		Timestamps:      batch.Timestamps,
+		Fields:          fields,
+	}
 }
 
 func toModelQuery(query Query) model.Query {

@@ -110,6 +110,10 @@ func (m *recordingPartManager) OpenPart(string) (partReader, error) {
 	return fakePartReader{meta: m.nextMeta}, nil
 }
 
+func (m *recordingPartManager) OpenPartTrusted(string) (partReader, error) {
+	return m.OpenPart("")
+}
+
 type recordingPartWriter struct {
 	meta sstable.PartMeta
 	rows int

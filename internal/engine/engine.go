@@ -42,6 +42,11 @@ type shardBatch struct {
 	points []model.ResolvedPoint
 }
 
+type typedShardBatch struct {
+	shard *Shard
+	rows  []int
+}
+
 type shardLookupKey struct {
 	database string
 	policy   string
@@ -126,6 +131,25 @@ func (e *Engine) Write(ctx context.Context, points []model.Point, opts model.Wri
 	if err != nil {
 		return err
 	}
+	return e.writeResolved(resolved, opts)
+}
+
+func (e *Engine) WriteTypedBatch(ctx context.Context, batch model.TypedBatch, opts model.WriteOptions) error {
+	if len(batch.Timestamps) == 0 {
+		return nil
+	}
+	normalized := normalizeTypedBatch(e.opts, batch)
+	resolved, err := e.metadata.ResolveTypedBatchColumns(ctx, normalized)
+	if err != nil {
+		return err
+	}
+	return e.writeResolvedTyped(resolved, opts)
+}
+
+func (e *Engine) writeResolved(resolved []model.ResolvedPoint, opts model.WriteOptions) error {
+	if len(resolved) == 0 {
+		return nil
+	}
 	incomingSamples := resolvedSampleCount(resolved)
 	incomingBytes := estimateResolvedPointsBytes(resolved)
 	e.mu.Lock()
@@ -148,6 +172,30 @@ func (e *Engine) Write(ctx context.Context, points []model.Point, opts model.Wri
 	return nil
 }
 
+func (e *Engine) writeResolvedTyped(batch model.ResolvedTypedBatch, opts model.WriteOptions) error {
+	if len(batch.Timestamps) == 0 {
+		return nil
+	}
+	incomingSamples := resolvedTypedSampleCount(batch)
+	incomingBytes := estimateResolvedTypedBatchBytes(batch, nil)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.enforceMemoryBeforeWriteLocked(incomingSamples, incomingBytes); err != nil {
+		return err
+	}
+	e.assignTypedWriteSeqsLocked(&batch)
+	batches, err := e.groupTypedByShardLocked(batch)
+	if err != nil {
+		return err
+	}
+	for _, shardBatch := range batches {
+		if err := shardBatch.shard.WriteTypedBatch(batch, shardBatch.rows, opts.Sync); err != nil {
+			return err
+		}
+	}
+	return e.enforceMemoryAfterWriteLocked()
+}
+
 func (e *Engine) Flush(_ context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -167,6 +215,10 @@ func resolvedSampleCount(points []model.ResolvedPoint) int {
 	return total
 }
 
+func resolvedTypedSampleCount(batch model.ResolvedTypedBatch) int {
+	return len(batch.Timestamps) * len(batch.Fields)
+}
+
 func estimateResolvedPointsBytes(points []model.ResolvedPoint) int64 {
 	var total int64
 	for _, point := range points {
@@ -181,9 +233,30 @@ func estimateResolvedPointsBytes(points []model.ResolvedPoint) int64 {
 	return total
 }
 
+func estimateResolvedTypedBatchBytes(batch model.ResolvedTypedBatch, rows []int) int64 {
+	var total int64
+	for position := range typedBatchRowCount(batch, rows) {
+		row := typedBatchRowIndex(rows, position)
+		total += int64(32 + len(batch.Measurement))
+		for _, tag := range batch.Tags {
+			total += int64(len(tag.Name) + len(tag.Values[row]) + 32)
+		}
+		for _, field := range batch.Fields {
+			total += estimateResolvedTypedFieldBytes(field, row)
+		}
+	}
+	return total
+}
+
 func estimateWALFrameBytes(points []model.ResolvedPoint) int64 {
 	const frameAndRecordOverhead = int64(64)
 	return estimateResolvedPointsBytes(points) + frameAndRecordOverhead + int64(len(points))*16
+}
+
+func estimateTypedWALFrameBytes(batch model.ResolvedTypedBatch, rows []int) int64 {
+	const frameAndRecordOverhead = int64(64)
+	count := typedBatchRowCount(batch, rows)
+	return estimateResolvedTypedBatchBytes(batch, rows) + frameAndRecordOverhead + int64(count)*16
 }
 
 func estimateResolvedFieldBytes(field model.ResolvedField) int64 {
@@ -198,6 +271,34 @@ func estimateResolvedFieldBytes(field model.ResolvedField) int64 {
 	default:
 		return sampleBaseBytes
 	}
+}
+
+func estimateResolvedTypedFieldBytes(field model.ResolvedTypedFieldColumn, row int) int64 {
+	const sampleBaseBytes = int64(32)
+	switch field.Type {
+	case model.FieldFloat64, model.FieldInt64:
+		return sampleBaseBytes + 8
+	case model.FieldString:
+		return sampleBaseBytes + 16 + int64(len(field.StringValues[row]))
+	case model.FieldBool:
+		return sampleBaseBytes + 1
+	default:
+		return sampleBaseBytes
+	}
+}
+
+func typedBatchRowCount(batch model.ResolvedTypedBatch, rows []int) int {
+	if len(rows) > 0 {
+		return len(rows)
+	}
+	return len(batch.Timestamps)
+}
+
+func typedBatchRowIndex(rows []int, position int) int {
+	if len(rows) > 0 {
+		return rows[position]
+	}
+	return position
 }
 
 func (e *Engine) enforceMemoryBeforeWriteLocked(incomingSamples int, incomingBytes int64) error {
@@ -717,6 +818,40 @@ func (e *Engine) groupByShardLocked(points []model.ResolvedPoint) ([]shardBatch,
 	return batches, nil
 }
 
+func (e *Engine) assignTypedWriteSeqsLocked(batch *model.ResolvedTypedBatch) {
+	if cap(batch.WriteSeqs) < len(batch.Timestamps) {
+		batch.WriteSeqs = make([]uint64, len(batch.Timestamps))
+	} else {
+		batch.WriteSeqs = batch.WriteSeqs[:len(batch.Timestamps)]
+	}
+	for index := range batch.WriteSeqs {
+		e.writeSeq++
+		batch.WriteSeqs[index] = e.writeSeq
+	}
+}
+
+func (e *Engine) groupTypedByShardLocked(
+	batch model.ResolvedTypedBatch,
+) ([]typedShardBatch, error) {
+	positions := make(map[*Shard]int)
+	shards := make(map[shardLookupKey]*Shard, 1)
+	batches := make([]typedShardBatch, 0, 1)
+	for row := range batch.Timestamps {
+		shard, err := e.shardForTypedRowLocked(batch, row, shards)
+		if err != nil {
+			return nil, err
+		}
+		position, ok := positions[shard]
+		if !ok {
+			positions[shard] = len(batches)
+			batches = append(batches, typedShardBatch{shard: shard})
+			position = len(batches) - 1
+		}
+		batches[position].rows = append(batches[position].rows, row)
+	}
+	return batches, nil
+}
+
 func (e *Engine) shardForPointLocked(
 	point model.ResolvedPoint,
 	shards map[shardLookupKey]*Shard,
@@ -725,6 +860,28 @@ func (e *Engine) shardForPointLocked(
 	key := shardLookupKey{
 		database: point.Database,
 		policy:   point.RetentionPolicy,
+		start:    start,
+	}
+	if shard, ok := shards[key]; ok {
+		return shard, nil
+	}
+	shard, err := e.shardForStartLocked(key.database, key.policy, key.start)
+	if err != nil {
+		return nil, err
+	}
+	shards[key] = shard
+	return shard, nil
+}
+
+func (e *Engine) shardForTypedRowLocked(
+	batch model.ResolvedTypedBatch,
+	row int,
+	shards map[shardLookupKey]*Shard,
+) (*Shard, error) {
+	start := shardStart(batch.Timestamps[row], e.opts.ShardDuration)
+	key := shardLookupKey{
+		database: batch.Database,
+		policy:   batch.RetentionPolicy,
 		start:    start,
 	}
 	if shard, ok := shards[key]; ok {
