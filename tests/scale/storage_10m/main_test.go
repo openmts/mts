@@ -29,6 +29,7 @@ func TestParseConfigRejectsInvalidInput(t *testing.T) {
 	for _, args := range [][]string{
 		{"-points", "0"},
 		{"-batch-size", "0"},
+		{"-memtable-max-samples", "0"},
 		{"-mode", "bad"},
 		{"-profile", "bad"},
 		{"-ingest-path", "bad"},
@@ -52,11 +53,27 @@ func TestParseConfigProfilesAndThresholds(t *testing.T) {
 	if cfg.profile != "quick" || cfg.points != 10000 || cfg.maxRSSBytes != 1024 {
 		t.Fatalf("config = %#v, want quick profile and rss threshold", cfg)
 	}
+	if cfg.mode != "compact" {
+		t.Fatalf("mode = %q, want compact", cfg.mode)
+	}
 	if cfg.ingestPath != "typed" {
 		t.Fatalf("ingestPath = %q, want typed", cfg.ingestPath)
 	}
+	if cfg.memTableMaxSamples != defaultMemTableMaxSamples {
+		t.Fatalf("memTableMaxSamples = %d, want %d", cfg.memTableMaxSamples, defaultMemTableMaxSamples)
+	}
 	if cfg.maxSSTableCount != 3 || cfg.maxCompactionBacklog != 1 {
 		t.Fatalf("config thresholds = %#v, want sstable/backlog thresholds", cfg)
+	}
+}
+
+func TestParseConfigAcceptsMemTableMaxSamples(t *testing.T) {
+	cfg, err := parseConfig([]string{"-points", "10", "-memtable-max-samples", "128"})
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.memTableMaxSamples != 128 {
+		t.Fatalf("memTableMaxSamples = %d, want 128", cfg.memTableMaxSamples)
 	}
 }
 
@@ -139,12 +156,61 @@ func TestReportIncludesAmplificationAndLevelDistribution(t *testing.T) {
 		"cold_query_latency_nanos",
 		"hot_query_latency_nanos",
 		"backlog_drain_nanos",
+		"write_duration_nanos",
+		"write_throughput",
+		"compaction_duration_nanos",
+		"sstable_count_before_compaction",
+		"sstable_count_after_compaction",
+		"level_distribution_before_compaction",
+		"level_distribution_after_compaction",
+		"compaction_result",
 		"compaction_stats",
 		"errors",
 	} {
 		if !strings.Contains(text, key) {
 			t.Fatalf("report json %s missing %s", text, key)
 		}
+	}
+}
+
+func TestCompactModeReportsWriteAndCompactionStats(t *testing.T) {
+	result, err := runWorkloadDetailed(t.TempDir(), config{
+		mode:               "compact",
+		ingestPath:         "typed",
+		points:             512,
+		batchSize:          32,
+		memTableMaxSamples: 64,
+	})
+	if err != nil {
+		t.Fatalf("runWorkloadDetailed(compact) error = %v", err)
+	}
+	if result.writeDuration <= 0 {
+		t.Fatalf("writeDuration = %s, want positive", result.writeDuration)
+	}
+	if result.compactionDuration <= 0 {
+		t.Fatalf("compactionDuration = %s, want positive", result.compactionDuration)
+	}
+	if result.sstableCountBeforeCompaction <= 1 {
+		t.Fatalf("sstableCountBeforeCompaction = %d, want more than one", result.sstableCountBeforeCompaction)
+	}
+	if result.sstableCountAfterCompaction <= 0 {
+		t.Fatalf("sstableCountAfterCompaction = %d, want positive", result.sstableCountAfterCompaction)
+	}
+	if result.sstableCountAfterCompaction > result.sstableCountBeforeCompaction {
+		t.Fatalf(
+			"sstable count after compaction = %d, want <= before %d",
+			result.sstableCountAfterCompaction,
+			result.sstableCountBeforeCompaction,
+		)
+	}
+	if len(result.levelDistributionBeforeCompaction) == 0 {
+		t.Fatal("levelDistributionBeforeCompaction is empty")
+	}
+	if len(result.levelDistributionAfterCompaction) == 0 {
+		t.Fatal("levelDistributionAfterCompaction is empty")
+	}
+	if result.compactionResult.InputParts == 0 || result.compactionResult.OutputParts == 0 {
+		t.Fatalf("compactionResult = %#v, want input and output parts", result.compactionResult)
 	}
 }
 

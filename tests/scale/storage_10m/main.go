@@ -16,33 +16,43 @@ import (
 	"github.com/openmts/mts/internal/sstable"
 )
 
+const defaultMemTableMaxSamples = 8192
+
 type report struct {
-	Profile            string              `json:"profile"`
-	Mode               string              `json:"mode"`
-	IngestPath         string              `json:"ingest_path"`
-	Points             int                 `json:"points"`
-	Duration           time.Duration       `json:"duration"`
-	Throughput         float64             `json:"throughput"`
-	HeapAlloc          uint64              `json:"heap_alloc"`
-	HeapSys            uint64              `json:"heap_sys"`
-	TotalAlloc         uint64              `json:"total_alloc"`
-	Mallocs            uint64              `json:"mallocs"`
-	Frees              uint64              `json:"frees"`
-	NumGC              uint32              `json:"num_gc"`
-	RSSPeakBytes       int64               `json:"rss_peak_bytes"`
-	Rows               int                 `json:"rows"`
-	DataBytes          int64               `json:"data_bytes"`
-	SSTableCount       int                 `json:"sstable_count"`
-	LevelDistribution  map[int]int         `json:"level_distribution"`
-	ReadAmplification  float64             `json:"read_amplification"`
-	WriteAmplification float64             `json:"write_amplification"`
-	SpaceAmplification float64             `json:"space_amplification"`
-	QueryLatencyNanos  int64               `json:"query_latency_nanos"`
-	ColdQueryLatency   int64               `json:"cold_query_latency_nanos"`
-	HotQueryLatency    int64               `json:"hot_query_latency_nanos"`
-	BacklogDrainNanos  int64               `json:"backlog_drain_nanos"`
-	CompactionStats    mts.CompactionStats `json:"compaction_stats"`
-	Errors             []string            `json:"errors"`
+	Profile                           string               `json:"profile"`
+	Mode                              string               `json:"mode"`
+	IngestPath                        string               `json:"ingest_path"`
+	Points                            int                  `json:"points"`
+	Duration                          time.Duration        `json:"duration"`
+	Throughput                        float64              `json:"throughput"`
+	WriteDurationNanos                int64                `json:"write_duration_nanos"`
+	WriteThroughput                   float64              `json:"write_throughput"`
+	CompactionDurationNanos           int64                `json:"compaction_duration_nanos"`
+	HeapAlloc                         uint64               `json:"heap_alloc"`
+	HeapSys                           uint64               `json:"heap_sys"`
+	TotalAlloc                        uint64               `json:"total_alloc"`
+	Mallocs                           uint64               `json:"mallocs"`
+	Frees                             uint64               `json:"frees"`
+	NumGC                             uint32               `json:"num_gc"`
+	RSSPeakBytes                      int64                `json:"rss_peak_bytes"`
+	Rows                              int                  `json:"rows"`
+	DataBytes                         int64                `json:"data_bytes"`
+	SSTableCount                      int                  `json:"sstable_count"`
+	SSTableCountBeforeCompaction      int                  `json:"sstable_count_before_compaction"`
+	SSTableCountAfterCompaction       int                  `json:"sstable_count_after_compaction"`
+	LevelDistribution                 map[int]int          `json:"level_distribution"`
+	LevelDistributionBeforeCompaction map[int]int          `json:"level_distribution_before_compaction"`
+	LevelDistributionAfterCompaction  map[int]int          `json:"level_distribution_after_compaction"`
+	ReadAmplification                 float64              `json:"read_amplification"`
+	WriteAmplification                float64              `json:"write_amplification"`
+	SpaceAmplification                float64              `json:"space_amplification"`
+	QueryLatencyNanos                 int64                `json:"query_latency_nanos"`
+	ColdQueryLatency                  int64                `json:"cold_query_latency_nanos"`
+	HotQueryLatency                   int64                `json:"hot_query_latency_nanos"`
+	BacklogDrainNanos                 int64                `json:"backlog_drain_nanos"`
+	CompactionResult                  mts.CompactionResult `json:"compaction_result"`
+	CompactionStats                   mts.CompactionStats  `json:"compaction_stats"`
+	Errors                            []string             `json:"errors"`
 }
 
 type config struct {
@@ -51,6 +61,7 @@ type config struct {
 	ingestPath           string
 	points               int
 	batchSize            int
+	memTableMaxSamples   int
 	dataDir              string
 	baseline             string
 	maxRegressionPercent float64
@@ -100,32 +111,40 @@ func run(args []string) (err error) {
 	}
 	logicalBytes := logicalInputBytes(cfg.points)
 	out := report{
-		Profile:            cfg.profile,
-		Mode:               cfg.mode,
-		IngestPath:         cfg.ingestPath,
-		Points:             cfg.points,
-		Duration:           duration,
-		Throughput:         float64(cfg.points) / duration.Seconds(),
-		HeapAlloc:          mem.HeapAlloc,
-		HeapSys:            mem.HeapSys,
-		TotalAlloc:         mem.TotalAlloc,
-		Mallocs:            mem.Mallocs,
-		Frees:              mem.Frees,
-		NumGC:              mem.NumGC,
-		RSSPeakBytes:       rssPeakBytes(),
-		Rows:               workload.rows,
-		DataBytes:          dataBytes,
-		SSTableCount:       tableCount,
-		LevelDistribution:  levelDistribution,
-		ReadAmplification:  readAmplification(tableCount, workload.rows),
-		WriteAmplification: amplificationRatio(dataBytes, logicalBytes),
-		SpaceAmplification: amplificationRatio(dataBytes, logicalBytes),
-		QueryLatencyNanos:  workload.queryLatency.Nanoseconds(),
-		ColdQueryLatency:   workload.coldQueryLatency.Nanoseconds(),
-		HotQueryLatency:    workload.hotQueryLatency.Nanoseconds(),
-		BacklogDrainNanos:  workload.backlogDrain.Nanoseconds(),
-		CompactionStats:    workload.compactionStats,
-		Errors:             []string{},
+		Profile:                           cfg.profile,
+		Mode:                              cfg.mode,
+		IngestPath:                        cfg.ingestPath,
+		Points:                            cfg.points,
+		Duration:                          duration,
+		Throughput:                        throughput(cfg.points, duration),
+		WriteDurationNanos:                workload.writeDuration.Nanoseconds(),
+		WriteThroughput:                   throughput(cfg.points, workload.writeDuration),
+		CompactionDurationNanos:           workload.compactionDuration.Nanoseconds(),
+		HeapAlloc:                         mem.HeapAlloc,
+		HeapSys:                           mem.HeapSys,
+		TotalAlloc:                        mem.TotalAlloc,
+		Mallocs:                           mem.Mallocs,
+		Frees:                             mem.Frees,
+		NumGC:                             mem.NumGC,
+		RSSPeakBytes:                      rssPeakBytes(),
+		Rows:                              workload.rows,
+		DataBytes:                         dataBytes,
+		SSTableCount:                      tableCount,
+		SSTableCountBeforeCompaction:      workload.sstableCountBeforeCompaction,
+		SSTableCountAfterCompaction:       workload.sstableCountAfterCompaction,
+		LevelDistribution:                 levelDistribution,
+		LevelDistributionBeforeCompaction: workload.levelDistributionBeforeCompaction,
+		LevelDistributionAfterCompaction:  workload.levelDistributionAfterCompaction,
+		ReadAmplification:                 readAmplification(tableCount, workload.rows),
+		WriteAmplification:                amplificationRatio(dataBytes, logicalBytes),
+		SpaceAmplification:                amplificationRatio(dataBytes, logicalBytes),
+		QueryLatencyNanos:                 workload.queryLatency.Nanoseconds(),
+		ColdQueryLatency:                  workload.coldQueryLatency.Nanoseconds(),
+		HotQueryLatency:                   workload.hotQueryLatency.Nanoseconds(),
+		BacklogDrainNanos:                 workload.backlogDrain.Nanoseconds(),
+		CompactionResult:                  workload.compactionResult,
+		CompactionStats:                   workload.compactionStats,
+		Errors:                            []string{},
 	}
 	if err := compareBaseline(cfg, out); err != nil {
 		return err
@@ -139,10 +158,15 @@ func run(args []string) (err error) {
 func parseConfig(args []string) (config, error) {
 	flags := flag.NewFlagSet("storage_10m", flag.ContinueOnError)
 	profile := flags.String("profile", "quick", "profile: quick|standard|soak")
-	mode := flags.String("mode", "write", "mode")
+	mode := flags.String("mode", "compact", "mode")
 	ingestPath := flags.String("ingest-path", "typed", "ingest path: typed|public")
 	points := flags.Int("points", 0, "points")
 	batchSize := flags.Int("batch-size", 1024, "batch size")
+	memTableMaxSamples := flags.Int(
+		"memtable-max-samples",
+		defaultMemTableMaxSamples,
+		"trigger MemTable flush after this many samples",
+	)
 	dataDir := flags.String("data-dir", "", "data directory")
 	baseline := flags.String("baseline", "", "baseline report json")
 	maxRegression := flags.Float64("max-regression-percent", 20, "max allowed regression percent")
@@ -156,8 +180,8 @@ func parseConfig(args []string) (config, error) {
 	if _, ok := visited["points"]; !ok {
 		*points = profilePoints(*profile)
 	}
-	if *points <= 0 || *batchSize <= 0 {
-		return config{}, fmt.Errorf("points and batch-size must be positive")
+	if *points <= 0 || *batchSize <= 0 || *memTableMaxSamples <= 0 {
+		return config{}, fmt.Errorf("points, batch-size and memtable-max-samples must be positive")
 	}
 	if !validProfile(*profile) {
 		return config{}, fmt.Errorf("unsupported profile %q", *profile)
@@ -179,6 +203,7 @@ func parseConfig(args []string) (config, error) {
 		ingestPath:           *ingestPath,
 		points:               *points,
 		batchSize:            *batchSize,
+		memTableMaxSamples:   *memTableMaxSamples,
 		dataDir:              *dataDir,
 		baseline:             *baseline,
 		maxRegressionPercent: *maxRegression,
@@ -239,75 +264,172 @@ func runWorkload(dir string, cfg config) (int, error) {
 }
 
 type workloadResult struct {
-	rows             int
-	queryLatency     time.Duration
-	coldQueryLatency time.Duration
-	hotQueryLatency  time.Duration
-	backlogDrain     time.Duration
-	compactionStats  mts.CompactionStats
+	rows                              int
+	queryLatency                      time.Duration
+	coldQueryLatency                  time.Duration
+	hotQueryLatency                   time.Duration
+	writeDuration                     time.Duration
+	compactionDuration                time.Duration
+	backlogDrain                      time.Duration
+	sstableCountBeforeCompaction      int
+	sstableCountAfterCompaction       int
+	levelDistributionBeforeCompaction map[int]int
+	levelDistributionAfterCompaction  map[int]int
+	compactionResult                  mts.CompactionResult
+	compactionStats                   mts.CompactionStats
+}
+
+type sstableSnapshot struct {
+	count             int
+	levelDistribution map[int]int
 }
 
 func runWorkloadDetailed(dir string, cfg config) (workloadResult, error) {
 	ctx := context.Background()
-	result := workloadResult{}
-	eng, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 8192})
+	result, err := runOpenWorkload(ctx, dir, cfg)
+	if err != nil || cfg.mode != "restart" {
+		return result, err
+	}
+	return queryReopenedWorkload(ctx, dir, cfg, result)
+}
+
+func runOpenWorkload(ctx context.Context, dir string, cfg config) (result workloadResult, err error) {
+	eng, err := openScaleEngine(ctx, dir, cfg)
 	if err != nil {
 		return workloadResult{}, fmt.Errorf("open engine: %w", err)
 	}
-	if err := writeScaleBatches(ctx, eng, cfg); err != nil {
-		closeErr := eng.Close(ctx)
-		return workloadResult{}, errors.Join(err, closeErr)
-	}
-	if err := eng.Flush(ctx); err != nil {
-		closeErr := eng.Close(ctx)
-		return workloadResult{}, errors.Join(fmt.Errorf("flush: %w", err), closeErr)
-	}
-	if cfg.mode == "compact" {
-		compactStarted := time.Now()
-		if err := eng.Compact(ctx); err != nil {
-			closeErr := eng.Close(ctx)
-			return workloadResult{}, errors.Join(fmt.Errorf("compact: %w", err), closeErr)
-		}
-		result.backlogDrain = time.Since(compactStarted)
-	}
-	rows := 0
-	if cfg.mode == "query" || cfg.mode == "compact" || cfg.mode == "restart" {
-		got, latency, err := timedQueryRows(ctx, eng, cfg.points)
-		if err != nil {
-			closeErr := eng.Close(ctx)
-			return workloadResult{}, errors.Join(fmt.Errorf("query rows: %w", err), closeErr)
-		}
-		_, hotLatency, err := timedQueryRows(ctx, eng, cfg.points)
-		if err != nil {
-			closeErr := eng.Close(ctx)
-			return workloadResult{}, errors.Join(fmt.Errorf("query rows hot: %w", err), closeErr)
-		}
-		rows = len(got)
-		result.queryLatency = latency
-		result.coldQueryLatency = latency
-		result.hotQueryLatency = hotLatency
-	}
-	stats := eng.CompactionStatsSnapshot()
-	result.rows = rows
-	result.compactionStats = stats
-	if err := eng.Close(ctx); err != nil {
+	defer func() {
+		err = errors.Join(err, eng.Close(ctx))
+	}()
+	if err := writeAndMaybeCompact(ctx, dir, eng, cfg, &result); err != nil {
 		return workloadResult{}, err
 	}
-	if cfg.mode != "restart" {
-		return result, nil
+	if shouldQueryRows(cfg.mode) {
+		if err := queryOpenEngine(ctx, eng, cfg.points, &result); err != nil {
+			return workloadResult{}, err
+		}
 	}
-	reopened, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 8192})
+	result.compactionStats = eng.CompactionStatsSnapshot()
+	return result, nil
+}
+
+func writeAndMaybeCompact(
+	ctx context.Context,
+	dir string,
+	eng *mts.Engine,
+	cfg config,
+	result *workloadResult,
+) error {
+	writeDuration, err := writeAndFlushScale(ctx, eng, cfg)
 	if err != nil {
-		return workloadResult{}, fmt.Errorf("reopen engine: %w", err)
+		return err
 	}
-	got, latency, err := timedQueryRows(ctx, reopened, cfg.points)
-	closeErr := reopened.Close(ctx)
+	result.writeDuration = writeDuration
+	beforeCompaction, err := captureSSTableSnapshot(dir)
 	if err != nil {
-		return workloadResult{}, errors.Join(fmt.Errorf("query reopened: %w", err), closeErr)
+		return fmt.Errorf("snapshot before compaction: %w", err)
+	}
+	result.setCompactionSnapshots(beforeCompaction, beforeCompaction)
+	if cfg.mode == "compact" {
+		return compactScaleWorkload(ctx, dir, eng, beforeCompaction, result)
+	}
+	return nil
+}
+
+func compactScaleWorkload(
+	ctx context.Context,
+	dir string,
+	eng *mts.Engine,
+	beforeCompaction sstableSnapshot,
+	result *workloadResult,
+) error {
+	compactStarted := time.Now()
+	compactionResult, err := eng.CompactWithResult(ctx)
+	if err != nil {
+		return fmt.Errorf("compact: %w", err)
+	}
+	result.compactionDuration = time.Since(compactStarted)
+	result.backlogDrain = result.compactionDuration
+	result.compactionResult = compactionResult
+	afterCompaction, err := captureSSTableSnapshot(dir)
+	if err != nil {
+		return fmt.Errorf("snapshot after compaction: %w", err)
+	}
+	result.setCompactionSnapshots(beforeCompaction, afterCompaction)
+	return nil
+}
+
+func shouldQueryRows(mode string) bool {
+	return mode == "query" || mode == "compact" || mode == "restart"
+}
+
+func queryOpenEngine(ctx context.Context, eng *mts.Engine, points int, result *workloadResult) error {
+	got, latency, err := timedQueryRows(ctx, eng, points)
+	if err != nil {
+		return fmt.Errorf("query rows: %w", err)
+	}
+	_, hotLatency, err := timedQueryRows(ctx, eng, points)
+	if err != nil {
+		return fmt.Errorf("query rows hot: %w", err)
 	}
 	result.rows = len(got)
 	result.queryLatency = latency
-	return result, closeErr
+	result.coldQueryLatency = latency
+	result.hotQueryLatency = hotLatency
+	return nil
+}
+
+func queryReopenedWorkload(
+	ctx context.Context,
+	dir string,
+	cfg config,
+	result workloadResult,
+) (out workloadResult, err error) {
+	out = result
+	reopened, err := openScaleEngine(ctx, dir, cfg)
+	if err != nil {
+		return workloadResult{}, fmt.Errorf("reopen engine: %w", err)
+	}
+	defer func() {
+		err = errors.Join(err, reopened.Close(ctx))
+	}()
+	got, latency, err := timedQueryRows(ctx, reopened, cfg.points)
+	if err != nil {
+		return workloadResult{}, fmt.Errorf("query reopened: %w", err)
+	}
+	out.rows = len(got)
+	out.queryLatency = latency
+	return out, nil
+}
+
+func (r *workloadResult) setCompactionSnapshots(before sstableSnapshot, after sstableSnapshot) {
+	r.sstableCountBeforeCompaction = before.count
+	r.sstableCountAfterCompaction = after.count
+	r.levelDistributionBeforeCompaction = before.levelDistribution
+	r.levelDistributionAfterCompaction = after.levelDistribution
+}
+
+func openScaleEngine(ctx context.Context, dir string, cfg config) (*mts.Engine, error) {
+	memTableMaxSamples := cfg.memTableMaxSamples
+	if memTableMaxSamples <= 0 {
+		memTableMaxSamples = defaultMemTableMaxSamples
+	}
+	return mts.Open(ctx, mts.Options{
+		Path:               dir,
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: memTableMaxSamples,
+	})
+}
+
+func writeAndFlushScale(ctx context.Context, eng *mts.Engine, cfg config) (time.Duration, error) {
+	started := time.Now()
+	if err := writeScaleBatches(ctx, eng, cfg); err != nil {
+		return time.Since(started), fmt.Errorf("write batches: %w", err)
+	}
+	if err := eng.Flush(ctx); err != nil {
+		return time.Since(started), fmt.Errorf("flush: %w", err)
+	}
+	return time.Since(started), nil
 }
 
 func timedQueryRows(ctx context.Context, eng *mts.Engine, points int) ([]mts.Row, time.Duration, error) {
@@ -516,6 +638,18 @@ func levelDistribution(root string) (map[int]int, error) {
 	return levels, err
 }
 
+func captureSSTableSnapshot(root string) (sstableSnapshot, error) {
+	count, err := countSSTables(root)
+	if err != nil {
+		return sstableSnapshot{}, err
+	}
+	levels, err := levelDistribution(root)
+	if err != nil {
+		return sstableSnapshot{}, err
+	}
+	return sstableSnapshot{count: count, levelDistribution: levels}, nil
+}
+
 func logicalInputBytes(points int) int64 {
 	const wide10ValueBytes = int64(5*8 + 3*8 + 2 + 1 + 8)
 	if points <= 0 {
@@ -529,6 +663,13 @@ func readAmplification(sstableCount int, rows int) float64 {
 		return 0
 	}
 	return float64(sstableCount)
+}
+
+func throughput(points int, duration time.Duration) float64 {
+	if points <= 0 || duration <= 0 {
+		return 0
+	}
+	return float64(points) / duration.Seconds()
 }
 
 func amplificationRatio(actual int64, logical int64) float64 {
