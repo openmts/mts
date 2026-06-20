@@ -238,6 +238,164 @@ func TestResolvePointsCachesRepeatedMultiTagSeries(t *testing.T) {
 	}
 }
 
+func TestResolveTypedBatchColumnsResolvesAllTypesAndSeriesFastPaths(t *testing.T) {
+	cat, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := cat.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+
+	batch := model.TypedBatch{
+		Database:        "metrics",
+		RetentionPolicy: "hot",
+		Measurement:     "cpu",
+		Timestamps:      []int64{10, 20},
+		Tags: []model.TagColumn{
+			{Name: "region", Values: []string{"west", "west"}},
+			{Name: "host", Values: []string{"a", "b"}},
+		},
+		Fields: []model.TypedFieldColumn{
+			{Name: "usage", Type: model.FieldFloat64, Float64Values: []float64{0.5, 0.8}},
+			{Name: "count", Type: model.FieldInt64, Int64Values: []int64{5, 8}},
+			{Name: "state", Type: model.FieldString, StringValues: []string{"ok", "warn"}},
+			{Name: "ready", Type: model.FieldBool, BoolValues: []bool{true, false}},
+		},
+	}
+	resolved, err := cat.ResolveTypedBatchColumns(batch)
+	if err != nil {
+		t.Fatalf("ResolveTypedBatchColumns() error = %v", err)
+	}
+	if len(resolved.SeriesIDs) != 2 || resolved.SeriesIDs[0] == resolved.SeriesIDs[1] {
+		t.Fatalf("series ids = %v, want two distinct ids", resolved.SeriesIDs)
+	}
+	if len(resolved.Fields) != 4 {
+		t.Fatalf("field count = %d, want 4", len(resolved.Fields))
+	}
+
+	points, err := cat.ResolveTypedBatch(batch)
+	if err != nil {
+		t.Fatalf("ResolveTypedBatch() error = %v", err)
+	}
+	if len(points) != 2 || len(points[0].Fields) != 4 {
+		t.Fatalf("resolved points = %#v, want two points with four fields", points)
+	}
+	if points[0].Tags["host"] != "a" || points[1].Tags["host"] != "b" {
+		t.Fatalf("point tags = %#v %#v, want host a/b", points[0].Tags, points[1].Tags)
+	}
+	if got := points[0].Fields[0].Value; got.Type != model.FieldFloat64 || got.Float64 != 0.5 {
+		t.Fatalf("float field = %#v, want 0.5", got)
+	}
+	if got := points[0].Fields[1].Value; got.Type != model.FieldInt64 || got.Int64 != 5 {
+		t.Fatalf("int field = %#v, want 5", got)
+	}
+	if got := points[0].Fields[2].Value; got.Type != model.FieldString || got.String != "ok" {
+		t.Fatalf("string field = %#v, want ok", got)
+	}
+	if got := points[0].Fields[3].Value; got.Type != model.FieldBool || !got.Bool {
+		t.Fatalf("bool field = %#v, want true", got)
+	}
+
+	again, err := cat.ResolveTypedBatchColumns(batch)
+	if err != nil {
+		t.Fatalf("ResolveTypedBatchColumns(again) error = %v", err)
+	}
+	if again.SeriesIDs[0] != resolved.SeriesIDs[0] || again.SeriesIDs[1] != resolved.SeriesIDs[1] {
+		t.Fatalf("series ids after cache = %v, want %v", again.SeriesIDs, resolved.SeriesIDs)
+	}
+}
+
+func TestResolveTypedBatchRejectsInvalidColumns(t *testing.T) {
+	cat := newCatalog(t.TempDir())
+	tests := []struct {
+		name  string
+		batch model.TypedBatch
+	}{
+		{
+			name: "empty measurement",
+			batch: model.TypedBatch{
+				Timestamps: []int64{1},
+				Fields:     []model.TypedFieldColumn{{Name: "usage", Type: model.FieldFloat64, Float64Values: []float64{1}}},
+			},
+		},
+		{
+			name: "empty tag name",
+			batch: model.TypedBatch{
+				Measurement: "cpu",
+				Timestamps:  []int64{1},
+				Tags:        []model.TagColumn{{Values: []string{"a"}}},
+				Fields:      []model.TypedFieldColumn{{Name: "usage", Type: model.FieldFloat64, Float64Values: []float64{1}}},
+			},
+		},
+		{
+			name: "duplicate tag",
+			batch: model.TypedBatch{
+				Measurement: "cpu",
+				Timestamps:  []int64{1},
+				Tags: []model.TagColumn{
+					{Name: "host", Values: []string{"a"}},
+					{Name: "host", Values: []string{"a"}},
+				},
+				Fields: []model.TypedFieldColumn{{Name: "usage", Type: model.FieldFloat64, Float64Values: []float64{1}}},
+			},
+		},
+		{
+			name: "tag length mismatch",
+			batch: model.TypedBatch{
+				Measurement: "cpu",
+				Timestamps:  []int64{1, 2},
+				Tags:        []model.TagColumn{{Name: "host", Values: []string{"a"}}},
+				Fields:      []model.TypedFieldColumn{{Name: "usage", Type: model.FieldFloat64, Float64Values: []float64{1, 2}}},
+			},
+		},
+		{
+			name: "empty field name",
+			batch: model.TypedBatch{
+				Measurement: "cpu",
+				Timestamps:  []int64{1},
+				Fields:      []model.TypedFieldColumn{{Type: model.FieldFloat64, Float64Values: []float64{1}}},
+			},
+		},
+		{
+			name: "duplicate field",
+			batch: model.TypedBatch{
+				Measurement: "cpu",
+				Timestamps:  []int64{1},
+				Fields: []model.TypedFieldColumn{
+					{Name: "usage", Type: model.FieldFloat64, Float64Values: []float64{1}},
+					{Name: "usage", Type: model.FieldFloat64, Float64Values: []float64{1}},
+				},
+			},
+		},
+		{
+			name: "unsupported field type",
+			batch: model.TypedBatch{
+				Measurement: "cpu",
+				Timestamps:  []int64{1},
+				Fields:      []model.TypedFieldColumn{{Name: "usage", Type: model.FieldType(99)}},
+			},
+		},
+		{
+			name: "field length mismatch",
+			batch: model.TypedBatch{
+				Measurement: "cpu",
+				Timestamps:  []int64{1, 2},
+				Fields:      []model.TypedFieldColumn{{Name: "usage", Type: model.FieldFloat64, Float64Values: []float64{1}}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := cat.ResolveTypedBatchColumns(tt.batch); err == nil {
+				t.Fatal("ResolveTypedBatchColumns() error = nil, want error")
+			}
+		})
+	}
+}
+
 func TestAppendEntryLockedReturnsWriteError(t *testing.T) {
 	cat, err := Open(t.TempDir())
 	if err != nil {

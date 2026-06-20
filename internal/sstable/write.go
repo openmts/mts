@@ -18,6 +18,7 @@ const valueBlockPageSamples = 256
 type WriteOptions struct {
 	Compression  model.CompressionOptions
 	MemoryBudget CompressionMemoryBudget
+	Sync         bool
 }
 
 type CompressionMemoryBudget interface {
@@ -54,15 +55,20 @@ func WritePartWithOptions(
 		return PartMeta{}, err
 	}
 	rows, meta, writeErr := writeColumns(files, level, id, columns, opts)
-	closeErr := files.close()
+	closeErr := files.close(opts.Sync)
 	if writeErr != nil || closeErr != nil {
 		return PartMeta{}, errors.Join(writeErr, closeErr)
 	}
-	if err := writePartIndexes(partPath, &meta, rows); err != nil {
+	if err := writePartIndexes(partPath, &meta, rows, opts.Sync); err != nil {
 		return PartMeta{}, err
 	}
-	if err := ensureStringsFile(partPath); err != nil {
+	if err := ensureStringsFile(partPath, opts.Sync); err != nil {
 		return PartMeta{}, err
+	}
+	if opts.Sync {
+		if err := storagefs.SyncDir(partPath); err != nil {
+			return PartMeta{}, err
+		}
 	}
 	meta.Part.Path = partPath
 	committed = true
@@ -114,13 +120,26 @@ func openWritable(path string) (*os.File, error) {
 	return file, nil
 }
 
-func (f *partFiles) close() error {
-	if err := f.timestamps.Close(); err != nil {
-		closeErr := f.values.Close()
-		return fmt.Errorf("close timestamps file: %w close values: %v", err, closeErr)
+func (f *partFiles) close(sync bool) error {
+	if err := closeWritableFile(f.timestamps, sync, "timestamps file"); err != nil {
+		closeErr := closeWritableFile(f.values, sync, "values file")
+		return errors.Join(err, closeErr)
 	}
-	if err := f.values.Close(); err != nil {
-		return fmt.Errorf("close values file: %w", err)
+	if err := closeWritableFile(f.values, sync, "values file"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func closeWritableFile(file *os.File, sync bool, label string) error {
+	if sync {
+		if err := storagefs.Sync(file); err != nil {
+			closeErr := file.Close()
+			return errors.Join(fmt.Errorf("sync %s: %w", label, err), closeErr)
+		}
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", label, err)
 	}
 	return nil
 }
@@ -237,9 +256,57 @@ func writeValuePages(
 			MinTime: pageColumn.Samples[0].Timestamp,
 			MaxTime: pageColumn.Samples[len(pageColumn.Samples)-1].Timestamp,
 			Ref:     ref,
+			Stats:   valuePageStatsFromSamples(pageColumn.FieldType, pageColumn.Samples),
 		})
 	}
 	return index, nil
+}
+
+func valuePageStatsFromSamples(
+	fieldType model.FieldType,
+	samples []model.VersionedSample,
+) valuePageStats {
+	if len(samples) == 0 {
+		return valuePageStats{}
+	}
+	switch fieldType {
+	case model.FieldFloat64:
+		return floatValuePageStats(samples)
+	case model.FieldInt64:
+		return intValuePageStats(samples)
+	default:
+		return valuePageStats{}
+	}
+}
+
+func floatValuePageStats(samples []model.VersionedSample) valuePageStats {
+	minValue := samples[0].Value.Float64
+	maxValue := minValue
+	for _, sample := range samples[1:] {
+		value := sample.Value.Float64
+		if value < minValue {
+			minValue = value
+		}
+		if value > maxValue {
+			maxValue = value
+		}
+	}
+	return valuePageStats{HasNumeric: true, MinFloat64: minValue, MaxFloat64: maxValue}
+}
+
+func intValuePageStats(samples []model.VersionedSample) valuePageStats {
+	minValue := samples[0].Value.Int64
+	maxValue := minValue
+	for _, sample := range samples[1:] {
+		value := sample.Value.Int64
+		if value < minValue {
+			minValue = value
+		}
+		if value > maxValue {
+			maxValue = value
+		}
+	}
+	return valuePageStats{HasNumeric: true, MinInt64: minValue, MaxInt64: maxValue}
 }
 
 func valuePageCount(samples int) int {
@@ -249,8 +316,8 @@ func valuePageCount(samples int) int {
 	return (samples + valueBlockPageSamples - 1) / valueBlockPageSamples
 }
 
-func writePartIndexes(path string, meta *metadata, rows []indexRow) error {
-	indexRef, rowRefs, err := writeIndexBlocks(filepath.Join(path, indexFile), rows)
+func writePartIndexes(path string, meta *metadata, rows []indexRow, sync bool) error {
+	indexRef, rowRefs, err := writeIndexBlocks(filepath.Join(path, indexFile), rows, sync)
 	if err != nil {
 		return err
 	}
@@ -260,7 +327,7 @@ func writePartIndexes(path string, meta *metadata, rows []indexRow) error {
 	if err != nil {
 		return err
 	}
-	metaIndexRef, err := writeBinaryBlock(filepath.Join(path, metaindexFile), metaIndexPayload)
+	metaIndexRef, err := writeBinaryBlock(filepath.Join(path, metaindexFile), metaIndexPayload, sync)
 	if err != nil {
 		return err
 	}
@@ -269,7 +336,7 @@ func writePartIndexes(path string, meta *metadata, rows []indexRow) error {
 	if err != nil {
 		return err
 	}
-	seriesIndexRef, err := writeBinaryBlock(filepath.Join(path, seriesIndexFile), seriesIndexPayload)
+	seriesIndexRef, err := writeBinaryBlock(filepath.Join(path, seriesIndexFile), seriesIndexPayload, sync)
 	if err != nil {
 		return err
 	}
@@ -277,7 +344,7 @@ func writePartIndexes(path string, meta *metadata, rows []indexRow) error {
 	return writeMetadata(path, *meta)
 }
 
-func writeIndexBlocks(path string, rows []indexRow) (blockRef, []blockRef, error) {
+func writeIndexBlocks(path string, rows []indexRow, sync bool) (blockRef, []blockRef, error) {
 	file, err := openWritable(path)
 	if err != nil {
 		return blockRef{}, nil, err
@@ -312,8 +379,8 @@ func writeIndexBlocks(path string, rows []indexRow) (blockRef, []blockRef, error
 		}
 		rowRefs = append(rowRefs, rowRef)
 	}
-	if err := file.Close(); err != nil {
-		return blockRef{}, nil, fmt.Errorf("close index blocks file: %w", err)
+	if err := closeWritableFile(file, sync, "index blocks file"); err != nil {
+		return blockRef{}, nil, err
 	}
 	return indexRef, rowRefs, nil
 }
@@ -325,18 +392,18 @@ func errorsWithClose(err error, closeErr error) error {
 	return fmt.Errorf("%w close file: %v", err, closeErr)
 }
 
-func writeBinaryBlock(path string, payload []byte) (blockRef, error) {
+func writeBinaryBlock(path string, payload []byte, sync bool) (blockRef, error) {
 	file, err := openWritable(path)
 	if err != nil {
 		return blockRef{}, err
 	}
 	ref, writeErr := writeBlock(file, payload)
-	closeErr := file.Close()
+	closeErr := closeWritableFile(file, sync, "binary block file")
 	if writeErr != nil {
-		return blockRef{}, writeErr
+		return blockRef{}, errors.Join(writeErr, closeErr)
 	}
 	if closeErr != nil {
-		return blockRef{}, fmt.Errorf("close binary block file: %w", closeErr)
+		return blockRef{}, closeErr
 	}
 	return ref, nil
 }
@@ -349,15 +416,12 @@ func writeMetadata(path string, meta metadata) error {
 	return storagefs.WriteFileAtomic(filepath.Join(path, metadataFile), data)
 }
 
-func ensureStringsFile(path string) error {
+func ensureStringsFile(path string, sync bool) error {
 	file, err := openWritable(filepath.Join(path, stringsFile))
 	if err != nil {
 		return err
 	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close strings file: %w", err)
-	}
-	return nil
+	return closeWritableFile(file, sync, "strings file")
 }
 
 func newMetadata(level int, id string) metadata {

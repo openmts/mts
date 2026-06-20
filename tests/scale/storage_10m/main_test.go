@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	mts "github.com/openmts/mts"
 	"github.com/openmts/mts/internal/faultinject"
@@ -30,9 +32,15 @@ func TestParseConfigRejectsInvalidInput(t *testing.T) {
 		{"-points", "0"},
 		{"-batch-size", "0"},
 		{"-memtable-max-samples", "0"},
+		{"-query-limit", "0"},
+		{"-shard-duration", "0"},
+		{"-timestamp-step", "0"},
+		{"-query-start", "10", "-query-end", "10"},
 		{"-mode", "bad"},
 		{"-profile", "bad"},
 		{"-ingest-path", "bad"},
+		{"-compression-algorithm", "gzip"},
+		{"-durability", "bad"},
 	} {
 		if _, err := parseConfig(args); err == nil {
 			t.Fatalf("parseConfig(%v) error = nil, want error", args)
@@ -62,18 +70,169 @@ func TestParseConfigProfilesAndThresholds(t *testing.T) {
 	if cfg.memTableMaxSamples != defaultMemTableMaxSamples {
 		t.Fatalf("memTableMaxSamples = %d, want %d", cfg.memTableMaxSamples, defaultMemTableMaxSamples)
 	}
+	if cfg.compressionAlgorithm != compressionOff {
+		t.Fatalf("compressionAlgorithm = %q, want %q", cfg.compressionAlgorithm, compressionOff)
+	}
+	if cfg.durability != durabilityBuffered {
+		t.Fatalf("durability = %q, want %q", cfg.durability, durabilityBuffered)
+	}
+	if cfg.queryLimit != defaultQueryLimit {
+		t.Fatalf("queryLimit = %d, want %d", cfg.queryLimit, defaultQueryLimit)
+	}
+	if !cfg.verify {
+		t.Fatal("verify = false, want default true")
+	}
 	if cfg.maxSSTableCount != 3 || cfg.maxCompactionBacklog != 1 {
 		t.Fatalf("config thresholds = %#v, want sstable/backlog thresholds", cfg)
 	}
 }
 
+func TestParseConfigAcceptsVerifyFlag(t *testing.T) {
+	cfg, err := parseConfig([]string{"-points", "10", "-verify=false"})
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.verify {
+		t.Fatal("verify = true, want false")
+	}
+}
+
+func TestParseConfigAcceptsCompressionAlgorithms(t *testing.T) {
+	for _, algorithm := range []string{"off", "none", "snappy", "lz4", "zstd"} {
+		t.Run(algorithm, func(t *testing.T) {
+			cfg, err := parseConfig([]string{"-points", "10", "-compression-algorithm", algorithm})
+			if err != nil {
+				t.Fatalf("parseConfig() error = %v", err)
+			}
+			if cfg.compressionAlgorithm != algorithm {
+				t.Fatalf("compressionAlgorithm = %q, want %q", cfg.compressionAlgorithm, algorithm)
+			}
+		})
+	}
+}
+
+func TestParseConfigAcceptsDurabilityModes(t *testing.T) {
+	for _, mode := range []string{
+		durabilityBuffered,
+		durabilityWALSync,
+		durabilityWriteSync,
+		durabilityStrictFlush,
+	} {
+		t.Run(mode, func(t *testing.T) {
+			cfg, err := parseConfig([]string{"-points", "10", "-durability", mode})
+			if err != nil {
+				t.Fatalf("parseConfig() error = %v", err)
+			}
+			if cfg.durability != mode {
+				t.Fatalf("durability = %q, want %q", cfg.durability, mode)
+			}
+		})
+	}
+}
+
+func TestDurabilityOptionsMapToEngineAndWriteOptions(t *testing.T) {
+	tests := []struct {
+		name      string
+		wantWAL   bool
+		wantWrite bool
+		wantFlush bool
+	}{
+		{name: durabilityBuffered},
+		{name: durabilityWALSync, wantWAL: true},
+		{name: durabilityWriteSync, wantWrite: true},
+		{name: durabilityStrictFlush, wantWAL: true, wantWrite: true, wantFlush: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := durabilityOptions(tt.name)
+			if got.walSync != tt.wantWAL || got.writeSync != tt.wantWrite || got.flushSync != tt.wantFlush {
+				t.Fatalf("durabilityOptions(%q) = %#v", tt.name, got)
+			}
+		})
+	}
+}
+
+func TestScaleCompressionOptions(t *testing.T) {
+	if scaleCompressionOptions("off").Enabled {
+		t.Fatal("scaleCompressionOptions(off).Enabled = true, want false")
+	}
+	got := scaleCompressionOptions("lz4")
+	if !got.Enabled || got.Algorithm != "lz4" || got.MinPageValues != 1 {
+		t.Fatalf("scaleCompressionOptions(lz4) = %#v, want enabled lz4", got)
+	}
+}
+
 func TestParseConfigAcceptsMemTableMaxSamples(t *testing.T) {
-	cfg, err := parseConfig([]string{"-points", "10", "-memtable-max-samples", "128"})
+	cfg, err := parseConfig([]string{
+		"-points", "10",
+		"-memtable-max-samples", "128",
+		"-shard-duration", "2h",
+		"-timestamp-step", "2s",
+		"-query-start", "4",
+		"-query-end", "8",
+		"-query-limit", "3",
+	})
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
 	}
 	if cfg.memTableMaxSamples != 128 {
 		t.Fatalf("memTableMaxSamples = %d, want 128", cfg.memTableMaxSamples)
+	}
+	if cfg.queryStart != 4 || cfg.queryEnd != 8 || cfg.queryLimit != 3 {
+		t.Fatalf("query config = start %d end %d limit %d, want 4/8/3",
+			cfg.queryStart, cfg.queryEnd, cfg.queryLimit)
+	}
+	if cfg.shardDuration != 2*time.Hour || cfg.timestampStep != 2*time.Second {
+		t.Fatalf("time config = shard %s step %s, want 2h/2s", cfg.shardDuration, cfg.timestampStep)
+	}
+}
+
+func TestScaleQuerySpecUsesMiddleLimitedWindow(t *testing.T) {
+	spec := scaleQuerySpec(config{points: 1_000_000, queryLimit: 2_000})
+	if spec.startIndex != 499_000 || spec.endIndex != 500_999 ||
+		spec.start != int64(499_000*time.Second) ||
+		spec.end != int64(500_999*time.Second) ||
+		spec.limit != 2_000 {
+		t.Fatalf("scaleQuerySpec(1M) = %#v, want middle 2000 rows", spec)
+	}
+	small := scaleQuerySpec(config{points: 10, queryLimit: 2_000})
+	if small.start != 0 || small.end != int64(9*time.Second) || small.limit != 2_000 {
+		t.Fatalf("scaleQuerySpec(small) = %#v, want full small range with limit 2000", small)
+	}
+	override := scaleQuerySpec(config{points: 100, queryStart: int64(30 * time.Second), queryEnd: int64(40 * time.Second), queryLimit: 5})
+	if override.startIndex != 30 || override.endIndex != 40 || override.limit != 5 {
+		t.Fatalf("scaleQuerySpec(override) = %#v, want explicit range and limit", override)
+	}
+}
+
+func TestExpectedQueryRowsHonorsInclusiveRangeAndLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		query querySpec
+		want  int
+	}{
+		{
+			name:  "inclusive range under limit",
+			query: querySpec{startIndex: 7, endIndex: 12, limit: 2_000},
+			want:  6,
+		},
+		{
+			name:  "limit smaller than range",
+			query: querySpec{startIndex: 10, endIndex: 20, limit: 5},
+			want:  5,
+		},
+		{
+			name:  "empty range",
+			query: querySpec{startIndex: 20, endIndex: 10, limit: 5},
+			want:  0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := expectedQueryRows(tt.query); got != tt.want {
+				t.Fatalf("expectedQueryRows() = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -115,7 +274,7 @@ func TestPrepareDirExplicitAndInvalidPath(t *testing.T) {
 }
 
 func TestRunWorkloadModes(t *testing.T) {
-	for _, mode := range []string{"write", "query", "compact", "restart"} {
+	for _, mode := range []string{"write", "query", "compact", "write-query-compact", "restart"} {
 		t.Run(mode, func(t *testing.T) {
 			rows, err := runWorkload(t.TempDir(), config{mode: mode, points: 16, batchSize: 5})
 			if err != nil {
@@ -134,6 +293,16 @@ func TestRunWorkloadModes(t *testing.T) {
 	}
 }
 
+func TestParseConfigAcceptsWriteQueryCompactMode(t *testing.T) {
+	cfg, err := parseConfig([]string{"-points", "10", "-mode", "write-query-compact"})
+	if err != nil {
+		t.Fatalf("parseConfig(write-query-compact) error = %v", err)
+	}
+	if cfg.mode != "write-query-compact" {
+		t.Fatalf("mode = %q, want write-query-compact", cfg.mode)
+	}
+}
+
 func TestReportIncludesAmplificationAndLevelDistribution(t *testing.T) {
 	out := report{
 		LevelDistribution:  map[int]int{1: 2},
@@ -148,6 +317,19 @@ func TestReportIncludesAmplificationAndLevelDistribution(t *testing.T) {
 	}
 	text := string(data)
 	for _, key := range []string{
+		"compression_algorithm",
+		"durability",
+		"wal_sync",
+		"write_sync",
+		"flush_sync",
+		"query_start_time",
+		"query_end_time",
+		"query_limit",
+		"verify",
+		"shard_duration_nanos",
+		"timestamp_step_nanos",
+		"shard_count",
+		"shard_sstable_distribution",
 		"level_distribution",
 		"read_amplification",
 		"write_amplification",
@@ -214,14 +396,73 @@ func TestCompactModeReportsWriteAndCompactionStats(t *testing.T) {
 	}
 }
 
+func TestCompactModeDistributesGeneratedDataAcrossShards(t *testing.T) {
+	result, err := runWorkloadDetailed(t.TempDir(), config{
+		mode:               "compact",
+		ingestPath:         "typed",
+		points:             12,
+		batchSize:          3,
+		memTableMaxSamples: 6,
+		shardDuration:      3 * time.Second,
+		timestampStep:      time.Second,
+		queryLimit:         4,
+	})
+	if err != nil {
+		t.Fatalf("runWorkloadDetailed(cross shard) error = %v", err)
+	}
+	if result.rows != 4 {
+		t.Fatalf("rows = %d, want 4", result.rows)
+	}
+	if result.sstableCountAfterCompaction < 4 {
+		t.Fatalf("sstableCountAfterCompaction = %d, want at least one per shard", result.sstableCountAfterCompaction)
+	}
+}
+
+func TestTimedQueryLimitedRowsCountsAndValidatesMiddleRows(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 2,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := eng.Close(ctx); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+	if err := eng.WriteTypedBatch(ctx, scaleTypedBatch(0, 20, scaleHostCache(100)), mts.WriteOptions{}); err != nil {
+		t.Fatalf("WriteTypedBatch() error = %v", err)
+	}
+	if err := eng.Flush(ctx); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+	spec := scaleQuerySpec(config{points: 20, queryLimit: 6})
+	rows, latency, err := timedQueryLimitedRows(ctx, eng, spec, true)
+	if err != nil {
+		t.Fatalf("timedQueryLimitedRows() error = %v", err)
+	}
+	if rows != 6 {
+		t.Fatalf("timedQueryLimitedRows() rows = %d, want 6", rows)
+	}
+	if latency <= 0 {
+		t.Fatalf("timedQueryLimitedRows() latency = %s, want positive", latency)
+	}
+}
+
 func structCompactionStats(backlog int) mts.CompactionStats {
 	return mts.CompactionStats{Backlog: backlog}
 }
 
 func TestScaleTypedBatch(t *testing.T) {
-	batch := scaleTypedBatch(2, 5, scaleHostCache(100))
+	batch := newScaleTypedBatchBuilder(3).Build(2, 5, scaleHostCache(100), config{timestampStep: 2 * time.Second})
 	if len(batch.Timestamps) != 3 {
 		t.Fatalf("typed timestamps len = %d, want 3", len(batch.Timestamps))
+	}
+	if batch.Timestamps[0] != int64(4*time.Second) {
+		t.Fatalf("typed first timestamp = %d, want 4s", batch.Timestamps[0])
 	}
 	if len(batch.Tags) != 1 || batch.Tags[0].Values[0] != "host-002" {
 		t.Fatalf("typed tags = %#v, want first host-002", batch.Tags)
@@ -240,8 +481,8 @@ func TestScaleTypedBatch(t *testing.T) {
 func TestScaleTypedBatchBuilderReusesBackingArrays(t *testing.T) {
 	builder := newScaleTypedBatchBuilder(4)
 	hosts := scaleHostCache(100)
-	first := builder.Build(0, 4, hosts)
-	second := builder.Build(4, 8, hosts)
+	first := builder.Build(0, 4, hosts, config{})
+	second := builder.Build(4, 8, hosts, config{})
 	if len(first.Timestamps) == 0 || len(second.Timestamps) == 0 {
 		t.Fatal("typed batches are empty")
 	}
@@ -254,8 +495,8 @@ func TestScaleTypedBatchBuilderReusesBackingArrays(t *testing.T) {
 	if &first.Fields[0].Float64Values[0] != &second.Fields[0].Float64Values[0] {
 		t.Fatal("field backing array was not reused")
 	}
-	if second.Timestamps[0] != 4 || second.Fields[0].Float64Values[0] != 4 {
-		t.Fatalf("second batch first row = time %d f0 %v, want 4",
+	if second.Timestamps[0] != int64(4*time.Second) || second.Fields[0].Float64Values[0] != 4 {
+		t.Fatalf("second batch first row = time %d f0 %v, want index 4 at 4s",
 			second.Timestamps[0], second.Fields[0].Float64Values[0])
 	}
 }
@@ -304,6 +545,31 @@ func TestRunRejectsInvalidConfigAndDirectory(t *testing.T) {
 	}
 	if err := run([]string{"-data-dir", filepath.Join(filePath, "child"), "-points", "1"}); err == nil {
 		t.Fatal("run(invalid dir) error = nil, want error")
+	}
+}
+
+func TestRunWritesJSONReportFile(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "reports", "storage.json")
+	if err := run([]string{"-points", "8", "-batch-size", "4", "-out", out}); err != nil {
+		t.Fatalf("run(out) error = %v", err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("ReadFile(out) error = %v", err)
+	}
+	var got report
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal(out) error = %v data=%s", err, string(data))
+	}
+	if got.Points != 8 || !got.Verify {
+		t.Fatalf("report = %#v, want points and verify", got)
+	}
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("Stat(out) error = %v", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("report mode = %04o, want 0600", info.Mode().Perm())
 	}
 }
 

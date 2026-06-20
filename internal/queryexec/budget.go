@@ -32,8 +32,21 @@ type budgetColumnStream struct {
 	closed  bool
 }
 
+type budgetRowStream struct {
+	source  RowStream
+	current model.Row
+	err     error
+	rows    int
+	limit   int
+	closed  bool
+}
+
 func NewBudgetColumnStream(source ColumnStream, budget model.QueryBudget) ColumnStream {
 	return &budgetColumnStream{source: source, limit: budget.MaxSamples}
+}
+
+func NewBudgetRowStream(source RowStream, budget model.QueryBudget) RowStream {
+	return &budgetRowStream{source: source, limit: budget.MaxSamples}
 }
 
 func NewReadBudgetError(metric string, actual int, limit int) error {
@@ -67,6 +80,40 @@ func (s *budgetColumnStream) Err() error {
 }
 
 func (s *budgetColumnStream) Close() error {
+	s.closed = true
+	if s.source == nil {
+		return nil
+	}
+	return s.source.Close()
+}
+
+func (s *budgetRowStream) Next() bool {
+	if s.closed || s.err != nil {
+		return false
+	}
+	if !s.source.Next() {
+		s.err = s.source.Err()
+		return false
+	}
+	s.rows++
+	if s.limit > 0 && s.rows > s.limit {
+		s.err = NewReadBudgetError("rows", s.rows, s.limit)
+		_ = s.Close()
+		return false
+	}
+	s.current = s.source.Row()
+	return true
+}
+
+func (s *budgetRowStream) Row() model.Row {
+	return s.current
+}
+
+func (s *budgetRowStream) Err() error {
+	return s.err
+}
+
+func (s *budgetRowStream) Close() error {
 	s.closed = true
 	if s.source == nil {
 		return nil

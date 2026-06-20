@@ -85,6 +85,40 @@ func TestConcurrentRowIteratorsDoNotShareMutableRows(t *testing.T) {
 	}
 }
 
+func TestRowMergeStreamHandlesEmptyInvalidOffsetAndNonAlignedSeries(t *testing.T) {
+	if rows, err := rowsFromSeriesColumns(nil); err != nil || len(rows) != 0 {
+		t.Fatalf("rowsFromSeriesColumns(nil) = %#v, %v; want empty nil", rows, err)
+	}
+	_, err := rowsFromSeriesColumns([]model.ColumnSeries{{
+		FieldName:  "usage",
+		Timestamps: []int64{1, 2},
+		Values:     []model.FieldValue{model.Float64Value(1)},
+	}})
+	if err == nil {
+		t.Fatal("rowsFromSeriesColumns(invalid lengths) error = nil, want error")
+	}
+
+	stream := NewRowMergeStream(NewSliceColumnSeriesStream([]model.ColumnSeries{
+		rowMergeColumn(1, "cpu", "usage", []int64{2, 1}, []model.FieldValue{
+			model.Float64Value(2),
+			model.Float64Value(1),
+		}),
+		rowMergeColumn(1, "cpu", "temp", []int64{1}, []model.FieldValue{
+			model.Int64Value(10),
+		}),
+		rowMergeColumn(2, "cpu", "usage", []int64{3}, []model.FieldValue{
+			model.Float64Value(3),
+		}),
+	}), model.Query{Offset: 1, Limit: 2})
+	rows := collectRows(t, stream)
+	if len(rows) != 2 || rows[0].Timestamp != 2 || rows[1].Timestamp != 3 {
+		t.Fatalf("rows = %#v, want offset row then first row from second series", rows)
+	}
+	if rows[0].Fields["usage"].Float64 != 2 || rows[1].Fields["usage"].Float64 != 3 {
+		t.Fatalf("row fields = %#v, want usage values 2 and 3", rows)
+	}
+}
+
 func collectRows(t *testing.T, stream RowStream) []model.Row {
 	t.Helper()
 	rows := make([]model.Row, 0)

@@ -37,10 +37,16 @@ func buildOperator(node queryplanner.Node, index int) (Operator, error) {
 	switch node.Kind {
 	case queryplanner.NodeScan:
 		return Operator{ID: id, Kind: OperatorScan}, nil
+	case queryplanner.NodeFilter:
+		return Operator{ID: id, Kind: OperatorFilter, Inputs: previousInput(index)}, nil
 	case queryplanner.NodeProject:
 		return Operator{ID: id, Kind: OperatorProject, Inputs: previousInput(index)}, nil
 	case queryplanner.NodeAggregate:
 		return Operator{ID: id, Kind: OperatorAggregate, Inputs: previousInput(index)}, nil
+	case queryplanner.NodeGroup:
+		return Operator{ID: id, Kind: OperatorGroup, Inputs: previousInput(index)}, nil
+	case queryplanner.NodeSort:
+		return Operator{ID: id, Kind: OperatorSort, Inputs: previousInput(index)}, nil
 	case queryplanner.NodeLimit:
 		return Operator{ID: id, Kind: OperatorLimit, Inputs: previousInput(index)}, nil
 	default:

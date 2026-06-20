@@ -14,6 +14,7 @@ const (
 	ErrFunctionTypeMismatch Code = "function-type-mismatch"
 	ErrInvalidWindow        Code = "invalid-window"
 	ErrInvalidPagination    Code = "invalid-pagination"
+	ErrInvalidGroup         Code = "invalid-group"
 )
 
 type Error struct {

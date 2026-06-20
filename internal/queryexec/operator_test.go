@@ -28,3 +28,20 @@ func TestPipelineProfilesOperatorsAndClosesOnLimit(t *testing.T) {
 		t.Fatal("source closed = false, want true after limit")
 	}
 }
+
+func TestPipelineCloseAndCountingOperatorErrAreStable(t *testing.T) {
+	source := queryexec.NewCountingOperator("scan", 1)
+	if err := source.Err(); err != nil {
+		t.Fatalf("source Err() = %v, want nil", err)
+	}
+	pipeline := queryexec.NewPipeline(source, queryexec.PipelineOptions{})
+	if err := pipeline.Close(); err != nil {
+		t.Fatalf("pipeline Close() error = %v", err)
+	}
+	if !source.Closed() {
+		t.Fatal("source closed = false, want true")
+	}
+	if pipeline.Next(context.Background()) {
+		t.Fatal("pipeline Next(after close) = true, want false")
+	}
+}

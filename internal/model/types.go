@@ -108,11 +108,81 @@ type Query struct {
 	Fields          []string          `json:"fields"`
 	StartTime       int64             `json:"start_time"`
 	EndTime         int64             `json:"end_time"`
+	Predicates      []QueryPredicate  `json:"predicates"`
+	Expr            QueryExpr         `json:"expr,omitempty"`
 	Aggregates      []AggregateSpec   `json:"aggregates"`
 	Window          time.Duration     `json:"window"`
+	Group           QueryGroup        `json:"group"`
+	Order           QueryOrder        `json:"order"`
 	Limit           int               `json:"limit"`
 	Offset          int               `json:"offset"`
+	Cursor          string            `json:"cursor,omitempty"`
 	Budget          QueryBudget       `json:"budget"`
+}
+
+type QueryPredicateKind uint8
+
+const (
+	QueryPredicateTimeRange QueryPredicateKind = iota + 1
+	QueryPredicateTagEq
+	QueryPredicateTagNe
+	QueryPredicateTagExists
+	QueryPredicateTagIn
+	QueryPredicateFieldEq
+	QueryPredicateFieldNe
+	QueryPredicateFieldGT
+	QueryPredicateFieldGTE
+	QueryPredicateFieldLT
+	QueryPredicateFieldLTE
+)
+
+type QueryPredicate struct {
+	Kind         QueryPredicateKind `json:"kind"`
+	Name         string             `json:"name"`
+	StringValues []string           `json:"string_values,omitempty"`
+	Value        FieldValue         `json:"value,omitempty"`
+	Start        int64              `json:"start,omitempty"`
+	End          int64              `json:"end,omitempty"`
+}
+
+type QueryExprKind uint8
+
+const (
+	QueryExprNone QueryExprKind = iota
+	QueryExprPredicate
+	QueryExprAnd
+	QueryExprOr
+	QueryExprNot
+)
+
+type QueryExpr struct {
+	Kind      QueryExprKind  `json:"kind,omitempty"`
+	Predicate QueryPredicate `json:"predicate,omitempty"`
+	Children  []QueryExpr    `json:"children,omitempty"`
+}
+
+type QueryGroup struct {
+	Tags   []string      `json:"tags,omitempty"`
+	Window time.Duration `json:"window,omitempty"`
+}
+
+type QueryOrderBy uint8
+
+const (
+	QueryOrderByNone QueryOrderBy = iota
+	QueryOrderByTime
+)
+
+type QuerySortDirection uint8
+
+const (
+	QuerySortAsc QuerySortDirection = iota + 1
+	QuerySortDesc
+)
+
+type QueryOrder struct {
+	By        QueryOrderBy       `json:"by"`
+	Direction QuerySortDirection `json:"direction"`
 }
 
 type AggregateSpec struct {
@@ -139,6 +209,7 @@ type QueryExplain struct {
 	Database        string            `json:"database"`
 	RetentionPolicy string            `json:"retention_policy"`
 	Measurement     string            `json:"measurement"`
+	ReadEpoch       int64             `json:"read_epoch"`
 	TagFilters      map[string]string `json:"tag_filters"`
 	FieldFilters    []string          `json:"field_filters"`
 	SeriesCount     int               `json:"series_count"`
@@ -148,6 +219,21 @@ type QueryExplain struct {
 	SkippedShards   int               `json:"skipped_shards"`
 	Pushdowns       []string          `json:"pushdowns"`
 	Budget          QueryBudget       `json:"budget"`
+	Cost            QueryCost         `json:"cost"`
+}
+
+type QueryCost struct {
+	SeriesCount      int    `json:"series_count"`
+	FieldCount       int    `json:"field_count"`
+	CandidateShards  int    `json:"candidate_shards"`
+	MatchedShards    int    `json:"matched_shards"`
+	Limit            int    `json:"limit"`
+	Offset           int    `json:"offset"`
+	WindowNanos      int64  `json:"window_nanos"`
+	Ordered          bool   `json:"ordered"`
+	Cursor           bool   `json:"cursor"`
+	EstimatedSamples int64  `json:"estimated_samples"`
+	PlanClass        string `json:"plan_class"`
 }
 
 type QueryStats struct {
@@ -169,6 +255,7 @@ type QueryStats struct {
 	BudgetErrors      int   `json:"budget_errors"`
 	Cancellations     int   `json:"cancellations"`
 	StartedUnixNanos  int64 `json:"started_unix_nanos"`
+	ReadEpoch         int64 `json:"read_epoch"`
 }
 
 type Options struct {
@@ -179,6 +266,7 @@ type Options struct {
 	Retention              time.Duration
 	MemTableMaxSamples     int
 	WAL                    WALOptions
+	FlushSync              bool
 	Compaction             CompactionOptions
 	Compression            CompressionOptions
 	StorageMemory          StorageMemoryOptions

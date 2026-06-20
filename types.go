@@ -65,11 +65,80 @@ type Query struct {
 	Fields          []string          `json:"fields"`
 	StartTime       int64             `json:"start_time"`
 	EndTime         int64             `json:"end_time"`
+	Predicates      []QueryPredicate  `json:"predicates"`
+	Expr            QueryExpr         `json:"expr,omitempty"`
 	Aggregates      []AggregateSpec   `json:"aggregates"`
 	Window          time.Duration     `json:"window"`
+	Group           QueryGroup        `json:"group"`
+	Order           QueryOrder        `json:"order"`
 	Limit           int               `json:"limit"`
 	Offset          int               `json:"offset"`
 	Budget          QueryBudget       `json:"budget"`
+}
+
+type QueryPredicateKind uint8
+
+const (
+	QueryPredicateTimeRange QueryPredicateKind = iota + 1
+	QueryPredicateTagEq
+	QueryPredicateTagNe
+	QueryPredicateTagExists
+	QueryPredicateTagIn
+	QueryPredicateFieldEq
+	QueryPredicateFieldNe
+	QueryPredicateFieldGT
+	QueryPredicateFieldGTE
+	QueryPredicateFieldLT
+	QueryPredicateFieldLTE
+)
+
+type QueryPredicate struct {
+	Kind         QueryPredicateKind `json:"kind"`
+	Name         string             `json:"name"`
+	StringValues []string           `json:"string_values,omitempty"`
+	Value        FieldValue         `json:"value,omitempty"`
+	Start        int64              `json:"start,omitempty"`
+	End          int64              `json:"end,omitempty"`
+}
+
+type QueryExprKind uint8
+
+const (
+	QueryExprNone QueryExprKind = iota
+	QueryExprPredicate
+	QueryExprAnd
+	QueryExprOr
+	QueryExprNot
+)
+
+type QueryExpr struct {
+	Kind      QueryExprKind  `json:"kind,omitempty"`
+	Predicate QueryPredicate `json:"predicate,omitempty"`
+	Children  []QueryExpr    `json:"children,omitempty"`
+}
+
+type QueryGroup struct {
+	Tags   []string      `json:"tags,omitempty"`
+	Window time.Duration `json:"window,omitempty"`
+}
+
+type QueryOrderBy uint8
+
+const (
+	QueryOrderByNone QueryOrderBy = iota
+	QueryOrderByTime
+)
+
+type QuerySortDirection uint8
+
+const (
+	QuerySortAsc QuerySortDirection = iota + 1
+	QuerySortDesc
+)
+
+type QueryOrder struct {
+	By        QueryOrderBy       `json:"by"`
+	Direction QuerySortDirection `json:"direction"`
 }
 
 type AggregateSpec struct {
@@ -87,6 +156,7 @@ type QueryExplain struct {
 	Database        string            `json:"database"`
 	RetentionPolicy string            `json:"retention_policy"`
 	Measurement     string            `json:"measurement"`
+	ReadEpoch       int64             `json:"read_epoch"`
 	TagFilters      map[string]string `json:"tag_filters"`
 	FieldFilters    []string          `json:"field_filters"`
 	SeriesCount     int               `json:"series_count"`
@@ -116,6 +186,8 @@ type QueryStats struct {
 	DurationNanos     int64 `json:"duration_nanos"`
 	BudgetErrors      int   `json:"budget_errors"`
 	Cancellations     int   `json:"cancellations"`
+	StartedUnixNanos  int64 `json:"started_unix_nanos"`
+	ReadEpoch         int64 `json:"read_epoch"`
 }
 
 type QueryResult struct {
@@ -132,6 +204,7 @@ type Options struct {
 	Retention              time.Duration
 	MemTableMaxSamples     int
 	WAL                    WALOptions
+	FlushSync              bool
 	Compaction             CompactionOptions
 	Compression            CompressionOptions
 	StorageMemory          StorageMemoryOptions
@@ -467,11 +540,52 @@ func toModelQuery(query Query) model.Query {
 		Fields:          append([]string(nil), query.Fields...),
 		StartTime:       query.StartTime,
 		EndTime:         query.EndTime,
+		Predicates:      toModelQueryPredicates(query.Predicates),
+		Expr:            toModelQueryExpr(query.Expr),
 		Aggregates:      toModelAggregateSpecs(query.Aggregates),
 		Window:          query.Window,
-		Limit:           query.Limit,
-		Offset:          query.Offset,
-		Budget:          toModelQueryBudget(query.Budget),
+		Group: model.QueryGroup{
+			Tags:   append([]string(nil), query.Group.Tags...),
+			Window: query.Group.Window,
+		},
+		Order: model.QueryOrder{
+			By:        model.QueryOrderBy(query.Order.By),
+			Direction: model.QuerySortDirection(query.Order.Direction),
+		},
+		Limit:  query.Limit,
+		Offset: query.Offset,
+		Budget: toModelQueryBudget(query.Budget),
+	}
+}
+
+func toModelQueryExpr(expr QueryExpr) model.QueryExpr {
+	out := model.QueryExpr{
+		Kind:      model.QueryExprKind(expr.Kind),
+		Predicate: toModelQueryPredicate(expr.Predicate),
+		Children:  make([]model.QueryExpr, 0, len(expr.Children)),
+	}
+	for _, child := range expr.Children {
+		out.Children = append(out.Children, toModelQueryExpr(child))
+	}
+	return out
+}
+
+func toModelQueryPredicates(predicates []QueryPredicate) []model.QueryPredicate {
+	out := make([]model.QueryPredicate, 0, len(predicates))
+	for _, predicate := range predicates {
+		out = append(out, toModelQueryPredicate(predicate))
+	}
+	return out
+}
+
+func toModelQueryPredicate(predicate QueryPredicate) model.QueryPredicate {
+	return model.QueryPredicate{
+		Kind:         model.QueryPredicateKind(predicate.Kind),
+		Name:         predicate.Name,
+		StringValues: append([]string(nil), predicate.StringValues...),
+		Value:        toModelFieldValue(predicate.Value),
+		Start:        predicate.Start,
+		End:          predicate.End,
 	}
 }
 
@@ -550,6 +664,7 @@ func toModelOptions(opts Options) model.Options {
 		Retention:              opts.Retention,
 		MemTableMaxSamples:     opts.MemTableMaxSamples,
 		WAL:                    toModelWALOptions(opts.WAL),
+		FlushSync:              opts.FlushSync,
 		Compaction:             toModelCompactionOptions(opts.Compaction),
 		Compression:            toModelCompressionOptions(opts.Compression),
 		StorageMemory:          toModelStorageMemoryOptions(opts.StorageMemory),

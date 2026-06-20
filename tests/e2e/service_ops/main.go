@@ -33,6 +33,8 @@ func run() error {
 	operations.registry.SetGauge("mts_ready", "Ready.", 1)
 	server := service.NewServer(service.Options{
 		AdminTimeout: time.Second,
+		EnableAdmin:  true,
+		AdminToken:   "secret",
 		EnablePprof:  true,
 		AuditLogger:  operations,
 	}, operations, operations, func(context.Context) error {
@@ -112,6 +114,7 @@ func assertGET(handler http.Handler, path string, contains string) error {
 func assertCompact(handler http.Handler) (serviceAdminCompactResponse, error) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	request.Header.Set("Authorization", "Bearer secret")
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		return serviceAdminCompactResponse{}, fmt.Errorf("compact status=%d, want 200", recorder.Code)

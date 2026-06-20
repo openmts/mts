@@ -132,6 +132,7 @@ func readCompressedValueHeader(reader *blockReader) (valueHeader, error) {
 
 func (b valueBlock) filter(query Query) valueBlock {
 	b.Samples = filterSamplesByTime(b.Samples, query)
+	b.Samples = filterSamplesByFieldPredicates(b.FieldID, b.Samples, query)
 	return b
 }
 
@@ -143,6 +144,117 @@ func filterSamplesByTime(samples []model.VersionedSample, query Query) []model.V
 		}
 	}
 	return out
+}
+
+func filterSamplesByFieldPredicates(
+	fieldID uint32,
+	samples []model.VersionedSample,
+	query Query,
+) []model.VersionedSample {
+	predicates := query.FieldPredicates[fieldID]
+	if len(predicates) == 0 {
+		return samples
+	}
+	out := samples[:0]
+	for _, sample := range samples {
+		if sampleMatchesFieldPredicates(sample, predicates) {
+			out = append(out, sample)
+		}
+	}
+	return out
+}
+
+func sampleMatchesFieldPredicates(
+	sample model.VersionedSample,
+	predicates []model.QueryPredicate,
+) bool {
+	for _, predicate := range predicates {
+		if !sampleMatchesFieldPredicate(sample.Value, predicate) {
+			return false
+		}
+	}
+	return true
+}
+
+func sampleMatchesFieldPredicate(value model.FieldValue, predicate model.QueryPredicate) bool {
+	comparison := compareSampleFieldValue(value, predicate.Value)
+	switch predicate.Kind {
+	case model.QueryPredicateFieldEq:
+		return comparison == 0
+	case model.QueryPredicateFieldNe:
+		return comparison != 0
+	case model.QueryPredicateFieldGT:
+		return comparison > 0
+	case model.QueryPredicateFieldGTE:
+		return comparison >= 0
+	case model.QueryPredicateFieldLT:
+		return comparison < 0
+	case model.QueryPredicateFieldLTE:
+		return comparison <= 0
+	default:
+		return true
+	}
+}
+
+func compareSampleFieldValue(left model.FieldValue, right model.FieldValue) int {
+	if numericSampleValue(left) && numericSampleValue(right) {
+		return compareSampleFloat(sampleValueAsFloat(left), sampleValueAsFloat(right))
+	}
+	if left.Type != right.Type {
+		return -1
+	}
+	switch left.Type {
+	case model.FieldString:
+		return compareSampleString(left.String, right.String)
+	case model.FieldBool:
+		return compareSampleBool(left.Bool, right.Bool)
+	default:
+		return -1
+	}
+}
+
+func numericSampleValue(value model.FieldValue) bool {
+	return value.Type == model.FieldFloat64 || value.Type == model.FieldInt64
+}
+
+func sampleValueAsFloat(value model.FieldValue) float64 {
+	if value.Type == model.FieldFloat64 {
+		return value.Float64
+	}
+	return float64(value.Int64)
+}
+
+func compareSampleFloat(left float64, right float64) int {
+	switch {
+	case left < right:
+		return -1
+	case left > right:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func compareSampleString(left string, right string) int {
+	switch {
+	case left < right:
+		return -1
+	case left > right:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func compareSampleBool(left bool, right bool) int {
+	switch {
+	case left == right:
+		return 0
+	case !left && right:
+		return -1
+	default:
+		return 1
+	}
 }
 
 func appendCodecPayload(dst []byte, codec byte, payload []byte) []byte {

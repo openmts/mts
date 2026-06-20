@@ -5,8 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/openmts/mts/internal/faultinject"
 	"github.com/openmts/mts/internal/model"
 	"github.com/openmts/mts/internal/sstable"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 func TestRepairDryRunAndApplyRemovesOnlyOrphans(t *testing.T) {
@@ -96,5 +98,46 @@ func TestRepairDoesNotRemoveUnknownPaths(t *testing.T) {
 	}
 	if _, err := os.Stat(unknown); err != nil {
 		t.Fatalf("unknown stat after repair = %v", err)
+	}
+}
+
+func TestRepairAndMigratePropagateStorageErrors(t *testing.T) {
+	if _, err := Repair("bad\x00path", RepairOptions{}); err == nil {
+		t.Fatal("Repair(bad path) error = nil, want error")
+	}
+
+	dir := t.TempDir()
+	orphan, err := sstable.WritePart(dir, 0, "sst-orphan", []model.ColumnData{checkColumn(1, 1, 4)})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	if orphan.Path == "" {
+		t.Fatal("orphan path is empty")
+	}
+	fs := faultinject.NewFS()
+	fs.FailNext(faultinject.OpRemove, os.ErrPermission)
+	restore := storagefs.SetFaultController(fs)
+	_, err = Repair(dir, RepairOptions{Apply: true})
+	restore()
+	if err == nil {
+		t.Fatal("Repair(remove fault) error = nil, want error")
+	}
+
+	missing := t.TempDir()
+	if _, err := Migrate(missing, MigrateOptions{Apply: true}); err == nil {
+		t.Fatal("Migrate(missing manifest) error = nil, want error")
+	}
+
+	healthy := t.TempDir()
+	if err := sstable.WriteManifest(healthy, sstable.Manifest{Sequence: 1}); err != nil {
+		t.Fatalf("WriteManifest() error = %v", err)
+	}
+	fs = faultinject.NewFS()
+	fs.FailNext(faultinject.OpWrite, os.ErrPermission)
+	restore = storagefs.SetFaultController(fs)
+	_, err = Migrate(healthy, MigrateOptions{Apply: true})
+	restore()
+	if err == nil {
+		t.Fatal("Migrate(write fault) error = nil, want error")
 	}
 }

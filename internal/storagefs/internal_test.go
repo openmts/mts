@@ -104,6 +104,51 @@ func TestIsNoSpaceRecognizesWrappedENOSPC(t *testing.T) {
 	}
 }
 
+func TestInternalHelpersCoverBranches(t *testing.T) {
+	if got := openOperation(os.O_RDONLY); got != OpStat {
+		t.Fatalf("openOperation(readonly) = %q, want %q", got, OpStat)
+	}
+	if got := openOperation(os.O_CREATE); got != OpCreate {
+		t.Fatalf("openOperation(create) = %q, want %q", got, OpCreate)
+	}
+	if got := filePath(nil); got != "" {
+		t.Fatalf("filePath(nil) = %q, want empty", got)
+	}
+	wrapped := &OpError{Operation: OpWrite, Path: "x", Err: errors.New("wrapped")}
+	if got := wrapOp(OpWrite, "x", wrapped); got != wrapped {
+		t.Fatalf("wrapOp(existing) = %v, want original", got)
+	}
+	if got := wrapOp(OpWrite, "x", nil); got != nil {
+		t.Fatalf("wrapOp(nil) = %v, want nil", got)
+	}
+	if err := writeFullError("x", 3, 3, errors.New("boom")); err == nil || errors.Is(err, ErrShortWrite) {
+		t.Fatalf("writeFullError(full) = %v, want original non-short error", err)
+	}
+	if _, err := Write(nil, []byte("x")); err == nil {
+		t.Fatal("Write(nil) error = nil, want error")
+	}
+	if err := WriteFull(nil, []byte("x")); err == nil {
+		t.Fatal("WriteFull(nil) error = nil, want error")
+	}
+	if err := Sync(nil); err == nil {
+		t.Fatal("Sync(nil) error = nil, want error")
+	}
+	for name, run := range map[string]func() error{
+		"open_file":   func() error { _, err := OpenFile("bad\x00path", os.O_RDONLY, FileMode); return err },
+		"create_temp": func() error { _, err := CreateTemp("bad\x00path", "x"); return err },
+		"remove":      func() error { return Remove("bad\x00path") },
+		"stat":        func() error { _, err := Stat("bad\x00path"); return err },
+		"read_dir":    func() error { _, err := ReadDir("bad\x00path"); return err },
+		"read_file":   func() error { _, err := ReadFile("bad\x00path"); return err },
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := run(); err == nil {
+				t.Fatal("error = nil, want invalid path error")
+			}
+		})
+	}
+}
+
 func TestMkdirAllRejectsInvalidPath(t *testing.T) {
 	if err := MkdirAll("bad\x00path"); err == nil {
 		t.Fatal("MkdirAll(invalid) error = nil, want error")

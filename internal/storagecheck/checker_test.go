@@ -64,6 +64,46 @@ func TestCheckUnknownFilePolicies(t *testing.T) {
 	assertIssue(t, fatal, SeverityFatal, unknown, "unknown file")
 }
 
+func TestCheckDoesNotTreatCatalogMetadataAsPart(t *testing.T) {
+	dir := t.TempDir()
+	catalogDir := filepath.Join(dir, "catalog")
+	if err := os.MkdirAll(catalogDir, 0700); err != nil {
+		t.Fatalf("MkdirAll(catalog) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(catalogDir, "metadata.bin"), []byte{1, 2, 3}, 0600); err != nil {
+		t.Fatalf("WriteFile(catalog metadata) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(catalogDir, "catalog.wal"), []byte{1, 2, 3}, 0600); err != nil {
+		t.Fatalf("WriteFile(catalog wal) error = %v", err)
+	}
+	report, err := Check(dir, Options{})
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	for _, issue := range report.Issues {
+		if issue.Path == catalogDir {
+			t.Fatalf("catalog dir issue = %#v, want ignored as non-part", issue)
+		}
+	}
+}
+
+func TestCheckTreatsPartWithMissingComponentAsPart(t *testing.T) {
+	dir := t.TempDir()
+	part, err := sstable.WritePart(dir, 0, "sst-missing-values", []model.ColumnData{checkColumn(1, 1, 4)})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	if err := os.Remove(filepath.Join(part.Path, "values.bin")); err != nil {
+		t.Fatalf("Remove(values) error = %v", err)
+	}
+	report, err := Check(dir, Options{})
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	assertIssue(t, report, SeverityWarn, part.Path, "orphan part")
+	assertIssue(t, report, SeverityFatal, part.Path, "open part failed")
+}
+
 func TestCheckReportsCorruptWALSegment(t *testing.T) {
 	dir := t.TempDir()
 	log, err := wal.Open(dir, wal.Options{Sync: true})
@@ -83,6 +123,73 @@ func TestCheckReportsCorruptWALSegment(t *testing.T) {
 		t.Fatalf("Check() error = %v", err)
 	}
 	assertIssue(t, report, SeverityFatal, path, "wal segment format error")
+}
+
+func TestCheckReportsWALSegmentFormatVariants(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{name: "truncated", data: []byte("short")},
+		{name: "magic", data: append([]byte("BADSIG2"), make([]byte, walSegmentHeaderLen-len("BADSIG2"))...)},
+		{name: "checksum", data: append([]byte(walSegmentMagic), make([]byte, walSegmentHeaderLen-len(walSegmentMagic))...)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "000001.wal")
+			if err := os.WriteFile(path, tt.data, 0600); err != nil {
+				t.Fatalf("WriteFile(wal) error = %v", err)
+			}
+			report, err := Check(dir, Options{})
+			if err != nil {
+				t.Fatalf("Check() error = %v", err)
+			}
+			assertIssue(t, report, SeverityFatal, path, "wal segment format error")
+		})
+	}
+}
+
+func TestCheckReportsManifestFormatAndNonDirectoryPart(t *testing.T) {
+	badManifestDir := t.TempDir()
+	badManifest := filepath.Join(badManifestDir, "MANIFEST.bin")
+	if err := os.WriteFile(badManifest, []byte("bad"), 0600); err != nil {
+		t.Fatalf("WriteFile(bad manifest) error = %v", err)
+	}
+	report, err := Check(badManifestDir, Options{})
+	if err != nil {
+		t.Fatalf("Check(bad manifest) error = %v", err)
+	}
+	assertIssue(t, report, SeverityFatal, badManifest, "manifest checksum or format error")
+
+	dir := t.TempDir()
+	partPath := filepath.Join(dir, "sst-file")
+	if err := os.WriteFile(partPath, []byte("not a dir"), 0600); err != nil {
+		t.Fatalf("WriteFile(part file) error = %v", err)
+	}
+	meta := sstable.PartMeta{ID: "sst-file", Path: partPath}
+	if err := sstable.WriteManifest(dir, sstable.Manifest{Sequence: 1, Parts: []sstable.PartMeta{meta}}); err != nil {
+		t.Fatalf("WriteManifest() error = %v", err)
+	}
+	report, err = Check(dir, Options{})
+	if err != nil {
+		t.Fatalf("Check(non-dir part) error = %v", err)
+	}
+	assertIssue(t, report, SeverityFatal, partPath, "manifest references non-directory part")
+}
+
+func TestCheckerHelperBranches(t *testing.T) {
+	if offset, kind := extractBlockLocation("read block offset=123 failed"); offset != 123 || kind != "block" {
+		t.Fatalf("extractBlockLocation(block) = %d %q, want 123 block", offset, kind)
+	}
+	for _, message := range []string{"value page", "value index", "time block", "index"} {
+		if _, kind := extractBlockLocation(message); kind == "" {
+			t.Fatalf("extractBlockLocation(%q) kind is empty", message)
+		}
+	}
+	for _, name := range []string{"000001.wal", "abc001.wal", "000001.bad"} {
+		_ = isStorageWALSegmentName(name)
+	}
 }
 
 func checkColumn(seriesID uint64, fieldID uint32, count int) model.ColumnData {

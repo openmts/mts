@@ -17,6 +17,8 @@ const (
 
 	timeRefModeAligned byte = 0
 	timeRefModeIndexed byte = 1
+
+	valuePageStatsNumeric byte = 1
 )
 
 func marshalTimeBlock(dst []byte, timestamps []int64) []byte {
@@ -495,8 +497,31 @@ func marshalValuePageIndex(dst []byte, index valuePageIndex) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		dst = appendValuePageStats(dst, index.FieldType, page.Stats)
 	}
 	return dst, nil
+}
+
+func appendValuePageStats(
+	dst []byte,
+	fieldType model.FieldType,
+	stats valuePageStats,
+) []byte {
+	if !stats.HasNumeric {
+		return append(dst, 0)
+	}
+	dst = append(dst, valuePageStatsNumeric)
+	switch fieldType {
+	case model.FieldFloat64:
+		dst = binary.LittleEndian.AppendUint64(dst, math.Float64bits(stats.MinFloat64))
+		dst = binary.LittleEndian.AppendUint64(dst, math.Float64bits(stats.MaxFloat64))
+	case model.FieldInt64:
+		dst = binary.AppendVarint(dst, stats.MinInt64)
+		dst = binary.AppendVarint(dst, stats.MaxInt64)
+	default:
+		dst[len(dst)-1] = 0
+	}
+	return dst
 }
 
 type valuePageIndexHeader struct {
@@ -516,7 +541,7 @@ func unmarshalValuePageIndex(payload []byte) (valuePageIndex, error) {
 	}
 	pages := make([]valuePageRef, 0, header.pageCount)
 	for range header.pageCount {
-		page, err := readValuePageRef(reader)
+		page, err := readValuePageRef(reader, header.fieldType)
 		if err != nil {
 			return valuePageIndex{}, err
 		}
@@ -569,7 +594,7 @@ func readValuePageIndexHeader(reader *blockReader) (valuePageIndexHeader, error)
 	}, nil
 }
 
-func readValuePageRef(reader *blockReader) (valuePageRef, error) {
+func readValuePageRef(reader *blockReader, fieldType model.FieldType) (valuePageRef, error) {
 	if valuePageRefReadHook != nil {
 		valuePageRefReadHook()
 	}
@@ -582,7 +607,52 @@ func readValuePageRef(reader *blockReader) (valuePageRef, error) {
 		return valuePageRef{}, err
 	}
 	ref, err := readBlockRef(reader)
-	return valuePageRef{MinTime: minTime, MaxTime: maxTime, Ref: ref}, err
+	if err != nil {
+		return valuePageRef{}, err
+	}
+	stats, err := readValuePageStats(reader, fieldType)
+	if err != nil {
+		return valuePageRef{}, err
+	}
+	return valuePageRef{MinTime: minTime, MaxTime: maxTime, Ref: ref, Stats: stats}, nil
+}
+
+func readValuePageStats(reader *blockReader, fieldType model.FieldType) (valuePageStats, error) {
+	flags, err := reader.byte("value page stats flags")
+	if err != nil {
+		return valuePageStats{}, err
+	}
+	if flags&valuePageStatsNumeric == 0 {
+		return valuePageStats{}, nil
+	}
+	stats := valuePageStats{HasNumeric: true}
+	switch fieldType {
+	case model.FieldFloat64:
+		minValue, err := reader.float64()
+		if err != nil {
+			return valuePageStats{}, err
+		}
+		maxValue, err := reader.float64()
+		if err != nil {
+			return valuePageStats{}, err
+		}
+		stats.MinFloat64 = minValue
+		stats.MaxFloat64 = maxValue
+	case model.FieldInt64:
+		minValue, err := reader.varint("value page min int")
+		if err != nil {
+			return valuePageStats{}, err
+		}
+		maxValue, err := reader.varint("value page max int")
+		if err != nil {
+			return valuePageStats{}, err
+		}
+		stats.MinInt64 = minValue
+		stats.MaxInt64 = maxValue
+	default:
+		return valuePageStats{}, fmt.Errorf("numeric stats unsupported for field type %d", fieldType)
+	}
+	return stats, nil
 }
 
 func uint32Value(name string, value uint64) (uint32, error) {

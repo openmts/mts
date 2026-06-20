@@ -284,6 +284,182 @@ timeout 600s go run ./tests/pprof/storage_engine \
 | `memtable.sortedColumnKeys` | `148.91MB` | 未进入 top | columnKey slice 复用 |
 | `internal/reflectlite.Swapper` | `142.01MB` | `24MB` | 热路径排序改为 `slices.SortFunc` |
 
+## 2026-06-19 realistic limited query 结果
+
+本次修正 `tests/scale/storage_10m` 的查询口径：1M 数据不再执行全量 row 查询，而是默认选择中间时间段并下推 `LIMIT 2000`。用例对返回行逐行校验 timestamp、host tag 和 10 个字段值，避免只测耗时不测正确性。
+
+执行命令：
+
+```bash
+timeout 1200s /tmp/mts-storage-limit \
+  -profile standard -mode compact -points 1000000 \
+  -batch-size 4096 -ingest-path typed \
+  -memtable-max-samples 8192 -compression-algorithm off \
+  -query-limit 2000 -data-dir /tmp/mts-storage-limit-off
+```
+
+关键结果：
+
+| 指标 | 结果 |
+| --- | ---: |
+| 查询时间范围 | `[499000, 500999]` |
+| query limit | `2000` |
+| 返回 rows | `2000` |
+| 总耗时 | `10.369s` |
+| 写入耗时 | `2.405s` |
+| compaction 耗时 | `7.889s` |
+| cold query latency | `30.251ms` |
+| hot query latency | `32.850ms` |
+| RSS peak | `60,186,624 bytes` |
+| 外部 max RSS | `58,776 KB` |
+| total alloc | `3,224,148,760 bytes` |
+| data bytes | `95,051,389 bytes` |
+| SSTable count before compaction | `245` |
+| SSTable count after compaction | `1` |
+
+判断：
+
+- 该口径更接近常规线上查询：时间范围命中中间段，行数通过 `LIMIT 2000` 控制。
+- 查询不再触发历史全量 1M row materialization，RSS peak 降到约 `58.8MiB`。
+- 当前主要耗时来自写入后全量 compaction，limited query 本身约 `30ms` 量级。
+
+## 2026-06-19 storage matrix smoke
+
+本批次新增 `tests/scale/storage_matrix`，用于编排三档规模、压缩算法和写入持久化策略。矩阵 runner 调用 `tests/scale/storage_10m` 单场景执行器，单场景继续执行中间时间段 `LIMIT 2000` 查询和逐行正确性校验。
+
+### 2026-06-19 shard-aware scale 口径修正
+
+早期 10M compact 结果使用 `timestamp=index` 和 `ShardDuration=1h`，由于引擎按纳秒级 timestamp 划分 shard，`0..10,000,000` 全部落入同一个 shard。这会让 compaction 把单 shard 内的全部 L0 SSTable 当作一个 full plan 处理，并输出为单个 L1 SSTable，不代表常规时序写入的时间分区行为。
+
+当前 scale 默认改为：
+
+- `timestamp-step=1s`
+- `shard-duration=24h`
+
+在该口径下，10M 行约覆盖 116 个 shard。compaction 仍会在 shard 内执行，但不会把全部历史数据压进同一个 shard，也不会把全部 SSTable 合成一个全局 SSTable。若要复现旧的单 shard 极限压力测试，需要显式设置旧口径参数。
+
+10M shard-aware compact 实测命令：
+
+```bash
+timeout 1800s /usr/bin/time -v \
+  go run ./tests/scale/storage_10m \
+  -profile soak \
+  -mode compact \
+  -batch-size 4096 \
+  -ingest-path typed \
+  -memtable-max-samples 8192 \
+  -compression-algorithm off \
+  -durability buffered \
+  -query-limit 2000
+```
+
+实测结果：
+
+| 指标 | 旧单 shard 口径 | shard-aware 口径 |
+| --- | ---: | ---: |
+| shard duration | `1h` | `24h` |
+| timestamp step | `1ns` | `1s` |
+| shard count | `1` | `116` |
+| 写入 + flush | `22.733s` | `21.937s` |
+| compaction | `866.374s` | `16.988s` |
+| cold query 2000 行 | `149.220ms` | `14.074ms` |
+| hot query 2000 行 | `146.662ms` | `15.173ms` |
+| 全链路耗时 | `889.513s` | `39.086s` |
+| RSS peak | `322.9MiB` | `308.6MiB` |
+| TotalAlloc | `32.03GiB` | `30.29GiB` |
+| data bytes | `1009.8MiB` | `1056.9MiB` |
+| SSTable before | `2442` | `2534` |
+| SSTable after | `1` | `116` |
+| level distribution after | `L1=1` | `L1=116` |
+| user CPU | `898.46s` | `36.88s` |
+| system CPU | `11.84s` | `6.78s` |
+| CPU% | `102%` | `111%` |
+
+判断：
+
+- 旧口径的 `2442 -> 1` 是测试数据时间分布不合理导致的单 shard full compaction，不应作为常规时序写入结论。
+- shard-aware 口径下 compaction 按 shard 分摊，产物是每个 shard 一个 compacted SSTable，本次为 `2534 -> 116`。
+- compaction 耗时从 `866.374s` 降到 `16.988s`，下降约 `98.0%`；查询 2000 行从约 `149ms` 降到约 `14ms`。
+
+全量矩阵推荐命令：
+
+```bash
+timeout 14400s go run ./tests/scale/storage_matrix \
+  -sizes 100k,1m,10m \
+  -compressions off,none,snappy,lz4,zstd \
+  -durabilities buffered,wal-sync,write-sync,strict-flush \
+  -case-timeout 30m \
+  -data-root /tmp/mts-storage-matrix \
+  -out /tmp/mts-storage-matrix.json \
+  -markdown /tmp/mts-storage-matrix.md
+```
+
+日常 smoke 命令：
+
+```bash
+timeout 600s go run ./tests/scale/storage_matrix \
+  -sizes 100k \
+  -compressions off,snappy \
+  -durabilities buffered,write-sync \
+  -case-timeout 300s \
+  -out /tmp/mts-storage-matrix-smoke.json \
+  -markdown /tmp/mts-storage-matrix-smoke.md
+```
+
+本次 100K 完整矩阵结果：
+
+| size | compression | durability | write | compaction | cold query | hot query | rss peak | data bytes | SSTable before | SSTable after |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100k | off | buffered | `248.158442ms` | `211.586344ms` | `21.128663ms` | `22.909108ms` | `33.4MiB` | `8.9MiB` | `25` | `1` |
+| 100k | off | wal-sync | `250.597562ms` | `210.192703ms` | `21.645708ms` | `20.782935ms` | `31.8MiB` | `8.9MiB` | `25` | `1` |
+| 100k | off | write-sync | `251.895415ms` | `220.037177ms` | `22.835852ms` | `26.267014ms` | `35.8MiB` | `8.9MiB` | `25` | `1` |
+| 100k | off | strict-flush | `241.226281ms` | `212.17478ms` | `22.55214ms` | `19.572652ms` | `38.3MiB` | `8.9MiB` | `25` | `1` |
+| 100k | none | buffered | `274.453256ms` | `248.178068ms` | `27.146607ms` | `24.137925ms` | `35.4MiB` | `7.2MiB` | `25` | `1` |
+| 100k | none | wal-sync | `283.109527ms` | `246.271881ms` | `26.900903ms` | `27.612977ms` | `34.7MiB` | `7.2MiB` | `25` | `1` |
+| 100k | none | write-sync | `277.405693ms` | `246.062154ms` | `26.659939ms` | `26.0701ms` | `33.1MiB` | `7.2MiB` | `25` | `1` |
+| 100k | none | strict-flush | `284.14086ms` | `244.267894ms` | `25.336156ms` | `26.345509ms` | `37.5MiB` | `7.2MiB` | `25` | `1` |
+| 100k | snappy | buffered | `297.388733ms` | `254.96496ms` | `25.749699ms` | `23.223518ms` | `38.5MiB` | `4.3MiB` | `25` | `1` |
+| 100k | snappy | wal-sync | `304.699512ms` | `251.811361ms` | `28.620556ms` | `23.155433ms` | `37.8MiB` | `4.3MiB` | `25` | `1` |
+| 100k | snappy | write-sync | `309.849163ms` | `251.148989ms` | `27.68527ms` | `23.590876ms` | `38.7MiB` | `4.3MiB` | `25` | `1` |
+| 100k | snappy | strict-flush | `304.548664ms` | `258.299723ms` | `27.321299ms` | `26.489805ms` | `35.6MiB` | `4.3MiB` | `25` | `1` |
+| 100k | lz4 | buffered | `312.627198ms` | `257.392368ms` | `27.601365ms` | `26.490807ms` | `35.3MiB` | `4.5MiB` | `25` | `1` |
+| 100k | lz4 | wal-sync | `317.695379ms` | `252.90512ms` | `25.091414ms` | `27.870593ms` | `35.3MiB` | `4.5MiB` | `25` | `1` |
+| 100k | lz4 | write-sync | `315.934812ms` | `252.869023ms` | `26.556969ms` | `26.600418ms` | `34.9MiB` | `4.5MiB` | `25` | `1` |
+| 100k | lz4 | strict-flush | `299.856035ms` | `257.044055ms` | `26.755224ms` | `25.402038ms` | `36.2MiB` | `4.5MiB` | `25` | `1` |
+| 100k | zstd | buffered | `372.379073ms` | `333.642181ms` | `29.521909ms` | `28.442267ms` | `35.6MiB` | `4.0MiB` | `25` | `1` |
+| 100k | zstd | wal-sync | `377.183788ms` | `325.992338ms` | `29.751723ms` | `25.635919ms` | `38.0MiB` | `4.0MiB` | `25` | `1` |
+| 100k | zstd | write-sync | `369.376003ms` | `323.606245ms` | `30.481639ms` | `25.348759ms` | `36.4MiB` | `4.0MiB` | `25` | `1` |
+| 100k | zstd | strict-flush | `371.099181ms` | `333.444938ms` | `29.963043ms` | `28.103432ms` | `40.5MiB` | `4.0MiB` | `25` | `1` |
+
+判断：
+
+- `storage_matrix` 已能输出矩阵 JSON 和 Markdown 汇总。
+- 本批次覆盖 100K 完整压缩与写入策略矩阵，用于验证工具链和观察小规模趋势，不代表 1M/10M 全量性能结论。
+- 后续需要在专用窗口分批执行 1M/10M 全量矩阵，特别是 `strict-flush` 场景。
+
+### 收尾 smoke 验证
+
+执行命令：
+
+```bash
+timeout 600s go run ./tests/scale/storage_matrix \
+  -sizes 100k \
+  -compressions off,snappy \
+  -durabilities buffered,write-sync \
+  -case-timeout 300s \
+  -markdown /tmp/mts-storage-matrix-smoke.md \
+  -out /tmp/mts-storage-matrix-smoke.json
+```
+
+结果：
+
+| size | compression | durability | write | compaction | cold query | hot query | rss peak | data bytes | SSTable before | SSTable after | rows |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100k | off | buffered | `243.678436ms` | `214.408150ms` | `21.650205ms` | `20.490645ms` | `36.3MiB` | `8.9MiB` | `25` | `1` | `2000` |
+| 100k | off | write-sync | `248.750444ms` | `219.087174ms` | `22.342733ms` | `25.966599ms` | `33.9MiB` | `8.9MiB` | `25` | `1` | `2000` |
+| 100k | snappy | buffered | `304.928805ms` | `265.751230ms` | `27.801224ms` | `25.385697ms` | `35.6MiB` | `4.3MiB` | `25` | `1` | `2000` |
+| 100k | snappy | write-sync | `312.620226ms` | `250.318286ms` | `26.759382ms` | `26.044162ms` | `37.7MiB` | `4.3MiB` | `25` | `1` | `2000` |
+
 ## 清理
 
 本轮 pprof、数据目录和临时二进制位于 `/tmp/mts-10m-run`，报告写完后可删除，不应提交临时产物。

@@ -20,6 +20,12 @@ type rowIterator struct {
 	stream queryexec.RowStream
 }
 
+type projectedRowStream struct {
+	source  queryexec.RowStream
+	fields  map[string]struct{}
+	current model.Row
+}
+
 type queryMemoryColumnDataStream struct {
 	source  queryexec.ColumnDataStream
 	memory  *storageMemoryLimiter
@@ -38,6 +44,51 @@ func newColumnIterator(stream queryexec.ColumnStream, stats ...*model.QueryStats
 
 func newRowIterator(stream queryexec.RowStream) *rowIterator {
 	return &rowIterator{stream: stream}
+}
+
+func newProjectedRowStream(source queryexec.RowStream, fields []string) queryexec.RowStream {
+	if len(fields) == 0 {
+		return source
+	}
+	fieldSet := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		fieldSet[field] = struct{}{}
+	}
+	return &projectedRowStream{source: source, fields: fieldSet}
+}
+
+func (s *projectedRowStream) Next() bool {
+	if s.source == nil || !s.source.Next() {
+		return false
+	}
+	row := s.source.Row()
+	projected := make(map[string]model.FieldValue, len(s.fields))
+	for name, value := range row.Fields {
+		if _, ok := s.fields[name]; ok {
+			projected[name] = value
+		}
+	}
+	row.Fields = projected
+	s.current = row
+	return true
+}
+
+func (s *projectedRowStream) Row() model.Row {
+	return s.current
+}
+
+func (s *projectedRowStream) Err() error {
+	if s.source == nil {
+		return nil
+	}
+	return s.source.Err()
+}
+
+func (s *projectedRowStream) Close() error {
+	if s.source == nil {
+		return nil
+	}
+	return s.source.Close()
 }
 
 func (e *Engine) QueryColumns(ctx context.Context, query model.Query) ([]model.ColumnSeries, error) {
@@ -128,11 +179,30 @@ func (e *Engine) queryColumnIteratorFromPlan(ctx context.Context, plan QueryPlan
 	}
 	raw = newQueryMemoryColumnDataStream(raw, e.memory, e.opts.StorageMemory.QueryBytesLimit)
 	stream := queryexec.NewDecoratedColumnStream(raw, columnDecorator(snapshot))
+	if plan.Query.Expr.Kind != model.QueryExprNone {
+		stream = queryexec.NewExprFilteredColumnStream(stream, plan.Query.Expr)
+	} else if len(plan.PostFilterPredicates) > 0 {
+		stream = queryexec.NewExprFilteredColumnStream(
+			stream,
+			andExprFromPredicates(plan.PostFilterPredicates),
+		)
+	}
 	if len(query.Aggregates) > 0 {
-		stream = queryexec.NewAggregateColumnStream(stream, query.Aggregates, query.Window)
+		stream = queryAggregateColumnStream(stream, query)
+	} else {
+		stream = queryexec.NewProjectedColumnStream(stream, plan.OutputFields)
 	}
 	if query.Budget.MaxSamples > 0 {
 		stream = queryexec.NewBudgetColumnStream(stream, query.Budget)
+	}
+	stream = queryexec.NewOrderedColumnStream(stream, query.Order)
+	if query.Cursor != "" {
+		cursor, err := cursorPositionForQuery(query)
+		if err != nil {
+			e.finishQueryStats(stats, err)
+			return nil, errors.Join(err, stream.Close())
+		}
+		stream = queryexec.NewCursorColumnStream(stream, cursor)
 	}
 	if query.Limit > 0 || query.Offset > 0 {
 		stream = queryexec.NewPaginatedColumnStream(stream, query.Limit, query.Offset)
@@ -140,6 +210,16 @@ func (e *Engine) queryColumnIteratorFromPlan(ctx context.Context, plan QueryPlan
 	stream = queryexec.WithContextColumnStream(ctx, stream)
 	stream = newQueryStatsColumnStream(stream, stats, e.finishQueryStats)
 	return newColumnIterator(stream, stats), nil
+}
+
+func queryAggregateColumnStream(
+	stream queryexec.ColumnStream,
+	query model.Query,
+) queryexec.ColumnStream {
+	if len(query.Group.Tags) == 0 {
+		return queryexec.NewAggregateColumnStream(stream, query.Aggregates, query.Window)
+	}
+	return queryexec.NewGroupAggregateColumnStream(stream, query.Aggregates, query.Group, query.Window)
 }
 
 func newQueryMemoryColumnDataStream(
@@ -169,10 +249,19 @@ func (e *Engine) QueryRows(ctx context.Context, query model.Query) ([]model.Row,
 }
 
 func (e *Engine) QueryRowIterator(ctx context.Context, query model.Query) (*rowIterator, error) {
-	columnQuery := query
-	columnQuery.Limit = 0
-	columnQuery.Offset = 0
-	columns, err := e.QueryColumnIterator(ctx, columnQuery)
+	plan, err := e.BuildQueryPlan(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	columnPlan := plan
+	columnPlan.Query.Limit = 0
+	columnPlan.Query.Offset = 0
+	columnPlan.Query.Order = model.QueryOrder{}
+	columnPlan.Query.Cursor = ""
+	columnPlan.Query.Expr = model.QueryExpr{}
+	columnPlan.PostFilterPredicates = nil
+	columnPlan.OutputFields = nil
+	columns, err := e.queryColumnIteratorFromPlan(ctx, columnPlan)
 	if err != nil {
 		return nil, err
 	}
@@ -180,8 +269,54 @@ func (e *Engine) QueryRowIterator(ctx context.Context, query model.Query) (*rowI
 		_ = columns.Close()
 		return nil, err
 	}
-	stream := queryexec.NewRowMergeStream(columns, query)
+	mergeQuery := plan.Query
+	mergeQuery.Limit = 0
+	mergeQuery.Offset = 0
+	stream := queryexec.NewRowMergeStream(columns, mergeQuery)
+	if plan.Query.Expr.Kind != model.QueryExprNone {
+		stream = queryexec.NewExprFilteredRowStream(stream, plan.Query.Expr)
+	} else if len(plan.PostFilterPredicates) > 0 {
+		stream = queryexec.NewFilteredRowStream(stream, plan.PostFilterPredicates)
+	}
+	stream = newProjectedRowStream(stream, plan.OutputFields)
+	if plan.Query.Cursor != "" {
+		cursor, err := cursorPositionForQuery(plan.Query)
+		if err != nil {
+			return nil, errors.Join(err, stream.Close())
+		}
+		stream = queryexec.NewCursorRowStream(stream, cursor)
+	}
+	stream = queryexec.NewOrderedRowStream(
+		stream,
+		plan.Query.Order,
+		plan.Query.Limit,
+		plan.Query.Offset,
+	)
+	if plan.Query.Limit > 0 || plan.Query.Offset > 0 {
+		stream = queryexec.NewPaginatedRowStream(stream, plan.Query.Limit, plan.Query.Offset)
+	}
+	if plan.Query.Budget.MaxSamples > 0 {
+		stream = queryexec.NewBudgetRowStream(stream, plan.Query.Budget)
+	}
 	return newRowIterator(queryexec.WithContextRowStream(ctx, stream)), nil
+}
+
+func cursorPositionForQuery(query model.Query) (queryexec.CursorPosition, error) {
+	position, err := queryexec.DecodeCursor(query.Cursor)
+	if err != nil {
+		return queryexec.CursorPosition{}, err
+	}
+	if position.Direction != cursorDirectionForQuery(query.Order) {
+		return queryexec.CursorPosition{}, queryexec.ErrInvalidCursor
+	}
+	return position, nil
+}
+
+func cursorDirectionForQuery(order model.QueryOrder) model.QuerySortDirection {
+	if order.By == model.QueryOrderByTime && order.Direction == model.QuerySortDesc {
+		return model.QuerySortDesc
+	}
+	return model.QuerySortAsc
 }
 
 func (e *Engine) queryColumnDataStream(
@@ -199,14 +334,15 @@ func (e *Engine) queryColumnDataStream(
 	streams := make([]queryexec.ColumnDataStream, 0, len(plan.Shards))
 	for _, shard := range plan.Shards {
 		stream, err := shard.ScanColumns(memtable.Query{
-			Context:   ctx,
-			Budget:    query.Budget,
-			Stats:     stats,
-			Boundary:  queryBoundaryMode(query),
-			SeriesIDs: plan.SeriesIDs,
-			FieldIDs:  plan.FieldIDs,
-			Start:     query.StartTime,
-			End:       query.EndTime,
+			Context:         ctx,
+			Budget:          query.Budget,
+			Stats:           stats,
+			Boundary:        queryBoundaryMode(query),
+			SeriesIDs:       plan.SeriesIDs,
+			FieldIDs:        plan.FieldIDs,
+			FieldPredicates: plan.FieldPredicates,
+			Start:           query.StartTime,
+			End:             query.EndTime,
 		})
 		if err != nil {
 			return nil, errors.Join(err, closeColumnDataStreams(streams))

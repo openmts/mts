@@ -18,11 +18,48 @@ import (
 
 const defaultMemTableMaxSamples = 8192
 
+const defaultQueryLimit = 2000
+
+const defaultScaleShardDuration = 24 * time.Hour
+
+const defaultScaleTimestampStep = time.Second
+
+const (
+	compressionOff  = "off"
+	compressionNone = "none"
+)
+
+const (
+	durabilityBuffered    = "buffered"
+	durabilityWALSync     = "wal-sync"
+	durabilityWriteSync   = "write-sync"
+	durabilityStrictFlush = "strict-flush"
+)
+
+const (
+	modeWrite             = "write"
+	modeQuery             = "query"
+	modeCompact           = "compact"
+	modeWriteQueryCompact = "write-query-compact"
+	modeRestart           = "restart"
+)
+
 type report struct {
 	Profile                           string               `json:"profile"`
 	Mode                              string               `json:"mode"`
 	IngestPath                        string               `json:"ingest_path"`
+	CompressionAlgorithm              string               `json:"compression_algorithm"`
+	Durability                        string               `json:"durability"`
+	WALSync                           bool                 `json:"wal_sync"`
+	WriteSync                         bool                 `json:"write_sync"`
+	FlushSync                         bool                 `json:"flush_sync"`
 	Points                            int                  `json:"points"`
+	QueryStartTime                    int64                `json:"query_start_time"`
+	QueryEndTime                      int64                `json:"query_end_time"`
+	QueryLimit                        int                  `json:"query_limit"`
+	Verify                            bool                 `json:"verify"`
+	ShardDurationNanos                int64                `json:"shard_duration_nanos"`
+	TimestampStepNanos                int64                `json:"timestamp_step_nanos"`
 	Duration                          time.Duration        `json:"duration"`
 	Throughput                        float64              `json:"throughput"`
 	WriteDurationNanos                int64                `json:"write_duration_nanos"`
@@ -37,6 +74,8 @@ type report struct {
 	RSSPeakBytes                      int64                `json:"rss_peak_bytes"`
 	Rows                              int                  `json:"rows"`
 	DataBytes                         int64                `json:"data_bytes"`
+	ShardCount                        int                  `json:"shard_count"`
+	ShardSSTableDistribution          map[string]int       `json:"shard_sstable_distribution"`
 	SSTableCount                      int                  `json:"sstable_count"`
 	SSTableCountBeforeCompaction      int                  `json:"sstable_count_before_compaction"`
 	SSTableCountAfterCompaction       int                  `json:"sstable_count_after_compaction"`
@@ -62,7 +101,16 @@ type config struct {
 	points               int
 	batchSize            int
 	memTableMaxSamples   int
+	compressionAlgorithm string
+	durability           string
+	queryStart           int64
+	queryEnd             int64
+	queryLimit           int
+	verify               bool
+	shardDuration        time.Duration
+	timestampStep        time.Duration
 	dataDir              string
+	outPath              string
 	baseline             string
 	maxRegressionPercent float64
 	maxRSSBytes          int64
@@ -101,6 +149,14 @@ func run(args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	shardCount, err := countShards(dir)
+	if err != nil {
+		return err
+	}
+	shardSSTables, err := shardSSTableDistribution(dir)
+	if err != nil {
+		return err
+	}
 	tableCount, err := countSSTables(dir)
 	if err != nil {
 		return err
@@ -110,11 +166,24 @@ func run(args []string) (err error) {
 		return err
 	}
 	logicalBytes := logicalInputBytes(cfg.points)
+	query := scaleQuerySpec(cfg)
+	durability := durabilityOptions(cfg.durability)
 	out := report{
 		Profile:                           cfg.profile,
 		Mode:                              cfg.mode,
 		IngestPath:                        cfg.ingestPath,
+		CompressionAlgorithm:              cfg.compressionAlgorithm,
+		Durability:                        cfg.durability,
+		WALSync:                           durability.walSync,
+		WriteSync:                         durability.writeSync,
+		FlushSync:                         durability.flushSync,
 		Points:                            cfg.points,
+		QueryStartTime:                    query.start,
+		QueryEndTime:                      query.end,
+		QueryLimit:                        query.limit,
+		Verify:                            cfg.verify,
+		ShardDurationNanos:                shardDuration(cfg).Nanoseconds(),
+		TimestampStepNanos:                timestampStepNanos(cfg),
 		Duration:                          duration,
 		Throughput:                        throughput(cfg.points, duration),
 		WriteDurationNanos:                workload.writeDuration.Nanoseconds(),
@@ -129,6 +198,8 @@ func run(args []string) (err error) {
 		RSSPeakBytes:                      rssPeakBytes(),
 		Rows:                              workload.rows,
 		DataBytes:                         dataBytes,
+		ShardCount:                        shardCount,
+		ShardSSTableDistribution:          shardSSTables,
 		SSTableCount:                      tableCount,
 		SSTableCountBeforeCompaction:      workload.sstableCountBeforeCompaction,
 		SSTableCountAfterCompaction:       workload.sstableCountAfterCompaction,
@@ -152,6 +223,9 @@ func run(args []string) (err error) {
 	if err := enforceThresholds(cfg, out); err != nil {
 		return err
 	}
+	if err := writeReportFile(cfg.outPath, out); err != nil {
+		return err
+	}
 	return json.NewEncoder(os.Stdout).Encode(out)
 }
 
@@ -167,7 +241,24 @@ func parseConfig(args []string) (config, error) {
 		defaultMemTableMaxSamples,
 		"trigger MemTable flush after this many samples",
 	)
+	compressionAlgorithm := flags.String(
+		"compression-algorithm",
+		compressionOff,
+		"payload compression algorithm: off|none|snappy|lz4|zstd",
+	)
+	durability := flags.String(
+		"durability",
+		durabilityBuffered,
+		"write durability mode: buffered|wal-sync|write-sync|strict-flush",
+	)
+	queryStart := flags.Int64("query-start", -1, "query start timestamp; default centers query window")
+	queryEnd := flags.Int64("query-end", -1, "query end timestamp; default centers query window")
+	queryLimit := flags.Int("query-limit", defaultQueryLimit, "row-level query limit")
+	verify := flags.Bool("verify", true, "validate query result row count and generated row values")
+	shardDuration := flags.Duration("shard-duration", defaultScaleShardDuration, "storage shard duration")
+	timestampStep := flags.Duration("timestamp-step", defaultScaleTimestampStep, "logical timestamp interval between generated rows")
 	dataDir := flags.String("data-dir", "", "data directory")
+	outPath := flags.String("out", "", "write final json report to file")
 	baseline := flags.String("baseline", "", "baseline report json")
 	maxRegression := flags.Float64("max-regression-percent", 20, "max allowed regression percent")
 	maxRSSBytes := flags.Int64("max-rss-bytes", 0, "max allowed RSS peak bytes")
@@ -180,8 +271,12 @@ func parseConfig(args []string) (config, error) {
 	if _, ok := visited["points"]; !ok {
 		*points = profilePoints(*profile)
 	}
-	if *points <= 0 || *batchSize <= 0 || *memTableMaxSamples <= 0 {
-		return config{}, fmt.Errorf("points, batch-size and memtable-max-samples must be positive")
+	if *points <= 0 || *batchSize <= 0 || *memTableMaxSamples <= 0 ||
+		*queryLimit <= 0 || *shardDuration <= 0 || *timestampStep <= 0 {
+		return config{}, fmt.Errorf("points, batch-size, memtable-max-samples, query-limit, shard-duration and timestamp-step must be positive")
+	}
+	if err := validateQueryRange(*queryStart, *queryEnd); err != nil {
+		return config{}, err
 	}
 	if !validProfile(*profile) {
 		return config{}, fmt.Errorf("unsupported profile %q", *profile)
@@ -189,11 +284,17 @@ func parseConfig(args []string) (config, error) {
 	if !validIngestPath(*ingestPath) {
 		return config{}, fmt.Errorf("unsupported ingest path %q", *ingestPath)
 	}
+	if !validCompressionAlgorithm(*compressionAlgorithm) {
+		return config{}, fmt.Errorf("unsupported compression algorithm %q", *compressionAlgorithm)
+	}
+	if !validDurability(*durability) {
+		return config{}, fmt.Errorf("unsupported durability %q", *durability)
+	}
 	if *maxRSSBytes < 0 || *maxSSTables < 0 || *maxBacklog < 0 {
 		return config{}, fmt.Errorf("thresholds must be non-negative")
 	}
 	switch *mode {
-	case "write", "query", "compact", "restart":
+	case modeWrite, modeQuery, modeCompact, modeWriteQueryCompact, modeRestart:
 	default:
 		return config{}, fmt.Errorf("unsupported mode %q", *mode)
 	}
@@ -204,13 +305,50 @@ func parseConfig(args []string) (config, error) {
 		points:               *points,
 		batchSize:            *batchSize,
 		memTableMaxSamples:   *memTableMaxSamples,
+		compressionAlgorithm: *compressionAlgorithm,
+		durability:           *durability,
+		queryStart:           *queryStart,
+		queryEnd:             *queryEnd,
+		queryLimit:           *queryLimit,
+		verify:               *verify,
+		shardDuration:        *shardDuration,
+		timestampStep:        *timestampStep,
 		dataDir:              *dataDir,
+		outPath:              *outPath,
 		baseline:             *baseline,
 		maxRegressionPercent: *maxRegression,
 		maxRSSBytes:          *maxRSSBytes,
 		maxSSTableCount:      *maxSSTables,
 		maxCompactionBacklog: *maxBacklog,
 	}, nil
+}
+
+func writeReportFile(path string, out report) error {
+	if path == "" {
+		return nil
+	}
+	clean := filepath.Clean(path)
+	dir := filepath.Dir(clean)
+	if dir != "." {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return fmt.Errorf("create report dir: %w", err)
+		}
+		if err := os.Chmod(dir, 0700); err != nil {
+			return fmt.Errorf("chmod report dir: %w", err)
+		}
+	}
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode report file: %w", err)
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(clean, data, 0600); err != nil {
+		return fmt.Errorf("write report file: %w", err)
+	}
+	if err := os.Chmod(clean, 0600); err != nil {
+		return fmt.Errorf("chmod report file: %w", err)
+	}
+	return nil
 }
 
 func visitedFlags(flags *flag.FlagSet) map[string]struct{} {
@@ -227,6 +365,53 @@ func validProfile(profile string) bool {
 
 func validIngestPath(path string) bool {
 	return path == "typed" || path == "public"
+}
+
+func validCompressionAlgorithm(algorithm string) bool {
+	switch algorithm {
+	case compressionOff, compressionNone, "snappy", "lz4", "zstd":
+		return true
+	default:
+		return false
+	}
+}
+
+func validDurability(durability string) bool {
+	switch durability {
+	case durabilityBuffered, durabilityWALSync, durabilityWriteSync, durabilityStrictFlush:
+		return true
+	default:
+		return false
+	}
+}
+
+type durabilitySetting struct {
+	walSync   bool
+	writeSync bool
+	flushSync bool
+}
+
+func durabilityOptions(durability string) durabilitySetting {
+	switch durability {
+	case durabilityWALSync:
+		return durabilitySetting{walSync: true}
+	case durabilityWriteSync:
+		return durabilitySetting{writeSync: true}
+	case durabilityStrictFlush:
+		return durabilitySetting{walSync: true, writeSync: true, flushSync: true}
+	default:
+		return durabilitySetting{}
+	}
+}
+
+func validateQueryRange(start int64, end int64) error {
+	if start < -1 || end < -1 {
+		return fmt.Errorf("query-start and query-end must be -1 or non-negative")
+	}
+	if start >= 0 && end >= 0 && start >= end {
+		return fmt.Errorf("query-start must be less than query-end")
+	}
+	return nil
 }
 
 func profilePoints(profile string) int {
@@ -284,10 +469,19 @@ type sstableSnapshot struct {
 	levelDistribution map[int]int
 }
 
+type querySpec struct {
+	start         int64
+	end           int64
+	limit         int
+	startIndex    int
+	endIndex      int
+	timestampStep int64
+}
+
 func runWorkloadDetailed(dir string, cfg config) (workloadResult, error) {
 	ctx := context.Background()
 	result, err := runOpenWorkload(ctx, dir, cfg)
-	if err != nil || cfg.mode != "restart" {
+	if err != nil || cfg.mode != modeRestart {
 		return result, err
 	}
 	return queryReopenedWorkload(ctx, dir, cfg, result)
@@ -305,7 +499,7 @@ func runOpenWorkload(ctx context.Context, dir string, cfg config) (result worklo
 		return workloadResult{}, err
 	}
 	if shouldQueryRows(cfg.mode) {
-		if err := queryOpenEngine(ctx, eng, cfg.points, &result); err != nil {
+		if err := queryOpenEngine(ctx, eng, cfg, &result); err != nil {
 			return workloadResult{}, err
 		}
 	}
@@ -330,7 +524,7 @@ func writeAndMaybeCompact(
 		return fmt.Errorf("snapshot before compaction: %w", err)
 	}
 	result.setCompactionSnapshots(beforeCompaction, beforeCompaction)
-	if cfg.mode == "compact" {
+	if shouldCompact(cfg.mode) {
 		return compactScaleWorkload(ctx, dir, eng, beforeCompaction, result)
 	}
 	return nil
@@ -360,19 +554,25 @@ func compactScaleWorkload(
 }
 
 func shouldQueryRows(mode string) bool {
-	return mode == "query" || mode == "compact" || mode == "restart"
+	return mode == modeQuery || mode == modeCompact ||
+		mode == modeWriteQueryCompact || mode == modeRestart
 }
 
-func queryOpenEngine(ctx context.Context, eng *mts.Engine, points int, result *workloadResult) error {
-	got, latency, err := timedQueryRows(ctx, eng, points)
+func shouldCompact(mode string) bool {
+	return mode == modeCompact || mode == modeWriteQueryCompact
+}
+
+func queryOpenEngine(ctx context.Context, eng *mts.Engine, cfg config, result *workloadResult) error {
+	query := scaleQuerySpec(cfg)
+	rows, latency, err := timedQueryLimitedRows(ctx, eng, query, cfg.verify)
 	if err != nil {
 		return fmt.Errorf("query rows: %w", err)
 	}
-	_, hotLatency, err := timedQueryRows(ctx, eng, points)
+	_, hotLatency, err := timedQueryLimitedRows(ctx, eng, query, cfg.verify)
 	if err != nil {
 		return fmt.Errorf("query rows hot: %w", err)
 	}
-	result.rows = len(got)
+	result.rows = rows
 	result.queryLatency = latency
 	result.coldQueryLatency = latency
 	result.hotQueryLatency = hotLatency
@@ -393,11 +593,11 @@ func queryReopenedWorkload(
 	defer func() {
 		err = errors.Join(err, reopened.Close(ctx))
 	}()
-	got, latency, err := timedQueryRows(ctx, reopened, cfg.points)
+	rows, latency, err := timedQueryLimitedRows(ctx, reopened, scaleQuerySpec(cfg), cfg.verify)
 	if err != nil {
 		return workloadResult{}, fmt.Errorf("query reopened: %w", err)
 	}
-	out.rows = len(got)
+	out.rows = rows
 	out.queryLatency = latency
 	return out, nil
 }
@@ -414,11 +614,26 @@ func openScaleEngine(ctx context.Context, dir string, cfg config) (*mts.Engine, 
 	if memTableMaxSamples <= 0 {
 		memTableMaxSamples = defaultMemTableMaxSamples
 	}
+	durability := durabilityOptions(cfg.durability)
 	return mts.Open(ctx, mts.Options{
 		Path:               dir,
-		ShardDuration:      time.Hour,
+		ShardDuration:      shardDuration(cfg),
 		MemTableMaxSamples: memTableMaxSamples,
+		WAL:                mts.WALOptions{Sync: durability.walSync},
+		FlushSync:          durability.flushSync,
+		Compression:        scaleCompressionOptions(cfg.compressionAlgorithm),
 	})
+}
+
+func scaleCompressionOptions(algorithm string) mts.CompressionOptions {
+	if algorithm == "" || algorithm == compressionOff {
+		return mts.CompressionOptions{}
+	}
+	return mts.CompressionOptions{
+		Enabled:       true,
+		Algorithm:     algorithm,
+		MinPageValues: 1,
+	}
 }
 
 func writeAndFlushScale(ctx context.Context, eng *mts.Engine, cfg config) (time.Duration, error) {
@@ -432,40 +647,262 @@ func writeAndFlushScale(ctx context.Context, eng *mts.Engine, cfg config) (time.
 	return time.Since(started), nil
 }
 
-func timedQueryRows(ctx context.Context, eng *mts.Engine, points int) ([]mts.Row, time.Duration, error) {
+func shardDuration(cfg config) time.Duration {
+	if cfg.shardDuration <= 0 {
+		return defaultScaleShardDuration
+	}
+	return cfg.shardDuration
+}
+
+func timestampStepNanos(cfg config) int64 {
+	if cfg.timestampStep <= 0 {
+		return int64(defaultScaleTimestampStep)
+	}
+	return int64(cfg.timestampStep)
+}
+
+func timestampForIndex(index int, step int64) int64 {
+	return int64(index) * step
+}
+
+func logicalIndexForTimestamp(timestamp int64, step int64) (int, error) {
+	if step <= 0 {
+		return 0, fmt.Errorf("timestamp step must be positive")
+	}
+	if timestamp%step != 0 {
+		return 0, fmt.Errorf("timestamp %d is not aligned to step %d", timestamp, step)
+	}
+	index := timestamp / step
+	if index > int64(^uint(0)>>1) {
+		return 0, fmt.Errorf("timestamp index %d overflows int", index)
+	}
+	return int(index), nil
+}
+
+func ceilDivInt64(value int64, divisor int64) int {
+	if value <= 0 {
+		return 0
+	}
+	return int((value + divisor - 1) / divisor)
+}
+
+func floorDivInt64(value int64, divisor int64) int {
+	if value < 0 {
+		return -1
+	}
+	return int(value / divisor)
+}
+
+func scaleQuerySpec(cfg config) querySpec {
+	limit := cfg.queryLimit
+	if limit <= 0 {
+		limit = defaultQueryLimit
+	}
+	points := cfg.points
+	step := timestampStepNanos(cfg)
+	start := cfg.queryStart
+	end := cfg.queryEnd
+	if start == 0 && end == 0 {
+		start = -1
+		end = -1
+	}
+	window := limit
+	if window > points {
+		window = points
+	}
+	startIndex := 0
+	endIndex := points - 1
+	if start < 0 && end < 0 {
+		startIndex = (points - window) / 2
+		endIndex = startIndex + window - 1
+		start = timestampForIndex(startIndex, step)
+		end = timestampForIndex(endIndex, step)
+		return querySpec{
+			start:         start,
+			end:           end,
+			limit:         limit,
+			startIndex:    startIndex,
+			endIndex:      endIndex,
+			timestampStep: step,
+		}
+	}
+	if start >= 0 {
+		startIndex = ceilDivInt64(start, step)
+	}
+	if end >= 0 {
+		endIndex = floorDivInt64(end, step)
+	}
+	if start >= 0 && end < 0 {
+		endIndex = startIndex + window - 1
+		end = timestampForIndex(endIndex, step)
+	}
+	if start < 0 && end >= 0 {
+		startIndex = endIndex - window + 1
+		start = timestampForIndex(startIndex, step)
+	}
+	if startIndex < 0 {
+		startIndex = 0
+	}
+	if endIndex >= points {
+		endIndex = points - 1
+	}
+	if startIndex > endIndex {
+		startIndex = endIndex
+	}
+	if start < 0 {
+		start = timestampForIndex(startIndex, step)
+	}
+	if end < 0 || end >= timestampForIndex(points, step) {
+		end = timestampForIndex(endIndex, step)
+	}
+	return querySpec{
+		start:         start,
+		end:           end,
+		limit:         limit,
+		startIndex:    startIndex,
+		endIndex:      endIndex,
+		timestampStep: step,
+	}
+}
+
+func timedQueryLimitedRows(
+	ctx context.Context,
+	eng *mts.Engine,
+	query querySpec,
+	verify bool,
+) (int, time.Duration, error) {
 	started := time.Now()
-	rows, err := eng.QueryRows(ctx, mts.Query{Measurement: "scale", StartTime: 0, EndTime: int64(points)})
-	return rows, time.Since(started), err
+	iter, err := eng.QueryRowIterator(ctx, mts.Query{
+		Measurement: "scale",
+		StartTime:   query.start,
+		EndTime:     query.end,
+		Limit:       query.limit,
+	})
+	if err != nil {
+		return 0, time.Since(started), err
+	}
+	rows := 0
+	for iter.Next() {
+		if verify {
+			if err := validateScaleRow(iter.Row(), query); err != nil {
+				return rows, time.Since(started), errors.Join(err, iter.Close())
+			}
+		}
+		if !verify {
+			_ = iter.Row()
+		}
+		rows++
+	}
+	if err := errors.Join(iter.Err(), iter.Close()); err != nil {
+		return rows, time.Since(started), err
+	}
+	if verify {
+		if want := expectedQueryRows(query); rows != want {
+			return rows, time.Since(started), fmt.Errorf("query rows = %d, want %d", rows, want)
+		}
+	}
+	return rows, time.Since(started), nil
+}
+
+func validateScaleRow(row mts.Row, query querySpec) error {
+	if row.Timestamp < query.start || row.Timestamp > query.end {
+		return fmt.Errorf("row timestamp %d outside query range [%d,%d]", row.Timestamp, query.start, query.end)
+	}
+	index, err := logicalIndexForTimestamp(row.Timestamp, query.timestampStep)
+	if err != nil {
+		return err
+	}
+	if index < query.startIndex || index > query.endIndex {
+		return fmt.Errorf("row index %d outside query index range [%d,%d]", index, query.startIndex, query.endIndex)
+	}
+	if got := row.Tags["host"]; got != scaleHost(index) {
+		return fmt.Errorf("row %d host = %q, want %q", index, got, scaleHost(index))
+	}
+	if len(row.Fields) != 10 {
+		return fmt.Errorf("row %d field count = %d, want 10", index, len(row.Fields))
+	}
+	return validateScaleFields(index, row.Fields)
+}
+
+func expectedQueryRows(query querySpec) int {
+	if query.endIndex < query.startIndex {
+		return 0
+	}
+	available := query.endIndex - query.startIndex + 1
+	if query.limit > 0 && query.limit < available {
+		return query.limit
+	}
+	return available
+}
+
+func validateScaleFields(index int, fields map[string]mts.FieldValue) error {
+	if err := validateScaleField(index, fields, "f0", mts.Float64Value(float64(index))); err != nil {
+		return err
+	}
+	if err := validateScaleField(index, fields, "f1", mts.Float64Value(float64(index)*1.1)); err != nil {
+		return err
+	}
+	if err := validateScaleField(index, fields, "f2", mts.Float64Value(float64(index)*1.2)); err != nil {
+		return err
+	}
+	if err := validateScaleField(index, fields, "f3", mts.Float64Value(float64(index)*1.3)); err != nil {
+		return err
+	}
+	if err := validateScaleField(index, fields, "f4", mts.Float64Value(float64(index)*1.4)); err != nil {
+		return err
+	}
+	if err := validateScaleField(index, fields, "i0", mts.Int64Value(int64(index))); err != nil {
+		return err
+	}
+	if err := validateScaleField(index, fields, "i1", mts.Int64Value(int64(index+1))); err != nil {
+		return err
+	}
+	if err := validateScaleField(index, fields, "i2", mts.Int64Value(int64(index+2))); err != nil {
+		return err
+	}
+	if err := validateScaleField(index, fields, "s0", mts.StringValue("ok")); err != nil {
+		return err
+	}
+	return validateScaleField(index, fields, "b0", mts.BoolValue(index%2 == 0))
+}
+
+func validateScaleField(index int, fields map[string]mts.FieldValue, name string, want mts.FieldValue) error {
+	if got := fields[name]; got != want {
+		return fmt.Errorf("row %d field %s = %#v, want %#v", index, name, got, want)
+	}
+	return nil
 }
 
 func writeScaleBatches(ctx context.Context, eng *mts.Engine, cfg config) error {
 	hostCache := scaleHostCache(100)
 	builder := newScaleTypedBatchBuilder(cfg.batchSize)
+	writeOptions := mts.WriteOptions{Sync: durabilityOptions(cfg.durability).writeSync}
 	for start := 0; start < cfg.points; start += cfg.batchSize {
 		end := start + cfg.batchSize
 		if end > cfg.points {
 			end = cfg.points
 		}
 		if cfg.ingestPath == "public" {
-			if err := eng.Write(ctx, scalePoints(start, end), mts.WriteOptions{}); err != nil {
+			if err := eng.Write(ctx, scalePoints(start, end, cfg), writeOptions); err != nil {
 				return fmt.Errorf("write public batch: %w", err)
 			}
 			continue
 		}
-		if err := eng.WriteTypedBatch(ctx, builder.Build(start, end, hostCache), mts.WriteOptions{}); err != nil {
+		if err := eng.WriteTypedBatch(ctx, builder.Build(start, end, hostCache, cfg), writeOptions); err != nil {
 			return fmt.Errorf("write typed batch: %w", err)
 		}
 	}
 	return nil
 }
 
-func scalePoints(start int, end int) []mts.Point {
+func scalePoints(start int, end int, cfg config) []mts.Point {
 	points := make([]mts.Point, 0, end-start)
+	step := timestampStepNanos(cfg)
 	for index := start; index < end; index++ {
 		points = append(points, mts.Point{
 			Measurement: "scale",
-			Tags:        map[string]string{"host": fmt.Sprintf("host-%03d", index%100)},
-			Timestamp:   int64(index),
+			Tags:        map[string]string{"host": scaleHost(index)},
+			Timestamp:   timestampForIndex(index, step),
 			Fields: map[string]mts.FieldValue{
 				"f0": mts.Float64Value(float64(index)),
 				"f1": mts.Float64Value(float64(index) * 1.1),
@@ -484,7 +921,7 @@ func scalePoints(start int, end int) []mts.Point {
 }
 
 func scaleTypedBatch(start int, end int, hostCache []string) mts.TypedBatch {
-	return newScaleTypedBatchBuilder(end-start).Build(start, end, hostCache)
+	return newScaleTypedBatchBuilder(end-start).Build(start, end, hostCache, config{})
 }
 
 type scaleTypedBatchBuilder struct {
@@ -525,19 +962,20 @@ func newScaleTypedBatchBuilder(capacity int) *scaleTypedBatchBuilder {
 	return builder
 }
 
-func (b *scaleTypedBatchBuilder) Build(start int, end int, hostCache []string) mts.TypedBatch {
+func (b *scaleTypedBatchBuilder) Build(start int, end int, hostCache []string, cfg config) mts.TypedBatch {
 	count := end - start
 	b.ensureCapacity(count)
 	b.resize(count)
+	step := timestampStepNanos(cfg)
 	for offset := range count {
 		index := start + offset
-		b.fillRow(offset, index, hostCache)
+		b.fillRow(offset, index, hostCache, step)
 	}
 	return b.batch
 }
 
-func (b *scaleTypedBatchBuilder) fillRow(offset int, index int, hostCache []string) {
-	b.timestamps[offset] = int64(index)
+func (b *scaleTypedBatchBuilder) fillRow(offset int, index int, hostCache []string, timestampStep int64) {
+	b.timestamps[offset] = timestampForIndex(index, timestampStep)
 	b.hosts[offset] = hostCache[index%len(hostCache)]
 	b.f0[offset] = float64(index)
 	b.f1[offset] = float64(index) * 1.1
@@ -587,9 +1025,13 @@ func (b *scaleTypedBatchBuilder) resize(count int) {
 func scaleHostCache(count int) []string {
 	hosts := make([]string, count)
 	for index := range count {
-		hosts[index] = fmt.Sprintf("host-%03d", index)
+		hosts[index] = scaleHost(index)
 	}
 	return hosts
+}
+
+func scaleHost(index int) string {
+	return fmt.Sprintf("host-%03d", index%100)
 }
 
 func dirSize(root string) (int64, error) {
@@ -618,6 +1060,55 @@ func countSSTables(root string) (int, error) {
 		return nil
 	})
 	return count, err
+}
+
+func countShards(root string) (int, error) {
+	count := 0
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return err
+		}
+		if filepath.Base(filepath.Dir(path)) == "shards" {
+			count++
+		}
+		return nil
+	})
+	return count, err
+}
+
+func shardSSTableDistribution(root string) (map[string]int, error) {
+	distribution := make(map[string]int)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return err
+		}
+		if filepath.Base(filepath.Dir(path)) == "shards" {
+			distribution[info.Name()] = 0
+			return nil
+		}
+		if strings.HasPrefix(info.Name(), "sst-") {
+			shard := nearestShardDir(path)
+			if shard != "" {
+				distribution[shard]++
+			}
+		}
+		return nil
+	})
+	return distribution, err
+}
+
+func nearestShardDir(path string) string {
+	dir := filepath.Dir(path)
+	for {
+		if filepath.Base(filepath.Dir(dir)) == "shards" {
+			return filepath.Base(dir)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 func levelDistribution(root string) (map[int]int, error) {

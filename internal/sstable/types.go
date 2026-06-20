@@ -19,14 +19,15 @@ const (
 )
 
 type Query struct {
-	Context   context.Context
-	Budget    model.QueryBudget
-	Stats     *model.QueryStats
-	Boundary  model.QueryBoundaryMode
-	SeriesIDs map[uint64]struct{}
-	FieldIDs  map[uint32]struct{}
-	Start     int64
-	End       int64
+	Context         context.Context
+	Budget          model.QueryBudget
+	Stats           *model.QueryStats
+	Boundary        model.QueryBoundaryMode
+	SeriesIDs       map[uint64]struct{}
+	FieldIDs        map[uint32]struct{}
+	FieldPredicates map[uint32][]model.QueryPredicate
+	Start           int64
+	End             int64
 }
 
 type PartMeta struct {
@@ -111,6 +112,15 @@ type valuePageRef struct {
 	MinTime int64
 	MaxTime int64
 	Ref     blockRef
+	Stats   valuePageStats
+}
+
+type valuePageStats struct {
+	HasNumeric bool
+	MinFloat64 float64
+	MaxFloat64 float64
+	MinInt64   int64
+	MaxInt64   int64
 }
 
 type valuePageIndex struct {

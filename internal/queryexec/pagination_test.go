@@ -32,6 +32,50 @@ func TestPaginatedColumnStreamAppliesOffsetAndLimit(t *testing.T) {
 	}
 }
 
+func TestPaginatedRowStreamAppliesOffsetAndLimit(t *testing.T) {
+	source := NewSliceRowStream([]model.Row{
+		{Timestamp: 1},
+		{Timestamp: 2},
+		{Timestamp: 3},
+		{Timestamp: 4},
+	})
+	stream := NewPaginatedRowStream(source, 2, 1)
+	var timestamps []int64
+	for stream.Next() {
+		timestamps = append(timestamps, stream.Row().Timestamp)
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("Err() = %v", err)
+	}
+	if len(timestamps) != 2 || timestamps[0] != 2 || timestamps[1] != 3 {
+		t.Fatalf("timestamps = %v, want [2 3]", timestamps)
+	}
+}
+
+func TestBudgetRowStreamStopsWhenMaxSamplesExceeded(t *testing.T) {
+	source := NewSliceRowStream([]model.Row{
+		{Timestamp: 1},
+		{Timestamp: 2},
+		{Timestamp: 3},
+	})
+	stream := NewBudgetRowStream(source, model.QueryBudget{MaxSamples: 2})
+	if !stream.Next() {
+		t.Fatalf("Next(1) = false err=%v", stream.Err())
+	}
+	if !stream.Next() {
+		t.Fatalf("Next(2) = false err=%v", stream.Err())
+	}
+	if stream.Next() {
+		t.Fatal("Next(3) = true, want false")
+	}
+	if !errors.Is(stream.Err(), ErrReadBudgetExceeded) {
+		t.Fatalf("Err() = %v, want ErrReadBudgetExceeded", stream.Err())
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestBudgetColumnStreamReturnsReadBudgetError(t *testing.T) {
 	source := NewSliceColumnSeriesStream([]model.ColumnSeries{{
 		SeriesID:   1,

@@ -26,6 +26,7 @@ func (e *Engine) beginQueryStats(plan QueryPlan) *model.QueryStats {
 		ShardsScanned:    len(plan.Shards),
 		ShardsSkipped:    plan.Explain.SkippedShards,
 		StartedUnixNanos: time.Now().UnixNano(),
+		ReadEpoch:        plan.Explain.ReadEpoch,
 	}
 	e.storeQueryStats(*stats)
 	return stats

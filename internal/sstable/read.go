@@ -548,11 +548,11 @@ func (p *Part) readValuePagesFromIndexPayload(
 		if err := queryContextErr(query); err != nil {
 			return model.ColumnData{}, err
 		}
-		page, err := readValuePageRef(reader)
+		page, err := readValuePageRef(reader, header.fieldType)
 		if err != nil {
 			return model.ColumnData{}, err
 		}
-		if page.MaxTime < query.Start || page.MinTime > query.End {
+		if !valuePageMatchesQuery(page, header.fieldID, header.fieldType, query) {
 			continue
 		}
 		block, err := p.readValuePage(page.Ref, rowTimestamps, query)
@@ -605,11 +605,11 @@ func scanValuePageIndexCoverage(
 	matches := 0
 	fullRange := header.pageCount > 0
 	for range header.pageCount {
-		page, err := readValuePageRef(reader)
+		page, err := readValuePageRef(reader, header.fieldType)
 		if err != nil {
 			return valuePageIndexHeader{}, nil, false, 0, err
 		}
-		if page.MaxTime >= query.Start && page.MinTime <= query.End {
+		if valuePageMatchesQuery(page, header.fieldID, header.fieldType, query) {
 			matches++
 			if fullRange {
 				pages = append(pages, page)
@@ -636,11 +636,11 @@ func matchingValuePageIndexHeader(payload []byte, query Query) (valuePageIndexHe
 	}
 	matches := 0
 	for range header.pageCount {
-		page, err := readValuePageRef(reader)
+		page, err := readValuePageRef(reader, header.fieldType)
 		if err != nil {
 			return valuePageIndexHeader{}, 0, err
 		}
-		if page.MaxTime >= query.Start && page.MinTime <= query.End {
+		if valuePageMatchesQuery(page, header.fieldID, header.fieldType, query) {
 			matches++
 		}
 	}
@@ -670,11 +670,11 @@ func matchingValuePageRefs(payload []byte, query Query) ([]valuePageRef, error) 
 	}
 	pages := make([]valuePageRef, 0, header.pageCount)
 	for range header.pageCount {
-		page, err := readValuePageRef(reader)
+		page, err := readValuePageRef(reader, header.fieldType)
 		if err != nil {
 			return nil, err
 		}
-		if page.MaxTime >= query.Start && page.MinTime <= query.End {
+		if valuePageMatchesQuery(page, header.fieldID, header.fieldType, query) {
 			pages = append(pages, page)
 		}
 	}
@@ -682,6 +682,96 @@ func matchingValuePageRefs(payload []byte, query Query) ([]valuePageRef, error) 
 		return nil, err
 	}
 	return pages, nil
+}
+
+func valuePageMatchesQuery(
+	page valuePageRef,
+	fieldID uint32,
+	fieldType model.FieldType,
+	query Query,
+) bool {
+	if page.MaxTime < query.Start || page.MinTime > query.End {
+		return false
+	}
+	predicates := query.FieldPredicates[fieldID]
+	if len(predicates) == 0 || !page.Stats.HasNumeric {
+		return true
+	}
+	for _, predicate := range predicates {
+		if !numericPageMayMatchPredicate(page.Stats, fieldType, predicate) {
+			return false
+		}
+	}
+	return true
+}
+
+func numericPageMayMatchPredicate(
+	stats valuePageStats,
+	fieldType model.FieldType,
+	predicate model.QueryPredicate,
+) bool {
+	switch fieldType {
+	case model.FieldFloat64:
+		return floatPageMayMatchPredicate(stats.MinFloat64, stats.MaxFloat64, predicate)
+	case model.FieldInt64:
+		return intPageMayMatchPredicate(stats.MinInt64, stats.MaxInt64, predicate)
+	default:
+		return true
+	}
+}
+
+func floatPageMayMatchPredicate(minValue float64, maxValue float64, predicate model.QueryPredicate) bool {
+	value := queryPredicateFloatValue(predicate)
+	switch predicate.Kind {
+	case model.QueryPredicateFieldEq:
+		return value >= minValue && value <= maxValue
+	case model.QueryPredicateFieldNe:
+		return minValue != maxValue || value != minValue
+	case model.QueryPredicateFieldGT:
+		return maxValue > value
+	case model.QueryPredicateFieldGTE:
+		return maxValue >= value
+	case model.QueryPredicateFieldLT:
+		return minValue < value
+	case model.QueryPredicateFieldLTE:
+		return minValue <= value
+	default:
+		return true
+	}
+}
+
+func intPageMayMatchPredicate(minValue int64, maxValue int64, predicate model.QueryPredicate) bool {
+	value := queryPredicateIntValue(predicate)
+	switch predicate.Kind {
+	case model.QueryPredicateFieldEq:
+		return value >= minValue && value <= maxValue
+	case model.QueryPredicateFieldNe:
+		return minValue != maxValue || value != minValue
+	case model.QueryPredicateFieldGT:
+		return maxValue > value
+	case model.QueryPredicateFieldGTE:
+		return maxValue >= value
+	case model.QueryPredicateFieldLT:
+		return minValue < value
+	case model.QueryPredicateFieldLTE:
+		return minValue <= value
+	default:
+		return true
+	}
+}
+
+func queryPredicateFloatValue(predicate model.QueryPredicate) float64 {
+	if predicate.Value.Type == model.FieldFloat64 {
+		return predicate.Value.Float64
+	}
+	return float64(predicate.Value.Int64)
+}
+
+func queryPredicateIntValue(predicate model.QueryPredicate) int64 {
+	if predicate.Value.Type == model.FieldInt64 {
+		return predicate.Value.Int64
+	}
+	return int64(predicate.Value.Float64)
 }
 
 func selectBoundaryPageRefs(pages []valuePageRef, mode model.QueryBoundaryMode) []valuePageRef {

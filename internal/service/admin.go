@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -29,10 +31,23 @@ type AdminAuditEvent struct {
 	StartedUnixNano int64         `json:"started_unix_nano"`
 }
 
-func compactHandler(timeout time.Duration, audit AuditLogger, compact CompactFunc) http.HandlerFunc {
+func compactHandler(
+	timeout time.Duration,
+	token string,
+	audit AuditLogger,
+	compact CompactFunc,
+) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			writeJSON(writer, http.StatusMethodNotAllowed, adminResponse{OK: false, Error: "method not allowed"})
+			return
+		}
+		if token == "" {
+			writeJSON(writer, http.StatusServiceUnavailable, adminResponse{OK: false, Error: "admin auth token required"})
+			return
+		}
+		if !authorizedAdminRequest(request, token) {
+			writeJSON(writer, http.StatusUnauthorized, adminResponse{OK: false, Error: "admin unauthorized"})
 			return
 		}
 		if compact == nil {
@@ -61,6 +76,17 @@ func compactHandler(timeout time.Duration, audit AuditLogger, compact CompactFun
 		logCompactAudit(audit, response, started)
 		writeJSON(writer, http.StatusOK, response)
 	}
+}
+
+func authorizedAdminRequest(request *http.Request, token string) bool {
+	candidate := request.Header.Get("X-MTS-Admin-Token")
+	if candidate == "" {
+		candidate = strings.TrimPrefix(request.Header.Get("Authorization"), "Bearer ")
+	}
+	if candidate == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(candidate), []byte(token)) == 1
 }
 
 func hasDeadline(ctx context.Context) bool {

@@ -163,6 +163,9 @@ func aggregateColumnBySpec(
 		FieldName:   fn + "(" + column.FieldName + ")",
 	}
 	if window <= 0 {
+		if transformAggregate(fn) {
+			return aggregateTransformColumn(out, column, fn)
+		}
 		return aggregateWholeColumn(out, column, fn)
 	}
 	return aggregateWindowedColumn(out, column, fn, int64(window))
@@ -173,7 +176,7 @@ func aggregateWholeColumn(
 	column model.ColumnSeries,
 	fn string,
 ) (model.ColumnSeries, error) {
-	value, err := aggregateValues(column.Values, fn)
+	value, err := aggregateValuesByTime(column.Values, column.Timestamps, fn)
 	if err != nil {
 		return model.ColumnSeries{}, err
 	}
@@ -195,7 +198,11 @@ func aggregateWindowedColumn(
 		for end < len(column.Timestamps) && column.Timestamps[end] < windowStart+window {
 			end++
 		}
-		value, err := aggregateValues(column.Values[start:end], fn)
+		value, err := aggregateValuesByTime(
+			column.Values[start:end],
+			column.Timestamps[start:end],
+			fn,
+		)
 		if err != nil {
 			return model.ColumnSeries{}, err
 		}
@@ -205,6 +212,25 @@ func aggregateWindowedColumn(
 		start = end
 	}
 	return out, nil
+}
+
+func aggregateValuesByTime(
+	values []model.FieldValue,
+	timestamps []int64,
+	fn string,
+) (model.FieldValue, error) {
+	switch fn {
+	case "rate":
+		return aggregateRate(values, timestamps)
+	case "irate":
+		return aggregateIRate(values, timestamps)
+	case "increase":
+		return aggregateIncrease(values)
+	case "delta":
+		return aggregateDelta(values)
+	default:
+		return aggregateValues(values, fn)
+	}
 }
 
 func aggregateValues(values []model.FieldValue, fn string) (model.FieldValue, error) {
@@ -224,70 +250,29 @@ func aggregateValues(values []model.FieldValue, fn string) (model.FieldValue, er
 		return values[0], nil
 	case "last":
 		return values[len(values)-1], nil
+	case "rate":
+		return aggregateRate(values, nil)
+	case "irate":
+		return aggregateIRate(values, nil)
+	case "increase":
+		return aggregateIncrease(values)
+	case "delta":
+		return aggregateDelta(values)
+	case "spread":
+		return aggregateSpread(values)
+	case "median":
+		return aggregateMedian(values)
+	case "mode":
+		return aggregateMode(values)
+	case "stddev", "stdvar":
+		return aggregateStd(values, fn == "stddev")
+	case "top":
+		return aggregateMinMax(values, false)
+	case "bottom":
+		return aggregateMinMax(values, true)
 	default:
 		return model.FieldValue{}, fmt.Errorf("unsupported aggregate function %q", fn)
 	}
-}
-
-func aggregateSum(values []model.FieldValue) (model.FieldValue, error) {
-	switch values[0].Type {
-	case model.FieldFloat64:
-		var sum float64
-		for _, value := range values {
-			sum += value.Float64
-		}
-		return model.Float64Value(sum), nil
-	case model.FieldInt64:
-		var sum int64
-		for _, value := range values {
-			sum += value.Int64
-		}
-		return model.Int64Value(sum), nil
-	default:
-		return model.FieldValue{}, fmt.Errorf("sum does not support field type %d", values[0].Type)
-	}
-}
-
-func aggregateAvg(values []model.FieldValue) (model.FieldValue, error) {
-	sum, err := aggregateSum(values)
-	if err != nil {
-		return model.FieldValue{}, err
-	}
-	if sum.Type == model.FieldFloat64 {
-		return model.Float64Value(sum.Float64 / float64(len(values))), nil
-	}
-	return model.Float64Value(float64(sum.Int64) / float64(len(values))), nil
-}
-
-func aggregateMinMax(values []model.FieldValue, min bool) (model.FieldValue, error) {
-	switch values[0].Type {
-	case model.FieldFloat64:
-		return aggregateFloatMinMax(values, min), nil
-	case model.FieldInt64:
-		return aggregateIntMinMax(values, min), nil
-	default:
-		return model.FieldValue{}, fmt.Errorf("min/max does not support field type %d", values[0].Type)
-	}
-}
-
-func aggregateFloatMinMax(values []model.FieldValue, min bool) model.FieldValue {
-	best := values[0].Float64
-	for _, value := range values[1:] {
-		if (min && value.Float64 < best) || (!min && value.Float64 > best) {
-			best = value.Float64
-		}
-	}
-	return model.Float64Value(best)
-}
-
-func aggregateIntMinMax(values []model.FieldValue, min bool) model.FieldValue {
-	best := values[0].Int64
-	for _, value := range values[1:] {
-		if (min && value.Int64 < best) || (!min && value.Int64 > best) {
-			best = value.Int64
-		}
-	}
-	return model.Int64Value(best)
 }
 
 func aggregateTimestamp(column model.ColumnSeries, fn string) int64 {

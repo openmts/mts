@@ -14,6 +14,8 @@ import (
 type Options struct {
 	Addr         string
 	AdminTimeout time.Duration
+	EnableAdmin  bool
+	AdminToken   string
 	EnablePprof  bool
 	AuditLogger  AuditLogger
 }
@@ -38,7 +40,14 @@ func NewServer(options Options, metrics MetricsProvider, health HealthProvider, 
 	mux.HandleFunc("/metrics", metricsHandler(metrics))
 	mux.HandleFunc("/healthz", healthHandler(health, false))
 	mux.HandleFunc("/readyz", healthHandler(health, true))
-	mux.HandleFunc("/admin/compact", compactHandler(options.AdminTimeout, options.AuditLogger, compact))
+	if options.EnableAdmin {
+		mux.HandleFunc("/admin/compact", compactHandler(
+			options.AdminTimeout,
+			options.AdminToken,
+			options.AuditLogger,
+			compact,
+		))
+	}
 	if options.EnablePprof {
 		registerPprof(mux)
 	}

@@ -37,6 +37,16 @@ func (f *fakeAuditLogger) LogAdminAction(event AdminAuditEvent) {
 	f.events = append(f.events, event)
 }
 
+func adminTestOptions() Options {
+	return Options{AdminTimeout: time.Second, EnableAdmin: true, AdminToken: "secret"}
+}
+
+func adminRequest(method string, path string) *http.Request {
+	request := httptest.NewRequest(method, path, nil)
+	request.Header.Set("Authorization", "Bearer secret")
+	return request
+}
+
 func TestServerHandlers(t *testing.T) {
 	registry := observability.NewRegistry()
 	registry.SetGauge("mts_ready", "Ready.", 1)
@@ -65,8 +75,8 @@ func TestServerHandlers(t *testing.T) {
 	recorder = httptest.NewRecorder()
 	request = httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
 	server.server.Handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK || ops.compacts != 1 {
-		t.Fatalf("compact status=%d count=%d, want 200 and 1", recorder.Code, ops.compacts)
+	if recorder.Code != http.StatusNotFound || ops.compacts != 0 {
+		t.Fatalf("compact status=%d count=%d, want default admin disabled", recorder.Code, ops.compacts)
 	}
 }
 
@@ -75,9 +85,14 @@ func TestServerHandlersCoverErrorPathsAndPprof(t *testing.T) {
 		registry: observability.NewRegistry(),
 		health:   Health{Healthy: true, Ready: false, Reasons: []string{"compaction backlog"}},
 	}
-	server := NewServer(Options{AdminTimeout: time.Second, EnablePprof: true}, nil, ops, func(context.Context) error {
-		return errors.New("compact failed")
-	})
+	server := NewServer(
+		Options{AdminTimeout: time.Second, EnableAdmin: true, AdminToken: "secret", EnablePprof: true},
+		nil,
+		ops,
+		func(context.Context) error {
+			return errors.New("compact failed")
+		},
+	)
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
@@ -94,22 +109,22 @@ func TestServerHandlersCoverErrorPathsAndPprof(t *testing.T) {
 	}
 
 	recorder = httptest.NewRecorder()
-	request = httptest.NewRequest(http.MethodGet, "/admin/compact", nil)
+	request = adminRequest(http.MethodGet, "/admin/compact")
 	server.server.Handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("compact get status = %d, want 405", recorder.Code)
 	}
 
 	recorder = httptest.NewRecorder()
-	request = httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	request = adminRequest(http.MethodPost, "/admin/compact")
 	server.server.Handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("compact failure status = %d, want 500", recorder.Code)
 	}
 
-	nilCompactServer := NewServer(Options{AdminTimeout: time.Second}, nil, nil, nil)
+	nilCompactServer := NewServer(adminTestOptions(), nil, nil, nil)
 	recorder = httptest.NewRecorder()
-	request = httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	request = adminRequest(http.MethodPost, "/admin/compact")
 	nilCompactServer.server.Handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("nil compact status = %d, want 503", recorder.Code)
@@ -153,27 +168,27 @@ func TestReadyzReturnsStructuredChecks(t *testing.T) {
 }
 
 func TestAdminCompactRequiresTimeoutAndReturnsTaskStatus(t *testing.T) {
-	server := NewServer(Options{}, nil, nil, func(ctx context.Context) error {
+	server := NewServer(Options{EnableAdmin: true, AdminToken: "secret"}, nil, nil, func(ctx context.Context) error {
 		if _, ok := ctx.Deadline(); !ok {
 			return errors.New("deadline missing")
 		}
 		return nil
 	})
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	request := adminRequest(http.MethodPost, "/admin/compact")
 	server.server.Handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("compact without timeout status = %d, want 400", recorder.Code)
 	}
 
-	server = NewServer(Options{AdminTimeout: time.Second}, nil, nil, func(ctx context.Context) error {
+	server = NewServer(adminTestOptions(), nil, nil, func(ctx context.Context) error {
 		if _, ok := ctx.Deadline(); !ok {
 			return errors.New("deadline missing")
 		}
 		return nil
 	})
 	recorder = httptest.NewRecorder()
-	request = httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	request = adminRequest(http.MethodPost, "/admin/compact")
 	server.server.Handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("compact status = %d, want 200 body=%s", recorder.Code, recorder.Body.String())
@@ -190,13 +205,13 @@ func TestAdminCompactRequiresTimeoutAndReturnsTaskStatus(t *testing.T) {
 func TestAdminCompactWritesAuditLog(t *testing.T) {
 	audit := &fakeAuditLogger{}
 	server := NewServer(
-		Options{AdminTimeout: time.Second, AuditLogger: audit},
+		Options{AdminTimeout: time.Second, EnableAdmin: true, AdminToken: "secret", AuditLogger: audit},
 		nil,
 		nil,
 		func(context.Context) error { return errors.New("boom") },
 	)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	request := adminRequest(http.MethodPost, "/admin/compact")
 	server.server.Handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("compact status = %d, want 500", recorder.Code)
@@ -207,6 +222,23 @@ func TestAdminCompactWritesAuditLog(t *testing.T) {
 	event := audit.events[0]
 	if event.Action != "compact" || event.TaskID == "" || event.State != "failed" || event.Error != "boom" {
 		t.Fatalf("audit event = %#v, want failed compact event", event)
+	}
+}
+
+func TestAdminCompactRequiresAuthAndPprofDisabledByDefault(t *testing.T) {
+	server := NewServer(adminTestOptions(), nil, nil, func(context.Context) error { return nil })
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	server.server.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("compact without auth status = %d, want 401", recorder.Code)
+	}
+
+	recorder = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	server.server.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("pprof default status = %d, want 404", recorder.Code)
 	}
 }
 

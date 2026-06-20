@@ -67,24 +67,30 @@ func (w *PartWriter) Close() (PartMeta, error) {
 	}
 	w.closed = true
 	if len(w.rows) == 0 {
-		closeErr := w.files.close()
+		closeErr := w.files.close(w.opts.Sync)
 		w.files = nil
 		removeErr := storagefs.RemoveAll(w.path)
 		return PartMeta{}, errors.Join(fmt.Errorf("part writer has no rows"), closeErr, removeErr)
 	}
-	closeErr := w.files.close()
+	closeErr := w.files.close(w.opts.Sync)
 	w.files = nil
 	if closeErr != nil {
 		removeErr := storagefs.RemoveAll(w.path)
 		return PartMeta{}, errors.Join(closeErr, removeErr)
 	}
-	if err := writePartIndexes(w.path, &w.meta, w.rows); err != nil {
+	if err := writePartIndexes(w.path, &w.meta, w.rows, w.opts.Sync); err != nil {
 		removeErr := storagefs.RemoveAll(w.path)
 		return PartMeta{}, errors.Join(err, removeErr)
 	}
-	if err := ensureStringsFile(w.path); err != nil {
+	if err := ensureStringsFile(w.path, w.opts.Sync); err != nil {
 		removeErr := storagefs.RemoveAll(w.path)
 		return PartMeta{}, errors.Join(err, removeErr)
+	}
+	if w.opts.Sync {
+		if err := storagefs.SyncDir(w.path); err != nil {
+			removeErr := storagefs.RemoveAll(w.path)
+			return PartMeta{}, errors.Join(err, removeErr)
+		}
 	}
 	w.meta.Part.Path = w.path
 	return w.meta.Part, nil
@@ -97,7 +103,7 @@ func (w *PartWriter) Abort() error {
 	w.closed = true
 	var closeErr error
 	if w.files != nil {
-		closeErr = w.files.close()
+		closeErr = w.files.close(false)
 		w.files = nil
 	}
 	return errors.Join(closeErr, storagefs.RemoveAll(w.path))

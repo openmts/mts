@@ -13,8 +13,27 @@ type paginatedColumnStream struct {
 	exhausted bool
 }
 
+type paginatedRowStream struct {
+	source    RowStream
+	current   model.Row
+	limit     int
+	offset    int
+	returned  int
+	skipped   int
+	closed    bool
+	exhausted bool
+}
+
 func NewPaginatedColumnStream(source ColumnStream, limit int, offset int) ColumnStream {
 	return &paginatedColumnStream{
+		source: source,
+		limit:  limit,
+		offset: offset,
+	}
+}
+
+func NewPaginatedRowStream(source RowStream, limit int, offset int) RowStream {
+	return &paginatedRowStream{
 		source: source,
 		limit:  limit,
 		offset: offset,
@@ -80,5 +99,53 @@ func (s *paginatedColumnStream) pageColumn(column model.ColumnSeries) model.Colu
 }
 
 func (s *paginatedColumnStream) limitSet() bool {
+	return s.limit > 0
+}
+
+func (s *paginatedRowStream) Next() bool {
+	if s.closed || s.exhausted {
+		return false
+	}
+	for s.source.Next() {
+		if s.skipped < s.offset {
+			s.skipped++
+			continue
+		}
+		if s.limitSet() && s.returned >= s.limit {
+			s.exhausted = true
+			_ = s.source.Close()
+			return false
+		}
+		s.current = s.source.Row()
+		s.returned++
+		if s.limitSet() && s.returned >= s.limit {
+			s.exhausted = true
+			_ = s.source.Close()
+		}
+		return true
+	}
+	return false
+}
+
+func (s *paginatedRowStream) Row() model.Row {
+	return s.current
+}
+
+func (s *paginatedRowStream) Err() error {
+	if s.source == nil {
+		return nil
+	}
+	return s.source.Err()
+}
+
+func (s *paginatedRowStream) Close() error {
+	s.closed = true
+	if s.source == nil {
+		return nil
+	}
+	return s.source.Close()
+}
+
+func (s *paginatedRowStream) limitSet() bool {
 	return s.limit > 0
 }

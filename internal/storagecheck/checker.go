@@ -97,7 +97,7 @@ func (s *scanState) visit(path string, entry fs.DirEntry, err error) error {
 	}
 	name := entry.Name()
 	if entry.IsDir() {
-		if hasFile(path, "metadata.bin") {
+		if isPartDir(path) {
 			s.partDirs[path] = struct{}{}
 		}
 		if hasFile(path, "MANIFEST.bin") {
@@ -105,7 +105,7 @@ func (s *scanState) visit(path string, entry fs.DirEntry, err error) error {
 		}
 		return nil
 	}
-	if strings.HasSuffix(name, ".wal") {
+	if isStorageWALSegmentName(name) {
 		s.validateWALSegment(path)
 		return nil
 	}
@@ -276,6 +276,37 @@ func parseOffset(message string) (int64, bool) {
 func hasFile(dir string, name string) bool {
 	info, err := os.Stat(filepath.Join(dir, name))
 	return err == nil && !info.IsDir()
+}
+
+func isPartDir(dir string) bool {
+	if !hasFile(dir, "metadata.bin") {
+		return false
+	}
+	for _, name := range []string{
+		"metaindex.bin",
+		"index.bin",
+		"series_index.bin",
+		"timestamps.bin",
+		"values.bin",
+		"strings.bin",
+	} {
+		if hasFile(dir, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func isStorageWALSegmentName(name string) bool {
+	if len(name) != len("000001.wal") || !strings.HasSuffix(name, ".wal") {
+		return false
+	}
+	for _, digit := range name[:6] {
+		if digit < '0' || digit > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func isKnownStorageFile(name string) bool {

@@ -22,6 +22,7 @@ type ShardOptions struct {
 	Start              int64
 	End                int64
 	WAL                model.WALOptions
+	FlushSync          bool
 	MemTableMaxSamples int
 	Compaction         model.CompactionOptions
 	Compression        model.CompressionOptions
@@ -407,6 +408,7 @@ func (s *Shard) flushWriteOptions() sstable.WriteOptions {
 	return sstable.WriteOptions{
 		Compression:  s.opts.Compression,
 		MemoryBudget: storageCompressionBudget{memory: s.opts.Memory},
+		Sync:         s.opts.FlushSync,
 	}
 }
 

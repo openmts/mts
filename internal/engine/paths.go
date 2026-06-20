@@ -16,6 +16,7 @@ const (
 	defaultMemTableSamples = 10000
 	defaultLevelPartLimit  = 4
 	defaultCascadeSteps    = 8
+	defaultQueryEndTime    = int64(1<<63 - 1)
 )
 
 func normalizeOptions(opts model.Options) model.Options {
@@ -169,6 +170,9 @@ func normalizeQuery(opts model.Options, query model.Query) model.Query {
 	}
 	if query.Tags == nil {
 		query.Tags = map[string]string{}
+	}
+	if query.EndTime == 0 {
+		query.EndTime = defaultQueryEndTime
 	}
 	return query
 }

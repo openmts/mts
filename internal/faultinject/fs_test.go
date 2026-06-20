@@ -88,6 +88,34 @@ func TestFSShortWriteNext(t *testing.T) {
 	}
 }
 
+func TestFSBeforeWriteAndWritePrefixBoundaries(t *testing.T) {
+	fs := NewFS()
+	file, err := os.CreateTemp(t.TempDir(), "before-write-*")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	written, handled, err := fs.BeforeWrite(file, []byte("abcdef"))
+	if err != nil || handled || written != 0 {
+		t.Fatalf("BeforeWrite(no short) = written %d handled %v err %v, want zero false nil", written, handled, err)
+	}
+	fs.ShortWriteNext(OpWrite, 99)
+	written, handled, err = fs.BeforeWrite(file, []byte("abcdef"))
+	if err != nil || !handled || written != 6 {
+		t.Fatalf("BeforeWrite(short cap) = written %d handled %v err %v, want 6 true nil", written, handled, err)
+	}
+	fs.ShortWriteNext(OpWrite, -1)
+	written, handled, err = fs.BeforeWrite(file, []byte("abcdef"))
+	if err != nil || !handled || written != 0 {
+		t.Fatalf("BeforeWrite(negative) = written %d handled %v err %v, want 0 true nil", written, handled, err)
+	}
+	if _, err := writePrefix(nil, []byte("x"), 1); !errors.Is(err, os.ErrInvalid) {
+		t.Fatalf("writePrefix(nil) error = %v, want invalid", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestFSFailNextENOSPCPropagatesThroughStorageFS(t *testing.T) {
 	fs := NewFS()
 	fs.FailNext(OpWrite, syscall.ENOSPC)

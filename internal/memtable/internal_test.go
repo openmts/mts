@@ -501,6 +501,11 @@ func TestReleaseTableDataRetainsReusableWideMaps(t *testing.T) {
 func TestColumnKeyFreeListBoundsRetainedSlices(t *testing.T) {
 	resetColumnKeyPoolForTest()
 	t.Cleanup(resetColumnKeyPoolForTest)
+	releaseColumnKeys(nil)
+	releaseColumnKeys(make([]columnKey, maxPooledColumnKeys+1))
+	if got := columnKeyPoolLenForTest(); got != 0 {
+		t.Fatalf("column key pool len after nil/large release = %d, want 0", got)
+	}
 	keys := make([]columnKey, maxPooledColumnKeys)
 	releaseColumnKeys(keys)
 	if got := columnKeyPoolLenForTest(); got != 1 {
@@ -512,6 +517,29 @@ func TestColumnKeyFreeListBoundsRetainedSlices(t *testing.T) {
 	}
 	if got := columnKeyPoolLenForTest(); got != 0 {
 		t.Fatalf("column key pool len after borrow = %d, want 0", got)
+	}
+}
+
+func TestColumnRetainsLargeBackingChecksAllTypedSlices(t *testing.T) {
+	cases := []struct {
+		name   string
+		column columnBuffer
+	}{
+		{name: "writeSeqs", column: columnBuffer{writeSeqs: make([]uint64, 0, maxPooledColumnCapacity+1)}},
+		{name: "floats", column: columnBuffer{floats: make([]float64, 0, maxPooledColumnCapacity+1)}},
+		{name: "ints", column: columnBuffer{ints: make([]int64, 0, maxPooledColumnCapacity+1)}},
+		{name: "strings", column: columnBuffer{strings: make([]string, 0, maxPooledColumnCapacity+1)}},
+		{name: "bools", column: columnBuffer{boolBits: make([]uint64, 0, boolWords(maxPooledColumnCapacity)+1)}},
+		{name: "small", column: columnBuffer{times: make([]int64, 0, maxPooledColumnCapacity)}},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got := columnRetainsLargeBacking(&tt.column)
+			want := tt.name != "small"
+			if got != want {
+				t.Fatalf("columnRetainsLargeBacking() = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
@@ -587,6 +615,34 @@ func TestSnapshotReleaseClearsRetainedColumns(t *testing.T) {
 	if got := snapshot.Query(Query{Start: 0, End: 30}); len(got) != 0 {
 		t.Fatalf("released query columns = %d, want 0", len(got))
 	}
+}
+
+func TestStatsSnapshotReportsSeriesFieldsColumnsAndNilSnapshot(t *testing.T) {
+	mt := New()
+	if err := mt.ApplyBatch([]model.ResolvedPoint{
+		memtableResolvedPoint(1, 10, 1, model.Float64Value(1)),
+		memtableResolvedPoint(1, 20, 2, model.Int64Value(2)),
+		memtableResolvedPoint(2, 30, 3, model.Float64Value(3)),
+	}); err != nil {
+		t.Fatalf("ApplyBatch() error = %v", err)
+	}
+	stats := mt.StatsSnapshot()
+	if stats.Samples != 3 || stats.Series != 2 || stats.Fields != 1 || stats.Columns != 2 || stats.Bytes == 0 {
+		t.Fatalf("StatsSnapshot() = %#v, want samples/series/fields/columns/bytes", stats)
+	}
+	snapshot := mt.Snapshot()
+	snapshotStats := snapshot.StatsSnapshot()
+	if snapshotStats.Samples != stats.Samples || snapshotStats.Columns != stats.Columns {
+		t.Fatalf("Snapshot stats = %#v, want match %#v", snapshotStats, stats)
+	}
+	var nilSnapshot *Snapshot
+	if nilSnapshot.StatsSnapshot() != (Stats{}) {
+		t.Fatalf("nil snapshot stats = %#v, want zero", nilSnapshot.StatsSnapshot())
+	}
+	if nilSnapshot.SampleCount() != 0 || nilSnapshot.ApproxMemoryBytes() != 0 {
+		t.Fatalf("nil snapshot counters = %d/%d, want zero", nilSnapshot.SampleCount(), nilSnapshot.ApproxMemoryBytes())
+	}
+	snapshot.Release()
 }
 
 func memtableResolvedPoint(seriesID uint64, timestamp int64, seq uint64, value model.FieldValue) model.ResolvedPoint {

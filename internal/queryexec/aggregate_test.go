@@ -1,6 +1,7 @@
 package queryexec
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -181,5 +182,157 @@ func TestAggregateColumnStreamRejectsEmptyFunction(t *testing.T) {
 	}
 	if stream.Err() == nil {
 		t.Fatal("Err() = nil, want empty function error")
+	}
+}
+
+func TestAggregateColumnStreamSupportsDifferenceAndDerivative(t *testing.T) {
+	stream := NewAggregateColumnStream(
+		NewSliceColumnSeriesStream([]model.ColumnSeries{{
+			FieldName:  "value",
+			FieldType:  model.FieldFloat64,
+			Timestamps: []int64{0, int64(time.Second), int64(3 * time.Second)},
+			Values: []model.FieldValue{
+				model.Float64Value(1),
+				model.Float64Value(4),
+				model.Float64Value(10),
+			},
+		}}),
+		[]model.AggregateSpec{
+			{Field: "value", Function: "difference"},
+			{Field: "value", Function: "derivative"},
+		},
+	)
+
+	if !stream.Next() {
+		t.Fatalf("Next(difference) = false err=%v", stream.Err())
+	}
+	difference := stream.Column()
+	if len(difference.Values) != 2 {
+		t.Fatalf("difference values = %d, want 2", len(difference.Values))
+	}
+	if difference.Timestamps[0] != int64(time.Second) ||
+		difference.Values[0].Float64 != 3 ||
+		difference.Values[1].Float64 != 6 {
+		t.Fatalf("difference = %#v, want [3,6]", difference)
+	}
+	if !stream.Next() {
+		t.Fatalf("Next(derivative) = false err=%v", stream.Err())
+	}
+	derivative := stream.Column()
+	if derivative.Values[0].Float64 != 3 || derivative.Values[1].Float64 != 3 {
+		t.Fatalf("derivative = %#v, want [3,3]", derivative)
+	}
+}
+
+func TestAggregateColumnStreamSupportsRateAndIRateWithReset(t *testing.T) {
+	stream := NewAggregateColumnStream(
+		NewSliceColumnSeriesStream([]model.ColumnSeries{{
+			FieldName:  "counter",
+			FieldType:  model.FieldFloat64,
+			Timestamps: []int64{0, int64(time.Second), int64(2 * time.Second), int64(3 * time.Second)},
+			Values: []model.FieldValue{
+				model.Float64Value(10),
+				model.Float64Value(15),
+				model.Float64Value(3),
+				model.Float64Value(8),
+			},
+		}}),
+		[]model.AggregateSpec{
+			{Field: "counter", Function: "rate"},
+			{Field: "counter", Function: "irate"},
+		},
+	)
+
+	if !stream.Next() {
+		t.Fatalf("Next(rate) = false err=%v", stream.Err())
+	}
+	rate := stream.Column().Values[0].Float64
+	if math.Abs(rate-(13.0/3.0)) > 0.000001 {
+		t.Fatalf("rate = %v, want %v", rate, 13.0/3.0)
+	}
+	if !stream.Next() {
+		t.Fatalf("Next(irate) = false err=%v", stream.Err())
+	}
+	if got := stream.Column().Values[0].Float64; got != 5 {
+		t.Fatalf("irate = %v, want 5", got)
+	}
+}
+
+func TestAggregateColumnStreamSupportsIncreaseDeltaTopBottom(t *testing.T) {
+	stream := NewAggregateColumnStream(
+		NewSliceColumnSeriesStream([]model.ColumnSeries{{
+			FieldName:  "counter",
+			FieldType:  model.FieldInt64,
+			Timestamps: []int64{0, int64(time.Second), int64(2 * time.Second)},
+			Values: []model.FieldValue{
+				model.Int64Value(10),
+				model.Int64Value(3),
+				model.Int64Value(8),
+			},
+		}}),
+		[]model.AggregateSpec{
+			{Field: "counter", Function: "increase"},
+			{Field: "counter", Function: "delta"},
+			{Field: "counter", Function: "top"},
+			{Field: "counter", Function: "bottom"},
+		},
+	)
+
+	if !stream.Next() {
+		t.Fatalf("Next(increase) = false err=%v", stream.Err())
+	}
+	if got := stream.Column().Values[0].Float64; got != 8 {
+		t.Fatalf("increase = %v, want 8", got)
+	}
+	if !stream.Next() {
+		t.Fatalf("Next(delta) = false err=%v", stream.Err())
+	}
+	if got := stream.Column().Values[0].Int64; got != -2 {
+		t.Fatalf("delta = %v, want -2", got)
+	}
+	if !stream.Next() {
+		t.Fatalf("Next(top) = false err=%v", stream.Err())
+	}
+	if got := stream.Column().Values[0].Int64; got != 10 {
+		t.Fatalf("top = %v, want 10", got)
+	}
+	if !stream.Next() {
+		t.Fatalf("Next(bottom) = false err=%v", stream.Err())
+	}
+	if got := stream.Column().Values[0].Int64; got != 3 {
+		t.Fatalf("bottom = %v, want 3", got)
+	}
+}
+
+func TestAggregateColumnStreamSupportsDistributionFunctions(t *testing.T) {
+	stream := NewAggregateColumnStream(
+		NewSliceColumnSeriesStream([]model.ColumnSeries{{
+			FieldName:  "value",
+			FieldType:  model.FieldFloat64,
+			Timestamps: []int64{1, 2, 3, 4},
+			Values: []model.FieldValue{
+				model.Float64Value(1),
+				model.Float64Value(2),
+				model.Float64Value(2),
+				model.Float64Value(5),
+			},
+		}}),
+		[]model.AggregateSpec{
+			{Field: "value", Function: "spread"},
+			{Field: "value", Function: "median"},
+			{Field: "value", Function: "mode"},
+			{Field: "value", Function: "stdvar"},
+			{Field: "value", Function: "stddev"},
+		},
+	)
+
+	want := []float64{4, 2, 2, 2.25, 1.5}
+	for index, expected := range want {
+		if !stream.Next() {
+			t.Fatalf("Next(%d) = false err=%v", index, stream.Err())
+		}
+		if got := stream.Column().Values[0].Float64; math.Abs(got-expected) > 0.000001 {
+			t.Fatalf("aggregate %d = %v, want %v", index, got, expected)
+		}
 	}
 }

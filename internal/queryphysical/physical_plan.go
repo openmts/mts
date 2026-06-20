@@ -12,8 +12,11 @@ type OperatorKind string
 
 const (
 	OperatorScan      OperatorKind = "scan"
+	OperatorFilter    OperatorKind = "filter"
 	OperatorProject   OperatorKind = "project"
 	OperatorAggregate OperatorKind = "aggregate"
+	OperatorGroup     OperatorKind = "group"
+	OperatorSort      OperatorKind = "sort"
 	OperatorLimit     OperatorKind = "limit"
 )
 

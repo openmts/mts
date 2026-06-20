@@ -1,13 +1,17 @@
 package sstable
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/openmts/mts/internal/codec"
+	"github.com/openmts/mts/internal/faultinject"
 	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/storagefs"
 )
 
 func TestBlockReadValidationErrors(t *testing.T) {
@@ -89,6 +93,759 @@ func TestBlockPayloadReleaseDoesNotCorruptCopiedData(t *testing.T) {
 	}
 	if err := file.Close(); err != nil {
 		t.Fatalf("Close(blocks.bin) error = %v", err)
+	}
+}
+
+func TestFieldPredicateSampleFilteringCoversNumericStringAndBool(t *testing.T) {
+	samples := []model.VersionedSample{
+		{Timestamp: 1, Value: model.Float64Value(0.2)},
+		{Timestamp: 2, Value: model.Int64Value(7)},
+		{Timestamp: 3, Value: model.StringValue("ok")},
+		{Timestamp: 4, Value: model.BoolValue(true)},
+	}
+	query := Query{FieldPredicates: map[uint32][]model.QueryPredicate{
+		1: {
+			{Kind: model.QueryPredicateFieldGTE, Value: model.Int64Value(1)},
+			{Kind: model.QueryPredicateFieldLT, Value: model.Float64Value(10)},
+		},
+	}}
+	filtered := filterSamplesByFieldPredicates(1, append([]model.VersionedSample(nil), samples[:2]...), query)
+	if len(filtered) != 1 || filtered[0].Timestamp != 2 {
+		t.Fatalf("numeric filtered = %#v, want only timestamp 2", filtered)
+	}
+
+	stringQuery := Query{FieldPredicates: map[uint32][]model.QueryPredicate{
+		2: {{Kind: model.QueryPredicateFieldEq, Value: model.StringValue("ok")}},
+	}}
+	filtered = filterSamplesByFieldPredicates(2, append([]model.VersionedSample(nil), samples[2:3]...), stringQuery)
+	if len(filtered) != 1 || filtered[0].Timestamp != 3 {
+		t.Fatalf("string filtered = %#v, want timestamp 3", filtered)
+	}
+
+	boolQuery := Query{FieldPredicates: map[uint32][]model.QueryPredicate{
+		3: {{Kind: model.QueryPredicateFieldNe, Value: model.BoolValue(false)}},
+	}}
+	filtered = filterSamplesByFieldPredicates(3, append([]model.VersionedSample(nil), samples[3:]...), boolQuery)
+	if len(filtered) != 1 || filtered[0].Timestamp != 4 {
+		t.Fatalf("bool filtered = %#v, want timestamp 4", filtered)
+	}
+
+	if compareSampleFieldValue(model.StringValue("x"), model.BoolValue(true)) >= 0 {
+		t.Fatal("compareSampleFieldValue(mixed non-numeric) >= 0, want mismatched type sorted before")
+	}
+	if !sampleMatchesFieldPredicate(model.BoolValue(false), model.QueryPredicate{Kind: model.QueryPredicateTagEq}) {
+		t.Fatal("unsupported sample predicate = false, want true for non-field predicate")
+	}
+}
+
+func TestValuePagePredicatePruningCoversFloatIntBoundaryAndStats(t *testing.T) {
+	floatStats := valuePageStats{HasNumeric: true, MinFloat64: 1.5, MaxFloat64: 9.5}
+	if !numericPageMayMatchPredicate(floatStats, model.FieldFloat64, model.QueryPredicate{
+		Kind:  model.QueryPredicateFieldEq,
+		Value: model.Float64Value(5),
+	}) {
+		t.Fatal("float eq within range = false, want true")
+	}
+	if numericPageMayMatchPredicate(floatStats, model.FieldFloat64, model.QueryPredicate{
+		Kind:  model.QueryPredicateFieldGT,
+		Value: model.Float64Value(10),
+	}) {
+		t.Fatal("float gt outside range = true, want false")
+	}
+
+	intStats := valuePageStats{HasNumeric: true, MinInt64: 10, MaxInt64: 20}
+	if !numericPageMayMatchPredicate(intStats, model.FieldInt64, model.QueryPredicate{
+		Kind:  model.QueryPredicateFieldLTE,
+		Value: model.Int64Value(10),
+	}) {
+		t.Fatal("int lte lower boundary = false, want true")
+	}
+	if intPageMayMatchPredicate(10, 20, model.QueryPredicate{
+		Kind:  model.QueryPredicateFieldLT,
+		Value: model.Int64Value(10),
+	}) {
+		t.Fatal("int lt below lower boundary = true, want false")
+	}
+	if !numericPageMayMatchPredicate(valuePageStats{}, model.FieldString, model.QueryPredicate{
+		Kind:  model.QueryPredicateFieldEq,
+		Value: model.StringValue("x"),
+	}) {
+		t.Fatal("non numeric page match = false, want conservative true")
+	}
+
+	page := valuePageRef{MinTime: 10, MaxTime: 20, Stats: intStats}
+	query := Query{
+		Start: 0,
+		End:   30,
+		FieldPredicates: map[uint32][]model.QueryPredicate{
+			1: {{Kind: model.QueryPredicateFieldGTE, Value: model.Int64Value(15)}},
+		},
+	}
+	if !valuePageMatchesQuery(page, 1, model.FieldInt64, query) {
+		t.Fatal("valuePageMatchesQuery(in range) = false, want true")
+	}
+	query.Start = 21
+	query.End = 30
+	if valuePageMatchesQuery(page, 1, model.FieldInt64, query) {
+		t.Fatal("valuePageMatchesQuery(time skipped) = true, want false")
+	}
+
+	refs := []valuePageRef{{MinTime: 1}, {MinTime: 2}, {MinTime: 3}}
+	if got := selectBoundaryPageRefs(refs, model.QueryBoundaryFirst); len(got) != 1 || got[0].MinTime != 1 {
+		t.Fatalf("first refs = %#v, want first page", got)
+	}
+	if got := selectBoundaryPageRefs(refs, model.QueryBoundaryLast); len(got) != 1 || got[0].MinTime != 3 {
+		t.Fatalf("last refs = %#v, want last page", got)
+	}
+	if got := selectBoundaryPageRefs(refs, model.QueryBoundaryBoth); len(got) != 2 || got[0].MinTime != 1 || got[1].MinTime != 3 {
+		t.Fatalf("both refs = %#v, want first and last page", got)
+	}
+	floatPredicates := []model.QueryPredicate{
+		{Kind: model.QueryPredicateFieldNe, Value: model.Float64Value(2)},
+		{Kind: model.QueryPredicateFieldGTE, Value: model.Int64Value(9)},
+		{Kind: model.QueryPredicateFieldLT, Value: model.Float64Value(2)},
+		{Kind: model.QueryPredicateFieldLTE, Value: model.Int64Value(1)},
+		{Kind: model.QueryPredicateTagEq, Value: model.Float64Value(100)},
+	}
+	wantFloat := []bool{true, true, true, true, true}
+	for index, predicate := range floatPredicates {
+		if got := floatPageMayMatchPredicate(1, 9, predicate); got != wantFloat[index] {
+			t.Fatalf("float predicate %d match=%v, want %v", index, got, wantFloat[index])
+		}
+	}
+	intPredicates := []model.QueryPredicate{
+		{Kind: model.QueryPredicateFieldNe, Value: model.Float64Value(15)},
+		{Kind: model.QueryPredicateFieldGTE, Value: model.Float64Value(20)},
+		{Kind: model.QueryPredicateTagEq, Value: model.Int64Value(100)},
+	}
+	wantInt := []bool{true, true, true}
+	for index, predicate := range intPredicates {
+		if got := intPageMayMatchPredicate(10, 20, predicate); got != wantInt[index] {
+			t.Fatalf("int predicate %d match=%v, want %v", index, got, wantInt[index])
+		}
+	}
+	if compareSampleString("a", "b") != -1 ||
+		compareSampleString("b", "a") != 1 ||
+		compareSampleString("a", "a") != 0 {
+		t.Fatal("compareSampleString() did not cover less/greater/equal ordering")
+	}
+	if compareSampleBool(false, true) != -1 ||
+		compareSampleBool(true, false) != 1 ||
+		compareSampleBool(true, true) != 0 {
+		t.Fatal("compareSampleBool() did not cover false/true/equal ordering")
+	}
+	if floatPageMayMatchPredicate(1, 1, model.QueryPredicate{
+		Kind:  model.QueryPredicateFieldNe,
+		Value: model.Float64Value(1),
+	}) {
+		t.Fatal("float ne single-value page matched same value, want false")
+	}
+	if intPageMayMatchPredicate(10, 10, model.QueryPredicate{
+		Kind:  model.QueryPredicateFieldNe,
+		Value: model.Int64Value(10),
+	}) {
+		t.Fatal("int ne single-value page matched same value, want false")
+	}
+	if got := queryPredicateFloatValue(model.QueryPredicate{Value: model.Int64Value(3)}); got != 3 {
+		t.Fatalf("queryPredicateFloatValue(int) = %v, want 3", got)
+	}
+	if got := queryPredicateIntValue(model.QueryPredicate{Value: model.Float64Value(3.8)}); got != 3 {
+		t.Fatalf("queryPredicateIntValue(float) = %d, want truncation to 3", got)
+	}
+	fullRefs, err := matchingBoundaryPageRefs(nil, refs, true, Query{})
+	if err != nil {
+		t.Fatalf("matchingBoundaryPageRefs(full range) error = %v", err)
+	}
+	if len(fullRefs) != len(refs) {
+		t.Fatalf("full range refs = %#v, want all refs", fullRefs)
+	}
+	oneRef := firstAndLastPageRefs(refs[:1])
+	if len(oneRef) != 1 || oneRef[0].MinTime != refs[0].MinTime {
+		t.Fatalf("firstAndLastPageRefs(single) = %#v, want original single ref", oneRef)
+	}
+}
+
+func TestMatchingValuePageRefsAndCompressionMemoryEstimates(t *testing.T) {
+	payload, err := marshalValuePageIndex(nil, valuePageIndex{
+		FieldID:   7,
+		FieldType: model.FieldInt64,
+		Count:     30,
+		Pages: []valuePageRef{
+			{
+				MinTime: 0,
+				MaxTime: 9,
+				Stats:   valuePageStats{HasNumeric: true, MinInt64: 1, MaxInt64: 9},
+			},
+			{
+				MinTime: 10,
+				MaxTime: 19,
+				Stats:   valuePageStats{HasNumeric: true, MinInt64: 10, MaxInt64: 19},
+			},
+			{
+				MinTime: 20,
+				MaxTime: 29,
+				Stats:   valuePageStats{HasNumeric: true, MinInt64: 20, MaxInt64: 29},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshalValuePageIndex() error = %v", err)
+	}
+	refs, err := matchingValuePageRefs(payload, Query{
+		Start: 0,
+		End:   29,
+		FieldPredicates: map[uint32][]model.QueryPredicate{
+			7: {{Kind: model.QueryPredicateFieldGTE, Value: model.Int64Value(20)}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("matchingValuePageRefs() error = %v", err)
+	}
+	if len(refs) != 1 || refs[0].MinTime != 20 {
+		t.Fatalf("refs = %#v, want only last page", refs)
+	}
+	header := valuePageIndexHeader{count: 30, pageCount: 3}
+	if got := matchingValuePageCapacity(header, len(refs)); got != 10 {
+		t.Fatalf("matchingValuePageCapacity() = %d, want 10", got)
+	}
+	if got := matchingValuePageCapacity(valuePageIndexHeader{}, 1); got != 0 {
+		t.Fatalf("matchingValuePageCapacity(empty) = %d, want 0", got)
+	}
+
+	if estimatePayloadCompressionBytes(payloadCompressionSnappy, 16) <= 16 {
+		t.Fatal("snappy compression estimate did not include working memory")
+	}
+	if estimatePayloadCompressionBytes(payloadCompressionLZ4, 16) <= 16 {
+		t.Fatal("lz4 compression estimate did not include working memory")
+	}
+	if estimatePayloadCompressionBytes(payloadCompressionZSTD, 16) <= 16 {
+		t.Fatal("zstd compression estimate did not include working memory")
+	}
+	if estimatePayloadCompressionBytes(payloadCompressionNone, 16) != 16 {
+		t.Fatal("none compression estimate should equal payload bytes")
+	}
+}
+
+func TestIndexSkipAndErrorWrappingBranches(t *testing.T) {
+	payload, err := encodeIndexRowsInto(nil, []indexRow{{
+		SeriesID: 1,
+		MinTime:  1,
+		MaxTime:  2,
+		TimeRef:  blockRef{Offset: 1, Size: 2},
+		Columns: []columnRef{{
+			FieldID:   7,
+			FieldType: model.FieldFloat64,
+			ValueRef:  blockRef{Offset: 3, Size: 4},
+		}},
+	}})
+	if err != nil {
+		t.Fatalf("encodeIndexRowsInto() error = %v", err)
+	}
+	stream, err := newIndexRowStream(payload)
+	if err != nil {
+		t.Fatalf("newIndexRowStream() error = %v", err)
+	}
+	if _, ok, err := stream.nextHeader(); err != nil || !ok {
+		t.Fatalf("nextHeader() ok=%v err=%v, want row header", ok, err)
+	}
+	if err := skipIndexColumnRefs(stream); err != nil {
+		t.Fatalf("skipIndexColumnRefs() error = %v", err)
+	}
+	if err := stream.done(); err != nil {
+		t.Fatalf("stream done() error = %v", err)
+	}
+
+	writeErr := errors.New("write failed")
+	closeErr := errors.New("close failed")
+	wrapped := errorsWithClose(writeErr, closeErr)
+	if !errors.Is(wrapped, writeErr) || wrapped.Error() == writeErr.Error() {
+		t.Fatalf("errorsWithClose() = %v, want wrapped write and close context", wrapped)
+	}
+	if got := errorsWithClose(writeErr, nil); !errors.Is(got, writeErr) {
+		t.Fatalf("errorsWithClose(no close) = %v, want write error", got)
+	}
+}
+
+func TestSeriesBatchReaderAndQuerySeriesIDsBranches(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-series-batch", []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, 3),
+		columnWithTimestamps(2, 2, 10, 3),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	defer func() {
+		if err := part.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+
+	reader, err := NewSeriesBatchReader(part, Query{Start: 0, End: 20})
+	if err != nil {
+		t.Fatalf("NewSeriesBatchReader() error = %v", err)
+	}
+	if got := reader.SeriesCount(); got != 2 {
+		t.Fatalf("SeriesCount() = %d, want 2", got)
+	}
+	ids := reader.SeriesIDs()
+	if len(ids) != 2 || ids[0] != 1 || ids[1] != 2 {
+		t.Fatalf("SeriesIDs() = %v, want [1 2]", ids)
+	}
+	ids[0] = 99
+	appended := reader.AppendSeriesIDs([]uint64{0})
+	if len(appended) != 3 || appended[1] != 1 || appended[2] != 2 {
+		t.Fatalf("AppendSeriesIDs() = %v, want [0 1 2]", appended)
+	}
+	columns, err := reader.QuerySeriesID(1)
+	if err != nil {
+		t.Fatalf("QuerySeriesID() error = %v", err)
+	}
+	if len(columns) != 1 || columns[0].SeriesID != 1 {
+		t.Fatalf("QuerySeriesID() = %#v, want series 1 column", columns)
+	}
+	columns, err = reader.QuerySeriesIDs([]uint64{2})
+	if err != nil {
+		t.Fatalf("QuerySeriesIDs() error = %v", err)
+	}
+	if len(columns) != 1 || columns[0].SeriesID != 2 {
+		t.Fatalf("QuerySeriesIDs() = %#v, want series 2 column", columns)
+	}
+	columns, err = part.QuerySeriesIDs(Query{Start: 0, End: 20}, []uint64{1})
+	if err != nil {
+		t.Fatalf("part QuerySeriesIDs() error = %v", err)
+	}
+	if len(columns) != 1 || columns[0].SeriesID != 1 {
+		t.Fatalf("part QuerySeriesIDs() = %#v, want series 1 column", columns)
+	}
+	emptyReader, err := NewSeriesBatchReader(part, Query{Start: 100, End: 10})
+	if err != nil {
+		t.Fatalf("NewSeriesBatchReader(empty) error = %v", err)
+	}
+	if emptyReader.SeriesCount() != 0 || len(emptyReader.SeriesIDs()) != 0 {
+		t.Fatalf("empty reader count=%d ids=%v, want empty", emptyReader.SeriesCount(), emptyReader.SeriesIDs())
+	}
+	if containsSortedSeriesIDOrAll(nil, 9) != true {
+		t.Fatal("containsSortedSeriesIDOrAll(nil) = false, want true")
+	}
+	if containsSortedSeriesIDOrAll([]uint64{1, 3}, 2) {
+		t.Fatal("containsSortedSeriesIDOrAll([1,3],2) = true, want false")
+	}
+	var nilReader *SeriesBatchReader
+	if nilReader.SeriesCount() != 0 || len(nilReader.SeriesIDs()) != 0 {
+		t.Fatal("nil reader count/ids not empty")
+	}
+	if got := nilReader.AppendSeriesIDs([]uint64{5}); len(got) != 1 || got[0] != 5 {
+		t.Fatalf("nil AppendSeriesIDs() = %v, want original", got)
+	}
+	if columns, err := nilReader.QuerySeriesID(1); err != nil || len(columns) != 0 {
+		t.Fatalf("nil QuerySeriesID() = %#v, %v; want empty nil", columns, err)
+	}
+	if columns, err := nilReader.QuerySeriesIDs([]uint64{1}); err != nil || len(columns) != 0 {
+		t.Fatalf("nil QuerySeriesIDs() = %#v, %v; want empty nil", columns, err)
+	}
+}
+
+func TestManifestValidateAndCompressionBudgetBranches(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteManifest(dir, Manifest{
+		Sequence: 10,
+		Parts: []PartMeta{{
+			ID:    "missing",
+			Level: 1,
+		}},
+	}); err != nil {
+		t.Fatalf("WriteManifest() error = %v", err)
+	}
+	if _, err := LoadManifestStrict(dir, 11); err == nil {
+		t.Fatal("LoadManifestStrict(sequence regression) error = nil, want error")
+	}
+	if _, err := LoadManifestStrict(dir, 0); err == nil {
+		t.Fatal("LoadManifestStrict(missing part) error = nil, want error")
+	}
+	filePath := filepath.Join(dir, "not-a-dir")
+	if err := os.WriteFile(filePath, []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile(not-a-dir) error = %v", err)
+	}
+	if err := WriteManifest(dir, Manifest{Parts: []PartMeta{{ID: "not-a-dir"}}}); err != nil {
+		t.Fatalf("WriteManifest(non-dir ref) error = %v", err)
+	}
+	if _, err := LoadManifestStrict(dir, 0); err == nil {
+		t.Fatal("LoadManifestStrict(non-directory part) error = nil, want error")
+	}
+
+	budget := &failingCompressionBudget{err: errors.New("budget exhausted")}
+	if _, err := reservePayloadCompressionMemory(budget, payloadCompressionSnappy, 10); err == nil {
+		t.Fatal("reservePayloadCompressionMemory(failing budget) error = nil, want error")
+	}
+	release, err := reservePayloadCompressionMemory(budget, payloadCompressionNone, 10)
+	if err != nil {
+		t.Fatalf("reservePayloadCompressionMemory(none) error = %v", err)
+	}
+	release()
+	if budget.calls != 1 {
+		t.Fatalf("budget calls = %d, want only failing compressed call", budget.calls)
+	}
+}
+
+func TestValidateBlockRefAndScanSkippedRowBranches(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		size int64
+		ref  blockRef
+	}{
+		{name: "negative offset", size: 10, ref: blockRef{Offset: -1, Size: 1}},
+		{name: "negative size", size: 10, ref: blockRef{Offset: 0, Size: -1}},
+		{name: "zero size", size: 10, ref: blockRef{Offset: 0, Size: 0}},
+		{name: "overflow", size: 10, ref: blockRef{Offset: 9, Size: 2}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateBlockRefWithinSize(tt.size, tt.ref); err == nil {
+				t.Fatal("validateBlockRefWithinSize() error = nil, want error")
+			}
+		})
+	}
+	if err := validatePartBlockRef(nil, valuesFile, blockRef{Offset: 0, Size: 1}); err == nil {
+		t.Fatal("validatePartBlockRef(nil) error = nil, want error")
+	}
+	part := &Part{componentSizes: map[string]int64{}}
+	if err := validatePartBlockRef(part, valuesFile, blockRef{Offset: 0, Size: 1}); err == nil {
+		t.Fatal("validatePartBlockRef(missing size) error = nil, want error")
+	}
+
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-scan-skip", []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, 3),
+		columnWithTimestamps(2, 2, 10, 3),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	opened, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	stats := &model.QueryStats{}
+	stream, err := opened.ScanColumns(Query{
+		Stats: stats,
+		Start: 0,
+		End:   5,
+	})
+	if err != nil {
+		closeErr := opened.Close()
+		t.Fatalf("ScanColumns() error = %v close = %v", err, closeErr)
+	}
+	for stream.Next() {
+		_ = stream.ColumnData()
+	}
+	if err := stream.Err(); err != nil {
+		closeErr := opened.Close()
+		t.Fatalf("stream Err() = %v close = %v", err, closeErr)
+	}
+	if err := stream.Close(); err != nil {
+		closeErr := opened.Close()
+		t.Fatalf("stream Close() error = %v part close = %v", err, closeErr)
+	}
+	if stats.IndexRowsRead == 0 || stats.IndexRowsSkipped == 0 {
+		closeErr := opened.Close()
+		t.Fatalf("stats = %#v, want read and skipped index rows close = %v", stats, closeErr)
+	}
+	if err := opened.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestPartReadFilesComponentAndTrustedOpenBranches(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-read-files", []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, 2),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPartTrusted(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPartTrusted() error = %v", err)
+	}
+	if got := part.Meta(); got.ID != "sst-read-files" {
+		closeErr := part.Close()
+		t.Fatalf("Meta().ID = %q, want sst-read-files close = %v", got.ID, closeErr)
+	}
+	if readFileForComponent(indexFile, part.files) == nil ||
+		readFileForComponent(timestampsFile, part.files) == nil ||
+		readFileForComponent(valuesFile, part.files) == nil ||
+		readFileForComponent("unknown", part.files) != nil {
+		closeErr := part.Close()
+		t.Fatalf("readFileForComponent() returned unexpected file close = %v", closeErr)
+	}
+	if size, err := partComponentSize(meta.Path, indexFile, part.files); err != nil || size <= 0 {
+		closeErr := part.Close()
+		t.Fatalf("partComponentSize(open file) = %d, %v close = %v", size, err, closeErr)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close(second) error = %v", err)
+	}
+	if err := (*Part)(nil).Close(); err != nil {
+		t.Fatalf("nil Part Close() error = %v", err)
+	}
+	if err := (*partReadFiles)(nil).close(); err != nil {
+		t.Fatalf("nil partReadFiles close() error = %v", err)
+	}
+	if closeFile(nil, "nil") != nil {
+		t.Fatal("closeFile(nil) returned error")
+	}
+	if _, err := partComponentSize(meta.Path, "missing.bin", nil); err == nil {
+		t.Fatal("partComponentSize(missing) error = nil, want error")
+	}
+	componentDir := filepath.Join(meta.Path, "component-dir")
+	if err := os.Mkdir(componentDir, 0700); err != nil {
+		t.Fatalf("Mkdir(component-dir) error = %v", err)
+	}
+	if _, err := partComponentSize(meta.Path, "component-dir", nil); err == nil {
+		t.Fatal("partComponentSize(directory) error = nil, want error")
+	}
+	if _, err := openPartReadFiles(filepath.Join(dir, "missing")); err == nil {
+		t.Fatal("openPartReadFiles(missing) error = nil, want error")
+	}
+}
+
+func TestLowLevelEncodingAndPoolBranches(t *testing.T) {
+	encoded := appendDeltaOfDeltaTimestamps(nil, []int64{0, 1, 3, 6})
+	if len(encoded) == 0 {
+		t.Fatal("appendDeltaOfDeltaTimestamps(non-zero dd) returned empty payload")
+	}
+	blockFramePool.Put(&struct{}{})
+	frame := borrowBlockFrameHandle(32)
+	if len(frame.buf) != 32 {
+		t.Fatalf("borrowBlockFrameHandle(non-frame pool item) len = %d, want 32", len(frame.buf))
+	}
+	releaseBlockFrameHandle(frame)
+	small := borrowBlockFrameHandle(1)
+	releaseBlockFrameHandle(small)
+	large := borrowBlockFrameHandle(maxPooledBlockFrameBytes + 1)
+	releaseBlockFrameHandle(large)
+
+	if _, _, err := writeIndexBlocks(filepath.Join(t.TempDir(), "index.bin"), []indexRow{{
+		TimeRef: blockRef{Offset: 0, Size: -1},
+	}}, false); err == nil {
+		t.Fatal("writeIndexBlocks(invalid row) error = nil, want error")
+	}
+	if err := writeMetadata(t.TempDir(), metadata{Part: PartMeta{RowsCount: -1}}); err == nil {
+		t.Fatal("writeMetadata(invalid metadata) error = nil, want error")
+	}
+}
+
+func TestInternalScanCancelAndValidateErrorBranches(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	stream := &partColumnDataStream{query: Query{Context: ctx}}
+	if stream.Next() {
+		t.Fatal("Next(cancelled) = true, want false")
+	}
+	if !errors.Is(stream.Err(), context.Canceled) {
+		t.Fatalf("Err() = %v, want context canceled", stream.Err())
+	}
+
+	stream = &partColumnDataStream{query: Query{Context: ctx}}
+	if stream.loadNextRow() {
+		t.Fatal("loadNextRow(cancelled) = true, want false")
+	}
+	if !errors.Is(stream.Err(), context.Canceled) {
+		t.Fatalf("loadNextRow Err() = %v, want context canceled", stream.Err())
+	}
+	if stream.loadRowColumns(indexRowHeader{}) {
+		t.Fatal("loadRowColumns(cancelled) = true, want false")
+	}
+
+	part := &Part{
+		metadata:       metadata{Components: []string{indexFile}},
+		componentSizes: map[string]int64{},
+	}
+	if err := validateOpenedPart(part, false); err == nil {
+		t.Fatal("validateOpenedPart(missing component size) error = nil, want error")
+	}
+	part = &Part{
+		metadata: metadata{Part: PartMeta{ID: "sst"}},
+		componentSizes: map[string]int64{
+			timestampsFile: 8,
+		},
+	}
+	if err := validateIndexRows(part, []indexRow{{SeriesID: 1, TimeRef: blockRef{Offset: 0, Size: 16}}}); err == nil {
+		t.Fatal("validateIndexRows(bad time ref) error = nil, want error")
+	}
+}
+
+func TestPartQueryIndexRowsFieldPredicatesAndBoundary(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-query-index-rows", []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, valueBlockPageSamples*2),
+		columnWithTimestamps(1, 3, 0, valueBlockPageSamples*2),
+		columnWithTimestamps(2, 2, 1000, valueBlockPageSamples),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	defer func() {
+		if err := part.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+	stats := &model.QueryStats{}
+	columns, err := part.Query(Query{
+		Stats:    stats,
+		Start:    int64(valueBlockPageSamples),
+		End:      int64(valueBlockPageSamples*2 - 1),
+		FieldIDs: map[uint32]struct{}{2: {}},
+		FieldPredicates: map[uint32][]model.QueryPredicate{
+			2: {{Kind: model.QueryPredicateFieldGTE, Value: model.Float64Value(float64(valueBlockPageSamples))}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if len(columns) != 1 || columns[0].FieldID != 2 || len(columns[0].Samples) != valueBlockPageSamples {
+		t.Fatalf("columns = %#v, want one filtered field page", columns)
+	}
+	if stats.IndexRowsRead == 0 || stats.IndexRowsSkipped == 0 {
+		t.Fatalf("stats = %#v, want index reads and skips", stats)
+	}
+
+	boundary, err := part.Query(Query{
+		Start:    0,
+		End:      int64(valueBlockPageSamples*2 - 1),
+		FieldIDs: map[uint32]struct{}{2: {}},
+		Boundary: model.QueryBoundaryBoth,
+	})
+	if err != nil {
+		t.Fatalf("Query(boundary) error = %v", err)
+	}
+	if len(boundary) == 0 || len(boundary[0].Samples) != valueBlockPageSamples*2 {
+		t.Fatalf("boundary columns = %#v, want first and last pages", boundary)
+	}
+	empty, err := part.Query(Query{Start: 10, End: 1})
+	if err != nil {
+		t.Fatalf("Query(empty range) error = %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("empty range columns = %#v, want none", empty)
+	}
+}
+
+func TestPartQueryCompressedAllFieldTypes(t *testing.T) {
+	dir := t.TempDir()
+	const count = 320
+	columns := []model.ColumnData{
+		compressedQueryColumn(1, 1, model.FieldFloat64, count, func(index int) model.FieldValue {
+			return model.Float64Value(float64(index) * 1.5)
+		}),
+		compressedQueryColumn(1, 2, model.FieldInt64, count, func(index int) model.FieldValue {
+			return model.Int64Value(int64(index * 2))
+		}),
+		compressedQueryColumn(1, 3, model.FieldString, count, func(index int) model.FieldValue {
+			if index%2 == 0 {
+				return model.StringValue("stable")
+			}
+			return model.StringValue("active")
+		}),
+		compressedQueryColumn(1, 4, model.FieldBool, count, func(index int) model.FieldValue {
+			return model.BoolValue(index%2 == 0)
+		}),
+	}
+	meta, err := WritePartWithOptions(dir, 0, "sst-compressed-query", columns, WriteOptions{
+		Compression: model.CompressionOptions{
+			Enabled:       true,
+			Timestamp:     "delta-of-delta",
+			Float:         "xor",
+			Int:           "delta",
+			String:        "dictionary",
+			Algorithm:     "zstd",
+			MinPageValues: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("WritePartWithOptions() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	defer func() {
+		if err := part.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+	got, err := part.Query(Query{Start: 10, End: 20})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("column count = %d, want 4", len(got))
+	}
+	for _, column := range got {
+		if len(column.Samples) != 11 {
+			t.Fatalf("field %d sample count = %d, want 11", column.FieldID, len(column.Samples))
+		}
+	}
+}
+
+func compressedQueryColumn(
+	seriesID uint64,
+	fieldID uint32,
+	fieldType model.FieldType,
+	count int,
+	valueAt func(int) model.FieldValue,
+) model.ColumnData {
+	samples := make([]model.VersionedSample, 0, count)
+	for index := range count {
+		samples = append(samples, model.VersionedSample{
+			Timestamp: int64(index),
+			WriteSeq:  uint64(index + 1),
+			Value:     valueAt(index),
+		})
+	}
+	return model.ColumnData{
+		SeriesID:  seriesID,
+		FieldID:   fieldID,
+		FieldType: fieldType,
+		Samples:   samples,
+	}
+}
+
+type failingCompressionBudget struct {
+	err   error
+	calls int
+}
+
+func (b *failingCompressionBudget) ReserveCompressionBytes(int64) (func(), error) {
+	b.calls++
+	return nil, b.err
+}
+
+func TestQueryStatsNoopAndSkippedIndexRows(t *testing.T) {
+	stats := &model.QueryStats{}
+	query := Query{Stats: stats}
+	recordIndexRowSkipped(query)
+	recordValuePagesSkipped(query, 2)
+	recordSamplesRead(query, 3)
+	if stats.IndexRowsSkipped != 1 || stats.ValuePagesSkipped != 2 || stats.SamplesRead != 3 {
+		t.Fatalf("stats = %#v, want skipped/read counters", stats)
+	}
+	recordIndexRowSkipped(Query{})
+	recordValuePagesSkipped(Query{Stats: stats}, 0)
+	recordSamplesRead(Query{Stats: stats}, 0)
+	if stats.ValuePagesSkipped != 2 || stats.SamplesRead != 3 {
+		t.Fatalf("stats after noop = %#v, want unchanged skip/read counters", stats)
 	}
 }
 
@@ -886,6 +1643,49 @@ func TestPartQueryReadsOnlyMatchingValuePages(t *testing.T) {
 	}
 }
 
+func TestPartQueryPrunesValuePagesByNumericFieldPredicate(t *testing.T) {
+	dir := t.TempDir()
+	columns := []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, valueBlockPageSamples*3),
+	}
+	meta, err := WritePart(dir, 0, "sst-000001", columns)
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	part, err := OpenPart(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPart() error = %v", err)
+	}
+	stats := part.resetReadStatsForTest()
+	got, err := part.Query(Query{
+		SeriesIDs: map[uint64]struct{}{1: {}},
+		FieldIDs:  map[uint32]struct{}{2: {}},
+		Start:     0,
+		End:       int64(valueBlockPageSamples*3 - 1),
+		FieldPredicates: map[uint32][]model.QueryPredicate{
+			2: {
+				{
+					Kind:  model.QueryPredicateFieldGT,
+					Name:  "value",
+					Value: model.Float64Value(float64(valueBlockPageSamples*2 + 100)),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if len(got) != 1 || len(got[0].Samples) == 0 {
+		t.Fatalf("query result = %#v, want matching samples", got)
+	}
+	if stats.ValuePagesRead != 1 {
+		t.Fatalf("value pages read = %d, want 1", stats.ValuePagesRead)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestPartReadBlockRejectsUnsupportedOpenFileName(t *testing.T) {
 	part := &Part{files: &partReadFiles{}}
 	if _, err := part.readBlock("unknown.bin", blockRef{}); err == nil {
@@ -977,6 +1777,24 @@ func TestWritePartWithCompressionOptionsRoundTrips(t *testing.T) {
 	}
 	if err := part.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestWritePartWithSyncReturnsSyncError(t *testing.T) {
+	fs := faultinject.NewFS()
+	fs.FailNext(faultinject.OpSync, os.ErrPermission)
+	restore := storagefs.SetFaultController(fs)
+	defer restore()
+
+	_, err := WritePartWithOptions(
+		t.TempDir(),
+		0,
+		"sst-sync",
+		[]model.ColumnData{columnWithTimestamps(1, 2, 0, 4)},
+		WriteOptions{Sync: true},
+	)
+	if err == nil {
+		t.Fatal("WritePartWithOptions(Sync:true) error = nil, want sync error")
 	}
 }
 
@@ -1455,7 +2273,7 @@ func TestOpenPartClosesReadFilesOnBadMetaIndex(t *testing.T) {
 			t.Fatalf("WriteFile(%s) error = %v", name, err)
 		}
 	}
-	metaIndexRef, err := writeBinaryBlock(filepath.Join(dir, metaindexFile), []byte("{"))
+	metaIndexRef, err := writeBinaryBlock(filepath.Join(dir, metaindexFile), []byte("{"), false)
 	if err != nil {
 		t.Fatalf("writeBinaryBlock(metaindex) error = %v", err)
 	}
@@ -1797,7 +2615,7 @@ func TestPartQueryRejectsBadLazyIndexBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeMetaIndexRows() error = %v", err)
 	}
-	metaIndexRef, err := writeBinaryBlock(filepath.Join(dir, metaindexFile), metaIndexPayload)
+	metaIndexRef, err := writeBinaryBlock(filepath.Join(dir, metaindexFile), metaIndexPayload, false)
 	if err != nil {
 		t.Fatalf("writeBinaryBlock(metaindex) error = %v", err)
 	}
@@ -1813,7 +2631,7 @@ func TestPartQueryRejectsBadLazyIndexBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeSeriesIndexRows() error = %v", err)
 	}
-	seriesIndexRef, err := writeBinaryBlock(filepath.Join(dir, seriesIndexFile), seriesIndexPayload)
+	seriesIndexRef, err := writeBinaryBlock(filepath.Join(dir, seriesIndexFile), seriesIndexPayload, false)
 	if err != nil {
 		t.Fatalf("writeBinaryBlock(series index) error = %v", err)
 	}
@@ -1832,20 +2650,20 @@ func TestPartQueryRejectsBadLazyIndexBlock(t *testing.T) {
 }
 
 func TestPartWriterPathErrors(t *testing.T) {
-	if _, err := writeBinaryBlock(filepath.Join("bad\x00path", "index.bin"), []byte{1}); err == nil {
+	if _, err := writeBinaryBlock(filepath.Join("bad\x00path", "index.bin"), []byte{1}, false); err == nil {
 		t.Fatal("writeBinaryBlock(invalid) error = nil, want error")
 	}
 	if err := writeMetadata("bad\x00path", metadata{}); err == nil {
 		t.Fatal("writeMetadata(invalid) error = nil, want error")
 	}
-	if err := ensureStringsFile("bad\x00path"); err == nil {
+	if err := ensureStringsFile("bad\x00path", false); err == nil {
 		t.Fatal("ensureStringsFile(invalid) error = nil, want error")
 	}
 	if _, err := openWritable("bad\x00path"); err == nil {
 		t.Fatal("openWritable(invalid) error = nil, want error")
 	}
 	meta := newMetadata(0, "bad")
-	if err := writePartIndexes("bad\x00path", &meta, nil); err == nil {
+	if err := writePartIndexes("bad\x00path", &meta, nil, false); err == nil {
 		t.Fatal("writePartIndexes(invalid) error = nil, want error")
 	}
 }
@@ -1883,7 +2701,7 @@ func TestOpenPartFilesAndCloseErrors(t *testing.T) {
 		t.Fatalf("Close(values) error = %v", err)
 	}
 	files := &partFiles{timestamps: timestamps, values: values}
-	if err := files.close(); err == nil {
+	if err := files.close(false); err == nil {
 		t.Fatal("partFiles.close() error = nil, want error")
 	}
 }

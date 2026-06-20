@@ -16,7 +16,7 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(stderr, "usage: mts-storage <check|repair|migrate> [flags] <path>")
+		_, _ = fmt.Fprintln(stderr, "usage: mts-storage <check|repair|migrate|snapshot|restore> [flags] <path>")
 		return 2
 	}
 	switch args[0] {
@@ -26,6 +26,10 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return runRepair(args[1:], stdout, stderr)
 	case "migrate":
 		return runMigrate(args[1:], stdout, stderr)
+	case "snapshot":
+		return runSnapshot(args[1:], stdout, stderr)
+	case "restore":
+		return runRestore(args[1:], stdout, stderr)
 	default:
 		_, _ = fmt.Fprintf(stderr, "unknown command %q\n", args[0])
 		return 2
@@ -78,6 +82,44 @@ func runMigrate(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	result, err := storagecheck.Migrate(flags.Arg(0), storagecheck.MigrateOptions{Apply: *apply})
+	return writeJSON(stdout, stderr, result, err)
+}
+
+func runSnapshot(args []string, stdout io.Writer, stderr io.Writer) int {
+	flags := flag.NewFlagSet("snapshot", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	overwrite := flags.Bool("overwrite", false, "overwrite target directory")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if flags.NArg() != 2 {
+		_, _ = fmt.Fprintln(stderr, "usage: mts-storage snapshot [--overwrite] <source> <target>")
+		return 2
+	}
+	result, err := storagecheck.Snapshot(
+		flags.Arg(0),
+		flags.Arg(1),
+		storagecheck.SnapshotOptions{Overwrite: *overwrite},
+	)
+	return writeJSON(stdout, stderr, result, err)
+}
+
+func runRestore(args []string, stdout io.Writer, stderr io.Writer) int {
+	flags := flag.NewFlagSet("restore", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	overwrite := flags.Bool("overwrite", false, "overwrite target directory")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if flags.NArg() != 2 {
+		_, _ = fmt.Fprintln(stderr, "usage: mts-storage restore [--overwrite] <snapshot> <target>")
+		return 2
+	}
+	result, err := storagecheck.Restore(
+		flags.Arg(0),
+		flags.Arg(1),
+		storagecheck.SnapshotOptions{Overwrite: *overwrite},
+	)
 	return writeJSON(stdout, stderr, result, err)
 }
 
