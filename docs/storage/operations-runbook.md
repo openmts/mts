@@ -17,6 +17,7 @@
 - `mts_compaction_failure_total`：compaction 失败次数，非零需要结合日志和 `storagecheck` 排查。
 - `mts_wal_sync_errors_total`：WAL fsync 错误，出现后应立即停止写入并检查磁盘。
 - `mts_sstable_parts`、`mts_sstable_level0_parts`：SSTable 数和 L0 数，持续增长需要手动 compact 或调小 flush 频率。
+- `mts_downsample_*`：降采样运行次数、失败次数、处理窗口数、写入点数和完成水位；失败时结合 `docs/storage/downsample-runbook.md` 排查 policy 与 watermark。
 - query profile 中的 part/page/sample 读取数：用于定位 slow query 和读放大。
 
 ## Health 与 Ready
@@ -24,6 +25,7 @@
 - `/healthz` 表示进程基础健康。
 - `/readyz` 表示是否适合承载读写流量。
 - 当 memory hard limit、compaction backlog、maintenance error 或恢复问题出现时，`readyz` 应返回 `503` 并包含结构化 checks。
+- 当 `downsample` check 为 `degraded` 时，说明最近一次降采样运行失败；优先确认 source/target retention policy、delay、lookback 和目标写入错误。
 
 ## Backup 与 Restore
 

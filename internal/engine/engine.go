@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/openmts/mts/internal/memtable"
 	"github.com/openmts/mts/internal/model"
@@ -35,6 +36,15 @@ type Engine struct {
 	compactStopOnce sync.Once
 	compactStop     chan struct{}
 	compactWG       sync.WaitGroup
+
+	downsampleStopOnce sync.Once
+	downsampleStop     chan struct{}
+	downsampleCtx      context.Context
+	downsampleCancel   context.CancelFunc
+	downsampleWG       sync.WaitGroup
+	downsampleRunning  map[string]struct{}
+	downsampleMu       sync.Mutex
+	downsampleStats    downsampleStatsRecorder
 }
 
 type shardBatch struct {
@@ -71,12 +81,14 @@ func Open(_ context.Context, opts model.Options) (*Engine, error) {
 		shards:              make(map[string]*Shard),
 		memory:              newStorageMemoryLimiter(opts.StorageMemory),
 		compactionScheduler: newCompactionScheduler(),
+		downsampleRunning:   make(map[string]struct{}),
 	}
 	if err := eng.loadExistingShards(); err != nil {
 		closeErr := metadata.Close()
 		return nil, fmt.Errorf("load shards: %w close metadata: %v", err, closeErr)
 	}
 	eng.startBackgroundCompaction()
+	eng.startDownsampleScheduler()
 	return eng, nil
 }
 
@@ -105,6 +117,7 @@ func tightenEmptyDirectory(path string) bool {
 }
 
 func (e *Engine) Close(_ context.Context) error {
+	e.stopDownsampleScheduler()
 	e.stopBackgroundCompaction()
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -459,6 +472,11 @@ func (e *Engine) MetricsSnapshot() []observability.Metric {
 	stats := e.CompactionStatsSnapshot()
 	production := e.productionMetricsSnapshot()
 	queryStats := e.QueryStatsSnapshot()
+	downsampleStats := e.DownsampleStatsSnapshot()
+	downsampleStatuses, downsampleStatusErr := e.DownsamplePolicyStatuses(
+		context.Background(),
+		time.Duration(time.Now().UnixNano()),
+	)
 	registry := observability.NewRegistry()
 	recordStorageMemoryMetrics(registry, snapshot)
 	recordCompactionMetrics(registry, stats)
@@ -467,9 +485,22 @@ func (e *Engine) MetricsSnapshot() []observability.Metric {
 	recordSSTableMetrics(registry, production)
 	recordQueryMetrics(registry, queryStats)
 	recordRetentionMetrics(registry, production)
+	recordDownsampleMetrics(registry, downsampleStats)
+	if downsampleStatusErr != nil {
+		registry.AddCounter(
+			"mts_downsample_status_collection_errors_total",
+			"Downsample status collection errors.",
+			1,
+		)
+	}
+	recordDownsamplePolicyMetrics(registry, downsampleStatuses)
 	recordRecoveryMetrics(registry, production)
 	recordRuntimeMetrics(registry, runtimeMetricsSnapshot())
 	return registry.Snapshot()
+}
+
+func (e *Engine) DownsampleStatsSnapshot() model.DownsampleStats {
+	return e.downsampleStats.snapshot()
 }
 
 type productionMetrics struct {
@@ -709,6 +740,7 @@ func (e *Engine) HealthSnapshot() HealthSnapshot {
 		HealthCheck{Name: "compaction", Status: "ok"},
 		HealthCheck{Name: "memory", Status: "ok"},
 		HealthCheck{Name: "maintenance", Status: "ok"},
+		HealthCheck{Name: "downsample", Status: "ok"},
 	)
 	for id, shard := range e.shards {
 		if shard.wal == nil {
@@ -735,7 +767,19 @@ func (e *Engine) HealthSnapshot() HealthSnapshot {
 		}
 	}
 	e.recordMemoryHealthLocked(&health)
+	e.recordDownsampleHealth(&health)
 	return health
+}
+
+func (e *Engine) recordDownsampleHealth(health *HealthSnapshot) {
+	stats := e.DownsampleStatsSnapshot()
+	if stats.LastError != "" {
+		reason := "last downsample error: " + stats.LastError
+		if stats.LastPolicy != "" {
+			reason = "last downsample error on policy " + stats.LastPolicy + ": " + stats.LastError
+		}
+		markHealthCheck(health, "downsample", "degraded", reason, true)
+	}
 }
 
 func (e *Engine) recordMemoryHealthLocked(health *HealthSnapshot) {

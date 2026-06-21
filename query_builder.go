@@ -34,6 +34,16 @@ func (b *QueryBuilder) From(database string, retentionPolicy string, measurement
 	return b
 }
 
+func (b *QueryBuilder) FromDownsamplePolicy(policy DownsamplePolicy) *QueryBuilder {
+	b.From(policy.TargetDatabase, policy.TargetRetention, policy.TargetMeasurement)
+	tagName := strings.TrimSpace(policy.PolicyTagName)
+	if tagName == "" {
+		tagName = "mts_downsample_policy"
+	}
+	b.Where(TagEq(tagName, strings.TrimSpace(policy.Name)))
+	return b
+}
+
 func (b *QueryBuilder) Where(predicates ...QueryPredicate) *QueryBuilder {
 	for _, predicate := range predicates {
 		b.addPredicate(predicate)

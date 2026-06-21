@@ -11,6 +11,7 @@ type MetadataStore interface {
 	MetadataResolver
 	MetadataQuerier
 	MetadataManager
+	DownsampleMetadataStore
 	Close() error
 }
 
@@ -34,6 +35,14 @@ type MetadataManager interface {
 	ListMeasurements(context.Context, string) ([]string, error)
 	ListFields(context.Context, string, string) ([]model.FieldSchema, error)
 	ListSeries(context.Context, string, string, map[string]string) ([]model.Series, error)
+}
+
+type DownsampleMetadataStore interface {
+	UpsertDownsamplePolicy(context.Context, model.DownsamplePolicy) error
+	DropDownsamplePolicy(context.Context, string) error
+	ListDownsamplePolicies(context.Context) ([]model.DownsamplePolicy, error)
+	DownsampleWatermark(context.Context, string) (model.DownsampleWatermark, bool, error)
+	UpdateDownsampleWatermark(context.Context, model.DownsampleWatermark) error
 }
 
 type LocalMetadataStore struct {
@@ -172,6 +181,53 @@ func (s *LocalMetadataStore) ListSeries(
 		return nil, err
 	}
 	return s.catalog.ListSeries(database, measurement, tags)
+}
+
+func (s *LocalMetadataStore) UpsertDownsamplePolicy(
+	ctx context.Context,
+	policy model.DownsamplePolicy,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.catalog.UpsertDownsamplePolicy(policy)
+}
+
+func (s *LocalMetadataStore) DropDownsamplePolicy(ctx context.Context, name string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.catalog.DropDownsamplePolicy(name)
+}
+
+func (s *LocalMetadataStore) ListDownsamplePolicies(
+	ctx context.Context,
+) ([]model.DownsamplePolicy, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.catalog.ListDownsamplePolicies()
+}
+
+func (s *LocalMetadataStore) DownsampleWatermark(
+	ctx context.Context,
+	name string,
+) (model.DownsampleWatermark, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return model.DownsampleWatermark{}, false, err
+	}
+	watermark, ok := s.catalog.DownsampleWatermark(name)
+	return watermark, ok, nil
+}
+
+func (s *LocalMetadataStore) UpdateDownsampleWatermark(
+	ctx context.Context,
+	watermark model.DownsampleWatermark,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.catalog.UpdateDownsampleWatermark(watermark)
 }
 
 func (s *LocalMetadataStore) Close() error {

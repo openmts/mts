@@ -42,6 +42,18 @@ func TestBlockReadValidationErrors(t *testing.T) {
 	if _, err := writeBlock(file, []byte("x")); err == nil {
 		t.Fatal("writeBlock(closed) error = nil, want error")
 	}
+	if _, err := newBlockWriter(file); err == nil {
+		t.Fatal("newBlockWriter(closed) error = nil, want error")
+	}
+
+	readFile := mustCreateTestFile(t, filepath.Join(dir, "read-invalid.bin"))
+	if _, err := readBlockFrom(readFile, blockRef{Offset: 0, Size: 3}); err == nil {
+		closeErr := readFile.Close()
+		t.Fatalf("readBlockFrom(invalid ref) error = nil, want error close = %v", closeErr)
+	}
+	if err := readFile.Close(); err != nil {
+		t.Fatalf("Close(read-invalid.bin) error = %v", err)
+	}
 }
 
 func TestBlockFramePoolLargeBufferBranch(t *testing.T) {
@@ -55,6 +67,15 @@ func TestBlockFramePoolLargeBufferBranch(t *testing.T) {
 		t.Fatalf("borrowBlockFrame(small) len = %d, want 16", len(small))
 	}
 	releaseBlockFrame(small)
+}
+
+func TestCompressionEnabledUsesDefaultMinPageValues(t *testing.T) {
+	if compressionEnabled(model.CompressionOptions{Enabled: true}, defaultCompressionMinPageValues-1) {
+		t.Fatal("compressionEnabled(default min - 1) = true, want false")
+	}
+	if !compressionEnabled(model.CompressionOptions{Enabled: true}, defaultCompressionMinPageValues) {
+		t.Fatal("compressionEnabled(default min) = false, want true")
+	}
 }
 
 func TestBlockFramePoolReusesSmallBuffer(t *testing.T) {

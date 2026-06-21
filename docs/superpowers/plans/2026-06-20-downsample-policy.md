@@ -35,7 +35,7 @@
 
 ## Task 1: 模型与校验
 
-**状态:** 待执行。
+**状态:** 已完成。
 
 **EARS:**
 - When policy 名称为空、interval 非正、函数为空或 source/target 完全相同时，系统应返回明确校验错误。
@@ -47,7 +47,7 @@
 - Create: `internal/engine/downsample_validate.go`
 - Test: `internal/engine/downsample_validate_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新增测试函数：
 
@@ -108,7 +108,7 @@ timeout 180s go test ./internal/engine -run 'TestValidateDownsample|TestNormaliz
 
 Expected: FAIL，提示类型或函数未定义。
 
-- [ ] **Step 2: 实现模型和校验**
+- [x] **Step 2: 实现模型和校验**
 
 在 `internal/model/types.go` 增加：
 
@@ -147,7 +147,7 @@ type DownsampleWatermark struct {
 
 在 `downsample_validate.go` 实现 `normalizeDownsamplePolicy`、`validateDownsamplePolicy`、`downsampleOutputFieldName`、`alignDownsampleWindow`。
 
-- [ ] **Step 3: 验证**
+- [x] **Step 3: 验证**
 
 运行：
 
@@ -157,9 +157,17 @@ timeout 180s go test ./internal/engine -run 'TestValidateDownsample|TestNormaliz
 
 Expected: PASS。
 
+**实现备注:** 已新增 `model.DownsamplePolicy`、`DownsampleFunction`、`DownsampleWatermark`，并实现 policy 规范化、支持函数校验、`mean` 到 `avg` 归一化、默认输出字段命名、tag 去重和窗口对齐函数。定向测试 `TestValidateDownsamplePolicyRejectsInvalidInput` 与 `TestNormalizeDownsamplePolicyFunctionsAndOutputNames` 已通过。
+
+**验证命令:**
+
+```bash
+timeout 180s go test ./internal/engine -run 'TestValidateDownsample|TestNormalizeDownsample' -count=1 -timeout 3m
+```
+
 ## Task 2: LocalMetadataStore 持久化
 
-**状态:** 待执行。
+**状态:** 已完成。
 
 **EARS:**
 - When Engine 重启时，系统应恢复所有 downsample policy 和 watermark。
@@ -171,7 +179,7 @@ Expected: PASS。
 - Test: `internal/catalog/downsample_test.go`
 - Test: `internal/engine/downsample_metadata_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新增 catalog 测试：
 
@@ -229,7 +237,7 @@ func TestCatalogDownsamplePoliciesPersistAcrossRestart(t *testing.T) {
 
 Expected: FAIL，方法未定义。
 
-- [ ] **Step 2: 实现本地持久化**
+- [x] **Step 2: 实现本地持久化**
 
 在 catalog 增加内存 map：
 
@@ -240,7 +248,7 @@ downsampleWatermark map[string]model.DownsampleWatermark
 
 新增 `downsample.bin`，使用二进制 envelope 编码 policy 和 watermark。写入流程使用临时文件、fsync、rename、父目录 fsync，权限遵循 `0600`。
 
-- [ ] **Step 3: 扩展 MetadataStore**
+- [x] **Step 3: 扩展 MetadataStore**
 
 新增接口：
 
@@ -256,7 +264,7 @@ type DownsampleMetadataStore interface {
 
 `MetadataStore` 嵌入该接口，`LocalMetadataStore` 转发到 catalog。
 
-- [ ] **Step 4: 验证**
+- [x] **Step 4: 验证**
 
 运行：
 
@@ -266,9 +274,17 @@ timeout 180s go test ./internal/catalog ./internal/engine -run 'Test.*Downsample
 
 Expected: PASS。
 
+**实现备注:** 已新增 `downsample.bin` 本地二进制元数据文件，通过 `codec.MarshalEnvelope` 包装 policy 和 watermark payload，写入路径复用 `storagefs.WriteFileAtomic`，保证临时文件、rename、fsync 与权限约束。`MetadataStore` 已扩展 `DownsampleMetadataStore` 子接口，`LocalMetadataStore` 完成 context 取消检查和 catalog 转发。补充 catalog 重启恢复测试，以及 LocalMetadataStore 的重启恢复和取消分支测试。
+
+**验证命令:**
+
+```bash
+timeout 180s go test ./internal/catalog ./internal/engine -run 'Test.*Downsample.*Metadata|TestCatalogDownsample|TestLocalMetadataStoreDownsample' -count=1 -timeout 3m
+```
+
 ## Task 3: Engine 与 public API
 
-**状态:** 待执行。
+**状态:** 已完成。
 
 **EARS:**
 - When 用户通过 public API 创建、禁用、启用或删除 policy 时，系统应更新本地 metadata。
@@ -281,7 +297,7 @@ Expected: PASS。
 - Test: `downsample_test.go`
 - Test: `internal/engine/downsample_api_test.go`
 
-- [ ] **Step 1: 写 public API 失败测试**
+- [x] **Step 1: 写 public API 失败测试**
 
 ```go
 func TestDownsamplePolicyPublicAPIPersistsAcrossRestart(t *testing.T) {
@@ -332,11 +348,11 @@ func TestDownsamplePolicyPublicAPIPersistsAcrossRestart(t *testing.T) {
 
 Expected: FAIL，public API 未定义。
 
-- [ ] **Step 2: 实现 public 类型和转换**
+- [x] **Step 2: 实现 public 类型和转换**
 
 在 `types.go` 暴露 `DownsamplePolicy`、`DownsampleFunction`、`DownsampleWatermark`，并实现 `toModelDownsamplePolicy`、`fromModelDownsamplePolicy`。
 
-- [ ] **Step 3: 实现 Engine API**
+- [x] **Step 3: 实现 Engine API**
 
 Engine 方法调用 `normalizeDownsamplePolicy` 后写 metadata：
 
@@ -352,7 +368,7 @@ func (e *Engine) CreateDownsamplePolicy(ctx context.Context, policy model.Downsa
 
 Public package 包装内部 Engine 方法。
 
-- [ ] **Step 4: 验证**
+- [x] **Step 4: 验证**
 
 ```bash
 timeout 180s go test . ./internal/engine -run 'TestDownsamplePolicyPublicAPI|Test.*Downsample.*API' -count=1 -timeout 3m
@@ -360,9 +376,17 @@ timeout 180s go test . ./internal/engine -run 'TestDownsamplePolicyPublicAPI|Tes
 
 Expected: PASS。
 
+**实现备注:** 已在 public `types.go` 暴露 `DownsamplePolicy`、`DownsampleFunction`、`DownsampleWatermark`，新增根包 `downsample.go` 做 public API 包装与 model 转换。内部 Engine 新增创建、启用、禁用、删除、列表方法；创建时执行规范化和校验，启用/禁用保留 policy 并只更新 `Enabled`，删除时移除 policy 和对应 watermark。补充 public API 重启恢复、删除，以及内部 Engine 启用/禁用/缺失 policy 错误路径测试。
+
+**验证命令:**
+
+```bash
+timeout 180s go test . ./internal/engine -run 'TestDownsamplePolicyPublicAPI|TestEngineDownsampleAPI' -count=1 -timeout 3m
+```
+
 ## Task 4: Window Planner 与 Executor
 
-**状态:** 待执行。
+**状态:** 已完成。
 
 **EARS:**
 - When 当前时间未超过 `delay` 后的完整窗口边界时，executor 不应处理半窗口。
@@ -373,7 +397,7 @@ Expected: PASS。
 - Create: `internal/engine/downsample_executor.go`
 - Test: `internal/engine/downsample_executor_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 func TestDownsampleExecutorWritesAggregatedPoints(t *testing.T) {
@@ -431,7 +455,7 @@ func TestDownsampleExecutorWritesAggregatedPoints(t *testing.T) {
 
 Expected: FAIL，executor 未定义。
 
-- [ ] **Step 2: 实现窗口执行**
+- [x] **Step 2: 实现窗口执行**
 
 实现 `runDownsampleWindow(ctx, policy, start, end)`：
 
@@ -440,7 +464,7 @@ Expected: FAIL，executor 未定义。
 - 将 `ColumnSeries` 转换为 `model.Point`。
 - 通过 `Write(ctx, points, model.WriteOptions{})` 写入 target。
 
-- [ ] **Step 3: 验证**
+- [x] **Step 3: 验证**
 
 ```bash
 timeout 180s go test ./internal/engine -run 'TestDownsampleExecutor' -count=1 -timeout 3m
@@ -448,9 +472,17 @@ timeout 180s go test ./internal/engine -run 'TestDownsampleExecutor' -count=1 -t
 
 Expected: PASS。
 
+**实现备注:** 已新增 `runDownsampleWindow` 和 `DownsampleWindowResult`。executor 构造 source query，复用现有 window/group aggregate 查询能力，再将 `function(field)` 聚合列按 policy 的 `As` 映射为目标字段，并按 tag+timestamp 合并为目标 `model.Point` 后走现有 `Engine.Write`。测试覆盖有数据窗口写入目标 RP、输出 tag 投影、默认字段命名，以及空窗口不写入。
+
+**验证命令:**
+
+```bash
+timeout 180s go test ./internal/engine -run 'TestDownsampleExecutor' -count=1 -timeout 3m
+```
+
 ## Task 5: Watermark、Refresh 与手动运行
 
-**状态:** 待执行。
+**状态:** 已完成。
 
 **EARS:**
 - When 窗口执行成功时，系统应推进 watermark。
@@ -461,7 +493,7 @@ Expected: PASS。
 - Modify: `internal/engine/downsample_executor.go`
 - Test: `internal/engine/downsample_watermark_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 func TestRunDownsamplePolicyAdvancesWatermarkAndRefreshesLookback(t *testing.T) {
@@ -495,7 +527,7 @@ func TestRunDownsamplePolicyAdvancesWatermarkAndRefreshesLookback(t *testing.T) 
 
 Expected: FAIL。
 
-- [ ] **Step 2: 实现运行计划**
+- [x] **Step 2: 实现运行计划**
 
 新增：
 
@@ -511,7 +543,7 @@ type DownsampleRunResult struct {
 
 实现 `downsampleWindowsToRun(policy, watermark, now)`，返回 refresh windows 和 new windows，按时间升序执行。
 
-- [ ] **Step 3: 验证**
+- [x] **Step 3: 验证**
 
 ```bash
 timeout 180s go test ./internal/engine -run 'TestRunDownsamplePolicy|Test.*Watermark' -count=1 -timeout 3m
@@ -519,9 +551,17 @@ timeout 180s go test ./internal/engine -run 'TestRunDownsamplePolicy|Test.*Water
 
 Expected: PASS。
 
+**实现备注:** 已新增 `DownsampleRunResult`、`RunDownsamplePolicy`、`downsampleWindowsToRun`。运行逻辑基于 `now-delay` 计算完整窗口上界，使用 watermark 和 lookback 生成 refresh/new window 列表，按时间顺序执行。全部成功后推进 `CompletedUntilUnix` 并记录 `LastRunUnix/LastSuccessUnix`；窗口失败时记录 `LastError/LastRunUnix`，保持原完成水位不推进。测试覆盖 watermark 推进、lookback late data 刷新重写目标窗口、delay 下半窗口跳过。
+
+**验证命令:**
+
+```bash
+timeout 180s go test ./internal/engine -run 'TestRunDownsamplePolicy|Test.*Watermark' -count=1 -timeout 3m
+```
+
 ## Task 6: Scheduler 生命周期
 
-**状态:** 待执行。
+**状态:** 已完成。
 
 **EARS:**
 - When Engine 打开时，scheduler 应启动并扫描 enabled policy。
@@ -533,7 +573,7 @@ Expected: PASS。
 - Modify: `internal/engine/engine.go`
 - Test: `internal/engine/downsample_scheduler_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 func TestDownsampleSchedulerRunsEnabledPolicyAndStopsOnClose(t *testing.T) {
@@ -565,7 +605,7 @@ func TestDownsampleSchedulerRunsEnabledPolicyAndStopsOnClose(t *testing.T) {
 
 Expected: FAIL。
 
-- [ ] **Step 2: 实现 scheduler**
+- [x] **Step 2: 实现 scheduler**
 
 Engine 增加：
 
@@ -578,7 +618,7 @@ downsampleRunning  map[string]struct{}
 
 `Open` 调用 `startDownsampleScheduler()`，`Close` 调用 `stopDownsampleScheduler()`。
 
-- [ ] **Step 3: 验证**
+- [x] **Step 3: 验证**
 
 ```bash
 timeout 180s go test ./internal/engine -run 'TestDownsampleScheduler' -count=1 -timeout 3m
@@ -586,9 +626,17 @@ timeout 180s go test ./internal/engine -run 'TestDownsampleScheduler' -count=1 -
 
 Expected: PASS。
 
+**实现备注:** Engine 打开时启动 downsample scheduler，关闭时先停止 scheduler 并等待运行任务退出。scheduler 周期扫描 enabled policy，按 `RefreshInterval` 与 watermark `LastRunUnix` 判断是否到期；同一 policy 通过 `downsampleRunning` map 防止并发重复运行。测试使用当前 wall clock 附近的样本验证后台物化结果，并覆盖 duplicate acquire/release 行为。
+
+**验证命令:**
+
+```bash
+timeout 180s go test ./internal/engine -run 'TestDownsampleScheduler' -count=1 -timeout 3m
+```
+
 ## Task 7: Metrics、Health 与 Runbook
 
-**状态:** 待执行。
+**状态:** 已完成。
 
 **EARS:**
 - When downsample policy 运行成功或失败时，系统应暴露运行次数、失败次数、处理窗口数、写入点数和 watermark。
@@ -603,7 +651,7 @@ Expected: PASS。
 - Test: `internal/engine/downsample_stats_test.go`
 - Test: `internal/observability/prometheus_text_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 func TestDownsampleStatsExposeWatermarkAndFailures(t *testing.T) {
@@ -620,11 +668,11 @@ func TestDownsampleStatsExposeWatermarkAndFailures(t *testing.T) {
 
 Expected: FAIL。
 
-- [ ] **Step 2: 实现指标**
+- [x] **Step 2: 实现指标**
 
 新增 `model.DownsampleStats`，Engine metrics snapshot 合并 downsample counters。Prometheus 输出指标名使用 `mts_downsample_*`。
 
-- [ ] **Step 3: 写 runbook**
+- [x] **Step 3: 写 runbook**
 
 文档覆盖：
 
@@ -634,7 +682,7 @@ Expected: FAIL。
 - 如何处理 late data 和 lookback。
 - 如何禁用 policy。
 
-- [ ] **Step 4: 验证**
+- [x] **Step 4: 验证**
 
 ```bash
 timeout 180s go test ./internal/engine ./internal/observability -run 'TestDownsampleStats|TestPrometheus.*Downsample' -count=1 -timeout 3m
@@ -642,9 +690,17 @@ timeout 180s go test ./internal/engine ./internal/observability -run 'TestDownsa
 
 Expected: PASS。
 
+**实现备注:** 已新增 `model.DownsampleStats` 与 `downsampleStatsRecorder`，`RunDownsamplePolicy` 成功和失败都写入统一统计。`MetricsSnapshot` 暴露 downsample active、运行总数、成功/失败、处理窗口数、写入点数、last watermark 和 last duration；`HealthSnapshot` 增加 `downsample` 检查，最后一次运行错误会标记 degraded。Prometheus 文本导出复用现有 registry；新增 `docs/storage/downsample-runbook.md` 说明 policy/watermark/delay/lookback/target RP 排查路径。
+
+**验证命令:**
+
+```bash
+timeout 180s go test ./internal/engine ./internal/observability -run 'TestDownsampleStats|TestDownsampleMetrics|TestRegistryExportsPrometheusText' -count=1 -timeout 3m
+```
+
 ## Task 8: E2E、Fault 与 Scale Smoke
 
-**状态:** 待执行。
+**状态:** 已完成。
 
 **EARS:**
 - When raw 数据写入后运行 downsample policy，目标 retention policy 应可查询正确聚合结果。
@@ -659,7 +715,7 @@ Expected: PASS。
 - Test: `tests/fault/downsample_policy`
 - Test: `tests/scale/downsample_policy`
 
-- [ ] **Step 1: 写 e2e 用例**
+- [x] **Step 1: 写 e2e 用例**
 
 `tests/e2e/downsample_policy/main.go` 执行：
 
@@ -670,11 +726,11 @@ Expected: PASS。
 5. 查询 `rp_1m`。
 6. 校验 `avg_usage`、`max_usage`、`count_usage`。
 
-- [ ] **Step 2: 写 fault 用例**
+- [x] **Step 2: 写 fault 用例**
 
 使用 faultinject 让 metadata watermark save 或 target write 失败，断言 `CompletedUntilUnix` 不推进，错误可见。
 
-- [ ] **Step 3: 写 scale smoke**
+- [x] **Step 3: 写 scale smoke**
 
 参数：
 
@@ -697,7 +753,7 @@ functions=avg,min,max,count,last
 }
 ```
 
-- [ ] **Step 4: 验证**
+- [x] **Step 4: 验证**
 
 ```bash
 timeout 600s go test ./tests/e2e/downsample_policy ./tests/fault/downsample_policy ./tests/scale/downsample_policy -count=1 -timeout 10m
@@ -705,9 +761,17 @@ timeout 600s go test ./tests/e2e/downsample_policy ./tests/fault/downsample_poli
 
 Expected: PASS。
 
+**实现备注:** 已新增 `tests/e2e/downsample_policy`，覆盖 raw 写入、policy 创建、手动运行、目标 RP 查询，以及 avg/max/count 正确性。已新增 `tests/fault/downsample_policy`，通过 `storagefs.SetFaultController` 注入目标写入失败，验证失败后 Health 降级且重跑仍处理完整窗口，间接证明 watermark 未推进。已新增 `tests/scale/downsample_policy`，默认 100K raw 点、100 series，输出包含耗时、RSS peak、窗口数、写入点数和完成水位的 JSON 报告。
+
+**验证命令:**
+
+```bash
+timeout 600s go test ./tests/e2e/downsample_policy ./tests/fault/downsample_policy ./tests/scale/downsample_policy -count=1 -timeout 10m
+```
+
 ## Task 9: 全量质量门禁
 
-**状态:** 待执行。
+**状态:** 已完成。
 
 **EARS:**
 - When 全量 CI gate 执行时，downsample 新能力应通过 format、test、lint、coverage 和 artifact scan。
@@ -718,11 +782,11 @@ Expected: PASS。
 - Update: `docs/query/builder-aggregate-functions.md`
 - Update: `docs/storage/operations-runbook.md`
 
-- [ ] **Step 1: 文档更新**
+- [x] **Step 1: 文档更新**
 
 更新聚合文档，移除 `downsample` 稳定拒绝描述，说明降采样是 policy 能力，不是 aggregate function。
 
-- [ ] **Step 2: 运行格式化**
+- [x] **Step 2: 运行格式化**
 
 ```bash
 timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
@@ -730,7 +794,7 @@ timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -
 
 Expected: exit 0。
 
-- [ ] **Step 3: 运行全量测试**
+- [x] **Step 3: 运行全量测试**
 
 ```bash
 timeout 600s go test ./... -count=1 -timeout 10m
@@ -738,7 +802,7 @@ timeout 600s go test ./... -count=1 -timeout 10m
 
 Expected: PASS。
 
-- [ ] **Step 4: 运行 lint**
+- [x] **Step 4: 运行 lint**
 
 ```bash
 timeout 720s golangci-lint run ./...
@@ -746,7 +810,7 @@ timeout 720s golangci-lint run ./...
 
 Expected: `0 issues.`
 
-- [ ] **Step 5: 运行 coverage**
+- [x] **Step 5: 运行 coverage**
 
 ```bash
 timeout 720s go test ./... -cover -count=1 -timeout 10m
@@ -754,7 +818,7 @@ timeout 720s go test ./... -cover -count=1 -timeout 10m
 
 Expected: 核心包覆盖率 >= 90%。
 
-- [ ] **Step 6: 运行 CI gate**
+- [x] **Step 6: 运行 CI gate**
 
 ```bash
 timeout 900s bash scripts/ci_gate.sh
@@ -762,13 +826,29 @@ timeout 900s bash scripts/ci_gate.sh
 
 Expected: PASS。
 
-- [ ] **Step 7: 扫描临时产物**
+- [x] **Step 7: 扫描临时产物**
 
 ```bash
 timeout 60s find . -type f \( -name '*.test' -o -name '*.prof' -o -name '*.pprof' -o -name 'coverage.out' -o -name '*.coverprofile' \) -not -path './.git/*' -print
 ```
 
 Expected: 无输出。
+
+**实现备注:** 已更新 Builder 聚合函数文档，明确 `downsample` 不是查询聚合函数，而是独立 `DownsamplePolicy` 物化能力；已更新单机运维 runbook 的 downsample 指标和 Health 排查入口。全量格式化、测试、lint、coverage、CI gate、artifact scan 与空白检查均已执行。为满足核心包 90% 覆盖率门槛，补充 root public API、catalog downsample 元数据错误路径、engine downsample 失败路径和校验分支测试。
+
+**验证命令:**
+
+```bash
+timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
+timeout 600s go test ./... -count=1 -timeout 10m
+timeout 720s golangci-lint run ./...
+timeout 720s go test ./... -cover -count=1 -timeout 10m
+timeout 900s bash scripts/ci_gate.sh
+timeout 60s find . -type f \( -name '*.test' -o -name '*.prof' -o -name '*.pprof' -o -name 'coverage.out' -o -name '*.coverprofile' \) -not -path './.git/*' -print
+timeout 60s git diff --check
+```
+
+**关键覆盖率:** 根包 90.4%，`internal/catalog` 90.3%，`internal/engine` 90.0%，其余核心包均不低于 90%。
 
 ## Self-Review
 

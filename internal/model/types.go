@@ -190,6 +190,117 @@ type AggregateSpec struct {
 	Function string `json:"function"`
 }
 
+type DownsamplePolicy struct {
+	Name               string               `json:"name"`
+	SourceDatabase     string               `json:"source_database"`
+	SourceRetention    string               `json:"source_retention"`
+	SourceMeasurement  string               `json:"source_measurement"`
+	TargetDatabase     string               `json:"target_database"`
+	TargetRetention    string               `json:"target_retention"`
+	TargetMeasurement  string               `json:"target_measurement"`
+	Interval           time.Duration        `json:"interval"`
+	Functions          []DownsampleFunction `json:"functions"`
+	GroupByTags        []string             `json:"group_by_tags"`
+	Delay              time.Duration        `json:"delay"`
+	RefreshInterval    time.Duration        `json:"refresh_interval"`
+	Lookback           time.Duration        `json:"lookback"`
+	InitialStartTime   int64                `json:"initial_start_time"`
+	RunTimeout         time.Duration        `json:"run_timeout"`
+	BatchSize          int                  `json:"batch_size"`
+	CheckpointInterval int                  `json:"checkpoint_interval"`
+	PolicyTagName      string               `json:"policy_tag_name"`
+	Enabled            bool                 `json:"enabled"`
+}
+
+type DownsampleFunction struct {
+	Function string `json:"function"`
+	Field    string `json:"field"`
+	As       string `json:"as"`
+}
+
+type DownsampleWatermark struct {
+	PolicyName         string `json:"policy_name"`
+	CompletedUntilUnix int64  `json:"completed_until_unix"`
+	LastRunUnix        int64  `json:"last_run_unix"`
+	LastSuccessUnix    int64  `json:"last_success_unix"`
+	LastError          string `json:"last_error"`
+	AllowPolicyReplace bool   `json:"allow_policy_replace"`
+}
+
+type DownsampleReset struct {
+	CompletedUntilUnix int64 `json:"completed_until_unix"`
+	AllowPolicyReplace bool  `json:"allow_policy_replace"`
+	CleanupTarget      bool  `json:"cleanup_target"`
+	CleanupStartUnix   int64 `json:"cleanup_start_unix"`
+	CleanupEndUnix     int64 `json:"cleanup_end_unix"`
+}
+
+type DownsampleRangeOptions struct {
+	AdvanceWatermark bool `json:"advance_watermark"`
+}
+
+type DownsampleDropOptions struct {
+	CleanupTarget    bool  `json:"cleanup_target"`
+	CleanupStartUnix int64 `json:"cleanup_start_unix"`
+	CleanupEndUnix   int64 `json:"cleanup_end_unix"`
+}
+
+type DownsampleDryRunResult struct {
+	PolicyName       string `json:"policy_name"`
+	StartUnix        int64  `json:"start_unix"`
+	EndUnix          int64  `json:"end_unix"`
+	Windows          int    `json:"windows"`
+	RefreshWindows   int    `json:"refresh_windows"`
+	AdvanceWindows   int    `json:"advance_windows"`
+	PointsEstimate   int    `json:"points_estimate"`
+	GroupsEstimate   int    `json:"groups_estimate"`
+	SamplesEstimate  int    `json:"samples_estimate"`
+	EstimateComplete bool   `json:"estimate_complete"`
+	WouldAdvance     bool   `json:"would_advance"`
+}
+
+type DownsampleStats struct {
+	Active            int           `json:"active"`
+	Total             int           `json:"total"`
+	Success           int           `json:"success"`
+	Failure           int           `json:"failure"`
+	WindowsProcessed  int           `json:"windows_processed"`
+	PointsWritten     int           `json:"points_written"`
+	LastDuration      time.Duration `json:"last_duration"`
+	LastWatermarkUnix int64         `json:"last_watermark_unix"`
+	LastPolicy        string        `json:"last_policy"`
+	LastError         string        `json:"last_error"`
+}
+
+type DownsamplePolicyRuntimeStats struct {
+	Active            int           `json:"active"`
+	Total             int           `json:"total"`
+	Success           int           `json:"success"`
+	Failure           int           `json:"failure"`
+	WindowsProcessed  int           `json:"windows_processed"`
+	PointsWritten     int           `json:"points_written"`
+	LastDuration      time.Duration `json:"last_duration"`
+	LastWatermarkUnix int64         `json:"last_watermark_unix"`
+	LastRunUnix       int64         `json:"last_run_unix"`
+	LastSuccessUnix   int64         `json:"last_success_unix"`
+	LastError         string        `json:"last_error"`
+}
+
+type DownsamplePolicyStatus struct {
+	PolicyName         string        `json:"policy_name"`
+	Enabled            bool          `json:"enabled"`
+	Active             bool          `json:"active"`
+	CompletedUntilUnix int64         `json:"completed_until_unix"`
+	LastRunUnix        int64         `json:"last_run_unix"`
+	LastSuccessUnix    int64         `json:"last_success_unix"`
+	LastError          string        `json:"last_error"`
+	NextRunUnix        int64         `json:"next_run_unix"`
+	LagSeconds         int64         `json:"lag_seconds"`
+	LastDuration       time.Duration `json:"last_duration"`
+	WindowsProcessed   int           `json:"windows_processed"`
+	PointsWritten      int           `json:"points_written"`
+}
+
 type QueryBudget struct {
 	MaxShards  int `json:"max_shards"`
 	MaxParts   int `json:"max_parts"`

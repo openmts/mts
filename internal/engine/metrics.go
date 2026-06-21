@@ -119,6 +119,42 @@ func recordRetentionMetrics(registry *observability.Registry, snapshot productio
 	registry.AddCounter("mts_retention_delete_errors_total", "Retention delete errors.", float64(snapshot.RetentionDeleteErrors))
 }
 
+func recordDownsampleMetrics(registry *observability.Registry, snapshot model.DownsampleStats) {
+	registry.SetGauge("mts_downsample_active", "Active downsample policy runs.", float64(snapshot.Active))
+	registry.SetGauge("mts_downsample_last_duration_seconds", "Last downsample run duration.", snapshot.LastDuration.Seconds())
+	registry.SetGauge("mts_downsample_last_watermark_unix", "Last downsample completed watermark.", float64(snapshot.LastWatermarkUnix))
+	registry.AddCounter("mts_downsample_runs_total", "Total downsample policy runs.", float64(snapshot.Total))
+	registry.AddCounter("mts_downsample_success_total", "Successful downsample policy runs.", float64(snapshot.Success))
+	registry.AddCounter("mts_downsample_failures_total", "Failed downsample policy runs.", float64(snapshot.Failure))
+	registry.AddCounter("mts_downsample_windows_processed_total", "Downsample windows processed.", float64(snapshot.WindowsProcessed))
+	registry.AddCounter("mts_downsample_points_written_total", "Downsample materialized points written.", float64(snapshot.PointsWritten))
+}
+
+func recordDownsamplePolicyMetrics(
+	registry *observability.Registry,
+	statuses []model.DownsamplePolicyStatus,
+) {
+	for _, status := range statuses {
+		labels := map[string]string{"policy": status.PolicyName}
+		active := 0.0
+		if status.Active {
+			active = 1
+		}
+		enabled := 0.0
+		if status.Enabled {
+			enabled = 1
+		}
+		registry.SetGaugeLabels("mts_downsample_policy_active", labels, "Downsample policy active state.", active)
+		registry.SetGaugeLabels("mts_downsample_policy_enabled", labels, "Downsample policy enabled state.", enabled)
+		registry.SetGaugeLabels("mts_downsample_policy_lag_seconds", labels, "Downsample policy lag in seconds.", float64(status.LagSeconds))
+		registry.SetGaugeLabels("mts_downsample_policy_last_watermark_unix", labels, "Downsample policy completed watermark.", float64(status.CompletedUntilUnix))
+		registry.SetGaugeLabels("mts_downsample_policy_next_run_unix", labels, "Downsample policy next run timestamp.", float64(status.NextRunUnix))
+		registry.SetGaugeLabels("mts_downsample_policy_last_duration_seconds", labels, "Downsample policy last duration.", status.LastDuration.Seconds())
+		registry.AddCounterLabels("mts_downsample_policy_windows_processed_total", labels, "Downsample policy processed windows.", float64(status.WindowsProcessed))
+		registry.AddCounterLabels("mts_downsample_policy_points_written_total", labels, "Downsample policy materialized points.", float64(status.PointsWritten))
+	}
+}
+
 func recordRecoveryMetrics(registry *observability.Registry, snapshot productionMetrics) {
 	registry.AddCounter("mts_recovery_issues_total", "Recovery issues found during shard open and maintenance.", float64(snapshot.RecoveryIssues))
 	registry.AddCounter("mts_recovery_errors_total", "Recovery issues with concrete errors.", float64(snapshot.RecoveryErrors))

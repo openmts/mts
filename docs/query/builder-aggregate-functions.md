@@ -29,9 +29,13 @@ MTS 当前只支持 Builder/API 查询入口，不支持 SQL、InfluxQL 或 Prom
 
 ## 稳定拒绝函数
 
-以下函数当前不属于 Builder 主链路支持范围：`fill`、`interpolation`、`align`、`downsample`、`histogram`、`approx_quantile`、`moving_average`、`moving_sum`、`moving_stddev`。
+以下函数当前不属于 Builder 主链路支持范围：`fill`、`interpolation`、`align`、`histogram`、`approx_quantile`、`moving_average`、`moving_sum`、`moving_stddev`。
 
 当 Builder 查询包含这些函数时，Analyzer 必须返回稳定 `unsupported-function` 错误，不能进入执行期后再失败，也不能输出不完整结果。
+
+`downsample` 不是查询聚合函数。MTS 通过规则驱动的 `DownsamplePolicy` 将固定窗口聚合结果物化到目标 retention policy。用户可以显式查询目标 retention policy，也可以使用 public Builder 的 `FromDownsamplePolicy(policy)` 让 Builder 填充目标 RP 和 policy tag。
+
+降采样 policy 当前支持查询执行器已有的常见聚合函数：`avg/mean`、`min`、`max`、`sum`、`count`、`first`、`last`、`rate`、`irate`、`increase`、`delta`、`difference`、`derivative`、`spread`、`mode`、`stddev`、`stdvar`、`top`、`bottom`、`median`。其中 `difference` 在普通查询中是相邻差值序列，在降采样窗口物化中输出窗口首尾差值；`derivative` 在降采样窗口物化中输出窗口首尾差值按秒归一化的变化率。
 
 ## 边界规则
 

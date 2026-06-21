@@ -37,6 +37,30 @@ func TestPublicQueryBuilderBuildsQuery(t *testing.T) {
 	}
 }
 
+func TestPublicQueryBuilderFromDownsamplePolicy(t *testing.T) {
+	query, err := NewQuery().
+		FromDownsamplePolicy(DownsamplePolicy{
+			Name:              "cpu_1m",
+			TargetDatabase:    "metrics",
+			TargetRetention:   "rp_1m",
+			TargetMeasurement: "cpu",
+		}).
+		Select("avg_usage").
+		TimeRange(0, 60).
+		Build()
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if query.Database != "metrics" ||
+		query.RetentionPolicy != "rp_1m" ||
+		query.Measurement != "cpu" {
+		t.Fatalf("query source = %#v, want downsample target", query)
+	}
+	if query.Tags["mts_downsample_policy"] != "cpu_1m" {
+		t.Fatalf("query tags = %#v, want downsample policy tag", query.Tags)
+	}
+}
+
 func TestPublicQueryBuilderCoversAllPrimitivesAndModelConversion(t *testing.T) {
 	query, err := NewQuery().
 		Select("usage", "state").

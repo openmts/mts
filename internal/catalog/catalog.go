@@ -25,16 +25,18 @@ type Catalog struct {
 	dir string
 	wal *os.File
 
-	nextSeriesID uint64
-	nextFieldID  uint32
-	seriesByKey  map[string]uint64
-	seriesByTag  map[string]map[string]map[string]uint64
-	series       map[uint64]Series
-	fieldsByKey  map[string]uint32
-	fields       map[uint32]Field
-	fieldSchemas map[string][]Field
-	databases    map[string]struct{}
-	policies     map[string]map[string]model.RetentionPolicy
+	nextSeriesID         uint64
+	nextFieldID          uint32
+	seriesByKey          map[string]uint64
+	seriesByTag          map[string]map[string]map[string]uint64
+	series               map[uint64]Series
+	fieldsByKey          map[string]uint32
+	fields               map[uint32]Field
+	fieldSchemas         map[string][]Field
+	databases            map[string]struct{}
+	policies             map[string]map[string]model.RetentionPolicy
+	downsamplePolicies   map[string]model.DownsamplePolicy
+	downsampleWatermarks map[string]model.DownsampleWatermark
 
 	snapshotDirtyRecords int
 	seriesKeyScratch     []string
@@ -57,6 +59,9 @@ func Open(dir string) (*Catalog, error) {
 		return nil, err
 	}
 	if err := cat.loadMetadata(); err != nil {
+		return nil, err
+	}
+	if err := cat.loadDownsampleMetadata(); err != nil {
 		return nil, err
 	}
 	wal, err := storagefs.OpenFile(cat.walPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, storagefs.FileMode)
@@ -295,17 +300,19 @@ func cloneFieldMap(fields map[uint32]Field) map[uint32]Field {
 
 func newCatalog(dir string) *Catalog {
 	return &Catalog{
-		dir:          filepath.Clean(dir),
-		nextSeriesID: 1,
-		nextFieldID:  1,
-		seriesByKey:  make(map[string]uint64),
-		seriesByTag:  make(map[string]map[string]map[string]uint64),
-		series:       make(map[uint64]Series),
-		fieldsByKey:  make(map[string]uint32),
-		fields:       make(map[uint32]Field),
-		fieldSchemas: make(map[string][]Field),
-		databases:    make(map[string]struct{}),
-		policies:     make(map[string]map[string]model.RetentionPolicy),
+		dir:                  filepath.Clean(dir),
+		nextSeriesID:         1,
+		nextFieldID:          1,
+		seriesByKey:          make(map[string]uint64),
+		seriesByTag:          make(map[string]map[string]map[string]uint64),
+		series:               make(map[uint64]Series),
+		fieldsByKey:          make(map[string]uint32),
+		fields:               make(map[uint32]Field),
+		fieldSchemas:         make(map[string][]Field),
+		databases:            make(map[string]struct{}),
+		policies:             make(map[string]map[string]model.RetentionPolicy),
+		downsamplePolicies:   make(map[string]model.DownsamplePolicy),
+		downsampleWatermarks: make(map[string]model.DownsampleWatermark),
 	}
 }
 
