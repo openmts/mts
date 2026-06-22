@@ -271,7 +271,7 @@ func aggregateValues(values []model.FieldValue, fn string) (model.FieldValue, er
 	case "bottom":
 		return aggregateMinMax(values, true)
 	default:
-		return model.FieldValue{}, fmt.Errorf("unsupported aggregate function %q", fn)
+		return model.FieldValue{}, fmt.Errorf("%w: %q", ErrUnsupportedAggregate, fn)
 	}
 }
 

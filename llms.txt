@@ -1,0 +1,47 @@
+# MTS
+
+MTS is a single-node embedded time series storage engine for Go applications.
+
+## Public Interfaces
+
+- Go package: `github.com/openmts/mts`
+- Maintenance CLI: `cmd/mts-storage`
+
+## Current Scope
+
+- Single process, local data directory only.
+- Local metadata store only.
+- Query construction through Builder/API.
+- No distributed query or distributed storage.
+- No SQL, InfluxQL, PromQL, or MetricsQL parser.
+- Internal HTTP query and operations packages are not public stable APIs.
+
+## Key Files
+
+- `README.md`: user-facing quick start and API boundary.
+- `doc.go`: package-level godoc.
+- `values.go`: write DTOs and field values.
+- `query_types.go`: query DTOs and aggregate constants.
+- `options.go`: engine options, defaults, and validation.
+- `engine.go`: Engine public methods.
+- `downsample.go`: downsample public methods.
+- `cmd/mts-storage`: local storage check, repair, migrate, snapshot, restore.
+
+## Verification
+
+Use these commands before claiming commercial readiness:
+
+```bash
+timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
+timeout 600s go test ./... -count=1 -timeout 10m
+timeout 720s golangci-lint run ./...
+timeout 600s go test $(go list ./... | grep -v '/tests/') -cover -count=1 -timeout 10m
+timeout 600s go test ./tests/... -count=1 -timeout 10m
+timeout 60s git diff --check
+```
+
+After the first release tag exists, check public Go API compatibility before publishing:
+
+```bash
+go run golang.org/x/exp/cmd/apidiff@latest github.com/openmts/mts@<previous-tag> .
+```

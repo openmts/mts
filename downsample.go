@@ -8,66 +8,76 @@ import (
 	"github.com/openmts/mts/internal/model"
 )
 
+// CreateDownsamplePolicy 创建或更新本地降采样策略。
 func (e *Engine) CreateDownsamplePolicy(ctx context.Context, policy DownsamplePolicy) error {
-	return e.inner.CreateDownsamplePolicy(ctx, toModelDownsamplePolicy(policy))
+	return publicError(e.inner.CreateDownsamplePolicy(ctx, toModelDownsamplePolicy(policy)))
 }
 
+// EnableDownsamplePolicy 启用降采样策略。
 func (e *Engine) EnableDownsamplePolicy(ctx context.Context, name string) error {
-	return e.inner.EnableDownsamplePolicy(ctx, name)
+	return publicError(e.inner.EnableDownsamplePolicy(ctx, name))
 }
 
+// DisableDownsamplePolicy 禁用降采样策略。
 func (e *Engine) DisableDownsamplePolicy(ctx context.Context, name string) error {
-	return e.inner.DisableDownsamplePolicy(ctx, name)
+	return publicError(e.inner.DisableDownsamplePolicy(ctx, name))
 }
 
+// DropDownsamplePolicy 删除降采样策略但不清理目标 rollup 数据。
 func (e *Engine) DropDownsamplePolicy(ctx context.Context, name string) error {
-	return e.inner.DropDownsamplePolicy(ctx, name)
+	return publicError(e.inner.DropDownsamplePolicy(ctx, name))
 }
 
+// DropDownsamplePolicyWithOptions 删除降采样策略，并按选项清理目标 rollup 数据。
 func (e *Engine) DropDownsamplePolicyWithOptions(
 	ctx context.Context,
 	name string,
 	opts DownsampleDropOptions,
 ) error {
-	return e.inner.DropDownsamplePolicyWithOptions(ctx, name, toModelDownsampleDropOptions(opts))
+	return publicError(e.inner.DropDownsamplePolicyWithOptions(ctx, name, toModelDownsampleDropOptions(opts)))
 }
 
+// ResetDownsamplePolicy 重置降采样策略 watermark 和替换许可。
 func (e *Engine) ResetDownsamplePolicy(
 	ctx context.Context,
 	name string,
 	reset DownsampleReset,
 ) error {
-	return e.inner.ResetDownsamplePolicy(ctx, name, toModelDownsampleReset(reset))
+	return publicError(e.inner.ResetDownsamplePolicy(ctx, name, toModelDownsampleReset(reset)))
 }
 
+// ListDownsamplePolicies 列出本地降采样策略。
 func (e *Engine) ListDownsamplePolicies(ctx context.Context) ([]DownsamplePolicy, error) {
 	policies, err := e.inner.ListDownsamplePolicies(ctx)
 	if err != nil {
-		return nil, err
+		return nil, publicError(err)
 	}
 	return fromModelDownsamplePolicies(policies), nil
 }
 
+// DownsamplePolicyStatuses 返回降采样策略运行状态。
 func (e *Engine) DownsamplePolicyStatuses(
 	ctx context.Context,
 	now time.Time,
 ) ([]DownsamplePolicyStatus, error) {
 	statuses, err := e.inner.DownsamplePolicyStatuses(ctx, time.Duration(now.UnixNano()))
 	if err != nil {
-		return nil, err
+		return nil, publicError(err)
 	}
 	return fromModelDownsamplePolicyStatuses(statuses), nil
 }
 
+// RunDownsamplePolicy 按当前时间触发一次策略运行。
 func (e *Engine) RunDownsamplePolicy(
 	ctx context.Context,
 	name string,
 	now time.Time,
 ) (DownsampleRunResult, error) {
 	result, err := e.inner.RunDownsamplePolicy(ctx, name, time.Duration(now.UnixNano()))
-	return fromStorageDownsampleRunResult(result), err
+	return fromStorageDownsampleRunResult(result), publicError(err)
 }
 
+// RunDownsamplePolicyRange 对指定时间范围手动运行降采样。
 func (e *Engine) RunDownsamplePolicyRange(
 	ctx context.Context,
 	name string,
@@ -82,9 +92,10 @@ func (e *Engine) RunDownsamplePolicyRange(
 		end.UnixNano(),
 		toModelDownsampleRangeOptions(opts),
 	)
-	return fromStorageDownsampleRunResult(result), err
+	return fromStorageDownsampleRunResult(result), publicError(err)
 }
 
+// RepairDownsamplePolicy 重算指定时间范围内的降采样结果。
 func (e *Engine) RepairDownsamplePolicy(
 	ctx context.Context,
 	name string,
@@ -92,9 +103,10 @@ func (e *Engine) RepairDownsamplePolicy(
 	end time.Time,
 ) (DownsampleRunResult, error) {
 	result, err := e.inner.RepairDownsamplePolicy(ctx, name, start.UnixNano(), end.UnixNano())
-	return fromStorageDownsampleRunResult(result), err
+	return fromStorageDownsampleRunResult(result), publicError(err)
 }
 
+// DryRunDownsamplePolicy 估算指定时间范围内降采样成本，不写入目标数据。
 func (e *Engine) DryRunDownsamplePolicy(
 	ctx context.Context,
 	name string,
@@ -102,7 +114,7 @@ func (e *Engine) DryRunDownsamplePolicy(
 	end time.Time,
 ) (DownsampleDryRunResult, error) {
 	result, err := e.inner.DryRunDownsamplePolicy(ctx, name, start.UnixNano(), end.UnixNano())
-	return fromModelDownsampleDryRunResult(result), err
+	return fromModelDownsampleDryRunResult(result), publicError(err)
 }
 
 func toModelDownsamplePolicy(policy DownsamplePolicy) model.DownsamplePolicy {

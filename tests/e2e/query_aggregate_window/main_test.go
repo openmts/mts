@@ -10,6 +10,13 @@ func TestMainSmoke(t *testing.T) {
 	main()
 }
 
+func TestRunRejectsInvalidTempDir(t *testing.T) {
+	t.Setenv("TMPDIR", "/dev/null")
+	if err := run(); err == nil {
+		t.Fatal("run(invalid temp dir) error = nil, want error")
+	}
+}
+
 func TestAssertAggregateColumnsRejectsInvalidResults(t *testing.T) {
 	validCount := mts.ColumnSeries{
 		FieldName: "count(value)",

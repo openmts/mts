@@ -190,3 +190,140 @@ func TestDownsamplePolicyPublicAPIRunsPolicy(t *testing.T) {
 		t.Fatalf("rows = %#v, want avg_usage=4", rows)
 	}
 }
+
+func TestPublicDownsampleRangeStatusResetAndDropOptions(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir(), ShardDuration: time.Hour})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	points := make([]mts.Point, 0, 3)
+	for minute := int64(0); minute < 3; minute++ {
+		points = append(points, mts.Point{
+			Database:        "metrics",
+			RetentionPolicy: "autogen",
+			Measurement:     "cpu",
+			Tags:            map[string]string{"host": "a"},
+			Timestamp:       minute * int64(time.Minute),
+			Fields: map[string]mts.FieldValue{
+				"usage": mts.Float64Value(float64(minute + 1)),
+			},
+		})
+	}
+	if err := eng.Write(ctx, points, mts.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write(raw) error = %v close = %v", err, closeErr)
+	}
+	policy := mts.DownsamplePolicy{
+		Name:              "cpu_1m",
+		SourceDatabase:    "metrics",
+		SourceRetention:   "autogen",
+		SourceMeasurement: "cpu",
+		TargetDatabase:    "metrics",
+		TargetRetention:   "rp_1m",
+		TargetMeasurement: "cpu",
+		Interval:          time.Minute,
+		Functions: []mts.DownsampleFunction{{
+			Function: mts.AggregateAvg,
+			Field:    "usage",
+		}},
+		GroupByTags:     []string{"host"},
+		RefreshInterval: time.Minute,
+		Lookback:        3 * time.Minute,
+		Enabled:         true,
+	}
+	if err := eng.CreateDownsamplePolicy(ctx, policy); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("CreateDownsamplePolicy() error = %v close = %v", err, closeErr)
+	}
+	dryRun, err := eng.DryRunDownsamplePolicy(ctx, "cpu_1m", time.Unix(0, 0), time.Unix(0, int64(2*time.Minute)))
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("DryRunDownsamplePolicy() error = %v close = %v", err, closeErr)
+	}
+	if dryRun.Windows != 2 || dryRun.PointsEstimate != 2 || !dryRun.EstimateComplete {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("dryRun = %#v, want two complete windows close = %v", dryRun, closeErr)
+	}
+	repair, err := eng.RepairDownsamplePolicy(ctx, "cpu_1m", time.Unix(0, 0), time.Unix(0, int64(time.Minute)))
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("RepairDownsamplePolicy() error = %v close = %v", err, closeErr)
+	}
+	if repair.PointsWritten != 1 || repair.CompletedUntilUnix != 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("repair = %#v, want refresh write without watermark close = %v", repair, closeErr)
+	}
+	backfill, err := eng.RunDownsamplePolicyRange(
+		ctx,
+		"cpu_1m",
+		time.Unix(0, 0),
+		time.Unix(0, int64(2*time.Minute)),
+		mts.DownsampleRangeOptions{AdvanceWatermark: true},
+	)
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("RunDownsamplePolicyRange() error = %v close = %v", err, closeErr)
+	}
+	if backfill.WindowsProcessed != 2 || backfill.CompletedUntilUnix != int64(2*time.Minute) {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("backfill = %#v, want two windows and 2m watermark close = %v", backfill, closeErr)
+	}
+	statuses, err := eng.DownsamplePolicyStatuses(ctx, time.Unix(0, int64(3*time.Minute)))
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("DownsamplePolicyStatuses() error = %v close = %v", err, closeErr)
+	}
+	if len(statuses) != 1 ||
+		statuses[0].PolicyName != "cpu_1m" ||
+		statuses[0].CompletedUntilUnix != int64(2*time.Minute) ||
+		statuses[0].LagSeconds != 60 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("statuses = %#v, want policy status with 60s lag close = %v", statuses, closeErr)
+	}
+	if err := eng.ResetDownsamplePolicy(ctx, "cpu_1m", mts.DownsampleReset{
+		CompletedUntilUnix: int64(time.Minute),
+		AllowPolicyReplace: true,
+		CleanupTarget:      true,
+		CleanupStartUnix:   0,
+		CleanupEndUnix:     int64(2 * time.Minute),
+	}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("ResetDownsamplePolicy() error = %v close = %v", err, closeErr)
+	}
+	rows, err := eng.QueryRows(ctx, mts.Query{
+		Database:        "metrics",
+		RetentionPolicy: "rp_1m",
+		Measurement:     "cpu",
+		StartTime:       0,
+		EndTime:         int64(2 * time.Minute),
+	})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows(target after reset) error = %v close = %v", err, closeErr)
+	}
+	if len(rows) != 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("rows after reset cleanup = %#v, want empty close = %v", rows, closeErr)
+	}
+	if err := eng.DropDownsamplePolicyWithOptions(ctx, "cpu_1m", mts.DownsampleDropOptions{
+		CleanupTarget:    true,
+		CleanupStartUnix: 0,
+		CleanupEndUnix:   int64(2 * time.Minute),
+	}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("DropDownsamplePolicyWithOptions() error = %v close = %v", err, closeErr)
+	}
+	policies, err := eng.ListDownsamplePolicies(ctx)
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("ListDownsamplePolicies() error = %v close = %v", err, closeErr)
+	}
+	if len(policies) != 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("policies = %#v, want dropped close = %v", policies, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}

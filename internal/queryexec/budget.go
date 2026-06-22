@@ -9,6 +9,8 @@ import (
 
 var ErrReadBudgetExceeded = errors.New("read budget exceeded")
 
+var ErrUnsupportedAggregate = errors.New("unsupported aggregate")
+
 type ReadBudgetError struct {
 	Metric string
 	Actual int

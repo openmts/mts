@@ -384,6 +384,30 @@ func TestQueryIteratorAndRowAlignmentBranches(t *testing.T) {
 	if got := estimateFieldValueBytes(model.FieldValue{Type: model.FieldType(99)}); got != 0 {
 		t.Fatalf("estimateFieldValueBytes(unknown) = %d, want 0", got)
 	}
+	aligned := []model.ColumnSeries{
+		{
+			SeriesID:    1,
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			FieldName:   "usage",
+			Timestamps:  []int64{1, 2},
+			Values:      []model.FieldValue{model.Float64Value(1), model.Float64Value(2)},
+		},
+		{
+			SeriesID:    1,
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			FieldName:   "load",
+			Timestamps:  []int64{1, 2},
+			Values:      []model.FieldValue{model.Int64Value(10), model.Int64Value(20)},
+		},
+	}
+	rows = columnsToRows(aligned)
+	if len(rows) != 2 || rows[0].Fields["usage"].Float64 != 1 ||
+		rows[0].Fields["load"].Int64 != 10 ||
+		rows[1].Fields["usage"].Float64 != 2 {
+		t.Fatalf("columnsToRows(aligned) = %#v, want two aligned rows", rows)
+	}
 
 	if got := queryBoundaryMode(model.Query{
 		Aggregates: []model.AggregateSpec{{Function: "first"}, {Function: "last"}},
@@ -410,6 +434,76 @@ func TestQueryIteratorAndRowAlignmentBranches(t *testing.T) {
 	}
 	if columns := mem.Query(memtable.Query{Start: 0, End: 10}); len(columns) != 1 {
 		t.Fatalf("memTableStore.Query() columns = %#v, want one column", columns)
+	}
+}
+
+func TestQueryStatsColumnStreamCoverageBranches(t *testing.T) {
+	source := &coverageColumnStream{
+		columns: []model.ColumnSeries{{
+			FieldName: "usage",
+			Values: []model.FieldValue{
+				model.Float64Value(1),
+				model.Float64Value(2),
+			},
+		}},
+	}
+	stats := &model.QueryStats{}
+	var finished int
+	stream := newQueryStatsColumnStream(source, stats, func(got *model.QueryStats, err error) {
+		finished++
+		if got.SamplesReturned != 2 || err != nil {
+			t.Fatalf("finish stats=%#v err=%v, want two samples and nil error", got, err)
+		}
+	})
+	if column := stream.Column(); column.FieldName != "" {
+		t.Fatalf("Column() before Next = %#v, want zero", column)
+	}
+	if !stream.Next() {
+		t.Fatal("Next() = false, want first column")
+	}
+	first := stream.Column()
+	second := stream.Column()
+	if first.FieldName != "usage" || second.FieldName != "usage" || stats.SamplesReturned != 2 {
+		t.Fatalf("columns first=%#v second=%#v stats=%#v, want counted once", first, second, stats)
+	}
+	if stream.Next() {
+		t.Fatal("Next() second = true, want EOF")
+	}
+	if finished != 1 {
+		t.Fatalf("finished = %d, want once at EOF", finished)
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close(after EOF) error = %v", err)
+	}
+	if finished != 1 {
+		t.Fatalf("finished after Close = %d, want still once", finished)
+	}
+	if newQueryStatsColumnStream(source, nil, nil) != source {
+		t.Fatal("newQueryStatsColumnStream(nil stats) did not return source")
+	}
+
+	nilStats := &model.QueryStats{}
+	var nilFinished int
+	nilStream := newQueryStatsColumnStream(nil, nilStats, func(got *model.QueryStats, err error) {
+		nilFinished++
+		if err != nil {
+			t.Fatalf("nil stream finish err = %v", err)
+		}
+	})
+	if nilStream.Next() {
+		t.Fatal("nil stream Next() = true, want false")
+	}
+	if column := nilStream.Column(); column.FieldName != "" {
+		t.Fatalf("nil stream Column() = %#v, want zero", column)
+	}
+	if err := nilStream.Err(); err != nil {
+		t.Fatalf("nil stream Err() = %v", err)
+	}
+	if err := nilStream.Close(); err != nil {
+		t.Fatalf("nil stream Close() error = %v", err)
+	}
+	if nilFinished != 1 {
+		t.Fatalf("nilFinished = %d, want once", nilFinished)
 	}
 }
 
@@ -486,3 +580,34 @@ func (coverageFakePartReader) QuerySeriesIDs(sstable.Query, []uint64) ([]model.C
 }
 
 func (coverageFakePartReader) SeriesIDs(sstable.Query) ([]uint64, error) { return nil, nil }
+
+type coverageColumnStream struct {
+	columns []model.ColumnSeries
+	index   int
+	err     error
+	closed  bool
+}
+
+func (s *coverageColumnStream) Next() bool {
+	if s.closed || s.index >= len(s.columns) {
+		return false
+	}
+	s.index++
+	return true
+}
+
+func (s *coverageColumnStream) Column() model.ColumnSeries {
+	if s.index == 0 || s.index > len(s.columns) {
+		return model.ColumnSeries{}
+	}
+	return s.columns[s.index-1]
+}
+
+func (s *coverageColumnStream) Err() error {
+	return s.err
+}
+
+func (s *coverageColumnStream) Close() error {
+	s.closed = true
+	return s.err
+}

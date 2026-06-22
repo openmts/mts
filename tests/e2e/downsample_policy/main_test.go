@@ -12,6 +12,13 @@ func TestMainSmoke(t *testing.T) {
 	main()
 }
 
+func TestRunRejectsInvalidTempDir(t *testing.T) {
+	t.Setenv("TMPDIR", "/dev/null")
+	if err := run(); err == nil {
+		t.Fatal("run(invalid temp dir) error = nil, want error")
+	}
+}
+
 func TestAssertRowsRejectsInvalidResults(t *testing.T) {
 	valid := mts.Row{
 		Timestamp: int64(2 * time.Minute),

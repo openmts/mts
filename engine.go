@@ -8,42 +8,52 @@ import (
 	"github.com/openmts/mts/internal/model"
 )
 
+// Close 关闭 Engine 并释放本地资源。
 func (e *Engine) Close(ctx context.Context) error {
-	return e.inner.Close(ctx)
+	return publicError(e.inner.Close(ctx))
 }
 
+// Write 写入点数据。
 func (e *Engine) Write(ctx context.Context, points []Point, opts WriteOptions) error {
-	return e.inner.Write(ctx, toModelPoints(points), toModelWriteOptions(opts))
+	return publicError(e.inner.Write(ctx, toModelPoints(points), toModelWriteOptions(opts)))
 }
 
+// WriteTypedBatch 写入按列组织的批量数据。
 func (e *Engine) WriteTypedBatch(ctx context.Context, batch TypedBatch, opts WriteOptions) error {
-	return e.inner.WriteTypedBatch(ctx, toModelTypedBatch(batch), toModelWriteOptions(opts))
+	return publicError(e.inner.WriteTypedBatch(ctx, toModelTypedBatch(batch), toModelWriteOptions(opts)))
 }
 
+// Flush 将当前内存数据刷写为本地 SSTable。
 func (e *Engine) Flush(ctx context.Context) error {
-	return e.inner.Flush(ctx)
+	return publicError(e.inner.Flush(ctx))
 }
 
+// QueryColumns 返回完整列式查询结果。
+//
+// 该方法会 materialize 完整结果，生产场景的大结果查询优先使用
+// QueryColumnIterator 并配置 Limit 或 QueryBudget。
 func (e *Engine) QueryColumns(ctx context.Context, query Query) ([]ColumnSeries, error) {
 	columns, err := e.inner.QueryColumns(ctx, toModelQuery(query))
 	if err != nil {
-		return nil, err
+		return nil, publicError(err)
 	}
 	return fromModelColumnSeriesList(columns), nil
 }
 
+// QueryColumnIterator 以 iterator 方式返回列式查询结果。
 func (e *Engine) QueryColumnIterator(ctx context.Context, query Query) (ColumnIterator, error) {
 	inner, err := e.inner.QueryColumnIterator(ctx, toModelQuery(query))
 	if err != nil {
-		return nil, err
+		return nil, publicError(err)
 	}
 	return columnIterator{inner: inner}, nil
 }
 
+// QueryWithExplain 返回列式查询结果、查询计划说明和执行统计。
 func (e *Engine) QueryWithExplain(ctx context.Context, query Query) (QueryResult, error) {
 	columns, explain, stats, err := e.inner.QueryWithExplain(ctx, toModelQuery(query))
 	if err != nil {
-		return QueryResult{}, err
+		return QueryResult{}, publicError(err)
 	}
 	return QueryResult{
 		Columns: fromModelColumnSeriesList(columns),
@@ -52,51 +62,64 @@ func (e *Engine) QueryWithExplain(ctx context.Context, query Query) (QueryResult
 	}, nil
 }
 
+// QueryStatsSnapshot 返回最近一次查询统计快照。
 func (e *Engine) QueryStatsSnapshot() QueryStats {
 	return fromModelQueryStats(e.inner.QueryStatsSnapshot())
 }
 
+// QueryRows 返回完整行式查询结果。
+//
+// 该方法适合小结果集。生产场景的大结果查询优先使用 QueryRowIterator 并配置
+// Limit 或 QueryBudget。
 func (e *Engine) QueryRows(ctx context.Context, query Query) ([]Row, error) {
 	rows, err := e.inner.QueryRows(ctx, toModelQuery(query))
 	if err != nil {
-		return nil, err
+		return nil, publicError(err)
 	}
 	return fromModelRows(rows), nil
 }
 
+// QueryRowIterator 以 iterator 方式返回行式查询结果。
 func (e *Engine) QueryRowIterator(ctx context.Context, query Query) (RowIterator, error) {
 	inner, err := e.inner.QueryRowIterator(ctx, toModelQuery(query))
 	if err != nil {
-		return nil, err
+		return nil, publicError(err)
 	}
 	return rowIterator{inner: inner}, nil
 }
 
+// Compact 对所有 shard 执行一次手动 compaction。
 func (e *Engine) Compact(ctx context.Context) error {
-	return e.inner.Compact(ctx)
+	return publicError(e.inner.Compact(ctx))
 }
 
+// CompactWithResult 对所有 shard 执行一次手动 compaction 并返回结果。
 func (e *Engine) CompactWithResult(ctx context.Context) (CompactionResult, error) {
 	result, err := e.inner.CompactWithResult(ctx)
-	return fromCompactionResult(result), err
+	return fromCompactionResult(result), publicError(err)
 }
 
+// ApplyRetention 按 now 应用本地 retention 清理。
 func (e *Engine) ApplyRetention(ctx context.Context, now time.Time) error {
-	return e.inner.ApplyRetention(ctx, now)
+	return publicError(e.inner.ApplyRetention(ctx, now))
 }
 
+// MaintenanceErrors 返回后台维护任务记录的错误。
 func (e *Engine) MaintenanceErrors(ctx context.Context) []error {
 	return e.inner.MaintenanceErrors(ctx)
 }
 
+// StorageMemorySnapshot 返回存储层内存占用快照。
 func (e *Engine) StorageMemorySnapshot() StorageMemorySnapshot {
 	return fromStorageMemorySnapshot(e.inner.StorageMemorySnapshot())
 }
 
+// CompactionStatsSnapshot 返回 compaction 统计快照。
 func (e *Engine) CompactionStatsSnapshot() CompactionStats {
 	return fromCompactionStats(e.inner.CompactionStatsSnapshot())
 }
 
+// HealthSnapshot 返回 Engine 健康状态快照。
 func (e *Engine) HealthSnapshot() HealthSnapshot {
 	health := e.inner.HealthSnapshot()
 	return HealthSnapshot{
@@ -119,38 +142,46 @@ func fromHealthChecks(checks []storageengine.HealthCheck) []HealthCheck {
 	return out
 }
 
+// CreateDatabase 创建本地 database 元数据。
 func (e *Engine) CreateDatabase(ctx context.Context, name string) error {
-	return e.inner.CreateDatabase(ctx, name)
+	return publicError(e.inner.CreateDatabase(ctx, name))
 }
 
+// DropDatabase 删除本地 database 元数据。
 func (e *Engine) DropDatabase(ctx context.Context, name string) error {
-	return e.inner.DropDatabase(ctx, name)
+	return publicError(e.inner.DropDatabase(ctx, name))
 }
 
+// CreateRetentionPolicy 创建或更新本地 retention policy。
 func (e *Engine) CreateRetentionPolicy(ctx context.Context, database string, policy RetentionPolicy) error {
-	return e.inner.CreateRetentionPolicy(ctx, database, toModelRetentionPolicy(policy))
+	return publicError(e.inner.CreateRetentionPolicy(ctx, database, toModelRetentionPolicy(policy)))
 }
 
+// ListRetentionPolicies 列出 database 下的 retention policy。
 func (e *Engine) ListRetentionPolicies(ctx context.Context, database string) ([]RetentionPolicy, error) {
 	policies, err := e.inner.ListRetentionPolicies(ctx, database)
 	if err != nil {
-		return nil, err
+		return nil, publicError(err)
 	}
 	return fromModelRetentionPolicies(policies), nil
 }
 
+// ListMeasurements 列出 database 下的 measurement。
 func (e *Engine) ListMeasurements(ctx context.Context, database string) ([]string, error) {
-	return e.inner.ListMeasurements(ctx, database)
+	measurements, err := e.inner.ListMeasurements(ctx, database)
+	return measurements, publicError(err)
 }
 
+// ListFields 列出 measurement 下的字段 schema。
 func (e *Engine) ListFields(ctx context.Context, database string, measurement string) ([]FieldSchema, error) {
 	fields, err := e.inner.ListFields(ctx, database, measurement)
 	if err != nil {
-		return nil, err
+		return nil, publicError(err)
 	}
 	return fromModelFieldSchemas(fields), nil
 }
 
+// ListSeries 按 measurement 和 tag 过滤列出 series。
 func (e *Engine) ListSeries(
 	ctx context.Context,
 	database string,
@@ -159,7 +190,7 @@ func (e *Engine) ListSeries(
 ) ([]Series, error) {
 	series, err := e.inner.ListSeries(ctx, database, measurement, tags)
 	if err != nil {
-		return nil, err
+		return nil, publicError(err)
 	}
 	return fromModelSeriesList(series), nil
 }

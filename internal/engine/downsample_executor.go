@@ -29,6 +29,8 @@ type DownsampleRunResult struct {
 	Error              string
 }
 
+var ErrDownsamplePolicyNotFound = errors.New("downsample policy not found")
+
 func (e *Engine) RunDownsamplePolicy(
 	ctx context.Context,
 	name string,
@@ -118,7 +120,7 @@ func (e *Engine) downsamplePolicyByName(
 			return policy, nil
 		}
 	}
-	return model.DownsamplePolicy{}, fmt.Errorf("downsample policy %q not found", name)
+	return model.DownsamplePolicy{}, fmt.Errorf("%w: %q", ErrDownsamplePolicyNotFound, name)
 }
 
 func (e *Engine) runDownsampleWindows(

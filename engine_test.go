@@ -266,6 +266,76 @@ func TestEngineWriteTypedBatchRejectsInvalidColumnLength(t *testing.T) {
 	}
 }
 
+func TestPublicWriteCopiesPointInput(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.DefaultOptions(t.TempDir()))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	tags := map[string]string{"host": "a"}
+	fields := map[string]mts.FieldValue{"usage": mts.Float64Value(1)}
+	if err := eng.Write(ctx, []mts.Point{{
+		Measurement: "cpu",
+		Tags:        tags,
+		Timestamp:   1,
+		Fields:      fields,
+	}}, mts.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	tags["host"] = "mutated"
+	fields["usage"] = mts.Float64Value(99)
+	rows, err := eng.QueryRows(ctx, mts.Query{Measurement: "cpu", StartTime: 0, EndTime: 2})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows() error = %v close = %v", err, closeErr)
+	}
+	if len(rows) != 1 || rows[0].Tags["host"] != "a" || rows[0].Fields["usage"].Float64 != 1 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("rows = %#v, want copied input close = %v", rows, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestPublicWriteTypedBatchCopiesInput(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.DefaultOptions(t.TempDir()))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	tagValues := []string{"a"}
+	timestamps := []int64{1}
+	fieldValues := []float64{1}
+	if err := eng.WriteTypedBatch(ctx, mts.TypedBatch{
+		Measurement: "cpu",
+		Tags:        []mts.TagColumn{{Name: "host", Values: tagValues}},
+		Timestamps:  timestamps,
+		Fields: []mts.TypedFieldColumn{
+			{Name: "usage", Type: mts.FieldFloat64, Float64Values: fieldValues},
+		},
+	}, mts.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("WriteTypedBatch() error = %v close = %v", err, closeErr)
+	}
+	tagValues[0] = "mutated"
+	timestamps[0] = 99
+	fieldValues[0] = 99
+	rows, err := eng.QueryRows(ctx, mts.Query{Measurement: "cpu", StartTime: 0, EndTime: 2})
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryRows() error = %v close = %v", err, closeErr)
+	}
+	if len(rows) != 1 || rows[0].Tags["host"] != "a" || rows[0].Fields["usage"].Float64 != 1 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("rows = %#v, want copied typed batch close = %v", rows, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestPublicAPIReturnsErrorsForInvalidPathAndCanceledQuery(t *testing.T) {
 	ctx := context.Background()
 	if _, err := mts.Open(ctx, mts.Options{Path: "bad\x00path"}); err == nil {
@@ -342,6 +412,104 @@ func TestPublicHealthSnapshotIncludesStructuredChecksAndQueryStatsDetails(t *tes
 	if stats.DurationNanos == 0 || stats.BudgetErrors == 0 {
 		closeErr := eng.Close(ctx)
 		t.Fatalf("QueryStatsSnapshot() = %#v, want duration and budget errors close = %v", stats, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestPublicQueryWithExplainReturnsPlanAndStats(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.DefaultOptions(t.TempDir()))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []mts.Point{{
+		Measurement: "public",
+		Tags:        map[string]string{"host": "a"},
+		Timestamp:   1,
+		Fields: map[string]mts.FieldValue{
+			"usage": mts.Float64Value(1),
+		},
+	}}, mts.WriteOptions{}); err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Write() error = %v close = %v", err, closeErr)
+	}
+	query, err := mts.NewQuery().
+		Select("usage").
+		From("", "", "public").
+		Where(mts.TagEq("host", "a")).
+		TimeRange(0, 10).
+		Build()
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("Build() error = %v close = %v", err, closeErr)
+	}
+	query.Budget = mts.QueryBudget{MaxSamples: 10}
+	result, err := eng.QueryWithExplain(ctx, query)
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("QueryWithExplain() error = %v close = %v", err, closeErr)
+	}
+	if len(result.Columns) != 1 || result.Columns[0].FieldName != "usage" {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("columns = %#v, want usage column close = %v", result.Columns, closeErr)
+	}
+	if result.Explain.Measurement != "public" || result.Explain.TagFilters["host"] != "a" {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("explain = %#v, want public host=a close = %v", result.Explain, closeErr)
+	}
+	if result.Explain.Budget.MaxSamples != 10 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("explain budget = %#v, want max samples 10 close = %v", result.Explain.Budget, closeErr)
+	}
+	if result.Stats.SamplesReturned == 0 || result.Stats.StartedUnixNanos == 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("stats = %#v, want returned samples and start time close = %v", result.Stats, closeErr)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestPublicCompactionResultAndMemorySnapshots(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 1,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	for index := range 2 {
+		if err := eng.Write(ctx, []mts.Point{{
+			Measurement: "compact",
+			Timestamp:   int64(index),
+			Fields:      map[string]mts.FieldValue{"value": mts.Int64Value(int64(index))},
+		}}, mts.WriteOptions{}); err != nil {
+			closeErr := eng.Close(ctx)
+			t.Fatalf("Write(%d) error = %v close = %v", index, err, closeErr)
+		}
+	}
+	memory := eng.StorageMemorySnapshot()
+	if memory.RuntimeHeapAllocBytes == 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("StorageMemorySnapshot() = %#v, want runtime heap close = %v", memory, closeErr)
+	}
+	result, err := eng.CompactWithResult(ctx)
+	if err != nil {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("CompactWithResult() error = %v close = %v", err, closeErr)
+	}
+	if result.State == "" || result.InputParts < 2 || result.OutputParts == 0 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("result = %#v, want affected compaction close = %v", result, closeErr)
+	}
+	stats := eng.CompactionStatsSnapshot()
+	if stats.Total == 0 || stats.LastTask.State == "" || stats.InputParts < result.InputParts {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("CompactionStatsSnapshot() = %#v result=%#v close = %v", stats, result, closeErr)
 	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() error = %v", err)

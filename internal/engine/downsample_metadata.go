@@ -271,7 +271,7 @@ func (e *Engine) setDownsamplePolicyEnabled(
 		policy.Enabled = enabled
 		return e.metadata.UpsertDownsamplePolicy(ctx, policy)
 	}
-	return fmt.Errorf("downsample policy %q not found", name)
+	return fmt.Errorf("%w: %q", ErrDownsamplePolicyNotFound, name)
 }
 
 func (e *Engine) validateDownsamplePolicyReplace(

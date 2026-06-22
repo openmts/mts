@@ -23,3 +23,24 @@ func TestAssertGETRejectsStatusAndBody(t *testing.T) {
 		t.Fatal("assertGET(body) error = nil, want error")
 	}
 }
+
+func TestAssertCompactRejectsBadResponses(t *testing.T) {
+	statusHandler := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		http.Error(writer, "bad", http.StatusTeapot)
+	})
+	if _, err := assertCompact(statusHandler); err == nil {
+		t.Fatal("assertCompact(status) error = nil, want error")
+	}
+	decodeHandler := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte("{"))
+	})
+	if _, err := assertCompact(decodeHandler); err == nil {
+		t.Fatal("assertCompact(decode) error = nil, want error")
+	}
+	responseHandler := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte(`{"ok":false,"state":"failed"}`))
+	})
+	if _, err := assertCompact(responseHandler); err == nil {
+		t.Fatal("assertCompact(response) error = nil, want error")
+	}
+}

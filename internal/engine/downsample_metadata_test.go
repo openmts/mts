@@ -220,6 +220,62 @@ func TestDropDownsamplePolicyWithOptionsCleansTargetData(t *testing.T) {
 	}
 }
 
+func TestResetDownsamplePolicyCleansTargetDataAndRejectsInvalidInput(t *testing.T) {
+	ctx := context.Background()
+	eng := openEngineWithRawDownsampleSamples(t)
+	defer func() {
+		if err := eng.Close(ctx); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+	if err := eng.DropDownsamplePolicyWithOptions(ctx, "", model.DownsampleDropOptions{}); err == nil {
+		t.Fatal("DropDownsamplePolicyWithOptions(empty) error = nil, want error")
+	}
+	if err := eng.ResetDownsamplePolicy(ctx, "", model.DownsampleReset{}); err == nil {
+		t.Fatal("ResetDownsamplePolicy(empty) error = nil, want error")
+	}
+	if err := eng.ResetDownsamplePolicy(ctx, "cpu_1m", model.DownsampleReset{
+		CompletedUntilUnix: -1,
+	}); err == nil {
+		t.Fatal("ResetDownsamplePolicy(negative) error = nil, want error")
+	}
+	if err := eng.CreateDownsamplePolicy(ctx, testDownsamplePolicy()); err != nil {
+		t.Fatalf("CreateDownsamplePolicy() error = %v", err)
+	}
+	if _, err := eng.RunDownsamplePolicy(ctx, "cpu_1m", 2*time.Minute); err != nil {
+		t.Fatalf("RunDownsamplePolicy() error = %v", err)
+	}
+	if err := eng.ResetDownsamplePolicy(ctx, "cpu_1m", model.DownsampleReset{
+		CompletedUntilUnix: int64(time.Minute),
+		AllowPolicyReplace: true,
+		CleanupTarget:      true,
+		CleanupStartUnix:   0,
+		CleanupEndUnix:     int64(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("ResetDownsamplePolicy(cleanup) error = %v", err)
+	}
+	watermark, ok, err := eng.metadata.DownsampleWatermark(ctx, "cpu_1m")
+	if err != nil || !ok {
+		t.Fatalf("DownsampleWatermark() = %#v ok=%v err=%v", watermark, ok, err)
+	}
+	if watermark.CompletedUntilUnix != int64(time.Minute) || !watermark.AllowPolicyReplace {
+		t.Fatalf("watermark = %#v, want reset completion and replace allowance", watermark)
+	}
+	rows, err := eng.QueryRows(ctx, model.Query{
+		Database:        "metrics",
+		RetentionPolicy: "rp_1m",
+		Measurement:     "cpu",
+		StartTime:       0,
+		EndTime:         int64(2 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("QueryRows(target) error = %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("target rows after reset cleanup = %#v, want none", rows)
+	}
+}
+
 func downsampleEstimatePoint(host string, timestamp int64, usage float64) model.Point {
 	return model.Point{
 		Database:        "metrics",

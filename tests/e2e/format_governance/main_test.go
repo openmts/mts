@@ -14,6 +14,13 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestRunRejectsInvalidTempDir(t *testing.T) {
+	t.Setenv("TMPDIR", "/dev/null")
+	if err := run(); err == nil {
+		t.Fatal("run(invalid temp dir) error = nil, want error")
+	}
+}
+
 func TestMainFunction(t *testing.T) {
 	main()
 }
