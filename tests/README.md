@@ -11,9 +11,11 @@
 常用门禁：
 
 ```bash
-go test -count=1 ./tests/fault/... -timeout 600s
-go test -count=1 ./tests/fault/... ./tests/scale/... -timeout 600s
-for dir in tests/e2e/*; do (cd "$dir" && go build -o testbin . && timeout 120s ./testbin; status=$?; rm -f testbin; exit $status) || exit $?; done
+make e2e
+make fault
+make scale
 ```
+
+单场景入口可执行 `make e2e-public-api`、`make fault-matrix`、`make storage-100k`、`make bench-query`，完整列表见 `make help`。
 
 `tests/fault/storage_fault_matrix` 会输出包含 case、operation、stage、expected、recovered、rows、maintenance_issues 的 JSON 报告。

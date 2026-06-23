@@ -13,6 +13,7 @@ rm -f testbin
 
 新增覆盖：
 
+- `public_api_workflow`：公开 typed batch、Builder、Row/Column iterator、元数据列表和跨重启读取。
 - `streaming_query`：流式列查询大结果迭代。
 - `query_aggregate_window`：聚合、窗口和边界。
 - `read_amplification`：读预算超限错误。

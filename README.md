@@ -125,10 +125,13 @@ go run ./cmd/mts-storage restore /backup/mts-snapshot /var/lib/mts-restored
 常规改动完成后执行：
 
 ```bash
-go test ./... -count=1 -timeout 10m
-golangci-lint run ./...
-go test $(go list ./... | grep -v '/tests/') -cover -count=1 -timeout 10m
-go test ./tests/... -count=1 -timeout 10m
+make fmt
+make test
+make lint
+make coverage
+make e2e
 ```
+
+常用场景可直接执行 `make e2e-public-api`、`make fault-matrix`、`make storage-100k`、`make bench-query`、`make pprof-storage`；完整商用门禁执行 `make ci`。
 
 商用交付门禁要求生产包代码行覆盖率达到 90% 以上；`tests/**` 下的 e2e、fault、scale 和 pprof harness 作为行为验证单独执行。

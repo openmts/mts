@@ -9,13 +9,15 @@
 ## 本地验证
 
 ```bash
-timeout 300s goimports-reviser -project-name github.com/openmts/mts -recursive -format -rm-unused .
-timeout 600s go test ./... -count=1 -timeout 10m
-timeout 720s golangci-lint run ./...
-timeout 600s go test $(go list ./... | grep -v '/tests/') -cover -count=1 -timeout 10m
-timeout 600s go test ./tests/... -count=1 -timeout 10m
+make fmt
+make test
+make lint
+make coverage
+make e2e
 timeout 60s git diff --check
 ```
+
+完整商用门禁执行 `make ci`，单场景验证可通过 `make help` 查看。
 
 生产包覆盖率未达到 90% 时，不应声明商用达标。`tests/**` 下的 e2e、fault、scale 和 pprof harness 做行为验证，不作为商用库行覆盖率分母。
 

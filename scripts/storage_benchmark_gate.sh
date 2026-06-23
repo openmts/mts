@@ -6,7 +6,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'USAGE'
 usage: scripts/storage_benchmark_gate.sh [--update-baseline] [baseline] [output]
 
-Runs the 10K default/wide10 storage write benchmarks.
+    Runs the 10K storage write and query iterator benchmarks.
 Without --update-baseline, an existing baseline is compared with benchstat.
 With --update-baseline, the current output is atomically written as baseline.
 USAGE
@@ -23,7 +23,7 @@ output="${2:-/tmp/mts-storage-benchmark.txt}"
 
 go test ./internal/bench \
   -run '^$' \
-  -bench 'BenchmarkEngineWrite(Batch|WideBatch)/points=10000$' \
+  -bench 'BenchmarkEngine(Write(Batch|WideBatch)|Query(Row|Column)Iterator)/points=10000$' \
   -benchmem \
   -count=10 | tee "$output"
 
