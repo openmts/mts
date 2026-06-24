@@ -34,6 +34,9 @@ func normalizeOptions(opts model.Options) model.Options {
 	}
 	opts.StorageMemory = normalizeStorageMemoryOptions(opts.StorageMemory)
 	opts.Compaction = normalizeCompactionOptions(opts.Compaction, opts.Compression)
+	if opts.Logger == nil {
+		opts.Logger = nopLogger()
+	}
 	return opts
 }
 

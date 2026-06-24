@@ -1,8 +1,11 @@
 package mts_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,5 +227,43 @@ func TestOptionsValidateRejectsInvalidValues(t *testing.T) {
 func TestOptionsValidateAcceptsDefaultOptions(t *testing.T) {
 	if err := mts.DefaultOptions("data").Validate(); err != nil {
 		t.Fatalf("DefaultOptions().Validate() error = %v", err)
+	}
+}
+
+func TestNilLoggerDefaultsToNop(t *testing.T) {
+	ctx := context.Background()
+	opts := mts.DefaultOptions(t.TempDir())
+	// 不设置 Logger，应使用 nopLogger
+	engine, err := mts.Open(ctx, opts)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() { _ = engine.Close(ctx) }()
+	// 引擎正常工作即可验证 nil logger 不 panic
+	if err := engine.Write(ctx, []mts.Point{{
+		Measurement: "cpu",
+		Timestamp:   1,
+		Fields:      map[string]mts.FieldValue{"v": mts.Float64Value(1)},
+	}}, mts.WriteOptions{}); err != nil {
+		t.Fatalf("Write() with nil logger error = %v", err)
+	}
+}
+
+func TestCustomLoggerPropagates(t *testing.T) {
+	ctx := context.Background()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	opts := mts.DefaultOptions(t.TempDir())
+	opts.Logger = logger
+	engine, err := mts.Open(ctx, opts)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() { _ = engine.Close(ctx) }()
+	output := buf.String()
+	if !strings.Contains(output, "engine opened") {
+		t.Fatalf("expected 'engine opened' log, got %q", output)
 	}
 }

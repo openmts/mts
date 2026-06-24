@@ -2,6 +2,7 @@ package mts
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -31,6 +32,7 @@ type Options struct {
 	Compaction             CompactionOptions
 	Compression            CompressionOptions
 	StorageMemory          StorageMemoryOptions
+	Logger                 *slog.Logger
 }
 
 // StorageMemoryOptions 控制存储层内存预算。

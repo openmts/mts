@@ -15,6 +15,7 @@ func toModelOptions(opts Options) model.Options {
 		Compaction:             toModelCompactionOptions(opts.Compaction),
 		Compression:            toModelCompressionOptions(opts.Compression),
 		StorageMemory:          toModelStorageMemoryOptions(opts.StorageMemory),
+		Logger:                 opts.Logger,
 	}
 }
 

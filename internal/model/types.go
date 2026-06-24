@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"log/slog"
+	"time"
+)
 
 type FieldType uint8
 
@@ -381,6 +384,7 @@ type Options struct {
 	Compaction             CompactionOptions
 	Compression            CompressionOptions
 	StorageMemory          StorageMemoryOptions
+	Logger                 *slog.Logger
 }
 
 type StorageMemoryOptions struct {
