@@ -2,9 +2,11 @@
 
 ## 环境
 
-- Go 1.26.2 或更高兼容版本
+- Go 1.26.4 或更高兼容版本
 - `goimports-reviser`
 - `golangci-lint`
+
+本项目使用 Go 自动工具链下载时需要启用官方 checksum DB。仓库 `Makefile` 和 `make ci` 默认使用 `GOSUMDB=sum.golang.org`，避免本机全局 `GOSUMDB=off` 阻止 `go1.26.4` 工具链校验下载。确需覆盖时使用 `MTS_GOSUMDB=<value>`。
 
 ## 本地验证
 

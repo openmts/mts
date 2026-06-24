@@ -14,6 +14,9 @@ func verifyPublicWorkflow(ctx context.Context, eng *mts.Engine) error {
 	if err := verifyMetadata(ctx, eng); err != nil {
 		return err
 	}
+	if err := verifyUserManagement(ctx, eng); err != nil {
+		return err
+	}
 	if err := verifyRowIterator(ctx, eng); err != nil {
 		return err
 	}
@@ -66,6 +69,50 @@ func assertFieldSchemas(fields []mts.FieldSchema) error {
 		if got[name] != fieldType {
 			return fmt.Errorf("field %s type = %v, want %v", name, got[name], fieldType)
 		}
+	}
+	return nil
+}
+
+func verifyUserManagement(ctx context.Context, eng *mts.Engine) error {
+	user, ok, err := eng.GetUser(ctx, "alice")
+	if err != nil {
+		return fmt.Errorf("get user: %w", err)
+	}
+	if !ok || user.DisplayName != "Alice" || user.Metadata["team"] != "platform" {
+		return fmt.Errorf("user = %#v ok=%v, want persisted alice", user, ok)
+	}
+	users, err := eng.ListUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("list users: %w", err)
+	}
+	if len(users) != 1 || users[0].Name != "alice" {
+		return fmt.Errorf("users = %#v, want alice", users)
+	}
+	grants, err := eng.ListDatabasePermissions(ctx, "alice")
+	if err != nil {
+		return fmt.Errorf("list database permissions: %w", err)
+	}
+	if !slices.Equal(grants, []mts.DatabaseGrant{{
+		Database:   databaseName,
+		Permission: mts.DatabasePermissionAdmin,
+	}}) {
+		return fmt.Errorf("database grants = %#v, want admin", grants)
+	}
+	if err := eng.CheckUserDatabasePermission(
+		ctx,
+		"alice",
+		databaseName,
+		mts.DatabasePermissionWrite,
+	); err != nil {
+		return fmt.Errorf("check admin implied write: %w", err)
+	}
+	if err := eng.CheckUserDatabasePermission(
+		ctx,
+		"alice",
+		"other",
+		mts.DatabasePermissionRead,
+	); !errors.Is(err, mts.ErrPermissionDenied) {
+		return fmt.Errorf("check other database error = %v, want permission denied", err)
 	}
 	return nil
 }

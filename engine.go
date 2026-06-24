@@ -2,6 +2,7 @@ package mts
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	storageengine "github.com/openmts/mts/internal/engine"
@@ -10,7 +11,11 @@ import (
 
 // Close 关闭 Engine 并释放本地资源。
 func (e *Engine) Close(ctx context.Context) error {
-	return publicError(e.inner.Close(ctx))
+	err := publicError(e.inner.Close(ctx))
+	if e.closeUserManager != nil {
+		err = errors.Join(err, e.closeUserManager())
+	}
+	return err
 }
 
 // Write 写入点数据。
@@ -221,6 +226,66 @@ func (e *Engine) ListSeries(
 		return nil, publicError(err)
 	}
 	return fromModelSeriesList(series), nil
+}
+
+// CreateUser 创建一个用户。
+func (e *Engine) CreateUser(ctx context.Context, user User) error {
+	return e.userManager.CreateUser(ctx, user)
+}
+
+// UpdateUser 更新用户显示名、禁用状态和 metadata。
+func (e *Engine) UpdateUser(ctx context.Context, user User) error {
+	return e.userManager.UpdateUser(ctx, user)
+}
+
+// GetUser 查询用户。
+func (e *Engine) GetUser(ctx context.Context, name string) (User, bool, error) {
+	return e.userManager.GetUser(ctx, name)
+}
+
+// ListUsers 按用户名排序列出用户。
+func (e *Engine) ListUsers(ctx context.Context) ([]User, error) {
+	return e.userManager.ListUsers(ctx)
+}
+
+// DeleteUser 删除用户及其 DB 权限。
+func (e *Engine) DeleteUser(ctx context.Context, name string) error {
+	return e.userManager.DeleteUser(ctx, name)
+}
+
+// GrantDatabasePermission 授予用户 database 权限。
+func (e *Engine) GrantDatabasePermission(
+	ctx context.Context,
+	userName string,
+	database string,
+	permission DatabasePermission,
+) error {
+	return e.userManager.GrantDatabasePermission(ctx, userName, database, permission)
+}
+
+// RevokeDatabasePermission 撤销用户 database 权限。
+func (e *Engine) RevokeDatabasePermission(
+	ctx context.Context,
+	userName string,
+	database string,
+	permission DatabasePermission,
+) error {
+	return e.userManager.RevokeDatabasePermission(ctx, userName, database, permission)
+}
+
+// ListDatabasePermissions 列出用户 DB 权限。
+func (e *Engine) ListDatabasePermissions(ctx context.Context, userName string) ([]DatabaseGrant, error) {
+	return e.userManager.ListDatabasePermissions(ctx, userName)
+}
+
+// CheckUserDatabasePermission 校验用户是否拥有 database 权限。
+func (e *Engine) CheckUserDatabasePermission(
+	ctx context.Context,
+	userName string,
+	database string,
+	permission DatabasePermission,
+) error {
+	return e.userManager.CheckDatabasePermission(ctx, userName, database, permission)
 }
 
 type columnIterator struct {

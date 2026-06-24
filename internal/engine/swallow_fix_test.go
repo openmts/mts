@@ -112,13 +112,16 @@ type flakyContext struct {
 }
 
 func (c *flakyContext) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *flakyContext) Done() <-chan struct{}       { return nil }
+
+func (c *flakyContext) Done() <-chan struct{} { return nil }
+
 func (c *flakyContext) Err() error {
 	if atomic.AddInt32(&c.calls, 1) >= 2 {
 		return context.Canceled
 	}
 	return nil
 }
+
 func (c *flakyContext) Value(_ any) any { return nil }
 
 // TestShouldRunDownsamplePolicyLogsWatermarkError 验证读取降采样水位失败时输出 WARN 日志。

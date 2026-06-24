@@ -119,7 +119,10 @@ func registerPprof(mux *http.ServeMux) {
 // nopServiceHandler 是 slog.Handler 的空操作实现，用于 nil Logger 归一化。
 type nopServiceHandler struct{}
 
-func (nopServiceHandler) Enabled(_ context.Context, _ slog.Level) bool  { return false }
+func (nopServiceHandler) Enabled(_ context.Context, _ slog.Level) bool { return false }
+
 func (nopServiceHandler) Handle(_ context.Context, _ slog.Record) error { return nil }
-func (h nopServiceHandler) WithAttrs(_ []slog.Attr) slog.Handler        { return h }
-func (h nopServiceHandler) WithGroup(_ string) slog.Handler             { return h }
+
+func (h nopServiceHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+
+func (h nopServiceHandler) WithGroup(_ string) slog.Handler { return h }

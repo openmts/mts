@@ -18,6 +18,9 @@ MTS is a single-node embedded time series storage engine for Go applications.
 - Internal storage timestamps are nanoseconds. Public `Point.Precision`,
   `TypedBatch.Precision`, and `Query.Precision` express ns/us/ms/s input and
   query result timestamp units.
+- User management is interface-based through public `UserManager`; the default
+  `LocalUserManager` stores users and database-level read/write/admin grants
+  locally. It does not implement password login or token issuance.
 
 ## Key Files
 
@@ -26,6 +29,8 @@ MTS is a single-node embedded time series storage engine for Go applications.
 - `values.go`: write DTOs and field values.
 - `query_types.go`: query DTOs and aggregate constants.
 - `precision.go`: public timestamp precision constants and conversion helpers.
+- `user_types.go`: public user and database permission DTOs.
+- `local_user_manager.go`: default local user manager implementation.
 - `options.go`: engine options, defaults, and validation.
 - `engine.go`: Engine public methods.
 - `downsample.go`: downsample public methods.

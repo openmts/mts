@@ -91,6 +91,26 @@ query, err := mts.NewQuery().
 
 聚合函数支持矩阵见 [docs/query/builder-aggregate-functions.md](docs/query/builder-aggregate-functions.md)。
 
+## 用户与权限
+
+MTS 提供接口化用户管理，默认使用本地 `LocalUserManager`。当前权限粒度到 database 级别，支持 `read`、`write`、`admin`，其中 `admin` 隐含读写权限。该模块只管理用户身份和授权数据，不负责密码登录或 token 签发。
+
+```go
+err := engine.CreateUser(ctx, mts.User{Name: "alice", DisplayName: "Alice"})
+if err != nil {
+	return err
+}
+
+err = engine.GrantDatabasePermission(ctx, "alice", "metrics", mts.DatabasePermissionRead)
+if err != nil {
+	return err
+}
+
+err = engine.CheckUserDatabasePermission(ctx, "alice", "metrics", mts.DatabasePermissionRead)
+```
+
+如需接入第三方权限系统，可通过 `Options.UserManager` 注入自定义 `UserManager` 实现。
+
 ## 批量写入
 
 高吞吐写入优先使用 `WriteTypedBatch`，避免每个点都构造字段 map：

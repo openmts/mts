@@ -12,10 +12,14 @@ import (
 )
 
 func main() {
+	os.Exit(runMain(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func runMain(args []string, stdout io.Writer, stderr io.Writer) int {
 	// stdout 用于输出 JSON 结果，结构化日志写入 stderr 避免污染结果
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	logger := slog.New(slog.NewTextHandler(stderr, nil))
 	slog.SetDefault(logger)
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	return run(args, stdout, stderr)
 }
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {

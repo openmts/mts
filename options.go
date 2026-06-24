@@ -33,6 +33,7 @@ type Options struct {
 	Compression            CompressionOptions
 	StorageMemory          StorageMemoryOptions
 	Logger                 *slog.Logger
+	UserManager            UserManager
 }
 
 // StorageMemoryOptions 控制存储层内存预算。

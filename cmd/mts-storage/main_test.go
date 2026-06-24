@@ -177,13 +177,22 @@ func TestStorageToolMigrateAndErrorPaths(t *testing.T) {
 	}
 }
 
-func TestMainSetsSlogDefault(t *testing.T) {
-	// main() 将 slog 默认 logger 设为 TextHandler(os.Stderr)。
-	// main() 调用 os.Exit 无法直接测试，这里验证 slog.SetDefault 的行为。
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	slog.SetDefault(logger)
-	if slog.Default() != logger {
-		t.Fatal("slog.SetDefault should set the default logger")
+func TestRunMainSetsSlogDefaultAndReturnsUsage(t *testing.T) {
+	previous := slog.Default()
+	defer slog.SetDefault(previous)
+	marker := slog.New(slog.NewTextHandler(io.Discard, nil))
+	slog.SetDefault(marker)
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := runMain(nil, &out, &errOut); code != 2 {
+		t.Fatalf("runMain(nil) exit = %d, want 2", code)
+	}
+	if slog.Default() == marker {
+		t.Fatal("runMain() should replace the default slog logger")
+	}
+	if !strings.Contains(errOut.String(), "usage: mts-storage") {
+		t.Fatalf("stderr = %q, want usage", errOut.String())
 	}
 }
 

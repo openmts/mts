@@ -48,6 +48,9 @@ func runWithDir(dir string) (err error) {
 	if err := prepareMetadata(ctx, eng); err != nil {
 		return errors.Join(err, eng.Close(ctx))
 	}
+	if err := prepareUsers(ctx, eng); err != nil {
+		return errors.Join(err, eng.Close(ctx))
+	}
 	if err := writeTypedScenario(ctx, eng); err != nil {
 		return errors.Join(err, eng.Close(ctx))
 	}
@@ -94,6 +97,25 @@ func prepareMetadata(ctx context.Context, eng *mts.Engine) error {
 	policy := mts.RetentionPolicy{Name: retentionName, Duration: 2 * time.Hour}
 	if err := eng.CreateRetentionPolicy(ctx, databaseName, policy); err != nil {
 		return fmt.Errorf("create retention policy: %w", err)
+	}
+	return nil
+}
+
+func prepareUsers(ctx context.Context, eng *mts.Engine) error {
+	if err := eng.CreateUser(ctx, mts.User{
+		Name:        "alice",
+		DisplayName: "Alice",
+		Metadata:    map[string]string{"team": "platform"},
+	}); err != nil {
+		return fmt.Errorf("create user: %w", err)
+	}
+	if err := eng.GrantDatabasePermission(
+		ctx,
+		"alice",
+		databaseName,
+		mts.DatabasePermissionAdmin,
+	); err != nil {
+		return fmt.Errorf("grant user database permission: %w", err)
 	}
 	return nil
 }

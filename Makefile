@@ -2,6 +2,9 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 PROJECT_NAME ?= github.com/openmts/mts
+GOSUMDB := $(or $(MTS_GOSUMDB),sum.golang.org)
+export GOSUMDB
+GO ?= env GOSUMDB=$(GOSUMDB) go
 COUNT ?= 1
 TEST_TIMEOUT ?= 10m
 TEST_WALL_TIMEOUT ?= 600s
@@ -25,9 +28,9 @@ DOWNSAMPLE_POINTS ?= 100000
 DOWNSAMPLE_SERIES ?= 100
 DOWNSAMPLE_POLICIES ?= 1
 
-CORE_PACKAGES = $(shell go list ./... | grep -v '/tests/' | grep -v '/internal/bench')
-GO_TEST = timeout $(TEST_WALL_TIMEOUT) go test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
-SCENARIO_GO_TEST = timeout $(SCENARIO_TIMEOUT) go test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
+CORE_PACKAGES = $(shell $(GO) list ./... | grep -v '/tests/' | grep -v '/internal/bench')
+GO_TEST = timeout $(TEST_WALL_TIMEOUT) $(GO) test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
+SCENARIO_GO_TEST = timeout $(SCENARIO_TIMEOUT) $(GO) test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
 
 .DEFAULT_GOAL := help
 
@@ -66,13 +69,13 @@ coverage: ## 检查生产包覆盖率不低于 COVERAGE_MIN
 	failed=0; \
 	for pkg in $(CORE_PACKAGES); do \
 		profile="$$tmp_dir/$$(echo "$$pkg" | tr '/.' '__').cover"; \
-		if ! output="$$(timeout $(COVERAGE_PACKAGE_TIMEOUT) go test "$$pkg" -coverprofile="$$profile" -count=$(COUNT) -timeout 5m 2>&1)"; then \
+		if ! output="$$(timeout $(COVERAGE_PACKAGE_TIMEOUT) $(GO) test "$$pkg" -coverprofile="$$profile" -count=$(COUNT) -timeout 5m 2>&1)"; then \
 			printf '%s\n' "$$output"; \
 			exit 1; \
 		fi; \
 		chmod 0600 "$$profile"; \
 		printf '%s\n' "$$output"; \
-		coverage="$$(go tool cover -func="$$profile" | awk '/^total:/ {gsub("%", "", $$3); print $$3}')"; \
+		coverage="$$($(GO) tool cover -func="$$profile" | awk '/^total:/ {gsub("%", "", $$3); print $$3}')"; \
 		if ! awk -v got="$$coverage" -v min="$(COVERAGE_MIN)" 'BEGIN { exit !(got + 0 >= min + 0) }'; then \
 			printf 'coverage below threshold: package=%s got=%s%% min=%s%%\n' "$$pkg" "$$coverage" "$(COVERAGE_MIN)"; \
 			failed=1; \
@@ -142,7 +145,7 @@ fault-downsample: ## 运行降采样故障用例
 scale: ## 运行全部 scale 测试包
 	$(SCENARIO_GO_TEST) ./tests/scale/...
 scale-storage: ## 运行可调规模存储场景，默认 100K
-	@umask 077; timeout $(SCENARIO_TIMEOUT) go run ./tests/scale/storage_10m \
+	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/scale/storage_10m \
 		-profile quick \
 		-mode write-query-compact \
 		-points $(STORAGE_POINTS) \
@@ -155,18 +158,18 @@ storage-1m: ## 运行 1M 存储写查压缩场景
 storage-10m: ## 运行 10M 存储写查压缩场景
 	@$(MAKE) scale-storage STORAGE_POINTS=10000000 SCENARIO_TIMEOUT=20m
 storage-matrix: ## 运行小规模存储矩阵
-	@umask 077; timeout $(SCENARIO_TIMEOUT) go run ./tests/scale/storage_matrix \
+	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/scale/storage_matrix \
 		-sizes 100k \
 		-compressions off,snappy,zstd \
 		-durabilities buffered,write-sync \
 		-case-timeout 5m
 storage-soak: ## 运行 30s 存储长稳 smoke
-	@umask 077; timeout $(SCENARIO_TIMEOUT) go run ./tests/scale/storage_soak \
+	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/scale/storage_soak \
 		-seed $(SOAK_SEED) \
 		-duration $(SOAK_DURATION) \
 		-report-interval 5s
 scale-downsample: ## 运行降采样规模化场景
-	@umask 077; timeout $(SCENARIO_TIMEOUT) go run ./tests/scale/downsample_policy \
+	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/scale/downsample_policy \
 		-points $(DOWNSAMPLE_POINTS) \
 		-series $(DOWNSAMPLE_SERIES) \
 		-policy-count $(DOWNSAMPLE_POLICIES)
@@ -175,7 +178,7 @@ scale-downsample: ## 运行降采样规模化场景
 pprof: ## 运行全部 pprof 测试包
 	$(SCENARIO_GO_TEST) ./tests/pprof/...
 pprof-storage: ## 运行存储 pprof smoke 场景，不落 profile 文件
-	@umask 077; timeout $(SCENARIO_TIMEOUT) go run ./tests/pprof/storage_engine \
+	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/pprof/storage_engine \
 		-mode query \
 		-points $(PPROF_POINTS) \
 		-series $(PPROF_SERIES) \
@@ -185,7 +188,7 @@ pprof-storage: ## 运行存储 pprof smoke 场景，不落 profile 文件
 bench: ## 运行存储基准 gate
 	timeout $(SCENARIO_TIMEOUT) bash scripts/storage_benchmark_gate.sh
 bench-query: ## 运行查询迭代器基准 smoke
-	timeout $(SCENARIO_TIMEOUT) go test ./internal/bench \
+	timeout $(SCENARIO_TIMEOUT) $(GO) test ./internal/bench \
 		-run '^$$' \
 		-bench 'BenchmarkEngineQuery(Row|Column)Iterator/points=1000$$' \
 		-benchmem \

@@ -4,6 +4,8 @@ set -euo pipefail
 project_name="${PROJECT_NAME:-github.com/openmts/mts}"
 coverage_min="${MTS_COVERAGE_MIN:-90.0}"
 tmp_dir="${TMPDIR:-/tmp}/mts-ci-gate-$$"
+export GOSUMDB="${MTS_GOSUMDB:-sum.golang.org}"
+go_cmd=(go)
 
 cleanup() {
   rm -rf "$tmp_dir"
@@ -17,7 +19,7 @@ echo "== format =="
 timeout 300s goimports-reviser -project-name "$project_name" -recursive -format -rm-unused .
 
 echo "== tests =="
-timeout 600s go test ./... -count=1 -timeout 10m
+timeout 600s "${go_cmd[@]}" test ./... -count=1 -timeout 10m
 
 echo "== lint =="
 timeout 720s golangci-lint run ./...
@@ -50,9 +52,9 @@ core_packages=(
 failed=0
 for pkg in "${core_packages[@]}"; do
   profile="$tmp_dir/$(echo "$pkg" | tr '/.' '__').cover"
-  output="$(timeout 300s go test "$pkg" -coverprofile="$profile" -count=1 -timeout 5m)"
+  output="$(timeout 300s "${go_cmd[@]}" test "$pkg" -coverprofile="$profile" -count=1 -timeout 5m)"
   echo "$output"
-  coverage="$(go tool cover -func="$profile" | awk '/^total:/ {gsub("%", "", $3); print $3}')"
+  coverage="$("${go_cmd[@]}" tool cover -func="$profile" | awk '/^total:/ {gsub("%", "", $3); print $3}')"
   awk -v got="$coverage" -v min="$coverage_min" 'BEGIN { exit !(got + 0 >= min + 0) }' || {
     echo "coverage below threshold: package=$pkg got=${coverage}% min=${coverage_min}%"
     failed=1
@@ -63,7 +65,7 @@ if [[ "$failed" -ne 0 ]]; then
 fi
 
 echo "== regression smoke =="
-timeout 900s go test ./tests/fault/storage_fault_matrix ./tests/scale/storage_matrix ./tests/pprof/storage_engine -count=1 -timeout 15m
+timeout 900s "${go_cmd[@]}" test ./tests/fault/storage_fault_matrix ./tests/scale/storage_matrix ./tests/pprof/storage_engine -count=1 -timeout 15m
 
 echo "== artifact scan =="
 artifacts="$(timeout 60s find . -type f \( -name '*.test' -o -name '*.prof' -o -name '*.pprof' -o -name 'coverage.out' -o -name '*.coverprofile' \) -not -path './.git/*' -print)"

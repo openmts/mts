@@ -2,6 +2,7 @@ package mts
 
 import (
 	"context"
+	"errors"
 
 	storageengine "github.com/openmts/mts/internal/engine"
 )
@@ -11,7 +12,9 @@ import (
 // Engine 持有本地数据目录、WAL、MemTable、SSTable、元数据和后台维护任务。
 // 使用完成后必须调用 Close 释放文件句柄和后台任务。
 type Engine struct {
-	inner *storageengine.Engine
+	inner            *storageengine.Engine
+	userManager      UserManager
+	closeUserManager func() error
 }
 
 // Open 打开或创建一个本地 Engine。
@@ -24,7 +27,25 @@ func Open(ctx context.Context, opts Options) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+	userManager, closeUserManager, err := openEngineUserManager(opts)
+	if err != nil {
+		closeErr := inner.Close(ctx)
+		return nil, errors.Join(err, closeErr)
+	}
 	return &Engine{
-		inner: inner,
+		inner:            inner,
+		userManager:      userManager,
+		closeUserManager: closeUserManager,
 	}, nil
+}
+
+func openEngineUserManager(opts Options) (UserManager, func() error, error) {
+	if opts.UserManager != nil {
+		return opts.UserManager, nil, nil
+	}
+	manager, err := OpenLocalUserManager(opts.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return manager, manager.Close, nil
 }
