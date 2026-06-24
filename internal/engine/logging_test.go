@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"bytes"
 	"context"
 	"log/slog"
 	"testing"
@@ -11,15 +10,6 @@ func TestNopHandlerEnabled(t *testing.T) {
 	handler := nopHandler{}
 	if handler.Enabled(context.Background(), slog.LevelError) {
 		t.Fatal("nopHandler.Enabled should return false for all levels")
-	}
-}
-
-func TestNopHandlerHandleNoOutput(t *testing.T) {
-	var buf bytes.Buffer
-	logger := slog.New(nopHandler{})
-	logger.Info("test message", "key", "value")
-	if buf.Len() > 0 {
-		t.Fatalf("nopHandler should produce no output, got %q", buf.String())
 	}
 }
 
@@ -45,12 +35,7 @@ func TestNopHandlerWithAttrsAndGroup(t *testing.T) {
 
 func TestNopLoggerIsDefault(t *testing.T) {
 	logger := nopLogger()
-	if logger == nil {
-		t.Fatal("nopLogger should not return nil")
+	if logger.Enabled(context.Background(), slog.LevelError) {
+		t.Fatal("nopLogger should be disabled for all levels")
 	}
-	if !logger.Enabled(context.Background(), slog.LevelError) {
-		// nopLogger 应返回 Enabled=false 的 logger
-		return
-	}
-	t.Fatal("nopLogger should be disabled for all levels")
 }
