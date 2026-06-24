@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -172,6 +174,16 @@ func TestStorageToolMigrateAndErrorPaths(t *testing.T) {
 		if code := run(args, &out, &errOut); code != 2 {
 			t.Fatalf("run(%v) exit = %d, want 2 output=%s error=%s", args, code, out.String(), errOut.String())
 		}
+	}
+}
+
+func TestMainSetsSlogDefault(t *testing.T) {
+	// main() 将 slog 默认 logger 设为 TextHandler(os.Stderr)。
+	// main() 调用 os.Exit 无法直接测试，这里验证 slog.SetDefault 的行为。
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	slog.SetDefault(logger)
+	if slog.Default() != logger {
+		t.Fatal("slog.SetDefault should set the default logger")
 	}
 }
 

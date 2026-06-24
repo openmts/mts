@@ -5,12 +5,16 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 
 	"github.com/openmts/mts/internal/storagecheck"
 )
 
 func main() {
+	// stdout 用于输出 JSON 结果，结构化日志写入 stderr 避免污染结果
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	slog.SetDefault(logger)
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
