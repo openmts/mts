@@ -53,6 +53,7 @@ func NewServer(options Options, metrics MetricsProvider, health HealthProvider, 
 			options.AdminToken,
 			options.AuditLogger,
 			compact,
+			logger,
 		))
 	}
 	if options.EnablePprof {

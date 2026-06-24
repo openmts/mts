@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/subtle"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ func compactHandler(
 	token string,
 	audit AuditLogger,
 	compact CompactFunc,
+	logger *slog.Logger,
 ) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
@@ -47,6 +49,7 @@ func compactHandler(
 			return
 		}
 		if !authorizedAdminRequest(request, token) {
+			logger.Warn("admin auth failed", "remote_addr", request.RemoteAddr)
 			writeJSON(writer, http.StatusUnauthorized, adminResponse{OK: false, Error: "admin unauthorized"})
 			return
 		}

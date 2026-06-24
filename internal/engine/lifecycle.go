@@ -306,6 +306,11 @@ func (s *Shard) preflightCompactionDiskSpace(plan compactionPlan) error {
 	if available >= required {
 		return nil
 	}
+	s.logger.Warn("compaction skipped: insufficient disk space",
+		"shard", shardID(s.opts.Database, s.opts.RetentionPolicy, s.opts.Start),
+		"available_bytes", available,
+		"required_bytes", required,
+	)
 	return fmt.Errorf(
 		"%w: available_bytes=%d required_bytes=%d",
 		ErrCompactionDiskSpaceExceeded,

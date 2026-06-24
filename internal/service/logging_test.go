@@ -5,8 +5,11 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openmts/mts/internal/observability"
 )
@@ -142,5 +145,36 @@ func TestServerShutdownLogsViaCustomLogger(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "service shutdown") {
 		t.Fatalf("logs = %q, want service shutdown", buf.String())
+	}
+}
+
+// TestAdminAuthFailureLogs 验证 admin 鉴权失败时输出 WARN 日志。
+func TestAdminAuthFailureLogs(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelWarn,
+	}))
+	registry := observability.NewRegistry()
+	ops := &fakeOps{registry: registry}
+	opts := Options{
+		Addr:         "127.0.0.1:0",
+		AdminTimeout: time.Second,
+		EnableAdmin:  true,
+		AdminToken:   "secret",
+		Logger:       logger,
+	}
+	server := NewServer(opts, ops, ops, func(_ context.Context) error { return nil })
+	handler := server.HTTPHandler()
+
+	request := httptest.NewRequest(http.MethodPost, "/admin/compact", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, recorder.Code)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "admin auth failed") {
+		t.Fatalf("expected 'admin auth failed' in log, got %q", output)
 	}
 }

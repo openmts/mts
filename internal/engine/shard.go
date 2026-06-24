@@ -539,10 +539,22 @@ func (s *Shard) openParts() (uint64, error) {
 	for _, meta := range s.manifest.Parts {
 		part, err := s.deps.parts.OpenPart(meta.Path)
 		if err != nil {
-			s.recoveryReport.Add(partOpenRecoveryIssue(meta, err))
+			issue := partOpenRecoveryIssue(meta, err)
+			s.logger.Warn("part open recovery issue",
+				"shard", shardID(s.opts.Database, s.opts.RetentionPolicy, s.opts.Start),
+				"part", meta.ID,
+				"kind", string(issue.Kind),
+				"error", err,
+			)
+			s.recoveryReport.Add(issue)
 			return 0, s.recoveryReport.FatalError()
 		}
 		if issue, ok := partMetadataMismatchIssue(meta, part.Meta()); ok {
+			s.logger.Warn("part metadata mismatch",
+				"shard", shardID(s.opts.Database, s.opts.RetentionPolicy, s.opts.Start),
+				"part", meta.ID,
+				"message", issue.Message,
+			)
 			closeErr := part.Close()
 			s.recoveryReport.Add(issue)
 			return 0, errors.Join(s.recoveryReport.FatalError(), closeErr)
