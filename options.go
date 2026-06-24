@@ -54,6 +54,7 @@ type WALOptions struct {
 	BatchRecords  int
 	BatchBytes    int64
 	BatchInterval time.Duration
+	Logger        *slog.Logger
 }
 
 // CompactionOptions 控制单机 compaction 策略。

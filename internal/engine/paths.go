@@ -37,6 +37,9 @@ func normalizeOptions(opts model.Options) model.Options {
 	if opts.Logger == nil {
 		opts.Logger = nopLogger()
 	}
+	if opts.WAL.Logger == nil {
+		opts.WAL.Logger = opts.Logger
+	}
 	return opts
 }
 

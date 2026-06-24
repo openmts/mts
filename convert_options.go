@@ -39,6 +39,7 @@ func toModelWALOptions(opts WALOptions) model.WALOptions {
 		BatchRecords:  opts.BatchRecords,
 		BatchBytes:    opts.BatchBytes,
 		BatchInterval: opts.BatchInterval,
+		Logger:        opts.Logger,
 	}
 }
 

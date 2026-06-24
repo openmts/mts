@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"path/filepath"
@@ -62,5 +63,32 @@ func TestOpenInitializesLogger(t *testing.T) {
 	}
 	if log.logger.Enabled(context.Background(), slog.LevelError) {
 		t.Fatal("default WAL logger should be disabled (nopLogger)")
+	}
+}
+
+// TestWALOpenWithCustomLogger 验证可通过 Options.Logger 注入自定义 logger。
+func TestWALOpenWithCustomLogger(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "wal")
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	log, err := Open(dir, Options{
+		BatchInterval: time.Hour,
+		Logger:        logger,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if cerr := log.Close(); cerr != nil {
+			t.Fatalf("Close() error = %v", cerr)
+		}
+	}()
+	if log.logger != logger {
+		t.Fatal("WAL should use the provided logger")
+	}
+	if !log.logger.Enabled(context.Background(), slog.LevelWarn) {
+		t.Fatal("provided logger should be enabled for warn level")
 	}
 }

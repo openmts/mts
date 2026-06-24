@@ -404,6 +404,7 @@ type WALOptions struct {
 	BatchRecords  int
 	BatchBytes    int64
 	BatchInterval time.Duration
+	Logger        *slog.Logger
 }
 
 type CompactionOptions struct {

@@ -36,6 +36,7 @@ type Options struct {
 	BatchRecords  int
 	BatchBytes    int64
 	BatchInterval time.Duration
+	Logger        *slog.Logger
 }
 
 type Log struct {
@@ -92,11 +93,15 @@ func Open(dir string, opts Options) (*Log, error) {
 	if opts.SegmentBytes <= 0 {
 		opts.SegmentBytes = defaultSegmentBytes
 	}
+	logger := opts.Logger
+	if logger == nil {
+		logger = nopLogger()
+	}
 	log := &Log{
 		dir:     filepath.Clean(dir),
 		opts:    opts,
 		segment: 1,
-		logger:  nopLogger(),
+		logger:  logger,
 	}
 	if err := log.openLastSegment(); err != nil {
 		return nil, err
