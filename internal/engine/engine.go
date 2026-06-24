@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -45,6 +46,7 @@ type Engine struct {
 	downsampleRunning  map[string]struct{}
 	downsampleMu       sync.Mutex
 	downsampleStats    downsampleStatsRecorder
+	logger             *slog.Logger
 }
 
 type shardBatch struct {
@@ -82,6 +84,7 @@ func Open(_ context.Context, opts model.Options) (*Engine, error) {
 		memory:              newStorageMemoryLimiter(opts.StorageMemory),
 		compactionScheduler: newCompactionScheduler(),
 		downsampleRunning:   make(map[string]struct{}),
+		logger:              opts.Logger,
 	}
 	if err := eng.loadExistingShards(); err != nil {
 		closeErr := metadata.Close()
@@ -89,6 +92,10 @@ func Open(_ context.Context, opts model.Options) (*Engine, error) {
 	}
 	eng.startBackgroundCompaction()
 	eng.startDownsampleScheduler()
+	eng.logger.Info("engine opened",
+		"path", opts.Path,
+		"shard_count", len(eng.shards),
+	)
 	return eng, nil
 }
 
@@ -123,12 +130,18 @@ func (e *Engine) Close(_ context.Context) error {
 	defer e.mu.Unlock()
 	for _, shard := range e.shards {
 		if err := shard.Close(); err != nil {
+			e.logger.Error("engine close failed",
+				"shard", shardID(shard.opts.Database, shard.opts.RetentionPolicy, shard.opts.Start),
+				"error", err,
+			)
 			return err
 		}
 	}
 	if err := e.metadata.Close(); err != nil {
+		e.logger.Error("metadata close failed", "error", err)
 		return err
 	}
+	e.logger.Info("engine closed")
 	return nil
 }
 
@@ -958,6 +971,7 @@ func (e *Engine) shardForStartLocked(database string, policy string, start int64
 		Compression:        e.opts.Compression,
 		Memory:             e.memory,
 		scheduler:          e.compactionScheduler,
+		logger:             e.logger,
 	})
 	if err != nil {
 		return nil, err
@@ -1012,6 +1026,7 @@ func (e *Engine) openShardDir(path string, entry os.DirEntry, err error) error {
 		Compression:        e.opts.Compression,
 		Memory:             e.memory,
 		scheduler:          e.compactionScheduler,
+		logger:             e.logger,
 	})
 	if err != nil {
 		return err

@@ -3,6 +3,7 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -28,6 +29,7 @@ type ShardOptions struct {
 	Compression        model.CompressionOptions
 	Memory             *storageMemoryLimiter
 	scheduler          *compactionScheduler
+	logger             *slog.Logger
 	deps               shardDeps
 }
 
@@ -46,6 +48,7 @@ type Shard struct {
 	compactionStats compactionStatsRecorder
 	deps            shardDeps
 	testHooks       shardTestHooks
+	logger          *slog.Logger
 }
 
 type shardTestHooks struct {
@@ -59,6 +62,10 @@ func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 	if err := prepareStorageRoot(opts.Dir); err != nil {
 		return nil, 0, err
 	}
+	logger := opts.logger
+	if logger == nil {
+		logger = nopLogger()
+	}
 	deps := normalizeShardDeps(opts.deps)
 	manifest, err := deps.parts.LoadManifest(opts.Dir)
 	if err != nil {
@@ -70,6 +77,7 @@ func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 		manifest: manifest,
 		parts:    make([]partReader, 0, len(manifest.Parts)),
 		deps:     deps,
+		logger:   logger,
 	}
 	maxSeq, err := shard.openParts()
 	if err != nil {
@@ -89,6 +97,10 @@ func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 	shard.wal = log
 	replayed, err := log.ReplayRecords()
 	if err != nil {
+		logger.Warn("wal replay failed",
+			"shard", shardID(opts.Database, opts.RetentionPolicy, opts.Start),
+			"error", err,
+		)
 		closeErr := shard.closeLocked()
 		return nil, 0, errors.Join(err, closeErr)
 	}
@@ -109,6 +121,10 @@ func OpenShard(opts ShardOptions) (*Shard, uint64, error) {
 			}
 		}
 	}
+	logger.Info("shard opened",
+		"shard", shardID(opts.Database, opts.RetentionPolicy, opts.Start),
+		"wal_records", len(replayed),
+	)
 	return shard, maxSeq, nil
 }
 
