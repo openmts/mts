@@ -48,6 +48,7 @@ func (e *Engine) scanDownsamplePolicies(ctx context.Context) {
 	}
 	policies, err := e.metadata.ListDownsamplePolicies(ctx)
 	if err != nil {
+		e.logger.Warn("list downsample policies failed", "error", err)
 		return
 	}
 	for _, policy := range policies {
@@ -64,6 +65,10 @@ func (e *Engine) shouldRunDownsamplePolicy(ctx context.Context, policy model.Dow
 	}
 	watermark, _, err := e.metadata.DownsampleWatermark(ctx, policy.Name)
 	if err != nil {
+		e.logger.Warn("read downsample watermark failed",
+			"policy", policy.Name,
+			"error", err,
+		)
 		return false
 	}
 	if watermark.LastRunUnix == 0 {
@@ -83,7 +88,12 @@ func (e *Engine) startDownsamplePolicyRun(policy model.DownsamplePolicy) {
 		defer e.releaseDownsamplePolicyRun(name)
 		ctx, cancel := e.downsampleRunContext(policy)
 		defer cancel()
-		_, _ = e.RunDownsamplePolicy(ctx, name, time.Duration(time.Now().UnixNano()))
+		if _, err := e.RunDownsamplePolicy(ctx, name, time.Duration(time.Now().UnixNano())); err != nil {
+			e.logger.Warn("downsample policy run failed",
+				"policy", name,
+				"error", err,
+			)
+		}
 	}()
 }
 

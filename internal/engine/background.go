@@ -31,7 +31,9 @@ func (e *Engine) backgroundCompactionLoop(interval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			_ = e.compactBackground(context.Background())
+			if err := e.compactBackground(context.Background()); err != nil {
+				e.logger.Warn("background compaction failed", "error", err)
+			}
 		case <-e.compactStop:
 			return
 		}

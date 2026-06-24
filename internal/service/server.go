@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -18,6 +19,7 @@ type Options struct {
 	AdminToken   string
 	EnablePprof  bool
 	AuditLogger  AuditLogger
+	Logger       *slog.Logger
 }
 
 type MetricsProvider interface {
@@ -33,9 +35,14 @@ type AuditLogger interface {
 type Server struct {
 	options Options
 	server  *http.Server
+	logger  *slog.Logger
 }
 
 func NewServer(options Options, metrics MetricsProvider, health HealthProvider, compact CompactFunc) *Server {
+	logger := options.Logger
+	if logger == nil {
+		logger = slog.New(nopServiceHandler{})
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/metrics", metricsHandler(metrics))
 	mux.HandleFunc("/healthz", healthHandler(health, false))
@@ -54,6 +61,7 @@ func NewServer(options Options, metrics MetricsProvider, health HealthProvider, 
 	return &Server{
 		options: options,
 		server:  &http.Server{Addr: options.Addr, Handler: mux},
+		logger:  logger,
 	}
 }
 
@@ -62,9 +70,11 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
+	s.logger.Info("service listening", "addr", s.options.Addr)
 	go func() {
 		err := s.server.Serve(listener)
 		if err != nil && err != http.ErrServerClosed {
+			s.logger.Error("http server stopped unexpectedly", "error", err)
 			return
 		}
 	}()
@@ -72,6 +82,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.logger.Info("service shutdown")
 	return s.server.Shutdown(ctx)
 }
 
@@ -103,3 +114,11 @@ func registerPprof(mux *http.ServeMux) {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 }
+
+// nopServiceHandler 是 slog.Handler 的空操作实现，用于 nil Logger 归一化。
+type nopServiceHandler struct{}
+
+func (nopServiceHandler) Enabled(_ context.Context, _ slog.Level) bool  { return false }
+func (nopServiceHandler) Handle(_ context.Context, _ slog.Record) error { return nil }
+func (h nopServiceHandler) WithAttrs(_ []slog.Attr) slog.Handler        { return h }
+func (h nopServiceHandler) WithGroup(_ string) slog.Handler             { return h }

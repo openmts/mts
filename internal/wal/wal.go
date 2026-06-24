@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -56,6 +57,8 @@ type Log struct {
 
 	metrics Metrics
 
+	logger *slog.Logger
+
 	encodeScratch []byte
 	frameScratch  []byte
 }
@@ -93,6 +96,7 @@ func Open(dir string, opts Options) (*Log, error) {
 		dir:     filepath.Clean(dir),
 		opts:    opts,
 		segment: 1,
+		logger:  nopLogger(),
 	}
 	if err := log.openLastSegment(); err != nil {
 		return nil, err
@@ -433,7 +437,9 @@ func (l *Log) intervalSyncLoop(interval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			_ = l.FlushPending()
+			if err := l.FlushPending(); err != nil {
+				l.logger.Warn("wal interval sync failed", "error", err)
+			}
 		case <-l.syncStop:
 			return
 		}
