@@ -5,8 +5,11 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/openmts/mts/internal/model"
 )
 
 func TestNopHandlerEnabled(t *testing.T) {
@@ -91,4 +94,45 @@ func TestWALOpenWithCustomLogger(t *testing.T) {
 	if !log.logger.Enabled(context.Background(), slog.LevelWarn) {
 		t.Fatal("provided logger should be enabled for warn level")
 	}
+}
+
+// TestIntervalSyncLoopErrorLogs 验证 intervalSyncLoop 在 FlushPending 失败时记录 WARN 日志。
+func TestIntervalSyncLoopErrorLogs(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "wal")
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelWarn,
+	}))
+	log, err := Open(dir, Options{
+		Sync:          false,
+		BatchInterval: 10 * time.Millisecond,
+		Logger:        logger,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	record := model.ResolvedPoint{
+		Measurement: "cpu",
+		Timestamp:   1,
+		Fields: []model.ResolvedField{{
+			FieldName: "v",
+			Type:      model.FieldFloat64,
+			Value:     model.Float64Value(1),
+		}},
+	}
+	if err := log.Append([]model.ResolvedPoint{record}, false); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+	// 关闭底层文件以触发周期同步失败
+	log.mu.Lock()
+	if log.file != nil {
+		_ = log.file.Close()
+	}
+	log.mu.Unlock()
+	// 等待周期同步触发并记录失败日志
+	waitForWALTest(t, time.Second, func() bool {
+		return strings.Contains(buf.String(), "wal interval sync failed")
+	})
+	// 文件已被手动关闭，Close 预期返回 "file already closed" 错误，此处忽略
+	_ = log.Close()
 }
