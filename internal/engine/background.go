@@ -11,6 +11,9 @@ func (e *Engine) startBackgroundCompaction() {
 	}
 	e.compactStop = make(chan struct{})
 	e.compactWG.Add(1)
+	e.logger.Info("background compaction started",
+		"interval", e.opts.Compaction.BackgroundInterval.String(),
+	)
 	go e.backgroundCompactionLoop(e.opts.Compaction.BackgroundInterval)
 }
 

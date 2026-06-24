@@ -64,6 +64,7 @@ func TestApplyRetentionWaitsForShardLifecycleLock(t *testing.T) {
 	engine := &Engine{
 		opts:   model.Options{Retention: time.Nanosecond},
 		shards: map[string]*Shard{"s": shard},
+		logger: nopLogger(),
 	}
 	shard.lifecycleMu.Lock()
 	done := make(chan error, 1)

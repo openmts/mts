@@ -107,7 +107,7 @@ func TestEngineOpenFlushAndCompactErrors(t *testing.T) {
 	if err := badCompact.mem.Apply(point); err != nil {
 		t.Fatalf("mem.Apply() compact error = %v", err)
 	}
-	eng = &Engine{shards: map[string]*Shard{"bad": badCompact}}
+	eng = &Engine{shards: map[string]*Shard{"bad": badCompact}, logger: nopLogger()}
 	if err := eng.Compact(context.Background()); err == nil {
 		t.Fatal("Engine.Compact() error = nil, want shard compact error")
 	}

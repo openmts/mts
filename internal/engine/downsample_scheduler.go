@@ -13,6 +13,7 @@ func (e *Engine) startDownsampleScheduler() {
 	e.downsampleCtx, e.downsampleCancel = context.WithCancel(context.Background())
 	e.downsampleStop = make(chan struct{})
 	e.downsampleWG.Add(1)
+	e.logger.Info("downsample scheduler started")
 	go e.downsampleSchedulerLoop()
 }
 

@@ -58,9 +58,19 @@ func (e *Engine) RunDownsamplePolicy(
 	result, err = e.runDownsampleWindows(ctx, policy, watermark, windows, result)
 	if err != nil {
 		attempt.finishFailure(result, err)
+		e.logger.Warn("downsample policy run failed",
+			"policy", policy.Name,
+			"windows", result.WindowsProcessed,
+			"error", err,
+		)
 		return result, err
 	}
 	attempt.finishSuccess(result)
+	e.logger.Info("downsample policy run completed",
+		"policy", policy.Name,
+		"windows", result.WindowsProcessed,
+		"points_written", result.PointsWritten,
+	)
 	return result, nil
 }
 

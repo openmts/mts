@@ -39,12 +39,23 @@ func (e *Engine) CompactWithResult(ctx context.Context) (CompactionResult, error
 			result.State = compactionTaskFailed
 			result.Duration = time.Since(started)
 			result.Error = err.Error()
+			e.logger.Warn("compaction failed",
+				"duration_ms", result.Duration.Milliseconds(),
+				"error", err,
+			)
 			return result, err
 		}
 	}
 	result.Duration = time.Since(started)
 	if result.Shards > 0 && result.State == compactionTaskNoop {
 		result.State = compactionTaskSucceeded
+	}
+	if result.State == compactionTaskSucceeded {
+		e.logger.Info("compaction completed",
+			"duration_ms", result.Duration.Milliseconds(),
+			"input_parts", result.InputParts,
+			"output_parts", result.OutputParts,
+		)
 	}
 	return result, nil
 }
@@ -78,6 +89,10 @@ func (e *Engine) ApplyRetention(_ context.Context, now time.Time) error {
 		e.retentionExpired += uint64(len(shard.manifest.Parts))
 		e.retentionDeletedBytes += uint64(deletedBytes)
 		shard.lifecycleMu.Unlock()
+		e.logger.Info("retention shard removed",
+			"shard", id,
+			"deleted_bytes", deletedBytes,
+		)
 		delete(e.shards, id)
 	}
 	return nil
