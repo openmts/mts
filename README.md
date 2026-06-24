@@ -138,6 +138,18 @@ go run ./cmd/mts-storage snapshot /var/lib/mts /backup/mts-snapshot
 go run ./cmd/mts-storage restore /backup/mts-snapshot /var/lib/mts-restored
 ```
 
+## 结构化日志
+
+`Options.Logger` 接收 `*slog.Logger`，nil 时使用零开销 nopHandler。日志仅在生命周期事件（Open/Close/Compaction/Retention/Downsample）和错误路径记录，高频读写路径依赖指标体系：
+
+```go
+opts := mts.DefaultOptions("/var/lib/mts")
+opts.Logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
+engine, err := mts.Open(ctx, opts)
+```
+
+`Options.WAL.Logger` 可单独指定 WAL 日志器，nil 时继承 `Options.Logger`。
+
 ## 质量门禁
 
 常规改动完成后执行：
