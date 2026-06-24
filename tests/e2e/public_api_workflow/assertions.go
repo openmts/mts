@@ -20,6 +20,9 @@ func verifyPublicWorkflow(ctx context.Context, eng *mts.Engine) error {
 	if err := verifyColumnIterator(ctx, eng); err != nil {
 		return err
 	}
+	if err := verifyPrecisionQuery(ctx, eng); err != nil {
+		return err
+	}
 	return verifyExplainAndHealth(ctx, eng)
 }
 
@@ -156,6 +159,30 @@ func assertUsageColumn(iter mts.ColumnIterator) (err error) {
 	}
 	if !slices.Equal(values, []float64{0.40, 0.90}) {
 		return fmt.Errorf("usage values = %v, want [0.4 0.9]", values)
+	}
+	return nil
+}
+
+func verifyPrecisionQuery(ctx context.Context, eng *mts.Engine) error {
+	query, err := mts.NewQuery().
+		Select("usage").
+		From(databaseName, retentionName, measurementName).
+		Where(mts.TagEq("host", "api-2")).
+		Precision(mts.PrecisionMillisecond).
+		TimeRange(5_000, 5_001).
+		Build()
+	if err != nil {
+		return fmt.Errorf("build precision query: %w", err)
+	}
+	rows, err := eng.QueryRows(ctx, query)
+	if err != nil {
+		return fmt.Errorf("query precision rows: %w", err)
+	}
+	if len(rows) != 1 {
+		return fmt.Errorf("precision row count = %d, want 1", len(rows))
+	}
+	if rows[0].Timestamp != 5_000 {
+		return fmt.Errorf("precision row timestamp = %d, want 5000", rows[0].Timestamp)
 	}
 	return nil
 }

@@ -30,7 +30,15 @@ func fromModelFieldValue(value model.FieldValue) FieldValue {
 	}
 }
 
-func toModelPoint(point Point) model.Point {
+func toModelPoint(point Point) (model.Point, error) {
+	factor, err := timePrecisionFactor(point.Precision)
+	if err != nil {
+		return model.Point{}, err
+	}
+	timestamp, err := timestampToNanoseconds(point.Timestamp, factor)
+	if err != nil {
+		return model.Point{}, err
+	}
 	fields := make(map[string]model.FieldValue, len(point.Fields))
 	for name, value := range point.Fields {
 		fields[name] = toModelFieldValue(value)
@@ -40,20 +48,28 @@ func toModelPoint(point Point) model.Point {
 		RetentionPolicy: point.RetentionPolicy,
 		Measurement:     point.Measurement,
 		Tags:            cloneStringMap(point.Tags),
-		Timestamp:       point.Timestamp,
+		Timestamp:       timestamp,
 		Fields:          fields,
-	}
+	}, nil
 }
 
-func toModelPoints(points []Point) []model.Point {
+func toModelPoints(points []Point) ([]model.Point, error) {
 	out := make([]model.Point, len(points))
 	for index, point := range points {
-		out[index] = toModelPoint(point)
+		converted, err := toModelPoint(point)
+		if err != nil {
+			return nil, err
+		}
+		out[index] = converted
 	}
-	return out
+	return out, nil
 }
 
-func toModelTypedBatch(batch TypedBatch) model.TypedBatch {
+func toModelTypedBatch(batch TypedBatch) (model.TypedBatch, error) {
+	factor, err := timePrecisionFactor(batch.Precision)
+	if err != nil {
+		return model.TypedBatch{}, err
+	}
 	tags := make([]model.TagColumn, len(batch.Tags))
 	for index, tag := range batch.Tags {
 		tags[index] = model.TagColumn{
@@ -72,14 +88,22 @@ func toModelTypedBatch(batch TypedBatch) model.TypedBatch {
 			BoolValues:    field.BoolValues,
 		}
 	}
+	timestamps := make([]int64, len(batch.Timestamps))
+	for index, timestamp := range batch.Timestamps {
+		converted, err := timestampToNanoseconds(timestamp, factor)
+		if err != nil {
+			return model.TypedBatch{}, err
+		}
+		timestamps[index] = converted
+	}
 	return model.TypedBatch{
 		Database:        batch.Database,
 		RetentionPolicy: batch.RetentionPolicy,
 		Measurement:     batch.Measurement,
 		Tags:            tags,
-		Timestamps:      batch.Timestamps,
+		Timestamps:      timestamps,
 		Fields:          fields,
-	}
+	}, nil
 }
 
 func toModelWriteOptions(opts WriteOptions) model.WriteOptions {

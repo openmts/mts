@@ -148,10 +148,14 @@ func fromModelSeriesList(series []model.Series) []Series {
 	return out
 }
 
-func fromModelColumnSeries(column model.ColumnSeries) ColumnSeries {
+func fromModelColumnSeries(column model.ColumnSeries, factor int64) ColumnSeries {
 	values := make([]FieldValue, len(column.Values))
 	for index, value := range column.Values {
 		values[index] = fromModelFieldValue(value)
+	}
+	timestamps := make([]int64, len(column.Timestamps))
+	for index, timestamp := range column.Timestamps {
+		timestamps[index] = timestampFromNanoseconds(timestamp, factor)
 	}
 	return ColumnSeries{
 		SeriesID:    column.SeriesID,
@@ -160,20 +164,20 @@ func fromModelColumnSeries(column model.ColumnSeries) ColumnSeries {
 		FieldID:     column.FieldID,
 		FieldName:   column.FieldName,
 		FieldType:   fromModelFieldType(column.FieldType),
-		Timestamps:  append([]int64(nil), column.Timestamps...),
+		Timestamps:  timestamps,
 		Values:      values,
 	}
 }
 
-func fromModelColumnSeriesList(columns []model.ColumnSeries) []ColumnSeries {
+func fromModelColumnSeriesList(columns []model.ColumnSeries, factor int64) []ColumnSeries {
 	out := make([]ColumnSeries, len(columns))
 	for index, column := range columns {
-		out[index] = fromModelColumnSeries(column)
+		out[index] = fromModelColumnSeries(column, factor)
 	}
 	return out
 }
 
-func fromModelRow(row model.Row) Row {
+func fromModelRow(row model.Row, factor int64) Row {
 	fields := make(map[string]FieldValue, len(row.Fields))
 	for name, value := range row.Fields {
 		fields[name] = fromModelFieldValue(value)
@@ -182,15 +186,15 @@ func fromModelRow(row model.Row) Row {
 		SeriesID:    row.SeriesID,
 		Measurement: row.Measurement,
 		Tags:        cloneStringMap(row.Tags),
-		Timestamp:   row.Timestamp,
+		Timestamp:   timestampFromNanoseconds(row.Timestamp, factor),
 		Fields:      fields,
 	}
 }
 
-func fromModelRows(rows []model.Row) []Row {
+func fromModelRows(rows []model.Row, factor int64) []Row {
 	out := make([]Row, len(rows))
 	for index, row := range rows {
-		out[index] = fromModelRow(row)
+		out[index] = fromModelRow(row, factor)
 	}
 	return out
 }

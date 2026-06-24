@@ -23,8 +23,10 @@ const (
 
 // Query 表示一次 Builder/API 查询。
 //
-// Database 和 RetentionPolicy 为空时使用 Engine 默认值。StartTime 和 EndTime
-// 使用 Unix nanosecond；EndTime 为 0 时内部查询会使用最大时间边界。
+// Database 和 RetentionPolicy 为空时使用 Engine 默认值。Precision 为空时
+// StartTime、EndTime 和结果时间戳使用 Unix nanosecond；设置 Precision 后，
+// 查询范围按该单位解释，返回数据时间戳也按该单位输出。EndTime 为 0 时内部
+// 查询会使用最大时间边界。
 type Query struct {
 	Database        string            `json:"database"`
 	RetentionPolicy string            `json:"retention_policy"`
@@ -33,6 +35,7 @@ type Query struct {
 	Fields          []string          `json:"fields"`
 	StartTime       int64             `json:"start_time"`
 	EndTime         int64             `json:"end_time"`
+	Precision       TimePrecision     `json:"precision,omitempty"`
 	Predicates      []QueryPredicate  `json:"predicates"`
 	Expr            QueryExpr         `json:"expr,omitempty"`
 	Aggregates      []AggregateSpec   `json:"aggregates"`

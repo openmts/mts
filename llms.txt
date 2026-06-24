@@ -15,6 +15,9 @@ MTS is a single-node embedded time series storage engine for Go applications.
 - No distributed query or distributed storage.
 - No SQL, InfluxQL, PromQL, or MetricsQL parser.
 - Internal HTTP query and operations packages are not public stable APIs.
+- Internal storage timestamps are nanoseconds. Public `Point.Precision`,
+  `TypedBatch.Precision`, and `Query.Precision` express ns/us/ms/s input and
+  query result timestamp units.
 
 ## Key Files
 
@@ -22,6 +25,7 @@ MTS is a single-node embedded time series storage engine for Go applications.
 - `doc.go`: package-level godoc.
 - `values.go`: write DTOs and field values.
 - `query_types.go`: query DTOs and aggregate constants.
+- `precision.go`: public timestamp precision constants and conversion helpers.
 - `options.go`: engine options, defaults, and validation.
 - `engine.go`: Engine public methods.
 - `downsample.go`: downsample public methods.

@@ -17,6 +17,9 @@ var ErrNotFound = errors.New("not found")
 // ErrUnsupported 表示当前单机公开 API 不支持该能力或语义。
 var ErrUnsupported = errors.New("unsupported")
 
+// ErrInvalidPrecision 表示时间精度声明非法或转换后会溢出。
+var ErrInvalidPrecision = errors.New("invalid precision")
+
 // ErrReadBudgetExceeded 表示查询读取预算已耗尽。
 var ErrReadBudgetExceeded = queryexec.ErrReadBudgetExceeded
 

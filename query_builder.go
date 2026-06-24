@@ -75,7 +75,14 @@ func (b *QueryBuilder) TimeRange(start int64, end int64) *QueryBuilder {
 
 // TimeRangeTime 使用 time.Time 设置查询时间范围。
 func (b *QueryBuilder) TimeRangeTime(start time.Time, end time.Time) *QueryBuilder {
+	b.query.Precision = PrecisionNanosecond
 	return b.TimeRange(start.UnixNano(), end.UnixNano())
+}
+
+// Precision 设置查询时间戳输入和返回结果时间戳的单位。
+func (b *QueryBuilder) Precision(precision TimePrecision) *QueryBuilder {
+	b.query.Precision = precision
+	return b
 }
 
 // Aggregate 追加聚合函数。
@@ -137,6 +144,9 @@ func (b *QueryBuilder) Build() (Query, error) {
 	}
 	if b.query.EndTime != 0 && b.query.StartTime > b.query.EndTime {
 		return Query{}, ErrInvalidQuery
+	}
+	if _, err := timePrecisionFactor(b.query.Precision); err != nil {
+		return Query{}, err
 	}
 	if b.query.Order.By == QueryOrderByNone {
 		b.query.Order = QueryOrder{By: QueryOrderByTime, Direction: QuerySortAsc}

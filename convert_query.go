@@ -2,17 +2,37 @@ package mts
 
 import "github.com/openmts/mts/internal/model"
 
-func toModelQuery(query Query) model.Query {
+func toModelQuery(query Query) (model.Query, int64, error) {
+	factor, err := timePrecisionFactor(query.Precision)
+	if err != nil {
+		return model.Query{}, 0, err
+	}
+	startTime, err := timestampToNanoseconds(query.StartTime, factor)
+	if err != nil {
+		return model.Query{}, 0, err
+	}
+	endTime, err := timestampToNanoseconds(query.EndTime, factor)
+	if err != nil {
+		return model.Query{}, 0, err
+	}
+	predicates, err := toModelQueryPredicates(query.Predicates, factor)
+	if err != nil {
+		return model.Query{}, 0, err
+	}
+	expr, err := toModelQueryExpr(query.Expr, factor)
+	if err != nil {
+		return model.Query{}, 0, err
+	}
 	return model.Query{
 		Database:        query.Database,
 		RetentionPolicy: query.RetentionPolicy,
 		Measurement:     query.Measurement,
 		Tags:            cloneStringMap(query.Tags),
 		Fields:          append([]string(nil), query.Fields...),
-		StartTime:       query.StartTime,
-		EndTime:         query.EndTime,
-		Predicates:      toModelQueryPredicates(query.Predicates),
-		Expr:            toModelQueryExpr(query.Expr),
+		StartTime:       startTime,
+		EndTime:         endTime,
+		Predicates:      predicates,
+		Expr:            expr,
 		Aggregates:      toModelAggregateSpecs(query.Aggregates),
 		Window:          query.Window,
 		Group: model.QueryGroup{
@@ -26,38 +46,64 @@ func toModelQuery(query Query) model.Query {
 		Limit:  query.Limit,
 		Offset: query.Offset,
 		Budget: toModelQueryBudget(query.Budget),
-	}
+	}, factor, nil
 }
 
-func toModelQueryExpr(expr QueryExpr) model.QueryExpr {
+func toModelQueryExpr(expr QueryExpr, factor int64) (model.QueryExpr, error) {
+	predicate, err := toModelQueryPredicate(expr.Predicate, factor)
+	if err != nil {
+		return model.QueryExpr{}, err
+	}
 	out := model.QueryExpr{
 		Kind:      model.QueryExprKind(expr.Kind),
-		Predicate: toModelQueryPredicate(expr.Predicate),
+		Predicate: predicate,
 		Children:  make([]model.QueryExpr, 0, len(expr.Children)),
 	}
 	for _, child := range expr.Children {
-		out.Children = append(out.Children, toModelQueryExpr(child))
+		converted, err := toModelQueryExpr(child, factor)
+		if err != nil {
+			return model.QueryExpr{}, err
+		}
+		out.Children = append(out.Children, converted)
 	}
-	return out
+	return out, nil
 }
 
-func toModelQueryPredicates(predicates []QueryPredicate) []model.QueryPredicate {
+func toModelQueryPredicates(predicates []QueryPredicate, factor int64) ([]model.QueryPredicate, error) {
 	out := make([]model.QueryPredicate, 0, len(predicates))
 	for _, predicate := range predicates {
-		out = append(out, toModelQueryPredicate(predicate))
+		converted, err := toModelQueryPredicate(predicate, factor)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, converted)
 	}
-	return out
+	return out, nil
 }
 
-func toModelQueryPredicate(predicate QueryPredicate) model.QueryPredicate {
+func toModelQueryPredicate(predicate QueryPredicate, factor int64) (model.QueryPredicate, error) {
+	start := predicate.Start
+	end := predicate.End
+	if predicate.Kind == QueryPredicateTimeRange {
+		convertedStart, err := timestampToNanoseconds(predicate.Start, factor)
+		if err != nil {
+			return model.QueryPredicate{}, err
+		}
+		convertedEnd, err := timestampToNanoseconds(predicate.End, factor)
+		if err != nil {
+			return model.QueryPredicate{}, err
+		}
+		start = convertedStart
+		end = convertedEnd
+	}
 	return model.QueryPredicate{
 		Kind:         model.QueryPredicateKind(predicate.Kind),
 		Name:         predicate.Name,
 		StringValues: append([]string(nil), predicate.StringValues...),
 		Value:        toModelFieldValue(predicate.Value),
-		Start:        predicate.Start,
-		End:          predicate.End,
-	}
+		Start:        start,
+		End:          end,
+	}, nil
 }
 
 func toModelAggregateSpecs(specs []AggregateSpec) []model.AggregateSpec {

@@ -107,7 +107,8 @@ func writeTypedScenario(ctx context.Context, eng *mts.Engine) error {
 		RetentionPolicy: retentionName,
 		Measurement:     measurementName,
 		Tags:            map[string]string{"host": "api-2", "region": "west"},
-		Timestamp:       int64(5 * time.Second),
+		Timestamp:       int64(5 * time.Second / time.Millisecond),
+		Precision:       mts.PrecisionMillisecond,
 		Fields: map[string]mts.FieldValue{
 			"active": mts.BoolValue(true),
 			"cores":  mts.Int64Value(16),
@@ -126,16 +127,12 @@ func publicTypedBatch() mts.TypedBatch {
 		Database:        databaseName,
 		RetentionPolicy: retentionName,
 		Measurement:     measurementName,
+		Precision:       mts.PrecisionSecond,
 		Tags: []mts.TagColumn{
 			{Name: "host", Values: []string{"api-1", "api-2", "api-1", "api-3"}},
 			{Name: "region", Values: []string{"east", "east", "east", "west"}},
 		},
-		Timestamps: []int64{
-			int64(time.Second),
-			int64(2 * time.Second),
-			int64(3 * time.Second),
-			int64(4 * time.Second),
-		},
+		Timestamps: []int64{1, 2, 3, 4},
 		Fields: []mts.TypedFieldColumn{
 			{Name: "usage", Type: mts.FieldFloat64, Float64Values: []float64{0.40, 0.70, 0.90, 0.20}},
 			{Name: "cores", Type: mts.FieldInt64, Int64Values: []int64{2, 4, 8, 4}},

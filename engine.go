@@ -15,12 +15,20 @@ func (e *Engine) Close(ctx context.Context) error {
 
 // Write 写入点数据。
 func (e *Engine) Write(ctx context.Context, points []Point, opts WriteOptions) error {
-	return publicError(e.inner.Write(ctx, toModelPoints(points), toModelWriteOptions(opts)))
+	converted, err := toModelPoints(points)
+	if err != nil {
+		return err
+	}
+	return publicError(e.inner.Write(ctx, converted, toModelWriteOptions(opts)))
 }
 
 // WriteTypedBatch 写入按列组织的批量数据。
 func (e *Engine) WriteTypedBatch(ctx context.Context, batch TypedBatch, opts WriteOptions) error {
-	return publicError(e.inner.WriteTypedBatch(ctx, toModelTypedBatch(batch), toModelWriteOptions(opts)))
+	converted, err := toModelTypedBatch(batch)
+	if err != nil {
+		return err
+	}
+	return publicError(e.inner.WriteTypedBatch(ctx, converted, toModelWriteOptions(opts)))
 }
 
 // Flush 将当前内存数据刷写为本地 SSTable。
@@ -33,30 +41,42 @@ func (e *Engine) Flush(ctx context.Context) error {
 // 该方法会 materialize 完整结果，生产场景的大结果查询优先使用
 // QueryColumnIterator 并配置 Limit 或 QueryBudget。
 func (e *Engine) QueryColumns(ctx context.Context, query Query) ([]ColumnSeries, error) {
-	columns, err := e.inner.QueryColumns(ctx, toModelQuery(query))
+	converted, factor, err := toModelQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	columns, err := e.inner.QueryColumns(ctx, converted)
 	if err != nil {
 		return nil, publicError(err)
 	}
-	return fromModelColumnSeriesList(columns), nil
+	return fromModelColumnSeriesList(columns, factor), nil
 }
 
 // QueryColumnIterator 以 iterator 方式返回列式查询结果。
 func (e *Engine) QueryColumnIterator(ctx context.Context, query Query) (ColumnIterator, error) {
-	inner, err := e.inner.QueryColumnIterator(ctx, toModelQuery(query))
+	converted, factor, err := toModelQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	inner, err := e.inner.QueryColumnIterator(ctx, converted)
 	if err != nil {
 		return nil, publicError(err)
 	}
-	return columnIterator{inner: inner}, nil
+	return columnIterator{inner: inner, factor: factor}, nil
 }
 
 // QueryWithExplain 返回列式查询结果、查询计划说明和执行统计。
 func (e *Engine) QueryWithExplain(ctx context.Context, query Query) (QueryResult, error) {
-	columns, explain, stats, err := e.inner.QueryWithExplain(ctx, toModelQuery(query))
+	converted, factor, err := toModelQuery(query)
+	if err != nil {
+		return QueryResult{}, err
+	}
+	columns, explain, stats, err := e.inner.QueryWithExplain(ctx, converted)
 	if err != nil {
 		return QueryResult{}, publicError(err)
 	}
 	return QueryResult{
-		Columns: fromModelColumnSeriesList(columns),
+		Columns: fromModelColumnSeriesList(columns, factor),
 		Explain: fromModelQueryExplain(explain),
 		Stats:   fromModelQueryStats(stats),
 	}, nil
@@ -72,20 +92,28 @@ func (e *Engine) QueryStatsSnapshot() QueryStats {
 // 该方法适合小结果集。生产场景的大结果查询优先使用 QueryRowIterator 并配置
 // Limit 或 QueryBudget。
 func (e *Engine) QueryRows(ctx context.Context, query Query) ([]Row, error) {
-	rows, err := e.inner.QueryRows(ctx, toModelQuery(query))
+	converted, factor, err := toModelQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := e.inner.QueryRows(ctx, converted)
 	if err != nil {
 		return nil, publicError(err)
 	}
-	return fromModelRows(rows), nil
+	return fromModelRows(rows, factor), nil
 }
 
 // QueryRowIterator 以 iterator 方式返回行式查询结果。
 func (e *Engine) QueryRowIterator(ctx context.Context, query Query) (RowIterator, error) {
-	inner, err := e.inner.QueryRowIterator(ctx, toModelQuery(query))
+	converted, factor, err := toModelQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	inner, err := e.inner.QueryRowIterator(ctx, converted)
 	if err != nil {
 		return nil, publicError(err)
 	}
-	return rowIterator{inner: inner}, nil
+	return rowIterator{inner: inner, factor: factor}, nil
 }
 
 // Compact 对所有 shard 执行一次手动 compaction。
@@ -196,11 +224,13 @@ func (e *Engine) ListSeries(
 }
 
 type columnIterator struct {
-	inner model.ColumnIterator
+	inner  model.ColumnIterator
+	factor int64
 }
 
 type rowIterator struct {
-	inner model.RowIterator
+	inner  model.RowIterator
+	factor int64
 }
 
 func (i columnIterator) Next() bool {
@@ -208,7 +238,7 @@ func (i columnIterator) Next() bool {
 }
 
 func (i columnIterator) Column() ColumnSeries {
-	return fromModelColumnSeries(i.inner.Column())
+	return fromModelColumnSeries(i.inner.Column(), i.factor)
 }
 
 func (i columnIterator) Err() error {
@@ -224,7 +254,7 @@ func (i rowIterator) Next() bool {
 }
 
 func (i rowIterator) Row() Row {
-	return fromModelRow(i.inner.Row())
+	return fromModelRow(i.inner.Row(), i.factor)
 }
 
 func (i rowIterator) Err() error {

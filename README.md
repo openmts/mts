@@ -55,6 +55,23 @@ _ = rows
 
 `QueryRows` 和 `QueryColumns` 适合小结果集。生产路径建议优先使用 `QueryRowIterator` 或 `QueryColumnIterator`，并配置 `Limit` 或 `QueryBudget`。
 
+MTS 内部统一按纳秒存储时间。公开 API 中 `Point.Precision`、`TypedBatch.Precision` 和 `Query.Precision` 可声明输入/返回时间戳单位，零值保持纳秒兼容：
+
+```go
+err := engine.Write(ctx, []mts.Point{{
+	Measurement: "cpu",
+	Timestamp:   time.Now().UnixMilli(),
+	Precision:   mts.PrecisionMillisecond,
+	Fields:      map[string]mts.FieldValue{"usage": mts.Float64Value(0.42)},
+}}, mts.WriteOptions{})
+
+query, err := mts.NewQuery().
+	From("", "", "cpu").
+	Precision(mts.PrecisionMillisecond).
+	TimeRange(startMillis, endMillis).
+	Build()
+```
+
 ## Builder 查询
 
 ```go
@@ -81,6 +98,7 @@ query, err := mts.NewQuery().
 ```go
 batch := mts.TypedBatch{
 	Measurement: "cpu",
+	Precision:   mts.PrecisionSecond,
 	Tags: []mts.TagColumn{
 		{Name: "host", Values: []string{"a", "a", "b"}},
 	},

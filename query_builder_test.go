@@ -62,6 +62,36 @@ func TestPublicQueryBuilderBuildsTimeRangeFromTime(t *testing.T) {
 	}
 }
 
+func TestPublicQueryBuilderPrecision(t *testing.T) {
+	query, err := NewQuery().
+		Select("usage").
+		From("metrics", "autogen", "cpu").
+		Precision(PrecisionMillisecond).
+		TimeRange(10, 20).
+		Build()
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if query.Precision != PrecisionMillisecond {
+		t.Fatalf("precision = %q, want %q", query.Precision, PrecisionMillisecond)
+	}
+
+	start := time.Unix(10, 20)
+	end := time.Unix(30, 40)
+	query, err = NewQuery().
+		Select("usage").
+		From("metrics", "autogen", "cpu").
+		Precision(PrecisionSecond).
+		TimeRangeTime(start, end).
+		Build()
+	if err != nil {
+		t.Fatalf("Build(time range) error = %v", err)
+	}
+	if query.Precision != PrecisionNanosecond {
+		t.Fatalf("TimeRangeTime precision = %q, want %q", query.Precision, PrecisionNanosecond)
+	}
+}
+
 func TestPublicQueryBuilderFromDownsamplePolicy(t *testing.T) {
 	query, err := NewQuery().
 		FromDownsamplePolicy(DownsamplePolicy{
@@ -111,7 +141,10 @@ func TestPublicQueryBuilderCoversAllPrimitivesAndModelConversion(t *testing.T) {
 	if query.Aggregates[0].Function != "avg" {
 		t.Fatalf("aggregate = %#v, want avg", query.Aggregates)
 	}
-	modelQuery := toModelQuery(query)
+	modelQuery, _, err := toModelQuery(query)
+	if err != nil {
+		t.Fatalf("toModelQuery() error = %v", err)
+	}
 	if modelQuery.StartTime != 10 || modelQuery.EndTime != 20 {
 		t.Fatalf("time range = %d/%d, want 10/20", modelQuery.StartTime, modelQuery.EndTime)
 	}
@@ -144,7 +177,10 @@ func TestPublicQueryBuilderBuildsExpressionTree(t *testing.T) {
 	if len(query.Predicates) != 3 {
 		t.Fatalf("compat predicates = %d, want 3", len(query.Predicates))
 	}
-	modelQuery := toModelQuery(query)
+	modelQuery, _, err := toModelQuery(query)
+	if err != nil {
+		t.Fatalf("toModelQuery() error = %v", err)
+	}
 	if modelQuery.Expr.Kind != model.QueryExprOr {
 		t.Fatalf("model expr kind = %v, want OR", modelQuery.Expr.Kind)
 	}

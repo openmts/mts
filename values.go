@@ -28,15 +28,17 @@ type FieldValue struct {
 
 // Point 表示一条时序写入记录。
 //
-// Database 和 RetentionPolicy 为空时使用 Engine 的默认配置。Timestamp 使用
-// Unix nanosecond。Write 会复制 Tags 和 Fields 的内容，调用返回后复用输入
-// map 不会污染已写入数据。
+// Database 和 RetentionPolicy 为空时使用 Engine 的默认配置。Precision 为空
+// 时 Timestamp 使用 Unix nanosecond；设置 Precision 后，Write 会先转换为
+// 纳秒存储。Write 会复制 Tags 和 Fields 的内容，调用返回后复用输入 map 不会
+// 污染已写入数据。
 type Point struct {
 	Database        string                `json:"database"`
 	RetentionPolicy string                `json:"retention_policy"`
 	Measurement     string                `json:"measurement"`
 	Tags            map[string]string     `json:"tags"`
 	Timestamp       int64                 `json:"timestamp"`
+	Precision       TimePrecision         `json:"precision,omitempty"`
 	Fields          map[string]FieldValue `json:"fields"`
 }
 
@@ -61,14 +63,17 @@ type TypedFieldColumn struct {
 
 // TypedBatch 表示按列组织的批量写入。
 //
-// Database 和 RetentionPolicy 为空时使用 Engine 的默认配置。Tags 中每列的
-// Values 长度、每个字段值切片长度都必须与 Timestamps 一致。
+// Database 和 RetentionPolicy 为空时使用 Engine 的默认配置。Precision 为空
+// 时 Timestamps 使用 Unix nanosecond；设置 Precision 后，WriteTypedBatch
+// 会先转换为纳秒存储。Tags 中每列的 Values 长度、每个字段值切片长度都必须与
+// Timestamps 一致。
 type TypedBatch struct {
 	Database        string             `json:"database"`
 	RetentionPolicy string             `json:"retention_policy"`
 	Measurement     string             `json:"measurement"`
 	Tags            []TagColumn        `json:"tags"`
 	Timestamps      []int64            `json:"timestamps"`
+	Precision       TimePrecision      `json:"precision,omitempty"`
 	Fields          []TypedFieldColumn `json:"fields"`
 }
 
