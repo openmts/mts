@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/pprof"
 	"strings"
 
 	mts "github.com/openmts/mts"
@@ -40,7 +41,38 @@ func (r *serverRuntime) httpHandler() http.Handler {
 	mux.HandleFunc("/api/v1/admin/downsample/policies", r.handleDownsamplePolicies)
 	mux.HandleFunc("/api/v1/admin/downsample/policies/", r.handleDownsamplePolicyResource)
 	mux.HandleFunc("/api/v1/admin/downsample/statuses", r.handleDownsampleStatuses)
-	return mux
+	mux.HandleFunc("/api/v1/admin/api-spec", r.handleAPISpec)
+	mux.HandleFunc("/api/v1/admin/error-codes", r.handleErrorCodes)
+	mux.HandleFunc("/api/v1/admin/config/validate", r.handleValidateConfig)
+	mux.HandleFunc("/api/v1/admin/config/reload", r.handleReloadConfig)
+	mux.HandleFunc("/api/v1/admin/storage/validate", r.handleStorageValidate)
+	mux.HandleFunc("/api/v1/admin/storage/snapshot", r.handleStorageSnapshot)
+	mux.HandleFunc("/api/v1/admin/storage/export", r.handleStorageExport)
+	r.mountPprof(mux)
+	return r.wrapHTTP(mux)
+}
+
+func (r *serverRuntime) mountPprof(mux *http.ServeMux) {
+	mux.HandleFunc("/debug/pprof/", r.adminHTTPHandler(pprof.Index))
+	mux.HandleFunc("/debug/pprof/cmdline", r.adminHTTPHandler(pprof.Cmdline))
+	mux.HandleFunc("/debug/pprof/profile", r.adminHTTPHandler(pprof.Profile))
+	mux.HandleFunc("/debug/pprof/symbol", r.adminHTTPHandler(pprof.Symbol))
+	mux.HandleFunc("/debug/pprof/trace", r.adminHTTPHandler(pprof.Trace))
+}
+
+func (r *serverRuntime) adminHTTPHandler(next http.HandlerFunc) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		cfg := r.currentConfig()
+		if !cfg.Observability.Pprof.Enabled {
+			http.NotFound(writer, request)
+			return
+		}
+		if err := r.requireHTTPAdmin(request); err != nil {
+			writeAPIError(writer, err)
+			return
+		}
+		next(writer, request)
+	}
 }
 
 func (r *serverRuntime) handleHealth(writer http.ResponseWriter, request *http.Request) {
@@ -109,6 +141,8 @@ func httpStatusForErrorCode(code errorCode) int {
 		return http.StatusUnauthorized
 	case errorCodePermissionDenied:
 		return http.StatusForbidden
+	case errorCodeResourceExhausted:
+		return http.StatusTooManyRequests
 	case errorCodeNotFound:
 		return http.StatusNotFound
 	case errorCodeAlreadyExists:

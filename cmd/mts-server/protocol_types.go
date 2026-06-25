@@ -9,12 +9,13 @@ import (
 type errorCode string
 
 const (
-	errorCodeBadRequest       errorCode = "bad_request"
-	errorCodeUnauthenticated  errorCode = "unauthenticated"
-	errorCodePermissionDenied errorCode = "permission_denied"
-	errorCodeNotFound         errorCode = "not_found"
-	errorCodeAlreadyExists    errorCode = "already_exists"
-	errorCodeInternal         errorCode = "internal"
+	errorCodeBadRequest        errorCode = "bad_request"
+	errorCodeUnauthenticated   errorCode = "unauthenticated"
+	errorCodePermissionDenied  errorCode = "permission_denied"
+	errorCodeResourceExhausted errorCode = "resource_exhausted"
+	errorCodeNotFound          errorCode = "not_found"
+	errorCodeAlreadyExists     errorCode = "already_exists"
+	errorCodeInternal          errorCode = "internal"
 )
 
 type okResponse struct {
@@ -146,6 +147,20 @@ type configSchemaResponse struct {
 	Fields []configFieldSchema `json:"fields"`
 }
 
+type configValidateRequest struct {
+	Config config `json:"config"`
+}
+
+type configValidateResponse struct {
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
+type reloadConfigResponse struct {
+	OK     bool     `json:"ok"`
+	Fields []string `json:"fields"`
+}
+
 type configFieldSchema struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -162,6 +177,58 @@ type retentionApplyRequest struct {
 
 type maintenanceErrorsResponse struct {
 	Errors []string `json:"errors"`
+}
+
+type apiSpecResponse struct {
+	Version    string         `json:"version"`
+	Namespaces []apiNamespace `json:"namespaces"`
+}
+
+type apiNamespace struct {
+	Name      string        `json:"name"`
+	BasePath  string        `json:"base_path"`
+	Endpoints []apiEndpoint `json:"endpoints"`
+}
+
+type apiEndpoint struct {
+	Method      string `json:"method"`
+	Path        string `json:"path"`
+	Auth        string `json:"auth"`
+	Description string `json:"description"`
+}
+
+type errorCodesResponse struct {
+	Codes []errorCodeSpec `json:"codes"`
+}
+
+type errorCodeSpec struct {
+	Code        errorCode `json:"code"`
+	HTTPStatus  int       `json:"http_status"`
+	GRPCCode    string    `json:"grpc_code"`
+	Description string    `json:"description"`
+}
+
+type storageValidateResponse struct {
+	OK      bool               `json:"ok"`
+	DataDir string             `json:"data_dir"`
+	Health  mts.HealthSnapshot `json:"health"`
+}
+
+type storageSnapshotResponse struct {
+	OK   bool   `json:"ok"`
+	Path string `json:"path"`
+}
+
+type storageExportResponse struct {
+	Export storageExport `json:"export"`
+}
+
+type storageExport struct {
+	GeneratedAt time.Time                      `json:"generated_at"`
+	Config      config                         `json:"config"`
+	Health      mts.HealthSnapshot             `json:"health"`
+	Users       []mts.User                     `json:"users"`
+	Grants      map[string][]mts.DatabaseGrant `json:"grants"`
 }
 
 type storageMemoryResponse struct {

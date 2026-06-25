@@ -4,10 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	mts "github.com/openmts/mts"
@@ -31,10 +36,63 @@ func (jsonCodec) Unmarshal(data []byte, value any) error {
 	return json.Unmarshal(data, value)
 }
 
-func newGRPCServer(runtime *serverRuntime) *grpc.Server {
-	server := grpc.NewServer()
+func newGRPCServer(runtime *serverRuntime) (*grpc.Server, error) {
+	cfg := runtime.currentConfig()
+	options := []grpc.ServerOption{grpc.UnaryInterceptor(runtime.grpcUnaryInterceptor)}
+	if cfg.GRPC.MaxRecvMsgBytes > 0 {
+		options = append(options, grpc.MaxRecvMsgSize(cfg.GRPC.MaxRecvMsgBytes))
+	}
+	if cfg.GRPC.MaxSendMsgBytes > 0 {
+		options = append(options, grpc.MaxSendMsgSize(cfg.GRPC.MaxSendMsgBytes))
+	}
+	if cfg.GRPC.TLS.Enabled {
+		tlsConfig, err := buildTLSConfig(cfg.GRPC.TLS)
+		if err != nil {
+			return nil, err
+		}
+		options = append(options, grpc.Creds(credentials.NewTLS(tlsConfig)))
+	}
+	server := grpc.NewServer(options...)
 	server.RegisterService(grpcServiceDesc(), &grpcService{runtime: runtime})
-	return server
+	return server, nil
+}
+
+func (r *serverRuntime) grpcUnaryInterceptor(
+	ctx context.Context,
+	req any,
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (any, error) {
+	requestID := grpcMetadataValue(ctx, strings.ToLower(headerRequestID))
+	if strings.TrimSpace(requestID) == "" {
+		requestID = r.nextRequestID()
+	}
+	ctx = context.WithValue(ctx, contextRequestID, requestID)
+	if timeout := time.Duration(r.currentConfig().Limits.RequestTimeout); timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	_ = grpc.SetHeader(ctx, metadata.Pairs(strings.ToLower(headerRequestID), requestID))
+	grpcSem := r.grpcSem
+	if !acquireGRPC(grpcSem) {
+		return nil, status.Error(codes.ResourceExhausted, "too many concurrent grpc requests")
+	}
+	defer releaseGRPC(grpcSem)
+	start := time.Now()
+	resp, err := handler(ctx, req)
+	code := status.Code(err)
+	duration := time.Since(start)
+	r.metrics.observe("grpc", info.FullMethod, code.String(), duration)
+	if r.currentConfig().Observability.AccessLog {
+		r.currentLogger().InfoContext(ctx, "grpc request",
+			"request_id", requestID,
+			"method", info.FullMethod,
+			"code", code.String(),
+			"duration", duration.String(),
+		)
+	}
+	return resp, err
 }
 
 type grpcService struct {
@@ -75,12 +133,19 @@ func grpcServiceDesc() *grpc.ServiceDesc {
 		{MethodName: "GetConfig", Handler: unaryHandler(&emptyRequest{}, grpcGetConfig)},
 		{MethodName: "GetEffectiveConfig", Handler: unaryHandler(&emptyRequest{}, grpcGetConfig)},
 		{MethodName: "GetConfigSchema", Handler: unaryHandler(&emptyRequest{}, grpcGetConfigSchema)},
+		{MethodName: "ValidateConfig", Handler: unaryHandler(&configValidateRequest{}, grpcValidateConfig)},
+		{MethodName: "ReloadConfig", Handler: unaryHandler(&emptyRequest{}, grpcReloadConfig)},
+		{MethodName: "GetAPISpec", Handler: unaryHandler(&emptyRequest{}, grpcGetAPISpec)},
+		{MethodName: "GetErrorCodes", Handler: unaryHandler(&emptyRequest{}, grpcGetErrorCodes)},
 		{MethodName: "Flush", Handler: grpcFlushHandler},
 		{MethodName: "Compact", Handler: grpcCompactHandler},
 		{MethodName: "ApplyRetention", Handler: unaryHandler(&retentionApplyRequest{}, grpcApplyRetention)},
 		{MethodName: "MaintenanceErrors", Handler: unaryHandler(&emptyRequest{}, grpcMaintenanceErrors)},
 		{MethodName: "StorageMemory", Handler: unaryHandler(&emptyRequest{}, grpcStorageMemory)},
 		{MethodName: "CompactionStats", Handler: unaryHandler(&emptyRequest{}, grpcCompactionStats)},
+		{MethodName: "StorageValidate", Handler: unaryHandler(&emptyRequest{}, grpcStorageValidate)},
+		{MethodName: "StorageSnapshot", Handler: unaryHandler(&emptyRequest{}, grpcStorageSnapshot)},
+		{MethodName: "StorageExport", Handler: unaryHandler(&emptyRequest{}, grpcStorageExport)},
 		{MethodName: "CreateDownsamplePolicy", Handler: unaryHandler(&mts.DownsamplePolicy{}, grpcCreateDownsamplePolicy)},
 		{MethodName: "ListDownsamplePolicies", Handler: unaryHandler(&emptyRequest{}, grpcListDownsamplePolicies)},
 		{MethodName: "EnableDownsamplePolicy", Handler: unaryHandler(&downsamplePolicyRequest{}, grpcEnableDownsamplePolicy)},
@@ -106,6 +171,13 @@ func grpcHealthHandler(service any, ctx context.Context, decode func(any) error,
 func grpcWriteHandler(service any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	handler := func(ctx context.Context, req any) (any, error) {
 		writeReq := req.(*writeRequest)
+		if err := service.(*grpcService).runtime.authorizeGRPCDatabase(
+			ctx,
+			writeRequestDatabase(*writeReq),
+			mts.DatabasePermissionWrite,
+		); err != nil {
+			return nil, grpcError(err)
+		}
 		if err := service.(*grpcService).runtime.write(ctx, *writeReq); err != nil {
 			return nil, grpcError(err)
 		}
@@ -117,6 +189,13 @@ func grpcWriteHandler(service any, ctx context.Context, decode func(any) error, 
 func grpcQueryRowsHandler(service any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	handler := func(ctx context.Context, req any) (any, error) {
 		queryReq := req.(*queryRowsRequest)
+		if err := service.(*grpcService).runtime.authorizeGRPCDatabase(
+			ctx,
+			queryReq.Query.Database,
+			mts.DatabasePermissionRead,
+		); err != nil {
+			return nil, grpcError(err)
+		}
 		rows, err := service.(*grpcService).runtime.queryRows(ctx, *queryReq)
 		if err != nil {
 			return nil, grpcError(err)
@@ -344,6 +423,38 @@ func grpcGetConfigSchema(r *serverRuntime, ctx context.Context, _ any) (any, err
 	return configSchemaResponse{Fields: configSchema()}, nil
 }
 
+func grpcValidateConfig(r *serverRuntime, ctx context.Context, req any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	resp := r.validateConfigPayload(req.(*configValidateRequest).Config)
+	if !resp.OK {
+		return nil, newAPIError(errorCodeBadRequest, resp.Error, nil)
+	}
+	return resp, nil
+}
+
+func grpcReloadConfig(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return r.reloadConfig()
+}
+
+func grpcGetAPISpec(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return apiSpec(), nil
+}
+
+func grpcGetErrorCodes(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return errorCodeSpecs(), nil
+}
+
 func grpcApplyRetention(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
@@ -370,6 +481,27 @@ func grpcCompactionStats(r *serverRuntime, ctx context.Context, _ any) (any, err
 		return nil, err
 	}
 	return compactionStatsResponse{Stats: r.compactionStats()}, nil
+}
+
+func grpcStorageValidate(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return r.storageValidate(), nil
+}
+
+func grpcStorageSnapshot(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return r.storageSnapshot(ctx)
+}
+
+func grpcStorageExport(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return storageExportResponse{Export: r.storageExport(ctx)}, nil
 }
 
 func grpcCreateDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -491,6 +623,9 @@ func grpcError(err error) error {
 	if errors.Is(err, mts.ErrInvalidUser) || errors.Is(err, mts.ErrInvalidPermission) || errors.Is(err, mts.ErrInvalidPrecision) {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
+	if looksLikeValidationError(err) {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
 	return status.Error(codes.InvalidArgument, err.Error())
 }
 
@@ -500,6 +635,8 @@ func grpcCodeForErrorCode(code errorCode) codes.Code {
 		return codes.Unauthenticated
 	case errorCodePermissionDenied:
 		return codes.PermissionDenied
+	case errorCodeResourceExhausted:
+		return codes.ResourceExhausted
 	case errorCodeNotFound:
 		return codes.NotFound
 	case errorCodeAlreadyExists:
@@ -509,6 +646,13 @@ func grpcCodeForErrorCode(code errorCode) codes.Code {
 	default:
 		return codes.Internal
 	}
+}
+
+func grpcStatusCodeText(err error) string {
+	if err == nil {
+		return strconv.Itoa(int(codes.OK))
+	}
+	return status.Code(err).String()
 }
 
 func invokeGRPC(ctx context.Context, conn *grpc.ClientConn, method string, in any, out any) error {

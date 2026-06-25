@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -14,7 +17,14 @@ import (
 )
 
 type serverRuntime struct {
+	mu         sync.RWMutex
 	config     config
+	logger     *slog.Logger
+	metrics    *serverMetrics
+	audit      *auditLog
+	httpSem    chan struct{}
+	grpcSem    chan struct{}
+	requestSeq atomic.Uint64
 	engine     *mts.Engine
 	httpServer *http.Server
 	grpcServer *grpc.Server
@@ -31,18 +41,72 @@ func openRuntime(ctx context.Context, cfg config) (*serverRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
-	runtime := &serverRuntime{config: cfg, engine: engine}
+	runtime := &serverRuntime{
+		config:  cfg,
+		logger:  slog.Default(),
+		metrics: newServerMetrics(),
+		audit:   newAuditLog(256),
+		engine:  engine,
+	}
+	runtime.applyLimitState(cfg)
 	if cfg.HTTP.Enabled {
+		tlsConfig, err := buildTLSConfig(cfg.HTTP.TLS)
+		if err != nil {
+			_ = engine.Close(ctx)
+			return nil, err
+		}
 		runtime.httpServer = &http.Server{
 			Addr:              cfg.HTTP.Addr,
 			Handler:           runtime.httpHandler(),
-			ReadHeaderTimeout: 5 * time.Second,
+			TLSConfig:         tlsConfig,
+			ReadHeaderTimeout: time.Duration(cfg.HTTP.ReadHeaderTimeout),
+			ReadTimeout:       time.Duration(cfg.HTTP.ReadTimeout),
+			WriteTimeout:      time.Duration(cfg.HTTP.WriteTimeout),
+			IdleTimeout:       time.Duration(cfg.HTTP.IdleTimeout),
 		}
 	}
 	if cfg.GRPC.Enabled {
-		runtime.grpcServer = newGRPCServer(runtime)
+		runtime.grpcServer, err = newGRPCServer(runtime)
+		if err != nil {
+			_ = engine.Close(ctx)
+			return nil, err
+		}
 	}
 	return runtime, nil
+}
+
+func (r *serverRuntime) applyLimitState(cfg config) {
+	if cfg.Limits.MaxConcurrentHTTP > 0 {
+		r.httpSem = make(chan struct{}, cfg.Limits.MaxConcurrentHTTP)
+	} else {
+		r.httpSem = nil
+	}
+	if cfg.Limits.MaxConcurrentGRPC > 0 {
+		r.grpcSem = make(chan struct{}, cfg.Limits.MaxConcurrentGRPC)
+	} else {
+		r.grpcSem = nil
+	}
+}
+
+func (r *serverRuntime) setLogger(logger *slog.Logger) {
+	if logger == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.logger = logger
+}
+
+func (r *serverRuntime) currentConfig() config {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.config
+}
+
+func (r *serverRuntime) currentLogger() *slog.Logger {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.logger
 }
 
 func (r *serverRuntime) start() error {
@@ -54,7 +118,7 @@ func (r *serverRuntime) start() error {
 		}
 		r.httpLn = ln
 		go func() {
-			err := r.httpServer.Serve(ln)
+			err := r.serveHTTP(ln)
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				r.reportServeError(fmt.Errorf("http server stopped: %w", err))
 			}
@@ -75,6 +139,13 @@ func (r *serverRuntime) start() error {
 		}()
 	}
 	return nil
+}
+
+func (r *serverRuntime) serveHTTP(ln net.Listener) error {
+	if r.config.HTTP.TLS.Enabled {
+		return r.httpServer.ServeTLS(ln, "", "")
+	}
+	return r.httpServer.Serve(ln)
 }
 
 func (r *serverRuntime) reportServeError(err error) {
@@ -116,12 +187,18 @@ func (r *serverRuntime) write(ctx context.Context, req writeRequest) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if max := r.currentConfig().Limits.MaxWritePoints; max > 0 && len(req.Points) > max {
+		return newAPIError(errorCodeBadRequest, "too many points in write request", nil)
+	}
 	return r.engine.Write(ctx, req.Points, req.Options)
 }
 
 func (r *serverRuntime) writeTypedBatch(ctx context.Context, req typedWriteRequest) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if max := r.currentConfig().Limits.MaxWritePoints; max > 0 && len(req.Batch.Timestamps) > max {
+		return newAPIError(errorCodeBadRequest, "too many points in typed write request", nil)
 	}
 	return r.engine.WriteTypedBatch(ctx, req.Batch, req.Options)
 }
@@ -130,21 +207,44 @@ func (r *serverRuntime) queryRows(ctx context.Context, req queryRowsRequest) ([]
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return r.engine.QueryRows(ctx, req.Query)
+	query, err := r.limitedQuery(req.Query)
+	if err != nil {
+		return nil, err
+	}
+	return r.engine.QueryRows(ctx, query)
 }
 
 func (r *serverRuntime) queryColumns(ctx context.Context, req queryRequest) ([]mts.ColumnSeries, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return r.engine.QueryColumns(ctx, req.Query)
+	query, err := r.limitedQuery(req.Query)
+	if err != nil {
+		return nil, err
+	}
+	return r.engine.QueryColumns(ctx, query)
 }
 
 func (r *serverRuntime) queryWithExplain(ctx context.Context, req queryRequest) (mts.QueryResult, error) {
 	if err := ctx.Err(); err != nil {
 		return mts.QueryResult{}, err
 	}
-	return r.engine.QueryWithExplain(ctx, req.Query)
+	query, err := r.limitedQuery(req.Query)
+	if err != nil {
+		return mts.QueryResult{}, err
+	}
+	return r.engine.QueryWithExplain(ctx, query)
+}
+
+func (r *serverRuntime) limitedQuery(query mts.Query) (mts.Query, error) {
+	cfg := r.currentConfig()
+	if cfg.Limits.MaxQueryLimit > 0 && query.Limit > cfg.Limits.MaxQueryLimit {
+		return mts.Query{}, newAPIError(errorCodeBadRequest, "query limit exceeds max_query_limit", nil)
+	}
+	if query.Limit == 0 && cfg.Limits.DefaultQueryLimit > 0 {
+		query.Limit = cfg.Limits.DefaultQueryLimit
+	}
+	return query, nil
 }
 
 func (r *serverRuntime) queryStats() mts.QueryStats {

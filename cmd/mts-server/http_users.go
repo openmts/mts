@@ -22,6 +22,7 @@ func (r *serverRuntime) handleUsers(writer http.ResponseWriter, request *http.Re
 			writeAPIError(writer, err)
 			return
 		}
+		r.audit.record(auditEvent{UserName: user.Name, Action: "create_user"})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 	case http.MethodGet:
 		users, err := r.engine.ListUsers(request.Context())
@@ -52,6 +53,10 @@ func (r *serverRuntime) handleUserResource(writer http.ResponseWriter, request *
 	}
 	if len(parts) >= 2 && parts[1] == "database-permissions" {
 		r.handleDatabasePermissionResource(writer, request, userName, parts[2:])
+		return
+	}
+	if len(parts) == 2 && parts[1] == "audit" {
+		r.handleUserAudit(writer, request, userName)
 		return
 	}
 	writeAPIError(writer, newAPIError(errorCodeNotFound, "user resource not found", nil))
@@ -85,12 +90,14 @@ func (r *serverRuntime) handleSingleUser(
 			writeAPIError(writer, err)
 			return
 		}
+		r.audit.record(auditEvent{UserName: user.Name, Action: "update_user"})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 	case http.MethodDelete:
 		if err := r.engine.DeleteUser(request.Context(), userName); err != nil {
 			writeAPIError(writer, err)
 			return
 		}
+		r.audit.record(auditEvent{UserName: userName, Action: "delete_user"})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
@@ -128,16 +135,25 @@ func (r *serverRuntime) handleDatabasePermissionResource(
 			writeAPIError(writer, err)
 			return
 		}
+		r.audit.record(auditEvent{UserName: userName, Action: "grant_database_permission", Database: database, Detail: string(permission)})
 	case http.MethodDelete:
 		if err := r.engine.RevokeDatabasePermission(request.Context(), userName, database, permission); err != nil {
 			writeAPIError(writer, err)
 			return
 		}
+		r.audit.record(auditEvent{UserName: userName, Action: "revoke_database_permission", Database: database, Detail: string(permission)})
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+}
+
+func (r *serverRuntime) handleUserAudit(writer http.ResponseWriter, request *http.Request, userName string) {
+	if !requireHTTPMethod(writer, request, http.MethodGet) {
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, userAuditResponse{Events: r.audit.list(userName)})
 }
 
 func (r *serverRuntime) handleAuthzDatabaseCheck(writer http.ResponseWriter, request *http.Request) {

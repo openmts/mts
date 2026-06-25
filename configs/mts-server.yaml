@@ -13,17 +13,63 @@ http:
   enabled: true
   # addr 是 HTTP 监听地址。生产环境暴露到外网前应放在反向代理或网关后面。
   addr: 127.0.0.1:8086
+  # tls.enabled 为 true 时使用 HTTPS；client_auth 为 true 时启用 mTLS。
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    client_ca_file: ""
+    client_auth: false
+  read_timeout: 30s
+  read_header_timeout: 5s
+  write_timeout: 30s
+  idle_timeout: 2m
 
 grpc:
   # enabled 控制是否启动 gRPC API。
   enabled: true
   # addr 是 gRPC 监听地址。
   addr: 127.0.0.1:9096
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    client_ca_file: ""
+    client_auth: false
+  max_recv_msg_bytes: 16777216
+  max_send_msg_bytes: 16777216
 
 auth:
   # admin_token 保护管理面和用户权限面。空值表示开发兼容模式；生产环境应配置强随机值，
   # HTTP 使用 Authorization: Bearer <token> 或 X-MTS-Admin-Token，gRPC 使用同名 metadata。
   admin_token: ""
+  # data_tokens 保护数据面。空数组表示兼容模式；生产环境建议配置并启用 require_user。
+  data_tokens: []
+  # require_user 为 true 时，数据面还必须携带 X-MTS-User / x-mts-user 并通过 DB 权限校验。
+  require_user: false
+
+limits:
+  max_request_body_bytes: 16777216
+  max_write_points: 10000
+  default_query_limit: 10000
+  max_query_limit: 100000
+  request_timeout: 30s
+  max_concurrent_http: 1024
+  max_concurrent_grpc: 1024
+
+observability:
+  access_log: true
+  pprof:
+    # pprof 端点位于 /debug/pprof/*，启用后仍要求 admin token。
+    enabled: false
+
+backup:
+  # storage snapshot 默认写入该目录，目录权限 0700，快照文件权限 0600。
+  dir: ./data/mts-server/backups
+
+log:
+  level: info
+  format: text
 
 engine:
   # database/retention_policy 为空时，写入和查询会使用这里的默认值。

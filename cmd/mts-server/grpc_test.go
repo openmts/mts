@@ -232,7 +232,10 @@ func TestGRPCServiceMarker(t *testing.T) {
 func openBufconnClient(t *testing.T, runtime *serverRuntime) *grpc.ClientConn {
 	t.Helper()
 	listener := bufconn.Listen(1024 * 1024)
-	server := newGRPCServer(runtime)
+	server, err := newGRPCServer(runtime)
+	if err != nil {
+		t.Fatalf("newGRPCServer() error = %v", err)
+	}
 	go func() {
 		if err := server.Serve(listener); err != nil {
 			t.Errorf("Serve(bufconn) error = %v", err)

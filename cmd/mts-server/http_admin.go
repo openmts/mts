@@ -14,7 +14,105 @@ func (r *serverRuntime) handleMetrics(writer http.ResponseWriter, request *http.
 	writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
 	writer.WriteHeader(http.StatusOK)
 	_, _ = writer.Write([]byte(r.engine.PrometheusMetrics()))
+	_, _ = writer.Write([]byte(r.metrics.prometheusText()))
 	_, _ = writer.Write([]byte(r.healthMetrics()))
+}
+
+func (r *serverRuntime) handleAPISpec(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodGet) {
+		return
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, apiSpec())
+}
+
+func (r *serverRuntime) handleErrorCodes(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodGet) {
+		return
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, errorCodeSpecs())
+}
+
+func (r *serverRuntime) handleValidateConfig(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodPost) {
+		return
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	var req configValidateRequest
+	if err := decodeHTTPJSON(request, &req); err != nil {
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+		return
+	}
+	resp := r.validateConfigPayload(req.Config)
+	if !resp.OK {
+		writeHTTPJSON(writer, http.StatusBadRequest, resp)
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, resp)
+}
+
+func (r *serverRuntime) handleReloadConfig(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodPost) {
+		return
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	resp, err := r.reloadConfig()
+	if err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, resp)
+}
+
+func (r *serverRuntime) handleStorageValidate(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodPost) {
+		return
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, r.storageValidate())
+}
+
+func (r *serverRuntime) handleStorageSnapshot(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodPost) {
+		return
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	resp, err := r.storageSnapshot(request.Context())
+	if err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, resp)
+}
+
+func (r *serverRuntime) handleStorageExport(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodGet) {
+		return
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, storageExportResponse{Export: r.storageExport(request.Context())})
 }
 
 func (r *serverRuntime) healthMetrics() string {

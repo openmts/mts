@@ -13,15 +13,22 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	mts "github.com/openmts/mts"
 )
 
 const grpcServiceName = "mts.v1.MTSServer"
+
+const (
+	e2eAdminToken = "e2e-admin-token"
+	e2eDataToken  = "e2e-data-token"
+)
 
 func main() {
 	if err := run(); err != nil {
@@ -125,6 +132,19 @@ http:
 grpc:
   enabled: true
   addr: %s
+auth:
+  admin_token: %s
+  data_tokens: [%s]
+  require_user: true
+limits:
+  default_query_limit: 1000
+  max_query_limit: 10000
+  max_write_points: 1000
+  max_request_body_bytes: 1048576
+observability:
+  access_log: false
+backup:
+  dir: %s
 engine:
   default_database: default
   default_retention_policy: autogen
@@ -142,7 +162,7 @@ engine:
     level0_part_limit: 4
     max_cascade_steps: 8
 shutdown_timeout: 2s
-`, filepath.ToSlash(dataDir), httpAddr, grpcAddr)
+`, filepath.ToSlash(dataDir), httpAddr, grpcAddr, e2eAdminToken, e2eDataToken, filepath.ToSlash(filepath.Join(root, "backups")))
 	if err := os.WriteFile(config, []byte(body), 0600); err != nil {
 		return "", "", "", fmt.Errorf("write server config: %w", err)
 	}
@@ -238,6 +258,15 @@ func exerciseHTTP(addr string) error {
 	if err := assertHTTPHealth(client, addr, "/readyz"); err != nil {
 		return err
 	}
+	if err := postHTTPJSON(client, addr, "/api/v1/users", mts.User{Name: "http-e2e"}, &okResponse{}); err != nil {
+		return err
+	}
+	if err := postHTTPJSON(client, addr, "/api/v1/users/http-e2e/database-permissions/default/read", emptyRequest{}, &okResponse{}); err != nil {
+		return err
+	}
+	if err := postHTTPJSON(client, addr, "/api/v1/users/http-e2e/database-permissions/default/write", emptyRequest{}, &okResponse{}); err != nil {
+		return err
+	}
 	point := testPoint("http_cpu", "http-host", 1, 0.42)
 	if err := postHTTPJSON(client, addr, "/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, &writeResponse{}); err != nil {
 		return err
@@ -281,6 +310,20 @@ func exerciseHTTP(addr string) error {
 	}
 	if cfg.Config.DataDir == "" {
 		return fmt.Errorf("http config data_dir empty")
+	}
+	var spec apiSpecResponse
+	if err := getHTTPJSON(client, addr, "/api/v1/admin/api-spec", &spec); err != nil {
+		return err
+	}
+	if spec.Version != "v1" {
+		return fmt.Errorf("api spec=%#v, want v1", spec)
+	}
+	var storage storageValidateResponse
+	if err := postHTTPJSON(client, addr, "/api/v1/admin/storage/validate", emptyRequest{}, &storage); err != nil {
+		return err
+	}
+	if !storage.OK {
+		return fmt.Errorf("storage validate=%#v, want ok", storage)
 	}
 	if err := assertHTTPMetrics(client, addr); err != nil {
 		return err
@@ -363,7 +406,13 @@ func postHTTPJSON(client http.Client, addr string, path string, in any, out any)
 	if err != nil {
 		return fmt.Errorf("marshal %s request: %w", path, err)
 	}
-	resp, err := client.Post("http://"+addr+path, "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, "http://"+addr+path, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("new post %s: %w", path, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setHTTPAuthHeaders(req, path)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("post %s: %w", path, err)
 	}
@@ -381,7 +430,12 @@ func postHTTPJSON(client http.Client, addr string, path string, in any, out any)
 }
 
 func getHTTPJSON(client http.Client, addr string, path string, out any) error {
-	resp, err := client.Get("http://" + addr + path)
+	req, err := http.NewRequest(http.MethodGet, "http://"+addr+path, nil)
+	if err != nil {
+		return fmt.Errorf("new get %s: %w", path, err)
+	}
+	setHTTPAuthHeaders(req, path)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("get %s: %w", path, err)
 	}
@@ -396,6 +450,16 @@ func getHTTPJSON(client http.Client, addr string, path string, out any) error {
 		return fmt.Errorf("decode %s response: %w", path, err)
 	}
 	return nil
+}
+
+func setHTTPAuthHeaders(req *http.Request, path string) {
+	if strings.HasPrefix(path, "/api/v1/admin") || strings.HasPrefix(path, "/api/v1/users") || strings.HasPrefix(path, "/api/v1/authz") {
+		req.Header.Set("Authorization", "Bearer "+e2eAdminToken)
+	}
+	if strings.HasPrefix(path, "/api/v1/data") {
+		req.Header.Set("X-MTS-Data-Token", e2eDataToken)
+		req.Header.Set("X-MTS-User", "http-e2e")
+	}
 }
 
 func assertHTTPMetrics(client http.Client, addr string) error {
@@ -430,6 +494,8 @@ func exerciseGRPC(addr string) error {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	adminCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+e2eAdminToken))
+	dataCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("x-mts-data-token", e2eDataToken, "x-mts-user", "grpc-e2e"))
 	var health mts.HealthSnapshot
 	if err := invokeGRPC(ctx, conn, "Health", emptyRequest{}, &health); err != nil {
 		return fmt.Errorf("grpc health: %w", err)
@@ -437,9 +503,18 @@ func exerciseGRPC(addr string) error {
 	if !health.Healthy || !health.Ready {
 		return fmt.Errorf("grpc health=%#v, want healthy and ready", health)
 	}
+	if err := invokeGRPC(adminCtx, conn, "CreateUser", mts.User{Name: "grpc-e2e"}, &okResponse{}); err != nil {
+		return fmt.Errorf("grpc create user: %w", err)
+	}
+	if err := invokeGRPC(adminCtx, conn, "GrantDatabasePermission", databasePermissionRequest{UserName: "grpc-e2e", Database: "default", Permission: mts.DatabasePermissionRead}, &okResponse{}); err != nil {
+		return fmt.Errorf("grpc grant read: %w", err)
+	}
+	if err := invokeGRPC(adminCtx, conn, "GrantDatabasePermission", databasePermissionRequest{UserName: "grpc-e2e", Database: "default", Permission: mts.DatabasePermissionWrite}, &okResponse{}); err != nil {
+		return fmt.Errorf("grpc grant write: %w", err)
+	}
 	point := testPoint("grpc_cpu", "grpc-host", 2, 0.84)
 	var write writeResponse
-	if err := invokeGRPC(ctx, conn, "Write", writeRequest{Points: []mts.Point{point}}, &write); err != nil {
+	if err := invokeGRPC(dataCtx, conn, "Write", writeRequest{Points: []mts.Point{point}}, &write); err != nil {
 		return fmt.Errorf("grpc write: %w", err)
 	}
 	if !write.OK {
@@ -450,14 +525,14 @@ func exerciseGRPC(addr string) error {
 		return err
 	}
 	var rows queryRowsResponse
-	if err := invokeGRPC(ctx, conn, "QueryRows", queryRowsRequest{Query: query}, &rows); err != nil {
+	if err := invokeGRPC(dataCtx, conn, "QueryRows", queryRowsRequest{Query: query}, &rows); err != nil {
 		return fmt.Errorf("grpc query rows: %w", err)
 	}
 	if err := assertRows(rows.Rows, "grpc_cpu", "grpc-host", 0.84); err != nil {
 		return fmt.Errorf("grpc query rows: %w", err)
 	}
 	batch := testBatch("grpc_typed_cpu", "grpc-typed", 4, 0.93)
-	if err := invokeGRPC(ctx, conn, "WriteTypedBatch", typedWriteRequest{Batch: batch}, &writeResponse{}); err != nil {
+	if err := invokeGRPC(dataCtx, conn, "WriteTypedBatch", typedWriteRequest{Batch: batch}, &writeResponse{}); err != nil {
 		return fmt.Errorf("grpc typed write: %w", err)
 	}
 	columnsQuery, err := testQuery("grpc_typed_cpu")
@@ -465,22 +540,22 @@ func exerciseGRPC(addr string) error {
 		return err
 	}
 	var columns queryColumnsResponse
-	if err := invokeGRPC(ctx, conn, "QueryColumns", queryRequest{Query: columnsQuery}, &columns); err != nil {
+	if err := invokeGRPC(dataCtx, conn, "QueryColumns", queryRequest{Query: columnsQuery}, &columns); err != nil {
 		return fmt.Errorf("grpc query columns: %w", err)
 	}
 	if len(columns.Columns) != 1 {
 		return fmt.Errorf("grpc columns=%#v, want one", columns.Columns)
 	}
 	var cfg configResponse
-	if err := invokeGRPC(ctx, conn, "GetEffectiveConfig", emptyRequest{}, &cfg); err != nil {
+	if err := invokeGRPC(adminCtx, conn, "GetEffectiveConfig", emptyRequest{}, &cfg); err != nil {
 		return fmt.Errorf("grpc config: %w", err)
 	}
 	policy := testDownsamplePolicy("grpc_rollup_cpu", "grpc_typed_cpu")
-	if err := invokeGRPC(ctx, conn, "CreateDownsamplePolicy", policy, &okResponse{}); err != nil {
+	if err := invokeGRPC(adminCtx, conn, "CreateDownsamplePolicy", policy, &okResponse{}); err != nil {
 		return fmt.Errorf("grpc create downsample: %w", err)
 	}
 	var dryRun downsampleDryRunResponse
-	if err := invokeGRPC(ctx, conn, "DryRunDownsamplePolicy", downsamplePolicyRangeRequest{
+	if err := invokeGRPC(adminCtx, conn, "DryRunDownsamplePolicy", downsamplePolicyRangeRequest{
 		Name:      "grpc_rollup_cpu",
 		StartUnix: 1,
 		EndUnix:   int64(time.Hour),
@@ -488,14 +563,14 @@ func exerciseGRPC(addr string) error {
 		return fmt.Errorf("grpc downsample dry-run: %w", err)
 	}
 	var flush maintenanceResponse
-	if err := invokeGRPC(ctx, conn, "Flush", emptyRequest{}, &flush); err != nil {
+	if err := invokeGRPC(adminCtx, conn, "Flush", emptyRequest{}, &flush); err != nil {
 		return fmt.Errorf("grpc flush: %w", err)
 	}
 	if !flush.OK {
 		return fmt.Errorf("grpc flush ok=false")
 	}
 	var compact maintenanceResponse
-	if err := invokeGRPC(ctx, conn, "Compact", emptyRequest{}, &compact); err != nil {
+	if err := invokeGRPC(adminCtx, conn, "Compact", emptyRequest{}, &compact); err != nil {
 		return fmt.Errorf("grpc compact: %w", err)
 	}
 	if !compact.OK {
@@ -634,6 +709,20 @@ type configResponse struct {
 	Config struct {
 		DataDir string `json:"DataDir" yaml:"data_dir"`
 	} `json:"config"`
+}
+
+type apiSpecResponse struct {
+	Version string `json:"version"`
+}
+
+type storageValidateResponse struct {
+	OK bool `json:"ok"`
+}
+
+type databasePermissionRequest struct {
+	UserName   string                 `json:"user_name"`
+	Database   string                 `json:"database"`
+	Permission mts.DatabasePermission `json:"permission"`
 }
 
 type downsamplePoliciesResponse struct {

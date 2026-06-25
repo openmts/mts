@@ -292,6 +292,7 @@ func openTestRuntime(t *testing.T) *serverRuntime {
 	cfg.DataDir = t.TempDir()
 	cfg.HTTP.Addr = "127.0.0.1:0"
 	cfg.GRPC.Addr = "127.0.0.1:0"
+	cfg.Observability.AccessLog = false
 	runtime, err := openRuntime(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("openRuntime() error = %v", err)
@@ -311,6 +312,7 @@ func openTestRuntimeWithAdminToken(t *testing.T) *serverRuntime {
 	cfg.HTTP.Addr = "127.0.0.1:0"
 	cfg.GRPC.Addr = "127.0.0.1:0"
 	cfg.Auth.AdminToken = "test-admin-token"
+	cfg.Observability.AccessLog = false
 	runtime, err := openRuntime(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("openRuntime() error = %v", err)
