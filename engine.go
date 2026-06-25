@@ -7,6 +7,7 @@ import (
 
 	storageengine "github.com/openmts/mts/internal/engine"
 	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/observability"
 )
 
 // Close 关闭 Engine 并释放本地资源。
@@ -161,6 +162,11 @@ func (e *Engine) HealthSnapshot() HealthSnapshot {
 		Reasons: append([]string(nil), health.Reasons...),
 		Checks:  fromHealthChecks(health.Checks),
 	}
+}
+
+// PrometheusMetrics 返回 Engine 指标的 Prometheus 文本格式。
+func (e *Engine) PrometheusMetrics() string {
+	return observability.PrometheusText(e.inner.MetricsSnapshot())
 }
 
 func fromHealthChecks(checks []storageengine.HealthCheck) []HealthCheck {

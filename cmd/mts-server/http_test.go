@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	mts "github.com/openmts/mts"
 )
@@ -16,7 +19,7 @@ func TestHTTPWriteAndQueryRows(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	postJSON(t, server.URL+"/api/v1/write", writeRequest{
+	postJSON(t, server.URL+"/api/v1/data/write", writeRequest{
 		Points: []mts.Point{testPoint()},
 		Options: mts.WriteOptions{
 			Sync: true,
@@ -24,7 +27,7 @@ func TestHTTPWriteAndQueryRows(t *testing.T) {
 	}, http.StatusOK, &writeResponse{})
 
 	var response queryRowsResponse
-	postJSON(t, server.URL+"/api/v1/query/rows", queryRowsRequest{
+	postJSON(t, server.URL+"/api/v1/data/query/rows", queryRowsRequest{
 		Query: testQuery(),
 	}, http.StatusOK, &response)
 	if len(response.Rows) != 1 || response.Rows[0].Fields["usage"].Float64 != 0.7 {
@@ -48,7 +51,7 @@ func TestHTTPHealthAndBadRequest(t *testing.T) {
 		t.Fatalf("health status = %d, want 200", resp.StatusCode)
 	}
 
-	postJSON(t, server.URL+"/api/v1/write", map[string]any{"bad": true}, http.StatusBadRequest, &errorResponse{})
+	postJSON(t, server.URL+"/api/v1/data/write", map[string]any{"bad": true}, http.StatusBadRequest, &errorResponse{})
 	resp, err = http.Post(server.URL+"/healthz", "application/json", bytes.NewReader([]byte(`{}`)))
 	if err != nil {
 		t.Fatalf("Post(healthz) error = %v", err)
@@ -66,12 +69,12 @@ func TestHTTPWriteAndQueryErrors(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	postJSON(t, server.URL+"/api/v1/write", writeRequest{
+	postJSON(t, server.URL+"/api/v1/data/write", writeRequest{
 		Points: []mts.Point{{Measurement: " "}},
 	}, http.StatusBadRequest, &errorResponse{})
-	postRaw(t, server.URL+"/api/v1/query/rows", `{"query":`, http.StatusBadRequest)
+	postRaw(t, server.URL+"/api/v1/data/query/rows", `{"query":`, http.StatusBadRequest)
 
-	resp, err := http.Get(server.URL + "/api/v1/query/rows")
+	resp, err := http.Get(server.URL + "/api/v1/data/query/rows")
 	if err != nil {
 		t.Fatalf("Get(query rows) error = %v", err)
 	}
@@ -83,24 +86,51 @@ func TestHTTPWriteAndQueryErrors(t *testing.T) {
 	}
 }
 
+func TestHTTPLegacyMixedNamespaceIsNotMounted(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	legacyPaths := []string{
+		"/api/v1/write",
+		"/api/v1/query/rows",
+		"/api/v1/flush",
+		"/api/v1/compact",
+	}
+	for _, path := range legacyPaths {
+		t.Run(path, func(t *testing.T) {
+			resp, err := http.Get(server.URL + path)
+			if err != nil {
+				t.Fatalf("Get(%s) error = %v", path, err)
+			}
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				t.Fatalf("Close(%s body) error = %v", path, closeErr)
+			}
+			if resp.StatusCode != http.StatusNotFound {
+				t.Fatalf("GET %s status = %d, want 404", path, resp.StatusCode)
+			}
+		})
+	}
+}
+
 func TestHTTPMaintenanceEndpoints(t *testing.T) {
 	runtime := openTestRuntime(t)
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
 	var flushResp maintenanceResponse
-	postJSON(t, server.URL+"/api/v1/flush", map[string]any{}, http.StatusOK, &flushResp)
+	postJSON(t, server.URL+"/api/v1/admin/flush", map[string]any{}, http.StatusOK, &flushResp)
 	if !flushResp.OK {
 		t.Fatal("flush OK = false, want true")
 	}
 
 	var compactResp maintenanceResponse
-	postJSON(t, server.URL+"/api/v1/compact", map[string]any{}, http.StatusOK, &compactResp)
+	postJSON(t, server.URL+"/api/v1/admin/compact", map[string]any{}, http.StatusOK, &compactResp)
 	if !compactResp.OK {
 		t.Fatal("compact OK = false, want true")
 	}
 
-	resp, err := http.Get(server.URL + "/api/v1/flush")
+	resp, err := http.Get(server.URL + "/api/v1/admin/flush")
 	if err != nil {
 		t.Fatalf("Get(flush) error = %v", err)
 	}
@@ -111,7 +141,7 @@ func TestHTTPMaintenanceEndpoints(t *testing.T) {
 		t.Fatalf("GET flush status = %d, want 405", resp.StatusCode)
 	}
 
-	resp, err = http.Get(server.URL + "/api/v1/compact")
+	resp, err = http.Get(server.URL + "/api/v1/admin/compact")
 	if err != nil {
 		t.Fatalf("Get(compact) error = %v", err)
 	}
@@ -145,6 +175,117 @@ func TestHTTPMaintenanceContextErrors(t *testing.T) {
 	}
 }
 
+func TestHTTPP0P1DataMetadataUsersAdminAndDownsample(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	adminHeaders := map[string]string{"Authorization": "Bearer test-admin-token"}
+	user := mts.User{Name: "alice", DisplayName: "Alice"}
+	postJSONWithHeaders(t, server.URL+"/api/v1/users", user, adminHeaders, http.StatusOK, &okResponse{})
+	postJSONWithHeaders(t, server.URL+"/api/v1/users/alice/database-permissions/default/write", map[string]any{}, adminHeaders, http.StatusOK, &okResponse{})
+	postJSONWithHeaders(t, server.URL+"/api/v1/users/alice/database-permissions/default/read", map[string]any{}, adminHeaders, http.StatusOK, &okResponse{})
+
+	var userResp userResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/users/alice", adminHeaders, http.StatusOK, &userResp)
+	if userResp.User.Name != "alice" {
+		t.Fatalf("user = %#v, want alice", userResp.User)
+	}
+
+	batch := mts.TypedBatch{
+		Measurement: "cpu",
+		Tags: []mts.TagColumn{{
+			Name:   "host",
+			Values: []string{"api-1", "api-1"},
+		}},
+		Timestamps: []int64{1, 2},
+		Fields: []mts.TypedFieldColumn{{
+			Name:          "usage",
+			Type:          mts.FieldFloat64,
+			Float64Values: []float64{0.7, 0.9},
+		}},
+	}
+	dataHeaders := map[string]string{"X-MTS-User": "alice"}
+	postJSONWithHeaders(t, server.URL+"/api/v1/data/write/typed", typedWriteRequest{
+		Batch:   batch,
+		Options: mts.WriteOptions{Sync: true},
+	}, dataHeaders, http.StatusOK, &writeResponse{})
+
+	var columnsResp queryColumnsResponse
+	postJSONWithHeaders(t, server.URL+"/api/v1/data/query/columns", queryRequest{Query: testQuery()}, dataHeaders, http.StatusOK, &columnsResp)
+	if len(columnsResp.Columns) != 1 || len(columnsResp.Columns[0].Timestamps) != 2 {
+		t.Fatalf("columns = %#v, want one column with two points", columnsResp.Columns)
+	}
+
+	var explainResp queryExplainResponse
+	postJSONWithHeaders(t, server.URL+"/api/v1/data/query/explain", queryRequest{Query: testQuery()}, dataHeaders, http.StatusOK, &explainResp)
+	if len(explainResp.Result.Columns) == 0 || explainResp.Result.Explain.Measurement != "cpu" {
+		t.Fatalf("explain response = %#v, want cpu explain with columns", explainResp)
+	}
+
+	streamResp, err := postJSONRawWithHeaders(server.URL+"/api/v1/data/query/stream", queryRequest{Query: testQuery()}, dataHeaders)
+	if err != nil {
+		t.Fatalf("query stream error = %v", err)
+	}
+	streamBody, closeStream := readResponseBody(t, streamResp)
+	defer closeStream()
+	if streamResp.StatusCode != http.StatusOK || !strings.Contains(streamBody, `"type":"row"`) {
+		t.Fatalf("stream status/body = %d %s, want row stream", streamResp.StatusCode, streamBody)
+	}
+
+	var statsResp queryStatsResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/data/query/stats", dataHeaders, http.StatusOK, &statsResp)
+	if statsResp.Stats.SamplesReturned == 0 {
+		t.Fatalf("query stats = %#v, want returned samples", statsResp.Stats)
+	}
+
+	var fieldsResp fieldsResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/data/databases/default/measurements/cpu/fields", dataHeaders, http.StatusOK, &fieldsResp)
+	if len(fieldsResp.Fields) != 1 || fieldsResp.Fields[0].Name != "usage" {
+		t.Fatalf("fields = %#v, want usage field", fieldsResp.Fields)
+	}
+
+	var cfgResp configResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/config/effective", adminHeaders, http.StatusOK, &cfgResp)
+	if cfgResp.Config.DataDir == "" {
+		t.Fatalf("config response = %#v, want data dir", cfgResp)
+	}
+
+	metricsResp, err := http.Get(server.URL + "/metrics")
+	if err != nil {
+		t.Fatalf("Get(metrics) error = %v", err)
+	}
+	metricsBody, closeMetrics := readResponseBody(t, metricsResp)
+	defer closeMetrics()
+	if metricsResp.StatusCode != http.StatusOK || !strings.Contains(metricsBody, "mts_health_ready") {
+		t.Fatalf("metrics status/body = %d %s, want mts metrics", metricsResp.StatusCode, metricsBody)
+	}
+
+	policy := testDownsamplePolicy()
+	postJSONWithHeaders(t, server.URL+"/api/v1/admin/downsample/policies", policy, adminHeaders, http.StatusOK, &okResponse{})
+	var policiesResp downsamplePoliciesResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/downsample/policies", adminHeaders, http.StatusOK, &policiesResp)
+	if len(policiesResp.Policies) != 1 || policiesResp.Policies[0].Name != policy.Name {
+		t.Fatalf("policies = %#v, want rollup_cpu", policiesResp.Policies)
+	}
+	postJSONWithHeaders(t, server.URL+"/api/v1/admin/downsample/policies/rollup_cpu/dry-run", downsampleRangeRequest{
+		StartUnix: 1,
+		EndUnix:   int64(time.Hour),
+	}, adminHeaders, http.StatusOK, &downsampleDryRunResponse{})
+}
+
+func TestHTTPAdminAuth(t *testing.T) {
+	runtime := openTestRuntimeWithAdminToken(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	var response errorResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/users", nil, http.StatusUnauthorized, &response)
+	if response.Code != errorCodeUnauthenticated {
+		t.Fatalf("auth error = %#v, want unauthenticated", response)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()
@@ -161,6 +302,48 @@ func openTestRuntime(t *testing.T) *serverRuntime {
 		}
 	})
 	return runtime
+}
+
+func openTestRuntimeWithAdminToken(t *testing.T) *serverRuntime {
+	t.Helper()
+	cfg := defaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.HTTP.Addr = "127.0.0.1:0"
+	cfg.GRPC.Addr = "127.0.0.1:0"
+	cfg.Auth.AdminToken = "test-admin-token"
+	runtime, err := openRuntime(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("openRuntime() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := runtime.shutdown(context.Background()); err != nil {
+			t.Fatalf("shutdown runtime error = %v", err)
+		}
+	})
+	return runtime
+}
+
+func testDownsamplePolicy() mts.DownsamplePolicy {
+	return mts.DownsamplePolicy{
+		Name:              "rollup_cpu",
+		SourceDatabase:    "default",
+		SourceRetention:   "autogen",
+		SourceMeasurement: "cpu",
+		TargetDatabase:    "default",
+		TargetRetention:   "autogen",
+		TargetMeasurement: "cpu_1h",
+		Interval:          time.Hour,
+		RefreshInterval:   time.Hour,
+		Lookback:          time.Hour,
+		BatchSize:         100,
+		Functions: []mts.DownsampleFunction{{
+			Function: mts.AggregateAvg,
+			Field:    "usage",
+			As:       "usage_avg",
+		}},
+		GroupByTags: []string{"host"},
+		Enabled:     true,
+	}
 }
 
 func testPoint() mts.Point {
@@ -184,11 +367,19 @@ func testQuery() mts.Query {
 
 func postJSON(t *testing.T, url string, req any, wantStatus int, out any) {
 	t.Helper()
-	data, err := json.Marshal(req)
-	if err != nil {
-		t.Fatalf("Marshal(request) error = %v", err)
-	}
-	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
+	postJSONWithHeaders(t, url, req, nil, wantStatus, out)
+}
+
+func postJSONWithHeaders(
+	t *testing.T,
+	url string,
+	req any,
+	headers map[string]string,
+	wantStatus int,
+	out any,
+) {
+	t.Helper()
+	resp, err := postJSONRawWithHeaders(url, req, headers)
 	if err != nil {
 		t.Fatalf("Post(%s) error = %v", url, err)
 	}
@@ -198,10 +389,73 @@ func postJSON(t *testing.T, url string, req any, wantStatus int, out any) {
 		}
 	}()
 	if resp.StatusCode != wantStatus {
-		t.Fatalf("Post(%s) status = %d, want %d", url, resp.StatusCode, wantStatus)
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("Post(%s) status = %d, want %d, body = %s", url, resp.StatusCode, wantStatus, string(body))
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 		t.Fatalf("Decode(response) error = %v", err)
+	}
+}
+
+func postJSONRawWithHeaders(url string, req any, headers map[string]string) (*http.Response, error) {
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		request.Header.Set(key, value)
+	}
+	return http.DefaultClient.Do(request)
+}
+
+func getJSONWithHeaders(
+	t *testing.T,
+	url string,
+	headers map[string]string,
+	wantStatus int,
+	out any,
+) {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(%s) error = %v", url, err)
+	}
+	for key, value := range headers {
+		request.Header.Set(key, value)
+	}
+	resp, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("Get(%s) error = %v", url, err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Fatalf("Close(response body) error = %v", err)
+		}
+	}()
+	if resp.StatusCode != wantStatus {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("Get(%s) status = %d, want %d, body = %s", url, resp.StatusCode, wantStatus, string(body))
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		t.Fatalf("Decode(response) error = %v", err)
+	}
+}
+
+func readResponseBody(t *testing.T, resp *http.Response) (string, func()) {
+	t.Helper()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll(response body) error = %v", err)
+	}
+	return string(body), func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Fatalf("Close(response body) error = %v", err)
+		}
 	}
 }
 

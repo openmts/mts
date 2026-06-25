@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -13,6 +14,81 @@ import (
 
 	mts "github.com/openmts/mts"
 )
+
+func TestGRPCP0P1DataUsersMetadataAdminAndDownsample(t *testing.T) {
+	runtime := openTestRuntime(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+	ctx := context.Background()
+	if err := invokeGRPC(ctx, conn, "CreateUser", &mts.User{Name: "grpc-alice"}, &okResponse{}); err != nil {
+		t.Fatalf("CreateUser error = %v", err)
+	}
+	for _, permission := range []mts.DatabasePermission{mts.DatabasePermissionRead, mts.DatabasePermissionWrite} {
+		req := databasePermissionRequest{UserName: "grpc-alice", Database: "default", Permission: permission}
+		if err := invokeGRPC(ctx, conn, "GrantDatabasePermission", &req, &okResponse{}); err != nil {
+			t.Fatalf("GrantDatabasePermission(%s) error = %v", permission, err)
+		}
+	}
+
+	batch := mts.TypedBatch{
+		Measurement: "cpu",
+		Tags:        []mts.TagColumn{{Name: "host", Values: []string{"grpc-1"}}},
+		Timestamps:  []int64{3},
+		Fields: []mts.TypedFieldColumn{{
+			Name:          "usage",
+			Type:          mts.FieldFloat64,
+			Float64Values: []float64{0.8},
+		}},
+	}
+	if err := invokeGRPC(ctx, conn, "WriteTypedBatch", &typedWriteRequest{Batch: batch}, &writeResponse{}); err != nil {
+		t.Fatalf("WriteTypedBatch error = %v", err)
+	}
+	var columns queryColumnsResponse
+	if err := invokeGRPC(ctx, conn, "QueryColumns", &queryRequest{Query: testQuery()}, &columns); err != nil {
+		t.Fatalf("QueryColumns error = %v", err)
+	}
+	if len(columns.Columns) != 1 || len(columns.Columns[0].Timestamps) != 1 {
+		t.Fatalf("columns = %#v, want one point", columns.Columns)
+	}
+	var explain queryExplainResponse
+	if err := invokeGRPC(ctx, conn, "QueryWithExplain", &queryRequest{Query: testQuery()}, &explain); err != nil {
+		t.Fatalf("QueryWithExplain error = %v", err)
+	}
+	if explain.Result.Explain.Measurement != "cpu" {
+		t.Fatalf("explain = %#v, want cpu", explain.Result.Explain)
+	}
+	var fields fieldsResponse
+	if err := invokeGRPC(ctx, conn, "ListFields", &metadataRequest{Database: "default", Measurement: "cpu"}, &fields); err != nil {
+		t.Fatalf("ListFields error = %v", err)
+	}
+	if len(fields.Fields) != 1 {
+		t.Fatalf("fields = %#v, want one", fields.Fields)
+	}
+	var cfg configResponse
+	if err := invokeGRPC(ctx, conn, "GetEffectiveConfig", &emptyRequest{}, &cfg); err != nil {
+		t.Fatalf("GetEffectiveConfig error = %v", err)
+	}
+	if cfg.Config.DataDir == "" {
+		t.Fatalf("config = %#v, want data dir", cfg.Config)
+	}
+	policy := testDownsamplePolicy()
+	policy.Name = "grpc_rollup_cpu"
+	if err := invokeGRPC(ctx, conn, "CreateDownsamplePolicy", &policy, &okResponse{}); err != nil {
+		t.Fatalf("CreateDownsamplePolicy error = %v", err)
+	}
+	var dryRun downsampleDryRunResponse
+	if err := invokeGRPC(ctx, conn, "DryRunDownsamplePolicy", &downsamplePolicyRangeRequest{
+		Name:      policy.Name,
+		StartUnix: 1,
+		EndUnix:   int64(time.Hour / time.Second),
+	}, &dryRun); err != nil {
+		t.Fatalf("DryRunDownsamplePolicy error = %v", err)
+	}
+}
 
 func TestGRPCWriteAndQueryRows(t *testing.T) {
 	runtime := openTestRuntime(t)

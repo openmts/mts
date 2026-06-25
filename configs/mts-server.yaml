@@ -20,6 +20,11 @@ grpc:
   # addr 是 gRPC 监听地址。
   addr: 127.0.0.1:9096
 
+auth:
+  # admin_token 保护管理面和用户权限面。空值表示开发兼容模式；生产环境应配置强随机值，
+  # HTTP 使用 Authorization: Bearer <token> 或 X-MTS-Admin-Token，gRPC 使用同名 metadata。
+  admin_token: ""
+
 engine:
   # database/retention_policy 为空时，写入和查询会使用这里的默认值。
   default_database: default

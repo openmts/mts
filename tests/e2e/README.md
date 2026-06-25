@@ -14,6 +14,7 @@ rm -f testbin
 新增覆盖：
 
 - `public_api_workflow`：公开 typed batch、Builder、Row/Column iterator、元数据列表和跨重启读取。
+- `mts_server_protocols`：启动真实 `mts-server` 进程，验证 HTTP 和 gRPC 协议下 health、write/typed write、rows/columns/explain query、用户权限、配置、metrics、flush、compact 和 downsample dry-run 可用性。
 - `streaming_query`：流式列查询大结果迭代。
 - `query_aggregate_window`：聚合、窗口和边界。
 - `read_amplification`：读预算超限错误。

@@ -46,7 +46,7 @@
 - [x] 实现 `runtime.go` 和 `http.go`。
 - [x] 运行定向包测试覆盖 HTTP 与 runtime 生命周期。
 
-**实现备注:** HTTP 暴露 `/healthz`、`/readyz`、`/api/v1/write`、`/api/v1/query/rows`、`/api/v1/flush`、`/api/v1/compact`，所有业务入口统一经过 `serverRuntime`。
+**实现备注:** HTTP 暴露 `/healthz`、`/readyz`、`/api/v1/data/write`、`/api/v1/data/query/rows`、`/api/v1/admin/flush`、`/api/v1/admin/compact`，所有业务入口统一经过 `serverRuntime`。
 
 ## Task 3: gRPC 服务
 

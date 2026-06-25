@@ -166,12 +166,18 @@ go run ./cmd/mts-storage restore /backup/mts-snapshot /var/lib/mts-restored
 go run ./cmd/mts-server serve --config configs/mts-server.yaml
 ```
 
-HTTP 默认监听 `127.0.0.1:8086`，gRPC 默认监听 `127.0.0.1:9096`。HTTP 支持健康检查、写入、行查询、flush 和 compact：
+HTTP 默认监听 `127.0.0.1:8086`，gRPC 默认监听 `127.0.0.1:9096`。HTTP API 按数据面、管理面和用户权限面拆分：数据面使用 `/api/v1/data/*`，管理面使用 `/api/v1/admin/*`，用户权限面使用 `/api/v1/users/*` 和 `/api/v1/authz/*`。配置 `auth.admin_token` 后，管理面和用户权限面需要 `Authorization: Bearer <token>` 或 `X-MTS-Admin-Token`。
 
 ```bash
 curl http://127.0.0.1:8086/healthz
-curl -X POST http://127.0.0.1:8086/api/v1/write -d @points.json
-curl -X POST http://127.0.0.1:8086/api/v1/query/rows -d @query.json
+curl -X POST http://127.0.0.1:8086/api/v1/data/write -d @points.json
+curl -X POST http://127.0.0.1:8086/api/v1/data/write/typed -d @typed-batch.json
+curl -X POST http://127.0.0.1:8086/api/v1/data/query/rows -d @query.json
+curl -X POST http://127.0.0.1:8086/api/v1/data/query/columns -d @query.json
+curl -X POST http://127.0.0.1:8086/api/v1/data/query/explain -d @query.json
+curl -X POST http://127.0.0.1:8086/api/v1/admin/flush
+curl -X POST http://127.0.0.1:8086/api/v1/admin/compact
+curl http://127.0.0.1:8086/metrics
 ```
 
 服务入口不提供 SQL、InfluxQL、PromQL 或 MetricsQL parser；查询请求使用与 Go API 一致的结构化 `Query` JSON。

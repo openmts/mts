@@ -40,6 +40,7 @@ help: ## 显示 Makefile 目标
 	@printf "\n常用场景示例:\n"
 	@printf "  make unit                  生产包单元测试\n"
 	@printf "  make e2e-public-api        公开 API 端到端用例\n"
+	@printf "  make e2e-mts-server        mts-server HTTP/gRPC 端到端用例\n"
 	@printf "  make fault-matrix          存储故障矩阵\n"
 	@printf "  make storage-100k          100K 存储写查压缩场景\n"
 	@printf "  make bench-query           查询迭代器性能基准\n"
@@ -88,11 +89,13 @@ coverage: ## 检查生产包覆盖率不低于 COVERAGE_MIN
 e2e: ## 运行全部 e2e 用例
 	$(SCENARIO_GO_TEST) ./tests/e2e/...
 
-.PHONY: e2e-simple e2e-public-api e2e-wal e2e-flush e2e-no-json e2e-retention e2e-compaction e2e-query-pruning e2e-query-window e2e-streaming e2e-read-amplification e2e-service e2e-format e2e-downsample
+.PHONY: e2e-simple e2e-public-api e2e-mts-server e2e-wal e2e-flush e2e-no-json e2e-retention e2e-compaction e2e-query-pruning e2e-query-window e2e-streaming e2e-read-amplification e2e-service e2e-format e2e-downsample
 e2e-simple: ## 运行 simple_integrity e2e
 	$(SCENARIO_GO_TEST) ./tests/e2e/simple_integrity
 e2e-public-api: ## 运行 public_api_workflow e2e
 	$(SCENARIO_GO_TEST) ./tests/e2e/public_api_workflow
+e2e-mts-server: ## 运行 mts_server_protocols e2e
+	$(SCENARIO_GO_TEST) ./tests/e2e/mts_server_protocols
 e2e-wal: ## 运行 wal_recovery e2e
 	$(SCENARIO_GO_TEST) ./tests/e2e/wal_recovery
 e2e-flush: ## 运行 flush_manifest_recovery e2e
@@ -118,9 +121,10 @@ e2e-format: ## 运行 format_governance e2e
 e2e-downsample: ## 运行 downsample_policy e2e
 	$(SCENARIO_GO_TEST) ./tests/e2e/downsample_policy
 
-.PHONY: simple-integrity public-api-workflow wal-recovery flush-manifest-recovery no-json-storage retention compaction-integrity query-pruning query-aggregate-window streaming-query read-amplification service-ops format-governance downsample-e2e
+.PHONY: simple-integrity public-api-workflow mts-server-e2e wal-recovery flush-manifest-recovery no-json-storage retention compaction-integrity query-pruning query-aggregate-window streaming-query read-amplification service-ops format-governance downsample-e2e
 simple-integrity: e2e-simple ## e2e-simple 的短别名
 public-api-workflow: e2e-public-api ## e2e-public-api 的短别名
+mts-server-e2e: e2e-mts-server ## e2e-mts-server 的短别名
 wal-recovery: e2e-wal ## e2e-wal 的短别名
 flush-manifest-recovery: e2e-flush ## e2e-flush 的短别名
 no-json-storage: e2e-no-json ## e2e-no-json 的短别名

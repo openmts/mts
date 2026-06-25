@@ -1,0 +1,232 @@
+package main
+
+import (
+	"time"
+
+	mts "github.com/openmts/mts"
+)
+
+type errorCode string
+
+const (
+	errorCodeBadRequest       errorCode = "bad_request"
+	errorCodeUnauthenticated  errorCode = "unauthenticated"
+	errorCodePermissionDenied errorCode = "permission_denied"
+	errorCodeNotFound         errorCode = "not_found"
+	errorCodeAlreadyExists    errorCode = "already_exists"
+	errorCodeInternal         errorCode = "internal"
+)
+
+type okResponse struct {
+	OK bool `json:"ok"`
+}
+
+type errorResponse struct {
+	OK      bool      `json:"ok"`
+	Code    errorCode `json:"code"`
+	Message string    `json:"message"`
+	Error   string    `json:"error,omitempty"`
+}
+
+type writeRequest struct {
+	Points  []mts.Point      `json:"points"`
+	Options mts.WriteOptions `json:"options"`
+}
+
+type writeResponse struct {
+	OK bool `json:"ok"`
+}
+
+type typedWriteRequest struct {
+	Batch   mts.TypedBatch   `json:"batch"`
+	Options mts.WriteOptions `json:"options"`
+}
+
+type queryRequest struct {
+	Query mts.Query `json:"query"`
+}
+
+type queryRowsRequest = queryRequest
+
+type queryRowsResponse struct {
+	Rows []mts.Row `json:"rows"`
+}
+
+type queryColumnsResponse struct {
+	Columns []mts.ColumnSeries `json:"columns"`
+}
+
+type queryExplainResponse struct {
+	Result mts.QueryResult `json:"result"`
+}
+
+type queryStatsResponse struct {
+	Stats mts.QueryStats `json:"stats"`
+}
+
+type streamRecord struct {
+	Type  string          `json:"type"`
+	Row   *mts.Row        `json:"row,omitempty"`
+	Error *errorResponse  `json:"error,omitempty"`
+	Stats *mts.QueryStats `json:"stats,omitempty"`
+}
+
+type userResponse struct {
+	User mts.User `json:"user"`
+}
+
+type userNameRequest struct {
+	Name string `json:"name"`
+}
+
+type usersResponse struct {
+	Users []mts.User `json:"users"`
+}
+
+type databasePermissionsResponse struct {
+	Grants []mts.DatabaseGrant `json:"grants"`
+}
+
+type authzDatabaseCheckRequest struct {
+	UserName   string                 `json:"user_name"`
+	Database   string                 `json:"database"`
+	Permission mts.DatabasePermission `json:"permission"`
+}
+
+type databasePermissionRequest struct {
+	UserName   string                 `json:"user_name"`
+	Database   string                 `json:"database"`
+	Permission mts.DatabasePermission `json:"permission"`
+}
+
+type authzDatabaseCheckResponse struct {
+	Allowed bool `json:"allowed"`
+}
+
+type databaseRequest struct {
+	Name string `json:"name"`
+}
+
+type retentionPolicyRequest struct {
+	Policy mts.RetentionPolicy `json:"policy"`
+}
+
+type grpcRetentionPolicyRequest struct {
+	Database string              `json:"database"`
+	Policy   mts.RetentionPolicy `json:"policy"`
+}
+
+type retentionPoliciesResponse struct {
+	Policies []mts.RetentionPolicy `json:"policies"`
+}
+
+type measurementsResponse struct {
+	Measurements []string `json:"measurements"`
+}
+
+type fieldsResponse struct {
+	Fields []mts.FieldSchema `json:"fields"`
+}
+
+type metadataRequest struct {
+	Database    string            `json:"database"`
+	Measurement string            `json:"measurement"`
+	Tags        map[string]string `json:"tags,omitempty"`
+}
+
+type seriesResponse struct {
+	Series []mts.Series `json:"series"`
+}
+
+type configResponse struct {
+	Config config `json:"config"`
+}
+
+type configSchemaResponse struct {
+	Fields []configFieldSchema `json:"fields"`
+}
+
+type configFieldSchema struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type maintenanceResponse struct {
+	OK     bool                 `json:"ok"`
+	Result mts.CompactionResult `json:"result,omitempty"`
+}
+
+type retentionApplyRequest struct {
+	NowUnixNanos int64 `json:"now_unix_nanos"`
+}
+
+type maintenanceErrorsResponse struct {
+	Errors []string `json:"errors"`
+}
+
+type storageMemoryResponse struct {
+	Snapshot mts.StorageMemorySnapshot `json:"snapshot"`
+}
+
+type compactionStatsResponse struct {
+	Stats mts.CompactionStats `json:"stats"`
+}
+
+type downsamplePoliciesResponse struct {
+	Policies []mts.DownsamplePolicy `json:"policies"`
+}
+
+type downsampleStatusesResponse struct {
+	Statuses []mts.DownsamplePolicyStatus `json:"statuses"`
+}
+
+type downsampleResetRequest struct {
+	Reset mts.DownsampleReset `json:"reset"`
+}
+
+type grpcDownsampleResetRequest struct {
+	Name  string              `json:"name"`
+	Reset mts.DownsampleReset `json:"reset"`
+}
+
+type downsampleDropRequest struct {
+	Options mts.DownsampleDropOptions `json:"options"`
+}
+
+type downsampleRunRequest struct {
+	NowUnix int64 `json:"now_unix"`
+}
+
+type downsampleRangeRequest struct {
+	StartUnix int64                      `json:"start_unix"`
+	EndUnix   int64                      `json:"end_unix"`
+	Options   mts.DownsampleRangeOptions `json:"options"`
+}
+
+type downsamplePolicyRequest struct {
+	Name string `json:"name"`
+}
+
+type downsamplePolicyRangeRequest struct {
+	Name      string                     `json:"name"`
+	StartUnix int64                      `json:"start_unix"`
+	EndUnix   int64                      `json:"end_unix"`
+	Options   mts.DownsampleRangeOptions `json:"options"`
+}
+
+type downsampleRunResponse struct {
+	Result mts.DownsampleRunResult `json:"result"`
+}
+
+type downsampleDryRunResponse struct {
+	Result mts.DownsampleDryRunResult `json:"result"`
+}
+
+type emptyRequest struct{}
+
+func unixNanosOrNow(value int64) time.Time {
+	if value == 0 {
+		return time.Now()
+	}
+	return time.Unix(0, value)
+}

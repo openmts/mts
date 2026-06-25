@@ -18,6 +18,7 @@ type config struct {
 	DataDir  string       `yaml:"data_dir"`
 	HTTP     httpConfig   `yaml:"http"`
 	GRPC     grpcConfig   `yaml:"grpc"`
+	Auth     authConfig   `yaml:"auth"`
 	Engine   engineConfig `yaml:"engine"`
 	Shutdown durationText `yaml:"shutdown_timeout"`
 }
@@ -30,6 +31,10 @@ type httpConfig struct {
 type grpcConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Addr    string `yaml:"addr"`
+}
+
+type authConfig struct {
+	AdminToken string `yaml:"admin_token"`
 }
 
 type engineConfig struct {

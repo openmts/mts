@@ -119,11 +119,36 @@ func (r *serverRuntime) write(ctx context.Context, req writeRequest) error {
 	return r.engine.Write(ctx, req.Points, req.Options)
 }
 
+func (r *serverRuntime) writeTypedBatch(ctx context.Context, req typedWriteRequest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return r.engine.WriteTypedBatch(ctx, req.Batch, req.Options)
+}
+
 func (r *serverRuntime) queryRows(ctx context.Context, req queryRowsRequest) ([]mts.Row, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return r.engine.QueryRows(ctx, req.Query)
+}
+
+func (r *serverRuntime) queryColumns(ctx context.Context, req queryRequest) ([]mts.ColumnSeries, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return r.engine.QueryColumns(ctx, req.Query)
+}
+
+func (r *serverRuntime) queryWithExplain(ctx context.Context, req queryRequest) (mts.QueryResult, error) {
+	if err := ctx.Err(); err != nil {
+		return mts.QueryResult{}, err
+	}
+	return r.engine.QueryWithExplain(ctx, req.Query)
+}
+
+func (r *serverRuntime) queryStats() mts.QueryStats {
+	return r.engine.QueryStatsSnapshot()
 }
 
 func (r *serverRuntime) flush(ctx context.Context) error {
@@ -140,32 +165,34 @@ func (r *serverRuntime) compact(ctx context.Context) (mts.CompactionResult, erro
 	return r.engine.CompactWithResult(ctx)
 }
 
+func (r *serverRuntime) applyRetention(ctx context.Context, req retentionApplyRequest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return r.engine.ApplyRetention(ctx, unixNanosOrNow(req.NowUnixNanos))
+}
+
+func (r *serverRuntime) maintenanceErrors(ctx context.Context) []string {
+	errors := r.engine.MaintenanceErrors(ctx)
+	out := make([]string, len(errors))
+	for index, err := range errors {
+		out[index] = err.Error()
+	}
+	return out
+}
+
+func (r *serverRuntime) storageMemory() mts.StorageMemorySnapshot {
+	return r.engine.StorageMemorySnapshot()
+}
+
+func (r *serverRuntime) compactionStats() mts.CompactionStats {
+	return r.engine.CompactionStatsSnapshot()
+}
+
 func (r *serverRuntime) health() mts.HealthSnapshot {
 	return r.engine.HealthSnapshot()
 }
 
-type writeRequest struct {
-	Points  []mts.Point      `json:"points"`
-	Options mts.WriteOptions `json:"options"`
-}
-
-type writeResponse struct {
-	OK bool `json:"ok"`
-}
-
-type queryRowsRequest struct {
-	Query mts.Query `json:"query"`
-}
-
-type queryRowsResponse struct {
-	Rows []mts.Row `json:"rows"`
-}
-
-type maintenanceResponse struct {
-	OK     bool                 `json:"ok"`
-	Result mts.CompactionResult `json:"result,omitempty"`
-}
-
-type errorResponse struct {
-	Error string `json:"error"`
+func (r *serverRuntime) effectiveConfig() config {
+	return r.config
 }
