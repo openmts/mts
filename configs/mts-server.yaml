@@ -1,0 +1,57 @@
+# mts-server 完整配置示例。
+#
+# 当前服务只启动单机本地 MTS Engine，不接入外部元数据系统，
+# 不提供 SQL、InfluxQL、PromQL 或 MetricsQL parser。HTTP/gRPC 查询
+# 均使用结构化 Query 请求体。
+
+# data_dir 是 MTS 本地数据目录，包含 WAL、SSTable、manifest、metadata 等文件。
+# 生产环境建议使用独立持久化目录，并由部署系统保证目录权限。
+data_dir: ./data/mts-server
+
+http:
+  # enabled 控制是否启动 HTTP JSON API。
+  enabled: true
+  # addr 是 HTTP 监听地址。生产环境暴露到外网前应放在反向代理或网关后面。
+  addr: 127.0.0.1:8086
+
+grpc:
+  # enabled 控制是否启动 gRPC API。
+  enabled: true
+  # addr 是 gRPC 监听地址。
+  addr: 127.0.0.1:9096
+
+engine:
+  # database/retention_policy 为空时，写入和查询会使用这里的默认值。
+  default_database: default
+  default_retention_policy: autogen
+
+  # shard_duration 控制按时间切分 shard 的窗口，使用 Go duration 格式，例如 30m、1h、24h。
+  shard_duration: 1h
+  # retention 为 0s 表示不按时间自动过期数据；设置为 168h 表示保留 7 天。
+  retention: 0s
+
+  # memtable_max_samples 控制内存表样本数阈值，超过后会触发刷写路径。
+  memtable_max_samples: 10000
+  # flush_sync 为 true 时刷写路径更偏向持久化安全，代价是写入延迟可能升高。
+  flush_sync: false
+
+  compression:
+    # enabled 控制 SSTable 数据页压缩。
+    enabled: true
+    # algorithm 支持 snappy、zstd 等已在引擎中支持的算法；空值表示使用默认行为。
+    algorithm: snappy
+    # min_page_values 控制达到多少值后才压缩数据页，用于避免小页压缩收益过低。
+    min_page_values: 128
+
+  compaction:
+    # enabled 控制后台/手动 compaction 能力。
+    enabled: true
+    # background_interval 为 0s 表示不启动周期性后台 compaction；例如 10m 表示每 10 分钟检查一次。
+    background_interval: 0s
+    # level0_part_limit 控制 Level 0 part 数量阈值。
+    level0_part_limit: 4
+    # max_cascade_steps 控制一次 compaction 级联推进的最大步数。
+    max_cascade_steps: 8
+
+# shutdown_timeout 控制收到 SIGINT/SIGTERM 后等待 HTTP/gRPC/Engine 优雅关闭的最长时间。
+shutdown_timeout: 15s

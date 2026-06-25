@@ -6,6 +6,7 @@ MTS is a single-node embedded time series storage engine for Go applications.
 
 - Go package: `github.com/openmts/mts`
 - Maintenance CLI: `cmd/mts-storage`
+- Standalone server: `cmd/mts-server`
 
 ## Current Scope
 
@@ -15,6 +16,8 @@ MTS is a single-node embedded time series storage engine for Go applications.
 - No distributed query or distributed storage.
 - No SQL, InfluxQL, PromQL, or MetricsQL parser.
 - Internal HTTP query and operations packages are not public stable APIs.
+- `cmd/mts-server` exposes public structured HTTP and gRPC APIs from a YAML
+  config file. It does not expose SQL, InfluxQL, PromQL, or MetricsQL parsers.
 - Internal storage timestamps are nanoseconds. Public `Point.Precision`,
   `TypedBatch.Precision`, and `Query.Precision` express ns/us/ms/s input and
   query result timestamp units.
@@ -35,6 +38,8 @@ MTS is a single-node embedded time series storage engine for Go applications.
 - `engine.go`: Engine public methods.
 - `downsample.go`: downsample public methods.
 - `cmd/mts-storage`: local storage check, repair, migrate, snapshot, restore.
+- `cmd/mts-server`: standalone HTTP/gRPC server executable.
+- `configs/mts-server.yaml`: complete commented mts-server YAML config example.
 
 ## Verification
 

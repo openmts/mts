@@ -44,6 +44,7 @@ help: ## 显示 Makefile 目标
 	@printf "  make storage-100k          100K 存储写查压缩场景\n"
 	@printf "  make bench-query           查询迭代器性能基准\n"
 	@printf "  make pprof-storage         存储 pprof smoke 场景\n"
+	@printf "  make mts-server-test       mts-server 单元与协议测试\n"
 
 .PHONY: fmt
 fmt: ## 格式化 Go 代码
@@ -194,6 +195,10 @@ bench-query: ## 运行查询迭代器基准 smoke
 		-benchmem \
 		-count=$(COUNT) \
 		-timeout $(TEST_TIMEOUT)
+
+.PHONY: mts-server-test
+mts-server-test: ## 运行 mts-server 配置、HTTP 和 gRPC 测试
+	$(GO_TEST) ./cmd/mts-server
 
 .PHONY: ci gate commercial
 ci: ## 运行完整商用门禁脚本

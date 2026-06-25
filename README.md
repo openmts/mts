@@ -4,7 +4,7 @@ MTS 是一个单机嵌入式时序存储库，面向 Go 应用内的本地时序
 
 当前项目只承诺单机本地目录能力：不做分布式查询、分布式存储、外部元数据系统，也不提供 SQL、InfluxQL、PromQL 或 MetricsQL parser。查询入口以 Go Builder/API 为主。
 
-当前稳定对外接口只有 Go library 根包 `github.com/openmts/mts` 和本地维护 CLI `cmd/mts-storage`。`internal/queryservice` 和 `internal/service` 中的 HTTP 查询、metrics、health、admin 实现不作为当前外部稳定 API。
+当前稳定对外接口包括 Go library 根包 `github.com/openmts/mts`、本地维护 CLI `cmd/mts-storage` 和服务进程 `cmd/mts-server`。`internal/queryservice` 和 `internal/service` 中的内部 HTTP 实现不作为当前外部稳定 API。
 
 ## 安装
 
@@ -158,6 +158,24 @@ go run ./cmd/mts-storage snapshot /var/lib/mts /backup/mts-snapshot
 go run ./cmd/mts-storage restore /backup/mts-snapshot /var/lib/mts-restored
 ```
 
+## 服务进程
+
+`cmd/mts-server` 可按 YAML 配置文件启动单机 MTS Engine，并同时提供 HTTP 与 gRPC 结构化 API。默认示例配置在 [configs/mts-server.yaml](configs/mts-server.yaml)，文件内包含完整配置说明和注释：
+
+```bash
+go run ./cmd/mts-server serve --config configs/mts-server.yaml
+```
+
+HTTP 默认监听 `127.0.0.1:8086`，gRPC 默认监听 `127.0.0.1:9096`。HTTP 支持健康检查、写入、行查询、flush 和 compact：
+
+```bash
+curl http://127.0.0.1:8086/healthz
+curl -X POST http://127.0.0.1:8086/api/v1/write -d @points.json
+curl -X POST http://127.0.0.1:8086/api/v1/query/rows -d @query.json
+```
+
+服务入口不提供 SQL、InfluxQL、PromQL 或 MetricsQL parser；查询请求使用与 Go API 一致的结构化 `Query` JSON。
+
 ## 结构化日志
 
 `Options.Logger` 接收 `*slog.Logger`，nil 时使用零开销 nopHandler。日志仅在生命周期事件（Open/Close/Compaction/Retention/Downsample）和错误路径记录，高频读写路径依赖指标体系：
@@ -182,6 +200,6 @@ make coverage
 make e2e
 ```
 
-常用场景可直接执行 `make e2e-public-api`、`make fault-matrix`、`make storage-100k`、`make bench-query`、`make pprof-storage`；完整商用门禁执行 `make ci`。
+常用场景可直接执行 `make e2e-public-api`、`make fault-matrix`、`make storage-100k`、`make bench-query`、`make pprof-storage`、`make mts-server-test`；完整商用门禁执行 `make ci`。
 
 商用交付门禁要求生产包代码行覆盖率达到 90% 以上；`tests/**` 下的 e2e、fault、scale 和 pprof harness 作为行为验证单独执行。

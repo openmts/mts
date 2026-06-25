@@ -1,0 +1,178 @@
+package main
+
+import (
+	"context"
+	"net"
+	"testing"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
+
+	mts "github.com/openmts/mts"
+)
+
+func TestGRPCWriteAndQueryRows(t *testing.T) {
+	runtime := openTestRuntime(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+	var writeResp writeResponse
+	if err := invokeGRPC(ctx, conn, "Write", &writeRequest{Points: []mts.Point{testPoint()}}, &writeResp); err != nil {
+		t.Fatalf("Invoke Write error = %v", err)
+	}
+	if !writeResp.OK {
+		t.Fatal("Write OK = false, want true")
+	}
+
+	var rowsResp queryRowsResponse
+	if err := invokeGRPC(ctx, conn, "QueryRows", &queryRowsRequest{Query: testQuery()}, &rowsResp); err != nil {
+		t.Fatalf("Invoke QueryRows error = %v", err)
+	}
+	if len(rowsResp.Rows) != 1 || rowsResp.Rows[0].Fields["usage"].Float64 != 0.7 {
+		t.Fatalf("rows = %#v, want one usage row", rowsResp.Rows)
+	}
+}
+
+func TestGRPCHealth(t *testing.T) {
+	runtime := openTestRuntime(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+
+	var health mts.HealthSnapshot
+	if err := invokeGRPC(context.Background(), conn, "Health", &emptyRequest{}, &health); err != nil {
+		t.Fatalf("Invoke Health error = %v", err)
+	}
+	if !health.Healthy {
+		t.Fatalf("health = %#v, want healthy", health)
+	}
+}
+
+func TestGRPCMaintenanceAndErrors(t *testing.T) {
+	runtime := openTestRuntime(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+
+	var flushResp maintenanceResponse
+	if err := invokeGRPC(ctx, conn, "Flush", &emptyRequest{}, &flushResp); err != nil {
+		t.Fatalf("Invoke Flush error = %v", err)
+	}
+	if !flushResp.OK {
+		t.Fatal("Flush OK = false, want true")
+	}
+
+	var compactResp maintenanceResponse
+	if err := invokeGRPC(ctx, conn, "Compact", &emptyRequest{}, &compactResp); err != nil {
+		t.Fatalf("Invoke Compact error = %v", err)
+	}
+	if !compactResp.OK {
+		t.Fatal("Compact OK = false, want true")
+	}
+
+	var writeResp writeResponse
+	err := invokeGRPC(ctx, conn, "Write", "bad request", &writeResp)
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("Invoke Write(bad) error = %v, want InvalidArgument", err)
+	}
+}
+
+func TestGRPCHandlerWithInterceptor(t *testing.T) {
+	runtime := openTestRuntime(t)
+	called := false
+	interceptor := func(
+		ctx context.Context,
+		req any,
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (any, error) {
+		called = true
+		if info.FullMethod != "/mts.v1.MTSServer/Health" {
+			t.Fatalf("FullMethod = %s, want health method", info.FullMethod)
+		}
+		return handler(ctx, req)
+	}
+	resp, err := grpcHealthHandler(
+		&grpcService{runtime: runtime},
+		context.Background(),
+		func(value any) error { return jsonCodec{}.Unmarshal([]byte(`{}`), value) },
+		interceptor,
+	)
+	if err != nil {
+		t.Fatalf("grpcHealthHandler() error = %v", err)
+	}
+	if !called {
+		t.Fatal("interceptor was not called")
+	}
+	health, ok := resp.(mts.HealthSnapshot)
+	if !ok || !health.Healthy {
+		t.Fatalf("health response = %#v, want healthy snapshot", resp)
+	}
+}
+
+func TestGRPCWriteHandlerBusinessError(t *testing.T) {
+	runtime := openTestRuntime(t)
+	decode := func(value any) error {
+		return jsonCodec{}.Unmarshal([]byte(`{"points":[{"measurement":" "}]}`), value)
+	}
+	_, err := grpcWriteHandler(&grpcService{runtime: runtime}, context.Background(), decode, nil)
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("grpcWriteHandler error = %v, want InvalidArgument", err)
+	}
+}
+
+func TestGRPCQueryRowsHandlerBusinessError(t *testing.T) {
+	runtime := openTestRuntime(t)
+	decode := func(value any) error {
+		return jsonCodec{}.Unmarshal([]byte(`{"query":{"measurement":"cpu","precision":"minute"}}`), value)
+	}
+	_, err := grpcQueryRowsHandler(&grpcService{runtime: runtime}, context.Background(), decode, nil)
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("grpcQueryRowsHandler error = %v, want InvalidArgument", err)
+	}
+}
+
+func TestGRPCServiceMarker(t *testing.T) {
+	service := &grpcService{}
+	service.mtsServer()
+}
+
+func openBufconnClient(t *testing.T, runtime *serverRuntime) *grpc.ClientConn {
+	t.Helper()
+	listener := bufconn.Listen(1024 * 1024)
+	server := newGRPCServer(runtime)
+	go func() {
+		if err := server.Serve(listener); err != nil {
+			t.Errorf("Serve(bufconn) error = %v", err)
+		}
+	}()
+	t.Cleanup(server.Stop)
+	conn, err := grpc.NewClient(
+		"passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return listener.DialContext(ctx)
+		}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(jsonCodec{})),
+	)
+	if err != nil {
+		t.Fatalf("NewClient(bufconn) error = %v", err)
+	}
+	return conn
+}

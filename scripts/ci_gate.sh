@@ -27,6 +27,7 @@ timeout 720s golangci-lint run ./...
 echo "== coverage =="
 core_packages=(
   .
+  ./cmd/mts-server
   ./cmd/mts-storage
   ./internal/catalog
   ./internal/codec
