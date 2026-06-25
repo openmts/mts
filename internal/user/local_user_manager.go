@@ -1,4 +1,4 @@
-package mts
+package user
 
 import (
 	"context"
@@ -14,25 +14,23 @@ import (
 
 const userMetadataFile = "users.bin"
 
-// LocalUserManager 是默认本地用户和 DB 级权限管理器。
-type LocalUserManager struct {
+// Manager 是默认本地用户和 DB 级权限管理器。
+type Manager struct {
 	mu     sync.RWMutex
 	path   string
 	users  map[string]User
-	grants map[string]map[string]map[DatabasePermission]struct{}
+	grants map[string]map[string]map[Permission]struct{}
 }
 
-var _ UserManager = (*LocalUserManager)(nil)
-
-// OpenLocalUserManager 打开或创建默认本地用户管理器。
-func OpenLocalUserManager(dir string) (*LocalUserManager, error) {
+// Open 打开或创建默认本地用户管理器。
+func Open(dir string) (*Manager, error) {
 	if err := storagefs.MkdirAll(dir); err != nil {
 		return nil, err
 	}
-	manager := &LocalUserManager{
+	manager := &Manager{
 		path:   filepath.Join(dir, userMetadataFile),
 		users:  make(map[string]User),
-		grants: make(map[string]map[string]map[DatabasePermission]struct{}),
+		grants: make(map[string]map[string]map[Permission]struct{}),
 	}
 	if err := manager.load(); err != nil {
 		return nil, err
@@ -41,11 +39,11 @@ func OpenLocalUserManager(dir string) (*LocalUserManager, error) {
 }
 
 // Close 关闭本地用户管理器。当前实现无常驻文件句柄。
-func (m *LocalUserManager) Close() error {
+func (m *Manager) Close() error {
 	return nil
 }
 
-func (m *LocalUserManager) CreateUser(ctx context.Context, user User) error {
+func (m *Manager) CreateUser(ctx context.Context, user User) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -63,7 +61,7 @@ func (m *LocalUserManager) CreateUser(ctx context.Context, user User) error {
 	return m.replaceStateLocked(users, grants)
 }
 
-func (m *LocalUserManager) UpdateUser(ctx context.Context, user User) error {
+func (m *Manager) UpdateUser(ctx context.Context, user User) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -81,7 +79,7 @@ func (m *LocalUserManager) UpdateUser(ctx context.Context, user User) error {
 	return m.replaceStateLocked(users, grants)
 }
 
-func (m *LocalUserManager) GetUser(ctx context.Context, name string) (User, bool, error) {
+func (m *Manager) GetUser(ctx context.Context, name string) (User, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return User{}, false, err
 	}
@@ -95,7 +93,7 @@ func (m *LocalUserManager) GetUser(ctx context.Context, name string) (User, bool
 	return cloneUser(user), true, nil
 }
 
-func (m *LocalUserManager) ListUsers(ctx context.Context) ([]User, error) {
+func (m *Manager) ListUsers(ctx context.Context) ([]User, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -109,7 +107,7 @@ func (m *LocalUserManager) ListUsers(ctx context.Context) ([]User, error) {
 	return users, nil
 }
 
-func (m *LocalUserManager) DeleteUser(ctx context.Context, name string) error {
+func (m *Manager) DeleteUser(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -125,7 +123,7 @@ func (m *LocalUserManager) DeleteUser(ctx context.Context, name string) error {
 	return m.replaceStateLocked(users, grants)
 }
 
-func (m *LocalUserManager) load() error {
+func (m *Manager) load() error {
 	data, err := storagefs.ReadFile(m.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -142,9 +140,9 @@ func (m *LocalUserManager) load() error {
 	return nil
 }
 
-func (m *LocalUserManager) replaceStateLocked(
+func (m *Manager) replaceStateLocked(
 	users map[string]User,
-	grants map[string]map[string]map[DatabasePermission]struct{},
+	grants map[string]map[string]map[Permission]struct{},
 ) error {
 	if err := storagefs.WriteFileAtomic(m.path, encodeUserMetadata(users, grants)); err != nil {
 		return err
@@ -154,9 +152,9 @@ func (m *LocalUserManager) replaceStateLocked(
 	return nil
 }
 
-func (m *LocalUserManager) clonedStateLocked() (
+func (m *Manager) clonedStateLocked() (
 	map[string]User,
-	map[string]map[string]map[DatabasePermission]struct{},
+	map[string]map[string]map[Permission]struct{},
 ) {
 	return cloneUsers(m.users), cloneGrants(m.grants)
 }

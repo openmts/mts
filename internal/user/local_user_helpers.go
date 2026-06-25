@@ -1,16 +1,16 @@
-package mts
+package user
 
 import "sort"
 
-func orderedDatabasePermissions() []DatabasePermission {
-	return []DatabasePermission{
-		DatabasePermissionRead,
-		DatabasePermissionWrite,
-		DatabasePermissionAdmin,
+func orderedPermissions() []Permission {
+	return []Permission{
+		PermissionRead,
+		PermissionWrite,
+		PermissionAdmin,
 	}
 }
 
-func sortedGrantDatabases(grants map[string]map[DatabasePermission]struct{}) []string {
+func sortedGrantDatabases(grants map[string]map[Permission]struct{}) []string {
 	databases := make([]string, 0, len(grants))
 	for database := range grants {
 		databases = append(databases, database)
@@ -51,9 +51,9 @@ func cloneUsers(users map[string]User) map[string]User {
 }
 
 func cloneGrants(
-	grants map[string]map[string]map[DatabasePermission]struct{},
-) map[string]map[string]map[DatabasePermission]struct{} {
-	out := make(map[string]map[string]map[DatabasePermission]struct{}, len(grants))
+	grants map[string]map[string]map[Permission]struct{},
+) map[string]map[string]map[Permission]struct{} {
+	out := make(map[string]map[string]map[Permission]struct{}, len(grants))
 	for userName, userGrants := range grants {
 		out[userName] = cloneUserGrants(userGrants)
 	}
@@ -61,9 +61,9 @@ func cloneGrants(
 }
 
 func cloneUserGrants(
-	grants map[string]map[DatabasePermission]struct{},
-) map[string]map[DatabasePermission]struct{} {
-	out := make(map[string]map[DatabasePermission]struct{}, len(grants))
+	grants map[string]map[Permission]struct{},
+) map[string]map[Permission]struct{} {
+	out := make(map[string]map[Permission]struct{}, len(grants))
 	for database, permissions := range grants {
 		out[database] = clonePermissionSet(permissions)
 	}
@@ -71,11 +71,22 @@ func cloneUserGrants(
 }
 
 func clonePermissionSet(
-	permissions map[DatabasePermission]struct{},
-) map[DatabasePermission]struct{} {
-	out := make(map[DatabasePermission]struct{}, len(permissions))
+	permissions map[Permission]struct{},
+) map[Permission]struct{} {
+	out := make(map[Permission]struct{}, len(permissions))
 	for permission := range permissions {
 		out[permission] = struct{}{}
+	}
+	return out
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		out[key] = value
 	}
 	return out
 }

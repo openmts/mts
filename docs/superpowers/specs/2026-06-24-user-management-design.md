@@ -4,14 +4,14 @@
 
 当前 MTS 已有本地 metadata、database/retention policy 管理和 `internal/queryservice` 的 tenant allowlist 授权器，但没有公开的用户管理模块。现有授权器只能按 tenant 粗粒度放行查询，不提供用户增删改查，不维护用户到 database 的权限，也不适合作为外部用户可商用的权限接口。
 
-本设计新增 public package 用户管理接口，默认提供本地二进制持久化实现，并在 Engine 上暴露用户 CRUD 和 DB 级权限管理方法。当前阶段只做授权数据管理和权限校验，不实现密码认证、token 签发、HTTP 登录或第三方系统适配器。
+本设计新增 public package 用户管理接口，默认提供本地二进制持久化实现，并在 Engine 上暴露用户 CRUD 和 DB 级权限管理方法。默认本地实现属于内部实现细节，不作为 public API 暴露；外部只依赖 `UserManager` 接口和 Engine 方法。当前阶段只做授权数据管理和权限校验，不实现密码认证、token 签发、HTTP 登录或第三方系统适配器。
 
 ## 范围
 
 本次包含：
 
 - public `UserManager` 接口，便于后续对接 LDAP、OIDC、IAM、自研权限系统。
-- 默认 `LocalUserManager`，随 `Engine` 默认打开本地用户元数据文件。
+- 默认内部本地用户管理器，随 `Engine` 默认打开本地用户元数据文件，但不暴露具体实现类型或构造函数。
 - 用户 CRUD：创建、更新、查询、列表、删除。
 - DB 级权限：授予、撤销、列出、校验。
 - 权限粒度：database + `read/write/admin`。
@@ -37,7 +37,7 @@
 
 `admin` 隐含 `read` 和 `write`。用户 `Disabled=true` 时所有权限校验失败。不存在的用户、空用户名、空 database 或非法 permission 均返回明确错误。
 
-本地实现持久化到 `users.bin`，使用内部 `codec.Envelope`，文件权限由 `storagefs.WriteFileAtomic` 保证为 `0600`，目录为 `0700`。
+本地实现持久化到 `users.bin`，使用内部 `codec.Envelope`，文件权限由 `storagefs.WriteFileAtomic` 保证为 `0600`，目录为 `0700`。该文件格式和实现类型仅服务默认单机运行，不属于对外兼容承诺。
 
 ## EARS 清单
 

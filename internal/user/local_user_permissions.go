@@ -1,4 +1,4 @@
-package mts
+package user
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-func (m *LocalUserManager) GrantDatabasePermission(
+func (m *Manager) GrantPermission(
 	ctx context.Context,
 	userName string,
 	database string,
-	permission DatabasePermission,
+	permission Permission,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -29,11 +29,11 @@ func (m *LocalUserManager) GrantDatabasePermission(
 	return m.replaceStateLocked(users, grants)
 }
 
-func (m *LocalUserManager) RevokeDatabasePermission(
+func (m *Manager) RevokePermission(
 	ctx context.Context,
 	userName string,
 	database string,
-	permission DatabasePermission,
+	permission Permission,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -52,10 +52,10 @@ func (m *LocalUserManager) RevokeDatabasePermission(
 	return m.replaceStateLocked(users, grants)
 }
 
-func (m *LocalUserManager) ListDatabasePermissions(
+func (m *Manager) ListPermissions(
 	ctx context.Context,
 	userName string,
-) ([]DatabaseGrant, error) {
+) ([]Grant, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -65,14 +65,14 @@ func (m *LocalUserManager) ListDatabasePermissions(
 	if _, ok := m.users[userName]; !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUserNotFound, userName)
 	}
-	return sortedDatabaseGrants(m.grants[userName]), nil
+	return sortedGrants(m.grants[userName]), nil
 }
 
-func (m *LocalUserManager) CheckDatabasePermission(
+func (m *Manager) CheckPermission(
 	ctx context.Context,
 	userName string,
 	database string,
-	permission DatabasePermission,
+	permission Permission,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -83,27 +83,27 @@ func (m *LocalUserManager) CheckDatabasePermission(
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return checkDatabasePermission(m.users[userName], m.grants[userName], database, permission)
+	return checkPermission(m.users[userName], m.grants[userName], database, permission)
 }
 
 func validateGrantInput(
 	userName string,
 	database string,
-	permission DatabasePermission,
+	permission Permission,
 ) (string, string, error) {
 	userName = strings.TrimSpace(userName)
 	database = strings.TrimSpace(database)
-	if userName == "" || database == "" || !validDatabasePermission(permission) {
+	if userName == "" || database == "" || !validPermission(permission) {
 		return "", "", ErrInvalidPermission
 	}
 	return userName, database, nil
 }
 
-func checkDatabasePermission(
+func checkPermission(
 	user User,
-	grants map[string]map[DatabasePermission]struct{},
+	grants map[string]map[Permission]struct{},
 	database string,
-	permission DatabasePermission,
+	permission Permission,
 ) error {
 	if user.Name == "" || user.Disabled {
 		return ErrPermissionDenied
@@ -112,15 +112,15 @@ func checkDatabasePermission(
 	if _, ok := permissions[permission]; ok {
 		return nil
 	}
-	if _, ok := permissions[DatabasePermissionAdmin]; ok {
+	if _, ok := permissions[PermissionAdmin]; ok {
 		return nil
 	}
 	return ErrPermissionDenied
 }
 
-func validDatabasePermission(permission DatabasePermission) bool {
+func validPermission(permission Permission) bool {
 	switch permission {
-	case DatabasePermissionRead, DatabasePermissionWrite, DatabasePermissionAdmin:
+	case PermissionRead, PermissionWrite, PermissionAdmin:
 		return true
 	default:
 		return false
@@ -128,24 +128,24 @@ func validDatabasePermission(permission DatabasePermission) bool {
 }
 
 func ensureGrantSet(
-	grants map[string]map[string]map[DatabasePermission]struct{},
+	grants map[string]map[string]map[Permission]struct{},
 	userName string,
 	database string,
-) map[DatabasePermission]struct{} {
+) map[Permission]struct{} {
 	if grants[userName] == nil {
-		grants[userName] = make(map[string]map[DatabasePermission]struct{})
+		grants[userName] = make(map[string]map[Permission]struct{})
 	}
 	if grants[userName][database] == nil {
-		grants[userName][database] = make(map[DatabasePermission]struct{})
+		grants[userName][database] = make(map[Permission]struct{})
 	}
 	return grants[userName][database]
 }
 
 func removeGrant(
-	grants map[string]map[string]map[DatabasePermission]struct{},
+	grants map[string]map[string]map[Permission]struct{},
 	userName string,
 	database string,
-	permission DatabasePermission,
+	permission Permission,
 ) {
 	permissions := grants[userName][database]
 	delete(permissions, permission)
@@ -157,13 +157,13 @@ func removeGrant(
 	}
 }
 
-func sortedDatabaseGrants(grants map[string]map[DatabasePermission]struct{}) []DatabaseGrant {
+func sortedGrants(grants map[string]map[Permission]struct{}) []Grant {
 	databases := sortedGrantDatabases(grants)
-	out := make([]DatabaseGrant, 0)
+	out := make([]Grant, 0)
 	for _, database := range databases {
-		for _, permission := range orderedDatabasePermissions() {
+		for _, permission := range orderedPermissions() {
 			if _, ok := grants[database][permission]; ok {
-				out = append(out, DatabaseGrant{Database: database, Permission: permission})
+				out = append(out, Grant{Database: database, Permission: permission})
 			}
 		}
 	}

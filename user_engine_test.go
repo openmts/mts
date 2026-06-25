@@ -10,44 +10,14 @@ import (
 	mts "github.com/openmts/mts"
 )
 
-func TestUserManagementPersistence(t *testing.T) {
-	ctx := context.Background()
-	dir := t.TempDir()
-
-	manager, err := mts.OpenLocalUserManager(dir)
-	if err != nil {
-		t.Fatalf("OpenLocalUserManager() error = %v", err)
-	}
-	if err := manager.CreateUser(ctx, mts.User{Name: "alice", DisplayName: "Alice"}); err != nil {
-		t.Fatalf("CreateUser() error = %v", err)
-	}
-	if err := manager.GrantDatabasePermission(
-		ctx,
-		"alice",
-		"metrics",
-		mts.DatabasePermissionAdmin,
-	); err != nil {
-		t.Fatalf("GrantDatabasePermission() error = %v", err)
-	}
-	if err := manager.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-
-	reopened, err := mts.OpenLocalUserManager(dir)
-	if err != nil {
-		t.Fatalf("OpenLocalUserManager(reopen) error = %v", err)
-	}
-	defer closeUserManager(t, reopened)
-	assertReopenedUser(t, ctx, reopened)
-}
-
 func TestUserManagementRejectsCorruptLocalFile(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "users.bin"), []byte("not-envelope"), 0600); err != nil {
 		t.Fatalf("WriteFile(corrupt users.bin) error = %v", err)
 	}
-	if _, err := mts.OpenLocalUserManager(dir); err == nil {
-		t.Fatal("OpenLocalUserManager(corrupt) error = nil, want error")
+	if eng, err := mts.Open(t.Context(), mts.DefaultOptions(dir)); err == nil {
+		_ = eng.Close(t.Context())
+		t.Fatal("Open(corrupt users.bin) error = nil, want error")
 	}
 }
 
@@ -137,25 +107,6 @@ func TestEngineUserManagementWrappers(t *testing.T) {
 	}
 }
 
-func assertReopenedUser(t *testing.T, ctx context.Context, manager *mts.LocalUserManager) {
-	t.Helper()
-	user, ok, err := manager.GetUser(ctx, "alice")
-	if err != nil || !ok {
-		t.Fatalf("GetUser(reopen) error = %v ok=%v", err, ok)
-	}
-	if user.DisplayName != "Alice" {
-		t.Fatalf("user display name = %q, want Alice", user.DisplayName)
-	}
-	if err := manager.CheckDatabasePermission(
-		ctx,
-		"alice",
-		"metrics",
-		mts.DatabasePermissionWrite,
-	); err != nil {
-		t.Fatalf("CheckDatabasePermission(reopen admin write) error = %v", err)
-	}
-}
-
 func assertEngineUser(t *testing.T, ctx context.Context, eng *mts.Engine) {
 	t.Helper()
 	user, ok, err := eng.GetUser(ctx, "bob")
@@ -202,6 +153,13 @@ func grantEnginePermissions(t *testing.T, ctx context.Context, eng *mts.Engine) 
 	}
 	if err := eng.GrantDatabasePermission(ctx, "bob", "metrics", mts.DatabasePermissionWrite); err != nil {
 		t.Fatalf("GrantDatabasePermission(write) error = %v", err)
+	}
+}
+
+func closeEngine(t *testing.T, engine *mts.Engine) {
+	t.Helper()
+	if err := engine.Close(t.Context()); err != nil {
+		t.Fatalf("Close() error = %v", err)
 	}
 }
 

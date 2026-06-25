@@ -1,4 +1,4 @@
-package mts
+package user
 
 import (
 	"encoding/binary"
@@ -11,7 +11,7 @@ var userMetadataMagic = codec.Magic("MTSUSR1")
 
 func encodeUserMetadata(
 	users map[string]User,
-	grants map[string]map[string]map[DatabasePermission]struct{},
+	grants map[string]map[string]map[Permission]struct{},
 ) []byte {
 	payload := binary.AppendUvarint(nil, uint64(len(users)))
 	for _, name := range sortedUserNames(users) {
@@ -23,7 +23,7 @@ func encodeUserMetadata(
 
 func decodeUserMetadata(data []byte) (
 	map[string]User,
-	map[string]map[string]map[DatabasePermission]struct{},
+	map[string]map[string]map[Permission]struct{},
 	error,
 ) {
 	env, err := codec.UnmarshalEnvelope(data, userMetadataMagic)
@@ -52,7 +52,7 @@ func appendUser(dst []byte, user User) []byte {
 	return appendStringMap(dst, user.Metadata)
 }
 
-func appendUserGrants(dst []byte, grants map[string]map[DatabasePermission]struct{}) []byte {
+func appendUserGrants(dst []byte, grants map[string]map[Permission]struct{}) []byte {
 	databases := sortedGrantDatabases(grants)
 	dst = binary.AppendUvarint(dst, uint64(len(databases)))
 	for _, database := range databases {
@@ -78,7 +78,7 @@ type userMetadataReader struct {
 
 func (r *userMetadataReader) read() (
 	map[string]User,
-	map[string]map[string]map[DatabasePermission]struct{},
+	map[string]map[string]map[Permission]struct{},
 	error,
 ) {
 	count, err := r.count("user count")
@@ -86,7 +86,7 @@ func (r *userMetadataReader) read() (
 		return nil, nil, err
 	}
 	users := make(map[string]User, count)
-	grants := make(map[string]map[string]map[DatabasePermission]struct{}, count)
+	grants := make(map[string]map[string]map[Permission]struct{}, count)
 	for range count {
 		user, err := r.user()
 		if err != nil {
@@ -125,14 +125,14 @@ func (r *userMetadataReader) user() (User, error) {
 }
 
 func (r *userMetadataReader) grants() (
-	map[string]map[DatabasePermission]struct{},
+	map[string]map[Permission]struct{},
 	error,
 ) {
 	count, err := r.count("grant database count")
 	if err != nil {
 		return nil, err
 	}
-	grants := make(map[string]map[DatabasePermission]struct{}, count)
+	grants := make(map[string]map[Permission]struct{}, count)
 	for range count {
 		database, err := r.string("grant database")
 		if err != nil {
@@ -216,34 +216,34 @@ func (r *userMetadataReader) byte(name string) (byte, error) {
 	return value, nil
 }
 
-func permissionMask(permissions map[DatabasePermission]struct{}) byte {
+func permissionMask(permissions map[Permission]struct{}) byte {
 	var mask byte
 	for permission := range permissions {
 		switch permission {
-		case DatabasePermissionRead:
+		case PermissionRead:
 			mask |= 1
-		case DatabasePermissionWrite:
+		case PermissionWrite:
 			mask |= 2
-		case DatabasePermissionAdmin:
+		case PermissionAdmin:
 			mask |= 4
 		}
 	}
 	return mask
 }
 
-func permissionsFromMask(mask byte) (map[DatabasePermission]struct{}, error) {
+func permissionsFromMask(mask byte) (map[Permission]struct{}, error) {
 	if mask&^byte(7) != 0 {
 		return nil, fmt.Errorf("decode user metadata permission mask: invalid bits %d", mask)
 	}
-	permissions := make(map[DatabasePermission]struct{}, 3)
+	permissions := make(map[Permission]struct{}, 3)
 	if mask&1 != 0 {
-		permissions[DatabasePermissionRead] = struct{}{}
+		permissions[PermissionRead] = struct{}{}
 	}
 	if mask&2 != 0 {
-		permissions[DatabasePermissionWrite] = struct{}{}
+		permissions[PermissionWrite] = struct{}{}
 	}
 	if mask&4 != 0 {
-		permissions[DatabasePermissionAdmin] = struct{}{}
+		permissions[PermissionAdmin] = struct{}{}
 	}
 	return permissions, nil
 }

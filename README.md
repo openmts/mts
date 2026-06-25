@@ -93,7 +93,7 @@ query, err := mts.NewQuery().
 
 ## 用户与权限
 
-MTS 提供接口化用户管理，默认使用本地 `LocalUserManager`。当前权限粒度到 database 级别，支持 `read`、`write`、`admin`，其中 `admin` 隐含读写权限。该模块只管理用户身份和授权数据，不负责密码登录或 token 签发。
+MTS 提供接口化用户管理，默认使用内部本地实现。当前权限粒度到 database 级别，支持 `read`、`write`、`admin`，其中 `admin` 隐含读写权限。该模块只管理用户身份和授权数据，不负责密码登录或 token 签发；具体本地实现和落盘格式不作为 public API 暴露。需要对接第三方权限系统时，实现 `mts.UserManager` 并通过 `Options.UserManager` 注入。
 
 ```go
 err := engine.CreateUser(ctx, mts.User{Name: "alice", DisplayName: "Alice"})

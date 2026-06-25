@@ -4,7 +4,7 @@
 
 **Goal:** 为 MTS public API 增加接口化用户管理和默认本地 DB 级权限管理实现。
 
-**Architecture:** public package 定义 `UserManager` 接口和用户/权限 DTO；默认 `LocalUserManager` 使用二进制 envelope 持久化 `users.bin`；`Engine` 持有注入或默认用户管理器，并暴露用户 CRUD、DB 权限管理和权限校验方法。现有读写查询 API 不被默认破坏，调用方可在入口层显式调用权限校验。
+**Architecture:** public package 定义 `UserManager` 接口和用户/权限 DTO；默认本地用户管理器位于 `internal/user`，使用二进制 envelope 持久化 `users.bin`；`Engine` 持有注入或默认用户管理器，并暴露用户 CRUD、DB 权限管理和权限校验方法。现有读写查询 API 不被默认破坏，调用方可在入口层显式调用权限校验。
 
 **Tech Stack:** Go、public `mts` package、`internal/codec`、`internal/storagefs`、`go test`、`goimports-reviser`、`golangci-lint`。
 
@@ -15,10 +15,11 @@
 ## 文件结构
 
 - Create: `user_types.go`：public 用户、权限 DTO、`UserManager` 接口和错误。
-- Create: `local_user_manager.go`：默认本地用户管理器、CRUD、权限管理、持久化入口。
-- Create: `local_user_encoding.go`：二进制 envelope 编解码。
-- Create: `local_user_permissions.go`：DB 级授权、撤销、列表和校验。
-- Create: `local_user_helpers.go`：排序、clone 和状态复制辅助函数。
+- Create: `internal/user/local_user_manager.go`：默认本地用户管理器、CRUD、权限管理、持久化入口。
+- Create: `internal/user/local_user_encoding.go`：二进制 envelope 编解码。
+- Create: `internal/user/local_user_permissions.go`：DB 级授权、撤销、列表和校验。
+- Create: `internal/user/local_user_helpers.go`：排序、clone 和状态复制辅助函数。
+- Create: `local_user_adapter.go`：根包私有适配器，将内部默认实现适配为 public `UserManager`。
 - Create: `user_management_test.go`、`user_permissions_test.go`、`user_engine_test.go`：public API 行为测试。
 - Modify: `options.go`：增加 `UserManager UserManager` 配置字段。
 - Modify: `engine_types.go`：Engine 保存用户管理器和默认关闭逻辑。
@@ -34,12 +35,12 @@
 **EARS:** When 调用方使用 public API 管理用户时，系统应提供稳定接口和明确错误。
 
 - [x] Step 1: 写失败测试，覆盖用户 CRUD、列表排序、metadata clone、错误类型。
-  - Run: `timeout 180s go test . -run 'TestLocalUserManager.*User' -count=1 -timeout 180s`
+  - Run: `timeout 180s go test ./internal/user -run 'TestManager.*User' -count=1 -timeout 180s`
   - Expected: FAIL，原因是类型和方法不存在。
-- [x] Step 2: 新增 `user_types.go` 和 `local_user_manager.go` 的最小 CRUD 实现。
+- [x] Step 2: 新增 `user_types.go` 和 `internal/user/local_user_manager.go` 的最小 CRUD 实现。
 - [x] Step 3: 运行同一测试通过，并记录实现备注。
 
-**实现备注:** 已提供 `UserManager` public 接口、`User`/`DatabaseGrant` DTO 和稳定错误；`LocalUserManager` 完成 Create/Update/Get/List/Delete，列表按用户名排序，返回值复制 metadata，避免调用方修改内部状态。
+**实现备注:** 已提供 `UserManager` public 接口、`User`/`DatabaseGrant` DTO 和稳定错误；默认本地实现位于 `internal/user`，完成 Create/Update/Get/List/Delete，列表按用户名排序，返回值复制 metadata，避免调用方修改内部状态。根包不暴露默认实现类型或构造函数。
 
 ## Task 2: DB 级权限管理
 
@@ -48,7 +49,7 @@
 **EARS:** When 调用方授予、撤销或校验 DB 权限时，系统应按 read/write/admin 语义返回结果。
 
 - [x] Step 1: 写失败测试，覆盖 grant/revoke/list/check、admin 隐含 read/write、disabled 用户拒绝、非法 permission。
-  - Run: `timeout 180s go test . -run 'TestLocalUserManager.*Permission' -count=1 -timeout 180s`
+  - Run: `timeout 180s go test ./internal/user -run 'TestManager.*Permission' -count=1 -timeout 180s`
   - Expected: FAIL，原因是权限方法不存在。
 - [x] Step 2: 完成本地权限 map、稳定排序、权限校验和错误处理。
 - [x] Step 3: 运行同一测试通过，并记录实现备注。
@@ -64,10 +65,10 @@
 - [x] Step 1: 写失败测试，覆盖本地重启恢复、损坏文件打开失败、Engine 默认用户管理、Engine 注入自定义 UserManager。
   - Run: `timeout 180s go test . -run 'TestUserManagement.*Persistence|TestEngine.*UserManager' -count=1 -timeout 180s`
   - Expected: FAIL，原因是持久化和 Engine 方法不存在。
-- [x] Step 2: 新增 `local_user_encoding.go`，修改 `Options`、`Open`、`Close`、Engine 用户方法。
+- [x] Step 2: 新增 `internal/user/local_user_encoding.go`，修改 `Options`、`Open`、`Close`、Engine 用户方法。
 - [x] Step 3: 运行同一测试通过，并记录实现备注。
 
-**实现备注:** 默认本地实现持久化到引擎目录下 `users.bin`，使用二进制 envelope；`Options.UserManager` 注入第三方实现时不创建本地 `users.bin`；`Engine.Close` 会关闭默认本地用户管理器。
+**实现备注:** 默认本地实现持久化到引擎目录下 `users.bin`，使用二进制 envelope；`Options.UserManager` 注入第三方实现时不创建本地 `users.bin`；`Engine.Close` 会关闭默认本地用户管理器。默认实现通过根包私有适配器装配，不对外暴露。
 
 ## Task 4: Public E2E 与文档
 
@@ -88,7 +89,7 @@
 **EARS:** When 用户管理模块完成时，系统应通过格式化、测试、lint、e2e 和产物清理检查。
 
 - [x] Step 1: 运行 `timeout 300s make fmt`。
-- [x] Step 2: 运行 `timeout 300s go test . -run 'TestLocalUserManager|TestUserManagement|TestEngine.*UserManager|TestEngineUserManagementWrappers' -count=1 -timeout 180s`。
+- [x] Step 2: 运行 `timeout 300s go test ./internal/user . -run 'TestManager|TestUserManagement|TestEngine.*UserManager|TestEngineUserManagementWrappers' -count=1 -timeout 180s`。
 - [x] Step 3: 运行 `timeout 900s make ci`。
 - [x] Step 4: 运行 `timeout 300s make e2e-public-api`。
 - [x] Step 5: 运行 `timeout 300s make e2e-no-json`。

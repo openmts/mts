@@ -43,7 +43,7 @@ func openEngineUserManager(opts Options) (UserManager, func() error, error) {
 	if opts.UserManager != nil {
 		return opts.UserManager, nil, nil
 	}
-	manager, err := OpenLocalUserManager(opts.Path)
+	manager, err := openLocalUserManager(opts.Path)
 	if err != nil {
 		return nil, nil, err
 	}

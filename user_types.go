@@ -1,18 +1,6 @@
 package mts
 
-import (
-	"context"
-	"errors"
-)
-
-// 用户管理相关错误。
-var (
-	ErrInvalidUser       = errors.New("invalid user")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUserAlreadyExists = errors.New("user already exists")
-	ErrInvalidPermission = errors.New("invalid permission")
-	ErrPermissionDenied  = errors.New("permission denied")
-)
+import "context"
 
 // DatabasePermission 表示用户对 database 的权限。
 type DatabasePermission string

@@ -6,6 +6,7 @@ import (
 	storageengine "github.com/openmts/mts/internal/engine"
 	"github.com/openmts/mts/internal/queryanalyzer"
 	"github.com/openmts/mts/internal/queryexec"
+	internaluser "github.com/openmts/mts/internal/user"
 )
 
 // ErrInvalidOptions 表示 Engine 配置非法。
@@ -22,6 +23,15 @@ var ErrInvalidPrecision = errors.New("invalid precision")
 
 // ErrReadBudgetExceeded 表示查询读取预算已耗尽。
 var ErrReadBudgetExceeded = queryexec.ErrReadBudgetExceeded
+
+// 用户管理相关错误。
+var (
+	ErrInvalidUser       = internaluser.ErrInvalidUser
+	ErrUserNotFound      = internaluser.ErrUserNotFound
+	ErrUserAlreadyExists = internaluser.ErrUserAlreadyExists
+	ErrInvalidPermission = internaluser.ErrInvalidPermission
+	ErrPermissionDenied  = internaluser.ErrPermissionDenied
+)
 
 func publicError(err error) error {
 	if err == nil {

@@ -1,4 +1,4 @@
-package mts_test
+package user
 
 import (
 	"context"
@@ -7,15 +7,13 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
-
-	mts "github.com/openmts/mts"
 )
 
-func TestLocalUserManagerUserCRUD(t *testing.T) {
+func TestManagerUserCRUD(t *testing.T) {
 	ctx := context.Background()
 	manager := openTestUserManager(t)
 
-	user := mts.User{
+	user := User{
 		Name:        "alice",
 		DisplayName: "Alice",
 		Metadata:    map[string]string{"team": "platform"},
@@ -23,7 +21,7 @@ func TestLocalUserManagerUserCRUD(t *testing.T) {
 	if err := manager.CreateUser(ctx, user); err != nil {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
-	if err := manager.CreateUser(ctx, user); !errors.Is(err, mts.ErrUserAlreadyExists) {
+	if err := manager.CreateUser(ctx, user); !errors.Is(err, ErrUserAlreadyExists) {
 		t.Fatalf("CreateUser(duplicate) error = %v, want ErrUserAlreadyExists", err)
 	}
 
@@ -43,7 +41,7 @@ func TestLocalUserManagerUserCRUD(t *testing.T) {
 		t.Fatalf("metadata leaked mutation = %q, want platform", got.Metadata["team"])
 	}
 
-	if err := manager.CreateUser(ctx, mts.User{Name: "bob"}); err != nil {
+	if err := manager.CreateUser(ctx, User{Name: "bob"}); err != nil {
 		t.Fatalf("CreateUser(bob) error = %v", err)
 	}
 	users, err := manager.ListUsers(ctx)
@@ -55,7 +53,7 @@ func TestLocalUserManagerUserCRUD(t *testing.T) {
 		t.Fatalf("users = %v, want [alice bob]", names)
 	}
 
-	if err := manager.UpdateUser(ctx, mts.User{
+	if err := manager.UpdateUser(ctx, User{
 		Name:        "alice",
 		DisplayName: "Alice Updated",
 		Disabled:    true,
@@ -83,11 +81,11 @@ func TestLocalUserManagerUserCRUD(t *testing.T) {
 	}
 }
 
-func TestLocalUserManagerListUsersReturnsClones(t *testing.T) {
+func TestManagerListUsersReturnsClones(t *testing.T) {
 	ctx := context.Background()
 	manager := openTestUserManager(t)
 
-	if err := manager.CreateUser(ctx, mts.User{
+	if err := manager.CreateUser(ctx, User{
 		Name:     "alice",
 		Metadata: map[string]string{"team": "platform"},
 	}); err != nil {
@@ -108,56 +106,56 @@ func TestLocalUserManagerListUsersReturnsClones(t *testing.T) {
 	}
 }
 
-func TestLocalUserManagerPersistsUsersFileWithPrivatePermissions(t *testing.T) {
+func TestManagerPersistsUsersFileWithPrivatePermissions(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	manager, err := mts.OpenLocalUserManager(dir)
+	manager, err := Open(dir)
 	if err != nil {
-		t.Fatalf("OpenLocalUserManager() error = %v", err)
+		t.Fatalf("Open() error = %v", err)
 	}
 	defer closeUserManager(t, manager)
 
-	if err := manager.CreateUser(ctx, mts.User{Name: "alice"}); err != nil {
+	if err := manager.CreateUser(ctx, User{Name: "alice"}); err != nil {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
 	assertPathMode(t, dir, 0700)
 	assertPathMode(t, filepath.Join(dir, "users.bin"), 0600)
 }
 
-func TestLocalUserManagerCanceledContextDoesNotMutateState(t *testing.T) {
+func TestManagerCanceledContextDoesNotMutateState(t *testing.T) {
 	ctx := context.Background()
 	manager := openTestUserManager(t)
-	if err := manager.CreateUser(ctx, mts.User{Name: "alice"}); err != nil {
+	if err := manager.CreateUser(ctx, User{Name: "alice"}); err != nil {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
 
-	assertCanceled(t, manager.CreateUser(canceled, mts.User{Name: "bob"}))
-	assertCanceled(t, manager.UpdateUser(canceled, mts.User{Name: "alice", Disabled: true}))
+	assertCanceled(t, manager.CreateUser(canceled, User{Name: "bob"}))
+	assertCanceled(t, manager.UpdateUser(canceled, User{Name: "alice", Disabled: true}))
 	_, _, err := manager.GetUser(canceled, "alice")
 	assertCanceled(t, err)
 	_, err = manager.ListUsers(canceled)
 	assertCanceled(t, err)
-	assertCanceled(t, manager.GrantDatabasePermission(
+	assertCanceled(t, manager.GrantPermission(
 		canceled,
 		"alice",
 		"metrics",
-		mts.DatabasePermissionRead,
+		PermissionRead,
 	))
-	assertCanceled(t, manager.RevokeDatabasePermission(
+	assertCanceled(t, manager.RevokePermission(
 		canceled,
 		"alice",
 		"metrics",
-		mts.DatabasePermissionRead,
+		PermissionRead,
 	))
-	_, err = manager.ListDatabasePermissions(canceled, "alice")
+	_, err = manager.ListPermissions(canceled, "alice")
 	assertCanceled(t, err)
-	assertCanceled(t, manager.CheckDatabasePermission(
+	assertCanceled(t, manager.CheckPermission(
 		canceled,
 		"alice",
 		"metrics",
-		mts.DatabasePermissionRead,
+		PermissionRead,
 	))
 	assertCanceled(t, manager.DeleteUser(canceled, "alice"))
 
@@ -173,32 +171,32 @@ func TestLocalUserManagerCanceledContextDoesNotMutateState(t *testing.T) {
 	}
 }
 
-func TestLocalUserManagerRejectsInvalidUsers(t *testing.T) {
+func TestManagerRejectsInvalidUsers(t *testing.T) {
 	ctx := context.Background()
 	manager := openTestUserManager(t)
 
-	if err := manager.CreateUser(ctx, mts.User{Name: " "}); !errors.Is(err, mts.ErrInvalidUser) {
+	if err := manager.CreateUser(ctx, User{Name: " "}); !errors.Is(err, ErrInvalidUser) {
 		t.Fatalf("CreateUser(empty) error = %v, want ErrInvalidUser", err)
 	}
-	if err := manager.UpdateUser(ctx, mts.User{Name: "missing"}); !errors.Is(err, mts.ErrUserNotFound) {
+	if err := manager.UpdateUser(ctx, User{Name: "missing"}); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("UpdateUser(missing) error = %v, want ErrUserNotFound", err)
 	}
-	if err := manager.DeleteUser(ctx, "missing"); !errors.Is(err, mts.ErrUserNotFound) {
+	if err := manager.DeleteUser(ctx, "missing"); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("DeleteUser(missing) error = %v, want ErrUserNotFound", err)
 	}
 
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if err := manager.CreateUser(canceled, mts.User{Name: "canceled"}); !errors.Is(err, context.Canceled) {
+	if err := manager.CreateUser(canceled, User{Name: "canceled"}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("CreateUser(canceled) error = %v, want context.Canceled", err)
 	}
 }
 
-func openTestUserManager(t *testing.T) *mts.LocalUserManager {
+func openTestUserManager(t *testing.T) *Manager {
 	t.Helper()
-	manager, err := mts.OpenLocalUserManager(t.TempDir())
+	manager, err := Open(t.TempDir())
 	if err != nil {
-		t.Fatalf("OpenLocalUserManager() error = %v", err)
+		t.Fatalf("Open() error = %v", err)
 	}
 	t.Cleanup(func() {
 		if err := manager.Close(); err != nil {
@@ -215,14 +213,7 @@ func closeUserManager(t *testing.T, manager interface{ Close() error }) {
 	}
 }
 
-func closeEngine(t *testing.T, engine *mts.Engine) {
-	t.Helper()
-	if err := engine.Close(t.Context()); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-}
-
-func userNames(users []mts.User) []string {
+func userNames(users []User) []string {
 	names := make([]string, len(users))
 	for index, user := range users {
 		names[index] = user.Name
