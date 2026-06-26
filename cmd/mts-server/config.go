@@ -1,13 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/goccy/go-yaml"
+	yaml "github.com/goccy/go-yaml"
 
 	mts "github.com/openmts/mts"
 )
@@ -15,97 +16,103 @@ import (
 var errInvalidConfig = errors.New("invalid config")
 
 type config struct {
-	ConfigPath    string              `yaml:"-"`
-	DataDir       string              `yaml:"data_dir"`
-	HTTP          httpConfig          `yaml:"http"`
-	GRPC          grpcConfig          `yaml:"grpc"`
-	Auth          authConfig          `yaml:"auth"`
-	Limits        limitsConfig        `yaml:"limits"`
-	Observability observabilityConfig `yaml:"observability"`
-	Backup        backupConfig        `yaml:"backup"`
-	Log           logConfig           `yaml:"log"`
-	Engine        engineConfig        `yaml:"engine"`
-	Shutdown      durationText        `yaml:"shutdown_timeout"`
+	ConfigPath    string              `yaml:"-"             json:"config_path"`
+	DataDir       string              `yaml:"data_dir"      json:"data_dir"`
+	HTTP          httpConfig          `yaml:"http"          json:"http"`
+	GRPC          grpcConfig          `yaml:"grpc"          json:"grpc"`
+	Auth          authConfig          `yaml:"auth"          json:"auth"`
+	User          userConfig          `yaml:"user"          json:"user"`
+	Limits        limitsConfig        `yaml:"limits"        json:"limits"`
+	Observability observabilityConfig `yaml:"observability" json:"observability"`
+	Backup        backupConfig        `yaml:"backup"        json:"backup"`
+	Log           logConfig           `yaml:"log"           json:"log"`
+	Engine        engineConfig        `yaml:"engine"        json:"engine"`
+	Shutdown      durationText        `yaml:"shutdown_timeout" json:"shutdown_timeout"`
 }
 
 type httpConfig struct {
-	Enabled           bool         `yaml:"enabled"`
-	Addr              string       `yaml:"addr"`
-	TLS               tlsConfig    `yaml:"tls"`
-	ReadTimeout       durationText `yaml:"read_timeout"`
-	ReadHeaderTimeout durationText `yaml:"read_header_timeout"`
-	WriteTimeout      durationText `yaml:"write_timeout"`
-	IdleTimeout       durationText `yaml:"idle_timeout"`
+	Enabled           bool         `yaml:"enabled"              json:"enabled"`
+	Addr              string       `yaml:"addr"                 json:"addr"`
+	TLS               tlsConfig    `yaml:"tls"                  json:"tls"`
+	ReadTimeout       durationText `yaml:"read_timeout"         json:"read_timeout"`
+	ReadHeaderTimeout durationText `yaml:"read_header_timeout"  json:"read_header_timeout"`
+	WriteTimeout      durationText `yaml:"write_timeout"        json:"write_timeout"`
+	IdleTimeout       durationText `yaml:"idle_timeout"         json:"idle_timeout"`
 }
 
 type grpcConfig struct {
-	Enabled         bool      `yaml:"enabled"`
-	Addr            string    `yaml:"addr"`
-	TLS             tlsConfig `yaml:"tls"`
-	MaxRecvMsgBytes int       `yaml:"max_recv_msg_bytes"`
-	MaxSendMsgBytes int       `yaml:"max_send_msg_bytes"`
+	Enabled         bool      `yaml:"enabled"             json:"enabled"`
+	Addr            string    `yaml:"addr"                json:"addr"`
+	TLS             tlsConfig `yaml:"tls"                 json:"tls"`
+	MaxRecvMsgBytes int       `yaml:"max_recv_msg_bytes"  json:"max_recv_msg_bytes"`
+	MaxSendMsgBytes int       `yaml:"max_send_msg_bytes"  json:"max_send_msg_bytes"`
 }
 
 type authConfig struct {
-	AdminToken  string   `yaml:"admin_token"`
-	DataTokens  []string `yaml:"data_tokens"`
-	RequireUser bool     `yaml:"require_user"`
+	AdminToken  string   `yaml:"admin_token"   json:"admin_token"`
+	DataTokens  []string `yaml:"data_tokens"   json:"data_tokens"`
+	RequireUser bool     `yaml:"require_user"  json:"require_user"`
+}
+
+type userConfig struct {
+	Endpoint             string `yaml:"endpoint"                  json:"endpoint"`
+	PasswordAuthDisabled bool   `yaml:"password_auth_disabled"    json:"password_auth_disabled"`
 }
 
 type tlsConfig struct {
-	Enabled      bool   `yaml:"enabled"`
-	CertFile     string `yaml:"cert_file"`
-	KeyFile      string `yaml:"key_file"`
-	ClientCAFile string `yaml:"client_ca_file"`
-	ClientAuth   bool   `yaml:"client_auth"`
+	Enabled      bool   `yaml:"enabled"          json:"enabled"`
+	CertFile     string `yaml:"cert_file"        json:"cert_file"`
+	KeyFile      string `yaml:"key_file"         json:"key_file"`
+	ClientCAFile string `yaml:"client_ca_file"   json:"client_ca_file"`
+	ClientAuth   bool   `yaml:"client_auth"      json:"client_auth"`
 }
 
 type limitsConfig struct {
-	MaxRequestBodyBytes int64        `yaml:"max_request_body_bytes"`
-	MaxWritePoints      int          `yaml:"max_write_points"`
-	DefaultQueryLimit   int          `yaml:"default_query_limit"`
-	MaxQueryLimit       int          `yaml:"max_query_limit"`
-	RequestTimeout      durationText `yaml:"request_timeout"`
-	MaxConcurrentHTTP   int          `yaml:"max_concurrent_http"`
-	MaxConcurrentGRPC   int          `yaml:"max_concurrent_grpc"`
+	MaxRequestBodyBytes int64        `yaml:"max_request_body_bytes" json:"max_request_body_bytes"`
+	MaxWritePoints      int          `yaml:"max_write_points"       json:"max_write_points"`
+	DefaultQueryLimit   int          `yaml:"default_query_limit"    json:"default_query_limit"`
+	MaxQueryLimit       int          `yaml:"max_query_limit"        json:"max_query_limit"`
+	RequestTimeout      durationText `yaml:"request_timeout"        json:"request_timeout"`
+	MaxConcurrentHTTP   int          `yaml:"max_concurrent_http"    json:"max_concurrent_http"`
+	MaxConcurrentGRPC   int          `yaml:"max_concurrent_grpc"    json:"max_concurrent_grpc"`
 }
 
 type observabilityConfig struct {
-	AccessLog bool        `yaml:"access_log"`
-	Pprof     pprofConfig `yaml:"pprof"`
+	AccessLog bool        `yaml:"access_log" json:"access_log"`
+	Pprof     pprofConfig `yaml:"pprof"      json:"pprof"`
 }
 
 type pprofConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 type backupConfig struct {
-	Dir string `yaml:"dir"`
+	Dir string `yaml:"dir" json:"dir"`
 }
 
 type logConfig struct {
-	Level  string `yaml:"level"`
-	Format string `yaml:"format"`
+	Level  string `yaml:"level"  json:"level"`
+	Format string `yaml:"format" json:"format"`
 }
 
 type engineConfig struct {
-	DefaultDatabase        string       `yaml:"default_database"`
-	DefaultRetentionPolicy string       `yaml:"default_retention_policy"`
-	ShardDuration          durationText `yaml:"shard_duration"`
-	Retention              durationText `yaml:"retention"`
-	MemTableMaxSamples     int          `yaml:"memtable_max_samples"`
-	FlushSync              bool         `yaml:"flush_sync"`
+	DefaultDatabase        string       `yaml:"default_database"          json:"default_database"`
+	DefaultRetentionPolicy string       `yaml:"default_retention_policy"  json:"default_retention_policy"`
+	ShardDuration          durationText `yaml:"shard_duration"            json:"shard_duration"`
+	Retention              durationText `yaml:"retention"                 json:"retention"`
+	MemTableMaxSamples     int          `yaml:"memtable_max_samples"      json:"memtable_max_samples"`
+	FlushSync              bool         `yaml:"flush_sync"                json:"flush_sync"`
 	Compression            struct {
-		Enabled       bool   `yaml:"enabled"`
-		Algorithm     string `yaml:"algorithm"`
-		MinPageValues int    `yaml:"min_page_values"`
-	} `yaml:"compression"`
+		Enabled       bool   `yaml:"enabled"          json:"enabled"`
+		Algorithm     string `yaml:"algorithm"        json:"algorithm"`
+		MinPageValues int    `yaml:"min_page_values"  json:"min_page_values"`
+	} `yaml:"compression" json:"compression"`
 	Compaction struct {
-		Enabled            bool         `yaml:"enabled"`
-		BackgroundInterval durationText `yaml:"background_interval"`
-		Level0PartLimit    int          `yaml:"level0_part_limit"`
-		MaxCascadeSteps    int          `yaml:"max_cascade_steps"`
-	} `yaml:"compaction"`
+		Enabled            bool         `yaml:"enabled"             json:"enabled"`
+		BackgroundInterval durationText `yaml:"background_interval" json:"background_interval"`
+		Level0PartLimit    int          `yaml:"level0_part_limit"   json:"level0_part_limit"`
+		MaxCascadeSteps    int          `yaml:"max_cascade_steps"   json:"max_cascade_steps"`
+	} `yaml:"compaction" json:"compaction"`
 }
 
 type durationText time.Duration
@@ -126,6 +133,9 @@ func defaultConfig() config {
 			Addr:            "127.0.0.1:9096",
 			MaxRecvMsgBytes: 16 << 20,
 			MaxSendMsgBytes: 16 << 20,
+		},
+		User: userConfig{
+			Endpoint: "local",
 		},
 		Limits: limitsConfig{
 			MaxRequestBodyBytes: 16 << 20,
@@ -152,10 +162,10 @@ func defaultConfig() config {
 			ShardDuration:          durationText(time.Hour),
 			MemTableMaxSamples:     10000,
 			Compaction: struct {
-				Enabled            bool         `yaml:"enabled"`
-				BackgroundInterval durationText `yaml:"background_interval"`
-				Level0PartLimit    int          `yaml:"level0_part_limit"`
-				MaxCascadeSteps    int          `yaml:"max_cascade_steps"`
+				Enabled            bool         `yaml:"enabled"             json:"enabled"`
+				BackgroundInterval durationText `yaml:"background_interval" json:"background_interval"`
+				Level0PartLimit    int          `yaml:"level0_part_limit"   json:"level0_part_limit"`
+				MaxCascadeSteps    int          `yaml:"max_cascade_steps"   json:"max_cascade_steps"`
 			}{
 				Enabled:         true,
 				Level0PartLimit: 4,
@@ -197,6 +207,10 @@ func (cfg config) validate() error {
 	}
 	if cfg.GRPC.Enabled && strings.TrimSpace(cfg.GRPC.Addr) == "" {
 		return fmt.Errorf("%w: grpc addr is empty", errInvalidConfig)
+	}
+	cfg.User.Endpoint = strings.TrimSpace(cfg.User.Endpoint)
+	if cfg.User.Endpoint == "" {
+		cfg.User.Endpoint = "local"
 	}
 	if time.Duration(cfg.Shutdown) <= 0 {
 		return fmt.Errorf("%w: shutdown_timeout must be positive", errInvalidConfig)
@@ -258,6 +272,8 @@ func (cfg config) engineOptions() mts.Options {
 	opts.Compaction.BackgroundInterval = time.Duration(cfg.Engine.Compaction.BackgroundInterval)
 	opts.Compaction.Level0PartLimit = cfg.Engine.Compaction.Level0PartLimit
 	opts.Compaction.MaxCascadeSteps = cfg.Engine.Compaction.MaxCascadeSteps
+	opts.User.Endpoint = cfg.User.Endpoint
+	opts.User.PasswordAuthDisabled = cfg.User.PasswordAuthDisabled
 	return opts
 }
 
@@ -268,6 +284,23 @@ func (d durationText) MarshalYAML() ([]byte, error) {
 func (d *durationText) UnmarshalYAML(data []byte) error {
 	var value string
 	if err := yaml.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return err
+	}
+	*d = durationText(duration)
+	return nil
+}
+
+func (d durationText) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
+}
+
+func (d *durationText) UnmarshalJSON(data []byte) error {
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
 	duration, err := time.ParseDuration(value)

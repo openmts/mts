@@ -55,6 +55,10 @@ func (r *serverRuntime) handleUserResource(writer http.ResponseWriter, request *
 		r.handleDatabasePermissionResource(writer, request, userName, parts[2:])
 		return
 	}
+	if len(parts) == 2 && parts[1] == "password" {
+		r.handleUserPassword(writer, request, userName)
+		return
+	}
 	if len(parts) == 2 && parts[1] == "audit" {
 		r.handleUserAudit(writer, request, userName)
 		return
@@ -102,6 +106,23 @@ func (r *serverRuntime) handleSingleUser(
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
 	}
+}
+
+func (r *serverRuntime) handleUserPassword(writer http.ResponseWriter, request *http.Request, userName string) {
+	if !requireHTTPMethod(writer, request, http.MethodPut) {
+		return
+	}
+	var req passwordRequest
+	if err := decodeHTTPJSON(request, &req); err != nil {
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+		return
+	}
+	if err := r.engine.SetPassword(request.Context(), userName, req.Password); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	r.audit.record(auditEvent{UserName: userName, Action: "set_password"})
+	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 }
 
 func (r *serverRuntime) handleDatabasePermissionResource(

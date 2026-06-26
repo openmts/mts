@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	mts "github.com/openmts/mts"
 )
@@ -98,6 +99,7 @@ func TestEngineUserManagementWrappers(t *testing.T) {
 	}
 	assertEngineUser(t, ctx, eng)
 	assertEnginePermissions(t, ctx, eng)
+	assertEngineAuthentication(t, ctx, eng)
 
 	if err := eng.DeleteUser(ctx, "bob"); err != nil {
 		t.Fatalf("DeleteUser() error = %v", err)
@@ -153,6 +155,30 @@ func grantEnginePermissions(t *testing.T, ctx context.Context, eng *mts.Engine) 
 	}
 	if err := eng.GrantDatabasePermission(ctx, "bob", "metrics", mts.DatabasePermissionWrite); err != nil {
 		t.Fatalf("GrantDatabasePermission(write) error = %v", err)
+	}
+}
+
+func assertEngineAuthentication(t *testing.T, ctx context.Context, eng *mts.Engine) {
+	t.Helper()
+	if err := eng.SetPassword(ctx, "bob", "secret"); err != nil {
+		t.Fatalf("SetPassword() error = %v", err)
+	}
+	token, err := eng.Authenticate(ctx, mts.Credentials{UserName: "bob", Password: "secret"}, time.Hour)
+	if err != nil {
+		t.Fatalf("Authenticate() error = %v", err)
+	}
+	principal, err := eng.VerifyToken(ctx, token.Token)
+	if err != nil {
+		t.Fatalf("VerifyToken() error = %v", err)
+	}
+	if principal.UserName != "bob" {
+		t.Fatalf("principal = %#v, want bob", principal)
+	}
+	if err := eng.ChangePassword(ctx, "bob", "secret", "next"); err != nil {
+		t.Fatalf("ChangePassword() error = %v", err)
+	}
+	if _, err := eng.Authenticate(ctx, mts.Credentials{UserName: "bob", Password: "secret"}, time.Hour); !errors.Is(err, mts.ErrInvalidCredentials) {
+		t.Fatalf("Authenticate(old password) error = %v, want ErrInvalidCredentials", err)
 	}
 }
 
@@ -219,5 +245,25 @@ func (m *recordingUserManager) CheckDatabasePermission(
 	string,
 	mts.DatabasePermission,
 ) error {
+	return nil
+}
+
+func (m *recordingUserManager) SetPassword(context.Context, string, string) error {
+	return nil
+}
+
+func (m *recordingUserManager) ChangePassword(context.Context, string, string, string) error {
+	return nil
+}
+
+func (m *recordingUserManager) Authenticate(context.Context, mts.Credentials, time.Duration) (mts.AuthToken, error) {
+	return mts.AuthToken{}, nil
+}
+
+func (m *recordingUserManager) VerifyToken(context.Context, string) (mts.Principal, error) {
+	return mts.Principal{}, nil
+}
+
+func (m *recordingUserManager) RevokeToken(context.Context, string) error {
 	return nil
 }

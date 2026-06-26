@@ -37,6 +37,15 @@ func sortedUserNames(users map[string]User) []string {
 	return names
 }
 
+func sortedTokenDigests(tokens map[string]tokenRecord) []string {
+	digests := make([]string, 0, len(tokens))
+	for digest := range tokens {
+		digests = append(digests, digest)
+	}
+	sort.Strings(digests)
+	return digests
+}
+
 func cloneUser(user User) User {
 	user.Metadata = cloneStringMap(user.Metadata)
 	return user
@@ -87,6 +96,38 @@ func cloneStringMap(values map[string]string) map[string]string {
 	out := make(map[string]string, len(values))
 	for key, value := range values {
 		out[key] = value
+	}
+	return out
+}
+
+func clonePasswordRecords(records map[string]passwordRecord) map[string]passwordRecord {
+	out := make(map[string]passwordRecord, len(records))
+	for userName, record := range records {
+		out[userName] = clonePasswordRecord(record)
+	}
+	return out
+}
+
+func clonePasswordRecord(record passwordRecord) passwordRecord {
+	record.Salt = append([]byte(nil), record.Salt...)
+	record.Hash = append([]byte(nil), record.Hash...)
+	return record
+}
+
+func cloneTokenRecords(records map[string]tokenRecord) map[string]tokenRecord {
+	out := make(map[string]tokenRecord, len(records))
+	for digest, record := range records {
+		out[digest] = record
+	}
+	return out
+}
+
+func removeUserTokens(tokens map[string]tokenRecord, userName string) map[string]tokenRecord {
+	out := cloneTokenRecords(tokens)
+	for digest, token := range out {
+		if token.UserName == userName {
+			delete(out, digest)
+		}
 	}
 	return out
 }

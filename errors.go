@@ -26,11 +26,14 @@ var ErrReadBudgetExceeded = queryexec.ErrReadBudgetExceeded
 
 // 用户管理相关错误。
 var (
-	ErrInvalidUser       = internaluser.ErrInvalidUser
-	ErrUserNotFound      = internaluser.ErrUserNotFound
-	ErrUserAlreadyExists = internaluser.ErrUserAlreadyExists
-	ErrInvalidPermission = internaluser.ErrInvalidPermission
-	ErrPermissionDenied  = internaluser.ErrPermissionDenied
+	ErrInvalidUser             = internaluser.ErrInvalidUser
+	ErrUserNotFound            = internaluser.ErrUserNotFound
+	ErrUserAlreadyExists       = internaluser.ErrUserAlreadyExists
+	ErrInvalidPermission       = internaluser.ErrInvalidPermission
+	ErrPermissionDenied        = internaluser.ErrPermissionDenied
+	ErrInvalidCredentials      = internaluser.ErrInvalidCredentials
+	ErrAuthenticationDisabled  = internaluser.ErrAuthenticationDisabled
+	ErrUnsupportedUserEndpoint = internaluser.ErrUnsupportedEndpoint
 )
 
 func publicError(err error) error {

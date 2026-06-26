@@ -15,10 +15,11 @@ func (r *serverRuntime) reloadConfig() (reloadConfigResponse, error) {
 	}
 	r.mu.Lock()
 	r.config.Auth = newCfg.Auth
+	r.config.User = newCfg.User
 	r.config.Limits = newCfg.Limits
 	r.config.Observability = newCfg.Observability
 	r.config.Log = newCfg.Log
 	r.mu.Unlock()
 	r.applyLimitState(newCfg)
-	return reloadConfigResponse{OK: true, Fields: []string{"auth", "limits", "observability", "log"}}, nil
+	return reloadConfigResponse{OK: true, Fields: []string{"auth", "user", "limits", "observability", "log"}}, nil
 }

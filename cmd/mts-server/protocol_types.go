@@ -88,6 +88,35 @@ type databasePermissionsResponse struct {
 	Grants []mts.DatabaseGrant `json:"grants"`
 }
 
+type loginRequest struct {
+	UserName   string `json:"user_name"`
+	Password   string `json:"password"`
+	TTLSeconds int64  `json:"ttl_seconds,omitempty"`
+}
+
+type authTokenResponse struct {
+	Token mts.AuthToken `json:"token"`
+}
+
+type logoutRequest struct {
+	Token string `json:"token,omitempty"`
+}
+
+type passwordRequest struct {
+	Password string `json:"password"`
+}
+
+type setUserPasswordRequest struct {
+	UserName string `json:"user_name"`
+	Password string `json:"password"`
+}
+
+type changePasswordRequest struct {
+	UserName    string `json:"user_name"`
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
 type authzDatabaseCheckRequest struct {
 	UserName   string                 `json:"user_name"`
 	Database   string                 `json:"database"`

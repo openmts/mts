@@ -24,9 +24,9 @@ func (m *Manager) GrantPermission(
 	if _, ok := m.users[userName]; !ok {
 		return fmt.Errorf("%w: %s", ErrUserNotFound, userName)
 	}
-	users, grants := m.clonedStateLocked()
+	users, grants, passwords, tokens := m.clonedStateLocked()
 	ensureGrantSet(grants, userName, database)[permission] = struct{}{}
-	return m.replaceStateLocked(users, grants)
+	return m.replaceStateLocked(users, grants, passwords, tokens)
 }
 
 func (m *Manager) RevokePermission(
@@ -47,9 +47,9 @@ func (m *Manager) RevokePermission(
 	if _, ok := m.users[userName]; !ok {
 		return fmt.Errorf("%w: %s", ErrUserNotFound, userName)
 	}
-	users, grants := m.clonedStateLocked()
+	users, grants, passwords, tokens := m.clonedStateLocked()
 	removeGrant(grants, userName, database, permission)
-	return m.replaceStateLocked(users, grants)
+	return m.replaceStateLocked(users, grants, passwords, tokens)
 }
 
 func (m *Manager) ListPermissions(

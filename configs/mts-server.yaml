@@ -45,8 +45,14 @@ auth:
   admin_token: ""
   # data_tokens 保护数据面。空数组表示兼容模式；生产环境建议配置并启用 require_user。
   data_tokens: []
-  # require_user 为 true 时，数据面还必须携带 X-MTS-User / x-mts-user 并通过 DB 权限校验。
+  # require_user 为 true 时，数据面还必须携带用户 Bearer token，并通过 DB 权限校验。
   require_user: false
+
+user:
+  # endpoint 指定用户模块接入地址。local 表示使用内置本地实现；缺省时同样使用 local。
+  endpoint: local
+  # password_auth_disabled 为 true 时关闭密码登录、token 校验和 token 撤销能力。
+  password_auth_disabled: false
 
 limits:
   max_request_body_bytes: 16777216

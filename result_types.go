@@ -51,143 +51,143 @@ type QueryResult struct {
 
 // StorageMemorySnapshot 表示存储层内存快照。
 type StorageMemorySnapshot struct {
-	CurrentBytes          int64
-	PeakBytes             int64
-	ActiveBytes           int64
-	MemTableBytes         int64
-	WALBytes              int64
-	ReservationBytes      int64
-	WriteBytes            int64
-	FlushBytes            int64
-	QueryBytes            int64
-	CompactionBytes       int64
-	CompressionBytes      int64
-	SoftBytesLimit        int64
-	HardBytesLimit        int64
-	RejectedWrites        uint64
-	RejectedReservations  uint64
-	FlushTriggered        uint64
-	QueryBytesLimit       int64
-	FlushBytesLimit       int64
-	CompactionBytesLimit  int64
-	CompressionBytesLimit int64
-	RuntimeHeapAllocBytes int64
-	RuntimeRSSBytes       int64
-	RuntimeGapBytes       int64
+	CurrentBytes          int64  `json:"current_bytes"`
+	PeakBytes             int64  `json:"peak_bytes"`
+	ActiveBytes           int64  `json:"active_bytes"`
+	MemTableBytes         int64  `json:"memtable_bytes"`
+	WALBytes              int64  `json:"wal_bytes"`
+	ReservationBytes      int64  `json:"reservation_bytes"`
+	WriteBytes            int64  `json:"write_bytes"`
+	FlushBytes            int64  `json:"flush_bytes"`
+	QueryBytes            int64  `json:"query_bytes"`
+	CompactionBytes       int64  `json:"compaction_bytes"`
+	CompressionBytes      int64  `json:"compression_bytes"`
+	SoftBytesLimit        int64  `json:"soft_bytes_limit"`
+	HardBytesLimit        int64  `json:"hard_bytes_limit"`
+	RejectedWrites        uint64 `json:"rejected_writes"`
+	RejectedReservations  uint64 `json:"rejected_reservations"`
+	FlushTriggered        uint64 `json:"flush_triggered"`
+	QueryBytesLimit       int64  `json:"query_bytes_limit"`
+	FlushBytesLimit       int64  `json:"flush_bytes_limit"`
+	CompactionBytesLimit  int64  `json:"compaction_bytes_limit"`
+	CompressionBytesLimit int64  `json:"compression_bytes_limit"`
+	RuntimeHeapAllocBytes int64  `json:"runtime_heap_alloc_bytes"`
+	RuntimeRSSBytes       int64  `json:"runtime_rss_bytes"`
+	RuntimeGapBytes       int64  `json:"runtime_gap_bytes"`
 }
 
 // RetentionPolicy 描述一个本地 retention policy。
 type RetentionPolicy struct {
-	Name     string
-	Duration time.Duration
+	Name     string        `json:"name"`
+	Duration time.Duration `json:"duration"`
 }
 
 // FieldSchema 描述 measurement 下的字段 schema。
 type FieldSchema struct {
-	Measurement string
-	Name        string
-	Type        FieldType
+	Measurement string    `json:"measurement"`
+	Name        string    `json:"name"`
+	Type        FieldType `json:"type"`
 }
 
 // Series 描述一条 series 元数据。
 type Series struct {
-	ID          uint64
-	Measurement string
-	Tags        map[string]string
+	ID          uint64            `json:"id"`
+	Measurement string            `json:"measurement"`
+	Tags        map[string]string `json:"tags"`
 }
 
 // CompactionTaskStatus 表示最近一次 compaction 任务状态。
 type CompactionTaskStatus struct {
-	ID          string
-	State       string
-	Level       int
-	OutputLevel int
-	Reason      string
-	Score       float64
-	StartedAt   time.Time
-	FinishedAt  time.Time
-	Duration    time.Duration
-	InputParts  int
-	OutputParts int
-	InputBytes  int64
-	OutputBytes int64
-	DroppedRows int
-	Error       string
+	ID          string        `json:"id"`
+	State       string        `json:"state"`
+	Level       int           `json:"level"`
+	OutputLevel int           `json:"output_level"`
+	Reason      string        `json:"reason"`
+	Score       float64       `json:"score"`
+	StartedAt   time.Time     `json:"started_at"`
+	FinishedAt  time.Time     `json:"finished_at"`
+	Duration    time.Duration `json:"duration"`
+	InputParts  int           `json:"input_parts"`
+	OutputParts int           `json:"output_parts"`
+	InputBytes  int64         `json:"input_bytes"`
+	OutputBytes int64         `json:"output_bytes"`
+	DroppedRows int           `json:"dropped_rows"`
+	Error       string        `json:"error"`
 }
 
 // CompactionStats 表示 compaction 累计统计。
 type CompactionStats struct {
-	Active          int
-	Backlog         int
-	Skipped         int
-	Total           int
-	Success         int
-	Failure         int
-	InputParts      int
-	OutputParts     int
-	InputBytes      int64
-	OutputBytes     int64
-	DroppedRows     int
-	OverlapCount    int
-	MaxScore        float64
-	LastReason      string
-	LastLevel       int
-	LastOutputLevel int
-	LastDuration    time.Duration
-	LastError       string
-	LastSkipReason  string
-	LastTask        CompactionTaskStatus
-	SafeDeleteParts int
+	Active          int                  `json:"active"`
+	Backlog         int                  `json:"backlog"`
+	Skipped         int                  `json:"skipped"`
+	Total           int                  `json:"total"`
+	Success         int                  `json:"success"`
+	Failure         int                  `json:"failure"`
+	InputParts      int                  `json:"input_parts"`
+	OutputParts     int                  `json:"output_parts"`
+	InputBytes      int64                `json:"input_bytes"`
+	OutputBytes     int64                `json:"output_bytes"`
+	DroppedRows     int                  `json:"dropped_rows"`
+	OverlapCount    int                  `json:"overlap_count"`
+	MaxScore        float64              `json:"max_score"`
+	LastReason      string               `json:"last_reason"`
+	LastLevel       int                  `json:"last_level"`
+	LastOutputLevel int                  `json:"last_output_level"`
+	LastDuration    time.Duration        `json:"last_duration"`
+	LastError       string               `json:"last_error"`
+	LastSkipReason  string               `json:"last_skip_reason"`
+	LastTask        CompactionTaskStatus `json:"last_task"`
+	SafeDeleteParts int                  `json:"safe_delete_parts"`
 }
 
 // CompactionResult 表示一次手动 compaction 结果。
 type CompactionResult struct {
-	State       string
-	Duration    time.Duration
-	Shards      int
-	InputParts  int
-	OutputParts int
-	InputBytes  int64
-	OutputBytes int64
-	DroppedRows int
-	Error       string
-	LastTask    CompactionTaskStatus
+	State       string               `json:"state"`
+	Duration    time.Duration        `json:"duration"`
+	Shards      int                  `json:"shards"`
+	InputParts  int                  `json:"input_parts"`
+	OutputParts int                  `json:"output_parts"`
+	InputBytes  int64                `json:"input_bytes"`
+	OutputBytes int64                `json:"output_bytes"`
+	DroppedRows int                  `json:"dropped_rows"`
+	Error       string               `json:"error"`
+	LastTask    CompactionTaskStatus `json:"last_task"`
 }
 
 // HealthSnapshot 表示 Engine 健康状态。
 type HealthSnapshot struct {
-	Healthy bool
-	Ready   bool
-	Reasons []string
-	Checks  []HealthCheck
+	Healthy bool          `json:"healthy"`
+	Ready   bool          `json:"ready"`
+	Reasons []string      `json:"reasons"`
+	Checks  []HealthCheck `json:"checks"`
 }
 
 // HealthCheck 表示一个健康检查项。
 type HealthCheck struct {
-	Name   string
-	Status string
-	Reason string
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Reason string `json:"reason"`
 }
 
 // ColumnSeries 表示按列返回的一组 series 字段数据。
 type ColumnSeries struct {
-	SeriesID    uint64 `json:"series_id"`
-	Measurement string `json:"measurement"`
-	Tags        map[string]string
-	FieldID     uint32
-	FieldName   string
-	FieldType   FieldType
-	Timestamps  []int64
-	Values      []FieldValue
+	SeriesID    uint64            `json:"series_id"`
+	Measurement string            `json:"measurement"`
+	Tags        map[string]string `json:"tags"`
+	FieldID     uint32            `json:"field_id"`
+	FieldName   string            `json:"field_name"`
+	FieldType   FieldType         `json:"field_type"`
+	Timestamps  []int64           `json:"timestamps"`
+	Values      []FieldValue      `json:"values"`
 }
 
 // Row 表示按行返回的一条时序记录。
 type Row struct {
-	SeriesID    uint64
-	Measurement string
-	Tags        map[string]string
-	Timestamp   int64
-	Fields      map[string]FieldValue
+	SeriesID    uint64                 `json:"series_id"`
+	Measurement string                 `json:"measurement"`
+	Tags        map[string]string      `json:"tags"`
+	Timestamp   int64                  `json:"timestamp"`
+	Fields      map[string]FieldValue  `json:"fields"`
 }
 
 // ColumnIterator 以流式方式遍历列查询结果。

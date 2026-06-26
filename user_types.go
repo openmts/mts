@@ -1,6 +1,9 @@
 package mts
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // DatabasePermission 表示用户对 database 的权限。
 type DatabasePermission string
@@ -28,6 +31,21 @@ type DatabaseGrant struct {
 	Permission DatabasePermission `json:"permission"`
 }
 
+type Credentials struct {
+	UserName string `json:"user_name"`
+	Password string `json:"password"`
+}
+
+type AuthToken struct {
+	Token     string    `json:"token"`
+	UserName  string    `json:"user_name"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type Principal struct {
+	UserName string `json:"user_name"`
+}
+
 // UserManager 定义用户管理与 DB 级权限管理接口。
 type UserManager interface {
 	CreateUser(context.Context, User) error
@@ -39,4 +57,9 @@ type UserManager interface {
 	RevokeDatabasePermission(context.Context, string, string, DatabasePermission) error
 	ListDatabasePermissions(context.Context, string) ([]DatabaseGrant, error)
 	CheckDatabasePermission(context.Context, string, string, DatabasePermission) error
+	SetPassword(context.Context, string, string) error
+	ChangePassword(context.Context, string, string, string) error
+	Authenticate(context.Context, Credentials, time.Duration) (AuthToken, error)
+	VerifyToken(context.Context, string) (Principal, error)
+	RevokeToken(context.Context, string) error
 }

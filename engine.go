@@ -294,6 +294,31 @@ func (e *Engine) CheckUserDatabasePermission(
 	return e.userManager.CheckDatabasePermission(ctx, userName, database, permission)
 }
 
+func (e *Engine) SetPassword(ctx context.Context, userName string, password string) error {
+	return e.userManager.SetPassword(ctx, userName, password)
+}
+
+func (e *Engine) ChangePassword(
+	ctx context.Context,
+	userName string,
+	oldPassword string,
+	newPassword string,
+) error {
+	return e.userManager.ChangePassword(ctx, userName, oldPassword, newPassword)
+}
+
+func (e *Engine) Authenticate(ctx context.Context, credentials Credentials, ttl time.Duration) (AuthToken, error) {
+	return e.userManager.Authenticate(ctx, credentials, ttl)
+}
+
+func (e *Engine) VerifyToken(ctx context.Context, token string) (Principal, error) {
+	return e.userManager.VerifyToken(ctx, token)
+}
+
+func (e *Engine) RevokeToken(ctx context.Context, token string) error {
+	return e.userManager.RevokeToken(ctx, token)
+}
+
 type columnIterator struct {
 	inner  model.ColumnIterator
 	factor int64

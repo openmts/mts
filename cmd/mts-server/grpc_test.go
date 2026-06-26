@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
@@ -88,6 +89,42 @@ func TestGRPCP0P1DataUsersMetadataAdminAndDownsample(t *testing.T) {
 	}, &dryRun); err != nil {
 		t.Fatalf("DryRunDownsamplePolicy error = %v", err)
 	}
+}
+
+func TestGRPCRequireUserAuthenticatesBearerToken(t *testing.T) {
+	runtime := openTestRuntime(t)
+	runtime.config.Auth.RequireUser = true
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+	ctx := context.Background()
+	invokeOK(t, ctx, conn, "CreateUser", &mts.User{Name: "grpc-auth"}, &okResponse{})
+	invokeOK(t, ctx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "grpc-auth", Password: "secret"}, &okResponse{})
+	invokeOK(t, ctx, conn, "GrantDatabasePermission", &databasePermissionRequest{
+		UserName: "grpc-auth", Database: "default", Permission: mts.DatabasePermissionWrite,
+	}, &okResponse{})
+
+	var writeResp writeResponse
+	err := invokeGRPC(ctx, conn, "Write", &writeRequest{Points: []mts.Point{testPoint()}}, &writeResp)
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("Write(no token) code = %v, want Unauthenticated, err=%v", status.Code(err), err)
+	}
+	badCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer bad-token"))
+	err = invokeGRPC(badCtx, conn, "Write", &writeRequest{Points: []mts.Point{testPoint()}}, &writeResp)
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("Write(bad token) code = %v, want Unauthenticated, err=%v", status.Code(err), err)
+	}
+
+	var login authTokenResponse
+	invokeOK(t, ctx, conn, "Login", &loginRequest{UserName: "grpc-auth", Password: "secret", TTLSeconds: 60}, &login)
+	if login.Token.Token == "" {
+		t.Fatal("login token is empty")
+	}
+	goodCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+login.Token.Token))
+	invokeOK(t, goodCtx, conn, "Write", &writeRequest{Points: []mts.Point{testPoint()}}, &writeResp)
 }
 
 func TestGRPCWriteAndQueryRows(t *testing.T) {

@@ -5,12 +5,17 @@ import "google.golang.org/grpc/codes"
 func apiSpec() apiSpecResponse {
 	return apiSpecResponse{Version: "v1", Namespaces: []apiNamespace{
 		{Name: "data", BasePath: "/api/v1/data", Endpoints: []apiEndpoint{
-			{Method: "POST", Path: "/api/v1/data/write", Auth: "data token optional, DB write when user is present", Description: "write point batch"},
-			{Method: "POST", Path: "/api/v1/data/write/typed", Auth: "data token optional, DB write when user is present", Description: "write typed column batch"},
-			{Method: "POST", Path: "/api/v1/data/query/rows", Auth: "data token optional, DB read when user is present", Description: "query row result"},
-			{Method: "POST", Path: "/api/v1/data/query/columns", Auth: "data token optional, DB read when user is present", Description: "query column result"},
-			{Method: "POST", Path: "/api/v1/data/query/explain", Auth: "data token optional, DB read when user is present", Description: "query with execution explain"},
-			{Method: "POST", Path: "/api/v1/data/query/stream", Auth: "data token optional, DB read when user is present", Description: "query NDJSON stream"},
+			{Method: "POST", Path: "/api/v1/data/write", Auth: "data token optional; when require_user is true, user bearer token and DB write permission are required", Description: "write point batch"},
+			{Method: "POST", Path: "/api/v1/data/write/typed", Auth: "data token optional; when require_user is true, user bearer token and DB write permission are required", Description: "write typed column batch"},
+			{Method: "POST", Path: "/api/v1/data/query/rows", Auth: "data token optional; when require_user is true, user bearer token and DB read permission are required", Description: "query row result"},
+			{Method: "POST", Path: "/api/v1/data/query/columns", Auth: "data token optional; when require_user is true, user bearer token and DB read permission are required", Description: "query column result"},
+			{Method: "POST", Path: "/api/v1/data/query/explain", Auth: "data token optional; when require_user is true, user bearer token and DB read permission are required", Description: "query with execution explain"},
+			{Method: "POST", Path: "/api/v1/data/query/stream", Auth: "data token optional; when require_user is true, user bearer token and DB read permission are required", Description: "query NDJSON stream"},
+		}},
+		{Name: "auth", BasePath: "/api/v1/auth", Endpoints: []apiEndpoint{
+			{Method: "POST", Path: "/api/v1/auth/login", Auth: "user password", Description: "issue user bearer token"},
+			{Method: "POST", Path: "/api/v1/auth/logout", Auth: "user bearer token", Description: "revoke user bearer token"},
+			{Method: "POST", Path: "/api/v1/auth/password", Auth: "user password", Description: "change user password"},
 		}},
 		{Name: "admin", BasePath: "/api/v1/admin", Endpoints: []apiEndpoint{
 			{Method: "GET", Path: "/api/v1/admin/config", Auth: "admin token", Description: "read effective config"},
@@ -24,6 +29,7 @@ func apiSpec() apiSpecResponse {
 		}},
 		{Name: "users", BasePath: "/api/v1/users", Endpoints: []apiEndpoint{
 			{Method: "POST", Path: "/api/v1/users", Auth: "admin token", Description: "create user"},
+			{Method: "PUT", Path: "/api/v1/users/{name}/password", Auth: "admin token", Description: "set user password"},
 			{Method: "GET", Path: "/api/v1/users/{name}/audit", Auth: "admin token", Description: "read user audit events"},
 			{Method: "POST", Path: "/api/v1/users/{name}/database-permissions/{database}/{permission}", Auth: "admin token", Description: "grant DB permission"},
 		}},

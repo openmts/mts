@@ -23,6 +23,9 @@ func (r *serverRuntime) httpHandler() http.Handler {
 	mux.HandleFunc("/api/v1/data/query/stream", r.handleQueryStream)
 	mux.HandleFunc("/api/v1/data/query/stats", r.handleQueryStats)
 	mux.HandleFunc("/api/v1/data/databases/", r.handleDataDatabase)
+	mux.HandleFunc("/api/v1/auth/login", r.handleLogin)
+	mux.HandleFunc("/api/v1/auth/logout", r.handleLogout)
+	mux.HandleFunc("/api/v1/auth/password", r.handleChangePassword)
 	mux.HandleFunc("/api/v1/users", r.handleUsers)
 	mux.HandleFunc("/api/v1/users/", r.handleUserResource)
 	mux.HandleFunc("/api/v1/authz/database/check", r.handleAuthzDatabaseCheck)
@@ -49,6 +52,7 @@ func (r *serverRuntime) httpHandler() http.Handler {
 	mux.HandleFunc("/api/v1/admin/storage/snapshot", r.handleStorageSnapshot)
 	mux.HandleFunc("/api/v1/admin/storage/export", r.handleStorageExport)
 	r.mountPprof(mux)
+	mux.HandleFunc("/", dashboardHandler().ServeHTTP)
 	return r.wrapHTTP(mux)
 }
 
@@ -121,6 +125,9 @@ func apiErrorResponse(err error) (int, errorResponse) {
 	} else if errors.Is(err, mts.ErrUserAlreadyExists) {
 		code = errorCodeAlreadyExists
 		statusCode = http.StatusConflict
+	} else if errors.Is(err, mts.ErrInvalidCredentials) || errors.Is(err, mts.ErrAuthenticationDisabled) {
+		code = errorCodeUnauthenticated
+		statusCode = http.StatusUnauthorized
 	} else if errors.Is(err, mts.ErrInvalidUser) ||
 		errors.Is(err, mts.ErrInvalidPermission) ||
 		errors.Is(err, mts.ErrInvalidPrecision) {

@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/goccy/go-yaml"
-	"github.com/urfave/cli/v2"
+	yaml "github.com/goccy/go-yaml"
+	cli "github.com/urfave/cli/v2"
 )
 
 func newApp(stdout io.Writer, stderr io.Writer) *cli.App {

@@ -10,3 +10,8 @@ dist
 build
 coverage
 /mts-storage
+
+# mts-dashboard
+cmd/mts-server/dashboard-dist/
+cmd/mts-dashboard/node_modules/
+*.tsbuildinfo

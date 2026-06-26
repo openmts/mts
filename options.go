@@ -33,7 +33,13 @@ type Options struct {
 	Compression            CompressionOptions
 	StorageMemory          StorageMemoryOptions
 	Logger                 *slog.Logger
+	User                   UserOptions
 	UserManager            UserManager
+}
+
+type UserOptions struct {
+	Endpoint             string
+	PasswordAuthDisabled bool
 }
 
 // StorageMemoryOptions 控制存储层内存预算。

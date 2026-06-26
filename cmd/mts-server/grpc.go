@@ -114,6 +114,10 @@ func grpcServiceDesc() *grpc.ServiceDesc {
 		{MethodName: "QueryColumns", Handler: unaryHandler(&queryRequest{}, grpcQueryColumns)},
 		{MethodName: "QueryWithExplain", Handler: unaryHandler(&queryRequest{}, grpcQueryWithExplain)},
 		{MethodName: "QueryStats", Handler: unaryHandler(&emptyRequest{}, grpcQueryStats)},
+		{MethodName: "Login", Handler: unaryHandler(&loginRequest{}, grpcLogin)},
+		{MethodName: "Logout", Handler: unaryHandler(&logoutRequest{}, grpcLogout)},
+		{MethodName: "ChangePassword", Handler: unaryHandler(&changePasswordRequest{}, grpcChangePassword)},
+		{MethodName: "SetUserPassword", Handler: unaryHandler(&setUserPasswordRequest{}, grpcSetUserPassword)},
 		{MethodName: "CreateUser", Handler: unaryHandler(&mts.User{}, grpcCreateUser)},
 		{MethodName: "UpdateUser", Handler: unaryHandler(&mts.User{}, grpcUpdateUser)},
 		{MethodName: "GetUser", Handler: unaryHandler(&userNameRequest{}, grpcGetUser)},
@@ -274,6 +278,52 @@ func grpcQueryWithExplain(r *serverRuntime, ctx context.Context, req any) (any, 
 
 func grpcQueryStats(r *serverRuntime, _ context.Context, _ any) (any, error) {
 	return queryStatsResponse{Stats: r.queryStats()}, nil
+}
+
+func grpcLogin(r *serverRuntime, ctx context.Context, req any) (any, error) {
+	request := req.(*loginRequest)
+	ttl := defaultAuthTTL
+	if request.TTLSeconds > 0 {
+		ttl = time.Duration(request.TTLSeconds) * time.Second
+	}
+	token, err := r.engine.Authenticate(ctx, mts.Credentials{
+		UserName: request.UserName,
+		Password: request.Password,
+	}, ttl)
+	if err != nil {
+		return nil, newAPIError(errorCodeUnauthenticated, "invalid credentials", err)
+	}
+	return authTokenResponse{Token: token}, nil
+}
+
+func grpcLogout(r *serverRuntime, ctx context.Context, req any) (any, error) {
+	token := strings.TrimSpace(req.(*logoutRequest).Token)
+	if token == "" {
+		token = bearerToken(grpcMetadataValue(ctx, strings.ToLower(headerAuthorization)))
+	}
+	if token == "" {
+		return nil, newAPIError(errorCodeUnauthenticated, "user bearer token is required", nil)
+	}
+	if err := r.engine.RevokeToken(ctx, token); err != nil {
+		return nil, newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err)
+	}
+	return okResponse{OK: true}, nil
+}
+
+func grpcChangePassword(r *serverRuntime, ctx context.Context, req any) (any, error) {
+	request := req.(*changePasswordRequest)
+	if err := r.engine.ChangePassword(ctx, request.UserName, request.OldPassword, request.NewPassword); err != nil {
+		return nil, newAPIError(errorCodeUnauthenticated, "invalid credentials", err)
+	}
+	return okResponse{OK: true}, nil
+}
+
+func grpcSetUserPassword(r *serverRuntime, ctx context.Context, req any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	request := req.(*setUserPasswordRequest)
+	return okResponse{OK: true}, r.engine.SetPassword(ctx, request.UserName, request.Password)
 }
 
 func grpcCreateUser(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -619,6 +669,9 @@ func grpcError(err error) error {
 	}
 	if errors.Is(err, mts.ErrUserAlreadyExists) {
 		return status.Error(codes.AlreadyExists, err.Error())
+	}
+	if errors.Is(err, mts.ErrInvalidCredentials) || errors.Is(err, mts.ErrAuthenticationDisabled) {
+		return status.Error(codes.Unauthenticated, err.Error())
 	}
 	if errors.Is(err, mts.ErrInvalidUser) || errors.Is(err, mts.ErrInvalidPermission) || errors.Is(err, mts.ErrInvalidPrecision) {
 		return status.Error(codes.InvalidArgument, err.Error())

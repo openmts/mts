@@ -30,6 +30,8 @@ const (
 	e2eDataToken  = "e2e-data-token"
 )
 
+var httpUserToken string
+
 func main() {
 	if err := run(); err != nil {
 		log.Fatalf("mts_server_protocols failed: %v", err)
@@ -233,15 +235,13 @@ func waitHTTPReady(addr string, process *serverProcess) error {
 		}
 		resp, err := client.Get(url)
 		if err == nil {
-			body, readErr := io.ReadAll(resp.Body)
+			var health mts.HealthSnapshot
+			decodeErr := json.NewDecoder(resp.Body).Decode(&health)
 			closeErr := resp.Body.Close()
-			if readErr != nil {
-				return fmt.Errorf("read ready response: %w", readErr)
-			}
 			if closeErr != nil {
 				return fmt.Errorf("close ready response: %w", closeErr)
 			}
-			if resp.StatusCode == http.StatusOK && bytes.Contains(body, []byte("Healthy")) {
+			if decodeErr == nil && resp.StatusCode == http.StatusOK && health.Healthy && health.Ready {
 				return nil
 			}
 		}
@@ -261,12 +261,24 @@ func exerciseHTTP(addr string) error {
 	if err := postHTTPJSON(client, addr, "/api/v1/users", mts.User{Name: "http-e2e"}, &okResponse{}); err != nil {
 		return err
 	}
+	if err := putHTTPJSON(client, addr, "/api/v1/users/http-e2e/password", passwordRequest{Password: "secret"}, &okResponse{}); err != nil {
+		return err
+	}
 	if err := postHTTPJSON(client, addr, "/api/v1/users/http-e2e/database-permissions/default/read", emptyRequest{}, &okResponse{}); err != nil {
 		return err
 	}
 	if err := postHTTPJSON(client, addr, "/api/v1/users/http-e2e/database-permissions/default/write", emptyRequest{}, &okResponse{}); err != nil {
 		return err
 	}
+	var login authTokenResponse
+	if err := postHTTPJSON(client, addr, "/api/v1/auth/login", loginRequest{
+		UserName:   "http-e2e",
+		Password:   "secret",
+		TTLSeconds: 60,
+	}, &login); err != nil {
+		return err
+	}
+	httpUserToken = login.Token.Token
 	point := testPoint("http_cpu", "http-host", 1, 0.42)
 	if err := postHTTPJSON(client, addr, "/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, &writeResponse{}); err != nil {
 		return err
@@ -429,6 +441,34 @@ func postHTTPJSON(client http.Client, addr string, path string, in any, out any)
 	return nil
 }
 
+func putHTTPJSON(client http.Client, addr string, path string, in any, out any) error {
+	body, err := json.Marshal(in)
+	if err != nil {
+		return fmt.Errorf("marshal %s request: %w", path, err)
+	}
+	req, err := http.NewRequest(http.MethodPut, "http://"+addr+path, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("new put %s: %w", path, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setHTTPAuthHeaders(req, path)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("put %s: %w", path, err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusOK {
+		response, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("put %s status=%d body=%s", path, resp.StatusCode, string(response))
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode %s response: %w", path, err)
+	}
+	return nil
+}
+
 func getHTTPJSON(client http.Client, addr string, path string, out any) error {
 	req, err := http.NewRequest(http.MethodGet, "http://"+addr+path, nil)
 	if err != nil {
@@ -458,7 +498,7 @@ func setHTTPAuthHeaders(req *http.Request, path string) {
 	}
 	if strings.HasPrefix(path, "/api/v1/data") {
 		req.Header.Set("X-MTS-Data-Token", e2eDataToken)
-		req.Header.Set("X-MTS-User", "http-e2e")
+		req.Header.Set("Authorization", "Bearer "+httpUserToken)
 	}
 }
 
@@ -495,7 +535,6 @@ func exerciseGRPC(addr string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	adminCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+e2eAdminToken))
-	dataCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("x-mts-data-token", e2eDataToken, "x-mts-user", "grpc-e2e"))
 	var health mts.HealthSnapshot
 	if err := invokeGRPC(ctx, conn, "Health", emptyRequest{}, &health); err != nil {
 		return fmt.Errorf("grpc health: %w", err)
@@ -506,12 +545,23 @@ func exerciseGRPC(addr string) error {
 	if err := invokeGRPC(adminCtx, conn, "CreateUser", mts.User{Name: "grpc-e2e"}, &okResponse{}); err != nil {
 		return fmt.Errorf("grpc create user: %w", err)
 	}
+	if err := invokeGRPC(adminCtx, conn, "SetUserPassword", setUserPasswordRequest{UserName: "grpc-e2e", Password: "secret"}, &okResponse{}); err != nil {
+		return fmt.Errorf("grpc set password: %w", err)
+	}
 	if err := invokeGRPC(adminCtx, conn, "GrantDatabasePermission", databasePermissionRequest{UserName: "grpc-e2e", Database: "default", Permission: mts.DatabasePermissionRead}, &okResponse{}); err != nil {
 		return fmt.Errorf("grpc grant read: %w", err)
 	}
 	if err := invokeGRPC(adminCtx, conn, "GrantDatabasePermission", databasePermissionRequest{UserName: "grpc-e2e", Database: "default", Permission: mts.DatabasePermissionWrite}, &okResponse{}); err != nil {
 		return fmt.Errorf("grpc grant write: %w", err)
 	}
+	var login authTokenResponse
+	if err := invokeGRPC(ctx, conn, "Login", loginRequest{UserName: "grpc-e2e", Password: "secret", TTLSeconds: 60}, &login); err != nil {
+		return fmt.Errorf("grpc login: %w", err)
+	}
+	dataCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		"x-mts-data-token", e2eDataToken,
+		"authorization", "Bearer "+login.Token.Token,
+	))
 	point := testPoint("grpc_cpu", "grpc-host", 2, 0.84)
 	var write writeResponse
 	if err := invokeGRPC(dataCtx, conn, "Write", writeRequest{Points: []mts.Point{point}}, &write); err != nil {
@@ -701,13 +751,32 @@ type okResponse struct {
 	OK bool `json:"ok"`
 }
 
+type loginRequest struct {
+	UserName   string `json:"user_name"`
+	Password   string `json:"password"`
+	TTLSeconds int64  `json:"ttl_seconds,omitempty"`
+}
+
+type authTokenResponse struct {
+	Token mts.AuthToken `json:"token"`
+}
+
+type passwordRequest struct {
+	Password string `json:"password"`
+}
+
+type setUserPasswordRequest struct {
+	UserName string `json:"user_name"`
+	Password string `json:"password"`
+}
+
 type userResponse struct {
 	User mts.User `json:"user"`
 }
 
 type configResponse struct {
 	Config struct {
-		DataDir string `json:"DataDir" yaml:"data_dir"`
+		DataDir string `json:"data_dir" yaml:"data_dir"`
 	} `json:"config"`
 }
 

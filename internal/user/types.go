@@ -1,14 +1,31 @@
 package user
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 var (
-	ErrInvalidUser       = errors.New("invalid user")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUserAlreadyExists = errors.New("user already exists")
-	ErrInvalidPermission = errors.New("invalid permission")
-	ErrPermissionDenied  = errors.New("permission denied")
+	ErrInvalidUser            = errors.New("invalid user")
+	ErrUserNotFound           = errors.New("user not found")
+	ErrUserAlreadyExists      = errors.New("user already exists")
+	ErrInvalidPermission      = errors.New("invalid permission")
+	ErrPermissionDenied       = errors.New("permission denied")
+	ErrInvalidCredentials     = errors.New("invalid credentials")
+	ErrAuthenticationDisabled = errors.New("authentication disabled")
+	ErrUnsupportedEndpoint    = errors.New("unsupported user endpoint")
 )
+
+const EndpointLocal = "local"
+
+type Options struct {
+	Endpoint             string
+	PasswordAuthDisabled bool
+}
+
+func DefaultOptions() Options {
+	return Options{Endpoint: EndpointLocal}
+}
 
 type Permission string
 
@@ -28,4 +45,19 @@ type User struct {
 type Grant struct {
 	Database   string
 	Permission Permission
+}
+
+type Credentials struct {
+	UserName string
+	Password string
+}
+
+type AuthToken struct {
+	Token     string
+	UserName  string
+	ExpiresAt time.Time
+}
+
+type Principal struct {
+	UserName string
 }

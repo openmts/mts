@@ -2,6 +2,7 @@ package mts
 
 import (
 	"context"
+	"time"
 
 	internaluser "github.com/openmts/mts/internal/user"
 )
@@ -12,8 +13,11 @@ type localUserManager struct {
 
 var _ UserManager = (*localUserManager)(nil)
 
-func openLocalUserManager(dir string) (*localUserManager, error) {
-	inner, err := internaluser.Open(dir)
+func openLocalUserManager(dir string, opts UserOptions) (*localUserManager, error) {
+	inner, err := internaluser.OpenWithOptions(dir, internaluser.Options{
+		Endpoint:             opts.Endpoint,
+		PasswordAuthDisabled: opts.PasswordAuthDisabled,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +94,46 @@ func (m *localUserManager) CheckDatabasePermission(
 	permission DatabasePermission,
 ) error {
 	return m.inner.CheckPermission(ctx, userName, database, toInternalPermission(permission))
+}
+
+func (m *localUserManager) SetPassword(ctx context.Context, userName string, password string) error {
+	return m.inner.SetPassword(ctx, userName, password)
+}
+
+func (m *localUserManager) ChangePassword(
+	ctx context.Context,
+	userName string,
+	oldPassword string,
+	newPassword string,
+) error {
+	return m.inner.ChangePassword(ctx, userName, oldPassword, newPassword)
+}
+
+func (m *localUserManager) Authenticate(
+	ctx context.Context,
+	credentials Credentials,
+	ttl time.Duration,
+) (AuthToken, error) {
+	token, err := m.inner.Authenticate(ctx, internaluser.Credentials{
+		UserName: credentials.UserName,
+		Password: credentials.Password,
+	}, ttl)
+	if err != nil {
+		return AuthToken{}, err
+	}
+	return AuthToken{Token: token.Token, UserName: token.UserName, ExpiresAt: token.ExpiresAt}, nil
+}
+
+func (m *localUserManager) VerifyToken(ctx context.Context, token string) (Principal, error) {
+	principal, err := m.inner.VerifyToken(ctx, token)
+	if err != nil {
+		return Principal{}, err
+	}
+	return Principal{UserName: principal.UserName}, nil
+}
+
+func (m *localUserManager) RevokeToken(ctx context.Context, token string) error {
+	return m.inner.RevokeToken(ctx, token)
 }
 
 func toInternalUser(user User) internaluser.User {

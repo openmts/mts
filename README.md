@@ -188,6 +188,13 @@ curl http://127.0.0.1:8086/metrics
 
 服务入口不提供 SQL、InfluxQL、PromQL 或 MetricsQL parser；查询请求使用与 Go API 一致的结构化 `Query` JSON。
 
+启动后浏览器访问 `http://127.0.0.1:8086/` 可直接打开内置管理页面（Dashboard），支持仪表盘概览、数据库管理、用户权限管理、配置热重载、运维操作、降采样管理、数据查询、审计日志和存储快照导出。构建时自动嵌入前端产物：
+
+```bash
+make dashboard           # 构建前端并生成嵌入产物
+go build ./cmd/mts-server  # 编译含 Dashboard 的二进制
+```
+
 ## 结构化日志
 
 `Options.Logger` 接收 `*slog.Logger`，nil 时使用零开销 nopHandler。日志仅在生命周期事件（Open/Close/Compaction/Retention/Downsample）和错误路径记录，高频读写路径依赖指标体系：

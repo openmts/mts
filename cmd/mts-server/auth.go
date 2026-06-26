@@ -18,7 +18,6 @@ const (
 	headerUser          = "X-MTS-User"
 	metadataAdminToken  = "x-mts-admin-token"
 	metadataDataToken   = "x-mts-data-token"
-	metadataUser        = "x-mts-user"
 )
 
 func (r *serverRuntime) requireHTTPAdmin(request *http.Request) error {
@@ -60,7 +59,11 @@ func (r *serverRuntime) authorizeHTTPDatabase(
 	if err := r.requireHTTPDataToken(request); err != nil {
 		return err
 	}
-	return r.authorizeDatabase(ctx, request.Header.Get(headerUser), database, permission)
+	userName, err := r.authenticateHTTPDataUser(ctx, request)
+	if err != nil {
+		return err
+	}
+	return r.authorizeDatabase(ctx, userName, database, permission)
 }
 
 func (r *serverRuntime) authorizeGRPCDatabase(
@@ -71,7 +74,11 @@ func (r *serverRuntime) authorizeGRPCDatabase(
 	if err := r.requireGRPCDataToken(ctx); err != nil {
 		return err
 	}
-	return r.authorizeDatabase(ctx, grpcMetadataValue(ctx, metadataUser), database, permission)
+	userName, err := r.authenticateGRPCDataUser(ctx)
+	if err != nil {
+		return err
+	}
+	return r.authorizeDatabase(ctx, userName, database, permission)
 }
 
 func (r *serverRuntime) requireHTTPDataToken(request *http.Request) error {
@@ -102,6 +109,38 @@ func (r *serverRuntime) requireGRPCDataToken(ctx context.Context) error {
 		return newAPIError(errorCodeUnauthenticated, "data token is required", nil)
 	}
 	return nil
+}
+
+func (r *serverRuntime) authenticateHTTPDataUser(ctx context.Context, request *http.Request) (string, error) {
+	cfg := r.currentConfig()
+	token := bearerToken(request.Header.Get(headerAuthorization))
+	if token == "" {
+		if cfg.Auth.RequireUser {
+			return "", newAPIError(errorCodeUnauthenticated, "user bearer token is required", nil)
+		}
+		return strings.TrimSpace(request.Header.Get(headerUser)), nil
+	}
+	principal, err := r.engine.VerifyToken(ctx, token)
+	if err != nil {
+		return "", newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err)
+	}
+	return principal.UserName, nil
+}
+
+func (r *serverRuntime) authenticateGRPCDataUser(ctx context.Context) (string, error) {
+	cfg := r.currentConfig()
+	token := bearerToken(grpcMetadataValue(ctx, strings.ToLower(headerAuthorization)))
+	if token == "" {
+		if cfg.Auth.RequireUser {
+			return "", newAPIError(errorCodeUnauthenticated, "user bearer token is required", nil)
+		}
+		return grpcMetadataValue(ctx, "x-mts-user"), nil
+	}
+	principal, err := r.engine.VerifyToken(ctx, token)
+	if err != nil {
+		return "", newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err)
+	}
+	return principal.UserName, nil
 }
 
 func (r *serverRuntime) authorizeDatabase(

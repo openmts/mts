@@ -35,6 +35,39 @@ func TestHTTPWriteAndQueryRows(t *testing.T) {
 	}
 }
 
+func TestHTTPRequireUserAuthenticatesBearerToken(t *testing.T) {
+	runtime := openTestRuntime(t)
+	runtime.config.Auth.RequireUser = true
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	adminHeaders := map[string]string{}
+	postJSONWithHeaders(t, server.URL+"/api/v1/users", mts.User{Name: "alice"}, adminHeaders, http.StatusOK, &okResponse{})
+	putJSONWithHeaders(t, server.URL+"/api/v1/users/alice/password", passwordRequest{Password: "secret"}, adminHeaders, http.StatusOK, &okResponse{})
+	postJSONWithHeaders(t, server.URL+"/api/v1/users/alice/database-permissions/default/write", emptyRequest{}, adminHeaders, http.StatusOK, &okResponse{})
+
+	point := testPoint()
+	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, map[string]string{
+		"X-MTS-User": "alice",
+	}, http.StatusUnauthorized, &errorResponse{})
+	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, map[string]string{
+		"Authorization": "Bearer bad-token",
+	}, http.StatusUnauthorized, &errorResponse{})
+
+	var login authTokenResponse
+	postJSON(t, server.URL+"/api/v1/auth/login", loginRequest{
+		UserName:   "alice",
+		Password:   "secret",
+		TTLSeconds: 60,
+	}, http.StatusOK, &login)
+	if login.Token.Token == "" {
+		t.Fatal("login token is empty")
+	}
+	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, map[string]string{
+		"Authorization": "Bearer " + login.Token.Token,
+	}, http.StatusOK, &writeResponse{})
+}
+
 func TestHTTPHealthAndBadRequest(t *testing.T) {
 	runtime := openTestRuntime(t)
 	server := httptest.NewServer(runtime.httpHandler())

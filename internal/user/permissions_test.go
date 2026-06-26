@@ -96,6 +96,27 @@ func TestManagerDeleteUserRemovesDatabasePermissions(t *testing.T) {
 	}
 }
 
+func TestManagerRevokePermissionRemovesEmptyGrantBuckets(t *testing.T) {
+	ctx := context.Background()
+	manager := openTestUserManager(t)
+	if err := manager.CreateUser(ctx, User{Name: "alice"}); err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	if err := manager.GrantPermission(ctx, "alice", "metrics", PermissionRead); err != nil {
+		t.Fatalf("GrantPermission() error = %v", err)
+	}
+	if err := manager.RevokePermission(ctx, "alice", "metrics", PermissionRead); err != nil {
+		t.Fatalf("RevokePermission() error = %v", err)
+	}
+	grants, err := manager.ListPermissions(ctx, "alice")
+	if err != nil {
+		t.Fatalf("ListPermissions() error = %v", err)
+	}
+	if len(grants) != 0 {
+		t.Fatalf("grants = %#v, want empty", grants)
+	}
+}
+
 func TestManagerCheckPermissionFailsClosedForMissingUser(t *testing.T) {
 	ctx := context.Background()
 	manager := openTestUserManager(t)

@@ -173,17 +173,20 @@ func TestHTTPProductionHardening(t *testing.T) {
 
 	adminHeaders := map[string]string{"Authorization": "Bearer admin-token"}
 	postJSONWithHeaders(t, server.URL+"/api/v1/users", mts.User{Name: "prod"}, adminHeaders, http.StatusOK, &okResponse{})
+	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod/password", passwordRequest{Password: "secret"}, adminHeaders, http.StatusOK, &okResponse{})
 	postJSONWithHeaders(t, server.URL+"/api/v1/users/prod/database-permissions/default/write", emptyRequest{}, adminHeaders, http.StatusOK, &okResponse{})
 	postJSONWithHeaders(t, server.URL+"/api/v1/users/prod/database-permissions/default/read", emptyRequest{}, adminHeaders, http.StatusOK, &okResponse{})
+	var login authTokenResponse
+	postJSON(t, server.URL+"/api/v1/auth/login", loginRequest{UserName: "prod", Password: "secret", TTLSeconds: 60}, http.StatusOK, &login)
 
 	point := testPoint()
 	postJSON(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, http.StatusUnauthorized, &errorResponse{})
-	dataHeaders := map[string]string{"X-MTS-Data-Token": "data-token", "X-MTS-User": "prod"}
+	dataHeaders := map[string]string{"X-MTS-Data-Token": "data-token", "Authorization": "Bearer " + login.Token.Token}
 	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point, point}}, dataHeaders, http.StatusBadRequest, &errorResponse{})
 	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, dataHeaders, http.StatusOK, &writeResponse{})
 	putJSON(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod", Disabled: true}, http.StatusUnauthorized, &errorResponse{})
 	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod", Disabled: true}, adminHeaders, http.StatusOK, &okResponse{})
-	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, dataHeaders, http.StatusForbidden, &errorResponse{})
+	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, dataHeaders, http.StatusUnauthorized, &errorResponse{})
 	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod"}, adminHeaders, http.StatusOK, &okResponse{})
 	query := testQuery()
 	query.Limit = 2
@@ -276,13 +279,16 @@ func TestGRPCProductionHardening(t *testing.T) {
 	conn := openBufconnClient(t, runtime)
 	defer func() { _ = conn.Close() }()
 	adminCtx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer admin-token"))
-	dataCtx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
-		"x-mts-data-token", "data-token",
-		"x-mts-user", "grpc-prod",
-	))
 	invokeOK(t, adminCtx, conn, "CreateUser", &mts.User{Name: "grpc-prod"}, &okResponse{})
+	invokeOK(t, adminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "grpc-prod", Password: "secret"}, &okResponse{})
 	invokeOK(t, adminCtx, conn, "GrantDatabasePermission", &databasePermissionRequest{UserName: "grpc-prod", Database: "default", Permission: mts.DatabasePermissionWrite}, &okResponse{})
 	invokeOK(t, adminCtx, conn, "GrantDatabasePermission", &databasePermissionRequest{UserName: "grpc-prod", Database: "default", Permission: mts.DatabasePermissionRead}, &okResponse{})
+	var login authTokenResponse
+	invokeOK(t, context.Background(), conn, "Login", &loginRequest{UserName: "grpc-prod", Password: "secret", TTLSeconds: 60}, &login)
+	dataCtx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
+		"x-mts-data-token", "data-token",
+		"authorization", "Bearer "+login.Token.Token,
+	))
 	invokeOK(t, dataCtx, conn, "Write", &writeRequest{Points: []mts.Point{testPoint()}}, &writeResponse{})
 	var spec apiSpecResponse
 	invokeOK(t, adminCtx, conn, "GetAPISpec", &emptyRequest{}, &spec)

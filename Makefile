@@ -51,6 +51,10 @@ help: ## 显示 Makefile 目标
 fmt: ## 格式化 Go 代码
 	timeout $(FMT_TIMEOUT) goimports-reviser -project-name $(PROJECT_NAME) -recursive -format -rm-unused .
 
+.PHONY: dashboard
+dashboard: ## 构建前端 Dashboard 并嵌入
+	cd cmd/mts-dashboard && npm ci && npm run build
+
 .PHONY: lint
 lint: ## 运行 golangci-lint
 	timeout $(LINT_TIMEOUT) golangci-lint run ./...
@@ -219,3 +223,4 @@ clean-artifacts: ## 清理测试和 profile 临时产物
 		-name 'coverage.out' -o \
 		-name '*.coverprofile' \
 	\) -not -path './.git/*' -print -delete
+	rm -rf cmd/mts-server/dashboard-dist
