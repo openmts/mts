@@ -183,11 +183,11 @@ type ColumnSeries struct {
 
 // Row 表示按行返回的一条时序记录。
 type Row struct {
-	SeriesID    uint64                 `json:"series_id"`
-	Measurement string                 `json:"measurement"`
-	Tags        map[string]string      `json:"tags"`
-	Timestamp   int64                  `json:"timestamp"`
-	Fields      map[string]FieldValue  `json:"fields"`
+	SeriesID    uint64                `json:"series_id"`
+	Measurement string                `json:"measurement"`
+	Tags        map[string]string     `json:"tags"`
+	Timestamp   int64                 `json:"timestamp"`
+	Fields      map[string]FieldValue `json:"fields"`
 }
 
 // ColumnIterator 以流式方式遍历列查询结果。

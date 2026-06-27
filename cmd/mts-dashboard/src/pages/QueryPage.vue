@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { apiPost, apiGet, getAdminToken } from '@/api/client'
-import { Search } from 'lucide-vue-next'
+import { ref, onMounted, watch } from 'vue'
+import { apiPost, apiGet, getBearerToken } from '@/api/client'
+import { Search, Database, Hash, Clock, Filter, Layers, Zap, BarChart3, Timer } from 'lucide-vue-next'
 
 interface QueryResultRow {
   series_id: number; measurement: string; tags: Record<string, string>
@@ -14,14 +14,51 @@ interface QueryStatsData {
 }
 interface RowsResponse { rows: QueryResultRow[] }
 interface StatsResponse { stats: QueryStatsData }
+interface DatabaseListResponse { measurements: string[] }
+interface MeasurementListResponse { measurements: string[] }
 
-const queryForm = ref({ database: '', measurement: '', start_unix_nanos: '', end_unix_nanos: '', fields: '', limit: '100' })
+const databases = ref<string[]>([])
+const measurements = ref<string[]>([])
+const retentionPolicies = ref<string[]>([])
+const measurementsLoading = ref(false)
+const queryForm = ref({ database: '', retention_policy: 'autogen', measurement: '', start_time: '', end_time: '', fields: '', limit: '100' })
 const queryMode = ref<'rows' | 'columns' | 'explain' | 'stream'>('rows')
 const rows = ref<QueryResultRow[]>([])
 const queryStats = ref<QueryStatsData | null>(null)
 const rawOutput = ref('')
 const actionError = ref('')
 const loading = ref(false)
+
+onMounted(async () => {
+  try {
+    const data = await apiGet<DatabaseListResponse>('/api/v1/admin/databases')
+    databases.value = (data.measurements ?? []).sort()
+    if (databases.value.length) {
+      queryForm.value.database = databases.value[0]
+    }
+  } catch (_) { /* 非关键 */ }
+})
+
+watch(() => queryForm.value.database, async (db) => {
+  measurements.value = []
+  retentionPolicies.value = []
+  queryForm.value.measurement = ''
+  queryForm.value.retention_policy = 'autogen'
+  if (!db) return
+  measurementsLoading.value = true
+  try {
+    const [measData, rpData] = await Promise.all([
+      apiGet<MeasurementListResponse>(`/api/v1/data/databases/${encodeURIComponent(db)}/measurements`),
+      apiGet<{ policies: { name: string }[] }>(`/api/v1/admin/databases/${encodeURIComponent(db)}/retention-policies`),
+    ])
+    measurements.value = (measData.measurements ?? []).sort()
+    retentionPolicies.value = (rpData.policies ?? []).map((p) => p.name)
+    if (measurements.value.length) {
+      queryForm.value.measurement = measurements.value[0]
+    }
+  } catch (_) { /* 忽略 */ }
+  finally { measurementsLoading.value = false }
+})
 
 async function executeQuery() {
   actionError.value = ''
@@ -31,9 +68,10 @@ async function executeQuery() {
   rawOutput.value = ''
   const query: Record<string, unknown> = {}
   if (queryForm.value.database) query.database = queryForm.value.database
+  if (queryForm.value.retention_policy) query.retention_policy = queryForm.value.retention_policy
   if (queryForm.value.measurement) query.measurement = queryForm.value.measurement
-  if (queryForm.value.start_unix_nanos) query.start_unix_nanos = parseInt(queryForm.value.start_unix_nanos)
-  if (queryForm.value.end_unix_nanos) query.end_unix_nanos = parseInt(queryForm.value.end_unix_nanos)
+  if (queryForm.value.start_time) query.start_time = parseInt(queryForm.value.start_time)
+  if (queryForm.value.end_time) query.end_time = parseInt(queryForm.value.end_time)
   if (queryForm.value.fields) query.fields = queryForm.value.fields.split(',').map((s) => s.trim())
   if (queryForm.value.limit) query.limit = parseInt(queryForm.value.limit)
   try {
@@ -48,12 +86,18 @@ async function executeQuery() {
       const data = await apiPost<{ columns: unknown[] }>('/api/v1/data/query/columns', { query })
       rawOutput.value = JSON.stringify(data.columns, null, 2)
     } else if (queryMode.value === 'stream') {
-      const token = getAdminToken()
+      const token = getBearerToken()
       const resp = await fetch('/api/v1/data/query/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-MTS-Admin-Token': token },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ query }),
       })
+      if (!resp.ok) {
+        let errMsg = `HTTP ${resp.status}`
+        try { errMsg = (await resp.json()).message || errMsg } catch (_) {}
+        actionError.value = errMsg
+        return
+      }
       rawOutput.value = await resp.text()
     }
   } catch (e) {
@@ -64,57 +108,186 @@ async function executeQuery() {
   try {
     const statsData = await apiGet<StatsResponse>('/api/v1/data/query/stats')
     queryStats.value = statsData.stats
-  } catch (_) { /* 统计获取失败不影响主流程 */ }
+  } catch (_) { /* 非关键 */ }
 }
 
 function formatTimestamp(ns: number): string { return new Date(ns / 1e6).toISOString() }
+
+const modeOptions = [
+  { value: 'rows' as const, label: '行式查询', desc: '按行返回数据' },
+  { value: 'columns' as const, label: '列式查询', desc: '按列返回数据' },
+  { value: 'explain' as const, label: 'EXPLAIN', desc: '含执行计划' },
+  { value: 'stream' as const, label: '流式查询', desc: 'NDJSON 流' },
+]
 </script>
 
 <template>
   <div class="space-y-6">
-    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
-    <div class="rounded-xl border border-slate-200 bg-white p-6">
-      <h3 class="mb-4 text-sm font-semibold text-slate-800">查询条件</h3>
-      <div class="mb-4 flex gap-3">
-        <select v-model="queryMode" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="rows">行式查询</option>
-          <option value="columns">列式查询</option>
-          <option value="explain">EXPLAIN</option>
-          <option value="stream">流式查询</option>
-        </select>
+    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{{ actionError }}</p>
+
+    <!-- 查询条件 -->
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+        <h3 class="text-sm font-semibold text-slate-800">查询条件</h3>
       </div>
-      <div class="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <div><label class="mb-1 block text-xs text-slate-500">数据库</label><input v-model="queryForm.database" placeholder="default" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /></div>
-        <div><label class="mb-1 block text-xs text-slate-500">Measurement</label><input v-model="queryForm.measurement" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /></div>
-        <div><label class="mb-1 block text-xs text-slate-500">开始时间 (纳秒)</label><input v-model="queryForm.start_unix_nanos" placeholder="0" type="number" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /></div>
-        <div><label class="mb-1 block text-xs text-slate-500">结束时间 (纳秒)</label><input v-model="queryForm.end_unix_nanos" placeholder="now" type="number" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /></div>
-        <div><label class="mb-1 block text-xs text-slate-500">字段 (逗号分隔)</label><input v-model="queryForm.fields" placeholder="value" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /></div>
-        <div><label class="mb-1 block text-xs text-slate-500">Limit</label><input v-model="queryForm.limit" type="number" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /></div>
+      <div class="p-6">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="sm:col-span-2 lg:col-span-2">
+            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+              <Database class="h-3 w-3" />数据库 & Measurement
+            </label>
+            <div class="flex gap-2">
+              <select v-model="queryForm.database" class="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100 disabled:bg-slate-50 disabled:text-slate-400">
+                <option v-if="!databases.length" value="" disabled>无数据</option>
+                <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
+              </select>
+              <select v-model="queryForm.measurement" :disabled="!queryForm.database || measurementsLoading || (!measurementsLoading && !measurements.length)" class="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100 disabled:bg-slate-50 disabled:text-slate-400">
+                <option v-if="!queryForm.database" value="" disabled>请先选择数据库</option>
+                <option v-else-if="measurementsLoading" value="" disabled>加载中...</option>
+                <option v-else-if="!measurements.length" value="" disabled>无数据</option>
+                <option v-for="m in measurements" v-else :key="m" :value="m">{{ m }}</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+              <Clock class="h-3 w-3" />保留策略
+            </label>
+            <select v-model="queryForm.retention_policy" :disabled="!queryForm.database || measurementsLoading" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100 disabled:bg-slate-50 disabled:text-slate-400">
+              <option v-if="!queryForm.database" value="autogen" disabled>请先选择数据库</option>
+              <option v-else-if="measurementsLoading" value="autogen" disabled>加载中...</option>
+              <option v-for="rp in retentionPolicies" :key="rp" :value="rp">{{ rp }}</option>
+              <option v-if="!measurementsLoading && !retentionPolicies.length" value="autogen">autogen (默认)</option>
+            </select>
+          </div>
+          <div>
+            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+              <Clock class="h-3 w-3" />开始时间 (ns)
+            </label>
+            <input v-model="queryForm.start_time" placeholder="0" type="number" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
+          </div>
+          <div>
+            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+              <Clock class="h-3 w-3" />结束时间 (ns)
+            </label>
+            <input v-model="queryForm.end_time" placeholder="now" type="number" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
+          </div>
+          <div>
+            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+              <Filter class="h-3 w-3" />字段过滤
+            </label>
+            <input v-model="queryForm.fields" placeholder="逗号分隔，如 value" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
+          </div>
+          <div>
+            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+              <Hash class="h-3 w-3" />返回行数
+            </label>
+            <input v-model="queryForm.limit" type="number" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
+          </div>
+        </div>
       </div>
-      <button :disabled="loading" class="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-800 px-6 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50" @click="executeQuery"><Search class="h-4 w-4" />{{ loading ? '查询中...' : '执行查询' }}</button>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/30 px-6 py-3">
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="opt in modeOptions"
+            :key="opt.value"
+            :class="[
+              'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+              queryMode === opt.value
+                ? 'bg-slate-800 text-white shadow-sm'
+                : 'bg-white text-slate-600 shadow-sm hover:bg-slate-100',
+            ]"
+            :title="opt.desc"
+            @click="queryMode = opt.value"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+        <button
+          :disabled="loading || !queryForm.database || !queryForm.measurement"
+          class="flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-50"
+          @click="executeQuery"
+        >
+          <Search class="h-4 w-4" />
+          {{ loading ? '查询中...' : '执行查询' }}
+        </button>
+      </div>
     </div>
-    <div v-if="queryStats" class="rounded-xl border border-slate-200 bg-white p-6">
-      <h3 class="mb-3 text-sm font-semibold text-slate-800">查询统计</h3>
-      <div class="grid grid-cols-3 gap-3 sm:grid-cols-5">
-        <div><span class="text-xs text-slate-500">扫描 Shards</span><p class="text-sm font-medium">{{ queryStats.shards_scanned }}</p></div>
-        <div><span class="text-xs text-slate-500">跳过 Shards</span><p class="text-sm font-medium">{{ queryStats.shards_skipped }}</p></div>
-        <div><span class="text-xs text-slate-500">读取样本</span><p class="text-sm font-medium">{{ queryStats.samples_read }}</p></div>
-        <div><span class="text-xs text-slate-500">返回样本</span><p class="text-sm font-medium">{{ queryStats.samples_returned }}</p></div>
-        <div><span class="text-xs text-slate-500">耗时</span><p class="text-sm font-medium">{{ (queryStats.duration_nanos / 1e6).toFixed(2) }}ms</p></div>
+
+    <!-- 查询统计 -->
+    <div v-if="queryStats" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-100 bg-slate-50/50 px-6 py-3">
+        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <BarChart3 class="h-4 w-4 text-slate-400" />查询统计
+        </h3>
+      </div>
+      <div class="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-5">
+        <div class="bg-white p-4">
+          <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">扫描 Shards</p>
+          <p class="mt-1 text-lg font-semibold text-slate-800">{{ queryStats.shards_scanned }}</p>
+        </div>
+        <div class="bg-white p-4">
+          <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">跳过 Shards</p>
+          <p class="mt-1 text-lg font-semibold text-slate-800">{{ queryStats.shards_skipped }}</p>
+        </div>
+        <div class="bg-white p-4">
+          <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">读取样本</p>
+          <p class="mt-1 text-lg font-semibold text-blue-600">{{ queryStats.samples_read }}</p>
+        </div>
+        <div class="bg-white p-4">
+          <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">返回样本</p>
+          <p class="mt-1 text-lg font-semibold text-green-600">{{ queryStats.samples_returned }}</p>
+        </div>
+        <div class="bg-white p-4">
+          <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">耗时</p>
+          <p class="mt-1 text-lg font-semibold text-amber-600">{{ (queryStats.duration_nanos / 1e6).toFixed(1) }}<span class="text-sm font-normal text-slate-400">ms</span></p>
+        </div>
       </div>
     </div>
-    <div v-if="rows.length" class="rounded-xl border border-slate-200 bg-white p-6">
-      <h3 class="mb-3 text-sm font-semibold text-slate-800">结果 ({{ rows.length }} 行)</h3>
-      <div class="overflow-auto max-h-96">
+
+    <!-- 查询结果 -->
+    <div v-if="rows.length" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-3">
+        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <Layers class="h-4 w-4 text-slate-400" />查询结果
+        </h3>
+        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">{{ rows.length }} 行</span>
+      </div>
+      <div class="overflow-x-auto">
         <table class="w-full text-sm">
-          <thead><tr class="border-b border-slate-200 text-left"><th class="pb-2 pr-4 text-xs font-medium text-slate-500">时间</th><th class="pb-2 pr-4 text-xs font-medium text-slate-500">Measurement</th><th class="pb-2 pr-4 text-xs font-medium text-slate-500">Tags</th><th class="pb-2 text-xs font-medium text-slate-500">Fields</th></tr></thead>
-          <tbody><tr v-for="(row, idx) in rows" :key="idx" class="border-b border-slate-100 last:border-b-0"><td class="py-2 pr-4 font-mono text-xs text-slate-600">{{ formatTimestamp(row.timestamp) }}</td><td class="py-2 pr-4 text-xs text-slate-600">{{ row.measurement }}</td><td class="py-2 pr-4 text-xs text-slate-500">{{ JSON.stringify(row.tags) }}</td><td class="py-2 text-xs text-slate-600">{{ JSON.stringify(row.fields) }}</td></tr></tbody>
+          <thead>
+            <tr class="border-b border-slate-100 bg-slate-50/30 text-left">
+              <th class="px-6 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">时间</th>
+              <th class="px-6 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Measurement</th>
+              <th class="px-6 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Tags</th>
+              <th class="px-6 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Fields</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-50">
+            <tr v-for="(row, idx) in rows" :key="idx" class="transition hover:bg-slate-50/50">
+              <td class="px-6 py-3 font-mono text-xs text-slate-600">{{ formatTimestamp(row.timestamp) }}</td>
+              <td class="px-6 py-3">
+                <span class="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">{{ row.measurement }}</span>
+              </td>
+              <td class="px-6 py-3 font-mono text-xs text-slate-500">
+                <span v-if="row.tags && Object.keys(row.tags).length">{{ JSON.stringify(row.tags) }}</span>
+                <span v-else class="text-slate-300">—</span>
+              </td>
+              <td class="px-6 py-3 font-mono text-xs text-slate-600">{{ JSON.stringify(row.fields) }}</td>
+            </tr>
+          </tbody>
         </table>
       </div>
     </div>
-    <div v-if="rawOutput" class="rounded-xl border border-slate-200 bg-white p-6">
-      <h3 class="mb-3 text-sm font-semibold text-slate-800">原始输出</h3>
-      <pre class="overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400 max-h-96">{{ rawOutput }}</pre>
+
+    <!-- 原始输出 -->
+    <div v-if="rawOutput" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-100 bg-slate-50/50 px-6 py-3">
+        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <Zap class="h-4 w-4 text-slate-400" />原始输出
+        </h3>
+      </div>
+      <pre class="overflow-auto bg-slate-950 p-6 font-mono text-xs leading-relaxed text-emerald-400 max-h-96">{{ rawOutput }}</pre>
     </div>
   </div>
 </template>

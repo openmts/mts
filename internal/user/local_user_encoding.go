@@ -7,7 +7,7 @@ import (
 	"github.com/openmts/mts/internal/codec"
 )
 
-var userMetadataMagic = codec.Magic("MTSUSR2")
+var userMetadataMagic = codec.Magic("MTSUSR3")
 
 func encodeUserMetadata(
 	users map[string]User,
@@ -50,6 +50,7 @@ func decodeUserMetadata(data []byte) (
 func appendUser(dst []byte, user User) []byte {
 	dst = codec.AppendString(dst, user.Name)
 	dst = codec.AppendString(dst, user.DisplayName)
+	dst = codec.AppendString(dst, string(user.Role))
 	if user.Disabled {
 		dst = append(dst, 1)
 	} else {
@@ -160,6 +161,10 @@ func (r *userMetadataReader) user() (User, error) {
 	if err != nil {
 		return User{}, err
 	}
+	roleText, err := r.string("role")
+	if err != nil {
+		return User{}, err
+	}
 	disabled, err := r.bool("disabled")
 	if err != nil {
 		return User{}, err
@@ -168,7 +173,11 @@ func (r *userMetadataReader) user() (User, error) {
 	if err != nil {
 		return User{}, err
 	}
-	return User{Name: name, DisplayName: displayName, Disabled: disabled, Metadata: metadata}, nil
+	role := normalizeRole(Role(roleText))
+	if !validRole(role) {
+		return User{}, fmt.Errorf("decode user metadata role: invalid role %q", roleText)
+	}
+	return User{Name: name, DisplayName: displayName, Role: role, Disabled: disabled, Metadata: metadata}, nil
 }
 
 func (r *userMetadataReader) grants() (

@@ -101,11 +101,8 @@ func TestGRPCRequireUserAuthenticatesBearerToken(t *testing.T) {
 		}
 	}()
 	ctx := context.Background()
-	invokeOK(t, ctx, conn, "CreateUser", &mts.User{Name: "grpc-auth"}, &okResponse{})
-	invokeOK(t, ctx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "grpc-auth", Password: "secret"}, &okResponse{})
-	invokeOK(t, ctx, conn, "GrantDatabasePermission", &databasePermissionRequest{
-		UserName: "grpc-auth", Database: "default", Permission: mts.DatabasePermissionWrite,
-	}, &okResponse{})
+	seedUserWithPassword(t, runtime, mts.User{Name: "grpc-auth"}, "secret")
+	seedDatabasePermission(t, runtime, "grpc-auth", "default", mts.DatabasePermissionWrite)
 
 	var writeResp writeResponse
 	err := invokeGRPC(ctx, conn, "Write", &writeRequest{Points: []mts.Point{testPoint()}}, &writeResp)
@@ -125,6 +122,184 @@ func TestGRPCRequireUserAuthenticatesBearerToken(t *testing.T) {
 	}
 	goodCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+login.Token.Token))
 	invokeOK(t, goodCtx, conn, "Write", &writeRequest{Points: []mts.Point{testPoint()}}, &writeResp)
+}
+
+func TestGRPCRequireUserBootstrapsDefaultAdmin(t *testing.T) {
+	runtime := openTestRuntimeRequireUser(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+	err := invokeGRPC(ctx, conn, "ListUsers", &emptyRequest{}, &usersResponse{})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("ListUsers(no token) code = %v, want Unauthenticated, err=%v", status.Code(err), err)
+	}
+
+	var login authTokenResponse
+	invokeOK(t, ctx, conn, "Login", &loginRequest{UserName: "admin", Password: "admin"}, &login)
+	adminCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+login.Token.Token))
+	var users usersResponse
+	invokeOK(t, adminCtx, conn, "ListUsers", &emptyRequest{}, &users)
+	if len(users.Users) != 1 || users.Users[0].Name != "admin" || users.Users[0].Role != mts.UserRoleAdmin {
+		t.Fatalf("users = %#v, want default admin", users.Users)
+	}
+}
+
+func TestGRPCCreateUserAcceptsInitialPassword(t *testing.T) {
+	runtime := openTestRuntime(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+	invokeOK(t, ctx, conn, "CreateUser", &createUserRequest{
+		User:     mts.User{Name: "grpc-created-with-password"},
+		Password: "secret",
+	}, &okResponse{})
+
+	var login authTokenResponse
+	invokeOK(t, ctx, conn, "Login", &loginRequest{
+		UserName: "grpc-created-with-password",
+		Password: "secret",
+	}, &login)
+	if login.Token.Token == "" {
+		t.Fatal("login token is empty")
+	}
+
+	var user userResponse
+	invokeOK(t, ctx, conn, "GetUser", &userNameRequest{Name: "grpc-created-with-password"}, &user)
+	if user.User.Name != "grpc-created-with-password" {
+		t.Fatalf("user = %#v, want grpc-created-with-password", user.User)
+	}
+}
+
+func TestGRPCCreateUserRollsBackWhenInitialPasswordInvalid(t *testing.T) {
+	runtime := openTestRuntime(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+	err := invokeGRPC(ctx, conn, "CreateUser", &createUserRequest{
+		User:     mts.User{Name: "grpc-rollback-user"},
+		Password: " ",
+	}, &okResponse{})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("CreateUser(invalid password) code = %v, want Unauthenticated, err=%v", status.Code(err), err)
+	}
+	err = invokeGRPC(ctx, conn, "GetUser", &userNameRequest{Name: "grpc-rollback-user"}, &userResponse{})
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("GetUser(rollback) code = %v, want NotFound, err=%v", status.Code(err), err)
+	}
+}
+
+func TestGRPCUserRoleControlsUserManagement(t *testing.T) {
+	runtime := openTestRuntimeWithAdminToken(t)
+	runtime.config.Auth.RequireUser = true
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+	ctx := context.Background()
+	serviceAdminCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer test-admin-token"))
+	invokeOK(t, serviceAdminCtx, conn, "CreateUser", &mts.User{Name: "admin", Role: mts.UserRoleAdmin}, &okResponse{})
+	invokeOK(t, serviceAdminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "admin", Password: "admin-secret"}, &okResponse{})
+	invokeOK(t, serviceAdminCtx, conn, "CreateUser", &mts.User{Name: "alice"}, &okResponse{})
+	invokeOK(t, serviceAdminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "alice", Password: "alice-secret"}, &okResponse{})
+	invokeOK(t, serviceAdminCtx, conn, "CreateUser", &mts.User{Name: "bob"}, &okResponse{})
+
+	var login authTokenResponse
+	invokeOK(t, ctx, conn, "Login", &loginRequest{UserName: "alice", Password: "alice-secret", TTLSeconds: 60}, &login)
+	aliceCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+login.Token.Token))
+	err := invokeGRPC(ctx, conn, "DeleteUser", &userNameRequest{Name: "bob"}, &okResponse{})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("DeleteUser(no token) code = %v, want Unauthenticated, err=%v", status.Code(err), err)
+	}
+	err = invokeGRPC(aliceCtx, conn, "DeleteUser", &userNameRequest{Name: "bob"}, &okResponse{})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("DeleteUser(as user) code = %v, want PermissionDenied, err=%v", status.Code(err), err)
+	}
+	err = invokeGRPC(aliceCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "bob", Password: "next"}, &okResponse{})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("SetUserPassword(as user) code = %v, want PermissionDenied, err=%v", status.Code(err), err)
+	}
+	err = invokeGRPC(aliceCtx, conn, "GrantDatabasePermission", &databasePermissionRequest{
+		UserName:   "bob",
+		Database:   "default",
+		Permission: mts.DatabasePermissionRead,
+	}, &okResponse{})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("GrantDatabasePermission(as user) code = %v, want PermissionDenied, err=%v", status.Code(err), err)
+	}
+	err = invokeGRPC(aliceCtx, conn, "RevokeDatabasePermission", &databasePermissionRequest{
+		UserName:   "bob",
+		Database:   "default",
+		Permission: mts.DatabasePermissionRead,
+	}, &okResponse{})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("RevokeDatabasePermission(as user) code = %v, want PermissionDenied, err=%v", status.Code(err), err)
+	}
+
+	invokeOK(t, ctx, conn, "Login", &loginRequest{UserName: "admin", Password: "admin-secret", TTLSeconds: 60}, &login)
+	adminCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+login.Token.Token))
+	invokeOK(t, adminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "bob", Password: "next"}, &okResponse{})
+	invokeOK(t, adminCtx, conn, "GrantDatabasePermission", &databasePermissionRequest{
+		UserName:   "bob",
+		Database:   "default",
+		Permission: mts.DatabasePermissionRead,
+	}, &okResponse{})
+	invokeOK(t, adminCtx, conn, "DeleteUser", &userNameRequest{Name: "bob"}, &okResponse{})
+}
+
+func TestGRPCUserCanOnlyChangeOwnPassword(t *testing.T) {
+	runtime := openTestRuntimeWithAdminToken(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+	ctx := context.Background()
+	serviceAdminCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer test-admin-token"))
+	invokeOK(t, serviceAdminCtx, conn, "CreateUser", &mts.User{Name: "alice"}, &okResponse{})
+	invokeOK(t, serviceAdminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "alice", Password: "alice-secret"}, &okResponse{})
+	invokeOK(t, serviceAdminCtx, conn, "CreateUser", &mts.User{Name: "bob"}, &okResponse{})
+	invokeOK(t, serviceAdminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "bob", Password: "bob-secret"}, &okResponse{})
+
+	var login authTokenResponse
+	invokeOK(t, ctx, conn, "Login", &loginRequest{UserName: "alice", Password: "alice-secret", TTLSeconds: 60}, &login)
+	aliceCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+login.Token.Token))
+	err := invokeGRPC(aliceCtx, conn, "ChangePassword", &changePasswordRequest{
+		UserName:    "bob",
+		OldPassword: "bob-secret",
+		NewPassword: "blocked",
+	}, &okResponse{})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("ChangePassword(other user) code = %v, want PermissionDenied, err=%v", status.Code(err), err)
+	}
+	invokeOK(t, aliceCtx, conn, "ChangePassword", &changePasswordRequest{
+		UserName:    "alice",
+		OldPassword: "alice-secret",
+		NewPassword: "alice-next",
+	}, &okResponse{})
+
+	err = invokeGRPC(ctx, conn, "Login", &loginRequest{UserName: "alice", Password: "alice-secret", TTLSeconds: 60}, &authTokenResponse{})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("Login(old password) code = %v, want Unauthenticated, err=%v", status.Code(err), err)
+	}
+	invokeOK(t, ctx, conn, "Login", &loginRequest{UserName: "alice", Password: "alice-next", TTLSeconds: 60}, &authTokenResponse{})
 }
 
 func TestGRPCWriteAndQueryRows(t *testing.T) {

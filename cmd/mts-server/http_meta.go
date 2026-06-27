@@ -2,26 +2,38 @@ package main
 
 import (
 	"net/http"
+
+	mts "github.com/openmts/mts"
 )
 
 func (r *serverRuntime) handleAdminDatabases(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodPost) {
-		return
-	}
 	if err := r.requireHTTPAdmin(request); err != nil {
 		writeAPIError(writer, err)
 		return
 	}
-	var req databaseRequest
-	if err := decodeHTTPJSON(request, &req); err != nil {
-		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
-		return
+	switch request.Method {
+	case http.MethodGet:
+		databases, err := r.engine.ListDatabases(request.Context())
+		if err != nil {
+			writeAPIError(writer, err)
+			return
+		}
+		writeHTTPJSON(writer, http.StatusOK, measurementsResponse{Measurements: databases})
+	case http.MethodPost:
+		var req databaseRequest
+		if err := decodeHTTPJSON(request, &req); err != nil {
+			writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+			return
+		}
+		if err := r.engine.CreateDatabase(request.Context(), req.Name); err != nil {
+			writeAPIError(writer, err)
+			return
+		}
+		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "create_database", Database: req.Name})
+		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+	default:
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
 	}
-	if err := r.engine.CreateDatabase(request.Context(), req.Name); err != nil {
-		writeAPIError(writer, err)
-		return
-	}
-	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 }
 
 func (r *serverRuntime) handleAdminDatabaseResource(writer http.ResponseWriter, request *http.Request) {
@@ -44,6 +56,7 @@ func (r *serverRuntime) handleAdminDatabaseResource(writer http.ResponseWriter, 
 			writeAPIError(writer, err)
 			return
 		}
+		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "drop_database", Database: database})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 		return
 	}
@@ -70,6 +83,7 @@ func (r *serverRuntime) handleRetentionPolicies(
 			writeAPIError(writer, err)
 			return
 		}
+		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "create_retention_policy", Database: database, Detail: req.Policy.Name})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 	case http.MethodGet:
 		policies, err := r.engine.ListRetentionPolicies(request.Context(), database)
@@ -97,7 +111,7 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 		request.Context(),
 		request,
 		database,
-		"read",
+		mts.DatabasePermissionRead,
 	); err != nil {
 		writeAPIError(writer, err)
 		return

@@ -45,7 +45,9 @@ auth:
   admin_token: ""
   # data_tokens 保护数据面。空数组表示兼容模式；生产环境建议配置并启用 require_user。
   data_tokens: []
-  # require_user 为 true 时，数据面还必须携带用户 Bearer token，并通过 DB 权限校验。
+  # require_user 为 true 时，服务启动会确保存在默认管理员 admin/admin。
+  # 管理面可使用该账号登录后的管理员 Bearer token；首次登录后应修改默认密码。
+  # 数据面还必须携带用户 Bearer token，并通过 DB 权限校验。
   require_user: false
 
 user:

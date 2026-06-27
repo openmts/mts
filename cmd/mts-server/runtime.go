@@ -41,11 +41,17 @@ func openRuntime(ctx context.Context, cfg config) (*serverRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := bootstrapDefaultAdmin(ctx, cfg, engine); err != nil {
+		_ = engine.Close(ctx)
+		return nil, err
+	}
+	audit := newAuditLog(256)
+	audit.engine = engine
 	runtime := &serverRuntime{
 		config:  cfg,
 		logger:  slog.Default(),
 		metrics: newServerMetrics(),
-		audit:   newAuditLog(256),
+		audit:   audit,
 		engine:  engine,
 	}
 	runtime.applyLimitState(cfg)
@@ -73,6 +79,33 @@ func openRuntime(ctx context.Context, cfg config) (*serverRuntime, error) {
 		}
 	}
 	return runtime, nil
+}
+
+const (
+	defaultSystemAdminName     = "admin"
+	defaultSystemAdminPassword = "admin"
+)
+
+func bootstrapDefaultAdmin(ctx context.Context, cfg config, engine *mts.Engine) error {
+	if !cfg.Auth.RequireUser || cfg.User.PasswordAuthDisabled {
+		return nil
+	}
+	user, ok, err := engine.GetUser(ctx, defaultSystemAdminName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		if err := engine.CreateUser(ctx, mts.User{Name: defaultSystemAdminName, Role: mts.UserRoleAdmin}); err != nil {
+			return err
+		}
+		return engine.SetPassword(ctx, defaultSystemAdminName, defaultSystemAdminPassword)
+	}
+	if user.Role == mts.UserRoleAdmin && !user.Disabled {
+		return nil
+	}
+	user.Role = mts.UserRoleAdmin
+	user.Disabled = false
+	return engine.UpdateUser(ctx, user)
 }
 
 func (r *serverRuntime) applyLimitState(cfg config) {
@@ -127,6 +160,7 @@ func (r *serverRuntime) start() error {
 	if r.grpcServer != nil {
 		ln, err := net.Listen("tcp", r.config.GRPC.Addr)
 		if err != nil {
+			_ = r.shutdown(context.Background())
 			return err
 		}
 		r.grpcLn = ln
@@ -273,10 +307,10 @@ func (r *serverRuntime) applyRetention(ctx context.Context, req retentionApplyRe
 }
 
 func (r *serverRuntime) maintenanceErrors(ctx context.Context) []string {
-	errors := r.engine.MaintenanceErrors(ctx)
-	out := make([]string, len(errors))
-	for index, err := range errors {
-		out[index] = err.Error()
+	errs := r.engine.MaintenanceErrors(ctx)
+	out := make([]string, len(errs))
+	for index, e := range errs {
+		out[index] = e.Error()
 	}
 	return out
 }
@@ -294,5 +328,7 @@ func (r *serverRuntime) health() mts.HealthSnapshot {
 }
 
 func (r *serverRuntime) effectiveConfig() config {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.config
 }

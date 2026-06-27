@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"net/http"
 
 	mts "github.com/openmts/mts"
@@ -13,16 +15,16 @@ func (r *serverRuntime) handleUsers(writer http.ResponseWriter, request *http.Re
 	}
 	switch request.Method {
 	case http.MethodPost:
-		var user mts.User
-		if err := decodeHTTPJSON(request, &user); err != nil {
+		var req createUserRequest
+		if err := decodeHTTPJSON(request, &req); err != nil {
 			writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 			return
 		}
-		if err := r.engine.CreateUser(request.Context(), user); err != nil {
+		if err := r.createUserWithInitialPassword(request.Context(), req); err != nil {
 			writeAPIError(writer, err)
 			return
 		}
-		r.audit.record(auditEvent{UserName: user.Name, Action: "create_user"})
+		r.audit.record(auditEvent{UserName: req.Name, Action: "create_user"})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 	case http.MethodGet:
 		users, err := r.engine.ListUsers(request.Context())
@@ -34,6 +36,23 @@ func (r *serverRuntime) handleUsers(writer http.ResponseWriter, request *http.Re
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
 	}
+}
+
+func (r *serverRuntime) createUserWithInitialPassword(ctx context.Context, req createUserRequest) error {
+	if err := r.engine.CreateUser(ctx, req.User); err != nil {
+		return err
+	}
+	if req.Password == "" {
+		return nil
+	}
+	if err := r.engine.SetPassword(ctx, req.Name, req.Password); err != nil {
+		rollbackErr := r.engine.DeleteUser(ctx, req.Name)
+		if rollbackErr != nil {
+			return rollbackErr
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *serverRuntime) handleUserResource(writer http.ResponseWriter, request *http.Request) {
@@ -150,6 +169,10 @@ func (r *serverRuntime) handleDatabasePermissionResource(
 	}
 	database := parts[0]
 	permission := mts.DatabasePermission(parts[1])
+	if permission != mts.DatabasePermissionRead && permission != mts.DatabasePermissionWrite && permission != mts.DatabasePermissionAdmin {
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, "invalid permission: must be read, write, or admin", nil))
+		return
+	}
 	switch request.Method {
 	case http.MethodPut, http.MethodPost:
 		if err := r.engine.GrantDatabasePermission(request.Context(), userName, database, permission); err != nil {
@@ -197,7 +220,7 @@ func (r *serverRuntime) handleAuthzDatabaseCheck(writer http.ResponseWriter, req
 		req.Permission,
 	)
 	if err != nil {
-		if err == mts.ErrPermissionDenied {
+		if errors.Is(err, mts.ErrPermissionDenied) {
 			writeHTTPJSON(writer, http.StatusOK, authzDatabaseCheckResponse{Allowed: false})
 			return
 		}

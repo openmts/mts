@@ -16,6 +16,7 @@ func TestManagerUserCRUD(t *testing.T) {
 	user := User{
 		Name:        "alice",
 		DisplayName: "Alice",
+		Role:        RoleAdmin,
 		Metadata:    map[string]string{"team": "platform"},
 	}
 	if err := manager.CreateUser(ctx, user); err != nil {
@@ -29,7 +30,7 @@ func TestManagerUserCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUser() error = %v", err)
 	}
-	if !ok || got.Name != "alice" || got.DisplayName != "Alice" || got.Metadata["team"] != "platform" {
+	if !ok || got.Name != "alice" || got.DisplayName != "Alice" || got.Role != RoleAdmin || got.Metadata["team"] != "platform" {
 		t.Fatalf("GetUser() = %#v ok=%v, want alice", got, ok)
 	}
 	got.Metadata["team"] = "mutated"
@@ -43,6 +44,13 @@ func TestManagerUserCRUD(t *testing.T) {
 
 	if err := manager.CreateUser(ctx, User{Name: "bob"}); err != nil {
 		t.Fatalf("CreateUser(bob) error = %v", err)
+	}
+	bob, ok, err := manager.GetUser(ctx, "bob")
+	if err != nil || !ok {
+		t.Fatalf("GetUser(bob) error = %v ok=%v", err, ok)
+	}
+	if bob.Role != RoleUser {
+		t.Fatalf("bob role = %q, want user", bob.Role)
 	}
 	users, err := manager.ListUsers(ctx)
 	if err != nil {
@@ -177,6 +185,9 @@ func TestManagerRejectsInvalidUsers(t *testing.T) {
 
 	if err := manager.CreateUser(ctx, User{Name: " "}); !errors.Is(err, ErrInvalidUser) {
 		t.Fatalf("CreateUser(empty) error = %v, want ErrInvalidUser", err)
+	}
+	if err := manager.CreateUser(ctx, User{Name: "bad-role", Role: Role("owner")}); !errors.Is(err, ErrInvalidUser) {
+		t.Fatalf("CreateUser(invalid role) error = %v, want ErrInvalidUser", err)
 	}
 	if err := manager.UpdateUser(ctx, User{Name: "missing"}); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("UpdateUser(missing) error = %v, want ErrUserNotFound", err)

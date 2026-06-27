@@ -13,6 +13,7 @@ const maintenanceErrors = ref<string[]>([])
 const actionLoading = ref('')
 
 async function doFlush() {
+  if (!confirm('确定执行此操作？')) return
   actionLoading.value = 'flush'
   try {
     const res = await apiPost<OpResult>('/api/v1/admin/flush')
@@ -25,6 +26,7 @@ async function doFlush() {
 }
 
 async function doCompact() {
+  if (!confirm('确定执行此操作？')) return
   actionLoading.value = 'compact'
   try {
     const res = await apiPost<OpResult>('/api/v1/admin/compact')
@@ -37,9 +39,10 @@ async function doCompact() {
 }
 
 async function doApplyRetention() {
+  if (!confirm('确定执行此操作？')) return
   actionLoading.value = 'retention'
   try {
-    const res = await apiPost<OpResult>('/api/v1/admin/retention/apply', { now_unix_nanos: 0 })
+    const res = await apiPost<OpResult>('/api/v1/admin/retention/apply', { now_unix_nanos: Date.now() * 1e6 })
     retentionResult.value = res.ok ? '保留策略应用成功' : '保留策略应用失败'
   } catch (e) {
     retentionResult.value = `失败: ${e instanceof Error ? e.message : '未知错误'}`
@@ -70,7 +73,7 @@ async function loadMaintenanceErrors() {
         </div>
         <p class="mb-4 text-xs text-slate-500">将 MemTable 数据刷写到 SSTable</p>
         <button :disabled="actionLoading === 'flush'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50" @click="doFlush">{{ actionLoading === 'flush' ? '执行中...' : '执行 Flush' }}</button>
-        <p v-if="flushResult" class="mt-2 text-xs" :class="flushResult.includes('失败') ? 'text-red-600' : 'text-green-600'">{{ flushResult }}</p>
+        <p v-if="flushResult" class="mt-2 text-xs" :class="!flushResult.includes('成功') ? 'text-red-600' : 'text-green-600'">{{ flushResult }}</p>
       </div>
       <div class="rounded-xl border border-slate-200 bg-white p-6">
         <div class="mb-3 flex items-center gap-2">
@@ -78,7 +81,7 @@ async function loadMaintenanceErrors() {
         </div>
         <p class="mb-4 text-xs text-slate-500">触发 Compaction 合并 SSTable 文件</p>
         <button :disabled="actionLoading === 'compact'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50" @click="doCompact">{{ actionLoading === 'compact' ? '执行中...' : '执行 Compact' }}</button>
-        <p v-if="compactResult" class="mt-2 text-xs" :class="compactResult.includes('失败') ? 'text-red-600' : 'text-green-600'">{{ compactResult }}</p>
+        <p v-if="compactResult" class="mt-2 text-xs" :class="!compactResult.includes('成功') ? 'text-red-600' : 'text-green-600'">{{ compactResult }}</p>
       </div>
       <div class="rounded-xl border border-slate-200 bg-white p-6">
         <div class="mb-3 flex items-center gap-2">
@@ -86,7 +89,7 @@ async function loadMaintenanceErrors() {
         </div>
         <p class="mb-4 text-xs text-slate-500">应用保留策略删除过期数据</p>
         <button :disabled="actionLoading === 'retention'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50" @click="doApplyRetention">{{ actionLoading === 'retention' ? '执行中...' : '应用保留策略' }}</button>
-        <p v-if="retentionResult" class="mt-2 text-xs" :class="retentionResult.includes('失败') ? 'text-red-600' : 'text-green-600'">{{ retentionResult }}</p>
+        <p v-if="retentionResult" class="mt-2 text-xs" :class="!retentionResult.includes('成功') ? 'text-red-600' : 'text-green-600'">{{ retentionResult }}</p>
       </div>
     </div>
     <div class="rounded-xl border border-slate-200 bg-white p-6">

@@ -16,10 +16,15 @@ func (r *serverRuntime) handleWrite(writer http.ResponseWriter, request *http.Re
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	database := writeRequestDatabase(req)
-	if err := r.authorizeHTTPDatabase(request.Context(), request, database, mts.DatabasePermissionWrite); err != nil {
-		writeAPIError(writer, err)
-		return
+	for _, db := range writeRequestDatabases(req) {
+		dbName := db
+		if dbName == "__default__" {
+			dbName = ""
+		}
+		if err := r.authorizeHTTPDatabase(request.Context(), request, dbName, mts.DatabasePermissionWrite); err != nil {
+			writeAPIError(writer, err)
+			return
+		}
 	}
 	if err := r.write(request.Context(), req); err != nil {
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
@@ -162,13 +167,20 @@ func (r *serverRuntime) decodeAuthorizedQuery(
 	return req, true
 }
 
-func writeRequestDatabase(req writeRequest) string {
+func writeRequestDatabases(req writeRequest) []string {
+	seen := make(map[string]struct{})
+	var dbs []string
 	for _, point := range req.Points {
-		if point.Database != "" {
-			return point.Database
+		db := point.Database
+		if db == "" {
+			db = "__default__"
+		}
+		if _, ok := seen[db]; !ok {
+			seen[db] = struct{}{}
+			dbs = append(dbs, db)
 		}
 	}
-	return ""
+	return dbs
 }
 
 func errorPayload(err error) *errorResponse {

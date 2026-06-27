@@ -84,6 +84,11 @@ type usersResponse struct {
 	Users []mts.User `json:"users"`
 }
 
+type createUserRequest struct {
+	mts.User
+	Password string `json:"password,omitempty"`
+}
+
 type databasePermissionsResponse struct {
 	Grants []mts.DatabaseGrant `json:"grants"`
 }

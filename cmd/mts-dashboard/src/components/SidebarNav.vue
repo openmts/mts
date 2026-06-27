@@ -3,7 +3,7 @@ import { watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   LayoutDashboard, Database, Users, Settings, Wrench,
-  ArrowDownUp, Search, ScrollText, HardDrive, X,
+  ArrowDownUp, Search, Send, ScrollText, HardDrive, X,
 } from 'lucide-vue-next'
 
 const props = defineProps<{ visible: boolean }>()
@@ -15,11 +15,12 @@ const router = useRouter()
 const navItems = [
   { to: '/', label: '仪表盘', icon: LayoutDashboard },
   { to: '/databases', label: '数据库', icon: Database },
+  { to: '/query', label: '查询', icon: Search },
+  { to: '/write', label: '写入', icon: Send },
   { to: '/users', label: '用户', icon: Users },
   { to: '/config', label: '配置', icon: Settings },
   { to: '/operations', label: '运维', icon: Wrench },
   { to: '/downsample', label: '降采样', icon: ArrowDownUp },
-  { to: '/query', label: '查询', icon: Search },
   { to: '/audit', label: '审计', icon: ScrollText },
   { to: '/storage', label: '存储', icon: HardDrive },
 ]

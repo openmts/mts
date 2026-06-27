@@ -198,6 +198,7 @@ func requireHTTPMethod(writer http.ResponseWriter, request *http.Request, method
 	if request.Method == method {
 		return true
 	}
+	writer.Header().Set("Allow", method)
 	writeHTTPJSON(writer, http.StatusMethodNotAllowed, errorResponse{
 		OK:      false,
 		Code:    errorCodeBadRequest,

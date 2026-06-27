@@ -193,8 +193,29 @@ func normalizeUser(user User) (User, error) {
 		return User{}, ErrInvalidUser
 	}
 	user.DisplayName = strings.TrimSpace(user.DisplayName)
+	user.Role = normalizeRole(user.Role)
+	if !validRole(user.Role) {
+		return User{}, ErrInvalidUser
+	}
 	user.Metadata = cloneStringMap(user.Metadata)
 	return user, nil
+}
+
+func normalizeRole(role Role) Role {
+	role = Role(strings.TrimSpace(string(role)))
+	if role == "" {
+		return RoleUser
+	}
+	return role
+}
+
+func validRole(role Role) bool {
+	switch role {
+	case RoleUser, RoleAdmin:
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeOptions(opts Options) Options {

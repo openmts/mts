@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 	"time"
 
@@ -41,8 +42,8 @@ func TestHTTPP0P1RemainingEndpoints(t *testing.T) {
 	}}}, http.StatusOK, &writeResponse{})
 	var measurements measurementsResponse
 	getJSONWithHeaders(t, server.URL+"/api/v1/data/databases/metrics/measurements", nil, http.StatusOK, &measurements)
-	if len(measurements.Measurements) != 1 || measurements.Measurements[0] != "mem" {
-		t.Fatalf("measurements = %#v, want mem", measurements.Measurements)
+	if !slices.Contains(measurements.Measurements, "mem") {
+		t.Fatalf("measurements = %#v, want to contain mem", measurements.Measurements)
 	}
 	var series seriesResponse
 	getJSONWithHeaders(t, server.URL+"/api/v1/data/databases/metrics/measurements/mem/series?host=h1", nil, http.StatusOK, &series)

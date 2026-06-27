@@ -21,6 +21,7 @@ func apiSpec() apiSpecResponse {
 			{Method: "GET", Path: "/api/v1/admin/config", Auth: "admin token", Description: "read effective config"},
 			{Method: "POST", Path: "/api/v1/admin/config/validate", Auth: "admin token", Description: "validate config payload"},
 			{Method: "POST", Path: "/api/v1/admin/config/reload", Auth: "admin token", Description: "reload hot fields"},
+			{Method: "GET|POST", Path: "/api/v1/admin/databases", Auth: "admin token", Description: "list or create databases"},
 			{Method: "GET", Path: "/api/v1/admin/api-spec", Auth: "admin token", Description: "read API contract"},
 			{Method: "GET", Path: "/api/v1/admin/error-codes", Auth: "admin token", Description: "read error code contract"},
 			{Method: "POST", Path: "/api/v1/admin/storage/validate", Auth: "admin token", Description: "validate local storage state"},
@@ -28,10 +29,10 @@ func apiSpec() apiSpecResponse {
 			{Method: "GET", Path: "/api/v1/admin/storage/export", Auth: "admin token", Description: "export server metadata summary"},
 		}},
 		{Name: "users", BasePath: "/api/v1/users", Endpoints: []apiEndpoint{
-			{Method: "POST", Path: "/api/v1/users", Auth: "admin token", Description: "create user"},
-			{Method: "PUT", Path: "/api/v1/users/{name}/password", Auth: "admin token", Description: "set user password"},
-			{Method: "GET", Path: "/api/v1/users/{name}/audit", Auth: "admin token", Description: "read user audit events"},
-			{Method: "POST", Path: "/api/v1/users/{name}/database-permissions/{database}/{permission}", Auth: "admin token", Description: "grant DB permission"},
+			{Method: "POST", Path: "/api/v1/users", Auth: "admin token or admin user bearer token", Description: "create user, optional initial password"},
+			{Method: "PUT", Path: "/api/v1/users/{name}/password", Auth: "admin token or admin user bearer token", Description: "set user password"},
+			{Method: "GET", Path: "/api/v1/users/{name}/audit", Auth: "admin token or admin user bearer token", Description: "read user audit events"},
+			{Method: "POST", Path: "/api/v1/users/{name}/database-permissions/{database}/{permission}", Auth: "admin token or admin user bearer token", Description: "grant DB permission"},
 		}},
 	}}
 }

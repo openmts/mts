@@ -8,7 +8,10 @@ import (
 	mts "github.com/openmts/mts"
 )
 
-const defaultAuthTTL = 12 * time.Hour
+const (
+	defaultAuthTTL = 12 * time.Hour
+	maxAuthTTL     = 30 * 24 * time.Hour
+)
 
 func (r *serverRuntime) handleLogin(writer http.ResponseWriter, request *http.Request) {
 	if !requireHTTPMethod(writer, request, http.MethodPost) {
@@ -23,6 +26,9 @@ func (r *serverRuntime) handleLogin(writer http.ResponseWriter, request *http.Re
 	if req.TTLSeconds > 0 {
 		ttl = time.Duration(req.TTLSeconds) * time.Second
 	}
+	if ttl > maxAuthTTL {
+		ttl = maxAuthTTL
+	}
 	token, err := r.engine.Authenticate(request.Context(), mts.Credentials{
 		UserName: req.UserName,
 		Password: req.Password,
@@ -31,6 +37,7 @@ func (r *serverRuntime) handleLogin(writer http.ResponseWriter, request *http.Re
 		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "invalid credentials", err))
 		return
 	}
+	r.audit.record(auditEvent{UserName: req.UserName, Action: "login"})
 	writeHTTPJSON(writer, http.StatusOK, authTokenResponse{Token: token})
 }
 
@@ -51,10 +58,16 @@ func (r *serverRuntime) handleLogout(writer http.ResponseWriter, request *http.R
 		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "user bearer token is required", nil))
 		return
 	}
-	if err := r.engine.RevokeToken(request.Context(), token); err != nil {
+	principal, err := r.engine.VerifyToken(request.Context(), token)
+	if err != nil {
 		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err))
 		return
 	}
+	if err := r.engine.RevokeToken(request.Context(), token); err != nil {
+		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "failed to revoke token", err))
+		return
+	}
+	r.audit.record(auditEvent{UserName: principal.UserName, Action: "logout"})
 	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 }
 
@@ -67,6 +80,20 @@ func (r *serverRuntime) handleChangePassword(writer http.ResponseWriter, request
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
+	token := bearerToken(request.Header.Get(headerAuthorization))
+	if token == "" {
+		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "user bearer token is required", nil))
+		return
+	}
+	principal, err := r.engine.VerifyToken(request.Context(), token)
+	if err != nil {
+		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err))
+		return
+	}
+	if strings.TrimSpace(req.UserName) != principal.UserName {
+		writeAPIError(writer, mts.ErrPermissionDenied)
+		return
+	}
 	if err := r.engine.ChangePassword(
 		request.Context(),
 		req.UserName,
@@ -76,5 +103,6 @@ func (r *serverRuntime) handleChangePassword(writer http.ResponseWriter, request
 		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "invalid credentials", err))
 		return
 	}
+	r.audit.record(auditEvent{UserName: principal.UserName, Action: "change_password"})
 	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 }

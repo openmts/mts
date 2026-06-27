@@ -140,6 +140,7 @@ func toInternalUser(user User) internaluser.User {
 	return internaluser.User{
 		Name:        user.Name,
 		DisplayName: user.DisplayName,
+		Role:        internaluser.Role(user.Role),
 		Disabled:    user.Disabled,
 		Metadata:    user.Metadata,
 	}
@@ -149,6 +150,7 @@ func fromInternalUser(user internaluser.User) User {
 	return User{
 		Name:        user.Name,
 		DisplayName: user.DisplayName,
+		Role:        UserRole(user.Role),
 		Disabled:    user.Disabled,
 		Metadata:    user.Metadata,
 	}

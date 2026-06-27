@@ -19,6 +19,7 @@ const routeLabels: Record<string, string> = {
   Query: '数据查询',
   Audit: '审计日志',
   Storage: '存储快照',
+  Write: '写入管理',
 }
 
 const pageTitle = computed(() => {

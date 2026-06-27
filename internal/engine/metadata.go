@@ -13,6 +13,10 @@ func (e *Engine) CreateDatabase(ctx context.Context, name string) error {
 	return e.metadata.CreateDatabase(ctx, name)
 }
 
+func (e *Engine) ListDatabases(ctx context.Context) ([]string, error) {
+	return e.metadata.ListDatabases(ctx)
+}
+
 func (e *Engine) DropDatabase(ctx context.Context, name string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()

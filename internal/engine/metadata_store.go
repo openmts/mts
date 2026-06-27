@@ -30,6 +30,7 @@ type MetadataQuerier interface {
 type MetadataManager interface {
 	CreateDatabase(context.Context, string) error
 	DropDatabase(context.Context, string) error
+	ListDatabases(context.Context) ([]string, error)
 	CreateRetentionPolicy(context.Context, string, model.RetentionPolicy) error
 	ListRetentionPolicies(context.Context, string) ([]model.RetentionPolicy, error)
 	ListMeasurements(context.Context, string) ([]string, error)
@@ -130,6 +131,13 @@ func (s *LocalMetadataStore) DropDatabase(ctx context.Context, name string) erro
 		return err
 	}
 	return s.catalog.DropDatabase(name)
+}
+
+func (s *LocalMetadataStore) ListDatabases(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.catalog.ListDatabases()
 }
 
 func (s *LocalMetadataStore) CreateRetentionPolicy(

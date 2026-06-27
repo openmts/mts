@@ -186,6 +186,12 @@ func (e *Engine) CreateDatabase(ctx context.Context, name string) error {
 	return publicError(e.inner.CreateDatabase(ctx, name))
 }
 
+// ListDatabases 列出所有 database。
+func (e *Engine) ListDatabases(ctx context.Context) ([]string, error) {
+	databases, err := e.inner.ListDatabases(ctx)
+	return databases, publicError(err)
+}
+
 // DropDatabase 删除本地 database 元数据。
 func (e *Engine) DropDatabase(ctx context.Context, name string) error {
 	return publicError(e.inner.DropDatabase(ctx, name))

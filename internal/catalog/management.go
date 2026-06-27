@@ -26,6 +26,17 @@ func (c *Catalog) DropDatabase(name string) error {
 	return c.saveMetadataLocked()
 }
 
+func (c *Catalog) ListDatabases() ([]string, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]string, 0, len(c.databases))
+	for db := range c.databases {
+		out = append(out, db)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 func (c *Catalog) CreateRetentionPolicy(database string, policy model.RetentionPolicy) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

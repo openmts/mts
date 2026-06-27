@@ -21,9 +21,17 @@ const (
 type User struct {
 	Name        string            `json:"name"`
 	DisplayName string            `json:"display_name,omitempty"`
+	Role        UserRole          `json:"role,omitempty"`
 	Disabled    bool              `json:"disabled,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
+
+type UserRole string
+
+const (
+	UserRoleUser  UserRole = "user"
+	UserRoleAdmin UserRole = "admin"
+)
 
 // DatabaseGrant 表示用户在一个 database 上的一项权限。
 type DatabaseGrant struct {

@@ -17,7 +17,7 @@ func TestUserMetadataEncodingRoundTripIncludesAuthState(t *testing.T) {
 		"abc": {UserName: "alice", ExpiresAtUnixNano: time.Unix(1, 2).UnixNano()},
 	}
 	data := encodeUserMetadata(
-		map[string]User{"alice": {Name: "alice", Metadata: map[string]string{"team": "storage"}}},
+		map[string]User{"alice": {Name: "alice", Role: RoleAdmin, Metadata: map[string]string{"team": "storage"}}},
 		map[string]map[string]map[Permission]struct{}{
 			"alice": {"metrics": {PermissionRead: {}, PermissionAdmin: {}}},
 		},
@@ -30,6 +30,9 @@ func TestUserMetadataEncodingRoundTripIncludesAuthState(t *testing.T) {
 	}
 	if users["alice"].Metadata["team"] != "storage" {
 		t.Fatalf("users = %#v, want metadata", users)
+	}
+	if users["alice"].Role != RoleAdmin {
+		t.Fatalf("role = %q, want admin", users["alice"].Role)
 	}
 	if _, ok := grants["alice"]["metrics"][PermissionAdmin]; !ok {
 		t.Fatalf("grants = %#v, want admin", grants)
@@ -79,6 +82,7 @@ func appendUserPrefix(disabled byte) []byte {
 	payload := binary.AppendUvarint(nil, 1)
 	payload = codec.AppendString(payload, "alice")
 	payload = codec.AppendString(payload, "Alice")
+	payload = codec.AppendString(payload, string(RoleUser))
 	payload = append(payload, disabled)
 	return payload
 }

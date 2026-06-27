@@ -18,6 +18,13 @@ var (
 
 const EndpointLocal = "local"
 
+type Role string
+
+const (
+	RoleUser  Role = "user"
+	RoleAdmin Role = "admin"
+)
+
 type Options struct {
 	Endpoint             string
 	PasswordAuthDisabled bool
@@ -38,6 +45,7 @@ const (
 type User struct {
 	Name        string
 	DisplayName string
+	Role        Role
 	Disabled    bool
 	Metadata    map[string]string
 }

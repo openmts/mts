@@ -93,7 +93,7 @@ query, err := mts.NewQuery().
 
 ## 用户与权限
 
-MTS 提供接口化用户管理，默认使用内部本地实现。当前权限粒度到 database 级别，支持 `read`、`write`、`admin`，其中 `admin` 隐含读写权限。该模块只管理用户身份和授权数据，不负责密码登录或 token 签发；具体本地实现和落盘格式不作为 public API 暴露。需要对接第三方权限系统时，实现 `mts.UserManager` 并通过 `Options.UserManager` 注入。
+MTS 提供接口化用户管理，默认使用内部本地实现。用户角色分为 `admin` 和 `user`，系统级管理操作需要管理员角色；database 权限支持 `read`、`write`、`admin`，其中 database `admin` 隐含读写权限。默认本地实现支持密码认证、token 签发和密码变更；`mts-server` 创建用户 API 可携带初始密码，但用户查询结果永不返回密码。具体落盘格式不作为 public API 暴露。需要对接第三方权限系统时，实现 `mts.UserManager` 并通过 `Options.UserManager` 注入。
 
 ```go
 err := engine.CreateUser(ctx, mts.User{Name: "alice", DisplayName: "Alice"})
@@ -170,7 +170,7 @@ go run ./cmd/mts-server init-config --output ./mts-server.yaml
 go run ./cmd/mts-server version
 ```
 
-HTTP 默认监听 `127.0.0.1:8086`，gRPC 默认监听 `127.0.0.1:9096`。HTTP API 按数据面、管理面和用户权限面拆分：数据面使用 `/api/v1/data/*`，管理面使用 `/api/v1/admin/*`，用户权限面使用 `/api/v1/users/*` 和 `/api/v1/authz/*`。配置 `auth.admin_token` 后，管理面和用户权限面需要 `Authorization: Bearer <token>` 或 `X-MTS-Admin-Token`；配置 `auth.data_tokens` 后，数据面需要 `X-MTS-Data-Token` 或 Bearer token。生产部署可开启 HTTP/gRPC TLS、请求限制、访问日志、pprof、API 契约、配置校验/热重载和本地 storage snapshot/export。
+HTTP 默认监听 `127.0.0.1:8086`，gRPC 默认监听 `127.0.0.1:9096`。HTTP API 按数据面、管理面和用户权限面拆分：数据面使用 `/api/v1/data/*`，管理面使用 `/api/v1/admin/*`，用户权限面使用 `/api/v1/users/*` 和 `/api/v1/authz/*`。配置 `auth.admin_token` 后，管理面和用户权限面需要服务级 admin token；开启 `auth.require_user` 后，服务会预置管理员账号 `admin/admin`，可登录后使用管理员 Bearer token 访问管理接口，普通用户只能访问已授权的数据面并修改自己的密码。首次登录后应修改默认管理员密码。配置 `auth.data_tokens` 后，数据面需要 `X-MTS-Data-Token` 或 Bearer token。生产部署可开启 HTTP/gRPC TLS、请求限制、访问日志、pprof、API 契约、配置校验/热重载和本地 storage snapshot/export。
 
 ```bash
 curl http://127.0.0.1:8086/healthz

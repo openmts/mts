@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { Plus, Trash2, Play, Pause, RefreshCw } from 'lucide-vue-next'
 
@@ -51,16 +51,29 @@ async function createPolicy() {
   try {
     await apiPost('/api/v1/admin/downsample/policies', newPolicy.value)
     showCreate.value = false
+    newPolicy.value = {
+      name: '', source_database: '', source_measurement: '',
+      target_database: '', target_measurement: '',
+      interval: 60000000000, functions: [{ function: 'mean', field: 'value', as: 'mean_value' }],
+      group_by_tags: [], enabled: true,
+    }
     await loadData()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '创建失败'
   }
 }
 
+const newPolicyTagsText = computed({
+  get: () => newPolicy.value.group_by_tags.join(', '),
+  set: (v: string) => {
+    newPolicy.value.group_by_tags = v.split(',').map((t) => t.trim()).filter((t) => t.length > 0)
+  },
+})
+
 async function deletePolicy(name: string) {
   if (!confirm(`确定删除降采样策略 ${name}？`)) return
   try {
-    await apiDelete(`/api/v1/admin/downsample/policies/${name}`)
+    await apiDelete(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}`)
     await loadData()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '删除失败'
@@ -70,11 +83,19 @@ async function deletePolicy(name: string) {
 async function togglePolicy(policy: DownsamplePolicy) {
   const action = policy.enabled ? 'pause' : 'resume'
   try {
-    await apiPost(`/api/v1/admin/downsample/policies/${policy.name}/${action}`)
+    await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`)
     await loadData()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '操作失败'
   }
+}
+
+function addPolicyFunction() {
+  newPolicy.value.functions.push({ function: 'mean', field: '', as: '' })
+}
+
+function removePolicyFunction(idx: number) {
+  if (newPolicy.value.functions.length > 1) newPolicy.value.functions.splice(idx, 1)
 }
 
 function formatDuration(ns: number): string {
@@ -142,6 +163,30 @@ function getStatus(name: string): DownsampleStatus | undefined {
           <div><label class="mb-1 block text-xs text-slate-500">目标数据库</label><input v-model="newPolicy.target_database" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs" /></div>
           <div><label class="mb-1 block text-xs text-slate-500">目标 Measurement</label><input v-model="newPolicy.target_measurement" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs" /></div>
           <div><label class="mb-1 block text-xs text-slate-500">间隔 (纳秒)</label><input v-model.number="newPolicy.interval" type="number" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs" /></div>
+        </div>
+        <div class="mt-3">
+          <label class="mb-1 block text-xs text-slate-500">Functions</label>
+          <div class="space-y-1.5">
+            <div v-for="(fn, idx) in newPolicy.functions" :key="idx" class="flex items-center gap-1.5">
+              <select v-model="fn.function" class="rounded border border-slate-300 px-1.5 py-1 text-xs">
+                <option value="mean">mean</option>
+                <option value="sum">sum</option>
+                <option value="min">min</option>
+                <option value="max">max</option>
+                <option value="first">first</option>
+                <option value="last">last</option>
+                <option value="count">count</option>
+              </select>
+              <input v-model="fn.field" placeholder="field" class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs" />
+              <input v-model="fn.as" placeholder="as" class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs" />
+              <button class="rounded p-0.5 text-slate-400 hover:text-red-600" @click="removePolicyFunction(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
+            </div>
+          </div>
+          <button class="mt-1.5 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700" @click="addPolicyFunction"><Plus class="h-3 w-3" /> 添加 function</button>
+        </div>
+        <div class="mt-3">
+          <label class="mb-1 block text-xs text-slate-500">Group By Tags (逗号分隔)</label>
+          <input v-model="newPolicyTagsText" placeholder="host, region" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs" />
         </div>
         <div class="mt-4 flex justify-end gap-2">
           <button class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100" @click="showCreate = false">取消</button>

@@ -74,6 +74,7 @@ func (r *serverRuntime) handleReloadConfig(writer http.ResponseWriter, request *
 		writeAPIError(writer, err)
 		return
 	}
+	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "reload_config"})
 	writeHTTPJSON(writer, http.StatusOK, resp)
 }
 
@@ -101,6 +102,7 @@ func (r *serverRuntime) handleStorageSnapshot(writer http.ResponseWriter, reques
 		writeAPIError(writer, err)
 		return
 	}
+	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "storage_snapshot"})
 	writeHTTPJSON(writer, http.StatusOK, resp)
 }
 
@@ -174,6 +176,7 @@ func (r *serverRuntime) handleFlush(writer http.ResponseWriter, request *http.Re
 		writeAPIError(writer, err)
 		return
 	}
+	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "flush"})
 	writeHTTPJSON(writer, http.StatusOK, maintenanceResponse{OK: true})
 }
 
@@ -190,6 +193,7 @@ func (r *serverRuntime) handleCompact(writer http.ResponseWriter, request *http.
 		writeAPIError(writer, err)
 		return
 	}
+	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "compact"})
 	writeHTTPJSON(writer, http.StatusOK, maintenanceResponse{OK: true, Result: result})
 }
 
@@ -210,6 +214,7 @@ func (r *serverRuntime) handleApplyRetention(writer http.ResponseWriter, request
 		writeAPIError(writer, err)
 		return
 	}
+	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "apply_retention"})
 	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 }
 
@@ -273,6 +278,7 @@ func (r *serverRuntime) handleDownsamplePolicies(writer http.ResponseWriter, req
 			writeAPIError(writer, err)
 			return
 		}
+		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "upsert_downsample_policy", Detail: policy.Name})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 	case http.MethodGet:
 		policies, err := r.engine.ListDownsamplePolicies(request.Context())
@@ -324,6 +330,7 @@ func (r *serverRuntime) handleDownsamplePolicyResource(writer http.ResponseWrite
 			writeAPIError(writer, err)
 			return
 		}
+		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "drop_downsample_policy", Detail: name})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 		return
 	}
@@ -342,19 +349,34 @@ func (r *serverRuntime) handleDownsampleAction(
 ) {
 	switch action {
 	case "enable":
-		writeActionOK(writer, r.engine.EnableDownsamplePolicy(request.Context(), name))
+		err := r.engine.EnableDownsamplePolicy(request.Context(), name)
+		writeActionOK(writer, err)
+		if err == nil {
+			r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "enable_downsample_policy", Detail: name})
+		}
 	case "disable":
-		writeActionOK(writer, r.engine.DisableDownsamplePolicy(request.Context(), name))
+		err := r.engine.DisableDownsamplePolicy(request.Context(), name)
+		writeActionOK(writer, err)
+		if err == nil {
+			r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "disable_downsample_policy", Detail: name})
+		}
 	case "reset":
 		var req downsampleResetRequest
 		if decodeActionRequest(writer, request, &req) {
-			writeActionOK(writer, r.engine.ResetDownsamplePolicy(request.Context(), name, req.Reset))
+			err := r.engine.ResetDownsamplePolicy(request.Context(), name, req.Reset)
+			writeActionOK(writer, err)
+			if err == nil {
+				r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "reset_downsample_policy", Detail: name})
+			}
 		}
 	case "run":
 		var req downsampleRunRequest
 		if decodeActionRequest(writer, request, &req) {
 			result, err := r.engine.RunDownsamplePolicy(request.Context(), name, unixSecondsOrNow(req.NowUnix))
 			writeDownsampleRun(writer, result, err)
+			if err == nil {
+				r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "run_downsample_policy", Detail: name})
+			}
 		}
 	case "run-range":
 		var req downsampleRangeRequest

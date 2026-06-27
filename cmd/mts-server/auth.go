@@ -21,31 +21,80 @@ const (
 )
 
 func (r *serverRuntime) requireHTTPAdmin(request *http.Request) error {
-	token := strings.TrimSpace(r.config.Auth.AdminToken)
+	cfg := r.currentConfig()
+	token := strings.TrimSpace(cfg.Auth.AdminToken)
+	provided := request.Header.Get(headerAdminToken)
+	bearer := bearerToken(request.Header.Get(headerAuthorization))
+	if token == "" && bearer != "" {
+		return r.requireHTTPAdminUser(request.Context(), bearer)
+	}
+	if token == "" && cfg.Auth.RequireUser {
+		return newAPIError(errorCodeUnauthenticated, "admin user bearer token is required", nil)
+	}
 	if token == "" {
 		return nil
 	}
-	provided := request.Header.Get(headerAdminToken)
 	if provided == "" {
-		provided = bearerToken(request.Header.Get(headerAuthorization))
+		provided = bearer
 	}
-	if !constantTimeEqual(token, provided) {
-		return newAPIError(errorCodeUnauthenticated, "admin token is required", nil)
+	if constantTimeEqual(token, provided) {
+		return nil
 	}
-	return nil
+	if bearer != "" {
+		return r.requireHTTPAdminUser(request.Context(), bearer)
+	}
+	return newAPIError(errorCodeUnauthenticated, "admin token is required", nil)
 }
 
 func (r *serverRuntime) requireGRPCAdmin(ctx context.Context) error {
-	token := strings.TrimSpace(r.config.Auth.AdminToken)
+	cfg := r.currentConfig()
+	token := strings.TrimSpace(cfg.Auth.AdminToken)
+	provided := grpcMetadataValue(ctx, metadataAdminToken)
+	bearer := bearerToken(grpcMetadataValue(ctx, strings.ToLower(headerAuthorization)))
+	if token == "" && bearer != "" {
+		return r.requireGRPCAdminUser(ctx, bearer)
+	}
+	if token == "" && cfg.Auth.RequireUser {
+		return newAPIError(errorCodeUnauthenticated, "admin user bearer token is required", nil)
+	}
 	if token == "" {
 		return nil
 	}
-	provided := grpcMetadataValue(ctx, metadataAdminToken)
 	if provided == "" {
-		provided = bearerToken(grpcMetadataValue(ctx, strings.ToLower(headerAuthorization)))
+		provided = bearer
 	}
-	if !constantTimeEqual(token, provided) {
-		return newAPIError(errorCodeUnauthenticated, "admin token is required", nil)
+	if constantTimeEqual(token, provided) {
+		return nil
+	}
+	if bearer != "" {
+		return r.requireGRPCAdminUser(ctx, bearer)
+	}
+	return newAPIError(errorCodeUnauthenticated, "admin token is required", nil)
+}
+
+func (r *serverRuntime) requireHTTPAdminUser(ctx context.Context, token string) error {
+	principal, err := r.engine.VerifyToken(ctx, token)
+	if err != nil {
+		return newAPIError(errorCodeUnauthenticated, "invalid admin bearer token", err)
+	}
+	return r.requireUserRole(ctx, principal.UserName, mts.UserRoleAdmin)
+}
+
+func (r *serverRuntime) requireGRPCAdminUser(ctx context.Context, token string) error {
+	principal, err := r.engine.VerifyToken(ctx, token)
+	if err != nil {
+		return newAPIError(errorCodeUnauthenticated, "invalid admin bearer token", err)
+	}
+	return r.requireUserRole(ctx, principal.UserName, mts.UserRoleAdmin)
+}
+
+func (r *serverRuntime) requireUserRole(ctx context.Context, userName string, role mts.UserRole) error {
+	user, ok, err := r.engine.GetUser(ctx, userName)
+	if err != nil {
+		return err
+	}
+	if !ok || user.Disabled || user.Role != role {
+		return mts.ErrPermissionDenied
 	}
 	return nil
 }
@@ -169,6 +218,9 @@ func (r *serverRuntime) authorizeDatabase(
 	if user.Disabled {
 		return mts.ErrPermissionDenied
 	}
+	if user.Role == mts.UserRoleAdmin {
+		return nil
+	}
 	if err := r.engine.CheckUserDatabasePermission(ctx, userName, database, permission); err != nil {
 		return err
 	}
@@ -211,4 +263,9 @@ func grpcMetadataValue(ctx context.Context, key string) string {
 		return ""
 	}
 	return values[0]
+}
+
+func (r *serverRuntime) auditUser(request *http.Request) string {
+	userName, _ := r.authenticateHTTPDataUser(request.Context(), request)
+	return userName
 }

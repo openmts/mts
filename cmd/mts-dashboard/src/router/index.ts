@@ -22,6 +22,7 @@ const router = createRouter({
         { path: 'query', name: 'Query', component: () => import('@/pages/QueryPage.vue') },
         { path: 'audit', name: 'Audit', component: () => import('@/pages/AuditPage.vue') },
         { path: 'storage', name: 'Storage', component: () => import('@/pages/StoragePage.vue') },
+        { path: 'write', name: 'Write', component: () => import('@/pages/WritePage.vue') },
       ],
     },
   ],
@@ -29,8 +30,11 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const { isAuthenticated } = useAuth()
+  if (to.name === 'Login' && isAuthenticated.value) {
+    return { name: 'Overview' }
+  }
   if (to.name !== 'Login' && !isAuthenticated.value) {
-    return { name: 'Login' }
+    return { name: 'Login', query: { redirect: to.fullPath } }
   }
 })
 
