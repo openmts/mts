@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 
-	"github.com/openmts/mts/internal/catalog"
 	"github.com/openmts/mts/internal/model"
 )
 
@@ -187,7 +186,7 @@ func tagOnlyExpr(expr model.QueryExpr) bool {
 
 func filterSeriesIDsByTagExpr(
 	ids []uint64,
-	series map[uint64]catalog.Series,
+	series map[uint64]metadataSeries,
 	expr model.QueryExpr,
 ) []uint64 {
 	out := ids[:0]
@@ -232,7 +231,7 @@ func seriesMatchesTagExpr(tags map[string]string, expr model.QueryExpr) bool {
 
 func filterSeriesIDs(
 	ids []uint64,
-	series map[uint64]catalog.Series,
+	series map[uint64]metadataSeries,
 	predicates []model.QueryPredicate,
 ) []uint64 {
 	out := ids[:0]

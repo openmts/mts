@@ -1,10 +1,10 @@
 package sstable
 
 import (
-	"context"
 	"os"
 
 	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/storagequery"
 )
 
 const (
@@ -18,17 +18,7 @@ const (
 	manifestFile    = "MANIFEST.bin"
 )
 
-type Query struct {
-	Context         context.Context
-	Budget          model.QueryBudget
-	Stats           *model.QueryStats
-	Boundary        model.QueryBoundaryMode
-	SeriesIDs       map[uint64]struct{}
-	FieldIDs        map[uint32]struct{}
-	FieldPredicates map[uint32][]model.QueryPredicate
-	Start           int64
-	End             int64
-}
+type Query = storagequery.Query
 
 type PartMeta struct {
 	ID          string `json:"id"`

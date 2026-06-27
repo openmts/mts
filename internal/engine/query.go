@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/openmts/mts/internal/catalog"
 	"github.com/openmts/mts/internal/memtable"
 	"github.com/openmts/mts/internal/model"
 	"github.com/openmts/mts/internal/queryexec"
@@ -368,7 +367,7 @@ func (e *Engine) queryShardsWithCandidates(query model.Query) ([]*Shard, int) {
 	return shards, candidates
 }
 
-func decorateColumns(columns []model.ColumnData, snapshot catalog.Snapshot) []model.ColumnSeries {
+func decorateColumns(columns []model.ColumnData, snapshot metadataSnapshot) []model.ColumnSeries {
 	out := make([]model.ColumnSeries, 0, len(columns))
 	for _, column := range columns {
 		if !canDecorateColumn(column, snapshot) {
@@ -379,7 +378,7 @@ func decorateColumns(columns []model.ColumnData, snapshot catalog.Snapshot) []mo
 	return out
 }
 
-func canDecorateColumn(column model.ColumnData, snapshot catalog.Snapshot) bool {
+func canDecorateColumn(column model.ColumnData, snapshot metadataSnapshot) bool {
 	if _, ok := snapshot.Series[column.SeriesID]; !ok {
 		return false
 	}
@@ -389,7 +388,7 @@ func canDecorateColumn(column model.ColumnData, snapshot catalog.Snapshot) bool 
 	return true
 }
 
-func columnDecorator(snapshot catalog.Snapshot) queryexec.ColumnDecorator {
+func columnDecorator(snapshot metadataSnapshot) queryexec.ColumnDecorator {
 	return func(column model.ColumnData) (model.ColumnSeries, bool) {
 		if !canDecorateColumn(column, snapshot) {
 			return model.ColumnSeries{}, false
@@ -400,7 +399,7 @@ func columnDecorator(snapshot catalog.Snapshot) queryexec.ColumnDecorator {
 
 var decorateColumnDataHook func()
 
-func decorateColumnData(column model.ColumnData, snapshot catalog.Snapshot) model.ColumnSeries {
+func decorateColumnData(column model.ColumnData, snapshot metadataSnapshot) model.ColumnSeries {
 	if decorateColumnDataHook != nil {
 		decorateColumnDataHook()
 	}

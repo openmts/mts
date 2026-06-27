@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmts/mts/internal/catalog"
 	"github.com/openmts/mts/internal/memtable"
 	"github.com/openmts/mts/internal/model"
 	"github.com/openmts/mts/internal/queryexec"
@@ -197,9 +196,9 @@ func TestQueryPredicatePureBranches(t *testing.T) {
 	if storageFieldPredicates(model.Query{Expr: model.QueryExpr{Kind: model.QueryExprOr}}, []model.QueryPredicate{{Name: "usage"}}) != nil {
 		t.Fatal("storageFieldPredicates(or expr) != nil, want no unsafe pushdown")
 	}
-	series := map[uint64]catalog.Series{
-		1: {ID: 1, Tags: map[string]string{"host": "a", "region": "west"}},
-		2: {ID: 2, Tags: map[string]string{"host": "b"}},
+	series := map[uint64]metadataSeries{
+		1: {Tags: map[string]string{"host": "a", "region": "west"}},
+		2: {Tags: map[string]string{"host": "b"}},
 	}
 	filtered := filterSeriesIDs([]uint64{1, 2}, series, []model.QueryPredicate{
 		{Kind: model.QueryPredicateTagIn, Name: "host", StringValues: []string{"a", "c"}},

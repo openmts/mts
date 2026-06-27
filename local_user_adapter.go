@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/openmts/mts/internal/runtime"
 	internaluser "github.com/openmts/mts/internal/user"
 )
 
@@ -14,7 +15,7 @@ type localUserManager struct {
 var _ UserManager = (*localUserManager)(nil)
 
 func openLocalUserManager(dir string, opts UserOptions) (*localUserManager, error) {
-	inner, err := internaluser.OpenWithOptions(dir, internaluser.Options{
+	inner, err := runtime.OpenUserManager(dir, runtime.UserOptions{
 		Endpoint:             opts.Endpoint,
 		PasswordAuthDisabled: opts.PasswordAuthDisabled,
 	})

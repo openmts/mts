@@ -3294,7 +3294,7 @@ func TestDecorateColumnsSkipsMissingCatalogEntries(t *testing.T) {
 	}()
 	got := decorateColumns([]model.ColumnData{
 		{SeriesID: 999, FieldID: 1},
-	}, cat.Snapshot())
+	}, metadataSnapshotFromCatalog(cat.Snapshot()))
 	if len(got) != 0 {
 		t.Fatalf("decorated count = %d, want 0", len(got))
 	}

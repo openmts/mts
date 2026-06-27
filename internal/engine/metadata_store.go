@@ -24,7 +24,22 @@ type MetadataResolver interface {
 type MetadataQuerier interface {
 	MatchSeries(context.Context, string, map[string]string) ([]uint64, error)
 	FieldIDs(context.Context, string, []string) (map[uint32]struct{}, error)
-	Snapshot(context.Context) (catalog.Snapshot, error)
+	Snapshot(context.Context) (metadataSnapshot, error)
+}
+
+type metadataSnapshot struct {
+	Series map[uint64]metadataSeries
+	Fields map[uint32]metadataField
+}
+
+type metadataSeries struct {
+	Measurement string
+	Tags        map[string]string
+}
+
+type metadataField struct {
+	Measurement string
+	Name        string
 }
 
 type MetadataManager interface {
@@ -112,11 +127,11 @@ func (s *LocalMetadataStore) FieldIDs(
 	return s.catalog.FieldIDs(measurement, names), nil
 }
 
-func (s *LocalMetadataStore) Snapshot(ctx context.Context) (catalog.Snapshot, error) {
+func (s *LocalMetadataStore) Snapshot(ctx context.Context) (metadataSnapshot, error) {
 	if err := ctx.Err(); err != nil {
-		return catalog.Snapshot{}, err
+		return metadataSnapshot{}, err
 	}
-	return s.catalog.Snapshot(), nil
+	return metadataSnapshotFromCatalog(s.catalog.Snapshot()), nil
 }
 
 func (s *LocalMetadataStore) CreateDatabase(ctx context.Context, name string) error {
@@ -243,4 +258,22 @@ func (s *LocalMetadataStore) Close() error {
 		return nil
 	}
 	return s.catalog.Close()
+}
+
+func metadataSnapshotFromCatalog(snapshot catalog.Snapshot) metadataSnapshot {
+	series := make(map[uint64]metadataSeries, len(snapshot.Series))
+	for id, item := range snapshot.Series {
+		series[id] = metadataSeries{
+			Measurement: item.Measurement,
+			Tags:        cloneTags(item.Tags),
+		}
+	}
+	fields := make(map[uint32]metadataField, len(snapshot.Fields))
+	for id, item := range snapshot.Fields {
+		fields[id] = metadataField{
+			Measurement: item.Measurement,
+			Name:        item.Name,
+		}
+	}
+	return metadataSnapshot{Series: series, Fields: fields}
 }

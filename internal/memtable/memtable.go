@@ -2,7 +2,6 @@ package memtable
 
 import (
 	"cmp"
-	"context"
 	"slices"
 	"sort"
 	"sync"
@@ -10,19 +9,10 @@ import (
 
 	"github.com/openmts/mts/internal/model"
 	"github.com/openmts/mts/internal/queryexec"
+	"github.com/openmts/mts/internal/storagequery"
 )
 
-type Query struct {
-	Context         context.Context
-	Budget          model.QueryBudget
-	Stats           *model.QueryStats
-	Boundary        model.QueryBoundaryMode
-	SeriesIDs       map[uint64]struct{}
-	FieldIDs        map[uint32]struct{}
-	FieldPredicates map[uint32][]model.QueryPredicate
-	Start           int64
-	End             int64
-}
+type Query = storagequery.Query
 
 type MemTable struct {
 	mu          sync.RWMutex
