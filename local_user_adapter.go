@@ -9,10 +9,19 @@ import (
 )
 
 type localUserManager struct {
-	inner *internaluser.Manager
+	inner localUserBackend
 }
 
 var _ UserManager = (*localUserManager)(nil)
+
+type localUserBackend interface {
+	Close() error
+	internaluser.UserStore
+	internaluser.PermissionStore
+	internaluser.CredentialStore
+	internaluser.Authenticator
+	internaluser.TokenStore
+}
 
 func openLocalUserManager(dir string, opts UserOptions) (*localUserManager, error) {
 	inner, err := runtime.OpenUserManager(dir, runtime.UserOptions{

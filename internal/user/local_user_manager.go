@@ -2,10 +2,7 @@ package user
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -16,13 +13,9 @@ const userMetadataFile = "users.bin"
 
 // Manager 是默认本地用户和 DB 级权限管理器。
 type Manager struct {
-	mu       sync.RWMutex
-	path     string
-	opts     Options
-	users    map[string]User
-	grants   map[string]map[string]map[Permission]struct{}
-	password map[string]passwordRecord
-	tokens   map[string]tokenRecord
+	mu    sync.RWMutex
+	store *localStateStore
+	opts  Options
 }
 
 // Open 打开或创建默认本地用户管理器。
@@ -39,12 +32,8 @@ func OpenWithOptions(dir string, opts Options) (*Manager, error) {
 		return nil, err
 	}
 	manager := &Manager{
-		path:     filepath.Join(dir, userMetadataFile),
-		opts:     opts,
-		users:    make(map[string]User),
-		grants:   make(map[string]map[string]map[Permission]struct{}),
-		password: make(map[string]passwordRecord),
-		tokens:   make(map[string]tokenRecord),
+		store: newLocalStateStore(dir),
+		opts:  opts,
 	}
 	if err := manager.load(); err != nil {
 		return nil, err
@@ -71,7 +60,7 @@ func (m *Manager) CreateUser(ctx context.Context, user User) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.users[user.Name]; ok {
+	if _, ok := m.store.users[user.Name]; ok {
 		return fmt.Errorf("%w: %s", ErrUserAlreadyExists, user.Name)
 	}
 	users, grants, passwords, tokens := m.clonedStateLocked()
@@ -89,7 +78,7 @@ func (m *Manager) UpdateUser(ctx context.Context, user User) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.users[user.Name]; !ok {
+	if _, ok := m.store.users[user.Name]; !ok {
 		return fmt.Errorf("%w: %s", ErrUserNotFound, user.Name)
 	}
 	users, grants, passwords, tokens := m.clonedStateLocked()
@@ -104,7 +93,7 @@ func (m *Manager) GetUser(ctx context.Context, name string) (User, bool, error) 
 	name = strings.TrimSpace(name)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	user, ok := m.users[name]
+	user, ok := m.store.users[name]
 	if !ok {
 		return User{}, false, nil
 	}
@@ -117,10 +106,10 @@ func (m *Manager) ListUsers(ctx context.Context) ([]User, error) {
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	names := sortedUserNames(m.users)
+	names := sortedUserNames(m.store.users)
 	users := make([]User, len(names))
 	for index, name := range names {
-		users[index] = cloneUser(m.users[name])
+		users[index] = cloneUser(m.store.users[name])
 	}
 	return users, nil
 }
@@ -132,7 +121,7 @@ func (m *Manager) DeleteUser(ctx context.Context, name string) error {
 	name = strings.TrimSpace(name)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.users[name]; !ok {
+	if _, ok := m.store.users[name]; !ok {
 		return fmt.Errorf("%w: %s", ErrUserNotFound, name)
 	}
 	users, grants, passwords, tokens := m.clonedStateLocked()
@@ -144,22 +133,7 @@ func (m *Manager) DeleteUser(ctx context.Context, name string) error {
 }
 
 func (m *Manager) load() error {
-	data, err := storagefs.ReadFile(m.path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	users, grants, passwords, tokens, err := decodeUserMetadata(data)
-	if err != nil {
-		return fmt.Errorf("decode user metadata: %w", err)
-	}
-	m.users = users
-	m.grants = grants
-	m.password = passwords
-	m.tokens = tokens
-	return nil
+	return m.store.loadIntoMemory()
 }
 
 func (m *Manager) replaceStateLocked(
@@ -168,13 +142,9 @@ func (m *Manager) replaceStateLocked(
 	passwords map[string]passwordRecord,
 	tokens map[string]tokenRecord,
 ) error {
-	if err := storagefs.WriteFileAtomic(m.path, encodeUserMetadata(users, grants, passwords, tokens)); err != nil {
+	if err := m.store.replace(users, grants, passwords, tokens); err != nil {
 		return err
 	}
-	m.users = users
-	m.grants = grants
-	m.password = passwords
-	m.tokens = tokens
 	return nil
 }
 
@@ -184,7 +154,7 @@ func (m *Manager) clonedStateLocked() (
 	map[string]passwordRecord,
 	map[string]tokenRecord,
 ) {
-	return cloneUsers(m.users), cloneGrants(m.grants), clonePasswordRecords(m.password), cloneTokenRecords(m.tokens)
+	return m.store.cloned()
 }
 
 func normalizeUser(user User) (User, error) {

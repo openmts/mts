@@ -21,7 +21,7 @@ func (m *Manager) GrantPermission(
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.users[userName]; !ok {
+	if _, ok := m.store.users[userName]; !ok {
 		return fmt.Errorf("%w: %s", ErrUserNotFound, userName)
 	}
 	users, grants, passwords, tokens := m.clonedStateLocked()
@@ -44,7 +44,7 @@ func (m *Manager) RevokePermission(
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.users[userName]; !ok {
+	if _, ok := m.store.users[userName]; !ok {
 		return fmt.Errorf("%w: %s", ErrUserNotFound, userName)
 	}
 	users, grants, passwords, tokens := m.clonedStateLocked()
@@ -62,10 +62,10 @@ func (m *Manager) ListPermissions(
 	userName = strings.TrimSpace(userName)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, ok := m.users[userName]; !ok {
+	if _, ok := m.store.users[userName]; !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUserNotFound, userName)
 	}
-	return sortedGrants(m.grants[userName]), nil
+	return sortedGrants(m.store.grants[userName]), nil
 }
 
 func (m *Manager) CheckPermission(
@@ -83,7 +83,7 @@ func (m *Manager) CheckPermission(
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return checkPermission(m.users[userName], m.grants[userName], database, permission)
+	return checkPermission(m.store.users[userName], m.store.grants[userName], database, permission)
 }
 
 func validateGrantInput(

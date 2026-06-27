@@ -580,6 +580,10 @@ func (coverageFakePartReader) QuerySeriesIDs(sstable.Query, []uint64) ([]model.C
 
 func (coverageFakePartReader) SeriesIDs(sstable.Query) ([]uint64, error) { return nil, nil }
 
+func (coverageFakePartReader) NewSeriesBatchReader(sstable.Query) (*sstable.SeriesBatchReader, error) {
+	return nil, errors.New("batch reader unsupported")
+}
+
 type coverageColumnStream struct {
 	columns []model.ColumnSeries
 	index   int

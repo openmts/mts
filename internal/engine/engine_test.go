@@ -3139,6 +3139,10 @@ func (f fakePartReader) SeriesIDs(sstable.Query) ([]uint64, error) {
 	return nil, nil
 }
 
+func (f fakePartReader) NewSeriesBatchReader(sstable.Query) (*sstable.SeriesBatchReader, error) {
+	return nil, nil
+}
+
 type fakePartWriter struct {
 	manager *fakePartManager
 	level   int

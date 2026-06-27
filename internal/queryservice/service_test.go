@@ -302,6 +302,7 @@ func TestLayeredExecutorRunsAnalyzerAndQuerySpecRows(t *testing.T) {
 		Database:    "metrics",
 		Measurement: "cpu",
 		Fields:      []string{"usage"},
+		Limit:       10,
 	})
 	if err != nil {
 		t.Fatalf("Query() error = %v", err)
@@ -311,6 +312,21 @@ func TestLayeredExecutorRunsAnalyzerAndQuerySpecRows(t *testing.T) {
 	}
 	if reader.rowsSpec.Measurement != "cpu" || len(reader.rowsSpec.Fields) != 1 {
 		t.Fatalf("rows spec = %#v, want cpu usage", reader.rowsSpec)
+	}
+	if result.LogicalPlanRoot == "" {
+		t.Fatalf("logical plan root is empty")
+	}
+	if len(result.PhysicalOperators) == 0 {
+		t.Fatalf("physical operators are empty")
+	}
+	if len(result.Pushdowns) == 0 {
+		t.Fatalf("pushdowns are empty")
+	}
+	if !containsString(result.Pushdowns, "limit") {
+		t.Fatalf("pushdowns = %v, want limit", result.Pushdowns)
+	}
+	if !containsString(result.PhysicalOperators, "limit") {
+		t.Fatalf("physical operators = %v, want limit", result.PhysicalOperators)
 	}
 }
 
@@ -823,6 +839,15 @@ func (f fakeStreamingExecutor) QueryStream(
 	return queryservice.StreamResult{
 		Rows: queryexec.NewSliceRowStream(append([]model.Row(nil), f.rows...)),
 	}, nil
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 type fakeReader struct {

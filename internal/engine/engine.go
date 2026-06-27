@@ -23,6 +23,7 @@ type Engine struct {
 	mu sync.Mutex
 
 	opts                  model.Options
+	deps                  Deps
 	metadata              MetadataStore
 	shards                map[string]*Shard
 	writeSeq              uint64
@@ -65,20 +66,31 @@ type shardLookupKey struct {
 	start    int64
 }
 
-func Open(_ context.Context, opts model.Options) (*Engine, error) {
+func Open(ctx context.Context, opts model.Options) (*Engine, error) {
+	return OpenWithDeps(ctx, opts, Deps{})
+}
+
+type Deps struct {
+	OpenMetadataStore func(dir string) (MetadataStore, error)
+	Shard             shardDeps
+}
+
+func OpenWithDeps(_ context.Context, opts model.Options, deps Deps) (*Engine, error) {
 	opts = normalizeOptions(opts)
+	deps = normalizeDeps(deps)
 	if opts.Path == "" {
 		return nil, fmt.Errorf("engine path is empty")
 	}
 	if err := prepareStorageRoot(opts.Path); err != nil {
 		return nil, err
 	}
-	metadata, err := OpenLocalMetadataStore(catalogDir(opts.Path))
+	metadata, err := deps.OpenMetadataStore(catalogDir(opts.Path))
 	if err != nil {
 		return nil, err
 	}
 	eng := &Engine{
 		opts:                opts,
+		deps:                deps,
 		metadata:            metadata,
 		shards:              make(map[string]*Shard),
 		memory:              newStorageMemoryLimiter(opts.StorageMemory),
@@ -97,6 +109,16 @@ func Open(_ context.Context, opts model.Options) (*Engine, error) {
 		"shard_count", len(eng.shards),
 	)
 	return eng, nil
+}
+
+func normalizeDeps(deps Deps) Deps {
+	if deps.OpenMetadataStore == nil {
+		deps.OpenMetadataStore = func(dir string) (MetadataStore, error) {
+			return OpenLocalMetadataStore(dir)
+		}
+	}
+	deps.Shard = normalizeShardDeps(deps.Shard)
+	return deps
 }
 
 func prepareStorageRoot(path string) error {
@@ -972,6 +994,7 @@ func (e *Engine) shardForStartLocked(database string, policy string, start int64
 		Memory:             e.memory,
 		scheduler:          e.compactionScheduler,
 		logger:             e.logger,
+		deps:               e.deps.Shard,
 	})
 	if err != nil {
 		return nil, err
@@ -1027,6 +1050,7 @@ func (e *Engine) openShardDir(path string, entry os.DirEntry, err error) error {
 		Memory:             e.memory,
 		scheduler:          e.compactionScheduler,
 		logger:             e.logger,
+		deps:               e.deps.Shard,
 	})
 	if err != nil {
 		return err

@@ -48,7 +48,7 @@ func (m *Manager) SetPassword(ctx context.Context, userName string, password str
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.users[userName]; !ok {
+	if _, ok := m.store.users[userName]; !ok {
 		return fmt.Errorf("%w: %s", ErrUserNotFound, userName)
 	}
 	users, grants, passwords, tokens := m.clonedStateLocked()
@@ -75,11 +75,11 @@ func (m *Manager) ChangePassword(
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	user, ok := m.users[userName]
+	user, ok := m.store.users[userName]
 	if !ok || user.Disabled {
 		return ErrInvalidCredentials
 	}
-	if !verifyPasswordRecord(m.password[userName], oldPassword) {
+	if !verifyPasswordRecord(m.store.passwords[userName], oldPassword) {
 		return ErrInvalidCredentials
 	}
 	record, err := newPasswordRecord(newPassword)
@@ -102,11 +102,11 @@ func (m *Manager) VerifyPassword(ctx context.Context, userName string, password 
 	userName = strings.TrimSpace(userName)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	user, ok := m.users[userName]
+	user, ok := m.store.users[userName]
 	if !ok || user.Disabled {
 		return ErrInvalidCredentials
 	}
-	if !verifyPasswordRecord(m.password[userName], password) {
+	if !verifyPasswordRecord(m.store.passwords[userName], password) {
 		return ErrInvalidCredentials
 	}
 	return nil
@@ -134,7 +134,7 @@ func (m *Manager) Authenticate(ctx context.Context, credentials Credentials, ttl
 	userName := strings.TrimSpace(credentials.UserName)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	user, ok := m.users[userName]
+	user, ok := m.store.users[userName]
 	if !ok || user.Disabled {
 		return AuthToken{}, ErrInvalidCredentials
 	}
@@ -159,8 +159,8 @@ func (m *Manager) VerifyToken(ctx context.Context, token string) (Principal, err
 	}
 	now := time.Now().UTC().UnixNano()
 	m.mu.RLock()
-	record, ok := m.tokens[tokenDigest(token)]
-	user := m.users[record.UserName]
+	record, ok := m.store.tokens[tokenDigest(token)]
+	user := m.store.users[record.UserName]
 	m.mu.RUnlock()
 	if !ok || record.ExpiresAtUnixNano <= now || user.Name == "" || user.Disabled {
 		if ok && record.ExpiresAtUnixNano <= now {

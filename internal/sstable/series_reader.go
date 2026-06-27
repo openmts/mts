@@ -44,6 +44,10 @@ func NewSeriesBatchReader(part *Part, query Query) (*SeriesBatchReader, error) {
 	return reader, nil
 }
 
+func (p *Part) NewSeriesBatchReader(query Query) (*SeriesBatchReader, error) {
+	return NewSeriesBatchReader(p, query)
+}
+
 func (p *Part) QuerySeriesIDs(query Query, seriesIDs []uint64) ([]model.ColumnData, error) {
 	if query.End < query.Start || len(seriesIDs) == 0 {
 		return []model.ColumnData{}, nil

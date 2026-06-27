@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"github.com/openmts/mts/internal/memtable"
@@ -62,6 +61,7 @@ type partReader interface {
 	ScanColumns(query sstable.Query) (queryexec.ColumnDataStream, error)
 	QuerySeriesIDs(query sstable.Query, seriesIDs []uint64) ([]model.ColumnData, error)
 	SeriesIDs(query sstable.Query) ([]uint64, error)
+	NewSeriesBatchReader(query sstable.Query) (*sstable.SeriesBatchReader, error)
 }
 
 type partWriter interface {
@@ -173,11 +173,7 @@ func (defaultPartManager) NewSeriesBatchReader(
 	reader partReader,
 	query sstable.Query,
 ) (seriesBatchReader, error) {
-	part, ok := reader.(*sstable.Part)
-	if !ok {
-		return nil, fmt.Errorf("part reader does not support batch reader")
-	}
-	return sstable.NewSeriesBatchReader(part, query)
+	return reader.NewSeriesBatchReader(query)
 }
 
 func (defaultFileOps) RemoveAll(path string) error {
