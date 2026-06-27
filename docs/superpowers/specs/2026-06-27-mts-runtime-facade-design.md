@@ -9,8 +9,8 @@
 ## 目标
 
 - When 外部用户导入根包时，根包应只暴露 public DTO、必要接口和 facade 方法，不包含默认本地实现适配代码。
-- When `Open` 未注入 `Options.UserManager` 时，系统应通过 `internal/runtime` 创建默认本地用户模块。
-- When `Open` 注入第三方 `Options.UserManager` 时，系统应通过 runtime adapter 使用外部实现，不创建默认本地用户文件。
+- When `Open` 打开 Engine 时，系统应通过 `internal/runtime` 创建默认本地用户模块。
+- When 后续需要接入第三方用户系统时，系统应在 MTS 仓库内新增内部 user provider，并通过 runtime 组合层选择 provider。
 - When 根包 `Engine` 需要执行存储或用户操作时，系统应通过内部 runtime facade 转发，而不是在根包分别持有 storage engine 和 user manager。
 - When 后续新增用户、认证、授权或服务治理能力时，系统应优先放入 runtime/security 组合层，不下沉到 `internal/engine`。
 - When 架构约束测试运行时，系统应阻止根包直接导入 `internal/user`，防止默认用户实现细节再次泄漏到根包。
@@ -30,7 +30,7 @@
 在 `internal/runtime` 新增组合层对象：
 
 - `Engine`：内部 runtime facade，持有 `*internal/engine.Engine` 和 `UserManager`。
-- `Options`：包含 storage engine options、默认用户选项和可选外部用户管理器。
+- `Options`：包含 storage engine options 和默认用户选项。
 - `UserManager`：runtime 层用户管理接口，使用 `internal/user` 类型，作为内部安全边界。
 - `OpenEngine(ctx, opts)`：打开 storage engine，装配默认本地或外部用户 manager。
 
@@ -38,10 +38,11 @@
 
 ### 用户适配边界
 
-由于 Go 会产生 import cycle，`internal/runtime` 不应导入根包 `mts`。因此适配分成两层：
+由于 Go 会产生 import cycle，`internal/runtime` 不应导入根包 `mts`。因此 public DTO 转换只留在根包 facade，默认用户实现和 provider 接入都留在 `internal/runtime`：
 
-- 根包保留一个很薄的外部注入 adapter：把 public `UserManager` 转成 runtime `UserManager`。该 adapter 只服务 `Options.UserManager` 注入，不代表默认本地实现。
+- 根包保留 public 用户 DTO 与 Engine 方法，不暴露 `UserManager` 接口或 `Options.UserManager` 注入字段。
 - 默认本地用户实现适配迁移到 `internal/runtime`，使用 `internal/user` 类型和接口，不出现在根包。
+- 第三方用户系统接入时，在 MTS 仓库内新增 provider，并由 runtime 根据配置选择，不要求外部用户在业务进程里注入 interface 实现。
 
 根包不再直接导入 `internal/user`，也删除 `local_user_adapter.go`。
 
@@ -64,7 +65,6 @@
 - `local_user_adapter.go` 从根包移除。
 - 根包没有任何 `internal/user` import。
 - `Engine` 根包结构体只持有 runtime facade。
-- 默认用户管理、第三方 `UserManager` 注入、用户 CRUD、认证授权、数据库权限测试保持通过。
+- 默认用户管理、用户 CRUD、认证授权、数据库权限测试保持通过。
 - 架构测试覆盖根包禁止导入 `internal/user`。
 - `goimports-reviser`、`golangci-lint`、`go test ./...`、`git diff --check` 全部通过。
-

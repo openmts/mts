@@ -21,9 +21,8 @@ type Engine struct {
 // 的文件系统错误会直接返回。
 func Open(ctx context.Context, opts Options) (*Engine, error) {
 	engine, err := runtime.OpenEngine(ctx, runtime.Options{
-		Storage:     toModelOptions(opts),
-		User:        runtime.UserOptions(opts.User),
-		UserManager: newRuntimeUserManagerAdapter(opts.UserManager),
+		Storage: toModelOptions(opts),
+		User:    runtime.UserOptions(opts.User),
 	})
 	if err != nil {
 		return nil, err

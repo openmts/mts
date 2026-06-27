@@ -9,9 +9,8 @@ import (
 )
 
 type Options struct {
-	Storage     model.Options
-	User        UserOptions
-	UserManager UserManager
+	Storage model.Options
+	User    UserOptions
 }
 
 type Engine struct {
@@ -38,9 +37,6 @@ func OpenEngine(ctx context.Context, opts Options) (*Engine, error) {
 }
 
 func openRuntimeEngineUserManager(opts Options) (UserManager, func() error, error) {
-	if opts.UserManager != nil {
-		return opts.UserManager, nil, nil
-	}
 	manager, err := openRuntimeUserManager(opts.Storage.Path, opts.User)
 	if err != nil {
 		return nil, nil, err

@@ -93,7 +93,7 @@ query, err := mts.NewQuery().
 
 ## 用户与权限
 
-MTS 提供接口化用户管理，默认使用内部本地实现。用户角色分为 `admin` 和 `user`，系统级管理操作需要管理员角色；database 权限支持 `read`、`write`、`admin`，其中 database `admin` 隐含读写权限。默认本地实现支持密码认证、token 签发和密码变更；`mts-server` 创建用户 API 可携带初始密码，但用户查询结果永不返回密码。具体落盘格式不作为 public API 暴露。需要对接第三方权限系统时，实现 `mts.UserManager` 并通过 `Options.UserManager` 注入。
+MTS 默认使用内部本地用户管理实现。用户角色分为 `admin` 和 `user`，系统级管理操作需要管理员角色；database 权限支持 `read`、`write`、`admin`，其中 database `admin` 隐含读写权限。默认本地实现支持密码认证、token 签发和密码变更；`mts-server` 创建用户 API 可携带初始密码，但用户查询结果永不返回密码。具体实现和落盘格式不作为 public API 暴露。
 
 ```go
 err := engine.CreateUser(ctx, mts.User{Name: "alice", DisplayName: "Alice"})
@@ -109,7 +109,7 @@ if err != nil {
 err = engine.CheckUserDatabasePermission(ctx, "alice", "metrics", mts.DatabasePermissionRead)
 ```
 
-如需接入第三方权限系统，可通过 `Options.UserManager` 注入自定义 `UserManager` 实现。
+如需接入第三方权限系统，应在 MTS 仓库内为用户模块新增 provider，并通过内部 runtime 组合层接入。
 
 ## 批量写入
 

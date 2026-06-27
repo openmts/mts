@@ -34,7 +34,6 @@ type Options struct {
 	StorageMemory          StorageMemoryOptions
 	Logger                 *slog.Logger
 	User                   UserOptions
-	UserManager            UserManager
 }
 
 type UserOptions struct {

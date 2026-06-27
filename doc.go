@@ -4,8 +4,8 @@
 // Builder 查询、本地元数据管理、compaction、retention 和本地降采样策略 API。
 // 内部时间统一按纳秒存储，public API 可通过 TimePrecision 声明秒、毫秒、
 // 微秒或纳秒输入和查询返回时间戳。
-// 用户管理通过 UserManager 接口暴露，默认本地实现由 Engine 内部装配；
-// 具体实现和落盘格式不作为 public API 暴露。
+// 用户管理由 Engine 内部装配默认本地实现；具体实现、扩展接口和落盘格式
+// 不作为 public API 暴露。
 //
 // 当前公开 API 明确限定在单进程和本地数据目录内，不提供分布式查询、
 // 分布式存储、外部元数据系统、SQL、InfluxQL、PromQL 或 MetricsQL parser。

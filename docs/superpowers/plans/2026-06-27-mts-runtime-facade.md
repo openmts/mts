@@ -4,7 +4,7 @@
 
 **Goal:** 将默认用户模块适配和运行时组合职责从根包下沉到 `internal/runtime`，让根包只保留 public DTO、接口和 facade 方法。
 
-**Architecture:** `internal/runtime.Engine` 组合 storage engine 和 runtime 用户管理器；根包 `Engine` 只持有 runtime facade。默认本地用户 manager 在 runtime 内打开，外部注入的 public `UserManager` 通过根包薄 adapter 转成 runtime 接口。
+**Architecture:** `internal/runtime.Engine` 组合 storage engine 和 runtime 用户管理器；根包 `Engine` 只持有 runtime facade。默认本地用户 manager 在 runtime 内打开；第三方用户系统接入作为仓库内部 provider 扩展点，不通过 public `Options` 注入 interface。
 
 **Tech Stack:** Go、手动依赖注入、`internal/runtime`、`internal/user`、`internal/engine`、架构约束测试。
 
@@ -28,9 +28,9 @@
 **EARS:** When 根包打开 MTS 时，系统应通过 runtime facade 组合 storage engine 与用户 manager。
 
 - [x] 新增 `internal/runtime/engine.go`，定义 `Engine`、`Options` 和 `OpenEngine`。
-- [x] `OpenEngine` 先打开 storage engine，再打开默认或外部用户 manager；用户 manager 打开失败时关闭 storage engine。
-- [x] `Engine.Close` 同时关闭 storage engine 和 runtime 创建的用户 manager；外部注入 manager 不由 runtime 关闭。
-- [x] 新增 `internal/runtime/engine_test.go`，覆盖默认用户持久化和外部用户 manager 注入。
+- [x] `OpenEngine` 先打开 storage engine，再打开默认用户 manager；用户 manager 打开失败时关闭 storage engine。
+- [x] `Engine.Close` 同时关闭 storage engine 和 runtime 创建的用户 manager。
+- [x] 新增 `internal/runtime/engine_test.go`，覆盖默认用户持久化。
 - [x] 运行 `timeout 180s go test ./internal/runtime -run 'TestRuntimeEngine' -count=1 -timeout 180s`。
 
 实现备注：runtime facade 已组合 storage engine 和用户 manager，根包不再分别持有两个模块。
@@ -40,12 +40,23 @@
 **EARS:** When 外部用户调用根包 `Engine` 方法时，系统应通过 runtime facade 转发，并保持 public API 不变。
 
 - [x] 修改 `engine_types.go`，将 `Engine` 字段替换为 `runtime *runtime.Engine`。
-- [x] 新增 `runtime_user_adapter.go`，只负责把外部注入的 public `UserManager` 转成 runtime `UserManager`。
+- [x] 新增 `runtime_user_convert.go`，只负责根包 public DTO 和 runtime DTO 转换。
 - [x] 删除根包 `local_user_adapter.go` 和 `local_user_adapter_internal_test.go`。
 - [x] 修改 `engine.go`、`downsample.go`，通过 `e.runtime.Storage()` 和 `e.runtime.Users()` 转发。
 - [x] 运行 `timeout 180s go test . -run 'TestEngine.*UserManager|TestEngineUser|TestLocalUser|TestDefaultOptionsOpenWriteAndQuery' -count=1 -timeout 180s`。
 
-实现备注：public API 签名保持不变；根包只做 DTO 转换和 facade 转发。
+实现备注：public API 删除 `Options.UserManager` 外部注入字段和根包 `UserManager` 接口；根包只做 DTO 转换和 facade 转发。
+
+### Task 3.1：移除外部 UserManager 注入 API
+
+**EARS:** When 用户配置 MTS 时，系统不应在 public `Options` 暴露 `UserManager` interface 注入点；When 需要接入第三方用户系统时，系统应通过仓库内部 provider 扩展。
+
+- [x] 从 `Options` 删除 `UserManager` 字段。
+- [x] 从根包删除 public `UserManager` 接口和外部注入 adapter。
+- [x] 删除根包外部注入测试，保留默认本地用户模块行为测试。
+- [x] 更新 README、doc.go、llms.txt 和本轮设计文档，说明第三方用户系统接入应在仓库内新增 provider。
+
+实现备注：外部用户不再需要实现并注入 `UserManager`，用户模块接口回到内部扩展边界。
 
 ### Task 4：补架构门禁和检视报告状态
 

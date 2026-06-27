@@ -1,7 +1,6 @@
 package mts
 
 import (
-	"context"
 	"time"
 )
 
@@ -52,22 +51,4 @@ type AuthToken struct {
 
 type Principal struct {
 	UserName string `json:"user_name"`
-}
-
-// UserManager 定义用户管理与 DB 级权限管理接口。
-type UserManager interface {
-	CreateUser(context.Context, User) error
-	UpdateUser(context.Context, User) error
-	GetUser(context.Context, string) (User, bool, error)
-	ListUsers(context.Context) ([]User, error)
-	DeleteUser(context.Context, string) error
-	GrantDatabasePermission(context.Context, string, string, DatabasePermission) error
-	RevokeDatabasePermission(context.Context, string, string, DatabasePermission) error
-	ListDatabasePermissions(context.Context, string) ([]DatabaseGrant, error)
-	CheckDatabasePermission(context.Context, string, string, DatabasePermission) error
-	SetPassword(context.Context, string, string) error
-	ChangePassword(context.Context, string, string, string) error
-	Authenticate(context.Context, Credentials, time.Duration) (AuthToken, error)
-	VerifyToken(context.Context, string) (Principal, error)
-	RevokeToken(context.Context, string) error
 }

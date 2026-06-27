@@ -61,28 +61,6 @@ func TestEngineUsesDefaultUserManager(t *testing.T) {
 	}
 }
 
-func TestEngineUsesInjectedUserManager(t *testing.T) {
-	ctx := context.Background()
-	manager := &recordingUserManager{}
-	opts := mts.DefaultOptions(t.TempDir())
-	opts.UserManager = manager
-	eng, err := mts.Open(ctx, opts)
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-	defer closeEngine(t, eng)
-
-	if err := eng.CreateUser(ctx, mts.User{Name: "alice"}); err != nil {
-		t.Fatalf("CreateUser() error = %v", err)
-	}
-	if !manager.created {
-		t.Fatal("injected user manager was not used")
-	}
-	if _, err := os.Stat(filepath.Join(opts.Path, "users.bin")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("default users.bin stat error = %v, want os.ErrNotExist", err)
-	}
-}
-
 func TestEngineUserManagementWrappers(t *testing.T) {
 	ctx := context.Background()
 	eng, err := mts.Open(ctx, mts.DefaultOptions(t.TempDir()))
@@ -187,83 +165,4 @@ func closeEngine(t *testing.T, engine *mts.Engine) {
 	if err := engine.Close(t.Context()); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
-}
-
-type recordingUserManager struct {
-	created bool
-}
-
-func (m *recordingUserManager) CreateUser(_ context.Context, _ mts.User) error {
-	m.created = true
-	return nil
-}
-
-func (m *recordingUserManager) UpdateUser(context.Context, mts.User) error {
-	return nil
-}
-
-func (m *recordingUserManager) GetUser(context.Context, string) (mts.User, bool, error) {
-	return mts.User{}, false, nil
-}
-
-func (m *recordingUserManager) ListUsers(context.Context) ([]mts.User, error) {
-	return nil, nil
-}
-
-func (m *recordingUserManager) DeleteUser(context.Context, string) error {
-	return nil
-}
-
-func (m *recordingUserManager) GrantDatabasePermission(
-	context.Context,
-	string,
-	string,
-	mts.DatabasePermission,
-) error {
-	return nil
-}
-
-func (m *recordingUserManager) RevokeDatabasePermission(
-	context.Context,
-	string,
-	string,
-	mts.DatabasePermission,
-) error {
-	return nil
-}
-
-func (m *recordingUserManager) ListDatabasePermissions(
-	context.Context,
-	string,
-) ([]mts.DatabaseGrant, error) {
-	return nil, nil
-}
-
-func (m *recordingUserManager) CheckDatabasePermission(
-	context.Context,
-	string,
-	string,
-	mts.DatabasePermission,
-) error {
-	return nil
-}
-
-func (m *recordingUserManager) SetPassword(context.Context, string, string) error {
-	return nil
-}
-
-func (m *recordingUserManager) ChangePassword(context.Context, string, string, string) error {
-	return nil
-}
-
-func (m *recordingUserManager) Authenticate(context.Context, mts.Credentials, time.Duration) (mts.AuthToken, error) {
-	return mts.AuthToken{}, nil
-}
-
-func (m *recordingUserManager) VerifyToken(context.Context, string) (mts.Principal, error) {
-	return mts.Principal{}, nil
-}
-
-func (m *recordingUserManager) RevokeToken(context.Context, string) error {
-	return nil
 }
