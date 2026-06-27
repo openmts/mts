@@ -2,7 +2,6 @@ package mts
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	storageengine "github.com/openmts/mts/internal/engine"
@@ -12,11 +11,7 @@ import (
 
 // Close 关闭 Engine 并释放本地资源。
 func (e *Engine) Close(ctx context.Context) error {
-	err := publicError(e.inner.Close(ctx))
-	if e.closeUserManager != nil {
-		err = errors.Join(err, e.closeUserManager())
-	}
-	return err
+	return publicError(e.runtime.Close(ctx))
 }
 
 // Write 写入点数据。
@@ -25,7 +20,7 @@ func (e *Engine) Write(ctx context.Context, points []Point, opts WriteOptions) e
 	if err != nil {
 		return err
 	}
-	return publicError(e.inner.Write(ctx, converted, toModelWriteOptions(opts)))
+	return publicError(e.runtime.Storage().Write(ctx, converted, toModelWriteOptions(opts)))
 }
 
 // WriteTypedBatch 写入按列组织的批量数据。
@@ -34,12 +29,12 @@ func (e *Engine) WriteTypedBatch(ctx context.Context, batch TypedBatch, opts Wri
 	if err != nil {
 		return err
 	}
-	return publicError(e.inner.WriteTypedBatch(ctx, converted, toModelWriteOptions(opts)))
+	return publicError(e.runtime.Storage().WriteTypedBatch(ctx, converted, toModelWriteOptions(opts)))
 }
 
 // Flush 将当前内存数据刷写为本地 SSTable。
 func (e *Engine) Flush(ctx context.Context) error {
-	return publicError(e.inner.Flush(ctx))
+	return publicError(e.runtime.Storage().Flush(ctx))
 }
 
 // QueryColumns 返回完整列式查询结果。
@@ -51,7 +46,7 @@ func (e *Engine) QueryColumns(ctx context.Context, query Query) ([]ColumnSeries,
 	if err != nil {
 		return nil, err
 	}
-	columns, err := e.inner.QueryColumns(ctx, converted)
+	columns, err := e.runtime.Storage().QueryColumns(ctx, converted)
 	if err != nil {
 		return nil, publicError(err)
 	}
@@ -64,7 +59,7 @@ func (e *Engine) QueryColumnIterator(ctx context.Context, query Query) (ColumnIt
 	if err != nil {
 		return nil, err
 	}
-	inner, err := e.inner.QueryColumnIterator(ctx, converted)
+	inner, err := e.runtime.Storage().QueryColumnIterator(ctx, converted)
 	if err != nil {
 		return nil, publicError(err)
 	}
@@ -77,7 +72,7 @@ func (e *Engine) QueryWithExplain(ctx context.Context, query Query) (QueryResult
 	if err != nil {
 		return QueryResult{}, err
 	}
-	columns, explain, stats, err := e.inner.QueryWithExplain(ctx, converted)
+	columns, explain, stats, err := e.runtime.Storage().QueryWithExplain(ctx, converted)
 	if err != nil {
 		return QueryResult{}, publicError(err)
 	}
@@ -90,7 +85,7 @@ func (e *Engine) QueryWithExplain(ctx context.Context, query Query) (QueryResult
 
 // QueryStatsSnapshot 返回最近一次查询统计快照。
 func (e *Engine) QueryStatsSnapshot() QueryStats {
-	return fromModelQueryStats(e.inner.QueryStatsSnapshot())
+	return fromModelQueryStats(e.runtime.Storage().QueryStatsSnapshot())
 }
 
 // QueryRows 返回完整行式查询结果。
@@ -102,7 +97,7 @@ func (e *Engine) QueryRows(ctx context.Context, query Query) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := e.inner.QueryRows(ctx, converted)
+	rows, err := e.runtime.Storage().QueryRows(ctx, converted)
 	if err != nil {
 		return nil, publicError(err)
 	}
@@ -115,7 +110,7 @@ func (e *Engine) QueryRowIterator(ctx context.Context, query Query) (RowIterator
 	if err != nil {
 		return nil, err
 	}
-	inner, err := e.inner.QueryRowIterator(ctx, converted)
+	inner, err := e.runtime.Storage().QueryRowIterator(ctx, converted)
 	if err != nil {
 		return nil, publicError(err)
 	}
@@ -124,38 +119,38 @@ func (e *Engine) QueryRowIterator(ctx context.Context, query Query) (RowIterator
 
 // Compact 对所有 shard 执行一次手动 compaction。
 func (e *Engine) Compact(ctx context.Context) error {
-	return publicError(e.inner.Compact(ctx))
+	return publicError(e.runtime.Storage().Compact(ctx))
 }
 
 // CompactWithResult 对所有 shard 执行一次手动 compaction 并返回结果。
 func (e *Engine) CompactWithResult(ctx context.Context) (CompactionResult, error) {
-	result, err := e.inner.CompactWithResult(ctx)
+	result, err := e.runtime.Storage().CompactWithResult(ctx)
 	return fromCompactionResult(result), publicError(err)
 }
 
 // ApplyRetention 按 now 应用本地 retention 清理。
 func (e *Engine) ApplyRetention(ctx context.Context, now time.Time) error {
-	return publicError(e.inner.ApplyRetention(ctx, now))
+	return publicError(e.runtime.Storage().ApplyRetention(ctx, now))
 }
 
 // MaintenanceErrors 返回后台维护任务记录的错误。
 func (e *Engine) MaintenanceErrors(ctx context.Context) []error {
-	return e.inner.MaintenanceErrors(ctx)
+	return e.runtime.Storage().MaintenanceErrors(ctx)
 }
 
 // StorageMemorySnapshot 返回存储层内存占用快照。
 func (e *Engine) StorageMemorySnapshot() StorageMemorySnapshot {
-	return fromStorageMemorySnapshot(e.inner.StorageMemorySnapshot())
+	return fromStorageMemorySnapshot(e.runtime.Storage().StorageMemorySnapshot())
 }
 
 // CompactionStatsSnapshot 返回 compaction 统计快照。
 func (e *Engine) CompactionStatsSnapshot() CompactionStats {
-	return fromCompactionStats(e.inner.CompactionStatsSnapshot())
+	return fromCompactionStats(e.runtime.Storage().CompactionStatsSnapshot())
 }
 
 // HealthSnapshot 返回 Engine 健康状态快照。
 func (e *Engine) HealthSnapshot() HealthSnapshot {
-	health := e.inner.HealthSnapshot()
+	health := e.runtime.Storage().HealthSnapshot()
 	return HealthSnapshot{
 		Healthy: health.Healthy,
 		Ready:   health.Ready,
@@ -166,7 +161,7 @@ func (e *Engine) HealthSnapshot() HealthSnapshot {
 
 // PrometheusMetrics 返回 Engine 指标的 Prometheus 文本格式。
 func (e *Engine) PrometheusMetrics() string {
-	return observability.PrometheusText(e.inner.MetricsSnapshot())
+	return observability.PrometheusText(e.runtime.Storage().MetricsSnapshot())
 }
 
 func fromHealthChecks(checks []storageengine.HealthCheck) []HealthCheck {
@@ -183,28 +178,28 @@ func fromHealthChecks(checks []storageengine.HealthCheck) []HealthCheck {
 
 // CreateDatabase 创建本地 database 元数据。
 func (e *Engine) CreateDatabase(ctx context.Context, name string) error {
-	return publicError(e.inner.CreateDatabase(ctx, name))
+	return publicError(e.runtime.Storage().CreateDatabase(ctx, name))
 }
 
 // ListDatabases 列出所有 database。
 func (e *Engine) ListDatabases(ctx context.Context) ([]string, error) {
-	databases, err := e.inner.ListDatabases(ctx)
+	databases, err := e.runtime.Storage().ListDatabases(ctx)
 	return databases, publicError(err)
 }
 
 // DropDatabase 删除本地 database 元数据。
 func (e *Engine) DropDatabase(ctx context.Context, name string) error {
-	return publicError(e.inner.DropDatabase(ctx, name))
+	return publicError(e.runtime.Storage().DropDatabase(ctx, name))
 }
 
 // CreateRetentionPolicy 创建或更新本地 retention policy。
 func (e *Engine) CreateRetentionPolicy(ctx context.Context, database string, policy RetentionPolicy) error {
-	return publicError(e.inner.CreateRetentionPolicy(ctx, database, toModelRetentionPolicy(policy)))
+	return publicError(e.runtime.Storage().CreateRetentionPolicy(ctx, database, toModelRetentionPolicy(policy)))
 }
 
 // ListRetentionPolicies 列出 database 下的 retention policy。
 func (e *Engine) ListRetentionPolicies(ctx context.Context, database string) ([]RetentionPolicy, error) {
-	policies, err := e.inner.ListRetentionPolicies(ctx, database)
+	policies, err := e.runtime.Storage().ListRetentionPolicies(ctx, database)
 	if err != nil {
 		return nil, publicError(err)
 	}
@@ -213,13 +208,13 @@ func (e *Engine) ListRetentionPolicies(ctx context.Context, database string) ([]
 
 // ListMeasurements 列出 database 下的 measurement。
 func (e *Engine) ListMeasurements(ctx context.Context, database string) ([]string, error) {
-	measurements, err := e.inner.ListMeasurements(ctx, database)
+	measurements, err := e.runtime.Storage().ListMeasurements(ctx, database)
 	return measurements, publicError(err)
 }
 
 // ListFields 列出 measurement 下的字段 schema。
 func (e *Engine) ListFields(ctx context.Context, database string, measurement string) ([]FieldSchema, error) {
-	fields, err := e.inner.ListFields(ctx, database, measurement)
+	fields, err := e.runtime.Storage().ListFields(ctx, database, measurement)
 	if err != nil {
 		return nil, publicError(err)
 	}
@@ -233,7 +228,7 @@ func (e *Engine) ListSeries(
 	measurement string,
 	tags map[string]string,
 ) ([]Series, error) {
-	series, err := e.inner.ListSeries(ctx, database, measurement, tags)
+	series, err := e.runtime.Storage().ListSeries(ctx, database, measurement, tags)
 	if err != nil {
 		return nil, publicError(err)
 	}
@@ -242,27 +237,36 @@ func (e *Engine) ListSeries(
 
 // CreateUser 创建一个用户。
 func (e *Engine) CreateUser(ctx context.Context, user User) error {
-	return e.userManager.CreateUser(ctx, user)
+	return e.runtime.Users().CreateUser(ctx, toRuntimeUser(user))
 }
 
 // UpdateUser 更新用户显示名、禁用状态和 metadata。
 func (e *Engine) UpdateUser(ctx context.Context, user User) error {
-	return e.userManager.UpdateUser(ctx, user)
+	return e.runtime.Users().UpdateUser(ctx, toRuntimeUser(user))
 }
 
 // GetUser 查询用户。
 func (e *Engine) GetUser(ctx context.Context, name string) (User, bool, error) {
-	return e.userManager.GetUser(ctx, name)
+	user, ok, err := e.runtime.Users().GetUser(ctx, name)
+	return fromRuntimeUser(user), ok, err
 }
 
 // ListUsers 按用户名排序列出用户。
 func (e *Engine) ListUsers(ctx context.Context) ([]User, error) {
-	return e.userManager.ListUsers(ctx)
+	users, err := e.runtime.Users().ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]User, len(users))
+	for index, user := range users {
+		out[index] = fromRuntimeUser(user)
+	}
+	return out, nil
 }
 
 // DeleteUser 删除用户及其 DB 权限。
 func (e *Engine) DeleteUser(ctx context.Context, name string) error {
-	return e.userManager.DeleteUser(ctx, name)
+	return e.runtime.Users().DeleteUser(ctx, name)
 }
 
 // GrantDatabasePermission 授予用户 database 权限。
@@ -272,7 +276,7 @@ func (e *Engine) GrantDatabasePermission(
 	database string,
 	permission DatabasePermission,
 ) error {
-	return e.userManager.GrantDatabasePermission(ctx, userName, database, permission)
+	return e.runtime.Users().GrantDatabasePermission(ctx, userName, database, runtimePermission(permission))
 }
 
 // RevokeDatabasePermission 撤销用户 database 权限。
@@ -282,12 +286,20 @@ func (e *Engine) RevokeDatabasePermission(
 	database string,
 	permission DatabasePermission,
 ) error {
-	return e.userManager.RevokeDatabasePermission(ctx, userName, database, permission)
+	return e.runtime.Users().RevokeDatabasePermission(ctx, userName, database, runtimePermission(permission))
 }
 
 // ListDatabasePermissions 列出用户 DB 权限。
 func (e *Engine) ListDatabasePermissions(ctx context.Context, userName string) ([]DatabaseGrant, error) {
-	return e.userManager.ListDatabasePermissions(ctx, userName)
+	grants, err := e.runtime.Users().ListDatabasePermissions(ctx, userName)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DatabaseGrant, len(grants))
+	for index, grant := range grants {
+		out[index] = fromRuntimeGrant(grant)
+	}
+	return out, nil
 }
 
 // CheckUserDatabasePermission 校验用户是否拥有 database 权限。
@@ -297,11 +309,11 @@ func (e *Engine) CheckUserDatabasePermission(
 	database string,
 	permission DatabasePermission,
 ) error {
-	return e.userManager.CheckDatabasePermission(ctx, userName, database, permission)
+	return e.runtime.Users().CheckDatabasePermission(ctx, userName, database, runtimePermission(permission))
 }
 
 func (e *Engine) SetPassword(ctx context.Context, userName string, password string) error {
-	return e.userManager.SetPassword(ctx, userName, password)
+	return e.runtime.Users().SetPassword(ctx, userName, password)
 }
 
 func (e *Engine) ChangePassword(
@@ -310,19 +322,27 @@ func (e *Engine) ChangePassword(
 	oldPassword string,
 	newPassword string,
 ) error {
-	return e.userManager.ChangePassword(ctx, userName, oldPassword, newPassword)
+	return e.runtime.Users().ChangePassword(ctx, userName, oldPassword, newPassword)
 }
 
 func (e *Engine) Authenticate(ctx context.Context, credentials Credentials, ttl time.Duration) (AuthToken, error) {
-	return e.userManager.Authenticate(ctx, credentials, ttl)
+	token, err := e.runtime.Users().Authenticate(ctx, toRuntimeCredentials(credentials), ttl)
+	if err != nil {
+		return AuthToken{}, err
+	}
+	return AuthToken{Token: token.Token, UserName: token.UserName, ExpiresAt: token.ExpiresAt}, nil
 }
 
 func (e *Engine) VerifyToken(ctx context.Context, token string) (Principal, error) {
-	return e.userManager.VerifyToken(ctx, token)
+	principal, err := e.runtime.Users().VerifyToken(ctx, token)
+	if err != nil {
+		return Principal{}, err
+	}
+	return Principal{UserName: principal.UserName}, nil
 }
 
 func (e *Engine) RevokeToken(ctx context.Context, token string) error {
-	return e.userManager.RevokeToken(ctx, token)
+	return e.runtime.Users().RevokeToken(ctx, token)
 }
 
 type columnIterator struct {

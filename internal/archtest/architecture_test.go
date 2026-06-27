@@ -53,6 +53,23 @@ func TestArchitectureDependencies(t *testing.T) {
 			},
 			forbidden: []string{modulePath + "/cmd/"},
 		},
+		{
+			name: "root package must not depend on user implementation",
+			match: func(path string) bool {
+				return path == modulePath
+			},
+			forbidden: []string{modulePath + "/internal/user"},
+		},
+		{
+			name: "storage engine must not depend on runtime or user implementation",
+			match: func(path string) bool {
+				return strings.HasPrefix(path, modulePath+"/internal/engine")
+			},
+			forbidden: []string{
+				modulePath + "/internal/runtime",
+				modulePath + "/internal/user",
+			},
+		},
 	}
 	for _, rule := range rules {
 		t.Run(rule.name, func(t *testing.T) {

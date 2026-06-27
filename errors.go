@@ -6,7 +6,7 @@ import (
 	storageengine "github.com/openmts/mts/internal/engine"
 	"github.com/openmts/mts/internal/queryanalyzer"
 	"github.com/openmts/mts/internal/queryexec"
-	internaluser "github.com/openmts/mts/internal/user"
+	"github.com/openmts/mts/internal/runtime"
 )
 
 // ErrInvalidOptions 表示 Engine 配置非法。
@@ -26,14 +26,14 @@ var ErrReadBudgetExceeded = queryexec.ErrReadBudgetExceeded
 
 // 用户管理相关错误。
 var (
-	ErrInvalidUser             = internaluser.ErrInvalidUser
-	ErrUserNotFound            = internaluser.ErrUserNotFound
-	ErrUserAlreadyExists       = internaluser.ErrUserAlreadyExists
-	ErrInvalidPermission       = internaluser.ErrInvalidPermission
-	ErrPermissionDenied        = internaluser.ErrPermissionDenied
-	ErrInvalidCredentials      = internaluser.ErrInvalidCredentials
-	ErrAuthenticationDisabled  = internaluser.ErrAuthenticationDisabled
-	ErrUnsupportedUserEndpoint = internaluser.ErrUnsupportedEndpoint
+	ErrInvalidUser             = runtime.ErrInvalidUser
+	ErrUserNotFound            = runtime.ErrUserNotFound
+	ErrUserAlreadyExists       = runtime.ErrUserAlreadyExists
+	ErrInvalidPermission       = runtime.ErrInvalidPermission
+	ErrPermissionDenied        = runtime.ErrPermissionDenied
+	ErrInvalidCredentials      = runtime.ErrInvalidCredentials
+	ErrAuthenticationDisabled  = runtime.ErrAuthenticationDisabled
+	ErrUnsupportedUserEndpoint = runtime.ErrUnsupportedUserEndpoint
 )
 
 func publicError(err error) error {

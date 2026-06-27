@@ -10,22 +10,22 @@ import (
 
 // CreateDownsamplePolicy 创建或更新本地降采样策略。
 func (e *Engine) CreateDownsamplePolicy(ctx context.Context, policy DownsamplePolicy) error {
-	return publicError(e.inner.CreateDownsamplePolicy(ctx, toModelDownsamplePolicy(policy)))
+	return publicError(e.runtime.Storage().CreateDownsamplePolicy(ctx, toModelDownsamplePolicy(policy)))
 }
 
 // EnableDownsamplePolicy 启用降采样策略。
 func (e *Engine) EnableDownsamplePolicy(ctx context.Context, name string) error {
-	return publicError(e.inner.EnableDownsamplePolicy(ctx, name))
+	return publicError(e.runtime.Storage().EnableDownsamplePolicy(ctx, name))
 }
 
 // DisableDownsamplePolicy 禁用降采样策略。
 func (e *Engine) DisableDownsamplePolicy(ctx context.Context, name string) error {
-	return publicError(e.inner.DisableDownsamplePolicy(ctx, name))
+	return publicError(e.runtime.Storage().DisableDownsamplePolicy(ctx, name))
 }
 
 // DropDownsamplePolicy 删除降采样策略但不清理目标 rollup 数据。
 func (e *Engine) DropDownsamplePolicy(ctx context.Context, name string) error {
-	return publicError(e.inner.DropDownsamplePolicy(ctx, name))
+	return publicError(e.runtime.Storage().DropDownsamplePolicy(ctx, name))
 }
 
 // DropDownsamplePolicyWithOptions 删除降采样策略，并按选项清理目标 rollup 数据。
@@ -34,7 +34,7 @@ func (e *Engine) DropDownsamplePolicyWithOptions(
 	name string,
 	opts DownsampleDropOptions,
 ) error {
-	return publicError(e.inner.DropDownsamplePolicyWithOptions(ctx, name, toModelDownsampleDropOptions(opts)))
+	return publicError(e.runtime.Storage().DropDownsamplePolicyWithOptions(ctx, name, toModelDownsampleDropOptions(opts)))
 }
 
 // ResetDownsamplePolicy 重置降采样策略 watermark 和替换许可。
@@ -43,12 +43,12 @@ func (e *Engine) ResetDownsamplePolicy(
 	name string,
 	reset DownsampleReset,
 ) error {
-	return publicError(e.inner.ResetDownsamplePolicy(ctx, name, toModelDownsampleReset(reset)))
+	return publicError(e.runtime.Storage().ResetDownsamplePolicy(ctx, name, toModelDownsampleReset(reset)))
 }
 
 // ListDownsamplePolicies 列出本地降采样策略。
 func (e *Engine) ListDownsamplePolicies(ctx context.Context) ([]DownsamplePolicy, error) {
-	policies, err := e.inner.ListDownsamplePolicies(ctx)
+	policies, err := e.runtime.Storage().ListDownsamplePolicies(ctx)
 	if err != nil {
 		return nil, publicError(err)
 	}
@@ -60,7 +60,7 @@ func (e *Engine) DownsamplePolicyStatuses(
 	ctx context.Context,
 	now time.Time,
 ) ([]DownsamplePolicyStatus, error) {
-	statuses, err := e.inner.DownsamplePolicyStatuses(ctx, time.Duration(now.UnixNano()))
+	statuses, err := e.runtime.Storage().DownsamplePolicyStatuses(ctx, time.Duration(now.UnixNano()))
 	if err != nil {
 		return nil, publicError(err)
 	}
@@ -73,7 +73,7 @@ func (e *Engine) RunDownsamplePolicy(
 	name string,
 	now time.Time,
 ) (DownsampleRunResult, error) {
-	result, err := e.inner.RunDownsamplePolicy(ctx, name, time.Duration(now.UnixNano()))
+	result, err := e.runtime.Storage().RunDownsamplePolicy(ctx, name, time.Duration(now.UnixNano()))
 	return fromStorageDownsampleRunResult(result), publicError(err)
 }
 
@@ -85,7 +85,7 @@ func (e *Engine) RunDownsamplePolicyRange(
 	end time.Time,
 	opts DownsampleRangeOptions,
 ) (DownsampleRunResult, error) {
-	result, err := e.inner.RunDownsamplePolicyRange(
+	result, err := e.runtime.Storage().RunDownsamplePolicyRange(
 		ctx,
 		name,
 		start.UnixNano(),
@@ -102,7 +102,7 @@ func (e *Engine) RepairDownsamplePolicy(
 	start time.Time,
 	end time.Time,
 ) (DownsampleRunResult, error) {
-	result, err := e.inner.RepairDownsamplePolicy(ctx, name, start.UnixNano(), end.UnixNano())
+	result, err := e.runtime.Storage().RepairDownsamplePolicy(ctx, name, start.UnixNano(), end.UnixNano())
 	return fromStorageDownsampleRunResult(result), publicError(err)
 }
 
@@ -113,7 +113,7 @@ func (e *Engine) DryRunDownsamplePolicy(
 	start time.Time,
 	end time.Time,
 ) (DownsampleDryRunResult, error) {
-	result, err := e.inner.DryRunDownsamplePolicy(ctx, name, start.UnixNano(), end.UnixNano())
+	result, err := e.runtime.Storage().DryRunDownsamplePolicy(ctx, name, start.UnixNano(), end.UnixNano())
 	return fromModelDownsampleDryRunResult(result), publicError(err)
 }
 
