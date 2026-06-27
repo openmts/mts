@@ -28,10 +28,7 @@ func TestEngineLifecycleAndQueries(t *testing.T) {
 		Retention:          time.Hour,
 		MemTableMaxSamples: 2,
 	}
-	eng, err := Open(ctx, opts)
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
+	eng := openTestEngine(t, ctx, opts)
 	point := model.Point{
 		Measurement: "cpu",
 		Tags:        map[string]string{"host": "a"},
@@ -104,21 +101,16 @@ func TestEngineLifecycleAndQueries(t *testing.T) {
 	if len(rows) != 0 {
 		t.Fatalf("row count after retention = %d, want 0", len(rows))
 	}
-	if err := eng.Close(ctx); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	closeTestEngine(t, ctx, eng)
 }
 
 func TestQuerySnapshotAllowsConcurrentWrite(t *testing.T) {
 	ctx := context.Background()
-	eng, err := Open(ctx, model.Options{
+	eng := openTestEngine(t, ctx, model.Options{
 		Path:               t.TempDir(),
 		ShardDuration:      time.Hour,
 		MemTableMaxSamples: 1000,
 	})
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
 	points := make([]model.Point, 0, 200)
 	for index := range 200 {
 		points = append(points, model.Point{
@@ -164,9 +156,7 @@ func TestQuerySnapshotAllowsConcurrentWrite(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("QueryRows() error = %v", err)
 	}
-	if err := eng.Close(ctx); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	closeTestEngine(t, ctx, eng)
 }
 
 func TestEngineReopenAndNoMatches(t *testing.T) {

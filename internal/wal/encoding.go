@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/openmts/mts/internal/codec"
+	"github.com/openmts/mts/internal/collections"
 	"github.com/openmts/mts/internal/model"
 )
 
@@ -963,14 +964,7 @@ func readTagPair(reader *batchReader) (string, string, error) {
 }
 
 func cloneStringMap(values map[string]string) map[string]string {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(values))
-	for key, value := range values {
-		out[key] = value
-	}
-	return out
+	return collections.CloneMapNilIfEmpty(values)
 }
 
 func appendValuePayload(dst []byte, value model.FieldValue) ([]byte, error) {

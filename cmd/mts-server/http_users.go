@@ -34,7 +34,7 @@ func (r *serverRuntime) handleUsers(writer http.ResponseWriter, request *http.Re
 		}
 		writeHTTPJSON(writer, http.StatusOK, usersResponse{Users: users})
 	default:
-		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
 }
 
@@ -60,7 +60,7 @@ func (r *serverRuntime) handleUserResource(writer http.ResponseWriter, request *
 		writeAPIError(writer, err)
 		return
 	}
-	parts := splitPath(request.URL.Path, "/api/v1/users/")
+	parts := splitPath(request.URL.Path, routeUsersPrefix)
 	if len(parts) == 0 || parts[0] == "" {
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, "user name is required", nil))
 		return
@@ -123,7 +123,7 @@ func (r *serverRuntime) handleSingleUser(
 		r.audit.record(auditEvent{UserName: userName, Action: "delete_user"})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 	default:
-		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
 }
 
@@ -152,7 +152,7 @@ func (r *serverRuntime) handleDatabasePermissionResource(
 ) {
 	if len(parts) == 0 {
 		if request.Method != http.MethodGet {
-			writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+			writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 			return
 		}
 		grants, err := r.engine.ListDatabasePermissions(request.Context(), userName)
@@ -187,7 +187,7 @@ func (r *serverRuntime) handleDatabasePermissionResource(
 		}
 		r.audit.record(auditEvent{UserName: userName, Action: "revoke_database_permission", Database: database, Detail: string(permission)})
 	default:
-		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})

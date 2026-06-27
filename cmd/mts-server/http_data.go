@@ -129,21 +129,21 @@ func (r *serverRuntime) handleQueryStream(writer http.ResponseWriter, request *h
 	defer func() {
 		_ = rows.Close()
 	}()
-	writer.Header().Set("Content-Type", "application/x-ndjson")
+	writer.Header().Set("Content-Type", contentTypeNDJSON)
 	writer.WriteHeader(http.StatusOK)
 	encoder := json.NewEncoder(writer)
 	for rows.Next() {
 		row := rows.Row()
-		if err := encoder.Encode(streamRecord{Type: "row", Row: &row}); err != nil {
+		if err := encoder.Encode(streamRecord{Type: streamTypeRow, Row: &row}); err != nil {
 			return
 		}
 	}
 	if err := rows.Err(); err != nil {
-		_ = encoder.Encode(streamRecord{Type: "error", Error: errorPayload(err)})
+		_ = encoder.Encode(streamRecord{Type: streamTypeError, Error: errorPayload(err)})
 		return
 	}
 	stats := r.queryStats()
-	_ = encoder.Encode(streamRecord{Type: "end", Stats: &stats})
+	_ = encoder.Encode(streamRecord{Type: streamTypeEnd, Stats: &stats})
 }
 
 func (r *serverRuntime) decodeAuthorizedQuery(

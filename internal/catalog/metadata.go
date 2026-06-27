@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/openmts/mts/internal/codec"
+	"github.com/openmts/mts/internal/collections"
 	"github.com/openmts/mts/internal/model"
 	"github.com/openmts/mts/internal/storagefs"
 )
@@ -136,21 +136,11 @@ func readPolicies(reader *payloadReader) (map[string]model.RetentionPolicy, erro
 }
 
 func sortedDatabaseNames(databases map[string]struct{}) []string {
-	names := make([]string, 0, len(databases))
-	for name := range databases {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return collections.SortedKeys(databases)
 }
 
 func sortedPolicyNames(policies map[string]model.RetentionPolicy) []string {
-	names := make([]string, 0, len(policies))
-	for name := range policies {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return collections.SortedKeys(policies)
 }
 
 func (r *payloadReader) varint(name string) (int64, error) {

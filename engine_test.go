@@ -17,10 +17,7 @@ func TestEngineWriteFlushReopenQueryRows(t *testing.T) {
 		ShardDuration:      time.Hour,
 		MemTableMaxSamples: 2,
 	}
-	eng, err := mts.Open(ctx, opts)
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
+	eng := openTestEngine(t, ctx, opts)
 	point := mts.Point{
 		Measurement: "cpu",
 		Tags:        map[string]string{"host": "a"},
@@ -36,14 +33,9 @@ func TestEngineWriteFlushReopenQueryRows(t *testing.T) {
 	if err := eng.Flush(ctx); err != nil {
 		t.Fatalf("Flush() error = %v", err)
 	}
-	if err := eng.Close(ctx); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	closeTestEngine(t, ctx, eng)
 
-	eng, err = mts.Open(ctx, opts)
-	if err != nil {
-		t.Fatalf("Open() after close error = %v", err)
-	}
+	eng = openTestEngine(t, ctx, opts)
 	columns, err := eng.QueryColumns(ctx, mts.Query{
 		Measurement: "cpu",
 		Tags:        map[string]string{"host": "a"},
@@ -124,9 +116,7 @@ func TestEngineWriteFlushReopenQueryRows(t *testing.T) {
 	if rows[0].Fields["state"].String != "ok" {
 		t.Fatalf("state = %q, want ok", rows[0].Fields["state"].String)
 	}
-	if err := eng.Close(ctx); err != nil {
-		t.Fatalf("Close() after query error = %v", err)
-	}
+	closeTestEngine(t, ctx, eng)
 }
 
 func TestEngineReplaysUnflushedWAL(t *testing.T) {
@@ -137,10 +127,7 @@ func TestEngineReplaysUnflushedWAL(t *testing.T) {
 		ShardDuration:      time.Hour,
 		MemTableMaxSamples: 100,
 	}
-	eng, err := mts.Open(ctx, opts)
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
+	eng := openTestEngine(t, ctx, opts)
 	point := mts.Point{
 		Measurement: "mem",
 		Timestamp:   int64(15),
@@ -151,14 +138,9 @@ func TestEngineReplaysUnflushedWAL(t *testing.T) {
 	if err := eng.Write(ctx, []mts.Point{point}, mts.WriteOptions{Sync: true}); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
-	if err := eng.Close(ctx); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	closeTestEngine(t, ctx, eng)
 
-	eng, err = mts.Open(ctx, opts)
-	if err != nil {
-		t.Fatalf("Open() after close error = %v", err)
-	}
+	eng = openTestEngine(t, ctx, opts)
 	rows, err := eng.QueryRows(ctx, mts.Query{
 		Measurement: "mem",
 		StartTime:   0,
@@ -173,9 +155,7 @@ func TestEngineReplaysUnflushedWAL(t *testing.T) {
 	if rows[0].Fields["used"].Int64 != 9 {
 		t.Fatalf("used = %d, want 9", rows[0].Fields["used"].Int64)
 	}
-	if err := eng.Close(ctx); err != nil {
-		t.Fatalf("Close() after replay query error = %v", err)
-	}
+	closeTestEngine(t, ctx, eng)
 }
 
 func TestEngineWriteTypedBatchFlushReopenQueryRows(t *testing.T) {

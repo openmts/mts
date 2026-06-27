@@ -1,67 +1,67 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/pprof"
 	"strings"
 
 	mts "github.com/openmts/mts"
+	"github.com/openmts/mts/internal/httpjson"
 )
 
 func (r *serverRuntime) httpHandler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", r.handleHealth)
-	mux.HandleFunc("/readyz", r.handleHealth)
-	mux.HandleFunc("/metrics", r.handleMetrics)
-	mux.HandleFunc("/api/v1/data/write", r.handleWrite)
-	mux.HandleFunc("/api/v1/data/write/typed", r.handleWriteTyped)
-	mux.HandleFunc("/api/v1/data/query/rows", r.handleQueryRows)
-	mux.HandleFunc("/api/v1/data/query/columns", r.handleQueryColumns)
-	mux.HandleFunc("/api/v1/data/query/explain", r.handleQueryExplain)
-	mux.HandleFunc("/api/v1/data/query/stream", r.handleQueryStream)
-	mux.HandleFunc("/api/v1/data/query/stats", r.handleQueryStats)
-	mux.HandleFunc("/api/v1/data/databases/", r.handleDataDatabase)
-	mux.HandleFunc("/api/v1/auth/login", r.handleLogin)
-	mux.HandleFunc("/api/v1/auth/logout", r.handleLogout)
-	mux.HandleFunc("/api/v1/auth/password", r.handleChangePassword)
-	mux.HandleFunc("/api/v1/users", r.handleUsers)
-	mux.HandleFunc("/api/v1/users/", r.handleUserResource)
-	mux.HandleFunc("/api/v1/authz/database/check", r.handleAuthzDatabaseCheck)
-	mux.HandleFunc("/api/v1/admin/databases", r.handleAdminDatabases)
-	mux.HandleFunc("/api/v1/admin/databases/", r.handleAdminDatabaseResource)
-	mux.HandleFunc("/api/v1/admin/config", r.handleConfig)
-	mux.HandleFunc("/api/v1/admin/config/effective", r.handleConfig)
-	mux.HandleFunc("/api/v1/admin/config/schema", r.handleConfigSchema)
-	mux.HandleFunc("/api/v1/admin/flush", r.handleFlush)
-	mux.HandleFunc("/api/v1/admin/compact", r.handleCompact)
-	mux.HandleFunc("/api/v1/admin/retention/apply", r.handleApplyRetention)
-	mux.HandleFunc("/api/v1/admin/maintenance/errors", r.handleMaintenanceErrors)
-	mux.HandleFunc("/api/v1/admin/stats/storage-memory", r.handleStorageMemory)
-	mux.HandleFunc("/api/v1/admin/stats/compaction", r.handleCompactionStats)
-	mux.HandleFunc("/api/v1/admin/health", r.handleAdminHealth)
-	mux.HandleFunc("/api/v1/admin/downsample/policies", r.handleDownsamplePolicies)
-	mux.HandleFunc("/api/v1/admin/downsample/policies/", r.handleDownsamplePolicyResource)
-	mux.HandleFunc("/api/v1/admin/downsample/statuses", r.handleDownsampleStatuses)
-	mux.HandleFunc("/api/v1/admin/api-spec", r.handleAPISpec)
-	mux.HandleFunc("/api/v1/admin/error-codes", r.handleErrorCodes)
-	mux.HandleFunc("/api/v1/admin/config/validate", r.handleValidateConfig)
-	mux.HandleFunc("/api/v1/admin/config/reload", r.handleReloadConfig)
-	mux.HandleFunc("/api/v1/admin/storage/validate", r.handleStorageValidate)
-	mux.HandleFunc("/api/v1/admin/storage/snapshot", r.handleStorageSnapshot)
-	mux.HandleFunc("/api/v1/admin/storage/export", r.handleStorageExport)
+	mux.HandleFunc(routeHealth, r.handleHealth)
+	mux.HandleFunc(routeReady, r.handleHealth)
+	mux.HandleFunc(routeMetrics, r.handleMetrics)
+	mux.HandleFunc(routeDataWrite, r.handleWrite)
+	mux.HandleFunc(routeDataWriteTyped, r.handleWriteTyped)
+	mux.HandleFunc(routeDataQueryRows, r.handleQueryRows)
+	mux.HandleFunc(routeDataQueryColumns, r.handleQueryColumns)
+	mux.HandleFunc(routeDataQueryExplain, r.handleQueryExplain)
+	mux.HandleFunc(routeDataQueryStream, r.handleQueryStream)
+	mux.HandleFunc(routeDataQueryStats, r.handleQueryStats)
+	mux.HandleFunc(routeDataDatabasesPrefix, r.handleDataDatabase)
+	mux.HandleFunc(routeAuthLogin, r.handleLogin)
+	mux.HandleFunc(routeAuthLogout, r.handleLogout)
+	mux.HandleFunc(routeAuthPassword, r.handleChangePassword)
+	mux.HandleFunc(routeUsers, r.handleUsers)
+	mux.HandleFunc(routeUsersPrefix, r.handleUserResource)
+	mux.HandleFunc(routeAuthzDatabaseCheck, r.handleAuthzDatabaseCheck)
+	mux.HandleFunc(routeAdminDatabases, r.handleAdminDatabases)
+	mux.HandleFunc(routeAdminDatabasesPrefix, r.handleAdminDatabaseResource)
+	mux.HandleFunc(routeAdminConfig, r.handleConfig)
+	mux.HandleFunc(routeAdminConfigEffective, r.handleConfig)
+	mux.HandleFunc(routeAdminConfigSchema, r.handleConfigSchema)
+	mux.HandleFunc(routeAdminFlush, r.handleFlush)
+	mux.HandleFunc(routeAdminCompact, r.handleCompact)
+	mux.HandleFunc(routeAdminRetentionApply, r.handleApplyRetention)
+	mux.HandleFunc(routeAdminMaintenanceErrors, r.handleMaintenanceErrors)
+	mux.HandleFunc(routeAdminStatsStorageMemory, r.handleStorageMemory)
+	mux.HandleFunc(routeAdminStatsCompaction, r.handleCompactionStats)
+	mux.HandleFunc(routeAdminHealth, r.handleAdminHealth)
+	mux.HandleFunc(routeAdminDownsamplePolicies, r.handleDownsamplePolicies)
+	mux.HandleFunc(routeAdminDownsamplePrefix, r.handleDownsamplePolicyResource)
+	mux.HandleFunc(routeAdminDownsampleStatuses, r.handleDownsampleStatuses)
+	mux.HandleFunc(routeAdminAPISpec, r.handleAPISpec)
+	mux.HandleFunc(routeAdminErrorCodes, r.handleErrorCodes)
+	mux.HandleFunc(routeAdminConfigValidate, r.handleValidateConfig)
+	mux.HandleFunc(routeAdminConfigReload, r.handleReloadConfig)
+	mux.HandleFunc(routeAdminStorageValidate, r.handleStorageValidate)
+	mux.HandleFunc(routeAdminStorageSnapshot, r.handleStorageSnapshot)
+	mux.HandleFunc(routeAdminStorageExport, r.handleStorageExport)
 	r.mountPprof(mux)
-	mux.HandleFunc("/", dashboardHandler().ServeHTTP)
+	mux.HandleFunc(routeRoot, dashboardHandler().ServeHTTP)
 	return r.wrapHTTP(mux)
 }
 
 func (r *serverRuntime) mountPprof(mux *http.ServeMux) {
-	mux.HandleFunc("/debug/pprof/", r.adminHTTPHandler(pprof.Index))
-	mux.HandleFunc("/debug/pprof/cmdline", r.adminHTTPHandler(pprof.Cmdline))
-	mux.HandleFunc("/debug/pprof/profile", r.adminHTTPHandler(pprof.Profile))
-	mux.HandleFunc("/debug/pprof/symbol", r.adminHTTPHandler(pprof.Symbol))
-	mux.HandleFunc("/debug/pprof/trace", r.adminHTTPHandler(pprof.Trace))
+	mux.HandleFunc(routePprofPrefix, r.adminHTTPHandler(pprof.Index))
+	mux.HandleFunc(routePprofCmdline, r.adminHTTPHandler(pprof.Cmdline))
+	mux.HandleFunc(routePprofProfile, r.adminHTTPHandler(pprof.Profile))
+	mux.HandleFunc(routePprofSymbol, r.adminHTTPHandler(pprof.Symbol))
+	mux.HandleFunc(routePprofTrace, r.adminHTTPHandler(pprof.Trace))
 }
 
 func (r *serverRuntime) adminHTTPHandler(next http.HandlerFunc) http.HandlerFunc {
@@ -87,15 +87,11 @@ func (r *serverRuntime) handleHealth(writer http.ResponseWriter, request *http.R
 }
 
 func decodeHTTPJSON(request *http.Request, value any) error {
-	decoder := json.NewDecoder(request.Body)
-	decoder.DisallowUnknownFields()
-	return decoder.Decode(value)
+	return httpjson.DecodeStrict(request, value)
 }
 
 func writeHTTPJSON(writer http.ResponseWriter, status int, value any) {
-	writer.Header().Set("Content-Type", "application/json")
-	writer.WriteHeader(status)
-	_ = json.NewEncoder(writer).Encode(value)
+	httpjson.Write(writer, status, value)
 }
 
 func writeAPIError(writer http.ResponseWriter, err error) {
@@ -104,40 +100,45 @@ func writeAPIError(writer http.ResponseWriter, err error) {
 }
 
 func apiErrorResponse(err error) (int, errorResponse) {
+	classified := classifyAPIError(err)
+	return httpStatusForErrorCode(classified.Code), errorResponse{
+		OK:      false,
+		Code:    classified.Code,
+		Message: classified.Message,
+		Error:   classified.Message,
+	}
+}
+
+type apiErrorClass struct {
+	Code    errorCode
+	Message string
+}
+
+func classifyAPIError(err error) apiErrorClass {
 	if err == nil {
-		return http.StatusInternalServerError, errorResponse{Code: errorCodeInternal}
+		return apiErrorClass{Code: errorCodeInternal, Message: string(errorCodeInternal)}
 	}
-	code := errorCodeInternal
-	statusCode := http.StatusInternalServerError
 	var apiErr apiError
-	if errors.As(err, &apiErr) {
-		code = apiErr.Code
-		statusCode = httpStatusForErrorCode(code)
-	} else if errors.Is(err, mts.ErrPermissionDenied) {
-		code = errorCodePermissionDenied
-		statusCode = http.StatusForbidden
-	} else if errors.Is(err, mts.ErrUserNotFound) {
-		code = errorCodeNotFound
-		statusCode = http.StatusNotFound
-	} else if looksLikeNotFoundError(err) {
-		code = errorCodeNotFound
-		statusCode = http.StatusNotFound
-	} else if errors.Is(err, mts.ErrUserAlreadyExists) {
-		code = errorCodeAlreadyExists
-		statusCode = http.StatusConflict
-	} else if errors.Is(err, mts.ErrInvalidCredentials) || errors.Is(err, mts.ErrAuthenticationDisabled) {
-		code = errorCodeUnauthenticated
-		statusCode = http.StatusUnauthorized
-	} else if errors.Is(err, mts.ErrInvalidUser) ||
+	switch {
+	case errors.As(err, &apiErr):
+		return apiErrorClass{Code: apiErr.Code, Message: err.Error()}
+	case errors.Is(err, mts.ErrPermissionDenied):
+		return apiErrorClass{Code: errorCodePermissionDenied, Message: err.Error()}
+	case errors.Is(err, mts.ErrUserNotFound), looksLikeNotFoundError(err):
+		return apiErrorClass{Code: errorCodeNotFound, Message: err.Error()}
+	case errors.Is(err, mts.ErrUserAlreadyExists):
+		return apiErrorClass{Code: errorCodeAlreadyExists, Message: err.Error()}
+	case errors.Is(err, mts.ErrInvalidCredentials), errors.Is(err, mts.ErrAuthenticationDisabled):
+		return apiErrorClass{Code: errorCodeUnauthenticated, Message: err.Error()}
+	case errors.Is(err, mts.ErrInvalidUser) ||
 		errors.Is(err, mts.ErrInvalidPermission) ||
-		errors.Is(err, mts.ErrInvalidPrecision) {
-		code = errorCodeBadRequest
-		statusCode = http.StatusBadRequest
-	} else if looksLikeValidationError(err) {
-		code = errorCodeBadRequest
-		statusCode = http.StatusBadRequest
+		errors.Is(err, mts.ErrInvalidPrecision):
+		return apiErrorClass{Code: errorCodeBadRequest, Message: err.Error()}
+	case looksLikeValidationError(err):
+		return apiErrorClass{Code: errorCodeBadRequest, Message: err.Error()}
+	default:
+		return apiErrorClass{Code: errorCodeInternal, Message: err.Error()}
 	}
-	return statusCode, errorResponse{OK: false, Code: code, Message: err.Error(), Error: err.Error()}
 }
 
 func httpStatusForErrorCode(code errorCode) int {
@@ -202,10 +203,25 @@ func requireHTTPMethod(writer http.ResponseWriter, request *http.Request, method
 	writeHTTPJSON(writer, http.StatusMethodNotAllowed, errorResponse{
 		OK:      false,
 		Code:    errorCodeBadRequest,
-		Message: "method not allowed",
-		Error:   "method not allowed",
+		Message: messageMethodNotAllowed,
+		Error:   messageMethodNotAllowed,
 	})
 	return false
+}
+
+func (r *serverRuntime) requireHTTPAdminMethod(
+	writer http.ResponseWriter,
+	request *http.Request,
+	method string,
+) bool {
+	if !requireHTTPMethod(writer, request, method) {
+		return false
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		writeAPIError(writer, err)
+		return false
+	}
+	return true
 }
 
 func splitPath(path string, prefix string) []string {

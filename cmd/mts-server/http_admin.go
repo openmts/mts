@@ -11,7 +11,7 @@ func (r *serverRuntime) handleMetrics(writer http.ResponseWriter, request *http.
 	if !requireHTTPMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	writer.Header().Set("Content-Type", contentTypePrometheus)
 	writer.WriteHeader(http.StatusOK)
 	_, _ = writer.Write([]byte(r.engine.PrometheusMetrics()))
 	_, _ = writer.Write([]byte(r.metrics.prometheusText()))
@@ -19,33 +19,21 @@ func (r *serverRuntime) handleMetrics(writer http.ResponseWriter, request *http.
 }
 
 func (r *serverRuntime) handleAPISpec(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, apiSpec())
 }
 
 func (r *serverRuntime) handleErrorCodes(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, errorCodeSpecs())
 }
 
 func (r *serverRuntime) handleValidateConfig(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodPost) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
 		return
 	}
 	var req configValidateRequest
@@ -62,11 +50,7 @@ func (r *serverRuntime) handleValidateConfig(writer http.ResponseWriter, request
 }
 
 func (r *serverRuntime) handleReloadConfig(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodPost) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
 		return
 	}
 	resp, err := r.reloadConfig()
@@ -79,22 +63,14 @@ func (r *serverRuntime) handleReloadConfig(writer http.ResponseWriter, request *
 }
 
 func (r *serverRuntime) handleStorageValidate(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodPost) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, r.storageValidate())
 }
 
 func (r *serverRuntime) handleStorageSnapshot(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodPost) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
 		return
 	}
 	resp, err := r.storageSnapshot(request.Context())
@@ -107,11 +83,7 @@ func (r *serverRuntime) handleStorageSnapshot(writer http.ResponseWriter, reques
 }
 
 func (r *serverRuntime) handleStorageExport(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, storageExportResponse{Export: r.storageExport(request.Context())})
@@ -143,33 +115,21 @@ func intMetric(value int) string {
 }
 
 func (r *serverRuntime) handleConfig(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, configResponse{Config: r.effectiveConfig()})
 }
 
 func (r *serverRuntime) handleConfigSchema(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, configSchemaResponse{Fields: configSchema()})
 }
 
 func (r *serverRuntime) handleFlush(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodPost) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
 		return
 	}
 	if err := r.flush(request.Context()); err != nil {
@@ -181,11 +141,7 @@ func (r *serverRuntime) handleFlush(writer http.ResponseWriter, request *http.Re
 }
 
 func (r *serverRuntime) handleCompact(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodPost) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
 		return
 	}
 	result, err := r.compact(request.Context())
@@ -198,11 +154,7 @@ func (r *serverRuntime) handleCompact(writer http.ResponseWriter, request *http.
 }
 
 func (r *serverRuntime) handleApplyRetention(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodPost) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
 		return
 	}
 	var req retentionApplyRequest
@@ -219,44 +171,28 @@ func (r *serverRuntime) handleApplyRetention(writer http.ResponseWriter, request
 }
 
 func (r *serverRuntime) handleMaintenanceErrors(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, maintenanceErrorsResponse{Errors: r.maintenanceErrors(request.Context())})
 }
 
 func (r *serverRuntime) handleStorageMemory(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, storageMemoryResponse{Snapshot: r.storageMemory()})
 }
 
 func (r *serverRuntime) handleCompactionStats(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, compactionStatsResponse{Stats: r.compactionStats()})
 }
 
 func (r *serverRuntime) handleAdminHealth(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, r.health())
@@ -288,16 +224,12 @@ func (r *serverRuntime) handleDownsamplePolicies(writer http.ResponseWriter, req
 		}
 		writeHTTPJSON(writer, http.StatusOK, downsamplePoliciesResponse{Policies: policies})
 	default:
-		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
 }
 
 func (r *serverRuntime) handleDownsampleStatuses(writer http.ResponseWriter, request *http.Request) {
-	if !requireHTTPMethod(writer, request, http.MethodGet) {
-		return
-	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
 	statuses, err := r.engine.DownsamplePolicyStatuses(request.Context(), time.Now())
@@ -313,7 +245,7 @@ func (r *serverRuntime) handleDownsamplePolicyResource(writer http.ResponseWrite
 		writeAPIError(writer, err)
 		return
 	}
-	parts := splitPath(request.URL.Path, "/api/v1/admin/downsample/policies/")
+	parts := splitPath(request.URL.Path, routeAdminDownsamplePrefix)
 	if len(parts) == 0 {
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, "policy name is required", nil))
 		return
@@ -321,7 +253,7 @@ func (r *serverRuntime) handleDownsamplePolicyResource(writer http.ResponseWrite
 	name := parts[0]
 	if len(parts) == 1 {
 		if request.Method != http.MethodDelete {
-			writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+			writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 			return
 		}
 		var req downsampleDropRequest
@@ -335,7 +267,7 @@ func (r *serverRuntime) handleDownsamplePolicyResource(writer http.ResponseWrite
 		return
 	}
 	if request.Method != http.MethodPost {
-		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 		return
 	}
 	r.handleDownsampleAction(writer, request, name, parts[1])

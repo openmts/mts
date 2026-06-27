@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/openmts/mts/internal/collections"
 	"github.com/openmts/mts/internal/memtable"
 	"github.com/openmts/mts/internal/model"
 	"github.com/openmts/mts/internal/queryexec"
@@ -700,9 +701,5 @@ func idSet(ids []uint64) map[uint64]struct{} {
 }
 
 func cloneTags(tags map[string]string) map[string]string {
-	out := make(map[string]string, len(tags))
-	for key, value := range tags {
-		out[key] = value
-	}
-	return out
+	return collections.CloneMap(tags)
 }

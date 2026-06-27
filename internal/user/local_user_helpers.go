@@ -1,6 +1,6 @@
 package user
 
-import "sort"
+import "github.com/openmts/mts/internal/collections"
 
 func orderedPermissions() []Permission {
 	return []Permission{
@@ -11,39 +11,19 @@ func orderedPermissions() []Permission {
 }
 
 func sortedGrantDatabases(grants map[string]map[Permission]struct{}) []string {
-	databases := make([]string, 0, len(grants))
-	for database := range grants {
-		databases = append(databases, database)
-	}
-	sort.Strings(databases)
-	return databases
+	return collections.SortedKeys(grants)
 }
 
 func sortedStringMapKeys(values map[string]string) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
+	return collections.SortedKeys(values)
 }
 
 func sortedUserNames(users map[string]User) []string {
-	names := make([]string, 0, len(users))
-	for name := range users {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return collections.SortedKeys(users)
 }
 
 func sortedTokenDigests(tokens map[string]tokenRecord) []string {
-	digests := make([]string, 0, len(tokens))
-	for digest := range tokens {
-		digests = append(digests, digest)
-	}
-	sort.Strings(digests)
-	return digests
+	return collections.SortedKeys(tokens)
 }
 
 func cloneUser(user User) User {
@@ -90,14 +70,7 @@ func clonePermissionSet(
 }
 
 func cloneStringMap(values map[string]string) map[string]string {
-	if values == nil {
-		return nil
-	}
-	out := make(map[string]string, len(values))
-	for key, value := range values {
-		out[key] = value
-	}
-	return out
+	return collections.CloneMap(values)
 }
 
 func clonePasswordRecords(records map[string]passwordRecord) map[string]passwordRecord {
@@ -115,11 +88,7 @@ func clonePasswordRecord(record passwordRecord) passwordRecord {
 }
 
 func cloneTokenRecords(records map[string]tokenRecord) map[string]tokenRecord {
-	out := make(map[string]tokenRecord, len(records))
-	for digest, record := range records {
-		out[digest] = record
-	}
-	return out
+	return collections.CloneMap(records)
 }
 
 func removeUserTokens(tokens map[string]tokenRecord, userName string) map[string]tokenRecord {

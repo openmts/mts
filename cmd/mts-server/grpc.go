@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"reflect"
 	"strconv"
 	"strings"
@@ -108,60 +107,111 @@ func (*grpcService) mtsServer() {}
 
 func grpcServiceDesc() *grpc.ServiceDesc {
 	methods := []grpc.MethodDesc{
-		{MethodName: "Health", Handler: grpcHealthHandler},
-		{MethodName: "Write", Handler: grpcWriteHandler},
-		{MethodName: "WriteTypedBatch", Handler: unaryHandler("WriteTypedBatch", &typedWriteRequest{}, grpcWriteTypedBatch)},
-		{MethodName: "QueryRows", Handler: grpcQueryRowsHandler},
-		{MethodName: "QueryColumns", Handler: unaryHandler("QueryColumns", &queryRequest{}, grpcQueryColumns)},
-		{MethodName: "QueryWithExplain", Handler: unaryHandler("QueryWithExplain", &queryRequest{}, grpcQueryWithExplain)},
-		{MethodName: "QueryStats", Handler: unaryHandler("QueryStats", &emptyRequest{}, grpcQueryStats)},
-		{MethodName: "Login", Handler: unaryHandler("Login", &loginRequest{}, grpcLogin)},
-		{MethodName: "Logout", Handler: unaryHandler("Logout", &logoutRequest{}, grpcLogout)},
-		{MethodName: "ChangePassword", Handler: unaryHandler("ChangePassword", &changePasswordRequest{}, grpcChangePassword)},
-		{MethodName: "SetUserPassword", Handler: unaryHandler("SetUserPassword", &setUserPasswordRequest{}, grpcSetUserPassword)},
-		{MethodName: "CreateUser", Handler: unaryHandler("CreateUser", &createUserRequest{}, grpcCreateUser)},
-		{MethodName: "UpdateUser", Handler: unaryHandler("UpdateUser", &mts.User{}, grpcUpdateUser)},
-		{MethodName: "GetUser", Handler: unaryHandler("GetUser", &userNameRequest{}, grpcGetUser)},
-		{MethodName: "ListUsers", Handler: unaryHandler("ListUsers", &emptyRequest{}, grpcListUsers)},
-		{MethodName: "DeleteUser", Handler: unaryHandler("DeleteUser", &userNameRequest{}, grpcDeleteUser)},
-		{MethodName: "GrantDatabasePermission", Handler: unaryHandler("GrantDatabasePermission", &databasePermissionRequest{}, grpcGrantDatabasePermission)},
-		{MethodName: "RevokeDatabasePermission", Handler: unaryHandler("RevokeDatabasePermission", &databasePermissionRequest{}, grpcRevokeDatabasePermission)},
-		{MethodName: "ListDatabasePermissions", Handler: unaryHandler("ListDatabasePermissions", &userNameRequest{}, grpcListDatabasePermissions)},
-		{MethodName: "CheckDatabasePermission", Handler: unaryHandler("CheckDatabasePermission", &databasePermissionRequest{}, grpcCheckDatabasePermission)},
-		{MethodName: "CreateDatabase", Handler: unaryHandler("CreateDatabase", &databaseRequest{}, grpcCreateDatabase)},
-		{MethodName: "DropDatabase", Handler: unaryHandler("DropDatabase", &databaseRequest{}, grpcDropDatabase)},
-		{MethodName: "CreateRetentionPolicy", Handler: unaryHandler("CreateRetentionPolicy", &grpcRetentionPolicyRequest{}, grpcCreateRetentionPolicy)},
-		{MethodName: "ListRetentionPolicies", Handler: unaryHandler("ListRetentionPolicies", &databaseRequest{}, grpcListRetentionPolicies)},
-		{MethodName: "ListMeasurements", Handler: unaryHandler("ListMeasurements", &metadataRequest{}, grpcListMeasurements)},
-		{MethodName: "ListFields", Handler: unaryHandler("ListFields", &metadataRequest{}, grpcListFields)},
-		{MethodName: "ListSeries", Handler: unaryHandler("ListSeries", &metadataRequest{}, grpcListSeries)},
-		{MethodName: "GetConfig", Handler: unaryHandler("GetConfig", &emptyRequest{}, grpcGetConfig)},
-		{MethodName: "GetEffectiveConfig", Handler: unaryHandler("GetEffectiveConfig", &emptyRequest{}, grpcGetConfig)},
-		{MethodName: "GetConfigSchema", Handler: unaryHandler("GetConfigSchema", &emptyRequest{}, grpcGetConfigSchema)},
-		{MethodName: "ValidateConfig", Handler: unaryHandler("ValidateConfig", &configValidateRequest{}, grpcValidateConfig)},
-		{MethodName: "ReloadConfig", Handler: unaryHandler("ReloadConfig", &emptyRequest{}, grpcReloadConfig)},
-		{MethodName: "GetAPISpec", Handler: unaryHandler("GetAPISpec", &emptyRequest{}, grpcGetAPISpec)},
-		{MethodName: "GetErrorCodes", Handler: unaryHandler("GetErrorCodes", &emptyRequest{}, grpcGetErrorCodes)},
-		{MethodName: "Flush", Handler: grpcFlushHandler},
-		{MethodName: "Compact", Handler: grpcCompactHandler},
-		{MethodName: "ApplyRetention", Handler: unaryHandler("ApplyRetention", &retentionApplyRequest{}, grpcApplyRetention)},
-		{MethodName: "MaintenanceErrors", Handler: unaryHandler("MaintenanceErrors", &emptyRequest{}, grpcMaintenanceErrors)},
-		{MethodName: "StorageMemory", Handler: unaryHandler("StorageMemory", &emptyRequest{}, grpcStorageMemory)},
-		{MethodName: "CompactionStats", Handler: unaryHandler("CompactionStats", &emptyRequest{}, grpcCompactionStats)},
-		{MethodName: "StorageValidate", Handler: unaryHandler("StorageValidate", &emptyRequest{}, grpcStorageValidate)},
-		{MethodName: "StorageSnapshot", Handler: unaryHandler("StorageSnapshot", &emptyRequest{}, grpcStorageSnapshot)},
-		{MethodName: "StorageExport", Handler: unaryHandler("StorageExport", &emptyRequest{}, grpcStorageExport)},
-		{MethodName: "CreateDownsamplePolicy", Handler: unaryHandler("CreateDownsamplePolicy", &mts.DownsamplePolicy{}, grpcCreateDownsamplePolicy)},
-		{MethodName: "ListDownsamplePolicies", Handler: unaryHandler("ListDownsamplePolicies", &emptyRequest{}, grpcListDownsamplePolicies)},
-		{MethodName: "EnableDownsamplePolicy", Handler: unaryHandler("EnableDownsamplePolicy", &downsamplePolicyRequest{}, grpcEnableDownsamplePolicy)},
-		{MethodName: "DisableDownsamplePolicy", Handler: unaryHandler("DisableDownsamplePolicy", &downsamplePolicyRequest{}, grpcDisableDownsamplePolicy)},
-		{MethodName: "DropDownsamplePolicy", Handler: unaryHandler("DropDownsamplePolicy", &downsamplePolicyRequest{}, grpcDropDownsamplePolicy)},
-		{MethodName: "ResetDownsamplePolicy", Handler: unaryHandler("ResetDownsamplePolicy", &grpcDownsampleResetRequest{}, grpcResetDownsamplePolicy)},
-		{MethodName: "DownsamplePolicyStatuses", Handler: unaryHandler("DownsamplePolicyStatuses", &emptyRequest{}, grpcDownsamplePolicyStatuses)},
-		{MethodName: "RunDownsamplePolicy", Handler: unaryHandler("RunDownsamplePolicy", &downsamplePolicyRangeRequest{}, grpcRunDownsamplePolicy)},
-		{MethodName: "RunDownsamplePolicyRange", Handler: unaryHandler("RunDownsamplePolicyRange", &downsamplePolicyRangeRequest{}, grpcRunDownsamplePolicyRange)},
-		{MethodName: "RepairDownsamplePolicy", Handler: unaryHandler("RepairDownsamplePolicy", &downsamplePolicyRangeRequest{}, grpcRepairDownsamplePolicy)},
-		{MethodName: "DryRunDownsamplePolicy", Handler: unaryHandler("DryRunDownsamplePolicy", &downsamplePolicyRangeRequest{}, grpcDryRunDownsamplePolicy)},
+		{MethodName: grpcMethodHealth, Handler: grpcHealthHandler},
+		{MethodName: grpcMethodWrite, Handler: grpcWriteHandler},
+		{MethodName: grpcMethodWriteTypedBatch, Handler: unaryHandler(grpcMethodWriteTypedBatch, &typedWriteRequest{}, grpcWriteTypedBatch)},
+		{MethodName: grpcMethodQueryRows, Handler: grpcQueryRowsHandler},
+		{MethodName: grpcMethodQueryColumns, Handler: unaryHandler(grpcMethodQueryColumns, &queryRequest{}, grpcQueryColumns)},
+		{MethodName: grpcMethodQueryWithExplain, Handler: unaryHandler(grpcMethodQueryWithExplain, &queryRequest{}, grpcQueryWithExplain)},
+		{MethodName: grpcMethodQueryStats, Handler: unaryHandler(grpcMethodQueryStats, &emptyRequest{}, grpcQueryStats)},
+		{MethodName: grpcMethodLogin, Handler: unaryHandler(grpcMethodLogin, &loginRequest{}, grpcLogin)},
+		{MethodName: grpcMethodLogout, Handler: unaryHandler(grpcMethodLogout, &logoutRequest{}, grpcLogout)},
+		{MethodName: grpcMethodChangePassword, Handler: unaryHandler(grpcMethodChangePassword, &changePasswordRequest{}, grpcChangePassword)},
+		{MethodName: grpcMethodSetUserPassword, Handler: unaryHandler(grpcMethodSetUserPassword, &setUserPasswordRequest{}, grpcSetUserPassword)},
+		{MethodName: grpcMethodCreateUser, Handler: unaryHandler(grpcMethodCreateUser, &createUserRequest{}, grpcCreateUser)},
+		{MethodName: grpcMethodUpdateUser, Handler: unaryHandler(grpcMethodUpdateUser, &mts.User{}, grpcUpdateUser)},
+		{MethodName: grpcMethodGetUser, Handler: unaryHandler(grpcMethodGetUser, &userNameRequest{}, grpcGetUser)},
+		{MethodName: grpcMethodListUsers, Handler: unaryHandler(grpcMethodListUsers, &emptyRequest{}, grpcListUsers)},
+		{MethodName: grpcMethodDeleteUser, Handler: unaryHandler(grpcMethodDeleteUser, &userNameRequest{}, grpcDeleteUser)},
+		{
+			MethodName: grpcMethodGrantDatabasePermission,
+			Handler:    unaryHandler(grpcMethodGrantDatabasePermission, &databasePermissionRequest{}, grpcGrantDatabasePermission),
+		},
+		{
+			MethodName: grpcMethodRevokeDatabasePermission,
+			Handler:    unaryHandler(grpcMethodRevokeDatabasePermission, &databasePermissionRequest{}, grpcRevokeDatabasePermission),
+		},
+		{
+			MethodName: grpcMethodListDatabasePermissions,
+			Handler:    unaryHandler(grpcMethodListDatabasePermissions, &userNameRequest{}, grpcListDatabasePermissions),
+		},
+		{
+			MethodName: grpcMethodCheckDatabasePermission,
+			Handler:    unaryHandler(grpcMethodCheckDatabasePermission, &databasePermissionRequest{}, grpcCheckDatabasePermission),
+		},
+		{MethodName: grpcMethodCreateDatabase, Handler: unaryHandler(grpcMethodCreateDatabase, &databaseRequest{}, grpcCreateDatabase)},
+		{MethodName: grpcMethodDropDatabase, Handler: unaryHandler(grpcMethodDropDatabase, &databaseRequest{}, grpcDropDatabase)},
+		{
+			MethodName: grpcMethodCreateRetentionPolicy,
+			Handler:    unaryHandler(grpcMethodCreateRetentionPolicy, &grpcRetentionPolicyRequest{}, grpcCreateRetentionPolicy),
+		},
+		{
+			MethodName: grpcMethodListRetentionPolicies,
+			Handler:    unaryHandler(grpcMethodListRetentionPolicies, &databaseRequest{}, grpcListRetentionPolicies),
+		},
+		{MethodName: grpcMethodListMeasurements, Handler: unaryHandler(grpcMethodListMeasurements, &metadataRequest{}, grpcListMeasurements)},
+		{MethodName: grpcMethodListFields, Handler: unaryHandler(grpcMethodListFields, &metadataRequest{}, grpcListFields)},
+		{MethodName: grpcMethodListSeries, Handler: unaryHandler(grpcMethodListSeries, &metadataRequest{}, grpcListSeries)},
+		{MethodName: grpcMethodGetConfig, Handler: unaryHandler(grpcMethodGetConfig, &emptyRequest{}, grpcGetConfig)},
+		{MethodName: grpcMethodGetEffectiveConfig, Handler: unaryHandler(grpcMethodGetEffectiveConfig, &emptyRequest{}, grpcGetConfig)},
+		{MethodName: grpcMethodGetConfigSchema, Handler: unaryHandler(grpcMethodGetConfigSchema, &emptyRequest{}, grpcGetConfigSchema)},
+		{MethodName: grpcMethodValidateConfig, Handler: unaryHandler(grpcMethodValidateConfig, &configValidateRequest{}, grpcValidateConfig)},
+		{MethodName: grpcMethodReloadConfig, Handler: unaryHandler(grpcMethodReloadConfig, &emptyRequest{}, grpcReloadConfig)},
+		{MethodName: grpcMethodGetAPISpec, Handler: unaryHandler(grpcMethodGetAPISpec, &emptyRequest{}, grpcGetAPISpec)},
+		{MethodName: grpcMethodGetErrorCodes, Handler: unaryHandler(grpcMethodGetErrorCodes, &emptyRequest{}, grpcGetErrorCodes)},
+		{MethodName: grpcMethodFlush, Handler: grpcFlushHandler},
+		{MethodName: grpcMethodCompact, Handler: grpcCompactHandler},
+		{MethodName: grpcMethodApplyRetention, Handler: unaryHandler(grpcMethodApplyRetention, &retentionApplyRequest{}, grpcApplyRetention)},
+		{MethodName: grpcMethodMaintenanceErrors, Handler: unaryHandler(grpcMethodMaintenanceErrors, &emptyRequest{}, grpcMaintenanceErrors)},
+		{MethodName: grpcMethodStorageMemory, Handler: unaryHandler(grpcMethodStorageMemory, &emptyRequest{}, grpcStorageMemory)},
+		{MethodName: grpcMethodCompactionStats, Handler: unaryHandler(grpcMethodCompactionStats, &emptyRequest{}, grpcCompactionStats)},
+		{MethodName: grpcMethodStorageValidate, Handler: unaryHandler(grpcMethodStorageValidate, &emptyRequest{}, grpcStorageValidate)},
+		{MethodName: grpcMethodStorageSnapshot, Handler: unaryHandler(grpcMethodStorageSnapshot, &emptyRequest{}, grpcStorageSnapshot)},
+		{MethodName: grpcMethodStorageExport, Handler: unaryHandler(grpcMethodStorageExport, &emptyRequest{}, grpcStorageExport)},
+		{
+			MethodName: grpcMethodCreateDownsamplePolicy,
+			Handler:    unaryHandler(grpcMethodCreateDownsamplePolicy, &mts.DownsamplePolicy{}, grpcCreateDownsamplePolicy),
+		},
+		{
+			MethodName: grpcMethodListDownsamplePolicies,
+			Handler:    unaryHandler(grpcMethodListDownsamplePolicies, &emptyRequest{}, grpcListDownsamplePolicies),
+		},
+		{
+			MethodName: grpcMethodEnableDownsamplePolicy,
+			Handler:    unaryHandler(grpcMethodEnableDownsamplePolicy, &downsamplePolicyRequest{}, grpcEnableDownsamplePolicy),
+		},
+		{
+			MethodName: grpcMethodDisableDownsamplePolicy,
+			Handler:    unaryHandler(grpcMethodDisableDownsamplePolicy, &downsamplePolicyRequest{}, grpcDisableDownsamplePolicy),
+		},
+		{
+			MethodName: grpcMethodDropDownsamplePolicy,
+			Handler:    unaryHandler(grpcMethodDropDownsamplePolicy, &downsamplePolicyRequest{}, grpcDropDownsamplePolicy),
+		},
+		{
+			MethodName: grpcMethodResetDownsamplePolicy,
+			Handler:    unaryHandler(grpcMethodResetDownsamplePolicy, &grpcDownsampleResetRequest{}, grpcResetDownsamplePolicy),
+		},
+		{
+			MethodName: grpcMethodDownsamplePolicyStatuses,
+			Handler:    unaryHandler(grpcMethodDownsamplePolicyStatuses, &emptyRequest{}, grpcDownsamplePolicyStatuses),
+		},
+		{
+			MethodName: grpcMethodRunDownsamplePolicy,
+			Handler:    unaryHandler(grpcMethodRunDownsamplePolicy, &downsamplePolicyRangeRequest{}, grpcRunDownsamplePolicy),
+		},
+		{
+			MethodName: grpcMethodRunDownsamplePolicyRange,
+			Handler:    unaryHandler(grpcMethodRunDownsamplePolicyRange, &downsamplePolicyRangeRequest{}, grpcRunDownsamplePolicyRange),
+		},
+		{
+			MethodName: grpcMethodRepairDownsamplePolicy,
+			Handler:    unaryHandler(grpcMethodRepairDownsamplePolicy, &downsamplePolicyRangeRequest{}, grpcRepairDownsamplePolicy),
+		},
+		{
+			MethodName: grpcMethodDryRunDownsamplePolicy,
+			Handler:    unaryHandler(grpcMethodDryRunDownsamplePolicy, &downsamplePolicyRangeRequest{}, grpcDryRunDownsamplePolicy),
+		},
 	}
 	return &grpc.ServiceDesc{ServiceName: grpcServiceName, HandlerType: (*grpcServiceServer)(nil), Methods: methods}
 }
@@ -170,7 +220,7 @@ func grpcHealthHandler(service any, ctx context.Context, decode func(any) error,
 	handler := func(ctx context.Context, _ any) (any, error) {
 		return service.(*grpcService).runtime.health(), nil
 	}
-	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, "/mts.v1.MTSServer/Health", handler)
+	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, grpcFullMethod(grpcMethodHealth), handler)
 }
 
 func grpcWriteHandler(service any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
@@ -194,7 +244,7 @@ func grpcWriteHandler(service any, ctx context.Context, decode func(any) error, 
 		}
 		return writeResponse{OK: true}, nil
 	}
-	return invokeGRPCUnary(ctx, &writeRequest{}, decode, interceptor, "/mts.v1.MTSServer/Write", handler)
+	return invokeGRPCUnary(ctx, &writeRequest{}, decode, interceptor, grpcFullMethod(grpcMethodWrite), handler)
 }
 
 func grpcQueryRowsHandler(service any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
@@ -213,7 +263,7 @@ func grpcQueryRowsHandler(service any, ctx context.Context, decode func(any) err
 		}
 		return queryRowsResponse{Rows: rows}, nil
 	}
-	return invokeGRPCUnary(ctx, &queryRowsRequest{}, decode, interceptor, "/mts.v1.MTSServer/QueryRows", handler)
+	return invokeGRPCUnary(ctx, &queryRowsRequest{}, decode, interceptor, grpcFullMethod(grpcMethodQueryRows), handler)
 }
 
 func grpcFlushHandler(service any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
@@ -226,7 +276,7 @@ func grpcFlushHandler(service any, ctx context.Context, decode func(any) error, 
 		}
 		return maintenanceResponse{OK: true}, nil
 	}
-	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, "/mts.v1.MTSServer/Flush", handler)
+	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, grpcFullMethod(grpcMethodFlush), handler)
 }
 
 func grpcCompactHandler(service any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
@@ -240,13 +290,13 @@ func grpcCompactHandler(service any, ctx context.Context, decode func(any) error
 		}
 		return maintenanceResponse{OK: true, Result: result}, nil
 	}
-	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, "/mts.v1.MTSServer/Compact", handler)
+	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, grpcFullMethod(grpcMethodCompact), handler)
 }
 
 func unaryHandler(methodName string, prototype any, fn func(*serverRuntime, context.Context, any) (any, error)) grpc.MethodHandler {
 	return func(service any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 		req := newGRPCRequest(prototype)
-		method := "/" + grpcServiceName + "/" + methodName
+		method := grpcFullMethod(methodName)
 		handler := func(ctx context.Context, decoded any) (any, error) {
 			resp, err := fn(service.(*grpcService).runtime, ctx, decoded)
 			if err != nil {
@@ -684,29 +734,8 @@ func grpcError(err error) error {
 	if err == nil {
 		return nil
 	}
-	var apiErr apiError
-	if errors.As(err, &apiErr) {
-		return status.Error(grpcCodeForErrorCode(apiErr.Code), err.Error())
-	}
-	if errors.Is(err, mts.ErrPermissionDenied) {
-		return status.Error(codes.PermissionDenied, err.Error())
-	}
-	if errors.Is(err, mts.ErrUserNotFound) {
-		return status.Error(codes.NotFound, err.Error())
-	}
-	if errors.Is(err, mts.ErrUserAlreadyExists) {
-		return status.Error(codes.AlreadyExists, err.Error())
-	}
-	if errors.Is(err, mts.ErrInvalidCredentials) || errors.Is(err, mts.ErrAuthenticationDisabled) {
-		return status.Error(codes.Unauthenticated, err.Error())
-	}
-	if errors.Is(err, mts.ErrInvalidUser) || errors.Is(err, mts.ErrInvalidPermission) || errors.Is(err, mts.ErrInvalidPrecision) {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	if looksLikeValidationError(err) {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	return status.Error(codes.InvalidArgument, err.Error())
+	classified := classifyAPIError(err)
+	return status.Error(grpcCodeForErrorCode(classified.Code), classified.Message)
 }
 
 func grpcCodeForErrorCode(code errorCode) codes.Code {
@@ -736,5 +765,9 @@ func grpcStatusCodeText(err error) string {
 }
 
 func invokeGRPC(ctx context.Context, conn *grpc.ClientConn, method string, in any, out any) error {
-	return conn.Invoke(ctx, "/"+grpcServiceName+"/"+method, in, out, grpc.ForceCodec(jsonCodec{}))
+	return conn.Invoke(ctx, grpcFullMethod(method), in, out, grpc.ForceCodec(jsonCodec{}))
+}
+
+func grpcFullMethod(method string) string {
+	return "/" + grpcServiceName + "/" + method
 }

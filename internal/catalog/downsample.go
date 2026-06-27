@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/openmts/mts/internal/codec"
+	"github.com/openmts/mts/internal/collections"
 	"github.com/openmts/mts/internal/model"
 	"github.com/openmts/mts/internal/storagefs"
 )
@@ -375,27 +375,17 @@ func readStringList(reader *payloadReader, name string) ([]string, error) {
 }
 
 func sortedDownsamplePolicyNames(policies map[string]model.DownsamplePolicy) []string {
-	names := make([]string, 0, len(policies))
-	for name := range policies {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return collections.SortedKeys(policies)
 }
 
 func sortedDownsampleWatermarkNames(
 	watermarks map[string]model.DownsampleWatermark,
 ) []string {
-	names := make([]string, 0, len(watermarks))
-	for name := range watermarks {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return collections.SortedKeys(watermarks)
 }
 
 func cloneDownsamplePolicy(policy model.DownsamplePolicy) model.DownsamplePolicy {
-	policy.Functions = append([]model.DownsampleFunction(nil), policy.Functions...)
-	policy.GroupByTags = append([]string(nil), policy.GroupByTags...)
+	policy.Functions = collections.CloneSliceNilIfEmpty(policy.Functions)
+	policy.GroupByTags = collections.CloneSliceNilIfEmpty(policy.GroupByTags)
 	return policy
 }

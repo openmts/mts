@@ -12,47 +12,89 @@ import (
 )
 
 const (
-	headerAdminToken    = "X-MTS-Admin-Token"
-	headerDataToken     = "X-MTS-Data-Token"
-	headerAuthorization = "Authorization"
-	headerUser          = "X-MTS-User"
-	metadataAdminToken  = "x-mts-admin-token"
-	metadataDataToken   = "x-mts-data-token"
+	headerAdminToken        = "X-MTS-Admin-Token"
+	headerDataToken         = "X-MTS-Data-Token"
+	headerAuthorization     = "Authorization"
+	headerUser              = "X-MTS-User"
+	metadataAdminToken      = "x-mts-admin-token"
+	metadataDataToken       = "x-mts-data-token"
+	metadataUser            = "x-mts-user"
+	credentialKeyAdminToken = "admin_token"
+	credentialKeyDataToken  = "data_token"
+	credentialKeyUser       = "user"
 )
 
+type credentialSource interface {
+	Context() context.Context
+	Value(key string) string
+	Bearer() string
+}
+
+type httpCredentialSource struct {
+	request *http.Request
+}
+
+func (s httpCredentialSource) Context() context.Context {
+	return s.request.Context()
+}
+
+func (s httpCredentialSource) Value(key string) string {
+	switch key {
+	case credentialKeyAdminToken:
+		return s.request.Header.Get(headerAdminToken)
+	case credentialKeyDataToken:
+		return s.request.Header.Get(headerDataToken)
+	case credentialKeyUser:
+		return strings.TrimSpace(s.request.Header.Get(headerUser))
+	default:
+		return ""
+	}
+}
+
+func (s httpCredentialSource) Bearer() string {
+	return bearerToken(s.request.Header.Get(headerAuthorization))
+}
+
+type grpcCredentialSource struct {
+	ctx context.Context
+}
+
+func (s grpcCredentialSource) Context() context.Context {
+	return s.ctx
+}
+
+func (s grpcCredentialSource) Value(key string) string {
+	switch key {
+	case credentialKeyAdminToken:
+		return grpcMetadataValue(s.ctx, metadataAdminToken)
+	case credentialKeyDataToken:
+		return grpcMetadataValue(s.ctx, metadataDataToken)
+	case credentialKeyUser:
+		return strings.TrimSpace(grpcMetadataValue(s.ctx, metadataUser))
+	default:
+		return ""
+	}
+}
+
+func (s grpcCredentialSource) Bearer() string {
+	return bearerToken(grpcMetadataValue(s.ctx, strings.ToLower(headerAuthorization)))
+}
+
 func (r *serverRuntime) requireHTTPAdmin(request *http.Request) error {
-	cfg := r.currentConfig()
-	token := strings.TrimSpace(cfg.Auth.AdminToken)
-	provided := request.Header.Get(headerAdminToken)
-	bearer := bearerToken(request.Header.Get(headerAuthorization))
-	if token == "" && bearer != "" {
-		return r.requireHTTPAdminUser(request.Context(), bearer)
-	}
-	if token == "" && cfg.Auth.RequireUser {
-		return newAPIError(errorCodeUnauthenticated, "admin user bearer token is required", nil)
-	}
-	if token == "" {
-		return nil
-	}
-	if provided == "" {
-		provided = bearer
-	}
-	if constantTimeEqual(token, provided) {
-		return nil
-	}
-	if bearer != "" {
-		return r.requireHTTPAdminUser(request.Context(), bearer)
-	}
-	return newAPIError(errorCodeUnauthenticated, "admin token is required", nil)
+	return r.requireAdmin(httpCredentialSource{request: request})
 }
 
 func (r *serverRuntime) requireGRPCAdmin(ctx context.Context) error {
+	return r.requireAdmin(grpcCredentialSource{ctx: ctx})
+}
+
+func (r *serverRuntime) requireAdmin(source credentialSource) error {
 	cfg := r.currentConfig()
 	token := strings.TrimSpace(cfg.Auth.AdminToken)
-	provided := grpcMetadataValue(ctx, metadataAdminToken)
-	bearer := bearerToken(grpcMetadataValue(ctx, strings.ToLower(headerAuthorization)))
+	provided := source.Value(credentialKeyAdminToken)
+	bearer := source.Bearer()
 	if token == "" && bearer != "" {
-		return r.requireGRPCAdminUser(ctx, bearer)
+		return r.requireAdminUser(source.Context(), bearer)
 	}
 	if token == "" && cfg.Auth.RequireUser {
 		return newAPIError(errorCodeUnauthenticated, "admin user bearer token is required", nil)
@@ -67,20 +109,12 @@ func (r *serverRuntime) requireGRPCAdmin(ctx context.Context) error {
 		return nil
 	}
 	if bearer != "" {
-		return r.requireGRPCAdminUser(ctx, bearer)
+		return r.requireAdminUser(source.Context(), bearer)
 	}
 	return newAPIError(errorCodeUnauthenticated, "admin token is required", nil)
 }
 
-func (r *serverRuntime) requireHTTPAdminUser(ctx context.Context, token string) error {
-	principal, err := r.engine.VerifyToken(ctx, token)
-	if err != nil {
-		return newAPIError(errorCodeUnauthenticated, "invalid admin bearer token", err)
-	}
-	return r.requireUserRole(ctx, principal.UserName, mts.UserRoleAdmin)
-}
-
-func (r *serverRuntime) requireGRPCAdminUser(ctx context.Context, token string) error {
+func (r *serverRuntime) requireAdminUser(ctx context.Context, token string) error {
 	principal, err := r.engine.VerifyToken(ctx, token)
 	if err != nil {
 		return newAPIError(errorCodeUnauthenticated, "invalid admin bearer token", err)
@@ -105,14 +139,7 @@ func (r *serverRuntime) authorizeHTTPDatabase(
 	database string,
 	permission mts.DatabasePermission,
 ) error {
-	if err := r.requireHTTPDataToken(request); err != nil {
-		return err
-	}
-	userName, err := r.authenticateHTTPDataUser(ctx, request)
-	if err != nil {
-		return err
-	}
-	return r.authorizeDatabase(ctx, userName, database, permission)
+	return r.authorizeSourceDatabase(httpCredentialSource{request: request}, database, permission)
 }
 
 func (r *serverRuntime) authorizeGRPCDatabase(
@@ -120,39 +147,32 @@ func (r *serverRuntime) authorizeGRPCDatabase(
 	database string,
 	permission mts.DatabasePermission,
 ) error {
-	if err := r.requireGRPCDataToken(ctx); err != nil {
+	return r.authorizeSourceDatabase(grpcCredentialSource{ctx: ctx}, database, permission)
+}
+
+func (r *serverRuntime) authorizeSourceDatabase(
+	source credentialSource,
+	database string,
+	permission mts.DatabasePermission,
+) error {
+	if err := r.requireDataToken(source); err != nil {
 		return err
 	}
-	userName, err := r.authenticateGRPCDataUser(ctx)
+	userName, err := r.authenticateDataUser(source)
 	if err != nil {
 		return err
 	}
-	return r.authorizeDatabase(ctx, userName, database, permission)
+	return r.authorizeDatabase(source.Context(), userName, database, permission)
 }
 
-func (r *serverRuntime) requireHTTPDataToken(request *http.Request) error {
+func (r *serverRuntime) requireDataToken(source credentialSource) error {
 	cfg := r.currentConfig()
 	if len(cfg.Auth.DataTokens) == 0 {
 		return nil
 	}
-	provided := request.Header.Get(headerDataToken)
+	provided := source.Value(credentialKeyDataToken)
 	if provided == "" {
-		provided = bearerToken(request.Header.Get(headerAuthorization))
-	}
-	if !matchesAnyToken(cfg.Auth.DataTokens, provided) {
-		return newAPIError(errorCodeUnauthenticated, "data token is required", nil)
-	}
-	return nil
-}
-
-func (r *serverRuntime) requireGRPCDataToken(ctx context.Context) error {
-	cfg := r.currentConfig()
-	if len(cfg.Auth.DataTokens) == 0 {
-		return nil
-	}
-	provided := grpcMetadataValue(ctx, metadataDataToken)
-	if provided == "" {
-		provided = bearerToken(grpcMetadataValue(ctx, strings.ToLower(headerAuthorization)))
+		provided = source.Bearer()
 	}
 	if !matchesAnyToken(cfg.Auth.DataTokens, provided) {
 		return newAPIError(errorCodeUnauthenticated, "data token is required", nil)
@@ -161,31 +181,19 @@ func (r *serverRuntime) requireGRPCDataToken(ctx context.Context) error {
 }
 
 func (r *serverRuntime) authenticateHTTPDataUser(ctx context.Context, request *http.Request) (string, error) {
-	cfg := r.currentConfig()
-	token := bearerToken(request.Header.Get(headerAuthorization))
-	if token == "" {
-		if cfg.Auth.RequireUser {
-			return "", newAPIError(errorCodeUnauthenticated, "user bearer token is required", nil)
-		}
-		return strings.TrimSpace(request.Header.Get(headerUser)), nil
-	}
-	principal, err := r.engine.VerifyToken(ctx, token)
-	if err != nil {
-		return "", newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err)
-	}
-	return principal.UserName, nil
+	return r.authenticateDataUser(httpCredentialSource{request: request})
 }
 
-func (r *serverRuntime) authenticateGRPCDataUser(ctx context.Context) (string, error) {
+func (r *serverRuntime) authenticateDataUser(source credentialSource) (string, error) {
 	cfg := r.currentConfig()
-	token := bearerToken(grpcMetadataValue(ctx, strings.ToLower(headerAuthorization)))
+	token := source.Bearer()
 	if token == "" {
 		if cfg.Auth.RequireUser {
 			return "", newAPIError(errorCodeUnauthenticated, "user bearer token is required", nil)
 		}
-		return grpcMetadataValue(ctx, "x-mts-user"), nil
+		return source.Value(credentialKeyUser), nil
 	}
-	principal, err := r.engine.VerifyToken(ctx, token)
+	principal, err := r.engine.VerifyToken(source.Context(), token)
 	if err != nil {
 		return "", newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err)
 	}
@@ -238,10 +246,10 @@ func matchesAnyToken(tokens []string, provided string) bool {
 
 func bearerToken(value string) string {
 	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(strings.ToLower(value), "bearer ") {
+	if !strings.HasPrefix(strings.ToLower(value), bearerPrefix) {
 		return ""
 	}
-	return strings.TrimSpace(value[len("bearer "):])
+	return strings.TrimSpace(value[len(bearerPrefix):])
 }
 
 func constantTimeEqual(want string, got string) bool {

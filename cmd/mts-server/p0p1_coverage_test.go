@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -211,6 +213,29 @@ func TestP0P1ErrorHelpersAndAuthBranches(t *testing.T) {
 	}
 	if errorPayload(mts.ErrInvalidUser).Code != errorCodeBadRequest {
 		t.Fatal("errorPayload invalid user code mismatch")
+	}
+	httpReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	httpReq.Header.Set(headerAuthorization, "Bearer http-token")
+	httpReq.Header.Set(headerAdminToken, "http-admin")
+	httpReq.Header.Set(headerUser, "http-user")
+	httpSource := httpCredentialSource{request: httpReq}
+	if httpSource.Context() != httpReq.Context() ||
+		httpSource.Bearer() != "http-token" ||
+		httpSource.Value(credentialKeyAdminToken) != "http-admin" ||
+		httpSource.Value(credentialKeyUser) != "http-user" {
+		t.Fatal("http credential source mismatch")
+	}
+	grpcCtx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		strings.ToLower(headerAuthorization), "Bearer grpc-token",
+		metadataAdminToken, "grpc-admin",
+		metadataUser, "grpc-user",
+	))
+	grpcSource := grpcCredentialSource{ctx: grpcCtx}
+	if grpcSource.Context() != grpcCtx ||
+		grpcSource.Bearer() != "grpc-token" ||
+		grpcSource.Value(credentialKeyAdminToken) != "grpc-admin" ||
+		grpcSource.Value(credentialKeyUser) != "grpc-user" {
+		t.Fatal("grpc credential source mismatch")
 	}
 }
 
@@ -601,8 +626,8 @@ func TestGRPCP0P1ErrorMappingBranches(t *testing.T) {
 		{name: "GrantDatabasePermission", req: &databasePermissionRequest{UserName: "missing", Database: "db", Permission: mts.DatabasePermissionRead}, code: codes.NotFound},
 		{name: "CreateDatabase", req: &databaseRequest{}, code: codes.InvalidArgument},
 		{name: "CreateDownsamplePolicy", req: &mts.DownsamplePolicy{Name: "bad"}, code: codes.InvalidArgument},
-		{name: "EnableDownsamplePolicy", req: &downsamplePolicyRequest{Name: "missing"}, code: codes.InvalidArgument},
-		{name: "RunDownsamplePolicyRange", req: &downsamplePolicyRangeRequest{Name: "missing", StartUnix: 1, EndUnix: 2}, code: codes.InvalidArgument},
+		{name: "EnableDownsamplePolicy", req: &downsamplePolicyRequest{Name: "missing"}, code: codes.NotFound},
+		{name: "RunDownsamplePolicyRange", req: &downsamplePolicyRangeRequest{Name: "missing", StartUnix: 1, EndUnix: 2}, code: codes.NotFound},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -653,6 +678,9 @@ func TestP0P1DirectHelperBranches(t *testing.T) {
 	}
 	if status.Code(grpcError(newAPIError(errorCodeInternal, "internal", nil))) != codes.Internal {
 		t.Fatal("grpc internal code mismatch")
+	}
+	if status.Code(grpcError(errors.New("plain failure"))) != codes.Internal {
+		t.Fatal("grpc plain error code mismatch")
 	}
 }
 

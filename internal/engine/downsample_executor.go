@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openmts/mts/internal/collections"
 	"github.com/openmts/mts/internal/model"
 )
 
@@ -443,14 +444,7 @@ func downsamplePointKey(tags map[string]string, timestamp int64) string {
 }
 
 func cloneDownsampleTags(tags map[string]string) map[string]string {
-	if len(tags) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(tags))
-	for name, value := range tags {
-		out[name] = value
-	}
-	return out
+	return collections.CloneMapNilIfEmpty(tags)
 }
 
 func downsampleTargetTags(
@@ -466,12 +460,7 @@ func downsampleTargetTags(
 }
 
 func sortedTagNames(tags map[string]string) []string {
-	names := make([]string, 0, len(tags))
-	for name := range tags {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return collections.SortedKeys(tags)
 }
 
 func sortedDownsamplePoints(byKey map[string]*model.Point) []model.Point {

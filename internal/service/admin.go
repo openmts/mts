@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const messageMethodNotAllowed = "method not allowed"
+
 type adminResponse struct {
 	OK    bool   `json:"ok"`
 	Error string `json:"error,omitempty"`
@@ -41,7 +43,7 @@ func compactHandler(
 ) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
-			writeJSON(writer, http.StatusMethodNotAllowed, adminResponse{OK: false, Error: "method not allowed"})
+			writeJSON(writer, http.StatusMethodNotAllowed, adminResponse{OK: false, Error: messageMethodNotAllowed})
 			return
 		}
 		if token == "" {

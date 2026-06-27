@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/openmts/mts/internal/collections"
 	"github.com/openmts/mts/internal/model"
 )
 
@@ -87,8 +88,8 @@ func cloneResult(result Result) Result {
 	out := result
 	out.Columns = cloneColumns(result.Columns)
 	out.Rows = cloneRows(result.Rows)
-	out.Pushdowns = append([]string(nil), result.Pushdowns...)
-	out.PhysicalOperators = append([]string(nil), result.PhysicalOperators...)
+	out.Pushdowns = collections.CloneSliceNilIfEmpty(result.Pushdowns)
+	out.PhysicalOperators = collections.CloneSliceNilIfEmpty(result.PhysicalOperators)
 	return out
 }
 
@@ -100,8 +101,8 @@ func cloneColumns(columns []model.ColumnSeries) []model.ColumnSeries {
 	for _, column := range columns {
 		cloned := column
 		cloned.Tags = cloneStringMap(column.Tags)
-		cloned.Timestamps = append([]int64(nil), column.Timestamps...)
-		cloned.Values = append([]model.FieldValue(nil), column.Values...)
+		cloned.Timestamps = collections.CloneSliceNilIfEmpty(column.Timestamps)
+		cloned.Values = collections.CloneSliceNilIfEmpty(column.Values)
 		out = append(out, cloned)
 	}
 	return out
@@ -122,23 +123,9 @@ func cloneRows(rows []model.Row) []model.Row {
 }
 
 func cloneStringMap(values map[string]string) map[string]string {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(values))
-	for key, value := range values {
-		out[key] = value
-	}
-	return out
+	return collections.CloneMapNilIfEmpty(values)
 }
 
 func cloneFieldMap(values map[string]model.FieldValue) map[string]model.FieldValue {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make(map[string]model.FieldValue, len(values))
-	for key, value := range values {
-		out[key] = value
-	}
-	return out
+	return collections.CloneMapNilIfEmpty(values)
 }

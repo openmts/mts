@@ -32,7 +32,7 @@ func (r *serverRuntime) handleAdminDatabases(writer http.ResponseWriter, request
 		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "create_database", Database: req.Name})
 		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 	default:
-		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
 }
 
@@ -41,7 +41,7 @@ func (r *serverRuntime) handleAdminDatabaseResource(writer http.ResponseWriter, 
 		writeAPIError(writer, err)
 		return
 	}
-	parts := splitPath(request.URL.Path, "/api/v1/admin/databases/")
+	parts := splitPath(request.URL.Path, routeAdminDatabasesPrefix)
 	if len(parts) == 0 {
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, "database is required", nil))
 		return
@@ -49,7 +49,7 @@ func (r *serverRuntime) handleAdminDatabaseResource(writer http.ResponseWriter, 
 	database := parts[0]
 	if len(parts) == 1 {
 		if request.Method != http.MethodDelete {
-			writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+			writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 			return
 		}
 		if err := r.engine.DropDatabase(request.Context(), database); err != nil {
@@ -93,7 +93,7 @@ func (r *serverRuntime) handleRetentionPolicies(
 		}
 		writeHTTPJSON(writer, http.StatusOK, retentionPoliciesResponse{Policies: policies})
 	default:
-		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
 }
 
@@ -101,7 +101,7 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 	if !requireHTTPMethod(writer, request, http.MethodGet) {
 		return
 	}
-	parts := splitPath(request.URL.Path, "/api/v1/data/databases/")
+	parts := splitPath(request.URL.Path, routeDataDatabasesPrefix)
 	if len(parts) < 2 {
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, "metadata path is incomplete", nil))
 		return

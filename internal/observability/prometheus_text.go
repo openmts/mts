@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/openmts/mts/internal/collections"
 )
 
 func PrometheusText(metrics []Metric) string {
@@ -69,12 +71,7 @@ func writeMetricLabels(builder *strings.Builder, labels map[string]string) {
 }
 
 func sortedLabelNames(labels map[string]string) []string {
-	names := make([]string, 0, len(labels))
-	for name := range labels {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return collections.SortedKeys(labels)
 }
 
 func escapeLabelValue(value string) string {

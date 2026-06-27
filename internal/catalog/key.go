@@ -3,6 +3,8 @@ package catalog
 import (
 	"sort"
 	"strings"
+
+	"github.com/openmts/mts/internal/collections"
 )
 
 func seriesKey(measurement string, tags map[string]string) string {
@@ -43,11 +45,7 @@ func fieldKey(measurement string, name string) string {
 }
 
 func cloneTags(tags map[string]string) map[string]string {
-	out := make(map[string]string, len(tags))
-	for key, value := range tags {
-		out[key] = value
-	}
-	return out
+	return collections.CloneMap(tags)
 }
 
 func tagsMatch(seriesTags map[string]string, filter map[string]string) bool {

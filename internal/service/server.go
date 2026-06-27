@@ -2,15 +2,17 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"time"
 
+	"github.com/openmts/mts/internal/httpjson"
 	"github.com/openmts/mts/internal/observability"
 )
+
+const contentTypePrometheus = "text/plain; version=0.0.4"
 
 type Options struct {
 	Addr         string
@@ -93,7 +95,7 @@ func (s *Server) HTTPHandler() http.Handler {
 
 func metricsHandler(provider MetricsProvider) http.HandlerFunc {
 	return func(writer http.ResponseWriter, _ *http.Request) {
-		writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		writer.Header().Set("Content-Type", contentTypePrometheus)
 		if provider == nil {
 			_, _ = writer.Write([]byte{})
 			return
@@ -103,9 +105,7 @@ func metricsHandler(provider MetricsProvider) http.HandlerFunc {
 }
 
 func writeJSON(writer http.ResponseWriter, status int, value any) {
-	writer.Header().Set("Content-Type", "application/json")
-	writer.WriteHeader(status)
-	_ = json.NewEncoder(writer).Encode(value)
+	httpjson.Write(writer, status, value)
 }
 
 func registerPprof(mux *http.ServeMux) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/openmts/mts/internal/httpjson"
 	"github.com/openmts/mts/internal/model"
 )
 
@@ -19,6 +20,15 @@ const (
 	ErrorCodeLanguageUnsupported    ErrorCode = "language_unsupported"
 	ErrorCodeDistributedUnsupported ErrorCode = "distributed_unsupported"
 	ErrorCodeQueryFailed            ErrorCode = "query_failed"
+)
+
+const (
+	contentTypeNDJSON       = "application/x-ndjson"
+	messageMethodNotAllowed = "method not allowed"
+	streamRecordTypeRow     = "row"
+	streamRecordTypeColumn  = "column"
+	streamRecordTypeError   = "error"
+	streamRecordTypeEnd     = "end"
 )
 
 type ErrorResponse struct {
@@ -67,7 +77,7 @@ func NewHTTPHandler(service *Service) http.Handler {
 func queryAuditHandler(service *Service) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet {
-			writeProtocolError(writer, http.StatusMethodNotAllowed, ErrorCodeBadRequest, "method not allowed")
+			writeProtocolError(writer, http.StatusMethodNotAllowed, ErrorCodeBadRequest, messageMethodNotAllowed)
 			return
 		}
 		writeProtocolJSON(writer, http.StatusOK, AuditResponse{OK: true, Records: service.AuditRecords()})
@@ -77,7 +87,7 @@ func queryAuditHandler(service *Service) http.HandlerFunc {
 func queryStatsHandler(service *Service) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet {
-			writeProtocolError(writer, http.StatusMethodNotAllowed, ErrorCodeBadRequest, "method not allowed")
+			writeProtocolError(writer, http.StatusMethodNotAllowed, ErrorCodeBadRequest, messageMethodNotAllowed)
 			return
 		}
 		writeProtocolJSON(writer, http.StatusOK, StatsResponse{OK: true, Stats: service.Stats()})
@@ -87,7 +97,7 @@ func queryStatsHandler(service *Service) http.HandlerFunc {
 func queryHandler(service *Service) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
-			writeProtocolError(writer, http.StatusMethodNotAllowed, ErrorCodeBadRequest, "method not allowed")
+			writeProtocolError(writer, http.StatusMethodNotAllowed, ErrorCodeBadRequest, messageMethodNotAllowed)
 			return
 		}
 		queryRequest, ok := decodeQueryRequest(writer, request)
@@ -111,7 +121,7 @@ func queryHandler(service *Service) http.HandlerFunc {
 func queryStreamHandler(service *Service) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
-			writeProtocolError(writer, http.StatusMethodNotAllowed, ErrorCodeBadRequest, "method not allowed")
+			writeProtocolError(writer, http.StatusMethodNotAllowed, ErrorCodeBadRequest, messageMethodNotAllowed)
 			return
 		}
 		queryRequest, ok := decodeQueryRequest(writer, request)
@@ -123,7 +133,7 @@ func queryStreamHandler(service *Service) http.HandlerFunc {
 			writeQueryError(writer, err)
 			return
 		}
-		writer.Header().Set("Content-Type", "application/x-ndjson")
+		writer.Header().Set("Content-Type", contentTypeNDJSON)
 		writer.WriteHeader(http.StatusOK)
 		encoder := json.NewEncoder(writer)
 		if result.Rows != nil {
@@ -139,9 +149,7 @@ func decodeQueryRequest(writer http.ResponseWriter, request *http.Request) (Requ
 		_ = request.Body.Close()
 	}()
 	var queryRequest Request
-	decoder := json.NewDecoder(request.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&queryRequest); err != nil {
+	if err := httpjson.DecodeStrict(request, &queryRequest); err != nil {
 		writeProtocolError(writer, http.StatusBadRequest, ErrorCodeBadRequest, err.Error())
 		return Request{}, false
 	}
@@ -154,23 +162,23 @@ func writeRowStreamRecords(encoder *json.Encoder, result StreamResult) {
 	}()
 	for result.Rows.Next() {
 		row := result.Rows.Row()
-		if err := encoder.Encode(StreamRecord{Type: "row", Row: &row}); err != nil {
+		if err := encoder.Encode(StreamRecord{Type: streamRecordTypeRow, Row: &row}); err != nil {
 			return
 		}
 	}
 	if err := result.Rows.Err(); err != nil {
 		_ = encoder.Encode(StreamRecord{
-			Type:  "error",
+			Type:  streamRecordTypeError,
 			Error: errorPayload(err),
 		})
 		return
 	}
-	_ = encoder.Encode(StreamRecord{Type: "end", Stats: result.Stats, Explain: result.Explain})
+	_ = encoder.Encode(StreamRecord{Type: streamRecordTypeEnd, Stats: result.Stats, Explain: result.Explain})
 }
 
 func writeColumnStreamRecords(encoder *json.Encoder, result StreamResult) {
 	if result.Columns == nil {
-		_ = encoder.Encode(StreamRecord{Type: "end", Stats: result.Stats, Explain: result.Explain})
+		_ = encoder.Encode(StreamRecord{Type: streamRecordTypeEnd, Stats: result.Stats, Explain: result.Explain})
 		return
 	}
 	defer func() {
@@ -178,18 +186,18 @@ func writeColumnStreamRecords(encoder *json.Encoder, result StreamResult) {
 	}()
 	for result.Columns.Next() {
 		column := result.Columns.Column()
-		if err := encoder.Encode(StreamRecord{Type: "column", Column: &column}); err != nil {
+		if err := encoder.Encode(StreamRecord{Type: streamRecordTypeColumn, Column: &column}); err != nil {
 			return
 		}
 	}
 	if err := result.Columns.Err(); err != nil {
 		_ = encoder.Encode(StreamRecord{
-			Type:  "error",
+			Type:  streamRecordTypeError,
 			Error: errorPayload(err),
 		})
 		return
 	}
-	_ = encoder.Encode(StreamRecord{Type: "end", Stats: result.Stats, Explain: result.Explain})
+	_ = encoder.Encode(StreamRecord{Type: streamRecordTypeEnd, Stats: result.Stats, Explain: result.Explain})
 }
 
 func writeQueryError(writer http.ResponseWriter, err error) {
@@ -227,9 +235,7 @@ func writeProtocolError(
 }
 
 func writeProtocolJSON(writer http.ResponseWriter, status int, value any) {
-	writer.Header().Set("Content-Type", "application/json")
-	writer.WriteHeader(status)
-	_ = json.NewEncoder(writer).Encode(value)
+	httpjson.Write(writer, status, value)
 }
 
 func errorPayload(err error) *ErrorResponse {

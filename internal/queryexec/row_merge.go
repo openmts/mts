@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/openmts/mts/internal/collections"
 	"github.com/openmts/mts/internal/model"
 )
 
@@ -234,23 +235,9 @@ func cloneRow(row model.Row) model.Row {
 }
 
 func cloneStringMap(values map[string]string) map[string]string {
-	if values == nil {
-		return nil
-	}
-	out := make(map[string]string, len(values))
-	for key, value := range values {
-		out[key] = value
-	}
-	return out
+	return collections.CloneMap(values)
 }
 
 func cloneFieldMap(values map[string]model.FieldValue) map[string]model.FieldValue {
-	if values == nil {
-		return nil
-	}
-	out := make(map[string]model.FieldValue, len(values))
-	for key, value := range values {
-		out[key] = value
-	}
-	return out
+	return collections.CloneMap(values)
 }
