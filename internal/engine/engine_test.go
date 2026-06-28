@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -1170,6 +1171,9 @@ func TestOpenRejectsEmptyPathAndShardStartFloorsNegativeTime(t *testing.T) {
 }
 
 func TestOpenRejectsUnsafeStoragePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 使用 ACL 进行访问控制，跳过 Unix 权限检查测试")
+	}
 	root := filepath.Join(t.TempDir(), "mts")
 	if err := os.Mkdir(root, 0755); err != nil {
 		t.Fatalf("Mkdir(root) error = %v", err)

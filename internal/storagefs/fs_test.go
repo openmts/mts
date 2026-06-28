@@ -4,12 +4,16 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/openmts/mts/internal/storagefs"
 )
 
 func TestSecureDirsAndAtomicFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 不支持 Unix 权限位检查")
+	}
 	root := t.TempDir()
 	dir := filepath.Join(root, "data")
 	if err := storagefs.MkdirAll(dir); err != nil {
@@ -53,6 +57,9 @@ func TestSecureDirsAndAtomicFile(t *testing.T) {
 }
 
 func TestSyncDirMissingPathReturnsError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 跳过 SyncDir 目录同步检查")
+	}
 	err := storagefs.SyncDir(filepath.Join(t.TempDir(), "missing"))
 	if err == nil {
 		t.Fatal("SyncDir() error = nil, want error")
@@ -73,6 +80,9 @@ func TestSyncDirMissingPathReturnsError(t *testing.T) {
 }
 
 func TestValidateStrictPermissionsRejectsWideModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 使用 ACL 进行访问控制，跳过 Unix 权限检查测试")
+	}
 	root := t.TempDir()
 	dir := filepath.Join(root, "wide-dir")
 	if err := os.Mkdir(dir, 0755); err != nil {

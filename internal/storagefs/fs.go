@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"syscall"
 )
@@ -132,6 +133,10 @@ func WriteFileAtomic(path string, data []byte) error {
 }
 
 func SyncDir(path string) error {
+	// Windows 的 NTFS 不支持对目录句柄调用 fsync，跳过即可
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	dir, err := Open(filepath.Clean(path))
 	if err != nil {
 		return fmt.Errorf("open directory for sync: %w", err)
@@ -280,6 +285,10 @@ func Stat(path string) (os.FileInfo, error) {
 }
 
 func ValidateStrictPermissions(path string) error {
+	// Windows 使用 ACL 进行访问控制，Unix 权限位无实际意义，跳过检查
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	info, err := Stat(path)
 	if err != nil {
 		return err

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -797,7 +798,8 @@ func assertNonEmptyFile(t *testing.T, path string) {
 	if info.Size() == 0 {
 		t.Fatalf("file %s is empty", path)
 	}
-	if info.Mode().Perm() != 0600 {
+	// Windows 使用 ACL 进行访问控制，Unix 权限位无实际意义
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("file %s mode = %v, want 0600", path, info.Mode().Perm())
 	}
 }

@@ -29,8 +29,30 @@ DOWNSAMPLE_SERIES ?= 100
 DOWNSAMPLE_POLICIES ?= 1
 
 CORE_PACKAGES = $(shell $(GO) list ./... | grep -v '/tests/' | grep -v '/internal/bench')
-GO_TEST = timeout $(TEST_WALL_TIMEOUT) $(GO) test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
-SCENARIO_GO_TEST = timeout $(SCENARIO_TIMEOUT) $(GO) test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
+
+# Windows 的 timeout.exe 与 GNU timeout 语法不兼容，检测后跳过外层 timeout 包装
+# （go test 自身的 -timeout 参数仍会生效）
+HOST_OS := $(shell uname -s 2>/dev/null || echo Windows)
+IS_WINDOWS := $(or $(findstring MINGW,$(HOST_OS)),$(findstring MSYS,$(HOST_OS)))
+ifdef IS_WINDOWS
+  GO_TEST = $(GO) test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
+  SCENARIO_GO_TEST = $(GO) test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
+  WALL_TIMEOUT_PREFIX =
+  FMT_TIMEOUT_PREFIX =
+  LINT_TIMEOUT_PREFIX =
+  COVERAGE_TIMEOUT_PREFIX =
+  SCENARIO_TIMEOUT_PREFIX =
+  CI_TIMEOUT_PREFIX =
+else
+  GO_TEST = timeout $(TEST_WALL_TIMEOUT) $(GO) test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
+  SCENARIO_GO_TEST = timeout $(SCENARIO_TIMEOUT) $(GO) test -count=$(COUNT) -timeout $(TEST_TIMEOUT)
+  WALL_TIMEOUT_PREFIX = timeout $(TEST_WALL_TIMEOUT)
+  FMT_TIMEOUT_PREFIX = timeout $(FMT_TIMEOUT)
+  LINT_TIMEOUT_PREFIX = timeout $(LINT_TIMEOUT)
+  COVERAGE_TIMEOUT_PREFIX = timeout $(COVERAGE_PACKAGE_TIMEOUT)
+  SCENARIO_TIMEOUT_PREFIX = timeout $(SCENARIO_TIMEOUT)
+  CI_TIMEOUT_PREFIX = timeout $(CI_TIMEOUT)
+endif
 
 .DEFAULT_GOAL := help
 
@@ -49,7 +71,7 @@ help: ## 显示 Makefile 目标
 
 .PHONY: fmt
 fmt: ## 格式化 Go 代码
-	timeout $(FMT_TIMEOUT) goimports-reviser -project-name $(PROJECT_NAME) -recursive -format -rm-unused .
+	$(FMT_TIMEOUT_PREFIX) goimports-reviser -project-name $(PROJECT_NAME) -recursive -format -rm-unused .
 
 .PHONY: dashboard
 dashboard: ## 构建前端 Dashboard 并嵌入
@@ -57,7 +79,7 @@ dashboard: ## 构建前端 Dashboard 并嵌入
 
 .PHONY: lint
 lint: ## 运行 golangci-lint
-	timeout $(LINT_TIMEOUT) golangci-lint run ./...
+	$(LINT_TIMEOUT_PREFIX) golangci-lint run ./...
 
 .PHONY: unit
 unit: ## 运行生产包单元测试
@@ -75,7 +97,7 @@ coverage: ## 检查生产包覆盖率不低于 COVERAGE_MIN
 	failed=0; \
 	for pkg in $(CORE_PACKAGES); do \
 		profile="$$tmp_dir/$$(echo "$$pkg" | tr '/.' '__').cover"; \
-		if ! output="$$(timeout $(COVERAGE_PACKAGE_TIMEOUT) $(GO) test "$$pkg" -coverprofile="$$profile" -count=$(COUNT) -timeout 5m 2>&1)"; then \
+		if ! output="$$($(COVERAGE_TIMEOUT_PREFIX) $(GO) test "$$pkg" -coverprofile="$$profile" -count=$(COUNT) -timeout 5m 2>&1)"; then \
 			printf '%s\n' "$$output"; \
 			exit 1; \
 		fi; \
@@ -154,7 +176,7 @@ fault-downsample: ## 运行降采样故障用例
 scale: ## 运行全部 scale 测试包
 	$(SCENARIO_GO_TEST) ./tests/scale/...
 scale-storage: ## 运行可调规模存储场景，默认 100K
-	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/scale/storage_10m \
+	@umask 077; $(SCENARIO_TIMEOUT_PREFIX) $(GO) run ./tests/scale/storage_10m \
 		-profile quick \
 		-mode write-query-compact \
 		-points $(STORAGE_POINTS) \
@@ -167,18 +189,18 @@ storage-1m: ## 运行 1M 存储写查压缩场景
 storage-10m: ## 运行 10M 存储写查压缩场景
 	@$(MAKE) scale-storage STORAGE_POINTS=10000000 SCENARIO_TIMEOUT=20m
 storage-matrix: ## 运行小规模存储矩阵
-	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/scale/storage_matrix \
+	@umask 077; $(SCENARIO_TIMEOUT_PREFIX) $(GO) run ./tests/scale/storage_matrix \
 		-sizes 100k \
 		-compressions off,snappy,zstd \
 		-durabilities buffered,write-sync \
 		-case-timeout 5m
 storage-soak: ## 运行 30s 存储长稳 smoke
-	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/scale/storage_soak \
+	@umask 077; $(SCENARIO_TIMEOUT_PREFIX) $(GO) run ./tests/scale/storage_soak \
 		-seed $(SOAK_SEED) \
 		-duration $(SOAK_DURATION) \
 		-report-interval 5s
 scale-downsample: ## 运行降采样规模化场景
-	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/scale/downsample_policy \
+	@umask 077; $(SCENARIO_TIMEOUT_PREFIX) $(GO) run ./tests/scale/downsample_policy \
 		-points $(DOWNSAMPLE_POINTS) \
 		-series $(DOWNSAMPLE_SERIES) \
 		-policy-count $(DOWNSAMPLE_POLICIES)
@@ -187,7 +209,7 @@ scale-downsample: ## 运行降采样规模化场景
 pprof: ## 运行全部 pprof 测试包
 	$(SCENARIO_GO_TEST) ./tests/pprof/...
 pprof-storage: ## 运行存储 pprof smoke 场景，不落 profile 文件
-	@umask 077; timeout $(SCENARIO_TIMEOUT) $(GO) run ./tests/pprof/storage_engine \
+	@umask 077; $(SCENARIO_TIMEOUT_PREFIX) $(GO) run ./tests/pprof/storage_engine \
 		-mode query \
 		-points $(PPROF_POINTS) \
 		-series $(PPROF_SERIES) \
@@ -195,9 +217,9 @@ pprof-storage: ## 运行存储 pprof smoke 场景，不落 profile 文件
 
 .PHONY: bench bench-query
 bench: ## 运行存储基准 gate
-	timeout $(SCENARIO_TIMEOUT) bash scripts/storage_benchmark_gate.sh
+	$(SCENARIO_TIMEOUT_PREFIX) bash scripts/storage_benchmark_gate.sh
 bench-query: ## 运行查询迭代器基准 smoke
-	timeout $(SCENARIO_TIMEOUT) $(GO) test ./internal/bench \
+	$(SCENARIO_TIMEOUT_PREFIX) $(GO) test ./internal/bench \
 		-run '^$$' \
 		-bench 'BenchmarkEngineQuery(Row|Column)Iterator/points=1000$$' \
 		-benchmem \
@@ -210,7 +232,7 @@ mts-server-test: ## 运行 mts-server 配置、HTTP 和 gRPC 测试
 
 .PHONY: ci gate commercial
 ci: ## 运行完整商用门禁脚本
-	timeout $(CI_TIMEOUT) bash scripts/ci_gate.sh
+	$(CI_TIMEOUT_PREFIX) bash scripts/ci_gate.sh
 gate: ci ## ci 的别名
 commercial: ci ## ci 的别名
 

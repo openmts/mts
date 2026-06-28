@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	mts "github.com/openmts/mts"
@@ -20,6 +21,9 @@ func TestMainFunction(t *testing.T) {
 }
 
 func TestRunRejectsInvalidTempDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 不支持 /dev/null 作为无效临时目录路径")
+	}
 	t.Setenv("TMPDIR", "/dev/null")
 	if err := run(); err == nil {
 		t.Fatal("run(invalid temp dir) error = nil, want error")
@@ -33,6 +37,9 @@ func TestRunWithDirRejectsInvalidPath(t *testing.T) {
 }
 
 func TestOpenPublicEngineRejectsInvalidExistingDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 使用 ACL 进行访问控制，跳过 Unix 权限检查测试")
+	}
 	root := filepath.Join(t.TempDir(), "mts")
 	if err := os.Mkdir(root, 0755); err != nil {
 		t.Fatalf("Mkdir(root) error = %v", err)

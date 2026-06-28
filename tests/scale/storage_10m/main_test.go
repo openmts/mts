@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -568,7 +569,8 @@ func TestRunWritesJSONReportFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat(out) error = %v", err)
 	}
-	if info.Mode().Perm() != 0600 {
+	// Windows 使用 ACL 进行访问控制，Unix 权限位无实际意义
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("report mode = %04o, want 0600", info.Mode().Perm())
 	}
 }

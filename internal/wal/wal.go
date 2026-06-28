@@ -519,7 +519,17 @@ func replaySegment(path string, isLast bool) ([]Record, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open wal segment for replay: %w", err)
 	}
-	points, replayErr := replayOpenSegment(file, isLast)
+	points, truncOffset, replayErr := replayOpenSegment(file, isLast)
+	if truncOffset >= 0 {
+		// Windows 不支持对已打开的文件执行 Truncate，需先关闭再截断
+		if closeErr := file.Close(); closeErr != nil {
+			return nil, fmt.Errorf("close wal segment before truncate: %w", closeErr)
+		}
+		if truncateErr := os.Truncate(path, truncOffset); truncateErr != nil {
+			return nil, fmt.Errorf("truncate partial wal record: %w", truncateErr)
+		}
+		return points, nil
+	}
 	closeErr := file.Close()
 	if replayErr != nil {
 		return nil, replayErr
@@ -530,15 +540,17 @@ func replaySegment(path string, isLast bool) ([]Record, error) {
 	return points, nil
 }
 
-func replayOpenSegment(file *os.File, isLast bool) ([]Record, error) {
+// replayOpenSegment replays WAL records from an open file.
+// Returns records, a truncation offset (>=0 when truncation is needed, -1 otherwise), and error.
+func replayOpenSegment(file *os.File, isLast bool) ([]Record, int64, error) {
 	records := make([]Record, 0)
 	if err := readSegmentHeader(file); err != nil {
-		return nil, err
+		return nil, -1, err
 	}
 	for {
 		offset, err := file.Seek(0, io.SeekCurrent)
 		if err != nil {
-			return nil, fmt.Errorf("seek wal segment: %w", err)
+			return nil, -1, fmt.Errorf("seek wal segment: %w", err)
 		}
 		record, err := readFrame(file)
 		if err == nil {
@@ -546,15 +558,12 @@ func replayOpenSegment(file *os.File, isLast bool) ([]Record, error) {
 			continue
 		}
 		if err == io.EOF {
-			return records, nil
+			return records, -1, nil
 		}
 		if isLast && isPartial(err) {
-			if truncateErr := file.Truncate(offset); truncateErr != nil {
-				return nil, fmt.Errorf("truncate partial wal record: %w", truncateErr)
-			}
-			return records, nil
+			return records, offset, nil
 		}
-		return nil, err
+		return nil, -1, err
 	}
 }
 

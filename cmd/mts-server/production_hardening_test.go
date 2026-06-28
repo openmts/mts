@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -96,7 +97,8 @@ shutdown_timeout: 3s
 	if err != nil {
 		t.Fatalf("Stat(init config) error = %v", err)
 	}
-	if info.Mode().Perm() != 0600 {
+	// Windows 使用 ACL 进行访问控制，Unix 权限位无实际意义
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("init config mode = %o, want 0600", info.Mode().Perm())
 	}
 	if err := app.RunContext(context.Background(), []string{"mts-server", "init-config", "--output", outPath}); !errorsIsInvalidConfig(err) {
@@ -218,7 +220,8 @@ func TestHTTPProductionHardening(t *testing.T) {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
 	info, err := os.Stat(snapshot.Path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	// Windows 使用 ACL 进行访问控制，Unix 权限位无实际意义
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatalf("snapshot stat = %#v %v, want mode 0600", info, err)
 	}
 	var exportResp storageExportResponse

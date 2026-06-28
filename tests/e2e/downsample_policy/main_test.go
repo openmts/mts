@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -13,6 +14,9 @@ func TestMainSmoke(t *testing.T) {
 }
 
 func TestRunRejectsInvalidTempDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 不支持 /dev/null 作为无效临时目录路径")
+	}
 	t.Setenv("TMPDIR", "/dev/null")
 	if err := run(); err == nil {
 		t.Fatal("run(invalid temp dir) error = nil, want error")

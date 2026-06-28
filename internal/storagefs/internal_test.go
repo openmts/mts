@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"testing"
 )
@@ -325,6 +326,9 @@ func TestWriteFileAtomicFaultBranches(t *testing.T) {
 }
 
 func TestSyncDirFaultBranches(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 跳过 SyncDir 目录同步检查")
+	}
 	dir := t.TempDir()
 	for _, item := range []struct {
 		name string

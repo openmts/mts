@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	mts "github.com/openmts/mts"
@@ -128,6 +129,10 @@ func assertCheckAndRepair(shardDir string, orphanPath string) error {
 }
 
 func assertUnsafePermissionsRejected(ctx context.Context, dir string) error {
+	// Windows 使用 ACL 进行访问控制，Unix 权限位无实际意义，跳过检查
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	if err := os.Chmod(dir, 0755); err != nil {
 		return fmt.Errorf("chmod unsafe root: %w", err)
 	}

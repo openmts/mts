@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 
 	"github.com/openmts/mts/internal/codec"
@@ -76,14 +77,30 @@ func (c *Catalog) checkpointSnapshotLocked(force bool) error {
 		c.snapshotDirtyRecords = 0
 		return nil
 	}
-	if err := c.wal.Truncate(0); err != nil {
-		return fmt.Errorf("truncate catalog wal after snapshot: %w", err)
-	}
-	if _, err := c.wal.Seek(0, 0); err != nil {
-		return fmt.Errorf("seek catalog wal after snapshot: %w", err)
-	}
-	if err := storagefs.Sync(c.wal); err != nil {
-		return fmt.Errorf("sync truncated catalog wal: %w", err)
+	if runtime.GOOS == "windows" {
+		// Windows 不支持对已打开的文件执行 Truncate，需先关闭再截断再重开
+		walPath := c.walPath()
+		if err := c.wal.Close(); err != nil {
+			return fmt.Errorf("close catalog wal before truncate: %w", err)
+		}
+		if err := os.Truncate(walPath, 0); err != nil {
+			return fmt.Errorf("truncate catalog wal after snapshot: %w", err)
+		}
+		wal, err := storagefs.OpenFile(walPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, storagefs.FileMode)
+		if err != nil {
+			return fmt.Errorf("reopen catalog wal after truncate: %w", err)
+		}
+		c.wal = wal
+	} else {
+		if err := c.wal.Truncate(0); err != nil {
+			return fmt.Errorf("truncate catalog wal after snapshot: %w", err)
+		}
+		if _, err := c.wal.Seek(0, 0); err != nil {
+			return fmt.Errorf("seek catalog wal after snapshot: %w", err)
+		}
+		if err := storagefs.Sync(c.wal); err != nil {
+			return fmt.Errorf("sync truncated catalog wal: %w", err)
+		}
 	}
 	c.snapshotDirtyRecords = 0
 	return nil
