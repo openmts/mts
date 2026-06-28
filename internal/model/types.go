@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"log/slog"
 	"time"
 )
@@ -370,6 +371,19 @@ type QueryStats struct {
 	Cancellations     int   `json:"cancellations"`
 	StartedUnixNanos  int64 `json:"started_unix_nanos"`
 	ReadEpoch         int64 `json:"read_epoch"`
+}
+
+// StorageQuery 是 MemTable 与 SSTable 共用的列扫描契约。
+type StorageQuery struct {
+	Context         context.Context
+	Budget          QueryBudget
+	Stats           *QueryStats
+	Boundary        QueryBoundaryMode
+	SeriesIDs       map[uint64]struct{}
+	FieldIDs        map[uint32]struct{}
+	FieldPredicates map[uint32][]QueryPredicate
+	Start           int64
+	End             int64
 }
 
 type Options struct {

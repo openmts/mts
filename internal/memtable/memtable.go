@@ -9,10 +9,9 @@ import (
 
 	"github.com/openmts/mts/internal/model"
 	"github.com/openmts/mts/internal/queryexec"
-	"github.com/openmts/mts/internal/storagequery"
 )
 
-type Query = storagequery.Query
+type Query = model.StorageQuery
 
 type MemTable struct {
 	mu          sync.RWMutex

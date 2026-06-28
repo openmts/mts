@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/openmts/mts/internal/model"
-	"github.com/openmts/mts/internal/storagequery"
 )
 
 const (
@@ -18,7 +17,7 @@ const (
 	manifestFile    = "MANIFEST.bin"
 )
 
-type Query = storagequery.Query
+type Query = model.StorageQuery
 
 type PartMeta struct {
 	ID          string `json:"id"`

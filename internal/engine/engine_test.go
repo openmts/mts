@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -3279,6 +3280,64 @@ func (f *fakeFileOps) AvailableBytes(string) (int64, error) {
 	}
 	return f.availableBytes, f.availableErr
 }
+
+func TestEngineCloseCollectsAllShardErrors(t *testing.T) {
+	ctx := context.Background()
+	opts := model.Options{
+		Path:               t.TempDir(),
+		ShardDuration:      time.Hour,
+		MemTableMaxSamples: 100,
+	}
+	eng := openTestEngine(t, ctx, opts)
+	// 写入两个不同时间点的数据，触发创建多个 shard。
+	for _, ts := range []int64{10, 3700_000_000_000} {
+		if err := eng.Write(ctx, []model.Point{{
+			Measurement: "cpu",
+			Timestamp:   ts,
+			Fields:      map[string]model.FieldValue{"v": model.Float64Value(1)},
+		}}, model.WriteOptions{Sync: true}); err != nil {
+			t.Fatalf("Write() error = %v", err)
+		}
+	}
+	if len(eng.shards) < 2 {
+		t.Fatalf("shard count = %d, want >= 2", len(eng.shards))
+	}
+	// 注入一个 Close 会失败的 shard，验证所有 shard 都被尝试关闭。
+	eng.shards["fake-failing-shard"] = &Shard{
+		opts: ShardOptions{Database: "fake", RetentionPolicy: "default"},
+		deps: shardDeps{
+			openWAL: func(string, model.WALOptions) (walStore, error) {
+				return nil, fmt.Errorf("open wal should not be called")
+			},
+			newMem: func() memStore { return memTableStore{inner: memtable.New()} },
+			parts:  defaultPartManager{},
+			files:  &fakeFileOps{},
+		},
+	}
+	eng.shards["fake-failing-shard"].lifecycleMu.Lock()
+	eng.shards["fake-failing-shard"].wal = &failingWALStore{closeErr: fmt.Errorf("shard close boom")}
+	eng.shards["fake-failing-shard"].lifecycleMu.Unlock()
+
+	err := eng.Close(ctx)
+	if err == nil {
+		t.Fatal("Close() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "shard close boom") {
+		t.Fatalf("Close() error = %v, want contains 'shard close boom'", err)
+	}
+}
+
+type failingWALStore struct {
+	closeErr error
+}
+
+func (f *failingWALStore) Append([]model.ResolvedPoint, bool) error                { return nil }
+func (f *failingWALStore) AppendTombstones([]model.Tombstone, bool) error          { return nil }
+func (f *failingWALStore) AppendTyped(model.ResolvedTypedBatch, []int, bool) error { return nil }
+func (f *failingWALStore) ReplayRecords() ([]wal.Record, error)                    { return nil, nil }
+func (f *failingWALStore) ApproxMemoryBytes() int64                                { return 0 }
+func (f *failingWALStore) Checkpoint() error                                       { return nil }
+func (f *failingWALStore) Close() error                                            { return f.closeErr }
 
 func TestDecorateColumnsSkipsMissingCatalogEntries(t *testing.T) {
 	cat, err := catalog.Open(t.TempDir())

@@ -150,17 +150,21 @@ func (e *Engine) Close(_ context.Context) error {
 	e.stopBackgroundCompaction()
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	var errs []error
 	for _, shard := range e.shards {
 		if err := shard.Close(); err != nil {
 			e.logger.Error("engine close failed",
 				"shard", shardID(shard.opts.Database, shard.opts.RetentionPolicy, shard.opts.Start),
 				"error", err,
 			)
-			return err
+			errs = append(errs, err)
 		}
 	}
 	if err := e.metadata.Close(); err != nil {
 		e.logger.Error("metadata close failed", "error", err)
+		errs = append(errs, err)
+	}
+	if err := errors.Join(errs...); err != nil {
 		return err
 	}
 	e.logger.Info("engine closed")
