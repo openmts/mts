@@ -138,6 +138,11 @@ func (e *Engine) MaintenanceErrors(ctx context.Context) []error {
 	return e.runtime.Storage().MaintenanceErrors(ctx)
 }
 
+// MaintenanceStatsSnapshot 返回后台 compact/downsample 的并发、跳过与失败快照。
+func (e *Engine) MaintenanceStatsSnapshot() MaintenanceStats {
+	return fromMaintenanceStats(e.runtime.Storage().MaintenanceStatsSnapshot())
+}
+
 // StorageMemorySnapshot 返回存储层内存占用快照。
 func (e *Engine) StorageMemorySnapshot() StorageMemorySnapshot {
 	return fromStorageMemorySnapshot(e.runtime.Storage().StorageMemorySnapshot())

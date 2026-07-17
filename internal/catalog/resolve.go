@@ -91,6 +91,9 @@ func (c *Catalog) createSeriesNoSnapshotLocked(
 	measurement string,
 	tags map[string]string,
 ) (Series, bool, error) {
+	if err := c.ensureSeriesCardinalityLocked(measurement, tags); err != nil {
+		return Series{}, false, err
+	}
 	series := Series{
 		ID:          c.nextSeriesID,
 		Measurement: measurement,
@@ -252,6 +255,9 @@ func (c *Catalog) resolveFieldNoSnapshotLocked(
 		}
 		return field, false, nil
 	}
+	if err := c.ensureFieldCardinalityLocked(); err != nil {
+		return Field{}, false, err
+	}
 	field := Field{
 		ID:          c.nextFieldID,
 		Measurement: measurement,
@@ -287,6 +293,7 @@ func (c *Catalog) applySeries(series Series) {
 	c.series[series.ID] = series
 	c.seriesByKey[seriesKey(series.Measurement, series.Tags)] = series.ID
 	c.upsertSingleTagSeries(series)
+	c.recordTagValues(series.Measurement, series.Tags)
 	if series.ID >= c.nextSeriesID {
 		c.nextSeriesID = series.ID + 1
 	}

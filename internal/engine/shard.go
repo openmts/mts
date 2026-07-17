@@ -43,6 +43,7 @@ type Shard struct {
 	manifest        sstable.Manifest
 	tombstones      []model.Tombstone
 	nextPart        int
+	readRefs        int
 	maintenanceErr  error
 	recoveryReport  RecoveryReport
 	compactionStats compactionStatsRecorder
@@ -136,21 +137,27 @@ func (s *Shard) WriteBatch(points []model.ResolvedPoint, syncWrite bool) error {
 	if len(points) == 0 {
 		return nil
 	}
+	s.lifecycleMu.RLock()
 	release, err := s.reserveWriteMemory(points)
 	if err != nil {
+		s.lifecycleMu.RUnlock()
 		return err
 	}
-	defer release()
 	if err := s.wal.Append(points, syncWrite); err != nil {
+		release()
+		s.lifecycleMu.RUnlock()
 		return err
 	}
-	if err := s.mem.ApplyBatch(points); err != nil {
+	if err := s.applyMemAfterWAL(points); err != nil {
+		release()
+		s.lifecycleMu.RUnlock()
 		return err
 	}
-	if s.mem.SampleCount() >= s.opts.MemTableMaxSamples {
-		if err := s.Flush(); err != nil {
-			return err
-		}
+	needFlush := s.mem.SampleCount() >= s.opts.MemTableMaxSamples
+	release()
+	s.lifecycleMu.RUnlock()
+	if needFlush {
+		return s.Flush()
 	}
 	return nil
 }
@@ -163,21 +170,27 @@ func (s *Shard) WriteTypedBatch(
 	if typedBatchRowCount(batch, rows) == 0 {
 		return nil
 	}
+	s.lifecycleMu.RLock()
 	release, err := s.reserveTypedWriteMemory(batch, rows)
 	if err != nil {
+		s.lifecycleMu.RUnlock()
 		return err
 	}
-	defer release()
 	if err := s.appendTypedWAL(batch, rows, syncWrite); err != nil {
+		release()
+		s.lifecycleMu.RUnlock()
 		return err
 	}
-	if err := s.applyTypedMemTable(batch, rows); err != nil {
+	if err := s.applyTypedMemAfterWAL(batch, rows); err != nil {
+		release()
+		s.lifecycleMu.RUnlock()
 		return err
 	}
-	if s.mem.SampleCount() >= s.opts.MemTableMaxSamples {
-		if err := s.Flush(); err != nil {
-			return err
-		}
+	needFlush := s.mem.SampleCount() >= s.opts.MemTableMaxSamples
+	release()
+	s.lifecycleMu.RUnlock()
+	if needFlush {
+		return s.Flush()
 	}
 	return nil
 }
@@ -364,23 +377,7 @@ func (s *Shard) flushLocked() error {
 	}
 	s.parts = append(s.parts, part)
 	s.manifest = nextManifest
-	if s.testHooks.afterManifestBeforeWALTrunc != nil {
-		if err := s.testHooks.afterManifestBeforeWALTrunc(); err != nil {
-			release()
-			s.mem.Restore(snapshot)
-			return err
-		}
-	}
-	if len(s.tombstones) == 0 {
-		if err := s.wal.Checkpoint(); err != nil {
-			release()
-			s.mem.Restore(snapshot)
-			return err
-		}
-	}
-	snapshot.Release()
-	release()
-	return nil
+	return s.completeCommittedFlush(snapshot, release)
 }
 
 func (s *Shard) writeSnapshotPart(snapshot memSnapshot) (sstable.PartMeta, error) {
@@ -486,8 +483,19 @@ func (s *Shard) Query(query memtable.Query) ([]model.ColumnData, error) {
 }
 
 func (s *Shard) Close() error {
+	return s.closeWithBusyCheck(true)
+}
+
+func (s *Shard) closeForced() error {
+	return s.closeWithBusyCheck(false)
+}
+
+func (s *Shard) closeWithBusyCheck(rejectBusy bool) error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
+	if rejectBusy && s.hasActiveReadersLocked() {
+		return ErrShardBusy
+	}
 	return s.closeLocked()
 }
 

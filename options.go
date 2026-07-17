@@ -32,13 +32,24 @@ type Options struct {
 	Compaction             CompactionOptions
 	Compression            CompressionOptions
 	StorageMemory          StorageMemoryOptions
-	Logger                 *slog.Logger
-	User                   UserOptions
+	Cardinality            CardinalityOptions
+	// MaxConcurrentDownsample 限制后台降采样策略的全局并发数，<=0 使用默认值 2。
+	MaxConcurrentDownsample int
+	Logger                  *slog.Logger
+	User                    UserOptions
 }
 
 type UserOptions struct {
 	Endpoint             string
 	PasswordAuthDisabled bool
+}
+
+// CardinalityOptions 控制本地 catalog 高基数硬限制。
+// 零值表示不限制；超限时写入拒绝并返回 ErrCardinalityLimit。
+type CardinalityOptions struct {
+	MaxSeries          int
+	MaxFields          int
+	MaxTagValuesPerKey int
 }
 
 // StorageMemoryOptions 控制存储层内存预算。
@@ -133,6 +144,12 @@ func (opts Options) Validate() error {
 	if err := validateStorageMemoryOptions(opts.StorageMemory); err != nil {
 		return err
 	}
+	if err := validateCardinalityOptions(opts.Cardinality); err != nil {
+		return err
+	}
+	if err := validateNonNegativeInt("max concurrent downsample", opts.MaxConcurrentDownsample); err != nil {
+		return err
+	}
 	if err := validateWALOptions(opts.WAL); err != nil {
 		return err
 	}
@@ -173,6 +190,23 @@ func validateStorageMemoryOptions(opts StorageMemoryOptions) error {
 	}
 	if opts.HardBytesLimit > 0 && opts.SoftBytesLimit > opts.HardBytesLimit {
 		return invalidOptions("soft bytes limit exceeds hard bytes limit")
+	}
+	return nil
+}
+
+func validateCardinalityOptions(opts CardinalityOptions) error {
+	fields := []struct {
+		name  string
+		value int
+	}{
+		{name: "max series", value: opts.MaxSeries},
+		{name: "max fields", value: opts.MaxFields},
+		{name: "max tag values per key", value: opts.MaxTagValuesPerKey},
+	}
+	for _, field := range fields {
+		if err := validateNonNegativeInt(field.name, field.value); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -27,6 +27,9 @@ type LayeredStreamReader interface {
 	QuerySpecColumnStream(context.Context, querylang.QuerySpec) (queryexec.ColumnStream, error)
 }
 
+// LayeredExecutor 是可选的分层查询包装（analyze/plan/optimize）。
+// 权威查询语义与结果以 internal/engine + queryexec 为准；本执行器仅做兼容/实验路径，
+// 生产路径（public API / mts-server）应直接调用 Engine 查询方法。
 type LayeredExecutor struct {
 	reader LayeredReader
 }

@@ -198,3 +198,19 @@ func fromModelRows(rows []model.Row, factor int64) []Row {
 	}
 	return out
 }
+
+func fromMaintenanceStats(stats storageengine.MaintenanceStats) MaintenanceStats {
+	return MaintenanceStats{
+		CompactionActive:        stats.CompactionActive,
+		CompactionBacklog:       stats.CompactionBacklog,
+		CompactionSkipped:       stats.CompactionSkipped,
+		CompactionFailure:       stats.CompactionFailure,
+		CompactionLastSkip:      stats.CompactionLastSkip,
+		DownsampleActive:        stats.DownsampleActive,
+		DownsampleInflight:      stats.DownsampleInflight,
+		DownsampleSkipped:       stats.DownsampleSkipped,
+		DownsampleFailure:       stats.DownsampleFailure,
+		DownsampleMaxConcurrent: stats.DownsampleMaxConcurrent,
+		MaintenanceErrorCount:   stats.MaintenanceErrorCount,
+	}
+}

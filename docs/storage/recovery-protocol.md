@@ -13,6 +13,8 @@ WAL header 损坏、未知 format 或中间 record CRC 错误会终止恢复并�
 
 如果 flush 已写出 part 但 Manifest 未提交，该 part 视为孤儿，启动恢复会通过 maintenance 清理或由离线 repair 清理。Manifest 已提交但 WAL checkpoint 未完成时，启动会加载 Manifest part 并 replay WAL，查询合并逻辑按 write sequence 去重。
 
+运行中若 Manifest 已提交而 WAL checkpoint 失败，引擎不得把已提交 snapshot 回灌 MemTable；应保留已提交 part，记录 `wal_checkpoint_failed` 恢复问题，并依赖后续 replay + write sequence 去重保持查询正确。
+
 ## 离线检查与修复
 
 `mts-storage check <path>` 扫描 WAL、Manifest、SSTable part 和未知文件，输出 JSON report。报告包含 path、part id、level、time range、series range、reason、offset 和 block type。

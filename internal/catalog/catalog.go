@@ -17,18 +17,33 @@ var (
 	ErrEmptyMeasurement  = errors.New("measurement is empty")
 	ErrEmptyFields       = errors.New("fields are empty")
 	ErrFieldTypeConflict = errors.New("field type conflict")
+	ErrCardinalityLimit  = errors.New("catalog cardinality limit exceeded")
 )
+
+// Limits 控制 catalog 高基数硬限制；0 表示不限制。
+type Limits struct {
+	MaxSeries          int
+	MaxFields          int
+	MaxTagValuesPerKey int
+}
+
+// Options 控制 Catalog 打开参数。
+type Options struct {
+	Limits Limits
+}
 
 type Catalog struct {
 	mu sync.RWMutex
 
-	dir string
-	wal *os.File
+	dir    string
+	wal    *os.File
+	limits Limits
 
 	nextSeriesID         uint64
 	nextFieldID          uint32
 	seriesByKey          map[string]uint64
 	seriesByTag          map[string]map[string]map[string]uint64
+	tagValues            map[string]map[string]map[string]struct{}
 	series               map[uint64]Series
 	fieldsByKey          map[string]uint32
 	fields               map[uint32]Field
@@ -40,6 +55,7 @@ type Catalog struct {
 
 	snapshotDirtyRecords int
 	seriesKeyScratch     []string
+	cardinalityRejected  uint64
 }
 
 type Snapshot struct {
@@ -48,10 +64,14 @@ type Snapshot struct {
 }
 
 func Open(dir string) (*Catalog, error) {
+	return OpenWithOptions(dir, Options{})
+}
+
+func OpenWithOptions(dir string, opts Options) (*Catalog, error) {
 	if err := storagefs.MkdirAll(dir); err != nil {
 		return nil, err
 	}
-	cat := newCatalog(dir)
+	cat := newCatalog(dir, opts.Limits)
 	if err := cat.loadSnapshot(); err != nil {
 		return nil, err
 	}
@@ -298,13 +318,15 @@ func cloneFieldMap(fields map[uint32]Field) map[uint32]Field {
 	return out
 }
 
-func newCatalog(dir string) *Catalog {
+func newCatalog(dir string, limits Limits) *Catalog {
 	return &Catalog{
 		dir:                  filepath.Clean(dir),
+		limits:               limits,
 		nextSeriesID:         1,
 		nextFieldID:          1,
 		seriesByKey:          make(map[string]uint64),
 		seriesByTag:          make(map[string]map[string]map[string]uint64),
+		tagValues:            make(map[string]map[string]map[string]struct{}),
 		series:               make(map[uint64]Series),
 		fieldsByKey:          make(map[string]uint32),
 		fields:               make(map[uint32]Field),

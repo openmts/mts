@@ -172,7 +172,7 @@ func TestLoadDownsampleMetadataRejectsUnreadablePath(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, "downsample.bin"), 0700); err != nil {
 		t.Fatalf("Mkdir(downsample.bin) error = %v", err)
 	}
-	cat := newCatalog(dir)
+	cat := newCatalog(dir, Limits{})
 	if err := cat.loadDownsampleMetadata(); err == nil {
 		t.Fatal("loadDownsampleMetadata(directory) error = nil, want error")
 	}

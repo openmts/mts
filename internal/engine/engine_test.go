@@ -620,9 +620,16 @@ func TestBackgroundCompactionLifecycle(t *testing.T) {
 		}
 	}
 	waitForTest(t, time.Second, func() bool {
-		shard := onlyShardForTest(t, eng)
-		return len(shard.manifest.Parts) == 1 && shard.manifest.Parts[0].Level == 1
+		stats := eng.CompactionStatsSnapshot()
+		return stats.Success >= 1 && stats.Active == 0
 	})
+	// 先停止后台 compact，避免与测试读取 manifest 并发竞态。
+	eng.stopBackgroundCompaction()
+	shard := onlyShardForTest(t, eng)
+	if len(shard.manifest.Parts) != 1 || shard.manifest.Parts[0].Level != 1 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("manifest parts = %#v, want single L1 part close = %v", shard.manifest.Parts, closeErr)
+	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}

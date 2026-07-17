@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,8 +16,32 @@ import (
 	"github.com/openmts/mts/internal/storagefs"
 )
 
+// concurrentBuffer 是并发安全的日志缓冲，供后台任务测试读取日志内容。
+type concurrentBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *concurrentBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *concurrentBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func (b *concurrentBuffer) Reset() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.buf.Reset()
+}
+
 // newCapturingLogger 创建一个将日志写入 buf 的 slog.Logger，级别为 WARN。
-func newCapturingLogger(buf *bytes.Buffer) *slog.Logger {
+func newCapturingLogger(buf *concurrentBuffer) *slog.Logger {
 	return slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{
 		Level: slog.LevelWarn,
 	}))
@@ -26,7 +51,7 @@ func newCapturingLogger(buf *bytes.Buffer) *slog.Logger {
 // 通过保留未刷盘的 memtable 并注入 OpCreate 故障，使 compactBackground 返回错误。
 func TestBackgroundCompactionLoopLogsFailure(t *testing.T) {
 	ctx := context.Background()
-	var buf bytes.Buffer
+	var buf concurrentBuffer
 	logger := newCapturingLogger(&buf)
 	eng, err := Open(ctx, model.Options{
 		Path:               t.TempDir(),
@@ -65,7 +90,7 @@ func TestBackgroundCompactionLoopLogsFailure(t *testing.T) {
 // 通过注入 OpWrite 故障，使 RunDownsamplePolicy 写入降采样结果时失败。
 func TestStartDownsamplePolicyRunLogsFailure(t *testing.T) {
 	ctx := context.Background()
-	var buf bytes.Buffer
+	var buf concurrentBuffer
 	logger := newCapturingLogger(&buf)
 	eng, err := Open(ctx, model.Options{
 		Path:          t.TempDir(),
@@ -129,7 +154,7 @@ func (c *flakyContext) Value(_ any) any { return nil }
 func TestShouldRunDownsamplePolicyLogsWatermarkError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	var buf bytes.Buffer
+	var buf concurrentBuffer
 	eng, err := Open(context.Background(), model.Options{
 		Path:          t.TempDir(),
 		ShardDuration: time.Hour,
@@ -150,7 +175,7 @@ func TestShouldRunDownsamplePolicyLogsWatermarkError(t *testing.T) {
 // TestScanDownsamplePoliciesLogsListError 验证列出降采样策略失败时输出 WARN 日志。
 // 使用 flakyContext 使 scanDownsamplePolicies 顶层检查通过但 ListDownsamplePolicies 失败。
 func TestScanDownsamplePoliciesLogsListError(t *testing.T) {
-	var buf bytes.Buffer
+	var buf concurrentBuffer
 	eng, err := Open(context.Background(), model.Options{
 		Path:          t.TempDir(),
 		ShardDuration: time.Hour,

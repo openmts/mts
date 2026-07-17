@@ -104,6 +104,15 @@ type ResolvedTypedBatch struct {
 	Fields          []ResolvedTypedFieldColumn `json:"fields"`
 }
 
+type DeleteRequest struct {
+	Database        string
+	RetentionPolicy string
+	Measurement     string
+	Tags            map[string]string
+	StartTime       int64
+	EndTime         int64
+}
+
 type Query struct {
 	Database        string            `json:"database"`
 	RetentionPolicy string            `json:"retention_policy"`
@@ -398,7 +407,15 @@ type Options struct {
 	Compaction             CompactionOptions
 	Compression            CompressionOptions
 	StorageMemory          StorageMemoryOptions
+	Cardinality            CardinalityOptions
+	MaxConcurrentDownsample int
 	Logger                 *slog.Logger
+}
+
+type CardinalityOptions struct {
+	MaxSeries          int
+	MaxFields          int
+	MaxTagValuesPerKey int
 }
 
 type StorageMemoryOptions struct {

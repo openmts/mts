@@ -10,3 +10,6 @@
 // 当前公开 API 明确限定在单进程和本地数据目录内，不提供分布式查询、
 // 分布式存储、外部元数据系统、SQL、InfluxQL、PromQL 或 MetricsQL parser。
 package mts
+
+//
+// 权威查询路径为 Engine 查询方法（Builder/API），内部由 storage engine + queryexec 执行。

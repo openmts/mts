@@ -124,16 +124,27 @@ func classifyAPIError(err error) apiErrorClass {
 		return apiErrorClass{Code: apiErr.Code, Message: err.Error()}
 	case errors.Is(err, mts.ErrPermissionDenied):
 		return apiErrorClass{Code: errorCodePermissionDenied, Message: err.Error()}
-	case errors.Is(err, mts.ErrUserNotFound), looksLikeNotFoundError(err):
+	case errors.Is(err, mts.ErrNotFound),
+		errors.Is(err, mts.ErrUserNotFound):
 		return apiErrorClass{Code: errorCodeNotFound, Message: err.Error()}
 	case errors.Is(err, mts.ErrUserAlreadyExists):
 		return apiErrorClass{Code: errorCodeAlreadyExists, Message: err.Error()}
 	case errors.Is(err, mts.ErrInvalidCredentials), errors.Is(err, mts.ErrAuthenticationDisabled):
 		return apiErrorClass{Code: errorCodeUnauthenticated, Message: err.Error()}
-	case errors.Is(err, mts.ErrInvalidUser) ||
-		errors.Is(err, mts.ErrInvalidPermission) ||
-		errors.Is(err, mts.ErrInvalidPrecision):
+	case errors.Is(err, mts.ErrResourceExhausted),
+		errors.Is(err, mts.ErrCardinalityLimit),
+		errors.Is(err, mts.ErrStorageMemoryLimitExceeded),
+		errors.Is(err, mts.ErrReadBudgetExceeded),
+		errors.Is(err, mts.ErrEngineBusy):
+		return apiErrorClass{Code: errorCodeResourceExhausted, Message: err.Error()}
+	case errors.Is(err, mts.ErrInvalidOptions),
+		errors.Is(err, mts.ErrInvalidUser),
+		errors.Is(err, mts.ErrInvalidPermission),
+		errors.Is(err, mts.ErrInvalidPrecision),
+		errors.Is(err, mts.ErrUnsupported):
 		return apiErrorClass{Code: errorCodeBadRequest, Message: err.Error()}
+	case looksLikeNotFoundError(err):
+		return apiErrorClass{Code: errorCodeNotFound, Message: err.Error()}
 	case looksLikeValidationError(err):
 		return apiErrorClass{Code: errorCodeBadRequest, Message: err.Error()}
 	default:

@@ -9,6 +9,7 @@ func (e *Engine) startBackgroundCompaction() {
 	if !e.opts.Compaction.Enabled || e.opts.Compaction.BackgroundInterval <= 0 {
 		return
 	}
+	e.compactCtx, e.compactCancel = context.WithCancel(context.Background())
 	e.compactStop = make(chan struct{})
 	e.compactWG.Add(1)
 	e.logger.Info("background compaction started",
@@ -18,6 +19,9 @@ func (e *Engine) startBackgroundCompaction() {
 }
 
 func (e *Engine) stopBackgroundCompaction() {
+	if e.compactCancel != nil {
+		e.compactCancel()
+	}
 	if e.compactStop == nil {
 		return
 	}
@@ -34,7 +38,7 @@ func (e *Engine) backgroundCompactionLoop(interval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := e.compactBackground(context.Background()); err != nil {
+			if err := e.compactBackground(e.compactContext()); err != nil {
 				e.logger.Warn("background compaction failed", "error", err)
 			}
 		case <-e.compactStop:
@@ -43,7 +47,17 @@ func (e *Engine) backgroundCompactionLoop(interval time.Duration) {
 	}
 }
 
+func (e *Engine) compactContext() context.Context {
+	if e.compactCtx != nil {
+		return e.compactCtx
+	}
+	return context.Background()
+}
+
 func (e *Engine) compactBackground(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	e.mu.Lock()
 	if skipped, reason := e.shouldSkipBackgroundCompactionLocked(); skipped {
 		e.mu.Unlock()

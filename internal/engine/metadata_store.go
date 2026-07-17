@@ -68,7 +68,17 @@ type LocalMetadataStore struct {
 var _ MetadataStore = (*LocalMetadataStore)(nil)
 
 func OpenLocalMetadataStore(dir string) (*LocalMetadataStore, error) {
-	cat, err := catalog.Open(dir)
+	return OpenLocalMetadataStoreWithLimits(dir, model.CardinalityOptions{})
+}
+
+func OpenLocalMetadataStoreWithLimits(dir string, limits model.CardinalityOptions) (*LocalMetadataStore, error) {
+	cat, err := catalog.OpenWithOptions(dir, catalog.Options{
+		Limits: catalog.Limits{
+			MaxSeries:          limits.MaxSeries,
+			MaxFields:          limits.MaxFields,
+			MaxTagValuesPerKey: limits.MaxTagValuesPerKey,
+		},
+	})
 	if err != nil {
 		return nil, err
 	}

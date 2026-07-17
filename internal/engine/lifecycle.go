@@ -68,33 +68,67 @@ func (e *Engine) ApplyRetention(_ context.Context, now time.Time) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for id, shard := range e.shards {
-		if shard.opts.End >= cutoff {
-			continue
-		}
-		shard.lifecycleMu.Lock()
-		deletedBytes, sizeErr := directorySize(shard.opts.Dir)
-		if sizeErr != nil {
-			deletedBytes = 0
-		}
-		if err := shard.closeLocked(); err != nil {
-			e.retentionDeleteErrors++
-			shard.lifecycleMu.Unlock()
+		if err := e.applyRetentionToShardLocked(id, shard, cutoff); err != nil {
 			return err
 		}
-		if err := shard.deps.files.RemoveAll(shard.opts.Dir); err != nil {
-			e.retentionDeleteErrors++
-			shard.lifecycleMu.Unlock()
-			return err
-		}
-		e.retentionExpired += uint64(len(shard.manifest.Parts))
-		e.retentionDeletedBytes += uint64(deletedBytes)
-		shard.lifecycleMu.Unlock()
-		e.logger.Info("retention shard removed",
-			"shard", id,
-			"deleted_bytes", deletedBytes,
-		)
-		delete(e.shards, id)
 	}
+	return nil
+}
+
+func (e *Engine) applyRetentionToShardLocked(id string, shard *Shard, cutoff int64) error {
+	if shard.opts.End < cutoff {
+		return e.removeExpiredShardLocked(id, shard)
+	}
+	if shard.opts.Start >= cutoff {
+		return nil
+	}
+	// 分片仍活跃，但包含过期时间范围：下发 tombstone 覆盖 [Start, cutoff)。
+	tombstone := model.Tombstone{
+		StartTime: shard.opts.Start,
+		EndTime:   cutoff - 1,
+		WriteSeq:  e.nextWriteSeq(),
+	}
+	if err := shard.DeleteRange(tombstone, e.opts.FlushSync); err != nil {
+		e.retentionDeleteErrors++
+		return err
+	}
+	e.logger.Info("retention range tombstoned",
+		"shard", id,
+		"start", tombstone.StartTime,
+		"end", tombstone.EndTime,
+	)
+	return nil
+}
+
+func (e *Engine) removeExpiredShardLocked(id string, shard *Shard) error {
+	shard.lifecycleMu.Lock()
+	deletedBytes, sizeErr := directorySize(shard.opts.Dir)
+	if sizeErr != nil {
+		deletedBytes = 0
+	}
+	if shard.hasActiveReadersLocked() {
+		shard.lifecycleMu.Unlock()
+		e.retentionDeleteErrors++
+		return ErrShardBusy
+	}
+	if err := shard.closeLocked(); err != nil {
+		e.retentionDeleteErrors++
+		shard.lifecycleMu.Unlock()
+		return err
+	}
+	if err := shard.deps.files.RemoveAll(shard.opts.Dir); err != nil {
+		e.retentionDeleteErrors++
+		shard.lifecycleMu.Unlock()
+		return err
+	}
+	e.retentionExpired += uint64(len(shard.manifest.Parts))
+	e.retentionDeletedBytes += uint64(deletedBytes)
+	shard.lifecycleMu.Unlock()
+	e.logger.Info("retention shard removed",
+		"shard", id,
+		"deleted_bytes", deletedBytes,
+	)
+	delete(e.shards, id)
 	return nil
 }
 
@@ -195,6 +229,10 @@ func resultFromCompactionStats(
 
 func (s *Shard) maybeCompactLocked() error {
 	if !s.opts.Compaction.Enabled {
+		return nil
+	}
+	// 活跃查询仍引用旧 part 句柄时，跳过会删除输入 part 的 compaction。
+	if s.hasActiveReadersLocked() {
 		return nil
 	}
 	return s.runCompactionCascadeLocked()

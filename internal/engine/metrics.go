@@ -194,3 +194,16 @@ func countOpenFDs() int {
 func nanosToSeconds(value int64) float64 {
 	return time.Duration(value).Seconds()
 }
+
+func recordMaintenanceMetrics(registry *observability.Registry, stats MaintenanceStats) {
+	registry.SetGauge("mts_maintenance_compaction_active", "Active compaction tasks.", float64(stats.CompactionActive))
+	registry.SetGauge("mts_maintenance_compaction_backlog", "Pending compaction plans.", float64(stats.CompactionBacklog))
+	registry.SetGauge("mts_maintenance_downsample_inflight", "In-flight downsample policy runs.", float64(stats.DownsampleInflight))
+	registry.SetGauge("mts_maintenance_downsample_active", "Active downsample runs recorded by stats.", float64(stats.DownsampleActive))
+	registry.SetGauge("mts_maintenance_downsample_max_concurrent", "Configured max concurrent downsample runs.", float64(stats.DownsampleMaxConcurrent))
+	registry.SetGauge("mts_maintenance_error_count", "Shard maintenance errors currently recorded.", float64(stats.MaintenanceErrorCount))
+	registry.AddCounter("mts_maintenance_compaction_skipped_total", "Background compaction skips.", float64(stats.CompactionSkipped))
+	registry.AddCounter("mts_maintenance_compaction_failures_total", "Compaction failures.", float64(stats.CompactionFailure))
+	registry.AddCounter("mts_maintenance_downsample_skipped_total", "Downsample runs skipped by scheduler limits.", float64(stats.DownsampleSkipped))
+	registry.AddCounter("mts_maintenance_downsample_failures_total", "Downsample run failures.", float64(stats.DownsampleFailure))
+}

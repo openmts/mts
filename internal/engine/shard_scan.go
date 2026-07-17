@@ -19,16 +19,19 @@ type shardColumnDataStream struct {
 }
 
 func (s *Shard) ScanColumns(query memtable.Query) (queryexec.ColumnDataStream, error) {
-	s.lifecycleMu.RLock()
+	s.lifecycleMu.Lock()
 	streams, err := s.openColumnStreamsLocked(query)
 	if err != nil {
-		s.lifecycleMu.RUnlock()
+		s.lifecycleMu.Unlock()
 		return nil, err
 	}
+	tombstones := append([]model.Tombstone(nil), s.tombstones...)
+	s.acquireReadLocked()
+	s.lifecycleMu.Unlock()
 	return &shardColumnDataStream{
 		inner:      queryexec.WithContextColumnDataStream(query.Context, queryexec.MergeColumnDataStreams(streams...)),
-		tombstones: s.tombstones,
-		unlock:     s.lifecycleMu.RUnlock,
+		tombstones: tombstones,
+		unlock:     s.releaseRead,
 	}, nil
 }
 

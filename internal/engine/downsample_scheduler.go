@@ -7,13 +7,19 @@ import (
 	"github.com/openmts/mts/internal/model"
 )
 
-const downsampleSchedulerTick = 100 * time.Millisecond
+const (
+	downsampleSchedulerTick         = 100 * time.Millisecond
+	downsampleSkipGlobalConcurrency = "global_concurrency"
+	downsampleSkipDuplicatePolicy   = "duplicate_policy"
+)
 
 func (e *Engine) startDownsampleScheduler() {
 	e.downsampleCtx, e.downsampleCancel = context.WithCancel(context.Background())
 	e.downsampleStop = make(chan struct{})
 	e.downsampleWG.Add(1)
-	e.logger.Info("downsample scheduler started")
+	e.logger.Info("downsample scheduler started",
+		"max_concurrent", e.opts.MaxConcurrentDownsample,
+	)
 	go e.downsampleSchedulerLoop()
 }
 
@@ -113,18 +119,37 @@ func (e *Engine) downsampleRunContext(policy model.DownsamplePolicy) (context.Co
 	return context.WithTimeout(parent, policy.RunTimeout)
 }
 
+func (e *Engine) maxConcurrentDownsample() int {
+	if e.opts.MaxConcurrentDownsample > 0 {
+		return e.opts.MaxConcurrentDownsample
+	}
+	return defaultMaxConcurrentDownsample
+}
+
 func (e *Engine) acquireDownsamplePolicyRun(name string) bool {
 	e.downsampleMu.Lock()
 	defer e.downsampleMu.Unlock()
 	if _, ok := e.downsampleRunning[name]; ok {
+		e.downsampleSkipped++
+		return false
+	}
+	if e.downsampleInflight >= e.maxConcurrentDownsample() {
+		e.downsampleSkipped++
 		return false
 	}
 	e.downsampleRunning[name] = struct{}{}
+	e.downsampleInflight++
 	return true
 }
 
 func (e *Engine) releaseDownsamplePolicyRun(name string) {
 	e.downsampleMu.Lock()
 	defer e.downsampleMu.Unlock()
+	if _, ok := e.downsampleRunning[name]; !ok {
+		return
+	}
 	delete(e.downsampleRunning, name)
+	if e.downsampleInflight > 0 {
+		e.downsampleInflight--
+	}
 }

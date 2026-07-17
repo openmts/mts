@@ -14,14 +14,16 @@ var ErrRecoveryFatal = errors.New("recovery fatal")
 type RecoveryIssueKind string
 
 const (
-	RecoveryIssueMissingPart        RecoveryIssueKind = "missing_part"
-	RecoveryIssuePartOpenFailed     RecoveryIssueKind = "part_open_failed"
-	RecoveryIssueMetadataMismatch   RecoveryIssueKind = "metadata_mismatch"
-	RecoveryIssueOrphanPartRemoved  RecoveryIssueKind = "orphan_part_removed"
-	RecoveryIssueOrphanRemoveFailed RecoveryIssueKind = "orphan_remove_failed"
-	RecoveryIssueTempRemoved        RecoveryIssueKind = "temp_removed"
-	RecoveryIssueTempRemoveFailed   RecoveryIssueKind = "temp_remove_failed"
-	RecoveryIssueCleanupScanFailed  RecoveryIssueKind = "cleanup_scan_failed"
+	RecoveryIssueMissingPart         RecoveryIssueKind = "missing_part"
+	RecoveryIssuePartOpenFailed      RecoveryIssueKind = "part_open_failed"
+	RecoveryIssueMetadataMismatch    RecoveryIssueKind = "metadata_mismatch"
+	RecoveryIssueOrphanPartRemoved   RecoveryIssueKind = "orphan_part_removed"
+	RecoveryIssueOrphanRemoveFailed  RecoveryIssueKind = "orphan_remove_failed"
+	RecoveryIssueTempRemoved         RecoveryIssueKind = "temp_removed"
+	RecoveryIssueTempRemoveFailed    RecoveryIssueKind = "temp_remove_failed"
+	RecoveryIssueCleanupScanFailed   RecoveryIssueKind = "cleanup_scan_failed"
+	RecoveryIssueWALCheckpointFailed RecoveryIssueKind = "wal_checkpoint_failed"
+	RecoveryIssueMemApplyFailed      RecoveryIssueKind = "mem_apply_failed"
 )
 
 type RecoveryIssue struct {

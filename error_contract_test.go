@@ -43,3 +43,35 @@ func TestPublicErrorCategories(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 }
+
+func TestPublicErrorMapsResourceExhaustedSentinels(t *testing.T) {
+	ctx := context.Background()
+	opts := mts.DefaultOptions(t.TempDir())
+	opts.Cardinality = mts.CardinalityOptions{MaxSeries: 1}
+	eng, err := mts.Open(ctx, opts)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := eng.Write(ctx, []mts.Point{{
+		Measurement: "cpu",
+		Tags:        map[string]string{"host": "a"},
+		Timestamp:   1,
+		Fields:      map[string]mts.FieldValue{"v": mts.Float64Value(1)},
+	}}, mts.WriteOptions{}); err != nil {
+		_ = eng.Close(ctx)
+		t.Fatalf("Write(first) error = %v", err)
+	}
+	err = eng.Write(ctx, []mts.Point{{
+		Measurement: "cpu",
+		Tags:        map[string]string{"host": "b"},
+		Timestamp:   2,
+		Fields:      map[string]mts.FieldValue{"v": mts.Float64Value(1)},
+	}}, mts.WriteOptions{})
+	if !errors.Is(err, mts.ErrCardinalityLimit) || !errors.Is(err, mts.ErrResourceExhausted) {
+		_ = eng.Close(ctx)
+		t.Fatalf("Write(second) error = %v, want cardinality+resource exhausted", err)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}

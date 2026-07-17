@@ -23,7 +23,7 @@ func TestDecodeLineRejectsBadCRCAndApplyEntryIgnoresUnknown(t *testing.T) {
 		t.Fatal("decodeLine() bad crc error = nil, want error")
 	}
 
-	cat := newCatalog(t.TempDir())
+	cat := newCatalog(t.TempDir(), Limits{})
 	cat.applyEntry(walEntry{Type: "unknown"})
 	if len(cat.series) != 0 {
 		t.Fatalf("series count = %d, want 0", len(cat.series))
@@ -72,7 +72,7 @@ func TestSeriesKeyMultiTagUsesSingleAllocationClass(t *testing.T) {
 }
 
 func TestResolveSeriesSinglePointMultiTagUsesScratch(t *testing.T) {
-	cat := newCatalog(t.TempDir())
+	cat := newCatalog(t.TempDir(), Limits{})
 	tags := map[string]string{"host": "a", "region": "west", "rack": "r1"}
 	cat.applySeries(Series{ID: 1, Measurement: "cpu", Tags: tags})
 	allocs := testing.AllocsPerRun(100, func() {
@@ -144,7 +144,7 @@ func TestFieldSchemaCachesSortedFieldsAndDetectsConflicts(t *testing.T) {
 }
 
 func TestUpsertFieldSchemaInsertsAndUpdatesInNameOrder(t *testing.T) {
-	cat := newCatalog(t.TempDir())
+	cat := newCatalog(t.TempDir(), Limits{})
 	cat.applyField(Field{ID: 1, Measurement: "cpu", Name: "z", Type: model.FieldInt64})
 	cat.applyField(Field{ID: 2, Measurement: "cpu", Name: "a", Type: model.FieldFloat64})
 	cat.applyField(Field{ID: 3, Measurement: "cpu", Name: "m", Type: model.FieldString})
@@ -309,7 +309,7 @@ func TestResolveTypedBatchColumnsResolvesAllTypesAndSeriesFastPaths(t *testing.T
 }
 
 func TestResolveTypedBatchRejectsInvalidColumns(t *testing.T) {
-	cat := newCatalog(t.TempDir())
+	cat := newCatalog(t.TempDir(), Limits{})
 	tests := []struct {
 		name  string
 		batch model.TypedBatch
@@ -526,7 +526,7 @@ func TestCatalogCheckpointAndFieldResolveBranches(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 
-	walNil := newCatalog(t.TempDir())
+	walNil := newCatalog(t.TempDir(), Limits{})
 	walNil.applySeries(Series{ID: 1, Measurement: "cpu"})
 	walNil.snapshotDirtyRecords = 1
 	if err := walNil.checkpointSnapshotLocked(true); err != nil {
@@ -571,7 +571,7 @@ func TestCatalogCheckpointThresholdScalesWithSeriesCount(t *testing.T) {
 }
 
 func TestEnsureMetadataBranches(t *testing.T) {
-	cat := newCatalog(t.TempDir())
+	cat := newCatalog(t.TempDir(), Limits{})
 	if cat.ensureMetadataLocked("", "hot") {
 		t.Fatal("ensureMetadataLocked(empty database) changed metadata")
 	}

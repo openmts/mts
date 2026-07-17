@@ -10,13 +10,14 @@ import (
 )
 
 const (
-	defaultDatabase        = "default"
-	defaultRetentionPolicy = "autogen"
-	defaultShardDuration   = time.Hour
-	defaultMemTableSamples = 10000
-	defaultLevelPartLimit  = 4
-	defaultCascadeSteps    = 8
-	defaultQueryEndTime    = int64(1<<63 - 1)
+	defaultDatabase                = "default"
+	defaultRetentionPolicy         = "autogen"
+	defaultShardDuration           = time.Hour
+	defaultMemTableSamples         = 10000
+	defaultLevelPartLimit          = 4
+	defaultCascadeSteps            = 8
+	defaultQueryEndTime            = int64(1<<63 - 1)
+	defaultMaxConcurrentDownsample = 2
 )
 
 func normalizeOptions(opts model.Options) model.Options {
@@ -34,6 +35,9 @@ func normalizeOptions(opts model.Options) model.Options {
 	}
 	opts.StorageMemory = normalizeStorageMemoryOptions(opts.StorageMemory)
 	opts.Compaction = normalizeCompactionOptions(opts.Compaction, opts.Compression)
+	if opts.MaxConcurrentDownsample <= 0 {
+		opts.MaxConcurrentDownsample = defaultMaxConcurrentDownsample
+	}
 	if opts.Logger == nil {
 		opts.Logger = nopLogger()
 	}

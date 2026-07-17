@@ -154,6 +154,21 @@ type CompactionResult struct {
 	LastTask    CompactionTaskStatus `json:"last_task"`
 }
 
+// MaintenanceStats 汇总后台维护任务可观测状态。
+type MaintenanceStats struct {
+	CompactionActive        int    `json:"compaction_active"`
+	CompactionBacklog       int    `json:"compaction_backlog"`
+	CompactionSkipped       int    `json:"compaction_skipped"`
+	CompactionFailure       int    `json:"compaction_failure"`
+	CompactionLastSkip      string `json:"compaction_last_skip,omitempty"`
+	DownsampleActive        int    `json:"downsample_active"`
+	DownsampleInflight      int    `json:"downsample_inflight"`
+	DownsampleSkipped       uint64 `json:"downsample_skipped"`
+	DownsampleFailure       int    `json:"downsample_failure"`
+	DownsampleMaxConcurrent int    `json:"downsample_max_concurrent"`
+	MaintenanceErrorCount   int    `json:"maintenance_error_count"`
+}
+
 // HealthSnapshot 表示 Engine 健康状态。
 type HealthSnapshot struct {
 	Healthy bool          `json:"healthy"`

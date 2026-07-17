@@ -25,8 +25,11 @@ func (e *Engine) DropDatabase(ctx context.Context, name string) error {
 		if shard.opts.Database != name {
 			continue
 		}
-		err = errors.Join(err, shard.Close())
-		delete(e.shards, id)
+		closeErr := shard.Close()
+		err = errors.Join(err, closeErr)
+		if closeErr == nil {
+			delete(e.shards, id)
+		}
 	}
 	err = errors.Join(err, e.metadata.DropDatabase(ctx, name))
 	err = errors.Join(err, storagefs.RemoveAll(filepath.Join(e.opts.Path, "data", name)))

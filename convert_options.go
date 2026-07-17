@@ -4,18 +4,28 @@ import "github.com/openmts/mts/internal/model"
 
 func toModelOptions(opts Options) model.Options {
 	return model.Options{
-		Path:                   opts.Path,
-		DefaultDatabase:        opts.DefaultDatabase,
-		DefaultRetentionPolicy: opts.DefaultRetentionPolicy,
-		ShardDuration:          opts.ShardDuration,
-		Retention:              opts.Retention,
-		MemTableMaxSamples:     opts.MemTableMaxSamples,
-		WAL:                    toModelWALOptions(opts.WAL),
-		FlushSync:              opts.FlushSync,
-		Compaction:             toModelCompactionOptions(opts.Compaction),
-		Compression:            toModelCompressionOptions(opts.Compression),
-		StorageMemory:          toModelStorageMemoryOptions(opts.StorageMemory),
-		Logger:                 opts.Logger,
+		Path:                    opts.Path,
+		DefaultDatabase:         opts.DefaultDatabase,
+		DefaultRetentionPolicy:  opts.DefaultRetentionPolicy,
+		ShardDuration:           opts.ShardDuration,
+		Retention:               opts.Retention,
+		MemTableMaxSamples:      opts.MemTableMaxSamples,
+		WAL:                     toModelWALOptions(opts.WAL),
+		FlushSync:               opts.FlushSync,
+		Compaction:              toModelCompactionOptions(opts.Compaction),
+		Compression:             toModelCompressionOptions(opts.Compression),
+		StorageMemory:           toModelStorageMemoryOptions(opts.StorageMemory),
+		Cardinality:             toModelCardinalityOptions(opts.Cardinality),
+		MaxConcurrentDownsample: opts.MaxConcurrentDownsample,
+		Logger:                  opts.Logger,
+	}
+}
+
+func toModelCardinalityOptions(opts CardinalityOptions) model.CardinalityOptions {
+	return model.CardinalityOptions{
+		MaxSeries:          opts.MaxSeries,
+		MaxFields:          opts.MaxFields,
+		MaxTagValuesPerKey: opts.MaxTagValuesPerKey,
 	}
 }
 
