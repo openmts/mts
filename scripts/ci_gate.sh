@@ -24,6 +24,10 @@ timeout 600s "${go_cmd[@]}" test ./... -count=1 -timeout 10m
 echo "== lint =="
 timeout 720s golangci-lint run ./...
 
+echo "== race (core storage) =="
+timeout 900s "${go_cmd[@]}" test -race -count=1 -timeout 15m \
+  ./internal/engine ./internal/memtable ./internal/sstable ./internal/wal ./internal/catalog ./internal/runtime
+
 echo "== coverage =="
 core_packages=(
   .
@@ -69,8 +73,13 @@ echo "== regression smoke =="
 timeout 900s "${go_cmd[@]}" test ./tests/fault/storage_fault_matrix ./tests/scale/storage_matrix ./tests/pprof/storage_engine -count=1 -timeout 15m
 
 echo "== artifact scan =="
-artifacts="$(timeout 60s find . -type f \( -name '*.test' -o -name '*.prof' -o -name '*.pprof' -o -name 'coverage.out' -o -name '*.coverprofile' \) -not -path './.git/*' -print)"
+artifacts="$(timeout 60s find . -type f \( -name '*.test' -o -name '*.prof' -o -name '*.pprof' -o -name 'coverage.out' -o -name '*.coverprofile' -o -name 'cpu.out' -o -name 'mem.out' \) -not -path './.git/*' -print)"
 if [[ -n "$artifacts" ]]; then
   echo "$artifacts"
+  exit 1
+fi
+if [[ -f ./mts-server || -f ./mts-storage ]]; then
+  echo "unexpected root binaries present"
+  ls -la ./mts-server ./mts-storage 2>/dev/null || true
   exit 1
 fi

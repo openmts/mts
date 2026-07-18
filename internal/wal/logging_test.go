@@ -6,11 +6,29 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/openmts/mts/internal/model"
 )
+
+type concurrentBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *concurrentBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *concurrentBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 func TestNopHandlerEnabled(t *testing.T) {
 	handler := nopHandler{}
@@ -72,7 +90,7 @@ func TestOpenInitializesLogger(t *testing.T) {
 // TestWALOpenWithCustomLogger 验证可通过 Options.Logger 注入自定义 logger。
 func TestWALOpenWithCustomLogger(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "wal")
-	var buf bytes.Buffer
+	var buf concurrentBuffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
@@ -99,7 +117,7 @@ func TestWALOpenWithCustomLogger(t *testing.T) {
 // TestIntervalSyncLoopErrorLogs 验证 intervalSyncLoop 在 FlushPending 失败时记录 WARN 日志。
 func TestIntervalSyncLoopErrorLogs(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "wal")
-	var buf bytes.Buffer
+	var buf concurrentBuffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
 		Level: slog.LevelWarn,
 	}))

@@ -122,6 +122,16 @@ func estimateQueryCost(query model.Query, explain model.QueryExplain) model.Quer
 	if explain.MatchedShards > 0 {
 		estimate *= int64(explain.MatchedShards)
 	}
+	// 时间窗启发式：窗越长扫描潜力越高，按小时量级放大，避免仅按 series×field 低估。
+	if query.EndTime > query.StartTime {
+		windowHours := (query.EndTime - query.StartTime) / int64(time.Hour)
+		if windowHours > 1 {
+			if windowHours > 24*30 {
+				windowHours = 24 * 30
+			}
+			estimate *= windowHours
+		}
+	}
 	if query.Limit > 0 && estimate > int64(query.Limit) {
 		estimate = int64(query.Limit)
 	}

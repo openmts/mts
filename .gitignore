@@ -16,3 +16,16 @@ cmd/mts-server/dashboard-dist/
 cmd/mts-dashboard/node_modules/
 *.tsbuildinfo
 /mts-server
+
+# 本地构建二进制与 profile 产物
+/mts-server
+/mts-storage
+*.test
+*.prof
+*.pprof
+cpu.out
+mem.out
+block.out
+mutex.out
+*.coverprofile
+coverage.out

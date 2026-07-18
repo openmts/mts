@@ -14,10 +14,13 @@ import (
 type Query = model.StorageQuery
 
 type MemTable struct {
-	mu          sync.RWMutex
-	data        tableData
-	sampleCount int
-	approxBytes int64
+	mu                sync.RWMutex
+	data              tableData
+	sampleCount       int
+	approxBytes       int64
+	outOfOrderSamples uint64
+	duplicateSamples  uint64
+	appendedSamples   uint64
 }
 
 type Snapshot struct {
@@ -27,11 +30,14 @@ type Snapshot struct {
 }
 
 type Stats struct {
-	Samples int
-	Series  int
-	Fields  int
-	Columns int
-	Bytes   int64
+	Samples           int
+	Series            int
+	Fields            int
+	Columns           int
+	Bytes             int64
+	OutOfOrderSamples uint64
+	DuplicateSamples  uint64
+	AppendedSamples   uint64
 }
 
 type columnKey struct {
@@ -40,17 +46,19 @@ type columnKey struct {
 }
 
 type columnBuffer struct {
-	seriesID  uint64
-	fieldID   uint32
-	fieldType model.FieldType
-	times     []int64
-	writeSeqs []uint64
-	floats    []float64
-	ints      []int64
-	strings   []string
-	boolBits  []uint64
-	count     int
-	memBytes  int64
+	seriesID      uint64
+	fieldID       uint32
+	fieldType     model.FieldType
+	times         []int64
+	writeSeqs     []uint64
+	floats        []float64
+	ints          []int64
+	strings       []string
+	boolBits      []uint64
+	count         int
+	memBytes      int64
+	lastTimestamp int64
+	hasLast       bool
 }
 
 type tableData map[columnKey]*columnBuffer
@@ -136,7 +144,11 @@ func (m *MemTable) ApproxMemoryBytes() int64 {
 func (m *MemTable) StatsSnapshot() Stats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return statsFromData(m.data, m.sampleCount, m.approxBytes)
+	stats := statsFromData(m.data, m.sampleCount, m.approxBytes)
+	stats.OutOfOrderSamples = m.outOfOrderSamples
+	stats.DuplicateSamples = m.duplicateSamples
+	stats.AppendedSamples = m.appendedSamples
+	return stats
 }
 
 func (m *MemTable) SnapshotAndReset() *Snapshot {
@@ -369,7 +381,6 @@ func (m *MemTable) Restore(snapshot *Snapshot) {
 func (m *MemTable) applyPointLocked(point model.ResolvedPoint) {
 	for _, field := range point.Fields {
 		m.applyField(point, field)
-		m.sampleCount++
 	}
 }
 
@@ -496,6 +507,26 @@ func releaseReservationMap(reservations map[columnKey]columnReservation) {
 	reservationMapPool.Put(&reservations)
 }
 
+func (m *MemTable) noteAppendOrderLocked(column *columnBuffer, timestamp int64) {
+	m.appendedSamples++
+	m.sampleCount++
+	if !column.hasLast {
+		column.lastTimestamp = timestamp
+		column.hasLast = true
+		return
+	}
+	if timestamp < column.lastTimestamp {
+		m.outOfOrderSamples++
+		column.lastTimestamp = timestamp
+		return
+	}
+	if timestamp == column.lastTimestamp {
+		m.duplicateSamples++
+		return
+	}
+	column.lastTimestamp = timestamp
+}
+
 func (m *MemTable) applyField(point model.ResolvedPoint, field model.ResolvedField) {
 	column, delta := ensureColumn(m.data, point.SeriesID, field.FieldID, field.Type)
 	delta += column.appendSample(model.VersionedSample{
@@ -503,6 +534,7 @@ func (m *MemTable) applyField(point model.ResolvedPoint, field model.ResolvedFie
 		WriteSeq:  point.WriteSeq,
 		Value:     field.Value,
 	})
+	m.noteAppendOrderLocked(column, point.Timestamp)
 	m.approxBytes += delta
 }
 
@@ -514,8 +546,8 @@ func (m *MemTable) applyTypedRowLocked(batch model.ResolvedTypedBatch, row int) 
 			WriteSeq:  batch.WriteSeqs[row],
 			Value:     typedFieldValueAt(field, row),
 		})
+		m.noteAppendOrderLocked(column, batch.Timestamps[row])
 		m.approxBytes += delta
-		m.sampleCount++
 	}
 }
 
@@ -527,6 +559,13 @@ func (m *MemTable) restoreColumnLocked(src *columnBuffer) {
 	delta += dst.appendColumn(src)
 	m.approxBytes += delta
 	m.sampleCount += src.count
+	if src.hasLast {
+		dst.lastTimestamp = src.lastTimestamp
+		dst.hasLast = true
+	} else if src.count > 0 {
+		dst.lastTimestamp = src.times[src.count-1]
+		dst.hasLast = true
+	}
 }
 
 func ensureColumn(
@@ -667,6 +706,10 @@ func (c *columnBuffer) clear() {
 	c.ints = nil
 	c.strings = nil
 	c.boolBits = nil
+	c.count = 0
+	c.memBytes = 0
+	c.lastTimestamp = 0
+	c.hasLast = false
 }
 
 func approxTableDataBytes(data tableData) int64 {
@@ -826,6 +869,13 @@ func (c *columnBuffer) appendColumn(src *columnBuffer) int64 {
 	delta := c.reserve(src.count)
 	for index := range src.count {
 		delta += c.appendSample(src.sampleAt(index))
+	}
+	if src.hasLast {
+		c.lastTimestamp = src.lastTimestamp
+		c.hasLast = true
+	} else if src.count > 0 {
+		c.lastTimestamp = src.times[src.count-1]
+		c.hasLast = true
 	}
 	return delta
 }

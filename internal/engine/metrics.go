@@ -81,6 +81,9 @@ func recordMemTableMetrics(registry *observability.Registry, snapshot production
 	registry.SetGauge("mts_memtable_fields", "MemTable fields currently buffered.", float64(snapshot.MemTableFields))
 	registry.SetGauge("mts_memtable_columns", "MemTable typed columns currently buffered.", float64(snapshot.MemTableColumns))
 	registry.AddCounter("mts_memtable_flush_triggered_total", "MemTable flushes triggered by memory pressure.", float64(snapshot.MemTableFlushTriggered))
+	registry.AddCounter("mts_memtable_out_of_order_samples_total", "MemTable samples appended out of order within a series/field column.", float64(snapshot.MemTableOutOfOrder))
+	registry.AddCounter("mts_memtable_duplicate_samples_total", "MemTable samples appended with duplicate timestamps within a series/field column.", float64(snapshot.MemTableDuplicates))
+	registry.AddCounter("mts_memtable_appended_samples_total", "MemTable samples appended since open.", float64(snapshot.MemTableAppended))
 }
 
 func recordSSTableMetrics(registry *observability.Registry, snapshot productionMetrics) {

@@ -56,6 +56,9 @@ type productionMetrics struct {
 	MemTableFields          int
 	MemTableColumns         int
 	MemTableFlushTriggered  uint64
+	MemTableOutOfOrder      uint64
+	MemTableDuplicates      uint64
+	MemTableAppended        uint64
 	SSTableParts            int
 	SSTableRows             int
 	SSTableSeries           int
@@ -118,6 +121,9 @@ func mergeMemTableMetrics(out *productionMetrics, store memStore) {
 	stats := provider.StatsSnapshot()
 	out.MemTableSamples += stats.Samples
 	out.MemTableBytes += stats.Bytes
+	out.MemTableOutOfOrder += stats.OutOfOrderSamples
+	out.MemTableDuplicates += stats.DuplicateSamples
+	out.MemTableAppended += stats.AppendedSamples
 	out.MemTableSeries += stats.Series
 	out.MemTableFields += stats.Fields
 	out.MemTableColumns += stats.Columns

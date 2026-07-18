@@ -68,6 +68,8 @@ help: ## 显示 Makefile 目标
 	@printf "  make bench-query           查询迭代器性能基准\n"
 	@printf "  make pprof-storage         存储 pprof smoke 场景\n"
 	@printf "  make mts-server-test       mts-server 单元与协议测试\n"
+	@printf "  make test-race            核心包 race 检测\n"
+	@printf "  make clean-artifacts      清理测试临时产物\n"
 
 .PHONY: fmt
 fmt: ## 格式化 Go 代码
@@ -82,12 +84,33 @@ lint: ## 运行 golangci-lint
 	$(LINT_TIMEOUT_PREFIX) golangci-lint run ./...
 
 .PHONY: unit
-unit: ## 运行生产包单元测试
+unit: ensure-dashboard-embed ## 运行生产包单元测试
 	$(GO_TEST) $(CORE_PACKAGES)
+	@$(MAKE) clean-artifacts
+
+.PHONY: ensure-dashboard-embed
+ensure-dashboard-embed: ## 确保 mts-server go:embed 目录存在
+	@mkdir -p cmd/mts-server/dashboard-dist/assets
+	@if [ ! -f cmd/mts-server/dashboard-dist/index.html ]; then \
+		printf '%s\n' '<!doctype html><title>mts dashboard placeholder</title>' > cmd/mts-server/dashboard-dist/index.html; \
+		chmod 0600 cmd/mts-server/dashboard-dist/index.html; \
+	fi
+	@if [ ! -f cmd/mts-server/dashboard-dist/assets/app.css ]; then \
+		printf '%s\n' '/* mts dashboard placeholder css */' > cmd/mts-server/dashboard-dist/assets/app.css; \
+		chmod 0600 cmd/mts-server/dashboard-dist/assets/app.css; \
+	fi
+	@chmod 0700 cmd/mts-server/dashboard-dist cmd/mts-server/dashboard-dist/assets
 
 .PHONY: test
-test: ## 运行全部 Go 测试
+test: ensure-dashboard-embed ## 运行全部 Go 测试
 	$(GO_TEST) ./...
+	@$(MAKE) clean-artifacts
+
+.PHONY: test-race
+test-race: ## 对存储核心包运行 race 检测
+	$(WALL_TIMEOUT_PREFIX) $(GO) test -race -count=$(COUNT) -timeout 15m \
+		./internal/engine ./internal/memtable ./internal/sstable ./internal/wal ./internal/catalog ./internal/runtime
+	@$(MAKE) clean-artifacts
 
 .PHONY: coverage
 coverage: ## 检查生产包覆盖率不低于 COVERAGE_MIN
@@ -112,7 +135,7 @@ coverage: ## 检查生产包覆盖率不低于 COVERAGE_MIN
 	exit "$$failed"
 
 .PHONY: e2e
-e2e: ## 运行全部 e2e 用例
+e2e: ensure-dashboard-embed ## 运行全部 e2e 用例
 	$(SCENARIO_GO_TEST) ./tests/e2e/...
 
 .PHONY: e2e-simple e2e-public-api e2e-mts-server e2e-wal e2e-flush e2e-no-json e2e-retention e2e-compaction e2e-query-pruning e2e-query-window e2e-streaming e2e-read-amplification e2e-service e2e-format e2e-downsample
@@ -243,6 +266,12 @@ clean-artifacts: ## 清理测试和 profile 临时产物
 		-name '*.prof' -o \
 		-name '*.pprof' -o \
 		-name 'coverage.out' -o \
-		-name '*.coverprofile' \
+		-name '*.coverprofile' -o \
+		-name 'cpu.out' -o \
+		-name 'mem.out' -o \
+		-name 'block.out' -o \
+		-name 'mutex.out' \
 	\) -not -path './.git/*' -print -delete
-	rm -rf cmd/mts-server/dashboard-dist
+	@# 清理误落在仓库根目录的本地构建二进制（保留 cmd 下源码）
+	@if [ -f ./mts-server ]; then rm -f ./mts-server; fi
+	@if [ -f ./mts-storage ]; then rm -f ./mts-storage; fi
