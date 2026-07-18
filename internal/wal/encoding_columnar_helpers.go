@@ -55,29 +55,29 @@ func readColumnarSchema(reader *batchReader) ([]columnarFieldSchema, error) {
 	return schema, nil
 }
 
-func buildPointFieldColumns(
-	records []model.ResolvedPoint,
-) ([]columnarFieldSchema, [][]bool, [][]model.FieldValue, error) {
+func buildPointFieldSchema(records []model.ResolvedPoint) ([]columnarFieldSchema, error) {
 	type key struct {
 		id   uint32
 		name string
 		typ  model.FieldType
 	}
 	order := make([]key, 0)
-	seen := make(map[key]int)
+	seen := make(map[key]struct{}, 8)
 	for _, record := range records {
 		for _, field := range record.Fields {
 			if field.Type != field.Value.Type {
-				return nil, nil, nil, fmt.Errorf(
+				return nil, fmt.Errorf(
 					"field %s type %d does not match value type %d",
-					field.FieldName, field.Type, field.Value.Type,
+					field.FieldName,
+					field.Type,
+					field.Value.Type,
 				)
 			}
 			item := key{id: field.FieldID, name: field.FieldName, typ: field.Type}
 			if _, ok := seen[item]; ok {
 				continue
 			}
-			seen[item] = len(order)
+			seen[item] = struct{}{}
 			order = append(order, item)
 		}
 	}
@@ -90,66 +90,15 @@ func buildPointFieldColumns(
 		}
 		return order[i].typ < order[j].typ
 	})
-	for index, item := range order {
-		seen[item] = index
-	}
 	schema := make([]columnarFieldSchema, len(order))
-	present := make([][]bool, len(order))
-	values := make([][]model.FieldValue, len(order))
 	for index, item := range order {
-		schema[index] = columnarFieldSchema{fieldID: item.id, name: item.name, typ: item.typ}
-		present[index] = make([]bool, len(records))
-		values[index] = make([]model.FieldValue, len(records))
-	}
-	for row, record := range records {
-		for _, field := range record.Fields {
-			item := key{id: field.FieldID, name: field.FieldName, typ: field.Type}
-			fieldIndex := seen[item]
-			present[fieldIndex][row] = true
-			values[fieldIndex][row] = field.Value
+		schema[index] = columnarFieldSchema{
+			fieldID: item.id,
+			name:    item.name,
+			typ:     item.typ,
 		}
 	}
-	return schema, present, values, nil
-}
-
-func appendPresenceAndAlignedValues(
-	dst []byte,
-	presence []bool,
-	column []model.FieldValue,
-) ([]byte, error) {
-	dst = appendPresenceBits(dst, presence)
-	for index, present := range presence {
-		if !present {
-			continue
-		}
-		var err error
-		dst, err = appendValuePayload(dst, column[index])
-		if err != nil {
-			return nil, err
-		}
-	}
-	return dst, nil
-}
-
-func appendPresenceBits(dst []byte, presence []bool) []byte {
-	byteCount := (len(presence) + 7) / 8
-	if byteCount == 0 {
-		return dst
-	}
-	start := len(dst)
-	for cap(dst)-len(dst) < byteCount {
-		// grow
-		dst = append(dst, 0)
-	}
-	dst = dst[:start+byteCount]
-	bits := dst[start:]
-	clear(bits)
-	for index, present := range presence {
-		if present {
-			bits[index/8] |= 1 << uint(index%8)
-		}
-	}
-	return dst
+	return schema, nil
 }
 
 func readPresenceBits(reader *batchReader, rowCount int) ([]bool, error) {
@@ -165,39 +114,6 @@ func readPresenceBits(reader *batchReader, rowCount int) ([]bool, error) {
 		}
 	}
 	return presence, nil
-}
-
-func appendDeltaVarints(dst []byte, values []int64) []byte {
-	var prev int64
-	for index, value := range values {
-		delta := value
-		if index > 0 {
-			delta = value - prev
-		}
-		dst = binary.AppendVarint(dst, delta)
-		prev = value
-	}
-	return dst
-}
-
-func appendDeltaUvarints(dst []byte, values []uint64) []byte {
-	var prev uint64
-	for index, value := range values {
-		if index == 0 {
-			dst = binary.AppendUvarint(dst, value)
-			prev = value
-			continue
-		}
-		if value < prev {
-			dst = binary.AppendUvarint(dst, 0)
-			dst = binary.AppendUvarint(dst, value)
-			prev = value
-			continue
-		}
-		dst = binary.AppendUvarint(dst, value-prev+1)
-		prev = value
-	}
-	return dst
 }
 
 func readDeltaVarints(reader *batchReader, count int) ([]int64, error) {
@@ -246,37 +162,6 @@ func readDeltaUvarints(reader *batchReader, count int) ([]uint64, error) {
 	return out, nil
 }
 
-func pointTimestamps(records []model.ResolvedPoint) []int64 {
-	out := make([]int64, len(records))
-	for index, record := range records {
-		out[index] = record.Timestamp
-	}
-	return out
-}
-
-func pointWriteSeqs(records []model.ResolvedPoint) []uint64 {
-	out := make([]uint64, len(records))
-	for index, record := range records {
-		out[index] = record.WriteSeq
-	}
-	return out
-}
-
-func typedFieldValue(field model.ResolvedTypedFieldColumn, row int) (model.FieldValue, error) {
-	switch field.Type {
-	case model.FieldFloat64:
-		return model.Float64Value(field.Float64Values[row]), nil
-	case model.FieldInt64:
-		return model.Int64Value(field.Int64Values[row]), nil
-	case model.FieldString:
-		return model.StringValue(field.StringValues[row]), nil
-	case model.FieldBool:
-		return model.BoolValue(field.BoolValues[row]), nil
-	default:
-		return model.FieldValue{}, fmt.Errorf("unsupported typed field value type %d", field.Type)
-	}
-}
-
 func estimateColumnarPointsSize(
 	identities []batchIdentity,
 	schema []columnarFieldSchema,
@@ -294,9 +179,11 @@ func estimateColumnarPointsSize(
 		size += stringSize(field.name) + uvarintSize(uint64(field.fieldID)) + 1
 	}
 	size += uvarintSize(uint64(len(records)))
-	size += len(records) * 24
-	size += len(schema) * ((len(records)+7)/8 + 16)
-	return size*2 + 256
+	size += len(records) * 20
+	for range schema {
+		size += (len(records)+7)/8 + len(records)*10
+	}
+	return size + 64
 }
 
 func estimateColumnarTypedSize(
@@ -305,8 +192,48 @@ func estimateColumnarTypedSize(
 	identityRows []int,
 	schema []columnarFieldSchema,
 ) int {
-	size := estimateTypedBatchSize(batch, rows, identityRows)
+	size := uvarintSize(uint64(len(identityRows)))
+	for _, row := range identityRows {
+		size += estimateTypedIdentitySize(batch, row)
+	}
+	size += uvarintSize(uint64(len(schema)))
+	for _, field := range schema {
+		size += stringSize(field.name) + uvarintSize(uint64(field.fieldID)) + 1
+	}
 	rowCount := typedRowCount(batch, rows)
-	size += len(schema) * ((rowCount+7)/8 + 8)
-	return size*2 + 256
+	size += uvarintSize(uint64(rowCount))
+	size += rowCount * 20
+	for _, field := range batch.Fields {
+		size += (rowCount+7)/8 + estimateTypedColumnValuesSize(field, rows, rowCount)
+	}
+	return size + 64
+}
+
+func estimateTypedColumnValuesSize(
+	field model.ResolvedTypedFieldColumn,
+	rows []int,
+	rowCount int,
+) int {
+	switch field.Type {
+	case model.FieldFloat64:
+		return rowCount * 8
+	case model.FieldInt64:
+		size := 0
+		for position := range rowCount {
+			row := typedRowIndex(rows, position)
+			size += varintSize(field.Int64Values[row])
+		}
+		return size
+	case model.FieldString:
+		size := 0
+		for position := range rowCount {
+			row := typedRowIndex(rows, position)
+			size += stringSize(field.StringValues[row])
+		}
+		return size
+	case model.FieldBool:
+		return rowCount
+	default:
+		return rowCount * 8
+	}
 }

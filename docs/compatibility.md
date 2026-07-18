@@ -84,3 +84,10 @@ Experimental 功能变更不构成 major，但应在 CHANGELOG 记录。
 
 当前为 POC：**不承诺旧 WAL formatID=1 可读**。WAL segment formatID=2，写入统一列式 batch payload。
 并行 compact 默认跨 shard，受 `MaxConcurrentCompaction` 限制。
+
+
+## 8. 并行 Compact 配额
+
+- `Options.MaxConcurrentCompaction` 与 `Options.Compaction.MaxConcurrent` 等价，归一化时互相同步。
+- `<=0` 时默认 `min(GOMAXPROCS, 4)`。
+- 峰值 CPU/内存约随并发度 N 线性上升，生产建议从 1~2 起调。

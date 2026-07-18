@@ -41,8 +41,18 @@ func normalizeOptions(opts model.Options) model.Options {
 	if opts.MaxConcurrentDownsample <= 0 {
 		opts.MaxConcurrentDownsample = defaultMaxConcurrentDownsample
 	}
+	// 并行 compact 配额：Options.MaxConcurrentCompaction 与 Compaction.MaxConcurrent 互相同步。
+	if opts.MaxConcurrentCompaction <= 0 && opts.Compaction.MaxConcurrent > 0 {
+		opts.MaxConcurrentCompaction = opts.Compaction.MaxConcurrent
+	}
+	if opts.Compaction.MaxConcurrent <= 0 && opts.MaxConcurrentCompaction > 0 {
+		opts.Compaction.MaxConcurrent = opts.MaxConcurrentCompaction
+	}
 	if opts.MaxConcurrentCompaction <= 0 {
 		opts.MaxConcurrentCompaction = defaultParallelCompactionLimit()
+	}
+	if opts.Compaction.MaxConcurrent <= 0 {
+		opts.Compaction.MaxConcurrent = opts.MaxConcurrentCompaction
 	}
 	if opts.MemTableDisorderFlushRatio > 0 && opts.MemTableDisorderFlushMinSamples <= 0 {
 		opts.MemTableDisorderFlushMinSamples = defaultDisorderFlushMinSamples

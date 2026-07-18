@@ -3,7 +3,9 @@ package wal
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 
+	"github.com/openmts/mts/internal/codec"
 	"github.com/openmts/mts/internal/model"
 )
 
@@ -36,7 +38,7 @@ func encodeTypedBatchInto(
 
 func encodeColumnarPointsInto(dst []byte, records []model.ResolvedPoint) ([]byte, error) {
 	identities, identityRefs := batchIdentities(records)
-	schema, present, values, err := buildPointFieldColumns(records)
+	schema, err := buildPointFieldSchema(records)
 	if err != nil {
 		return nil, err
 	}
@@ -55,11 +57,11 @@ func encodeColumnarPointsInto(dst []byte, records []model.ResolvedPoint) ([]byte
 	for _, record := range records {
 		dst = binary.AppendUvarint(dst, record.SeriesID)
 	}
-	dst = appendDeltaVarints(dst, pointTimestamps(records))
-	dst = appendDeltaUvarints(dst, pointWriteSeqs(records))
-	for fieldIndex := range schema {
+	dst = appendPointTimestampDeltas(dst, records)
+	dst = appendPointWriteSeqDeltas(dst, records)
+	for _, field := range schema {
 		var encErr error
-		dst, encErr = appendPresenceAndAlignedValues(dst, present[fieldIndex], values[fieldIndex])
+		dst, encErr = appendPointFieldColumn(dst, records, field)
 		if encErr != nil {
 			return nil, encErr
 		}
@@ -98,30 +100,15 @@ func encodeColumnarTypedInto(
 	for _, ref := range identityRefs {
 		dst = binary.AppendUvarint(dst, uint64(ref))
 	}
-	timestamps := make([]int64, rowCount)
-	writeSeqs := make([]uint64, rowCount)
 	for position := range rowCount {
 		row := typedRowIndex(rows, position)
 		dst = binary.AppendUvarint(dst, batch.SeriesIDs[row])
-		timestamps[position] = batch.Timestamps[row]
-		writeSeqs[position] = batch.WriteSeqs[row]
 	}
-	dst = appendDeltaVarints(dst, timestamps)
-	dst = appendDeltaUvarints(dst, writeSeqs)
+	dst = appendTypedTimestampDeltas(dst, batch, rows, rowCount)
+	dst = appendTypedWriteSeqDeltas(dst, batch, rows, rowCount)
 	for _, field := range batch.Fields {
-		presence := make([]bool, rowCount)
-		values := make([]model.FieldValue, rowCount)
-		for position := range rowCount {
-			row := typedRowIndex(rows, position)
-			presence[position] = true
-			value, err := typedFieldValue(field, row)
-			if err != nil {
-				return nil, err
-			}
-			values[position] = value
-		}
 		var encErr error
-		dst, encErr = appendPresenceAndAlignedValues(dst, presence, values)
+		dst, encErr = appendTypedFieldColumnDense(dst, field, rows, rowCount)
 		if encErr != nil {
 			return nil, encErr
 		}
@@ -228,4 +215,188 @@ func decodeBatch(payload []byte) ([]model.ResolvedPoint, error) {
 		}
 	}
 	return records, nil
+}
+
+func appendPointTimestampDeltas(dst []byte, records []model.ResolvedPoint) []byte {
+	var prev int64
+	for index, record := range records {
+		delta := record.Timestamp
+		if index > 0 {
+			delta = record.Timestamp - prev
+		}
+		dst = binary.AppendVarint(dst, delta)
+		prev = record.Timestamp
+	}
+	return dst
+}
+
+func appendPointWriteSeqDeltas(dst []byte, records []model.ResolvedPoint) []byte {
+	var prev uint64
+	for index, record := range records {
+		if index == 0 {
+			dst = binary.AppendUvarint(dst, record.WriteSeq)
+			prev = record.WriteSeq
+			continue
+		}
+		if record.WriteSeq < prev {
+			dst = binary.AppendUvarint(dst, 0)
+			dst = binary.AppendUvarint(dst, record.WriteSeq)
+			prev = record.WriteSeq
+			continue
+		}
+		dst = binary.AppendUvarint(dst, record.WriteSeq-prev+1)
+		prev = record.WriteSeq
+	}
+	return dst
+}
+
+func appendTypedTimestampDeltas(
+	dst []byte,
+	batch model.ResolvedTypedBatch,
+	rows []int,
+	rowCount int,
+) []byte {
+	var prev int64
+	for position := range rowCount {
+		row := typedRowIndex(rows, position)
+		value := batch.Timestamps[row]
+		delta := value
+		if position > 0 {
+			delta = value - prev
+		}
+		dst = binary.AppendVarint(dst, delta)
+		prev = value
+	}
+	return dst
+}
+
+func appendTypedWriteSeqDeltas(
+	dst []byte,
+	batch model.ResolvedTypedBatch,
+	rows []int,
+	rowCount int,
+) []byte {
+	var prev uint64
+	for position := range rowCount {
+		row := typedRowIndex(rows, position)
+		value := batch.WriteSeqs[row]
+		if position == 0 {
+			dst = binary.AppendUvarint(dst, value)
+			prev = value
+			continue
+		}
+		if value < prev {
+			dst = binary.AppendUvarint(dst, 0)
+			dst = binary.AppendUvarint(dst, value)
+			prev = value
+			continue
+		}
+		dst = binary.AppendUvarint(dst, value-prev+1)
+		prev = value
+	}
+	return dst
+}
+
+func appendPointFieldColumn(
+	dst []byte,
+	records []model.ResolvedPoint,
+	field columnarFieldSchema,
+) ([]byte, error) {
+	byteCount := (len(records) + 7) / 8
+	start := len(dst)
+	dst = growBytes(dst, byteCount)
+	bits := dst[start : start+byteCount]
+	clear(bits)
+	for row, record := range records {
+		value, ok := lookupPointField(record, field)
+		if !ok {
+			continue
+		}
+		bits[row/8] |= 1 << uint(row%8)
+		var err error
+		dst, err = appendValuePayload(dst, value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+func lookupPointField(
+	record model.ResolvedPoint,
+	field columnarFieldSchema,
+) (model.FieldValue, bool) {
+	for _, item := range record.Fields {
+		if item.FieldID == field.fieldID &&
+			item.FieldName == field.name &&
+			item.Type == field.typ {
+			return item.Value, true
+		}
+	}
+	return model.FieldValue{}, false
+}
+
+func appendTypedFieldColumnDense(
+	dst []byte,
+	field model.ResolvedTypedFieldColumn,
+	rows []int,
+	rowCount int,
+) ([]byte, error) {
+	byteCount := (rowCount + 7) / 8
+	start := len(dst)
+	dst = growBytes(dst, byteCount)
+	bits := dst[start : start+byteCount]
+	for index := range bits {
+		bits[index] = 0xff
+	}
+	// 清理尾部多余 bit。
+	if rem := rowCount % 8; rem != 0 && byteCount > 0 {
+		bits[byteCount-1] = byte((1 << rem) - 1)
+	}
+	for position := range rowCount {
+		row := typedRowIndex(rows, position)
+		var err error
+		dst, err = appendTypedScalar(dst, field, row)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+func appendTypedScalar(
+	dst []byte,
+	field model.ResolvedTypedFieldColumn,
+	row int,
+) ([]byte, error) {
+	switch field.Type {
+	case model.FieldFloat64:
+		return binary.LittleEndian.AppendUint64(dst, math.Float64bits(field.Float64Values[row])), nil
+	case model.FieldInt64:
+		return binary.AppendVarint(dst, field.Int64Values[row]), nil
+	case model.FieldString:
+		return codec.AppendString(dst, field.StringValues[row]), nil
+	case model.FieldBool:
+		if field.BoolValues[row] {
+			return append(dst, 1), nil
+		}
+		return append(dst, 0), nil
+	default:
+		return nil, fmt.Errorf("unsupported typed field value type %d", field.Type)
+	}
+}
+
+func growBytes(dst []byte, n int) []byte {
+	if n <= 0 {
+		return dst
+	}
+	start := len(dst)
+	if cap(dst)-len(dst) < n {
+		grown := make([]byte, start+n)
+		copy(grown, dst)
+		dst = grown
+	} else {
+		dst = dst[:start+n]
+	}
+	return dst
 }

@@ -75,3 +75,34 @@ func TestDefaultParallelCompactionLimitBounded(t *testing.T) {
 		t.Fatalf("defaultParallelCompactionLimit() = %d, want in [1,4]", limit)
 	}
 }
+
+func TestCompactionMaxConcurrentOptionAlias(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{
+		Path:          t.TempDir(),
+		ShardDuration: time.Hour,
+		Compaction: model.CompactionOptions{
+			Enabled:       true,
+			MaxConcurrent: 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if eng.opts.MaxConcurrentCompaction != 3 {
+		_ = eng.Close(ctx)
+		t.Fatalf("MaxConcurrentCompaction = %d, want 3 from Compaction.MaxConcurrent", eng.opts.MaxConcurrentCompaction)
+	}
+	if eng.opts.Compaction.MaxConcurrent != 3 {
+		_ = eng.Close(ctx)
+		t.Fatalf("Compaction.MaxConcurrent = %d, want 3", eng.opts.Compaction.MaxConcurrent)
+	}
+	stats := eng.MaintenanceStatsSnapshot()
+	if stats.CompactionMaxConcurrent != 3 {
+		_ = eng.Close(ctx)
+		t.Fatalf("CompactionMaxConcurrent = %d, want 3", stats.CompactionMaxConcurrent)
+	}
+	if err := eng.Close(ctx); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}

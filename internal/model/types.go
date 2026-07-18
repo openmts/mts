@@ -460,10 +460,12 @@ type WALOptions struct {
 }
 
 type CompactionOptions struct {
-	Enabled                    bool
-	Level0PartLimit            int
-	Level0SizeLimit            int64
-	MaxOutputPartBytes         int64
+	Enabled            bool
+	Level0PartLimit    int
+	Level0SizeLimit    int64
+	MaxOutputPartBytes int64
+	// MaxConcurrent 限制跨 shard 并行 compact 任务数；<=0 时由 Options/归一化默认填充。
+	MaxConcurrent              int
 	Levels                     []CompactionLevelOptions
 	MaxCascadeSteps            int
 	BackgroundInterval         time.Duration

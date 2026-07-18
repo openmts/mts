@@ -76,6 +76,7 @@ func toModelCompactionOptions(opts CompactionOptions) model.CompactionOptions {
 		Level0PartLimit:            opts.Level0PartLimit,
 		Level0SizeLimit:            opts.Level0SizeLimit,
 		MaxOutputPartBytes:         opts.MaxOutputPartBytes,
+		MaxConcurrent:              opts.MaxConcurrent,
 		Levels:                     levels,
 		MaxCascadeSteps:            opts.MaxCascadeSteps,
 		BackgroundInterval:         opts.BackgroundInterval,

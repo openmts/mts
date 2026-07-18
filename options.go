@@ -94,10 +94,12 @@ type WALOptions struct {
 
 // CompactionOptions 控制单机 compaction 策略。
 type CompactionOptions struct {
-	Enabled                    bool
-	Level0PartLimit            int
-	Level0SizeLimit            int64
-	MaxOutputPartBytes         int64
+	Enabled            bool
+	Level0PartLimit    int
+	Level0SizeLimit    int64
+	MaxOutputPartBytes int64
+	// MaxConcurrent 跨 shard 并行 compact 配额；<=0 时回退 Options.MaxConcurrentCompaction / 默认。
+	MaxConcurrent              int
 	Levels                     []CompactionLevelOptions
 	MaxCascadeSteps            int
 	BackgroundInterval         time.Duration
@@ -174,6 +176,9 @@ func (opts Options) Validate() error {
 		return err
 	}
 	if err := validateNonNegativeInt("max concurrent compaction", opts.MaxConcurrentCompaction); err != nil {
+		return err
+	}
+	if err := validateNonNegativeInt("compaction max concurrent", opts.Compaction.MaxConcurrent); err != nil {
 		return err
 	}
 	if err := validateNonNegativeInt("query protection default max samples", opts.QueryProtection.DefaultMaxSamples); err != nil {

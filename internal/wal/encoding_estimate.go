@@ -4,25 +4,6 @@ import (
 	"github.com/openmts/mts/internal/model"
 )
 
-func estimateTypedBatchSize(
-	batch model.ResolvedTypedBatch,
-	rows []int,
-	identityRows []int,
-) int {
-	size := uvarintSize(uint64(len(identityRows)))
-	for _, row := range identityRows {
-		size += estimateTypedIdentitySize(batch, row)
-	}
-	size += uvarintSize(uint64(len(batch.Fields)))
-	for _, field := range batch.Fields {
-		size += stringSize(field.Name)
-	}
-	for position := range typedRowCount(batch, rows) {
-		size += estimateTypedPointSize(batch, typedRowIndex(rows, position))
-	}
-	return size
-}
-
 func estimateTypedIdentitySize(batch model.ResolvedTypedBatch, row int) int {
 	size := stringSize(batch.Database)
 	size += stringSize(batch.RetentionPolicy)
@@ -31,33 +12,6 @@ func estimateTypedIdentitySize(batch model.ResolvedTypedBatch, row int) int {
 		size += stringSize(tag.Name) + stringSize(tag.Values[row])
 	}
 	return size + uvarintSize(uint64(len(batch.Tags)))
-}
-
-func estimateTypedPointSize(batch model.ResolvedTypedBatch, row int) int {
-	size := uvarintSize(0) + uvarintSize(batch.SeriesIDs[row])
-	size += varintSize(batch.Timestamps[row])
-	size += uvarintSize(batch.WriteSeqs[row])
-	size += uvarintSize(uint64(len(batch.Fields)))
-	for _, field := range batch.Fields {
-		size += estimateTypedFieldSize(field, row)
-	}
-	return size
-}
-
-func estimateTypedFieldSize(field model.ResolvedTypedFieldColumn, row int) int {
-	size := uvarintSize(uint64(field.FieldID)) + uvarintSize(0) + 1
-	switch field.Type {
-	case model.FieldFloat64:
-		return size + 8
-	case model.FieldInt64:
-		return size + varintSize(field.Int64Values[row])
-	case model.FieldString:
-		return size + stringSize(field.StringValues[row])
-	case model.FieldBool:
-		return size + 1
-	default:
-		return size
-	}
 }
 
 func estimatePointSize(point model.ResolvedPoint) int {

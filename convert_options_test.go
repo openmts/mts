@@ -29,6 +29,7 @@ func TestToModelOptionsPreservesStorageConfiguration(t *testing.T) {
 			Level0PartLimit:            3,
 			Level0SizeLimit:            4096,
 			MaxOutputPartBytes:         8192,
+			MaxConcurrent:              2,
 			MaxCascadeSteps:            4,
 			BackgroundInterval:         time.Minute,
 			ReadAmplificationPartLimit: 5,
@@ -105,6 +106,7 @@ func TestToModelOptionsPreservesStorageConfiguration(t *testing.T) {
 		got.Compaction.Level0PartLimit != opts.Compaction.Level0PartLimit ||
 		got.Compaction.Level0SizeLimit != opts.Compaction.Level0SizeLimit ||
 		got.Compaction.MaxOutputPartBytes != opts.Compaction.MaxOutputPartBytes ||
+		got.Compaction.MaxConcurrent != opts.Compaction.MaxConcurrent ||
 		got.Compaction.MaxCascadeSteps != opts.Compaction.MaxCascadeSteps ||
 		got.Compaction.BackgroundInterval != opts.Compaction.BackgroundInterval ||
 		got.Compaction.ReadAmplificationPartLimit != opts.Compaction.ReadAmplificationPartLimit ||

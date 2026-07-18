@@ -4,6 +4,9 @@
 
 ### Added
 
+- 列式 WAL 编码路径减少中间列矩阵分配；`Compaction.MaxConcurrent` 与 `MaxConcurrentCompaction` 配额可配置同步。
+
+
 - POC：列式 WAL（segment formatID=2）与跨 shard 有界并行 compact。
 - `MaxConcurrentCompaction` 默认归一化为 `min(GOMAXPROCS, 4)`。
 
