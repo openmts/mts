@@ -12,6 +12,13 @@ func encodeTimestamps(timestamps []int64, policy string) (byte, []byte, error) {
 	if compressionPolicy(policy, "delta-of-delta") == "plain" {
 		return compressionPlain, plain, nil
 	}
+	// 固定步长快路径优先；否则 DoD，再与 plain 比最短。
+	if step, ok := detectConstStepTimestamps(timestamps); ok {
+		candidate := appendConstStepTimestamps(make([]byte, 0, 8+binary.MaxVarintLen64), timestamps[0], step)
+		if len(candidate) < len(plain) {
+			return compressionConstStep, candidate, nil
+		}
+	}
 	candidate := appendDeltaOfDeltaTimestamps(make([]byte, 0, timestampPayloadCapacity(len(timestamps))), timestamps)
 	if len(candidate) < len(plain) {
 		return compressionDeltaOfDelta, candidate, nil
@@ -24,11 +31,48 @@ func encodeSampleTimestamps(samples []model.VersionedSample, policy string) (byt
 	if compressionPolicy(policy, "delta-of-delta") == "plain" {
 		return compressionPlain, plain, nil
 	}
+	if step, ok := detectConstStepSamples(samples); ok {
+		candidate := appendConstStepTimestamps(make([]byte, 0, 8+binary.MaxVarintLen64), samples[0].Timestamp, step)
+		if len(candidate) < len(plain) {
+			return compressionConstStep, candidate, nil
+		}
+	}
 	candidate := appendDeltaOfDeltaSampleTimestamps(make([]byte, 0, timestampPayloadCapacity(len(samples))), samples)
 	if len(candidate) < len(plain) {
 		return compressionDeltaOfDelta, candidate, nil
 	}
 	return compressionPlain, plain, nil
+}
+
+func detectConstStepTimestamps(timestamps []int64) (int64, bool) {
+	if len(timestamps) < 2 {
+		return 0, false
+	}
+	step := timestamps[1] - timestamps[0]
+	for index := 2; index < len(timestamps); index++ {
+		if timestamps[index]-timestamps[index-1] != step {
+			return 0, false
+		}
+	}
+	return step, true
+}
+
+func detectConstStepSamples(samples []model.VersionedSample) (int64, bool) {
+	if len(samples) < 2 {
+		return 0, false
+	}
+	step := samples[1].Timestamp - samples[0].Timestamp
+	for index := 2; index < len(samples); index++ {
+		if samples[index].Timestamp-samples[index-1].Timestamp != step {
+			return 0, false
+		}
+	}
+	return step, true
+}
+
+func appendConstStepTimestamps(dst []byte, base, step int64) []byte {
+	dst = binary.LittleEndian.AppendUint64(dst, uint64(base))
+	return binary.AppendVarint(dst, step)
 }
 
 func timestampPayloadCapacity(count int) int {
@@ -152,9 +196,31 @@ func decodeCodecTimestamps(codecID byte, payload []byte, count int) ([]int64, er
 		return decodePlainTimestamps(payload, count)
 	case compressionDeltaOfDelta:
 		return decodeDeltaOfDeltaTimestamps(payload, count)
+	case compressionConstStep:
+		return decodeConstStepTimestamps(payload, count)
 	default:
 		return nil, fmt.Errorf("unknown timestamp compression %d", codecID)
 	}
+}
+
+func decodeConstStepTimestamps(payload []byte, count int) ([]int64, error) {
+	reader := newBlockReader(payload)
+	if count == 0 {
+		return nil, reader.done("const-step timestamps")
+	}
+	base, err := reader.fixedInt64("const-step base")
+	if err != nil {
+		return nil, err
+	}
+	step, err := reader.varint("const-step step")
+	if err != nil {
+		return nil, err
+	}
+	timestamps := make([]int64, count)
+	for index := range timestamps {
+		timestamps[index] = base + int64(index)*step
+	}
+	return timestamps, reader.done("const-step timestamps")
 }
 
 func decodePlainTimestamps(payload []byte, count int) ([]int64, error) {

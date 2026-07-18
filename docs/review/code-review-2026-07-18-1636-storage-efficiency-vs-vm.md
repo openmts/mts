@@ -125,6 +125,24 @@ MTS 已有专用编码骨架（默认）：
 **EARS**：当未启用版本冲突/精确写序查询时，系统应允许 SSTable 省略 per-sample writeSeq，或仅存 run-length。  
 **验收**：关闭 writeSeq 后体积再降 ≥8%~15%（视页结构）。
 
+
+### P1 实施状态（2026-07-18）
+
+| 项 | 状态 | 备注 |
+|---|---|---|
+| P1-1 Gorilla float | **已完成** | `compressionXOR` 载荷改为 leading/trailing 位打包；POC 不兼容旧 uvarint-xor |
+| P1-2 固定 step 时间戳 | **已完成** | 新 codec `compressionConstStep`：`base + step` |
+| P1-3 Int RLE | **已完成** | 新 codec `compressionRLE`，与 delta 自动择短 |
+| P1-4 Bool/String | 未做 | 下阶段 |
+| P1-5 writeSeq RLE | **已完成（部分）** | 递增 writeSeq 走 delta-RLE；尚未做“可省略 writeSeq” |
+
+**10M 复测（zstd + value-page-samples=4096 + typed + compact）**：
+- P0 后：约 **479 MiB**
+- 仅 P1 typed 编码初版：约 **476 MiB**（writeSeq 税掩盖）
+- P1 + writeSeq RLE：约 **115 MiB**（`data_bytes=120603121`）
+- 相对 P0：约 **-76%**；相对 VM ~10 MiB 仍约 **11~12x**
+
+
 ---
 
 ### P2 — 布局与合并（目标：稳态体积与 VM 同量级逼近）

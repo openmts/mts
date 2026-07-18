@@ -13,6 +13,8 @@ const (
 	compressionXOR
 	compressionDelta
 	compressionDictionary
+	compressionRLE
+	compressionConstStep
 )
 
 const defaultCompressionMinPageValues = 8
@@ -273,11 +275,8 @@ func appendWriteSeqsPayload(dst []byte, writeSeqs []uint64) []byte {
 }
 
 func appendSampleWriteSeqsPayload(dst []byte, samples []model.VersionedSample) []byte {
-	payload := make([]byte, 0, len(samples)*binary.MaxVarintLen64)
-	for _, sample := range samples {
-		payload = binary.AppendUvarint(payload, sample.WriteSeq)
-	}
-	return appendCodecPayload(dst, compressionPlain, payload)
+	codecID, payload := encodeWriteSeqs(samples)
+	return appendCodecPayload(dst, codecID, payload)
 }
 
 func appendSampleWriteSeqsPayloadWithCompression(
@@ -286,11 +285,8 @@ func appendSampleWriteSeqsPayloadWithCompression(
 	algorithm string,
 	budget ...CompressionMemoryBudget,
 ) ([]byte, error) {
-	payload := make([]byte, 0, len(samples)*binary.MaxVarintLen64)
-	for _, sample := range samples {
-		payload = binary.AppendUvarint(payload, sample.WriteSeq)
-	}
-	return appendCodecPayloadWithCompression(dst, compressionPlain, payload, algorithm, budget...)
+	codecID, payload := encodeWriteSeqs(samples)
+	return appendCodecPayloadWithCompression(dst, codecID, payload, algorithm, budget...)
 }
 
 func readCodecPayload(reader *blockReader, name string) (byte, []byte, error) {
@@ -338,15 +334,7 @@ func readCodecWriteSeqs(reader *blockReader, count int) ([]uint64, error) {
 }
 
 func decodeCodecWriteSeqs(codecID byte, payload []byte, count int) ([]uint64, error) {
-	if codecID != compressionPlain {
-		return nil, fmt.Errorf("unknown write seq compression %d", codecID)
-	}
-	payloadReader := blockReader{rest: payload}
-	writeSeqs, err := readWriteSeqs(&payloadReader, count)
-	if err != nil {
-		return nil, err
-	}
-	return writeSeqs, payloadReader.done("write seqs")
+	return decodeWriteSeqs(codecID, payload, count)
 }
 
 func compressionPolicy(policy string, defaultPolicy string) string {
@@ -355,6 +343,17 @@ func compressionPolicy(policy string, defaultPolicy string) string {
 		return defaultPolicy
 	case "plain", defaultPolicy:
 		return policy
+	case "gorilla":
+		// gorilla 是 float xor 的正式位打包形态别名。
+		if defaultPolicy == "xor" {
+			return "xor"
+		}
+		return defaultPolicy
+	case "rle":
+		if defaultPolicy == "delta" {
+			return "delta"
+		}
+		return defaultPolicy
 	default:
 		return defaultPolicy
 	}

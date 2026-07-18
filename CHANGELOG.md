@@ -4,6 +4,8 @@
 
 ### Added
 
+- SSTable 时序编码 P1：Gorilla float 位打包、固定步长时间戳、int/writeSeq delta-RLE。
+
 - SSTable `ValuePageSamples` 可配置（默认 1024）；未显式 `Algorithm` 时 L0=snappy、L1+=zstd 分层压缩。
 - 公开写接口文档明确优先使用 `WriteTypedBatch` 提升性能。
 - `PointsToTypedBatch` 与 `Engine.WritePointsAsTypedBatch`：同构 `[]Point` 转列式写入。

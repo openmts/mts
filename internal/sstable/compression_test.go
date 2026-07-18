@@ -136,15 +136,15 @@ func TestTimestampDeltaOfDeltaIsSmallerForRegularSeries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeTimestamps() error = %v", err)
 	}
-	if codecID != compressionDeltaOfDelta {
-		t.Fatalf("timestamp codec = %d, want delta-of-delta", codecID)
+	if codecID != compressionConstStep && codecID != compressionDeltaOfDelta {
+		t.Fatalf("timestamp codec = %d, want const-step or delta-of-delta", codecID)
 	}
 	if len(payload) >= len(plain) {
-		t.Fatalf("delta-of-delta size = %d, want smaller than plain %d", len(payload), len(plain))
+		t.Fatalf("timestamp compressed size = %d, want smaller than plain %d", len(payload), len(plain))
 	}
-	got, err := decodeDeltaOfDeltaTimestamps(payload, len(timestamps))
+	got, err := decodeCodecTimestamps(codecID, payload, len(timestamps))
 	if err != nil {
-		t.Fatalf("decodeDeltaOfDeltaTimestamps() error = %v", err)
+		t.Fatalf("decodeCodecTimestamps() error = %v", err)
 	}
 	if !reflect.DeepEqual(got, timestamps) {
 		t.Fatalf("timestamps = %#v, want %#v", got, timestamps)
@@ -177,11 +177,11 @@ func TestIntDeltaEncodingIsSmallerForIncreasingLargeValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeIntValues() error = %v", err)
 	}
-	if codecID != compressionDelta {
-		t.Fatalf("int codec = %d, want delta", codecID)
+	if codecID != compressionDelta && codecID != compressionRLE {
+		t.Fatalf("int codec = %d, want delta or rle", codecID)
 	}
 	if len(payload) >= len(plain) {
-		t.Fatalf("delta size = %d, want smaller than plain %d", len(payload), len(plain))
+		t.Fatalf("compressed int size = %d, want smaller than plain %d", len(payload), len(plain))
 	}
 }
 
@@ -565,8 +565,8 @@ func TestReadCodecSamplesCompressedFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeIntValues() error = %v", err)
 	}
-	if codecID != compressionDelta {
-		t.Fatalf("codecID = %d, want delta", codecID)
+	if codecID != compressionDelta && codecID != compressionRLE {
+		t.Fatalf("codecID = %d, want delta or rle", codecID)
 	}
 	reader := newBlockReader(appendCodecPayload(nil, codecID, payload))
 	samples, err := readCodecSamples(

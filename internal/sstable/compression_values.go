@@ -30,8 +30,8 @@ func encodeFloatValues(samples []model.VersionedSample, policy string) (byte, []
 	if selected == "plain" {
 		return compressionPlain, appendFloatValues(make([]byte, 0, len(samples)*8), samples), nil
 	}
-	// 顺序 float 默认优先 XOR；仅当 XOR 未更短时回退 plain。
-	candidate := appendXORFloatValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), samples)
+	// 默认 Gorilla 位打包（仍用 compressionXOR id）；仅当未更短时回退 plain。
+	candidate := appendGorillaFloatValues(make([]byte, 0, gorillaFloatCapacity(len(samples))), samples)
 	plain := appendFloatValues(make([]byte, 0, len(samples)*8), samples)
 	if len(candidate) < len(plain) {
 		return compressionXOR, candidate, nil
@@ -39,28 +39,36 @@ func encodeFloatValues(samples []model.VersionedSample, policy string) (byte, []
 	return compressionPlain, plain, nil
 }
 
+func gorillaFloatCapacity(count int) int {
+	if count <= 1 {
+		return count * 8
+	}
+	// 首值 8 字节 + 最坏约每点 1+1+5+6+64 bit ≈ 10 字节。
+	return 8 + (count-1)*10
+}
+
+// appendXORFloatValues 兼容旧测试名，实际为 Gorilla 位打包。
 func appendXORFloatValues(dst []byte, samples []model.VersionedSample) []byte {
-	if len(samples) == 0 {
-		return dst
-	}
-	prev := math.Float64bits(samples[0].Value.Float64)
-	dst = binary.LittleEndian.AppendUint64(dst, prev)
-	for index := 1; index < len(samples); index++ {
-		next := math.Float64bits(samples[index].Value.Float64)
-		dst = binary.AppendUvarint(dst, next^prev)
-		prev = next
-	}
-	return dst
+	return appendGorillaFloatValues(dst, samples)
 }
 
 func encodeIntValues(samples []model.VersionedSample, policy string) (byte, []byte, error) {
 	plain := appendIntValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), samples)
-	if compressionPolicy(policy, "delta") == "plain" {
+	selected := compressionPolicy(policy, "delta")
+	if selected == "plain" {
 		return compressionPlain, plain, nil
 	}
-	candidate := appendDeltaIntValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), samples)
-	if len(candidate) < len(plain) {
-		return compressionDelta, candidate, nil
+	// 选择 delta / delta-RLE 中更短者，再与 plain 比较。
+	delta := appendDeltaIntValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), samples)
+	rle := appendDeltaRLEIntValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), samples)
+	bestCodec := compressionDelta
+	best := delta
+	if len(rle) < len(best) {
+		bestCodec = compressionRLE
+		best = rle
+	}
+	if len(best) < len(plain) {
+		return bestCodec, best, nil
 	}
 	return compressionPlain, plain, nil
 }
@@ -216,6 +224,9 @@ func readCodecPayloadSamples(
 	case model.FieldFloat64:
 		return readXORFloatSampleValues(reader, codecID, timestamps, writeSeqs, query)
 	case model.FieldInt64:
+		if codecID == compressionRLE {
+			return readDeltaRLEIntSampleValues(reader, codecID, timestamps, writeSeqs, query)
+		}
 		return readDeltaIntSampleValues(reader, codecID, timestamps, writeSeqs, query)
 	case model.FieldString:
 		return readDictionaryStringSampleValues(reader, codecID, timestamps, writeSeqs, query)
@@ -462,6 +473,9 @@ func readCompressedValues(
 	case model.FieldFloat64:
 		return readXORFloatValues(reader, codecID, count)
 	case model.FieldInt64:
+		if codecID == compressionRLE {
+			return readDeltaRLEIntValues(reader, codecID, count)
+		}
 		return readDeltaIntValues(reader, codecID, count)
 	case model.FieldString:
 		return readDictionaryStringValues(reader, codecID, count)
@@ -475,28 +489,7 @@ func readXORFloatValues(
 	codecID byte,
 	count int,
 ) ([]model.FieldValue, error) {
-	if codecID != compressionXOR {
-		return nil, fmt.Errorf("unknown float compression %d", codecID)
-	}
-	values := make([]model.FieldValue, count)
-	if count == 0 {
-		return values, nil
-	}
-	first, err := reader.fixedInt64("first float bits")
-	if err != nil {
-		return nil, err
-	}
-	prev := uint64(first)
-	values[0] = model.Float64Value(math.Float64frombits(prev))
-	for index := 1; index < count; index++ {
-		xor, err := reader.uvarint("float xor")
-		if err != nil {
-			return nil, err
-		}
-		prev ^= xor
-		values[index] = model.Float64Value(math.Float64frombits(prev))
-	}
-	return values, nil
+	return readGorillaFloatValues(reader, codecID, count)
 }
 
 func readXORFloatSampleValues(
@@ -506,28 +499,7 @@ func readXORFloatSampleValues(
 	writeSeqs []uint64,
 	query Query,
 ) ([]model.VersionedSample, error) {
-	if codecID != compressionXOR {
-		return nil, fmt.Errorf("unknown float compression %d", codecID)
-	}
-	samples := make([]model.VersionedSample, 0, compressedQueryCapacity(len(timestamps), query))
-	if len(timestamps) == 0 {
-		return samples, nil
-	}
-	first, err := reader.fixedInt64("first float bits")
-	if err != nil {
-		return nil, err
-	}
-	prev := uint64(first)
-	samples = appendCompressedFloatSample(samples, timestamps[0], writeSeqs[0], prev, query)
-	for index := 1; index < len(timestamps); index++ {
-		xor, err := reader.uvarint("float xor")
-		if err != nil {
-			return nil, err
-		}
-		prev ^= xor
-		samples = appendCompressedFloatSample(samples, timestamps[index], writeSeqs[index], prev, query)
-	}
-	return samples, nil
+	return readGorillaFloatSampleValues(reader, codecID, timestamps, writeSeqs, query)
 }
 
 func appendCompressedFloatSample(
