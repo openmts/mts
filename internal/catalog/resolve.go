@@ -214,6 +214,7 @@ func (c *Catalog) resolveFieldsFromSchema(
 	if len(schema) == 0 || len(schema) != len(values) {
 		return nil, false, nil
 	}
+	// 先完整校验再分配 arena，避免不匹配时泄漏 offset。
 	for _, field := range schema {
 		value, ok := values[field.Name]
 		if !ok {
@@ -225,12 +226,11 @@ func (c *Catalog) resolveFieldsFromSchema(
 	}
 	fields := makeResolvedFields(len(schema), arena)
 	for index, field := range schema {
-		value := values[field.Name]
 		fields[index] = model.ResolvedField{
 			FieldID:   field.ID,
 			FieldName: field.Name,
 			Type:      field.Type,
-			Value:     value,
+			Value:     values[field.Name],
 		}
 	}
 	return fields, true, nil
@@ -325,4 +325,51 @@ func (c *Catalog) upsertFieldSchema(field Field) {
 		}
 	}
 	c.fieldSchemas[field.Measurement] = append(schema, field)
+}
+
+// applyFieldTemplateLocked 在同 measurement、同字段集合的批写热路径复用字段 ID 模板。
+// 返回 fields=nil, changed=false, err=nil 表示模板不匹配，调用方应回退完整解析。
+func (c *Catalog) applyFieldTemplateLocked(
+	values map[string]model.FieldValue,
+	template []model.ResolvedField,
+	arena *resolvedFieldArena,
+) ([]model.ResolvedField, bool, error) {
+	if len(template) == 0 || len(template) != len(values) {
+		return nil, false, nil
+	}
+	// 先完整校验，避免不匹配时推进 arena offset。
+	for _, item := range template {
+		value, ok := values[item.FieldName]
+		if !ok {
+			return nil, false, nil
+		}
+		if value.Type != item.Type {
+			return nil, true, fmt.Errorf("%w: %s", ErrFieldTypeConflict, item.FieldName)
+		}
+	}
+	fields := makeResolvedFields(len(template), arena)
+	for index, item := range template {
+		fields[index] = model.ResolvedField{
+			FieldID:   item.FieldID,
+			FieldName: item.FieldName,
+			Type:      item.Type,
+			Value:     values[item.FieldName],
+		}
+	}
+	return fields, false, nil
+}
+
+func cloneFieldTemplate(fields []model.ResolvedField) []model.ResolvedField {
+	if len(fields) == 0 {
+		return nil
+	}
+	out := make([]model.ResolvedField, len(fields))
+	for index, field := range fields {
+		out[index] = model.ResolvedField{
+			FieldID:   field.FieldID,
+			FieldName: field.FieldName,
+			Type:      field.Type,
+		}
+	}
+	return out
 }

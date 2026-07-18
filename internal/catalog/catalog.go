@@ -134,16 +134,59 @@ func (c *Catalog) ResolvePoints(points []model.Point) ([]model.ResolvedPoint, er
 	resolved := make([]model.ResolvedPoint, len(points))
 	changed := false
 	metadataChanged := false
+	var (
+		fieldTemplate       []model.ResolvedField
+		fieldTemplateReady  bool
+		fieldTemplateMeas   string
+		fieldTemplateCount  int
+		lastDatabase        string
+		lastPolicy          string
+		haveLastMetadataKey bool
+	)
 	for index, point := range points {
-		metadataChanged = c.ensureMetadataLocked(point.Database, point.RetentionPolicy) || metadataChanged
+		if !haveLastMetadataKey || point.Database != lastDatabase || point.RetentionPolicy != lastPolicy {
+			metadataChanged = c.ensureMetadataLocked(point.Database, point.RetentionPolicy) || metadataChanged
+			lastDatabase = point.Database
+			lastPolicy = point.RetentionPolicy
+			haveLastMetadataKey = true
+		}
 		// ResolvePoints feeds the synchronous engine write path, so the resolved
 		// point may borrow input tags instead of cloning them per sample.
-		got, pointChanged, err := c.resolvePointNoSnapshotCachedLocked(point, false, &arena, cache)
+		series, seriesChanged, err := c.resolveSeriesNoSnapshotCachedLocked(point.Measurement, point.Tags, cache)
 		if err != nil {
 			return nil, err
 		}
-		changed = changed || pointChanged
-		resolved[index] = got
+		var fields []model.ResolvedField
+		var fieldsChanged bool
+		if fieldTemplateReady &&
+			point.Measurement == fieldTemplateMeas &&
+			len(point.Fields) == fieldTemplateCount {
+			fields, fieldsChanged, err = c.applyFieldTemplateLocked(point.Fields, fieldTemplate, &arena)
+			if err != nil {
+				return nil, err
+			}
+			if !fieldsChanged && fields == nil {
+				// 模板不匹配（字段集合变化），回退完整解析并刷新模板。
+				fields, fieldsChanged, err = c.resolveFieldsNoSnapshotLocked(point.Measurement, point.Fields, &arena)
+				if err != nil {
+					return nil, err
+				}
+				fieldTemplate, fieldTemplateReady = cloneFieldTemplate(fields), len(fields) > 0
+				fieldTemplateMeas = point.Measurement
+				fieldTemplateCount = len(point.Fields)
+			}
+		} else {
+			fields, fieldsChanged, err = c.resolveFieldsNoSnapshotLocked(point.Measurement, point.Fields, &arena)
+			if err != nil {
+				return nil, err
+			}
+			fieldTemplate = cloneFieldTemplate(fields)
+			fieldTemplateReady = len(fields) > 0
+			fieldTemplateMeas = point.Measurement
+			fieldTemplateCount = len(point.Fields)
+		}
+		resolved[index] = resolvedPointFrom(point, series.ID, fields, false)
+		changed = changed || seriesChanged || fieldsChanged
 	}
 	if changed {
 		if err := c.checkpointSnapshotLocked(false); err != nil {
@@ -198,22 +241,6 @@ func (c *Catalog) ensureMetadataLocked(database string, policy string) bool {
 	return changed
 }
 
-func (c *Catalog) resolvePointNoSnapshotCachedLocked(
-	point model.Point,
-	cloneResultTags bool,
-	arena *resolvedFieldArena,
-	cache *resolveBatchCache,
-) (model.ResolvedPoint, bool, error) {
-	series, seriesChanged, err := c.resolveSeriesNoSnapshotCachedLocked(point.Measurement, point.Tags, cache)
-	if err != nil {
-		return model.ResolvedPoint{}, false, err
-	}
-	fields, fieldsChanged, err := c.resolveFieldsNoSnapshotLocked(point.Measurement, point.Fields, arena)
-	if err != nil {
-		return model.ResolvedPoint{}, false, err
-	}
-	return resolvedPointFrom(point, series.ID, fields, cloneResultTags), seriesChanged || fieldsChanged, nil
-}
 
 func resolvedPointFrom(
 	point model.Point,

@@ -14,8 +14,9 @@ func fromModelFieldType(fieldType model.FieldType) FieldType {
 }
 
 func toModelFieldValue(value FieldValue) model.FieldValue {
+	// 与 model.FieldValue 内存布局一致；按字段拷贝保持类型安全。
 	return model.FieldValue{
-		Type:    toModelFieldType(value.Type),
+		Type:    model.FieldType(value.Type),
 		Float64: value.Float64,
 		Int64:   value.Int64,
 		String:  value.String,
@@ -34,13 +35,16 @@ func fromModelFieldValue(value model.FieldValue) FieldValue {
 }
 
 func toModelPoint(point Point) (model.Point, error) {
-	factor, err := timePrecisionFactor(point.Precision)
-	if err != nil {
-		return model.Point{}, err
-	}
-	timestamp, err := timestampToNanoseconds(point.Timestamp, factor)
-	if err != nil {
-		return model.Point{}, err
+	timestamp := point.Timestamp
+	if point.Precision != "" && point.Precision != PrecisionNanosecond {
+		factor, err := timePrecisionFactor(point.Precision)
+		if err != nil {
+			return model.Point{}, err
+		}
+		timestamp, err = timestampToNanoseconds(point.Timestamp, factor)
+		if err != nil {
+			return model.Point{}, err
+		}
 	}
 	fields := make(map[string]model.FieldValue, len(point.Fields))
 	for name, value := range point.Fields {
@@ -57,7 +61,35 @@ func toModelPoint(point Point) (model.Point, error) {
 }
 
 func toModelPoints(points []Point) ([]model.Point, error) {
+	if len(points) == 0 {
+		return nil, nil
+	}
 	out := make([]model.Point, len(points))
+	// 热路径：整批同为默认纳秒精度时跳过逐点 precision 分支。
+	uniformNanos := true
+	for _, point := range points {
+		if point.Precision != "" && point.Precision != PrecisionNanosecond {
+			uniformNanos = false
+			break
+		}
+	}
+	if uniformNanos {
+		for index, point := range points {
+			fields := make(map[string]model.FieldValue, len(point.Fields))
+			for name, value := range point.Fields {
+				fields[name] = toModelFieldValue(value)
+			}
+			out[index] = model.Point{
+				Database:        point.Database,
+				RetentionPolicy: point.RetentionPolicy,
+				Measurement:     point.Measurement,
+				Tags:            cloneStringMap(point.Tags),
+				Timestamp:       point.Timestamp,
+				Fields:          fields,
+			}
+		}
+		return out, nil
+	}
 	for index, point := range points {
 		converted, err := toModelPoint(point)
 		if err != nil {

@@ -526,3 +526,43 @@ func catalogPoint(measurement string, host string, timestamp int64) model.Point 
 		},
 	}
 }
+
+func TestResolvePointsReusesFieldTemplateForHomogeneousBatch(t *testing.T) {
+	cat, err := catalog.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() { _ = cat.Close() }()
+
+	points := make([]model.Point, 0, 8)
+	for index := 0; index < 8; index++ {
+		points = append(points, model.Point{
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			Timestamp:   int64(index),
+			Fields: map[string]model.FieldValue{
+				"f0": model.Float64Value(float64(index)),
+				"f1": model.Float64Value(float64(index) + 0.1),
+				"f2": model.Float64Value(float64(index) + 0.2),
+			},
+		})
+	}
+	resolved, err := cat.ResolvePoints(points)
+	if err != nil {
+		t.Fatalf("ResolvePoints() error = %v", err)
+	}
+	if len(resolved) != len(points) {
+		t.Fatalf("resolved count = %d, want %d", len(resolved), len(points))
+	}
+	firstIDs := []uint32{resolved[0].Fields[0].FieldID, resolved[0].Fields[1].FieldID, resolved[0].Fields[2].FieldID}
+	for _, point := range resolved[1:] {
+		if len(point.Fields) != 3 {
+			t.Fatalf("field count = %d, want 3", len(point.Fields))
+		}
+		for index, field := range point.Fields {
+			if field.FieldID != firstIDs[index] {
+				t.Fatalf("field %d id = %d, want %d", index, field.FieldID, firstIDs[index])
+			}
+		}
+	}
+}

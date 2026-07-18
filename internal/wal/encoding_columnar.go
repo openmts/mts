@@ -59,12 +59,10 @@ func encodeColumnarPointsInto(dst []byte, records []model.ResolvedPoint) ([]byte
 	}
 	dst = appendPointTimestampDeltas(dst, records)
 	dst = appendPointWriteSeqDeltas(dst, records)
-	for _, field := range schema {
-		var encErr error
-		dst, encErr = appendPointFieldColumn(dst, records, field)
-		if encErr != nil {
-			return nil, encErr
-		}
+	var encErr error
+	dst, encErr = appendPointFieldColumns(dst, records, schema)
+	if encErr != nil {
+		return nil, encErr
 	}
 	return dst, nil
 }
@@ -295,6 +293,84 @@ func appendTypedWriteSeqDeltas(
 		prev = value
 	}
 	return dst
+}
+
+func appendPointFieldColumns(
+	dst []byte,
+	records []model.ResolvedPoint,
+	schema []columnarFieldSchema,
+) ([]byte, error) {
+	if len(schema) == 0 {
+		return dst, nil
+	}
+	// 同构宽表（常见）：按 schema 顺序直接写出，避免 rows×fields 二次查找。
+	if pointFieldsMatchSchema(records, schema) {
+		return appendPointFieldColumnsDense(dst, records, schema)
+	}
+	for _, field := range schema {
+		var err error
+		dst, err = appendPointFieldColumn(dst, records, field)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+func pointFieldsMatchSchema(records []model.ResolvedPoint, schema []columnarFieldSchema) bool {
+	if len(records) == 0 {
+		return true
+	}
+	// 抽样检查前/中/后三点，失败则回退通用路径。
+	sample := []int{0, len(records) / 2, len(records) - 1}
+	for _, index := range sample {
+		if index < 0 || index >= len(records) {
+			continue
+		}
+		fields := records[index].Fields
+		if len(fields) != len(schema) {
+			return false
+		}
+		for fieldIndex, field := range schema {
+			item := fields[fieldIndex]
+			if item.FieldID != field.fieldID || item.FieldName != field.name || item.Type != field.typ {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func appendPointFieldColumnsDense(
+	dst []byte,
+	records []model.ResolvedPoint,
+	schema []columnarFieldSchema,
+) ([]byte, error) {
+	rowCount := len(records)
+	byteCount := (rowCount + 7) / 8
+	for fieldIndex := range schema {
+		start := len(dst)
+		dst = growBytes(dst, byteCount)
+		bits := dst[start : start+byteCount]
+		// dense presence
+		for index := range bits {
+			bits[index] = 0xff
+		}
+		if rem := rowCount % 8; rem != 0 && byteCount > 0 {
+			bits[byteCount-1] = byte((1 << rem) - 1)
+		}
+		for _, record := range records {
+			if fieldIndex >= len(record.Fields) {
+				return nil, fmt.Errorf("dense field index %d out of range", fieldIndex)
+			}
+			var err error
+			dst, err = appendValuePayload(dst, record.Fields[fieldIndex].Value)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return dst, nil
 }
 
 func appendPointFieldColumn(
