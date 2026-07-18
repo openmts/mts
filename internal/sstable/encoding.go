@@ -9,6 +9,7 @@ import (
 
 const (
 	timeEncodingDelta           byte = 1
+	timeEncodingConstStep       byte = 2
 	valueEncodingPagePlain      byte = 3
 	valueEncodingPageIndex      byte = 4
 	valueEncodingPageCompressed byte = 5
@@ -20,6 +21,15 @@ const (
 )
 
 func marshalTimeBlock(dst []byte, timestamps []int64) []byte {
+	if step, ok := detectRowTimeConstStep(timestamps); ok {
+		dst = append(dst, timeEncodingConstStep)
+		dst = binary.AppendUvarint(dst, uint64(len(timestamps)))
+		if len(timestamps) == 0 {
+			return dst
+		}
+		dst = binary.LittleEndian.AppendUint64(dst, uint64(timestamps[0]))
+		return binary.AppendVarint(dst, step)
+	}
 	dst = append(dst, timeEncodingDelta)
 	dst = binary.AppendUvarint(dst, uint64(len(timestamps)))
 	if len(timestamps) == 0 {
@@ -32,24 +42,64 @@ func marshalTimeBlock(dst []byte, timestamps []int64) []byte {
 	return dst
 }
 
+func detectRowTimeConstStep(timestamps []int64) (int64, bool) {
+	if len(timestamps) < 2 {
+		return 0, false
+	}
+	step := timestamps[1] - timestamps[0]
+	for index := 2; index < len(timestamps); index++ {
+		if timestamps[index]-timestamps[index-1] != step {
+			return 0, false
+		}
+	}
+	return step, true
+}
+
 func unmarshalTimeBlock(payload []byte) ([]int64, error) {
 	reader := newBlockReader(payload)
 	encoding, err := reader.byte("time encoding")
 	if err != nil {
 		return nil, err
 	}
-	if encoding != timeEncodingDelta {
-		return nil, fmt.Errorf("unknown time encoding %d", encoding)
-	}
 	count, err := reader.intCount("time count")
 	if err != nil {
 		return nil, err
 	}
-	timestamps, err := readTimestamps(reader, count)
+	switch encoding {
+	case timeEncodingDelta:
+		timestamps, err := readTimestamps(reader, count)
+		if err != nil {
+			return nil, err
+		}
+		return timestamps, reader.done("time block")
+	case timeEncodingConstStep:
+		timestamps, err := readConstStepTimestamps(reader, count)
+		if err != nil {
+			return nil, err
+		}
+		return timestamps, reader.done("time block")
+	default:
+		return nil, fmt.Errorf("unknown time encoding %d", encoding)
+	}
+}
+
+func readConstStepTimestamps(reader *blockReader, count int) ([]int64, error) {
+	if count == 0 {
+		return nil, nil
+	}
+	base, err := reader.fixedInt64("const-step time base")
 	if err != nil {
 		return nil, err
 	}
-	return timestamps, reader.done("time block")
+	step, err := reader.varint("const-step time step")
+	if err != nil {
+		return nil, err
+	}
+	timestamps := make([]int64, count)
+	for index := range timestamps {
+		timestamps[index] = base + int64(index)*step
+	}
+	return timestamps, nil
 }
 
 func marshalValueBlockWithTimestamps(

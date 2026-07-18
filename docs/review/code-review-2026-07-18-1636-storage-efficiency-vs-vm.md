@@ -143,8 +143,10 @@ MTS 已有专用编码骨架（默认）：
 - P1-4/P1-5（+string const/RLE + omit-write-seq）：约 **113.6 MiB**（`data_bytes=119109606`）
 - **float const-step / int-as-float RLE**：约 **75.8 MiB**（`data_bytes=79425428`）
 - **P2 冷层 page + zstd 强化 + 7d shard**：约 **63.7 MiB**（`data_bytes=66804649`，shard 116→17）
-- 相对 P0：约 **-87%**；相对 VM ~10 MiB 约 **6.4x**
-- 说明：已进入阶段 B 目标带中段；下步仍可做 part 组件合并与更高 zstd 级
+- **行时间戳 const-step（timestamps.bin）**：约 **6.5 MiB**（`data_bytes=6813204`）
+- 相对 P0：约 **-98.6%**；相对 VM ~10 MiB 约 **0.65x（更优）**
+- 说明：此前 timestamps.bin 朴素 delta 占 part 约 90%；const-step 后体积逼近/优于 VM 同模型
+
 
 
 

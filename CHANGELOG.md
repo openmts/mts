@@ -4,6 +4,7 @@
 
 ### Added
 
+- 行时间戳块 `timestamps.bin` 支持 const-step 编码，显著降低等间隔序列存储。
 - 冷层 L1+ 默认更大 value page（16384）与更强 zstd（SpeedDefault）；scale 默认 shard 7d。
 - SSTable float 自动选择 const-step / 整数值 delta-RLE / Gorilla 最短编码。
 - SSTable 字符串字典强化（const/ordinal RLE）与 `Compression.OmitWriteSeq` 可省略写序号。
