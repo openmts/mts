@@ -14,6 +14,12 @@ import (
 	"github.com/openmts/mts/internal/storagefs"
 )
 
+func writePartForPageTests(root string, level int, id string, columns []model.ColumnData) (PartMeta, error) {
+	return WritePartWithOptions(root, level, id, columns, WriteOptions{
+		Compression: model.CompressionOptions{ValuePageSamples: testValueBlockPageSamples},
+	})
+}
+
 func TestBlockReadValidationErrors(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "blocks.bin")
@@ -705,10 +711,10 @@ func TestInternalScanCancelAndValidateErrorBranches(t *testing.T) {
 
 func TestPartQueryIndexRowsFieldPredicatesAndBoundary(t *testing.T) {
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-query-index-rows", []model.ColumnData{
-		columnWithTimestamps(1, 2, 0, valueBlockPageSamples*2),
-		columnWithTimestamps(1, 3, 0, valueBlockPageSamples*2),
-		columnWithTimestamps(2, 2, 1000, valueBlockPageSamples),
+	meta, err := writePartForPageTests(dir, 0, "sst-query-index-rows", []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, testValueBlockPageSamples*2),
+		columnWithTimestamps(1, 3, 0, testValueBlockPageSamples*2),
+		columnWithTimestamps(2, 2, 1000, testValueBlockPageSamples),
 	})
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
@@ -725,17 +731,17 @@ func TestPartQueryIndexRowsFieldPredicatesAndBoundary(t *testing.T) {
 	stats := &model.QueryStats{}
 	columns, err := part.Query(Query{
 		Stats:    stats,
-		Start:    int64(valueBlockPageSamples),
-		End:      int64(valueBlockPageSamples*2 - 1),
+		Start:    int64(testValueBlockPageSamples),
+		End:      int64(testValueBlockPageSamples*2 - 1),
 		FieldIDs: map[uint32]struct{}{2: {}},
 		FieldPredicates: map[uint32][]model.QueryPredicate{
-			2: {{Kind: model.QueryPredicateFieldGTE, Value: model.Float64Value(float64(valueBlockPageSamples))}},
+			2: {{Kind: model.QueryPredicateFieldGTE, Value: model.Float64Value(float64(testValueBlockPageSamples))}},
 		},
 	})
 	if err != nil {
 		t.Fatalf("Query() error = %v", err)
 	}
-	if len(columns) != 1 || columns[0].FieldID != 2 || len(columns[0].Samples) != valueBlockPageSamples {
+	if len(columns) != 1 || columns[0].FieldID != 2 || len(columns[0].Samples) != testValueBlockPageSamples {
 		t.Fatalf("columns = %#v, want one filtered field page", columns)
 	}
 	if stats.IndexRowsRead == 0 || stats.IndexRowsSkipped == 0 {
@@ -744,14 +750,14 @@ func TestPartQueryIndexRowsFieldPredicatesAndBoundary(t *testing.T) {
 
 	boundary, err := part.Query(Query{
 		Start:    0,
-		End:      int64(valueBlockPageSamples*2 - 1),
+		End:      int64(testValueBlockPageSamples*2 - 1),
 		FieldIDs: map[uint32]struct{}{2: {}},
 		Boundary: model.QueryBoundaryBoth,
 	})
 	if err != nil {
 		t.Fatalf("Query(boundary) error = %v", err)
 	}
-	if len(boundary) == 0 || len(boundary[0].Samples) != valueBlockPageSamples*2 {
+	if len(boundary) == 0 || len(boundary[0].Samples) != testValueBlockPageSamples*2 {
 		t.Fatalf("boundary columns = %#v, want first and last pages", boundary)
 	}
 	empty, err := part.Query(Query{Start: 10, End: 1})
@@ -1604,7 +1610,7 @@ func TestPartQueryPrunesValueBlocksByField(t *testing.T) {
 		columnWithField(1, 2, model.Int64Value(2)),
 		columnWithField(1, 3, model.StringValue("skip")),
 	}
-	meta, err := WritePart(dir, 0, "sst-000001", columns)
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", columns)
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
 	}
@@ -1633,9 +1639,9 @@ func TestPartQueryPrunesValueBlocksByField(t *testing.T) {
 func TestPartQueryReadsOnlyMatchingValuePages(t *testing.T) {
 	dir := t.TempDir()
 	columns := []model.ColumnData{
-		columnWithTimestamps(1, 2, 0, valueBlockPageSamples*3),
+		columnWithTimestamps(1, 2, 0, testValueBlockPageSamples*3),
 	}
-	meta, err := WritePart(dir, 0, "sst-000001", columns)
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", columns)
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
 	}
@@ -1647,8 +1653,8 @@ func TestPartQueryReadsOnlyMatchingValuePages(t *testing.T) {
 	got, err := part.Query(Query{
 		SeriesIDs: map[uint64]struct{}{1: {}},
 		FieldIDs:  map[uint32]struct{}{2: {}},
-		Start:     int64(valueBlockPageSamples + 10),
-		End:       int64(valueBlockPageSamples + 10),
+		Start:     int64(testValueBlockPageSamples + 10),
+		End:       int64(testValueBlockPageSamples + 10),
 	})
 	if err != nil {
 		t.Fatalf("Query() error = %v", err)
@@ -1667,9 +1673,9 @@ func TestPartQueryReadsOnlyMatchingValuePages(t *testing.T) {
 func TestPartQueryPrunesValuePagesByNumericFieldPredicate(t *testing.T) {
 	dir := t.TempDir()
 	columns := []model.ColumnData{
-		columnWithTimestamps(1, 2, 0, valueBlockPageSamples*3),
+		columnWithTimestamps(1, 2, 0, testValueBlockPageSamples*3),
 	}
-	meta, err := WritePart(dir, 0, "sst-000001", columns)
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", columns)
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
 	}
@@ -1682,13 +1688,13 @@ func TestPartQueryPrunesValuePagesByNumericFieldPredicate(t *testing.T) {
 		SeriesIDs: map[uint64]struct{}{1: {}},
 		FieldIDs:  map[uint32]struct{}{2: {}},
 		Start:     0,
-		End:       int64(valueBlockPageSamples*3 - 1),
+		End:       int64(testValueBlockPageSamples*3 - 1),
 		FieldPredicates: map[uint32][]model.QueryPredicate{
 			2: {
 				{
 					Kind:  model.QueryPredicateFieldGT,
 					Name:  "value",
-					Value: model.Float64Value(float64(valueBlockPageSamples*2 + 100)),
+					Value: model.Float64Value(float64(testValueBlockPageSamples*2 + 100)),
 				},
 			},
 		},
@@ -1946,7 +1952,7 @@ func fileSizeForTest(t *testing.T, path string) int64 {
 
 func TestOpenPartQueriesWithAlreadyOpenedBlockFiles(t *testing.T) {
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", []model.ColumnData{
 		columnWithField(1, 2, model.Float64Value(42)),
 	})
 	if err != nil {
@@ -1975,7 +1981,7 @@ func TestOpenPartQueriesWithAlreadyOpenedBlockFiles(t *testing.T) {
 
 func TestOpenPartRejectsOutOfBoundsMetadataRefs(t *testing.T) {
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", []model.ColumnData{
 		columnWithField(1, 2, model.Float64Value(42)),
 	})
 	if err != nil {
@@ -2032,7 +2038,7 @@ func TestWritePartEmbedsComponentSizes(t *testing.T) {
 
 func TestOpenPartRejectsMissingComponent(t *testing.T) {
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", []model.ColumnData{
 		columnWithField(1, 2, model.Float64Value(42)),
 	})
 	if err != nil {
@@ -2048,7 +2054,7 @@ func TestOpenPartRejectsMissingComponent(t *testing.T) {
 
 func TestOpenPartRejectsComponentChecksumCorruption(t *testing.T) {
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", []model.ColumnData{
 		columnWithTimestamps(1, 2, 0, 300),
 	})
 	if err != nil {
@@ -2073,7 +2079,7 @@ func TestOpenPartRejectsComponentChecksumCorruption(t *testing.T) {
 
 func TestOpenPartTrustedSkipsDeepValueValidation(t *testing.T) {
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", []model.ColumnData{
 		columnWithTimestamps(1, 2, 0, 300),
 	})
 	if err != nil {
@@ -2105,7 +2111,7 @@ func TestOpenPartTrustedSkipsDeepValueValidation(t *testing.T) {
 
 func TestPartQueryFallsBackToPathAfterClose(t *testing.T) {
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", []model.ColumnData{
 		columnWithField(1, 2, model.Float64Value(42)),
 	})
 	if err != nil {
@@ -2128,8 +2134,8 @@ func TestPartQueryFallsBackToPathAfterClose(t *testing.T) {
 }
 
 func TestSSTableSmallHelpersAndOpenPartFilesErrors(t *testing.T) {
-	if valuePageCount(0) != 0 {
-		t.Fatalf("valuePageCount(0) = %d, want 0", valuePageCount(0))
+	if valuePageCount(0, testValueBlockPageSamples) != 0 {
+		t.Fatalf("valuePageCount(0, testValueBlockPageSamples) = %d, want 0", valuePageCount(0, testValueBlockPageSamples))
 	}
 	if _, err := uint32Value("too large", uint64(^uint32(0))+1); err == nil {
 		t.Fatal("uint32Value(overflow) error = nil, want error")
@@ -2286,7 +2292,7 @@ func TestPartCloseIsIdempotentAndNilSafe(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{
+	meta, err := writePartForPageTests(dir, 0, "sst-000001", []model.ColumnData{
 		columnWithField(1, 2, model.Float64Value(1)),
 	})
 	if err != nil {

@@ -163,6 +163,9 @@ func TestFirstAggregateUsesBoundaryPageFastPath(t *testing.T) {
 		Path:               t.TempDir(),
 		ShardDuration:      time.Hour,
 		MemTableMaxSamples: 1000,
+		Compression: model.CompressionOptions{
+			ValuePageSamples: 256,
+		},
 	})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)

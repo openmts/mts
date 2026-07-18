@@ -512,6 +512,8 @@ type CompressionOptions struct {
 	String        string
 	Algorithm     string
 	MinPageValues int
+	// ValuePageSamples 控制 values.bin 每页样本数；0 表示使用引擎默认。
+	ValuePageSamples int
 }
 
 type WriteOptions struct {

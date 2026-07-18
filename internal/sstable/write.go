@@ -13,7 +13,18 @@ import (
 	"github.com/openmts/mts/internal/storagefs"
 )
 
-const valueBlockPageSamples = 256
+const (
+	// defaultValueBlockPageSamples 是未配置 ValuePageSamples 时的默认页大小。
+	// 相对历史默认 256 放大，以提升 payload 压缩窗口。
+	defaultValueBlockPageSamples = 1024
+	// minValueBlockPageSamples 防止过小页导致固定税过高。
+	minValueBlockPageSamples = 64
+	// maxValueBlockPageSamples 防止单页过大占用峰值内存。
+	maxValueBlockPageSamples = 65536
+)
+
+// testValueBlockPageSamples 用于依赖固定页边界的单测（历史 256）。
+const testValueBlockPageSamples = 256
 
 type WriteOptions struct {
 	Compression  model.CompressionOptions
@@ -228,17 +239,18 @@ func writeValuePages(
 	rowTimestamps []int64,
 	opts WriteOptions,
 ) (valuePageIndex, error) {
+	pageSamples := resolveValuePageSamples(opts.Compression.ValuePageSamples)
 	index := valuePageIndex{
 		FieldID:   column.FieldID,
 		FieldType: column.FieldType,
 		Count:     len(column.Samples),
-		Pages:     make([]valuePageRef, 0, valuePageCount(len(column.Samples))),
+		Pages:     make([]valuePageRef, 0, valuePageCount(len(column.Samples), pageSamples)),
 	}
 	if len(column.Samples) == 0 {
 		return index, nil
 	}
-	for start := 0; start < len(column.Samples); start += valueBlockPageSamples {
-		end := start + valueBlockPageSamples
+	for start := 0; start < len(column.Samples); start += pageSamples {
+		end := start + pageSamples
 		if end > len(column.Samples) {
 			end = len(column.Samples)
 		}
@@ -309,11 +321,27 @@ func intValuePageStats(samples []model.VersionedSample) valuePageStats {
 	return valuePageStats{HasNumeric: true, MinInt64: minValue, MaxInt64: maxValue}
 }
 
-func valuePageCount(samples int) int {
+func valuePageCount(samples int, pageSamples int) int {
 	if samples == 0 {
 		return 0
 	}
-	return (samples + valueBlockPageSamples - 1) / valueBlockPageSamples
+	if pageSamples <= 0 {
+		pageSamples = defaultValueBlockPageSamples
+	}
+	return (samples + pageSamples - 1) / pageSamples
+}
+
+func resolveValuePageSamples(configured int) int {
+	if configured <= 0 {
+		return defaultValueBlockPageSamples
+	}
+	if configured < minValueBlockPageSamples {
+		return minValueBlockPageSamples
+	}
+	if configured > maxValueBlockPageSamples {
+		return maxValueBlockPageSamples
+	}
+	return configured
 }
 
 func writePartIndexes(path string, meta *metadata, rows []indexRow, sync bool) error {

@@ -102,6 +102,7 @@ type config struct {
 	batchSize            int
 	memTableMaxSamples   int
 	compressionAlgorithm string
+	valuePageSamples     int
 	durability           string
 	queryStart           int64
 	queryEnd             int64
@@ -246,6 +247,11 @@ func parseConfig(args []string) (config, error) {
 		compressionOff,
 		"payload compression algorithm: off|none|snappy|lz4|zstd",
 	)
+	valuePageSamples := flags.Int(
+		"value-page-samples",
+		0,
+		"SSTable value page samples; 0 uses engine default",
+	)
 	durability := flags.String(
 		"durability",
 		durabilityBuffered,
@@ -306,6 +312,7 @@ func parseConfig(args []string) (config, error) {
 		batchSize:            *batchSize,
 		memTableMaxSamples:   *memTableMaxSamples,
 		compressionAlgorithm: *compressionAlgorithm,
+		valuePageSamples:     *valuePageSamples,
 		durability:           *durability,
 		queryStart:           *queryStart,
 		queryEnd:             *queryEnd,
@@ -621,18 +628,19 @@ func openScaleEngine(ctx context.Context, dir string, cfg config) (*mts.Engine, 
 		MemTableMaxSamples: memTableMaxSamples,
 		WAL:                mts.WALOptions{Sync: durability.walSync},
 		FlushSync:          durability.flushSync,
-		Compression:        scaleCompressionOptions(cfg.compressionAlgorithm),
+		Compression:        scaleCompressionOptions(cfg.compressionAlgorithm, cfg.valuePageSamples),
 	})
 }
 
-func scaleCompressionOptions(algorithm string) mts.CompressionOptions {
+func scaleCompressionOptions(algorithm string, valuePageSamples int) mts.CompressionOptions {
 	if algorithm == "" || algorithm == compressionOff {
-		return mts.CompressionOptions{}
+		return mts.CompressionOptions{ValuePageSamples: valuePageSamples}
 	}
 	return mts.CompressionOptions{
-		Enabled:       true,
-		Algorithm:     algorithm,
-		MinPageValues: 1,
+		Enabled:          true,
+		Algorithm:        algorithm,
+		MinPageValues:    1,
+		ValuePageSamples: valuePageSamples,
 	}
 }
 

@@ -442,8 +442,10 @@ func (s *Shard) writeSnapshotPart(snapshot memSnapshot) (sstable.PartMeta, error
 }
 
 func (s *Shard) flushWriteOptions() sstable.WriteOptions {
+	// flush 产物落在 L0：未显式指定 Algorithm 时使用分层默认（snappy）。
+	compression := defaultLevelCompression(0, s.opts.Compression)
 	return sstable.WriteOptions{
-		Compression:  s.opts.Compression,
+		Compression:  compression,
 		MemoryBudget: storageCompressionBudget{memory: s.opts.Memory},
 		Sync:         s.opts.FlushSync,
 	}

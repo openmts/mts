@@ -154,12 +154,12 @@ func TestDurabilityOptionsMapToEngineAndWriteOptions(t *testing.T) {
 }
 
 func TestScaleCompressionOptions(t *testing.T) {
-	if scaleCompressionOptions("off").Enabled {
-		t.Fatal("scaleCompressionOptions(off).Enabled = true, want false")
+	if scaleCompressionOptions("off", 0).Enabled {
+		t.Fatal("scaleCompressionOptions(off, 0).Enabled = true, want false")
 	}
-	got := scaleCompressionOptions("lz4")
+	got := scaleCompressionOptions("lz4", 0)
 	if !got.Enabled || got.Algorithm != "lz4" || got.MinPageValues != 1 {
-		t.Fatalf("scaleCompressionOptions(lz4) = %#v, want enabled lz4", got)
+		t.Fatalf("scaleCompressionOptions(lz4, 0) = %#v, want enabled lz4", got)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/openmts/mts/internal/model"
@@ -158,9 +159,34 @@ func normalizeCompactionLevel(
 		level.MaxOutputPartBytes = opts.MaxOutputPartBytes
 	}
 	if !compressionConfigured(level.Compression) {
-		level.Compression = globalCompression
+		level.Compression = defaultLevelCompression(level.Level, globalCompression)
+	} else {
+		level.Compression = normalizeCompressionOptions(level.Compression)
+		// 层级未指定页大小时继承全局，保证 flush/compact 页参数一致。
+		if level.Compression.ValuePageSamples <= 0 && globalCompression.ValuePageSamples > 0 {
+			level.Compression.ValuePageSamples = globalCompression.ValuePageSamples
+		}
 	}
 	return level
+}
+
+// defaultLevelCompression 在未显式配置层级压缩时应用分层策略：
+// L0 优先写吞吐（snappy），L1+ 优先存储效率（zstd）。
+// 若全局 Algorithm 已显式指定，则全层级沿用全局算法。
+func defaultLevelCompression(level int, global model.CompressionOptions) model.CompressionOptions {
+	out := normalizeCompressionOptions(global)
+	if !out.Enabled {
+		return out
+	}
+	if strings.TrimSpace(global.Algorithm) != "" {
+		return out
+	}
+	if level <= 0 {
+		out.Algorithm = "snappy"
+		return out
+	}
+	out.Algorithm = "zstd"
+	return out
 }
 
 func normalizeCompressionOptions(opts model.CompressionOptions) model.CompressionOptions {
@@ -180,12 +206,16 @@ func normalizeCompressionOptions(opts model.CompressionOptions) model.Compressio
 	if opts.MinPageValues < 0 {
 		opts.MinPageValues = 0
 	}
+	if opts.ValuePageSamples < 0 {
+		opts.ValuePageSamples = 0
+	}
 	return opts
 }
 
 func compressionConfigured(opts model.CompressionOptions) bool {
 	return opts.Enabled || opts.Timestamp != "" || opts.Float != "" ||
-		opts.Int != "" || opts.String != "" || opts.Algorithm != "" || opts.MinPageValues > 0
+		opts.Int != "" || opts.String != "" || opts.Algorithm != "" ||
+		opts.MinPageValues > 0 || opts.ValuePageSamples > 0
 }
 
 func normalizePoint(opts model.Options, point model.Point) model.Point {

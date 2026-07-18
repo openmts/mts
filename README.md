@@ -113,6 +113,20 @@ err = engine.CheckUserDatabasePermission(ctx, "alice", "metrics", mts.DatabasePe
 
 如需接入第三方权限系统，应在 MTS 仓库内为用户模块新增 provider，并通过内部 runtime 组合层接入。
 
+## 存储压缩
+
+高密度写入可打开 SSTable payload 压缩，并放大 value page 以提升压缩窗口：
+
+```go
+opts := mts.DefaultOptions(dir)
+opts.Compression = mts.CompressionOptions{
+    Enabled:          true,
+    Algorithm:        "zstd", // 全局显式算法；留空时 L0=snappy、L1+=zstd
+    ValuePageSamples: 4096,  // 默认 1024；更大通常更省盘
+    MinPageValues:    1,
+}
+```
+
 ## 批量写入
 
 **性能建议（按优先顺序）：**

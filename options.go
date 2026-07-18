@@ -119,14 +119,20 @@ type CompactionLevelOptions struct {
 }
 
 // CompressionOptions 控制 SSTable 数据压缩策略。
+//
+// ValuePageSamples 控制 values.bin 单页样本数；更大页通常提高压缩率但增加
+// 单页编解码内存。0 表示使用引擎默认（1024）。
+// Algorithm 为全局/层级 payload 压缩算法（none|snappy|lz4|zstd）。
+// 未显式配置层级压缩时，引擎会对 L0 使用更快算法、L1+ 使用更高压缩率算法。
 type CompressionOptions struct {
-	Enabled       bool
-	Timestamp     string
-	Float         string
-	Int           string
-	String        string
-	Algorithm     string
-	MinPageValues int
+	Enabled          bool
+	Timestamp        string
+	Float            string
+	Int              string
+	String           string
+	Algorithm        string
+	MinPageValues    int
+	ValuePageSamples int
 }
 
 // DefaultOptions 返回适合本地单机嵌入式使用的推荐配置。
@@ -331,7 +337,10 @@ func validateCompactionLevelOptions(opts CompactionLevelOptions) error {
 }
 
 func validateCompressionOptions(opts CompressionOptions) error {
-	return validateNonNegativeInt("compression min page values", opts.MinPageValues)
+	if err := validateNonNegativeInt("compression min page values", opts.MinPageValues); err != nil {
+		return err
+	}
+	return validateNonNegativeInt("compression value page samples", opts.ValuePageSamples)
 }
 
 func validateNonNegativeDuration(name string, value time.Duration) error {

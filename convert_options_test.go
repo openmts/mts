@@ -42,24 +42,26 @@ func TestToModelOptionsPreservesStorageConfiguration(t *testing.T) {
 				SizeLimit:          10,
 				MaxOutputPartBytes: 11,
 				Compression: CompressionOptions{
-					Enabled:       true,
-					Algorithm:     "zstd",
-					Timestamp:     "delta",
-					Float:         "xor",
-					Int:           "zigzag",
-					String:        "dict",
-					MinPageValues: 12,
+					Enabled:          true,
+					Algorithm:        "zstd",
+					Timestamp:        "delta",
+					Float:            "xor",
+					Int:              "zigzag",
+					String:           "dict",
+					MinPageValues:    12,
+					ValuePageSamples: 256,
 				},
 			}},
 		},
 		Compression: CompressionOptions{
-			Enabled:       true,
-			Algorithm:     "snappy",
-			Timestamp:     "delta",
-			Float:         "xor",
-			Int:           "zigzag",
-			String:        "plain",
-			MinPageValues: 13,
+			Enabled:          true,
+			Algorithm:        "snappy",
+			Timestamp:        "delta",
+			Float:            "xor",
+			Int:              "zigzag",
+			String:           "plain",
+			MinPageValues:    13,
+			ValuePageSamples: 1024,
 		},
 		StorageMemory: StorageMemoryOptions{
 			SoftSampleLimit:       14,
@@ -123,9 +125,13 @@ func TestToModelOptionsPreservesStorageConfiguration(t *testing.T) {
 	}
 	if got.Compression.Algorithm != "snappy" ||
 		got.Compression.MinPageValues != 13 ||
+		got.Compression.ValuePageSamples != 1024 ||
 		got.StorageMemory.QueryBytesLimit != 18 ||
 		got.StorageMemory.CompressionBytesLimit != 21 {
 		t.Fatalf("toModelOptions() compression/memory = %#v %#v", got.Compression, got.StorageMemory)
+	}
+	if got.Compaction.Levels[0].Compression.ValuePageSamples != 256 {
+		t.Fatalf("toModelOptions() level page samples = %d", got.Compaction.Levels[0].Compression.ValuePageSamples)
 	}
 }
 

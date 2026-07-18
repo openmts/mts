@@ -89,12 +89,13 @@ func toModelCompactionOptions(opts CompactionOptions) model.CompactionOptions {
 
 func toModelCompressionOptions(opts CompressionOptions) model.CompressionOptions {
 	return model.CompressionOptions{
-		Enabled:       opts.Enabled,
-		Timestamp:     opts.Timestamp,
-		Float:         opts.Float,
-		Int:           opts.Int,
-		String:        opts.String,
-		Algorithm:     opts.Algorithm,
-		MinPageValues: opts.MinPageValues,
+		Enabled:          opts.Enabled,
+		Timestamp:        opts.Timestamp,
+		Float:            opts.Float,
+		Int:              opts.Int,
+		String:           opts.String,
+		Algorithm:        opts.Algorithm,
+		MinPageValues:    opts.MinPageValues,
+		ValuePageSamples: opts.ValuePageSamples,
 	}
 }

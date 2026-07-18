@@ -10,8 +10,8 @@ import (
 
 func TestPartScanStatsRecordsSkippedPagesAndIndexRows(t *testing.T) {
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-query-stats", []model.ColumnData{
-		columnWithTimestamps(1, 2, 0, valueBlockPageSamples*3),
+	meta, err := writePartForPageTests(dir, 0, "sst-query-stats", []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, testValueBlockPageSamples*3),
 	})
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
@@ -25,8 +25,8 @@ func TestPartScanStatsRecordsSkippedPagesAndIndexRows(t *testing.T) {
 		Stats:     stats,
 		SeriesIDs: map[uint64]struct{}{1: {}},
 		FieldIDs:  map[uint32]struct{}{2: {}},
-		Start:     int64(valueBlockPageSamples + 10),
-		End:       int64(valueBlockPageSamples + 10),
+		Start:     int64(testValueBlockPageSamples + 10),
+		End:       int64(testValueBlockPageSamples + 10),
 	})
 	if err != nil {
 		closeErr := part.Close()
@@ -308,8 +308,8 @@ func TestMetadataEmptyQueryDoesNotReadValues(t *testing.T) {
 
 func TestFirstLastBoundaryQueryReadsOnlyBoundaryValuePages(t *testing.T) {
 	dir := t.TempDir()
-	meta, err := WritePart(dir, 0, "sst-query-boundary", []model.ColumnData{
-		columnWithTimestamps(1, 2, 0, valueBlockPageSamples*3),
+	meta, err := writePartForPageTests(dir, 0, "sst-query-boundary", []model.ColumnData{
+		columnWithTimestamps(1, 2, 0, testValueBlockPageSamples*3),
 	})
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
@@ -325,7 +325,7 @@ func TestFirstLastBoundaryQueryReadsOnlyBoundaryValuePages(t *testing.T) {
 		SeriesIDs: map[uint64]struct{}{1: {}},
 		FieldIDs:  map[uint32]struct{}{2: {}},
 		Start:     0,
-		End:       int64(valueBlockPageSamples*3 - 1),
+		End:       int64(testValueBlockPageSamples*3 - 1),
 	})
 	if err != nil {
 		closeErr := part.Close()
@@ -343,7 +343,7 @@ func TestFirstLastBoundaryQueryReadsOnlyBoundaryValuePages(t *testing.T) {
 		closeErr := part.Close()
 		t.Fatalf("stream Close() error = %v part close = %v", err, closeErr)
 	}
-	if samples != valueBlockPageSamples {
+	if samples != testValueBlockPageSamples {
 		closeErr := part.Close()
 		t.Fatalf("samples = %d, want one boundary page close = %v", samples, closeErr)
 	}
