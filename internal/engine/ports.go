@@ -34,6 +34,8 @@ type memStore interface {
 	SampleCount() int
 	ApproxMemorySamples() int
 	ApproxMemoryBytes() int64
+	DisorderRatio() float64
+	AppendedSamples() uint64
 	SnapshotAndReset() memSnapshot
 	Snapshot() memSnapshot
 	Query(query memtable.Query) []model.ColumnData
@@ -210,6 +212,14 @@ func (m memTableStore) ApproxMemoryBytes() int64 {
 
 func (m memTableStore) StatsSnapshot() memtable.Stats {
 	return m.inner.StatsSnapshot()
+}
+
+func (m memTableStore) DisorderRatio() float64 {
+	return m.inner.DisorderRatio()
+}
+
+func (m memTableStore) AppendedSamples() uint64 {
+	return m.inner.AppendedSamples()
 }
 
 func (m memTableStore) SnapshotAndReset() memSnapshot {

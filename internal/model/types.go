@@ -409,7 +409,19 @@ type Options struct {
 	StorageMemory          StorageMemoryOptions
 	Cardinality            CardinalityOptions
 	MaxConcurrentDownsample int
+	QueryProtection        QueryProtectionOptions
+	// MemTableDisorderFlushRatio 当前 MemTable 乱序样本占比达到该阈值时触发更积极 flush；<=0 关闭。
+	MemTableDisorderFlushRatio float64
+	// MemTableDisorderFlushMinSamples 乱序降载生效的最小追加样本数；<=0 时使用默认。
+	MemTableDisorderFlushMinSamples int
 	Logger                 *slog.Logger
+}
+
+// QueryProtectionOptions 控制查询默认读取保护。
+// 当请求未设置对应 budget/limit 时注入默认值；字段为 0 表示不注入该项。
+type QueryProtectionOptions struct {
+	DefaultMaxSamples int
+	DefaultLimit      int
 }
 
 type CardinalityOptions struct {

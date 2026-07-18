@@ -18,6 +18,7 @@ const (
 	defaultCascadeSteps            = 8
 	defaultQueryEndTime            = int64(1<<63 - 1)
 	defaultMaxConcurrentDownsample = 2
+	defaultDisorderFlushMinSamples = 1024
 )
 
 func normalizeOptions(opts model.Options) model.Options {
@@ -37,6 +38,9 @@ func normalizeOptions(opts model.Options) model.Options {
 	opts.Compaction = normalizeCompactionOptions(opts.Compaction, opts.Compression)
 	if opts.MaxConcurrentDownsample <= 0 {
 		opts.MaxConcurrentDownsample = defaultMaxConcurrentDownsample
+	}
+	if opts.MemTableDisorderFlushRatio > 0 && opts.MemTableDisorderFlushMinSamples <= 0 {
+		opts.MemTableDisorderFlushMinSamples = defaultDisorderFlushMinSamples
 	}
 	if opts.Logger == nil {
 		opts.Logger = nopLogger()
@@ -183,6 +187,16 @@ func normalizeQuery(opts model.Options, query model.Query) model.Query {
 	}
 	if query.EndTime == 0 {
 		query.EndTime = defaultQueryEndTime
+	}
+	return applyQueryProtection(opts.QueryProtection, query)
+}
+
+func applyQueryProtection(protection model.QueryProtectionOptions, query model.Query) model.Query {
+	if query.Budget.MaxSamples <= 0 && protection.DefaultMaxSamples > 0 {
+		query.Budget.MaxSamples = protection.DefaultMaxSamples
+	}
+	if query.Limit <= 0 && protection.DefaultLimit > 0 {
+		query.Limit = protection.DefaultLimit
 	}
 	return query
 }

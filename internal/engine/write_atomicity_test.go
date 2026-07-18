@@ -143,6 +143,10 @@ func (m *failOnceMemStore) ApproxMemorySamples() int { return m.samples }
 
 func (m *failOnceMemStore) ApproxMemoryBytes() int64 { return int64(m.samples * 32) }
 
+func (m *failOnceMemStore) DisorderRatio() float64 { return 0 }
+
+func (m *failOnceMemStore) AppendedSamples() uint64 { return uint64(m.samples) }
+
 func (m *failOnceMemStore) SnapshotAndReset() memSnapshot {
 	return &fakeMemSnapshot{}
 }

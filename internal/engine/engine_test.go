@@ -2972,6 +2972,10 @@ func (f *fakeMemStore) ApproxMemoryBytes() int64 {
 	return int64(f.samples * 32)
 }
 
+func (f *fakeMemStore) DisorderRatio() float64 { return 0 }
+
+func (f *fakeMemStore) AppendedSamples() uint64 { return uint64(f.samples) }
+
 func (f *fakeMemStore) SnapshotAndReset() memSnapshot {
 	f.samples = 0
 	f.snapshot.onRelease = func() {

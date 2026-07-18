@@ -17,7 +17,13 @@ func toModelOptions(opts Options) model.Options {
 		StorageMemory:           toModelStorageMemoryOptions(opts.StorageMemory),
 		Cardinality:             toModelCardinalityOptions(opts.Cardinality),
 		MaxConcurrentDownsample: opts.MaxConcurrentDownsample,
-		Logger:                  opts.Logger,
+		QueryProtection: model.QueryProtectionOptions{
+			DefaultMaxSamples: opts.QueryProtection.DefaultMaxSamples,
+			DefaultLimit:      opts.QueryProtection.DefaultLimit,
+		},
+		MemTableDisorderFlushRatio:      opts.MemTableDisorderFlushRatio,
+		MemTableDisorderFlushMinSamples: opts.MemTableDisorderFlushMinSamples,
+		Logger:                          opts.Logger,
 	}
 }
 

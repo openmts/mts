@@ -8,12 +8,15 @@ import (
 )
 
 const (
-	defaultOptionsDatabase        = "default"
-	defaultOptionsRetentionPolicy = "autogen"
-	defaultOptionsShardDuration   = time.Hour
-	defaultOptionsMemTableSamples = 10000
-	defaultOptionsLevelPartLimit  = 4
-	defaultOptionsCascadeSteps    = 8
+	defaultOptionsDatabase                = "default"
+	defaultOptionsRetentionPolicy         = "autogen"
+	defaultOptionsShardDuration           = time.Hour
+	defaultOptionsMemTableSamples         = 10000
+	defaultOptionsLevelPartLimit          = 4
+	defaultOptionsCascadeSteps            = 8
+	defaultOptionsQueryMaxSamples         = 1_000_000
+	defaultOptionsDisorderFlushRatio      = 0.25
+	defaultOptionsDisorderFlushMinSamples = 1024
 )
 
 // Options 控制 Engine 打开和运行参数。
@@ -35,8 +38,21 @@ type Options struct {
 	Cardinality            CardinalityOptions
 	// MaxConcurrentDownsample 限制后台降采样策略的全局并发数，<=0 使用默认值 2。
 	MaxConcurrentDownsample int
-	Logger                  *slog.Logger
-	User                    UserOptions
+	// QueryProtection 控制未显式设置 limit/budget 时的默认读取保护。
+	QueryProtection QueryProtectionOptions
+	// MemTableDisorderFlushRatio 当前 MemTable 乱序占比达到阈值时更积极 flush；<=0 关闭。
+	MemTableDisorderFlushRatio float64
+	// MemTableDisorderFlushMinSamples 乱序降载最小样本数；<=0 使用内部默认。
+	MemTableDisorderFlushMinSamples int
+	Logger                          *slog.Logger
+	User                            UserOptions
+}
+
+// QueryProtectionOptions 控制查询默认读取保护。
+// 字段为 0 表示不注入该默认值；DefaultOptions 会给出安全默认 MaxSamples。
+type QueryProtectionOptions struct {
+	DefaultMaxSamples int
+	DefaultLimit      int
 }
 
 type UserOptions struct {
@@ -117,6 +133,11 @@ func DefaultOptions(path string) Options {
 		DefaultRetentionPolicy: defaultOptionsRetentionPolicy,
 		ShardDuration:          defaultOptionsShardDuration,
 		MemTableMaxSamples:     defaultOptionsMemTableSamples,
+		QueryProtection: QueryProtectionOptions{
+			DefaultMaxSamples: defaultOptionsQueryMaxSamples,
+		},
+		MemTableDisorderFlushRatio:      defaultOptionsDisorderFlushRatio,
+		MemTableDisorderFlushMinSamples: defaultOptionsDisorderFlushMinSamples,
 		Compaction: CompactionOptions{
 			Level0PartLimit: defaultOptionsLevelPartLimit,
 			MaxCascadeSteps: defaultOptionsCascadeSteps,
@@ -149,6 +170,18 @@ func (opts Options) Validate() error {
 	}
 	if err := validateNonNegativeInt("max concurrent downsample", opts.MaxConcurrentDownsample); err != nil {
 		return err
+	}
+	if err := validateNonNegativeInt("query protection default max samples", opts.QueryProtection.DefaultMaxSamples); err != nil {
+		return err
+	}
+	if err := validateNonNegativeInt("query protection default limit", opts.QueryProtection.DefaultLimit); err != nil {
+		return err
+	}
+	if err := validateNonNegativeInt("memtable disorder flush min samples", opts.MemTableDisorderFlushMinSamples); err != nil {
+		return err
+	}
+	if opts.MemTableDisorderFlushRatio < 0 {
+		return invalidOptions("memtable disorder flush ratio is negative")
 	}
 	if err := validateWALOptions(opts.WAL); err != nil {
 		return err

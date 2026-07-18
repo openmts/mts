@@ -17,20 +17,22 @@ import (
 )
 
 type ShardOptions struct {
-	Dir                string
-	Database           string
-	RetentionPolicy    string
-	Start              int64
-	End                int64
-	WAL                model.WALOptions
-	FlushSync          bool
-	MemTableMaxSamples int
-	Compaction         model.CompactionOptions
-	Compression        model.CompressionOptions
-	Memory             *storageMemoryLimiter
-	scheduler          *compactionScheduler
-	logger             *slog.Logger
-	deps               shardDeps
+	Dir                             string
+	Database                        string
+	RetentionPolicy                 string
+	Start                           int64
+	End                             int64
+	WAL                             model.WALOptions
+	FlushSync                       bool
+	MemTableMaxSamples              int
+	MemTableDisorderFlushRatio      float64
+	MemTableDisorderFlushMinSamples int
+	Compaction                      model.CompactionOptions
+	Compression                     model.CompressionOptions
+	Memory                          *storageMemoryLimiter
+	scheduler                       *compactionScheduler
+	logger                          *slog.Logger
+	deps                            shardDeps
 }
 
 type Shard struct {
@@ -153,7 +155,7 @@ func (s *Shard) WriteBatch(points []model.ResolvedPoint, syncWrite bool) error {
 		s.lifecycleMu.RUnlock()
 		return err
 	}
-	needFlush := s.mem.SampleCount() >= s.opts.MemTableMaxSamples
+	needFlush := s.shouldFlushMemTable()
 	release()
 	s.lifecycleMu.RUnlock()
 	if needFlush {
@@ -186,13 +188,35 @@ func (s *Shard) WriteTypedBatch(
 		s.lifecycleMu.RUnlock()
 		return err
 	}
-	needFlush := s.mem.SampleCount() >= s.opts.MemTableMaxSamples
+	needFlush := s.shouldFlushMemTable()
 	release()
 	s.lifecycleMu.RUnlock()
 	if needFlush {
 		return s.Flush()
 	}
 	return nil
+}
+
+func (s *Shard) shouldFlushMemTable() bool {
+	if s.mem == nil {
+		return false
+	}
+	if s.opts.MemTableMaxSamples > 0 && s.mem.SampleCount() >= s.opts.MemTableMaxSamples {
+		return true
+	}
+	ratio := s.opts.MemTableDisorderFlushRatio
+	if ratio <= 0 {
+		return false
+	}
+	minSamples := s.opts.MemTableDisorderFlushMinSamples
+	if minSamples <= 0 {
+		minSamples = 1024
+	}
+	appended := s.mem.AppendedSamples()
+	if appended < uint64(minSamples) {
+		return false
+	}
+	return s.mem.DisorderRatio() >= ratio
 }
 
 func (s *Shard) appendTypedWAL(
