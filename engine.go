@@ -15,6 +15,10 @@ func (e *Engine) Close(ctx context.Context) error {
 }
 
 // Write 写入点数据。
+//
+// 便于兼容按点构造的调用方；每个 Point 的 Tags/Fields map 会带来额外分配与转换开销。
+// 高吞吐或宽字段场景请优先使用 WriteTypedBatch；若已有同构 []Point，可改用
+// WritePointsAsTypedBatch。
 func (e *Engine) Write(ctx context.Context, points []Point, opts WriteOptions) error {
 	converted, err := toModelPoints(points)
 	if err != nil {
@@ -24,6 +28,9 @@ func (e *Engine) Write(ctx context.Context, points []Point, opts WriteOptions) e
 }
 
 // WriteTypedBatch 写入按列组织的批量数据。
+//
+// 这是推荐的高性能写入入口：调用方直接提供列式 tag/field，可显著降低分配与
+// CPU 开销。宽表、大批量、持续高吞吐场景应优先使用本方法，而不是 Write。
 func (e *Engine) WriteTypedBatch(ctx context.Context, batch TypedBatch, opts WriteOptions) error {
 	converted, err := toModelTypedBatch(batch)
 	if err != nil {
@@ -36,6 +43,8 @@ func (e *Engine) WriteTypedBatch(ctx context.Context, batch TypedBatch, opts Wri
 //
 // 适合调用方仍持有 []Point，但希望走 WriteTypedBatch 热路径的场景。
 // 转换规则与 PointsToTypedBatch 相同；若 batch 异构则返回错误。
+// 性能介于 Write 与直接 WriteTypedBatch 之间：仍有一次 []Point→列式转换成本，
+// 新采集路径若可直接构造 TypedBatch，请优先调用 WriteTypedBatch。
 func (e *Engine) WritePointsAsTypedBatch(ctx context.Context, points []Point, opts WriteOptions) error {
 	batch, err := PointsToTypedBatch(points)
 	if err != nil {

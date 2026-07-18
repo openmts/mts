@@ -32,6 +32,9 @@ type FieldValue struct {
 // 时 Timestamp 使用 Unix nanosecond；设置 Precision 后，Write 会先转换为
 // 纳秒存储。Write 会复制 Tags 和 Fields 的内容，调用返回后复用输入 map 不会
 // 污染已写入数据。
+//
+// 性能提示：高吞吐写入优先构造 TypedBatch 并调用 WriteTypedBatch；仅在已有
+// []Point 且字段同构时使用 WritePointsAsTypedBatch，避免长期依赖逐点 map 写入。
 type Point struct {
 	Database        string                `json:"database"`
 	RetentionPolicy string                `json:"retention_policy"`
@@ -68,8 +71,9 @@ type TypedFieldColumn struct {
 // 会先转换为纳秒存储。Tags 中每列的 Values 长度、每个字段值切片长度都必须与
 // Timestamps 一致。
 //
-// 若调用侧持有同构 []Point，可先用 PointsToTypedBatch 转换，或直接调用
-// Engine.WritePointsAsTypedBatch。
+// 这是高性能写路径的推荐输入形态。新代码应优先组装 TypedBatch 并调用
+// WriteTypedBatch。若调用侧仅持有同构 []Point，可先用 PointsToTypedBatch
+// 转换，或直接调用 Engine.WritePointsAsTypedBatch。
 type TypedBatch struct {
 	Database        string             `json:"database"`
 	RetentionPolicy string             `json:"retention_policy"`

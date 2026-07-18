@@ -7,6 +7,9 @@ import (
 
 // PointsToTypedBatch 将同构 []Point 转换为列式 TypedBatch。
 //
+// 用于把已有 []Point 接到 WriteTypedBatch 高性能路径。若业务可直接产出列式
+// 数据，请跳过本转换，直接调用 WriteTypedBatch，以避免额外分配与扫描开销。
+//
 // 约束：
 //   - 空输入返回空 TypedBatch
 //   - 整批 Database/RetentionPolicy/Measurement/Precision 必须一致

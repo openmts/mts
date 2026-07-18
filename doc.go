@@ -2,6 +2,8 @@
 //
 // MTS 面向 Go 应用内的本地时序数据存储，公开点写入、typed batch 写入、
 // Builder 查询、本地元数据管理、compaction、retention 和本地降采样策略 API。
+// 高吞吐写入请优先使用 WriteTypedBatch（列式批量），其次再考虑
+// WritePointsAsTypedBatch 或 Write。
 // 内部时间统一按纳秒存储，public API 可通过 TimePrecision 声明秒、毫秒、
 // 微秒或纳秒输入和查询返回时间戳。
 // 用户管理由 Engine 内部装配默认本地实现；具体实现、扩展接口和落盘格式

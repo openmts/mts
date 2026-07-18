@@ -4,6 +4,7 @@
 
 ### Added
 
+- 公开写接口文档明确优先使用 `WriteTypedBatch` 提升性能。
 - `PointsToTypedBatch` 与 `Engine.WritePointsAsTypedBatch`：同构 `[]Point` 转列式写入。
 - wide 布局 bench：`Write` / `WritePointsAsTypedBatch` / `WriteTypedBatch` 三路对比。
 

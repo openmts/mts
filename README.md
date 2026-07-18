@@ -115,6 +115,12 @@ err = engine.CheckUserDatabasePermission(ctx, "alice", "metrics", mts.DatabasePe
 
 ## 批量写入
 
+**性能建议（按优先顺序）：**
+
+1. **首选** `WriteTypedBatch`：调用方直接构造列式 `TypedBatch`，宽字段/高吞吐场景收益最大。
+2. **次选** `WritePointsAsTypedBatch` / `PointsToTypedBatch`：已有同构 `[]Point` 时，转列式后再写。
+3. **兼容** `Write([]Point)`：便于迁移与小批量，但 Tags/Fields map 开销更高，不适合持续高吞吐主路径。
+
 高吞吐写入优先使用 `WriteTypedBatch`，避免每个点都构造字段 map：
 
 ```go
