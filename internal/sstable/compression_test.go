@@ -160,11 +160,12 @@ func TestFloatXOREncodingFallsBackOnlyWhenUseful(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeFloatValues() error = %v", err)
 	}
-	if codecID != compressionXOR {
-		t.Fatalf("float codec = %d, want xor", codecID)
+	if codecID != compressionXOR && codecID != compressionConstStep &&
+		codecID != compressionRLE && codecID != compressionDelta {
+		t.Fatalf("float codec = %d, want compressed float codec", codecID)
 	}
 	if len(payload) >= len(plain) {
-		t.Fatalf("xor size = %d, want smaller than plain %d", len(payload), len(plain))
+		t.Fatalf("compressed float size = %d, want smaller than plain %d", len(payload), len(plain))
 	}
 }
 

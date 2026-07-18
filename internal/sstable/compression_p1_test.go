@@ -29,8 +29,9 @@ func TestGorillaFloatRoundTripAndSmallerThanPlain(t *testing.T) {
 			if err != nil {
 				t.Fatalf("encodeFloatValues() error = %v", err)
 			}
-			if codecID != compressionXOR && codecID != compressionPlain {
-				t.Fatalf("codec = %d, want xor or plain", codecID)
+			if codecID != compressionXOR && codecID != compressionPlain &&
+				codecID != compressionConstStep && codecID != compressionRLE && codecID != compressionDelta {
+				t.Fatalf("codec = %d, want xor/plain/const-step/rle/delta", codecID)
 			}
 			values, err := readCompressedValues(newBlockReader(payload), model.FieldFloat64, codecID, len(samples))
 			if err != nil {
@@ -598,8 +599,12 @@ func TestCompressionPolicyAliases(t *testing.T) {
 	codec, _, err := encodeFloatValues(makeSamples(model.FieldFloat64, 16, func(int) model.FieldValue {
 		return model.Float64Value(1)
 	}), "gorilla")
-	if err != nil || (codec != compressionXOR && codec != compressionPlain) {
-		t.Fatalf("encode gorilla policy codec=%d err=%v", codec, err)
+	if err != nil {
+		t.Fatalf("encode gorilla policy err=%v", err)
+	}
+	if codec != compressionXOR && codec != compressionPlain &&
+		codec != compressionConstStep && codec != compressionRLE && codec != compressionDelta {
+		t.Fatalf("encode gorilla policy codec=%d", codec)
 	}
 }
 

@@ -141,8 +141,10 @@ MTS 已有专用编码骨架（默认）：
 - 仅 P1 typed 编码初版：约 **476 MiB**（writeSeq 税掩盖）
 - P1 + writeSeq RLE：约 **115 MiB**（`data_bytes=120603121`）
 - P1-4/P1-5（+string const/RLE + omit-write-seq）：约 **113.6 MiB**（`data_bytes=119109606`）
-- 相对 P0：约 **-76%**；相对 VM ~10 MiB 仍约 **11~12x**
-- 说明：string/bool/writeSeq 已近下界，剩余主要是 float 单调乘子列与布局固定税（P2）
+- **float const-step / int-as-float RLE**：约 **75.8 MiB**（`data_bytes=79425428`）
+- 相对 P0：约 **-84%**；相对 VM ~10 MiB 约 **7.6x**
+- 说明：typed 编码深度已进入阶段 B 目标带（40~80MiB）；剩余主要是布局固定税与 zstd 后再压缩空间（P2）
+
 
 
 

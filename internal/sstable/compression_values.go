@@ -29,13 +29,40 @@ func encodeFloatValues(samples []model.VersionedSample, policy string) (byte, []
 	if selected == "plain" {
 		return compressionPlain, appendFloatValues(make([]byte, 0, len(samples)*8), samples), nil
 	}
-	// 默认 Gorilla 位打包（仍用 compressionXOR id）；仅当未更短时回退 plain。
-	candidate := appendGorillaFloatValues(make([]byte, 0, gorillaFloatCapacity(len(samples))), samples)
 	plain := appendFloatValues(make([]byte, 0, len(samples)*8), samples)
-	if len(candidate) < len(plain) {
-		return compressionXOR, candidate, nil
+	bestCodec := compressionPlain
+	best := plain
+
+	// 1) 等差数列：base + i*step（覆盖 scale 的 f0..f4 / host 步进）。
+	if base, step, ok := detectFloatConstStep(samples); ok {
+		candidate := appendFloatConstStepValues(make([]byte, 0, 16), base, step)
+		if len(candidate) < len(best) {
+			bestCodec = compressionConstStep
+			best = candidate
+		}
 	}
-	return compressionPlain, plain, nil
+
+	// 2) 整数值 float：复用 int delta / RLE。
+	if intSamples, ok := floatSamplesAsIntSamples(samples); ok {
+		delta := appendDeltaIntValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), intSamples)
+		if len(delta) < len(best) {
+			bestCodec = compressionDelta
+			best = delta
+		}
+		rle := appendDeltaRLEIntValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), intSamples)
+		if len(rle) < len(best) {
+			bestCodec = compressionRLE
+			best = rle
+		}
+	}
+
+	// 3) Gorilla 位打包。
+	gorilla := appendGorillaFloatValues(make([]byte, 0, gorillaFloatCapacity(len(samples))), samples)
+	if len(gorilla) < len(best) {
+		bestCodec = compressionXOR
+		best = gorilla
+	}
+	return bestCodec, best, nil
 }
 
 func gorillaFloatCapacity(count int) int {
@@ -194,7 +221,7 @@ func readCodecPayloadSamples(
 	}
 	switch fieldType {
 	case model.FieldFloat64:
-		return readXORFloatSampleValues(reader, codecID, timestamps, writeSeqs, query)
+		return readCompressedFloatSampleValues(reader, codecID, timestamps, writeSeqs, query)
 	case model.FieldInt64:
 		if codecID == compressionRLE {
 			return readDeltaRLEIntSampleValues(reader, codecID, timestamps, writeSeqs, query)
@@ -443,7 +470,7 @@ func readCompressedValues(
 	}
 	switch fieldType {
 	case model.FieldFloat64:
-		return readXORFloatValues(reader, codecID, count)
+		return readCompressedFloatValues(reader, codecID, count)
 	case model.FieldInt64:
 		if codecID == compressionRLE {
 			return readDeltaRLEIntValues(reader, codecID, count)
@@ -456,12 +483,49 @@ func readCompressedValues(
 	}
 }
 
+func readCompressedFloatValues(
+	reader *blockReader,
+	codecID byte,
+	count int,
+) ([]model.FieldValue, error) {
+	switch codecID {
+	case compressionXOR:
+		return readGorillaFloatValues(reader, codecID, count)
+	case compressionConstStep:
+		return readFloatConstStepValues(reader, codecID, count)
+	case compressionDelta, compressionRLE:
+		return readFloatIntValues(reader, codecID, count)
+	default:
+		return nil, fmt.Errorf("unknown float compression %d", codecID)
+	}
+}
+
+func readCompressedFloatSampleValues(
+	reader *blockReader,
+	codecID byte,
+	timestamps []int64,
+	writeSeqs []uint64,
+	query Query,
+) ([]model.VersionedSample, error) {
+	switch codecID {
+	case compressionXOR:
+		return readGorillaFloatSampleValues(reader, codecID, timestamps, writeSeqs, query)
+	case compressionConstStep:
+		return readFloatConstStepSampleValues(reader, codecID, timestamps, writeSeqs, query)
+	case compressionDelta, compressionRLE:
+		return readFloatIntSampleValues(reader, codecID, timestamps, writeSeqs, query)
+	default:
+		return nil, fmt.Errorf("unknown float compression %d", codecID)
+	}
+}
+
+// 兼容旧测试名。
 func readXORFloatValues(
 	reader *blockReader,
 	codecID byte,
 	count int,
 ) ([]model.FieldValue, error) {
-	return readGorillaFloatValues(reader, codecID, count)
+	return readCompressedFloatValues(reader, codecID, count)
 }
 
 func readXORFloatSampleValues(
@@ -471,7 +535,7 @@ func readXORFloatSampleValues(
 	writeSeqs []uint64,
 	query Query,
 ) ([]model.VersionedSample, error) {
-	return readGorillaFloatSampleValues(reader, codecID, timestamps, writeSeqs, query)
+	return readCompressedFloatSampleValues(reader, codecID, timestamps, writeSeqs, query)
 }
 
 func appendCompressedFloatSample(
