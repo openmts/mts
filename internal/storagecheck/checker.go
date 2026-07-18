@@ -282,6 +282,9 @@ func isPartDir(dir string) bool {
 	if !hasFile(dir, "metadata.bin") {
 		return false
 	}
+	if hasFile(dir, "pack.bin") {
+		return true
+	}
 	for _, name := range []string{
 		"metaindex.bin",
 		"index.bin",
@@ -313,6 +316,7 @@ func isKnownStorageFile(name string) bool {
 	switch name {
 	case "MANIFEST.bin",
 		"metadata.bin",
+		"pack.bin",
 		"metaindex.bin",
 		"index.bin",
 		"series_index.bin",

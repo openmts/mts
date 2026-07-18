@@ -141,7 +141,7 @@ func readBlock(path string, ref blockRef) ([]byte, error) {
 	return payload, nil
 }
 
-func readBlockFrom(file *os.File, ref blockRef) ([]byte, error) {
+func readBlockFrom(file io.ReaderAt, ref blockRef) ([]byte, error) {
 	payload, err := readBlockPayloadFrom(file, ref)
 	if err != nil {
 		return nil, err
@@ -151,7 +151,10 @@ func readBlockFrom(file *os.File, ref blockRef) ([]byte, error) {
 	return data, nil
 }
 
-func readBlockPayloadFrom(file *os.File, ref blockRef) (blockPayload, error) {
+func readBlockPayloadFrom(file io.ReaderAt, ref blockRef) (blockPayload, error) {
+	if file == nil {
+		return blockPayload{}, fmt.Errorf("block reader is nil")
+	}
 	if ref.Size < 8 {
 		return blockPayload{}, fmt.Errorf("block frame is too small")
 	}

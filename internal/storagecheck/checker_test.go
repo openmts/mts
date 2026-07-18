@@ -24,7 +24,9 @@ func TestCheckReportsOrphanPartMissingReferencedPartAndChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WritePart(bad) error = %v", err)
 	}
-	corruptFile(t, filepath.Join(bad.Path, "values.bin"), 16)
+	if err := sstable.OverwriteLogicalComponentAt(bad.Path, "values.bin", 16, []byte{0xff}); err != nil {
+		t.Fatalf("corrupt values error = %v", err)
+	}
 	missing := sstable.PartMeta{ID: "sst-missing", Level: 0, Path: filepath.Join(dir, "sst-missing")}
 	if err := sstable.WriteManifest(dir, sstable.Manifest{Sequence: 1, Parts: []sstable.PartMeta{good, bad, missing}}); err != nil {
 		t.Fatalf("WriteManifest() error = %v", err)
@@ -93,7 +95,7 @@ func TestCheckTreatsPartWithMissingComponentAsPart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
 	}
-	if err := os.Remove(filepath.Join(part.Path, "values.bin")); err != nil {
+	if err := sstable.RemoveLogicalComponent(part.Path, "values.bin"); err != nil {
 		t.Fatalf("Remove(values) error = %v", err)
 	}
 	report, err := Check(dir, Options{})

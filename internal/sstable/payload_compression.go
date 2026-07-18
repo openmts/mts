@@ -19,8 +19,10 @@ const (
 
 var (
 	lz4Compressors = sync.Pool{}
-	zstdEncoders   = sync.Pool{}
 	zstdDecoders   = sync.Pool{}
+
+	zstdEncoderPoolsMu sync.Mutex
+	zstdEncoderPools   = map[zstd.EncoderLevel]*sync.Pool{}
 )
 
 func appendCodecPayloadWithCompression(
@@ -28,6 +30,7 @@ func appendCodecPayloadWithCompression(
 	codec byte,
 	payload []byte,
 	algorithm string,
+	zstdLevel string,
 	budget ...CompressionMemoryBudget,
 ) ([]byte, error) {
 	algorithmID, err := payloadCompressionAlgorithmID(algorithm)
@@ -39,7 +42,7 @@ func appendCodecPayloadWithCompression(
 		return nil, err
 	}
 	defer release()
-	storedAlgorithmID, stored, err := compressPayload(algorithmID, payload)
+	storedAlgorithmID, stored, err := compressPayload(algorithmID, payload, zstdLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +98,7 @@ func payloadCompressionAlgorithmID(algorithm string) (byte, error) {
 	}
 }
 
-func compressPayload(algorithmID byte, payload []byte) (byte, []byte, error) {
+func compressPayload(algorithmID byte, payload []byte, zstdLevel string) (byte, []byte, error) {
 	switch algorithmID {
 	case payloadCompressionNone:
 		return payloadCompressionNone, payload, nil
@@ -104,7 +107,7 @@ func compressPayload(algorithmID byte, payload []byte) (byte, []byte, error) {
 	case payloadCompressionLZ4:
 		return encodeLZ4(payload)
 	case payloadCompressionZSTD:
-		encoded, err := encodeZSTD(payload)
+		encoded, err := encodeZSTD(payload, zstdLevel)
 		return payloadCompressionZSTD, encoded, err
 	default:
 		return 0, nil, fmt.Errorf("unknown payload compression id %d", algorithmID)
@@ -180,12 +183,14 @@ func getLZ4Compressor() *lz4.Compressor {
 	return &lz4.Compressor{}
 }
 
-func encodeZSTD(payload []byte) ([]byte, error) {
-	encoder, err := getZSTDEncoder()
+func encodeZSTD(payload []byte, level string) ([]byte, error) {
+	encoderLevel := resolveZstdEncoderLevel(level)
+	pool := zstdEncoderPool(encoderLevel)
+	encoder, err := getZSTDEncoder(pool, encoderLevel)
 	if err != nil {
 		return nil, err
 	}
-	defer zstdEncoders.Put(encoder)
+	defer pool.Put(encoder)
 	return encoder.EncodeAll(payload, nil), nil
 }
 
@@ -198,15 +203,39 @@ func decodeZSTD(payload []byte, rawSize int) ([]byte, error) {
 	return decoder.DecodeAll(payload, make([]byte, 0, rawSize))
 }
 
-func getZSTDEncoder() (*zstd.Encoder, error) {
-	if value := zstdEncoders.Get(); value != nil {
+func resolveZstdEncoderLevel(level string) zstd.EncoderLevel {
+	switch level {
+	case "fastest":
+		return zstd.SpeedFastest
+	case "better":
+		return zstd.SpeedBetterCompression
+	case "best":
+		return zstd.SpeedBestCompression
+	default:
+		// 空与 default 均映射 SpeedDefault。
+		return zstd.SpeedDefault
+	}
+}
+
+func zstdEncoderPool(level zstd.EncoderLevel) *sync.Pool {
+	zstdEncoderPoolsMu.Lock()
+	defer zstdEncoderPoolsMu.Unlock()
+	if pool := zstdEncoderPools[level]; pool != nil {
+		return pool
+	}
+	pool := &sync.Pool{}
+	zstdEncoderPools[level] = pool
+	return pool
+}
+
+func getZSTDEncoder(pool *sync.Pool, level zstd.EncoderLevel) (*zstd.Encoder, error) {
+	if value := pool.Get(); value != nil {
 		return value.(*zstd.Encoder), nil
 	}
-	// SpeedDefault 在 POC 体积优化中显著优于 SpeedFastest，写放大可接受。
 	return zstd.NewWriter(
 		nil,
 		zstd.WithEncoderConcurrency(1),
-		zstd.WithEncoderLevel(zstd.SpeedDefault),
+		zstd.WithEncoderLevel(level),
 		zstd.WithLowerEncoderMem(true),
 	)
 }

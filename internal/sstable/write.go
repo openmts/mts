@@ -73,13 +73,8 @@ func WritePartWithOptions(
 	if err := writePartIndexes(partPath, &meta, rows, opts.Sync); err != nil {
 		return PartMeta{}, err
 	}
-	if err := ensureStringsFile(partPath, opts.Sync); err != nil {
+	if err := finalizePartLayout(partPath, &meta, opts.Sync); err != nil {
 		return PartMeta{}, err
-	}
-	if opts.Sync {
-		if err := storagefs.SyncDir(partPath); err != nil {
-			return PartMeta{}, err
-		}
 	}
 	meta.Part.Path = partPath
 	committed = true
@@ -369,7 +364,28 @@ func writePartIndexes(path string, meta *metadata, rows []indexRow, sync bool) e
 		return err
 	}
 	meta.SeriesIndexRef = seriesIndexRef
-	return writeMetadata(path, *meta)
+	return nil
+}
+
+func finalizePartLayout(path string, meta *metadata, sync bool) error {
+	if err := ensureStringsFile(path, sync); err != nil {
+		return err
+	}
+	sizes, err := writePartPack(path, sync)
+	if err != nil {
+		return err
+	}
+	meta.Components = metadataComponents(meta.Components)
+	meta.ComponentSizes = sizes
+	if err := writeMetadata(path, *meta); err != nil {
+		return err
+	}
+	if sync {
+		if err := storagefs.SyncDir(path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeIndexBlocks(path string, rows []indexRow, sync bool) (blockRef, []blockRef, error) {
@@ -437,19 +453,37 @@ func writeBinaryBlock(path string, payload []byte, sync bool) (blockRef, error) 
 }
 
 func writeMetadata(path string, meta metadata) error {
-	// 生产路径在 writePartIndexes 前后已落齐组件；此处再保证 strings 存在以便嵌入 size。
-	if err := ensureStringsFile(path, false); err != nil {
-		return err
-	}
 	meta.Components = metadataComponents(meta.Components)
-	if sizes, ok := collectPartComponentSizes(path, meta.Components); ok {
-		meta.ComponentSizes = sizes
+	if len(meta.ComponentSizes) == 0 {
+		if sizes, ok := collectPartComponentSizes(path, meta.Components); ok {
+			meta.ComponentSizes = sizes
+		} else if sizes, ok := collectPackLogicalSizes(path); ok {
+			meta.ComponentSizes = sizes
+		}
 	}
 	data, err := encodeMetadata(meta)
 	if err != nil {
 		return fmt.Errorf("encode part metadata: %w", err)
 	}
 	return storagefs.WriteFileAtomic(filepath.Join(path, metadataFile), data)
+}
+
+func collectPackLogicalSizes(path string) (map[string]int64, bool) {
+	file, sections, err := openPartPack(path)
+	if err != nil {
+		return nil, false
+	}
+	defer func() { _ = file.Close() }()
+	sizes := make(map[string]int64, len(packSectionOrder)+1)
+	sizes[metadataFile] = 0
+	for _, name := range packSectionOrder {
+		section, ok := sections[name]
+		if !ok {
+			return nil, false
+		}
+		sizes[name] = section.Size
+	}
+	return sizes, true
 }
 
 // collectPartComponentSizes 在全部非 metadata 组件存在时返回 sizes；

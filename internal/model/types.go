@@ -517,6 +517,9 @@ type CompressionOptions struct {
 	// OmitWriteSeq 为 true 时，SSTable value page 不存储 per-sample writeSeq，
 	// 解码时使用 0。适用于无需版本冲突/写序精确性的 POC 吞吐与体积优化。
 	OmitWriteSeq bool
+	// ZstdLevel 控制 zstd 压缩强度：fastest|default|better|best；空表示 default。
+	// 仅当 Algorithm 为 zstd（含分层默认 zstd）时生效。
+	ZstdLevel string
 }
 
 type WriteOptions struct {

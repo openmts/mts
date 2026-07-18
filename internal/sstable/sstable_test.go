@@ -208,17 +208,8 @@ func TestPartQueryDetectsValueBlockCorruption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
 	}
-	valuePath := filepath.Join(dir, meta.ID, "values.bin")
-	file, err := os.OpenFile(valuePath, os.O_RDWR, 0600)
-	if err != nil {
-		t.Fatalf("OpenFile() error = %v", err)
-	}
-	if _, err := file.WriteAt([]byte{0xff}, 12); err != nil {
-		closeErr := file.Close()
-		t.Fatalf("WriteAt() error = %v close = %v", err, closeErr)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
+	if err := sstable.OverwriteLogicalComponentAt(filepath.Join(dir, meta.ID), "values.bin", 12, []byte{0xff}); err != nil {
+		t.Fatalf("corrupt values error = %v", err)
 	}
 
 	if _, err := sstable.OpenPart(filepath.Join(dir, meta.ID)); err == nil {

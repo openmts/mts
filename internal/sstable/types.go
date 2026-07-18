@@ -14,6 +14,7 @@ const (
 	timestampsFile  = "timestamps.bin"
 	valuesFile      = "values.bin"
 	stringsFile     = "strings.bin"
+	packFile        = "pack.bin"
 	manifestFile    = "MANIFEST.bin"
 )
 
@@ -131,9 +132,12 @@ type Part struct {
 }
 
 type partReadFiles struct {
-	index      *os.File
-	timestamps *os.File
-	values     *os.File
+	pack       *os.File
+	legacy     []*os.File
+	sections   map[string]packSection
+	index      *sectionReader
+	timestamps *sectionReader
+	values     *sectionReader
 }
 
 type readStats struct {

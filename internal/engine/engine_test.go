@@ -2008,16 +2008,10 @@ func corruptValuesFileAtPath(t *testing.T, partPath string) {
 
 func corruptValuesFilePath(t *testing.T, path string) {
 	t.Helper()
-	file, err := os.OpenFile(path, os.O_RDWR, 0600)
-	if err != nil {
-		t.Fatalf("OpenFile(values) error = %v", err)
-	}
-	if _, err := file.WriteAt([]byte{0xff}, 12); err != nil {
-		closeErr := file.Close()
-		t.Fatalf("WriteAt(values) error = %v close = %v", err, closeErr)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close(values) error = %v", err)
+	// path 历史为 .../values.bin；pack 布局下改为 part 目录 + 逻辑组件。
+	partPath := filepath.Dir(path)
+	if err := sstable.OverwriteLogicalComponentAt(partPath, "values.bin", 12, []byte{0xff}); err != nil {
+		t.Fatalf("corrupt values error = %v", err)
 	}
 }
 
@@ -3342,13 +3336,19 @@ type failingWALStore struct {
 	closeErr error
 }
 
-func (f *failingWALStore) Append([]model.ResolvedPoint, bool) error                { return nil }
-func (f *failingWALStore) AppendTombstones([]model.Tombstone, bool) error          { return nil }
+func (f *failingWALStore) Append([]model.ResolvedPoint, bool) error { return nil }
+
+func (f *failingWALStore) AppendTombstones([]model.Tombstone, bool) error { return nil }
+
 func (f *failingWALStore) AppendTyped(model.ResolvedTypedBatch, []int, bool) error { return nil }
-func (f *failingWALStore) ReplayRecords() ([]wal.Record, error)                    { return nil, nil }
-func (f *failingWALStore) ApproxMemoryBytes() int64                                { return 0 }
-func (f *failingWALStore) Checkpoint() error                                       { return nil }
-func (f *failingWALStore) Close() error                                            { return f.closeErr }
+
+func (f *failingWALStore) ReplayRecords() ([]wal.Record, error) { return nil, nil }
+
+func (f *failingWALStore) ApproxMemoryBytes() int64 { return 0 }
+
+func (f *failingWALStore) Checkpoint() error { return nil }
+
+func (f *failingWALStore) Close() error { return f.closeErr }
 
 func TestDecorateColumnsSkipsMissingCatalogEntries(t *testing.T) {
 	cat, err := catalog.Open(t.TempDir())

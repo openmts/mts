@@ -98,5 +98,6 @@ func toModelCompressionOptions(opts CompressionOptions) model.CompressionOptions
 		MinPageValues:    opts.MinPageValues,
 		ValuePageSamples: opts.ValuePageSamples,
 		OmitWriteSeq:     opts.OmitWriteSeq,
+		ZstdLevel:        opts.ZstdLevel,
 	}
 }

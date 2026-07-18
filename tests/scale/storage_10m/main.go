@@ -104,6 +104,7 @@ type config struct {
 	compressionAlgorithm string
 	valuePageSamples     int
 	omitWriteSeq         bool
+	zstdLevel            string
 	durability           string
 	queryStart           int64
 	queryEnd             int64
@@ -258,6 +259,11 @@ func parseConfig(args []string) (config, error) {
 		false,
 		"omit per-sample writeSeq in SSTable value pages (decode as 0)",
 	)
+	zstdLevel := flags.String(
+		"zstd-level",
+		"",
+		"zstd level when compression-algorithm=zstd: fastest|default|better|best",
+	)
 	durability := flags.String(
 		"durability",
 		durabilityBuffered,
@@ -299,6 +305,9 @@ func parseConfig(args []string) (config, error) {
 	if !validCompressionAlgorithm(*compressionAlgorithm) {
 		return config{}, fmt.Errorf("unsupported compression algorithm %q", *compressionAlgorithm)
 	}
+	if err := validateZstdLevelFlag(*zstdLevel); err != nil {
+		return config{}, err
+	}
 	if !validDurability(*durability) {
 		return config{}, fmt.Errorf("unsupported durability %q", *durability)
 	}
@@ -320,6 +329,7 @@ func parseConfig(args []string) (config, error) {
 		compressionAlgorithm: *compressionAlgorithm,
 		valuePageSamples:     *valuePageSamples,
 		omitWriteSeq:         *omitWriteSeq,
+		zstdLevel:            *zstdLevel,
 		durability:           *durability,
 		queryStart:           *queryStart,
 		queryEnd:             *queryEnd,
@@ -635,13 +645,13 @@ func openScaleEngine(ctx context.Context, dir string, cfg config) (*mts.Engine, 
 		MemTableMaxSamples: memTableMaxSamples,
 		WAL:                mts.WALOptions{Sync: durability.walSync},
 		FlushSync:          durability.flushSync,
-		Compression:        scaleCompressionOptions(cfg.compressionAlgorithm, cfg.valuePageSamples, cfg.omitWriteSeq),
+		Compression:        scaleCompressionOptions(cfg.compressionAlgorithm, cfg.valuePageSamples, cfg.omitWriteSeq, cfg.zstdLevel),
 	})
 }
 
-func scaleCompressionOptions(algorithm string, valuePageSamples int, omitWriteSeq bool) mts.CompressionOptions {
+func scaleCompressionOptions(algorithm string, valuePageSamples int, omitWriteSeq bool, zstdLevel string) mts.CompressionOptions {
 	if algorithm == "" || algorithm == compressionOff {
-		return mts.CompressionOptions{ValuePageSamples: valuePageSamples, OmitWriteSeq: omitWriteSeq}
+		return mts.CompressionOptions{ValuePageSamples: valuePageSamples, OmitWriteSeq: omitWriteSeq, ZstdLevel: zstdLevel}
 	}
 	return mts.CompressionOptions{
 		Enabled:          true,
@@ -649,6 +659,16 @@ func scaleCompressionOptions(algorithm string, valuePageSamples int, omitWriteSe
 		MinPageValues:    1,
 		ValuePageSamples: valuePageSamples,
 		OmitWriteSeq:     omitWriteSeq,
+		ZstdLevel:        zstdLevel,
+	}
+}
+
+func validateZstdLevelFlag(level string) error {
+	switch level {
+	case "", "fastest", "default", "better", "best":
+		return nil
+	default:
+		return fmt.Errorf("unsupported zstd level %q", level)
 	}
 }
 

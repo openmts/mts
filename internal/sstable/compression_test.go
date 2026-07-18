@@ -15,7 +15,7 @@ func TestPayloadCompressionAlgorithmsRoundTrip(t *testing.T) {
 	algorithms := []string{"", "none", "snappy", "lz4", "zstd"}
 	for _, algorithm := range algorithms {
 		t.Run(algorithm, func(t *testing.T) {
-			payload, err := appendCodecPayloadWithCompression(nil, compressionDelta, source, algorithm)
+			payload, err := appendCodecPayloadWithCompression(nil, compressionDelta, source, algorithm, "")
 			if err != nil {
 				t.Fatalf("appendCodecPayloadWithCompression(%q) error = %v", algorithm, err)
 			}
@@ -34,7 +34,7 @@ func TestPayloadCompressionAlgorithmsRoundTrip(t *testing.T) {
 }
 
 func TestPayloadCompressionRejectsUnknownAlgorithm(t *testing.T) {
-	_, err := appendCodecPayloadWithCompression(nil, compressionPlain, []byte("payload"), "gzip")
+	_, err := appendCodecPayloadWithCompression(nil, compressionPlain, []byte("payload"), "gzip", "")
 	if err == nil {
 		t.Fatal("appendCodecPayloadWithCompression(gzip) error = nil, want error")
 	}
@@ -80,7 +80,7 @@ func TestPayloadCompressionRejectsMalformedHeaders(t *testing.T) {
 }
 
 func TestPayloadCompressionInternalErrorBranches(t *testing.T) {
-	if _, _, err := compressPayload(99, []byte("payload")); err == nil {
+	if _, _, err := compressPayload(99, []byte("payload"), ""); err == nil {
 		t.Fatal("compressPayload(unknown) error = nil, want error")
 	}
 	if _, err := decompressPayload(payloadCompressionSnappy, []byte("bad"), 10); err == nil {
@@ -93,7 +93,7 @@ func TestPayloadCompressionInternalErrorBranches(t *testing.T) {
 
 func TestLZ4PayloadUsesPierrecBlockCompression(t *testing.T) {
 	source := bytes.Repeat([]byte("lz4-pierrec-payload-"), 128)
-	payload, err := appendCodecPayloadWithCompression(nil, compressionPlain, source, "lz4")
+	payload, err := appendCodecPayloadWithCompression(nil, compressionPlain, source, "lz4", "")
 	if err != nil {
 		t.Fatalf("appendCodecPayloadWithCompression(lz4) error = %v", err)
 	}
@@ -281,7 +281,7 @@ func TestReadCodecValuesRoundTripsCompressedTypedValues(t *testing.T) {
 		if err != nil {
 			t.Fatalf("encodeTypedValues(%d) error = %v", column.FieldType, err)
 		}
-		framed, err := appendCodecPayloadWithCompression(nil, codecID, payload, "")
+		framed, err := appendCodecPayloadWithCompression(nil, codecID, payload, "", "")
 		if err != nil {
 			t.Fatalf("appendCodecPayloadWithCompression(%d) error = %v", column.FieldType, err)
 		}
@@ -294,7 +294,7 @@ func TestReadCodecValuesRoundTripsCompressedTypedValues(t *testing.T) {
 		}
 	}
 
-	framed, err := appendCodecPayloadWithCompression(nil, compressionDelta, []byte{1}, "")
+	framed, err := appendCodecPayloadWithCompression(nil, compressionDelta, []byte{1}, "", "")
 	if err != nil {
 		t.Fatalf("appendCodecPayloadWithCompression(unsupported) error = %v", err)
 	}

@@ -602,12 +602,12 @@ func TestPartReadFilesComponentAndTrustedOpenBranches(t *testing.T) {
 		closeErr := part.Close()
 		t.Fatalf("Meta().ID = %q, want sst-read-files close = %v", got.ID, closeErr)
 	}
-	if readFileForComponent(indexFile, part.files) == nil ||
-		readFileForComponent(timestampsFile, part.files) == nil ||
-		readFileForComponent(valuesFile, part.files) == nil ||
-		readFileForComponent("unknown", part.files) != nil {
+	if sectionReaderForComponent(indexFile, part.files) == nil ||
+		sectionReaderForComponent(timestampsFile, part.files) == nil ||
+		sectionReaderForComponent(valuesFile, part.files) == nil ||
+		sectionReaderForComponent("unknown", part.files) != nil {
 		closeErr := part.Close()
-		t.Fatalf("readFileForComponent() returned unexpected file close = %v", closeErr)
+		t.Fatalf("sectionReaderForComponent() returned unexpected file close = %v", closeErr)
 	}
 	if size, err := partComponentSize(meta.Path, indexFile, part.files); err != nil || size <= 0 {
 		closeErr := part.Close()
@@ -1322,10 +1322,20 @@ func TestSeriesBatchReaderCachesIndexRows(t *testing.T) {
 		closeErr := part.Close()
 		t.Fatalf("Close(filteredPart) error = %v close = %v", err, closeErr)
 	}
-	if err := os.WriteFile(filepath.Join(meta.Path, indexFile), []byte{0xff}, 0600); err != nil {
+	indexSize, err := PartLogicalComponentSize(meta.Path, indexFile)
+	if err != nil {
 		closeErr := part.Close()
-		t.Fatalf("WriteFile(corrupt index) error = %v close = %v", err, closeErr)
+		t.Fatalf("index size error = %v close = %v", err, closeErr)
 	}
+	corrupt := make([]byte, indexSize)
+	for i := range corrupt {
+		corrupt[i] = 0xff
+	}
+	if err := OverwriteLogicalComponentAt(meta.Path, indexFile, 0, corrupt); err != nil {
+		closeErr := part.Close()
+		t.Fatalf("corrupt index error = %v close = %v", err, closeErr)
+	}
+	// 已打开 pack 句柄会看到原地改写，查询应失败；reader 缓存仍可用。
 	if _, err := part.QuerySeriesIDs(Query{Start: 0, End: 100}, []uint64{2}); err == nil {
 		closeErr := part.Close()
 		t.Fatalf("Part.QuerySeriesIDs(corrupt index) error = nil, want error close = %v", closeErr)
@@ -1729,9 +1739,10 @@ func TestPartReadBlockUsesOpenFiles(t *testing.T) {
 	timeFileHandle, timeRef := writeSingleBlockFileForTest(t, filepath.Join(dir, timestampsFile), []byte("time"))
 	valueFileHandle, valueRef := writeSingleBlockFileForTest(t, filepath.Join(dir, valuesFile), []byte("value"))
 	part := &Part{files: &partReadFiles{
-		index:      indexFileHandle,
-		timestamps: timeFileHandle,
-		values:     valueFileHandle,
+		legacy:     []*os.File{indexFileHandle, timeFileHandle, valueFileHandle},
+		index:      &sectionReader{file: indexFileHandle, base: 0, size: fileSizeForTest(t, indexFileHandle.Name())},
+		timestamps: &sectionReader{file: timeFileHandle, base: 0, size: fileSizeForTest(t, timeFileHandle.Name())},
+		values:     &sectionReader{file: valueFileHandle, base: 0, size: fileSizeForTest(t, valueFileHandle.Name())},
 	}}
 	tests := []struct {
 		name string
@@ -1878,10 +1889,16 @@ func TestWritePartWithPayloadCompressionReducesValuesFileSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WritePartWithOptions(zstd) error = %v", err)
 	}
-	plainSize := fileSizeForTest(t, filepath.Join(plainMeta.Path, valuesFile))
-	zstdSize := fileSizeForTest(t, filepath.Join(zstdMeta.Path, valuesFile))
+	plainSize, err := PartLogicalComponentSize(plainMeta.Path, valuesFile)
+	if err != nil {
+		t.Fatalf("plain values size error = %v", err)
+	}
+	zstdSize, err := PartLogicalComponentSize(zstdMeta.Path, valuesFile)
+	if err != nil {
+		t.Fatalf("zstd values size error = %v", err)
+	}
 	if zstdSize >= plainSize {
-		t.Fatalf("zstd values.bin size = %d, want smaller than plain %d", zstdSize, plainSize)
+		t.Fatalf("zstd values size = %d, want smaller than plain %d", zstdSize, plainSize)
 	}
 }
 
@@ -1963,11 +1980,10 @@ func TestOpenPartQueriesWithAlreadyOpenedBlockFiles(t *testing.T) {
 		t.Fatalf("OpenPart() error = %v", err)
 	}
 
-	for _, name := range []string{indexFile, timestampsFile, valuesFile} {
-		path := filepath.Join(meta.Path, name)
-		if err := os.Rename(path, path+".moved"); err != nil {
-			t.Fatalf("Rename(%s) error = %v", name, err)
-		}
+	// pack 布局下移动 pack.bin；已打开句柄应仍可查询。
+	packPath := filepath.Join(meta.Path, packFile)
+	if err := os.Rename(packPath, packPath+".moved"); err != nil {
+		t.Fatalf("Rename(pack.bin) error = %v", err)
 	}
 
 	got, err := part.Query(Query{Start: 0, End: 10})
@@ -1991,7 +2007,11 @@ func TestOpenPartRejectsOutOfBoundsMetadataRefs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadPartMetadata() error = %v", err)
 	}
-	decoded.IndexRef.Offset = fileSizeForTest(t, filepath.Join(meta.Path, indexFile)) + 1
+	indexSize, err := PartLogicalComponentSize(meta.Path, indexFile)
+	if err != nil {
+		t.Fatalf("logicalComponentSize(index) error = %v", err)
+	}
+	decoded.IndexRef.Offset = indexSize + 1
 	if err := writeMetadata(meta.Path, decoded); err != nil {
 		t.Fatalf("writeMetadata() error = %v", err)
 	}
@@ -2044,7 +2064,7 @@ func TestOpenPartRejectsMissingComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
 	}
-	if err := os.Remove(filepath.Join(meta.Path, stringsFile)); err != nil {
+	if err := RemoveLogicalComponent(meta.Path, stringsFile); err != nil {
 		t.Fatalf("Remove(strings) error = %v", err)
 	}
 	if _, err := OpenPart(meta.Path); err == nil {
@@ -2060,17 +2080,8 @@ func TestOpenPartRejectsComponentChecksumCorruption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
 	}
-	path := filepath.Join(meta.Path, valuesFile)
-	file, err := os.OpenFile(path, os.O_RDWR, 0600)
-	if err != nil {
-		t.Fatalf("OpenFile(values) error = %v", err)
-	}
-	if _, err := file.WriteAt([]byte{0xff}, 16); err != nil {
-		closeErr := file.Close()
-		t.Fatalf("WriteAt(values) error = %v close = %v", err, closeErr)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close(values) error = %v", err)
+	if err := OverwriteLogicalComponentAt(meta.Path, valuesFile, 16, []byte{0xff}); err != nil {
+		t.Fatalf("corrupt values error = %v", err)
 	}
 	if _, err := OpenPart(meta.Path); err == nil {
 		t.Fatal("OpenPart(corrupt values component) error = nil, want checksum error")
@@ -2085,17 +2096,8 @@ func TestOpenPartTrustedSkipsDeepValueValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WritePart() error = %v", err)
 	}
-	path := filepath.Join(meta.Path, valuesFile)
-	file, err := os.OpenFile(path, os.O_RDWR, 0600)
-	if err != nil {
-		t.Fatalf("OpenFile(values) error = %v", err)
-	}
-	if _, err := file.WriteAt([]byte{0xff}, 16); err != nil {
-		closeErr := file.Close()
-		t.Fatalf("WriteAt(values) error = %v close = %v", err, closeErr)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close(values) error = %v", err)
+	if err := OverwriteLogicalComponentAt(meta.Path, valuesFile, 16, []byte{0xff}); err != nil {
+		t.Fatalf("corrupt values error = %v", err)
 	}
 	if _, err := OpenPart(meta.Path); err == nil {
 		t.Fatal("OpenPart(corrupt values component) error = nil, want checksum error")

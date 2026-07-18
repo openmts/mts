@@ -186,7 +186,8 @@ func sstableFileSizes(path string) sstableSizeMetrics {
 }
 
 func isSSTableDataFile(name string) bool {
-	return name == "timestamps.bin" || name == "values.bin" || name == "strings.bin"
+	// pack.bin 同时包含 index/data 逻辑组件；POC 将其计入 data，避免低估数据字节。
+	return name == "pack.bin" || name == "timestamps.bin" || name == "values.bin" || name == "strings.bin"
 }
 
 func sstableCompressionRatio(rows int, dataBytes int64) float64 {

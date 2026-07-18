@@ -115,6 +115,9 @@ err = engine.CheckUserDatabasePermission(ctx, "alice", "metrics", mts.DatabasePe
 
 ## 存储压缩
 
+SSTable part 最终布局为 `metadata.bin` + `pack.bin`（逻辑组件 section）。
+
+
 高密度写入可打开 SSTable payload 压缩，并放大 value page 以提升压缩窗口：
 
 ```go
@@ -122,6 +125,7 @@ opts := mts.DefaultOptions(dir)
 opts.Compression = mts.CompressionOptions{
     Enabled:          true,
     Algorithm:        "zstd", // 全局显式算法；留空时 L0=snappy、L1+=zstd
+    ZstdLevel:        "default", // fastest|default|better|best
     ValuePageSamples: 4096,  // 默认 1024；更大通常更省盘
     // Float 默认 xor=Gorilla 位打包；Timestamp 自动 const-step；Int/writeSeq 自动 RLE
     // OmitWriteSeq: true, // 不需要写序时可进一步省空间

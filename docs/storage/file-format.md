@@ -38,24 +38,33 @@ sequence uvarint | part_count uvarint | part_meta...
 
 ## SSTable Part
 
-每个 part 是一个目录，必需组件：
+每个 part 是一个目录。最终布局（POC，不兼容旧多文件）：
 
 ```text
 metadata.bin
-metaindex.bin
-index.bin
-series_index.bin
-timestamps.bin
-values.bin
-strings.bin
+pack.bin
 ```
 
-`metadata.bin` magic 为 `MTSPRT2`，payload 包含 `PartMeta`、`index_ref`、`metaindex_ref`、`series_index_ref`、`created_unix` 和 component 列表。缺失 component 列表的旧 metadata 默认使用上述必需组件。
+`metadata.bin` magic 为 `MTSPRT2`，payload 包含 `PartMeta`、`index_ref`、`metaindex_ref`、`series_index_ref`、`created_unix` 和 **逻辑** component 列表（仍按 `metaindex/index/series_index/timestamps/values/strings` 命名，便于 block ref 语义保持不变）。
 
-`index.bin`、`metaindex.bin`、`series_index.bin` 分别使用 `MTSIDX2`、`MTSMIX2`、`MTSSIX2` envelope。`timestamps.bin` 和 `values.bin` 使用 block frame：
+`pack.bin` magic 为 `MTSPAK1`：
+
+```text
+"MTSPAK1"[7]
+section_count uvarint
+for each section:
+  name_len uvarint | name bytes | size uvarint
+section payloads (按 section 顺序紧密排列)
+```
+
+逻辑组件内容与历史独立文件一致：`index/metaindex/series_index` 使用 `MTSIDX2`/`MTSMIX2`/`MTSSIX2` envelope；`timestamps/values` 使用 block frame：
 
 ```text
 payload_len uint32be | payload bytes | crc32c uint32be
 ```
 
-`OpenPart` 必须校验 component 存在、metadata block ref 不越界、index/series index/time/value page block CRC 正确；任一组件不一致时拒绝加载。
+block ref 的 offset/size 是相对逻辑 section 起始的偏移，而不是整个 `pack.bin` 的绝对偏移。
+
+payload 压缩算法支持 `none|snappy|lz4|zstd`；当算法为 `zstd` 时，`Compression.ZstdLevel` 可选 `fastest|default|better|best`（空=default）。
+
+`OpenPart` 必须校验 pack section 完整、metadata block ref 不越界、index/series index/time/value page block CRC 正确；任一组件不一致时拒绝加载。

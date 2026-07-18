@@ -29,7 +29,7 @@ func openPart(path string, validateDeep bool) (*Part, error) {
 	if err != nil {
 		return nil, err
 	}
-	metaRows, err := loadPartMetaIndex(path, meta.MetaIndexRef)
+	metaRows, err := loadPartMetaIndex(path, files, meta.MetaIndexRef)
 	if err != nil {
 		closeErr := files.close()
 		if closeErr != nil {
@@ -37,7 +37,7 @@ func openPart(path string, validateDeep bool) (*Part, error) {
 		}
 		return nil, err
 	}
-	seriesRows, err := loadPartSeriesIndex(path, meta.SeriesIndexRef)
+	seriesRows, err := loadPartSeriesIndex(path, files, meta.SeriesIndexRef)
 	if err != nil {
 		closeErr := files.close()
 		if closeErr != nil {
@@ -120,12 +120,18 @@ func loadPartComponentSizes(
 }
 
 func ensurePartComponentPresent(path string, name string, files *partReadFiles) error {
-	if file := readFileForComponent(name, files); file != nil {
-		info, err := file.Stat()
+	if name == metadataFile {
+		info, err := storagefs.Stat(filepath.Join(path, metadataFile))
 		if err != nil {
 			return err
 		}
 		if info.IsDir() {
+			return fmt.Errorf("component is directory")
+		}
+		return nil
+	}
+	if sectionSize, ok := logicalComponentSize(files, name); ok {
+		if sectionSize < 0 {
 			return fmt.Errorf("component is directory")
 		}
 		return nil
@@ -141,9 +147,8 @@ func ensurePartComponentPresent(path string, name string, files *partReadFiles) 
 }
 
 func partComponentSize(path string, name string, files *partReadFiles) (int64, error) {
-	file := readFileForComponent(name, files)
-	if file != nil {
-		info, err := file.Stat()
+	if name == metadataFile {
+		info, err := storagefs.Stat(filepath.Join(path, metadataFile))
 		if err != nil {
 			return 0, err
 		}
@@ -151,6 +156,9 @@ func partComponentSize(path string, name string, files *partReadFiles) (int64, e
 			return 0, fmt.Errorf("component is directory")
 		}
 		return info.Size(), nil
+	}
+	if size, ok := logicalComponentSize(files, name); ok {
+		return size, nil
 	}
 	info, err := storagefs.Stat(filepath.Join(path, name))
 	if err != nil {
@@ -162,7 +170,31 @@ func partComponentSize(path string, name string, files *partReadFiles) (int64, e
 	return info.Size(), nil
 }
 
-func readFileForComponent(name string, files *partReadFiles) *os.File {
+func logicalComponentSize(files *partReadFiles, name string) (int64, bool) {
+	if files == nil {
+		return 0, false
+	}
+	if section, ok := files.sections[name]; ok {
+		return section.Size, true
+	}
+	switch name {
+	case indexFile:
+		if files.index != nil {
+			return files.index.Size(), true
+		}
+	case timestampsFile:
+		if files.timestamps != nil {
+			return files.timestamps.Size(), true
+		}
+	case valuesFile:
+		if files.values != nil {
+			return files.values.Size(), true
+		}
+	}
+	return 0, false
+}
+
+func sectionReaderForComponent(name string, files *partReadFiles) *sectionReader {
 	if files == nil {
 		return nil
 	}
@@ -180,39 +212,118 @@ func readFileForComponent(name string, files *partReadFiles) *os.File {
 
 func openPartReadFiles(path string) (*partReadFiles, error) {
 	clean := filepath.Clean(path)
-	index, err := storagefs.Open(filepath.Join(clean, indexFile))
-	if err != nil {
-		return nil, fmt.Errorf("open part index: %w", err)
+	packPath := filepath.Join(clean, packFile)
+	if _, err := storagefs.Stat(packPath); err == nil {
+		return openPartReadFilesFromPack(clean)
 	}
-	timestamps, err := storagefs.Open(filepath.Join(clean, timestampsFile))
+	return openPartReadFilesLegacy(clean)
+}
+
+func openPartReadFilesFromPack(path string) (*partReadFiles, error) {
+	pack, sections, err := openPartPack(path)
 	if err != nil {
-		closeErr := index.Close()
-		return nil, errors.Join(fmt.Errorf("open part timestamps: %w", err), closeErr)
+		return nil, err
 	}
-	values, err := storagefs.Open(filepath.Join(clean, valuesFile))
+	index, err := packSectionFile(pack, sections, indexFile)
 	if err != nil {
-		indexErr := index.Close()
-		timeErr := timestamps.Close()
-		return nil, errors.Join(fmt.Errorf("open part values: %w", err), indexErr, timeErr)
+		closeErr := pack.Close()
+		return nil, errors.Join(err, closeErr)
+	}
+	timestamps, err := packSectionFile(pack, sections, timestampsFile)
+	if err != nil {
+		closeErr := pack.Close()
+		return nil, errors.Join(err, closeErr)
+	}
+	values, err := packSectionFile(pack, sections, valuesFile)
+	if err != nil {
+		closeErr := pack.Close()
+		return nil, errors.Join(err, closeErr)
 	}
 	return &partReadFiles{
+		pack:       pack,
+		sections:   sections,
 		index:      index,
 		timestamps: timestamps,
 		values:     values,
 	}, nil
 }
 
+func openPartReadFilesLegacy(path string) (*partReadFiles, error) {
+	indexFileHandle, err := storagefs.Open(filepath.Join(path, indexFile))
+	if err != nil {
+		return nil, fmt.Errorf("open part index: %w", err)
+	}
+	timestampsFileHandle, err := storagefs.Open(filepath.Join(path, timestampsFile))
+	if err != nil {
+		closeErr := indexFileHandle.Close()
+		return nil, errors.Join(fmt.Errorf("open part timestamps: %w", err), closeErr)
+	}
+	valuesFileHandle, err := storagefs.Open(filepath.Join(path, valuesFile))
+	if err != nil {
+		indexErr := indexFileHandle.Close()
+		timeErr := timestampsFileHandle.Close()
+		return nil, errors.Join(fmt.Errorf("open part values: %w", err), indexErr, timeErr)
+	}
+	indexInfo, err := indexFileHandle.Stat()
+	if err != nil {
+		return nil, closeLegacyOpenError(err, indexFileHandle, timestampsFileHandle, valuesFileHandle)
+	}
+	timeInfo, err := timestampsFileHandle.Stat()
+	if err != nil {
+		return nil, closeLegacyOpenError(err, indexFileHandle, timestampsFileHandle, valuesFileHandle)
+	}
+	valueInfo, err := valuesFileHandle.Stat()
+	if err != nil {
+		return nil, closeLegacyOpenError(err, indexFileHandle, timestampsFileHandle, valuesFileHandle)
+	}
+	return &partReadFiles{
+		legacy: []*os.File{indexFileHandle, timestampsFileHandle, valuesFileHandle},
+		sections: map[string]packSection{
+			indexFile:      {Name: indexFile, Offset: 0, Size: indexInfo.Size()},
+			timestampsFile: {Name: timestampsFile, Offset: 0, Size: timeInfo.Size()},
+			valuesFile:     {Name: valuesFile, Offset: 0, Size: valueInfo.Size()},
+		},
+		index:      &sectionReader{file: indexFileHandle, base: 0, size: indexInfo.Size()},
+		timestamps: &sectionReader{file: timestampsFileHandle, base: 0, size: timeInfo.Size()},
+		values:     &sectionReader{file: valuesFileHandle, base: 0, size: valueInfo.Size()},
+	}, nil
+}
+
+func closeLegacyOpenError(err error, files ...*os.File) error {
+	errs := []error{err}
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+		if closeErr := file.Close(); closeErr != nil {
+			errs = append(errs, closeErr)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func (f *partReadFiles) close() error {
 	if f == nil {
 		return nil
 	}
-	indexErr := closeFile(f.index, "part index")
-	timeErr := closeFile(f.timestamps, "part timestamps")
-	valueErr := closeFile(f.values, "part values")
+	var errs []error
+	if f.pack != nil {
+		if err := closeFile(f.pack, "part pack"); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	for _, file := range f.legacy {
+		if err := closeFile(file, "part legacy component"); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	f.pack = nil
+	f.legacy = nil
+	f.sections = nil
 	f.index = nil
 	f.timestamps = nil
 	f.values = nil
-	return errors.Join(indexErr, timeErr, valueErr)
+	return errors.Join(errs...)
 }
 
 func closeFile(file *os.File, name string) error {
@@ -419,7 +530,7 @@ func (p *Part) readValuePage(ref blockRef, rowTimestamps []int64, query Query) (
 
 func (p *Part) readBlock(name string, ref blockRef) ([]byte, error) {
 	if p.files == nil {
-		return readBlock(filepath.Join(p.path, name), ref)
+		return readLogicalComponentBlock(p.path, nil, name, ref)
 	}
 	switch name {
 	case indexFile:
@@ -435,7 +546,7 @@ func (p *Part) readBlock(name string, ref blockRef) ([]byte, error) {
 
 func (p *Part) readBlockPayload(name string, ref blockRef) (blockPayload, error) {
 	if p.files == nil {
-		data, err := readBlock(filepath.Join(p.path, name), ref)
+		data, err := readLogicalComponentBlock(p.path, nil, name, ref)
 		if err != nil {
 			return blockPayload{}, err
 		}
@@ -506,8 +617,8 @@ func loadPartMetadata(path string) (metadata, error) {
 	return meta, nil
 }
 
-func loadPartMetaIndex(path string, ref blockRef) ([]metaIndexRow, error) {
-	payload, err := readBlock(filepath.Join(path, metaindexFile), ref)
+func loadPartMetaIndex(path string, files *partReadFiles, ref blockRef) ([]metaIndexRow, error) {
+	payload, err := readLogicalComponentBlock(path, files, metaindexFile, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -518,8 +629,8 @@ func loadPartMetaIndex(path string, ref blockRef) ([]metaIndexRow, error) {
 	return rows, nil
 }
 
-func loadPartSeriesIndex(path string, ref blockRef) ([]seriesIndexRow, error) {
-	payload, err := readBlock(filepath.Join(path, seriesIndexFile), ref)
+func loadPartSeriesIndex(path string, files *partReadFiles, ref blockRef) ([]seriesIndexRow, error) {
+	payload, err := readLogicalComponentBlock(path, files, seriesIndexFile, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -528,6 +639,32 @@ func loadPartSeriesIndex(path string, ref blockRef) ([]seriesIndexRow, error) {
 		return nil, fmt.Errorf("decode part series index: %w", err)
 	}
 	return rows, nil
+}
+
+func readLogicalComponentBlock(path string, files *partReadFiles, name string, ref blockRef) ([]byte, error) {
+	if files != nil && files.pack != nil {
+		section, ok := files.sections[name]
+		if !ok {
+			return nil, fmt.Errorf("pack section %s missing", name)
+		}
+		reader := &sectionReader{file: files.pack, base: section.Offset, size: section.Size}
+		return readBlockFrom(reader, ref)
+	}
+	packPath := filepath.Join(filepath.Clean(path), packFile)
+	if _, err := storagefs.Stat(packPath); err == nil {
+		pack, sections, openErr := openPartPack(path)
+		if openErr != nil {
+			return nil, openErr
+		}
+		defer func() { _ = pack.Close() }()
+		section, ok := sections[name]
+		if !ok {
+			return nil, fmt.Errorf("pack section %s missing", name)
+		}
+		reader := &sectionReader{file: pack, base: section.Offset, size: section.Size}
+		return readBlockFrom(reader, ref)
+	}
+	return readBlock(filepath.Join(path, name), ref)
 }
 
 func timeBlockFromTimestamps(timestamps []int64) timeBlock {

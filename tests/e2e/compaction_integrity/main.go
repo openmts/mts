@@ -177,7 +177,7 @@ func runCorruptCompactionScenario(dir string) error {
 		closeErr := eng.Close(ctx)
 		return errors.Join(errors.New("manifest has no parts before corrupt"), closeErr)
 	}
-	if err := os.WriteFile(filepath.Join(before.Parts[0].Path, "values.bin"), []byte("bad"), 0600); err != nil {
+	if err := sstable.OverwriteLogicalComponentAt(before.Parts[0].Path, "values.bin", 0, []byte("bad")); err != nil {
 		closeErr := eng.Close(ctx)
 		return errors.Join(fmt.Errorf("corrupt values: %w", err), closeErr)
 	}
@@ -222,8 +222,12 @@ func runOrphanCleanupScenario(dir string) error {
 	if err := os.MkdirAll(orphanPath, 0700); err != nil {
 		return fmt.Errorf("create orphan dir: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(orphanPath, "values.bin"), []byte("orphan"), 0600); err != nil {
-		return fmt.Errorf("write orphan file: %w", err)
+	// 最小 orphan part：metadata + pack 占位，保证被识别为 part 目录。
+	if err := os.WriteFile(filepath.Join(orphanPath, "metadata.bin"), []byte("orphan"), 0600); err != nil {
+		return fmt.Errorf("write orphan metadata: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(orphanPath, "pack.bin"), []byte("orphan"), 0600); err != nil {
+		return fmt.Errorf("write orphan pack: %w", err)
 	}
 	reopened, err := mts.Open(ctx, mts.Options{Path: dir, ShardDuration: time.Hour, MemTableMaxSamples: 1})
 	if err != nil {

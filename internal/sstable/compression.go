@@ -62,15 +62,15 @@ func marshalCompressedValueBlock(
 	dst = binary.AppendUvarint(dst, uint64(column.FieldID))
 	dst = append(dst, byte(column.FieldType))
 	dst = binary.AppendUvarint(dst, uint64(len(column.Samples)))
-	dst, err = appendCodecPayloadWithCompression(dst, timeCodec, timePayload, opts.Algorithm, budget...)
+	dst, err = appendCodecPayloadWithCompression(dst, timeCodec, timePayload, opts.Algorithm, opts.ZstdLevel, budget...)
 	if err != nil {
 		return nil, err
 	}
-	dst, err = appendSampleWriteSeqsPayloadWithCompression(dst, column.Samples, opts.Algorithm, opts.OmitWriteSeq, budget...)
+	dst, err = appendSampleWriteSeqsPayloadWithCompression(dst, column.Samples, opts.Algorithm, opts.ZstdLevel, opts.OmitWriteSeq, budget...)
 	if err != nil {
 		return nil, err
 	}
-	return appendCodecPayloadWithCompression(dst, valueCodec, valuePayload, opts.Algorithm, budget...)
+	return appendCodecPayloadWithCompression(dst, valueCodec, valuePayload, opts.Algorithm, opts.ZstdLevel, budget...)
 }
 
 func unmarshalCompressedValueBlock(payload []byte, query Query) (valueBlock, error) {
@@ -284,14 +284,15 @@ func appendSampleWriteSeqsPayloadWithCompression(
 	dst []byte,
 	samples []model.VersionedSample,
 	algorithm string,
+	zstdLevel string,
 	omitWriteSeq bool,
 	budget ...CompressionMemoryBudget,
 ) ([]byte, error) {
 	if omitWriteSeq {
-		return appendCodecPayloadWithCompression(dst, compressionOmitted, nil, algorithm, budget...)
+		return appendCodecPayloadWithCompression(dst, compressionOmitted, nil, algorithm, zstdLevel, budget...)
 	}
 	codecID, payload := encodeWriteSeqs(samples)
-	return appendCodecPayloadWithCompression(dst, codecID, payload, algorithm, budget...)
+	return appendCodecPayloadWithCompression(dst, codecID, payload, algorithm, zstdLevel, budget...)
 }
 
 func readCodecPayload(reader *blockReader, name string) (byte, []byte, error) {

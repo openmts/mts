@@ -123,6 +123,7 @@ type CompactionLevelOptions struct {
 // ValuePageSamples 控制 values.bin 单页样本数；更大页通常提高压缩率但增加
 // 单页编解码内存。0 表示使用引擎默认（1024）。
 // Algorithm 为全局/层级 payload 压缩算法（none|snappy|lz4|zstd）。
+// ZstdLevel 控制 zstd 强度（fastest|default|better|best）。
 // 未显式配置层级压缩时，引擎会对 L0 使用更快算法、L1+ 使用更高压缩率算法。
 type CompressionOptions struct {
 	Enabled          bool
@@ -136,6 +137,8 @@ type CompressionOptions struct {
 	// OmitWriteSeq 省略 SSTable 中 per-sample writeSeq（解码为 0）。
 	// 在不需要写序/版本冲突语义时，可显著降低存储体积。
 	OmitWriteSeq bool
+	// ZstdLevel 控制 zstd 强度：fastest|default|better|best（空=default）。
+	ZstdLevel string
 }
 
 // DefaultOptions 返回适合本地单机嵌入式使用的推荐配置。
@@ -205,7 +208,10 @@ func (opts Options) Validate() error {
 	if err := validateWALOptions(opts.WAL); err != nil {
 		return err
 	}
-	return validateCompactionOptions(opts.Compaction)
+	if err := validateCompactionOptions(opts.Compaction); err != nil {
+		return err
+	}
+	return validateCompressionOptions(opts.Compression)
 }
 
 func validateStorageMemoryOptions(opts StorageMemoryOptions) error {
@@ -343,7 +349,19 @@ func validateCompressionOptions(opts CompressionOptions) error {
 	if err := validateNonNegativeInt("compression min page values", opts.MinPageValues); err != nil {
 		return err
 	}
-	return validateNonNegativeInt("compression value page samples", opts.ValuePageSamples)
+	if err := validateNonNegativeInt("compression value page samples", opts.ValuePageSamples); err != nil {
+		return err
+	}
+	return validateZstdLevel(opts.ZstdLevel)
+}
+
+func validateZstdLevel(level string) error {
+	switch level {
+	case "", "fastest", "default", "better", "best":
+		return nil
+	default:
+		return invalidOptions("compression zstd level must be fastest|default|better|best")
+	}
 }
 
 func validateNonNegativeDuration(name string, value time.Duration) error {

@@ -267,3 +267,16 @@ func TestCustomLoggerPropagates(t *testing.T) {
 		t.Fatalf("expected 'engine opened' log, got %q", output)
 	}
 }
+
+func TestOptionsValidateRejectsInvalidZstdLevel(t *testing.T) {
+	opts := mts.DefaultOptions(t.TempDir())
+	opts.Compression.Algorithm = "zstd"
+	opts.Compression.ZstdLevel = "ultra"
+	if err := opts.Validate(); err == nil {
+		t.Fatal("Validate(invalid zstd level) error = nil, want error")
+	}
+	opts.Compression.ZstdLevel = "better"
+	if err := opts.Validate(); err != nil {
+		t.Fatalf("Validate(better) error = %v", err)
+	}
+}

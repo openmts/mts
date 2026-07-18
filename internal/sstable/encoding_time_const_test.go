@@ -1,8 +1,6 @@
 package sstable
 
 import (
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -93,12 +91,12 @@ func TestWritePartTimestampsConstStepSavesSpace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WritePartWithOptions error = %v", err)
 	}
-	info, err := os.Stat(filepath.Join(meta.Path, timestampsFile))
+	size, err := PartLogicalComponentSize(meta.Path, timestampsFile)
 	if err != nil {
 		t.Fatalf("stat timestamps: %v", err)
 	}
 	// 单 series 8192 点，const-step 帧头 + 载荷应远小于旧 delta ~40KB
-	if info.Size() > 64 {
-		t.Fatalf("timestamps.bin size=%d, want compact const-step", info.Size())
+	if size > 64 {
+		t.Fatalf("timestamps section size=%d, want compact const-step", size)
 	}
 }

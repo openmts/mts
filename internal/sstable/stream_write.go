@@ -82,15 +82,9 @@ func (w *PartWriter) Close() (PartMeta, error) {
 		removeErr := storagefs.RemoveAll(w.path)
 		return PartMeta{}, errors.Join(err, removeErr)
 	}
-	if err := ensureStringsFile(w.path, w.opts.Sync); err != nil {
+	if err := finalizePartLayout(w.path, &w.meta, w.opts.Sync); err != nil {
 		removeErr := storagefs.RemoveAll(w.path)
 		return PartMeta{}, errors.Join(err, removeErr)
-	}
-	if w.opts.Sync {
-		if err := storagefs.SyncDir(w.path); err != nil {
-			removeErr := storagefs.RemoveAll(w.path)
-			return PartMeta{}, errors.Join(err, removeErr)
-		}
 	}
 	w.meta.Part.Path = w.path
 	return w.meta.Part, nil
