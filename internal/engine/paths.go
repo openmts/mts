@@ -180,6 +180,33 @@ func normalizePoint(opts model.Options, point model.Point) model.Point {
 	return point
 }
 
+// normalizePoints 在无需改写时复用输入切片，避免写路径必经的大切片分配。
+func normalizePoints(opts model.Options, points []model.Point) []model.Point {
+	if !pointsNeedNormalize(opts, points) {
+		return points
+	}
+	normalized := make([]model.Point, len(points))
+	for index, point := range points {
+		normalized[index] = normalizePoint(opts, point)
+	}
+	return normalized
+}
+
+func pointsNeedNormalize(opts model.Options, points []model.Point) bool {
+	for _, point := range points {
+		if point.Database == "" && opts.DefaultDatabase != "" {
+			return true
+		}
+		if point.RetentionPolicy == "" && opts.DefaultRetentionPolicy != "" {
+			return true
+		}
+		if point.Tags == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func normalizeTypedBatch(opts model.Options, batch model.TypedBatch) model.TypedBatch {
 	if batch.Database == "" {
 		batch.Database = opts.DefaultDatabase

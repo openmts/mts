@@ -35,6 +35,13 @@
 | Manifest | 版本不匹配时 fail-fast，避免静默丢数据 |
 | Catalog/Metadata | 本地文件 schema 演进需可读旧字段默认值 |
 
+
+### SSTable metadata component sizes（POC）
+
+- 新写 part 在 `metadata.bin` 中嵌入各组件 size（flag `component_sizes`）。
+- 打开时优先使用嵌入 size；`OpenPart` 深校验仍验证组件存在与损坏拒绝。
+- 残缺测试 fixture 可不嵌入 size，打开路径回退 Stat。
+
 ## 3. Experimental 功能
 
 以下能力可用，但语义/指标名可能在 minor 版本调整：

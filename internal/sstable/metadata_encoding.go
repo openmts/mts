@@ -18,8 +18,9 @@ var (
 )
 
 const (
-	partMetadataFlagComponents uint16 = 1
-	envelopeReservedLenBytes          = binary.MaxVarintLen64
+	partMetadataFlagComponents     uint16 = 1
+	partMetadataFlagComponentSizes uint16 = 2
+	envelopeReservedLenBytes              = binary.MaxVarintLen64
 )
 
 var defaultPartComponents = []string{
@@ -73,8 +74,26 @@ func encodeMetadata(meta metadata) ([]byte, error) {
 		return nil, err
 	}
 	payload = binary.AppendVarint(payload, meta.CreatedUnix)
-	payload = appendStringSlice(payload, metadataComponents(meta.Components))
-	return codec.MarshalEnvelope(nil, partMagic, partMetadataFlagComponents, payload), nil
+	components := metadataComponents(meta.Components)
+	payload = appendStringSlice(payload, components)
+	flags := partMetadataFlagComponents
+	if len(meta.ComponentSizes) > 0 {
+		payload = appendComponentSizes(payload, components, meta.ComponentSizes)
+		flags |= partMetadataFlagComponentSizes
+	}
+	return codec.MarshalEnvelope(nil, partMagic, flags, payload), nil
+}
+
+func appendComponentSizes(dst []byte, components []string, sizes map[string]int64) []byte {
+	dst = binary.AppendUvarint(dst, uint64(len(components)))
+	for _, name := range components {
+		size := int64(0)
+		if sizes != nil {
+			size = sizes[name]
+		}
+		dst = binary.AppendVarint(dst, size)
+	}
+	return dst
 }
 
 func decodeMetadata(data []byte) (metadata, error) {
@@ -87,7 +106,7 @@ func decodeMetadata(data []byte) (metadata, error) {
 	if err != nil {
 		return metadata{}, err
 	}
-	indexRef, metaIndexRef, seriesIndexRef, createdUnix, components, err := readMetadataTail(reader, env.Flags)
+	indexRef, metaIndexRef, seriesIndexRef, createdUnix, components, sizes, err := readMetadataTail(reader, env.Flags)
 	if err != nil {
 		return metadata{}, err
 	}
@@ -100,32 +119,65 @@ func decodeMetadata(data []byte) (metadata, error) {
 		MetaIndexRef:   metaIndexRef,
 		SeriesIndexRef: seriesIndexRef,
 		Components:     metadataComponents(components),
+		ComponentSizes: sizes,
 		CreatedUnix:    createdUnix,
 	}, nil
 }
 
-func readMetadataTail(reader *blockReader, flags uint16) (blockRef, blockRef, blockRef, int64, []string, error) {
+func readMetadataTail(reader *blockReader, flags uint16) (blockRef, blockRef, blockRef, int64, []string, map[string]int64, error) {
 	indexRef, err := readBlockRef(reader)
 	if err != nil {
-		return blockRef{}, blockRef{}, blockRef{}, 0, nil, err
+		return blockRef{}, blockRef{}, blockRef{}, 0, nil, nil, err
 	}
 	metaIndexRef, err := readBlockRef(reader)
 	if err != nil {
-		return blockRef{}, blockRef{}, blockRef{}, 0, nil, err
+		return blockRef{}, blockRef{}, blockRef{}, 0, nil, nil, err
 	}
 	seriesIndexRef, err := readBlockRef(reader)
 	if err != nil {
-		return blockRef{}, blockRef{}, blockRef{}, 0, nil, err
+		return blockRef{}, blockRef{}, blockRef{}, 0, nil, nil, err
 	}
 	createdUnix, err := reader.varint("created unix")
 	if err != nil {
-		return blockRef{}, blockRef{}, blockRef{}, 0, nil, err
+		return blockRef{}, blockRef{}, blockRef{}, 0, nil, nil, err
 	}
 	if flags&partMetadataFlagComponents == 0 && len(reader.rest) == 0 {
-		return indexRef, metaIndexRef, seriesIndexRef, createdUnix, nil, nil
+		return indexRef, metaIndexRef, seriesIndexRef, createdUnix, nil, nil, nil
 	}
 	components, err := readStringSlice(reader, "part component count")
-	return indexRef, metaIndexRef, seriesIndexRef, createdUnix, components, err
+	if err != nil {
+		return blockRef{}, blockRef{}, blockRef{}, 0, nil, nil, err
+	}
+	var sizes map[string]int64
+	if flags&partMetadataFlagComponentSizes != 0 {
+		sizes, err = readComponentSizes(reader, metadataComponents(components))
+		if err != nil {
+			return blockRef{}, blockRef{}, blockRef{}, 0, nil, nil, err
+		}
+	}
+	return indexRef, metaIndexRef, seriesIndexRef, createdUnix, components, sizes, nil
+}
+
+func readComponentSizes(reader *blockReader, components []string) (map[string]int64, error) {
+	count, err := reader.intCount("component size count")
+	if err != nil {
+		return nil, err
+	}
+	if count != len(components) {
+		return nil, fmt.Errorf("component size count %d does not match components %d", count, len(components))
+	}
+	sizes := make(map[string]int64, count)
+	for _, name := range components {
+		size, err := reader.varint("component size")
+		if err != nil {
+			return nil, err
+		}
+		if size < 0 {
+			return nil, fmt.Errorf("component %s size %d is negative", name, size)
+		}
+		sizes[name] = size
+	}
+	return sizes, nil
 }
 
 func encodeIndexRows(rows []indexRow) ([]byte, error) {

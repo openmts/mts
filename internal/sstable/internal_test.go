@@ -1994,6 +1994,42 @@ func TestOpenPartRejectsOutOfBoundsMetadataRefs(t *testing.T) {
 	}
 }
 
+func TestWritePartEmbedsComponentSizes(t *testing.T) {
+	dir := t.TempDir()
+	meta, err := WritePart(dir, 0, "sst-sizes", []model.ColumnData{
+		columnWithField(1, 2, model.Float64Value(42)),
+	})
+	if err != nil {
+		t.Fatalf("WritePart() error = %v", err)
+	}
+	decoded, err := loadPartMetadata(meta.Path)
+	if err != nil {
+		t.Fatalf("loadPartMetadata() error = %v", err)
+	}
+	if len(decoded.ComponentSizes) == 0 {
+		t.Fatal("ComponentSizes empty, want embedded sizes")
+	}
+	for _, name := range metadataComponents(nil) {
+		if name == metadataFile {
+			continue
+		}
+		size, ok := decoded.ComponentSizes[name]
+		if !ok {
+			t.Fatalf("missing component size for %s", name)
+		}
+		if name != stringsFile && size <= 0 {
+			t.Fatalf("component %s size = %d, want > 0", name, size)
+		}
+	}
+	part, err := OpenPartTrusted(meta.Path)
+	if err != nil {
+		t.Fatalf("OpenPartTrusted() error = %v", err)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestOpenPartRejectsMissingComponent(t *testing.T) {
 	dir := t.TempDir()
 	meta, err := WritePart(dir, 0, "sst-000001", []model.ColumnData{

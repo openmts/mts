@@ -157,11 +157,7 @@ func (e *Engine) Write(ctx context.Context, points []model.Point, opts model.Wri
 	if len(points) == 0 {
 		return nil
 	}
-	normalized := make([]model.Point, len(points))
-	for index, point := range points {
-		normalized[index] = normalizePoint(e.opts, point)
-	}
-	resolved, err := e.metadata.ResolvePoints(ctx, normalized)
+	resolved, err := e.metadata.ResolvePoints(ctx, normalizePoints(e.opts, points))
 	if err != nil {
 		return err
 	}

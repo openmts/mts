@@ -42,11 +42,11 @@ type batchIdentity struct {
 const denseSeriesRefMaxSpanFactor = 4
 
 func batchIdentities(records []model.ResolvedPoint) ([]batchIdentity, []int) {
-	identities := make([]batchIdentity, 0)
+	identities := make([]batchIdentity, 0, min(len(records), 16))
 	refs := make([]int, len(records))
 	seenSeries := newSeriesRefIndex(records)
 	seenIdentity := make(map[string]int)
-	keyScratch := make([]byte, 0)
+	keyScratch := make([]byte, 0, 64)
 	for index, record := range records {
 		if ref, ok := lastIdentityRef(record, identities); ok {
 			refs[index] = ref

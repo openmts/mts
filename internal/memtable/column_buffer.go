@@ -17,7 +17,10 @@ func (c *columnBuffer) appendSample(sample model.VersionedSample) int64 {
 	if c.fieldType == 0 {
 		c.fieldType = sample.Value.Type
 	}
-	delta := c.reserve(1)
+	delta := int64(0)
+	if !c.hasCapacityFor(1) {
+		delta = c.reserve(1)
+	}
 	appendDelta := int64(0)
 	oldTimesCap := cap(c.times)
 	c.times = append(c.times, sample.Timestamp)
@@ -29,6 +32,28 @@ func (c *columnBuffer) appendSample(sample model.VersionedSample) int64 {
 	c.count++
 	c.memBytes += appendDelta
 	return delta + appendDelta
+}
+
+func (c *columnBuffer) hasCapacityFor(additional int) bool {
+	if c == nil || additional <= 0 {
+		return true
+	}
+	target := c.count + additional
+	if cap(c.times) < target || cap(c.writeSeqs) < target {
+		return false
+	}
+	switch c.fieldType {
+	case model.FieldFloat64:
+		return cap(c.floats) >= target
+	case model.FieldInt64:
+		return cap(c.ints) >= target
+	case model.FieldString:
+		return cap(c.strings) >= target
+	case model.FieldBool:
+		return cap(c.boolBits) >= boolWords(target)
+	default:
+		return true
+	}
 }
 
 func (c *columnBuffer) appendValue(value model.FieldValue) int64 {

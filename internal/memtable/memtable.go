@@ -459,13 +459,13 @@ func hasUniqueSeriesPrefix(points []model.ResolvedPoint, limit int) bool {
 	if limit > len(points) {
 		limit = len(points)
 	}
+	seen := make(map[uint64]struct{}, limit)
 	for index := 0; index < limit; index++ {
 		seriesID := points[index].SeriesID
-		for previous := 0; previous < index; previous++ {
-			if points[previous].SeriesID == seriesID {
-				return false
-			}
+		if _, exists := seen[seriesID]; exists {
+			return false
 		}
+		seen[seriesID] = struct{}{}
 	}
 	return true
 }
@@ -489,13 +489,13 @@ func hasUniqueTypedSeriesPrefix(
 	if limit > typedBatchRowCount(batch, rows) {
 		limit = typedBatchRowCount(batch, rows)
 	}
+	seen := make(map[uint64]struct{}, limit)
 	for index := 0; index < limit; index++ {
 		seriesID := batch.SeriesIDs[typedBatchRowIndex(rows, index)]
-		for previous := 0; previous < index; previous++ {
-			if batch.SeriesIDs[typedBatchRowIndex(rows, previous)] == seriesID {
-				return false
-			}
+		if _, exists := seen[seriesID]; exists {
+			return false
 		}
+		seen[seriesID] = struct{}{}
 	}
 	return true
 }

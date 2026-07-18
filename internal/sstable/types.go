@@ -39,12 +39,13 @@ type Manifest struct {
 }
 
 type metadata struct {
-	Part           PartMeta `json:"part"`
-	IndexRef       blockRef `json:"index_ref"`
-	MetaIndexRef   blockRef `json:"metaindex_ref"`
-	SeriesIndexRef blockRef `json:"series_index_ref"`
-	Components     []string `json:"components"`
-	CreatedUnix    int64    `json:"created_unix"`
+	Part           PartMeta         `json:"part"`
+	IndexRef       blockRef         `json:"index_ref"`
+	MetaIndexRef   blockRef         `json:"metaindex_ref"`
+	SeriesIndexRef blockRef         `json:"series_index_ref"`
+	Components     []string         `json:"components"`
+	ComponentSizes map[string]int64 `json:"component_sizes,omitempty"`
+	CreatedUnix    int64            `json:"created_unix"`
 }
 
 type blockRef struct {

@@ -385,6 +385,80 @@ func TestMemTableQueryAvoidsSnapshotClone(t *testing.T) {
 	}
 }
 
+func TestHasUniqueSeriesPrefixUsesLinearScan(t *testing.T) {
+	unique := make([]model.ResolvedPoint, uniqueSeriesReservationBypassMinPoints)
+	for index := range unique {
+		unique[index] = memtableResolvedPoint(uint64(index+1), int64(index+1), uint64(index+1), model.Float64Value(1))
+	}
+	if !hasUniqueSeriesPrefix(unique, len(unique)) {
+		t.Fatal("hasUniqueSeriesPrefix(unique) = false, want true")
+	}
+	dup := append([]model.ResolvedPoint{}, unique...)
+	dup[len(dup)-1].SeriesID = dup[0].SeriesID
+	if hasUniqueSeriesPrefix(dup, len(dup)) {
+		t.Fatal("hasUniqueSeriesPrefix(duplicate) = true, want false")
+	}
+}
+
+func TestHasUniqueTypedSeriesPrefixUsesLinearScan(t *testing.T) {
+	count := uniqueSeriesReservationBypassMinPoints
+	batch := model.ResolvedTypedBatch{
+		Timestamps: make([]int64, count),
+		SeriesIDs:  make([]uint64, count),
+		WriteSeqs:  make([]uint64, count),
+		Fields: []model.ResolvedTypedFieldColumn{{
+			FieldID:       1,
+			Name:          "v",
+			Type:          model.FieldFloat64,
+			Float64Values: make([]float64, count),
+		}},
+	}
+	for index := range count {
+		batch.Timestamps[index] = int64(index + 1)
+		batch.SeriesIDs[index] = uint64(index + 1)
+		batch.WriteSeqs[index] = uint64(index + 1)
+		batch.Fields[0].Float64Values[index] = float64(index)
+	}
+	if !hasUniqueTypedSeriesPrefix(batch, nil, count) {
+		t.Fatal("hasUniqueTypedSeriesPrefix(unique) = false, want true")
+	}
+	batch.SeriesIDs[count-1] = batch.SeriesIDs[0]
+	if hasUniqueTypedSeriesPrefix(batch, nil, count) {
+		t.Fatal("hasUniqueTypedSeriesPrefix(duplicate) = true, want false")
+	}
+}
+
+func TestColumnBufferAppendSampleUsesReservedCapacity(t *testing.T) {
+	column := borrowColumnBuffer(1, 1, model.FieldFloat64)
+	if delta := column.reserve(8); delta <= 0 {
+		t.Fatalf("reserve(8) delta = %d, want positive", delta)
+	}
+	beforeTimesCap := cap(column.times)
+	beforeFloatsCap := cap(column.floats)
+	beforeMem := column.memBytes
+	for index := 0; index < 8; index++ {
+		delta := column.appendSample(model.VersionedSample{
+			Timestamp: int64(index + 1),
+			WriteSeq:  uint64(index + 1),
+			Value:     model.Float64Value(float64(index)),
+		})
+		if delta != 0 {
+			t.Fatalf("appendSample(%d) delta = %d, want 0 after reserve", index, delta)
+		}
+	}
+	if cap(column.times) != beforeTimesCap || cap(column.floats) != beforeFloatsCap {
+		t.Fatalf("capacity changed after reserved append: times %d->%d floats %d->%d",
+			beforeTimesCap, cap(column.times), beforeFloatsCap, cap(column.floats))
+	}
+	if column.memBytes != beforeMem {
+		t.Fatalf("memBytes = %d, want unchanged reserved capacity %d", column.memBytes, beforeMem)
+	}
+	if column.count != 8 {
+		t.Fatalf("count = %d, want 8", column.count)
+	}
+	releaseColumnBuffer(column)
+}
+
 func TestMemTableApproxMemoryBytesAvoidsFullScan(t *testing.T) {
 	mt := New()
 	if err := mt.ApplyBatch([]model.ResolvedPoint{

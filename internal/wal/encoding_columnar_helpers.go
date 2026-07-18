@@ -61,7 +61,7 @@ func buildPointFieldSchema(records []model.ResolvedPoint) ([]columnarFieldSchema
 		name string
 		typ  model.FieldType
 	}
-	order := make([]key, 0)
+	schema := make([]columnarFieldSchema, 0, 4)
 	seen := make(map[key]struct{}, 8)
 	for _, record := range records {
 		for _, field := range record.Fields {
@@ -78,26 +78,22 @@ func buildPointFieldSchema(records []model.ResolvedPoint) ([]columnarFieldSchema
 				continue
 			}
 			seen[item] = struct{}{}
-			order = append(order, item)
+			schema = append(schema, columnarFieldSchema{
+				fieldID: field.FieldID,
+				name:    field.FieldName,
+				typ:     field.Type,
+			})
 		}
 	}
-	sort.SliceStable(order, func(i, j int) bool {
-		if order[i].id != order[j].id {
-			return order[i].id < order[j].id
+	sort.SliceStable(schema, func(i, j int) bool {
+		if schema[i].fieldID != schema[j].fieldID {
+			return schema[i].fieldID < schema[j].fieldID
 		}
-		if order[i].name != order[j].name {
-			return order[i].name < order[j].name
+		if schema[i].name != schema[j].name {
+			return schema[i].name < schema[j].name
 		}
-		return order[i].typ < order[j].typ
+		return schema[i].typ < schema[j].typ
 	})
-	schema := make([]columnarFieldSchema, len(order))
-	for index, item := range order {
-		schema[index] = columnarFieldSchema{
-			fieldID: item.id,
-			name:    item.name,
-			typ:     item.typ,
-		}
-	}
 	return schema, nil
 }
 

@@ -409,11 +409,41 @@ func writeBinaryBlock(path string, payload []byte, sync bool) (blockRef, error) 
 }
 
 func writeMetadata(path string, meta metadata) error {
+	// 生产路径在 writePartIndexes 前后已落齐组件；此处再保证 strings 存在以便嵌入 size。
+	if err := ensureStringsFile(path, false); err != nil {
+		return err
+	}
+	meta.Components = metadataComponents(meta.Components)
+	if sizes, ok := collectPartComponentSizes(path, meta.Components); ok {
+		meta.ComponentSizes = sizes
+	}
 	data, err := encodeMetadata(meta)
 	if err != nil {
 		return fmt.Errorf("encode part metadata: %w", err)
 	}
 	return storagefs.WriteFileAtomic(filepath.Join(path, metadataFile), data)
+}
+
+// collectPartComponentSizes 在全部非 metadata 组件存在时返回 sizes；
+// 残缺 fixture 返回 ok=false，调用方不嵌入 size（保持可写测试元数据）。
+func collectPartComponentSizes(path string, components []string) (map[string]int64, bool) {
+	names := metadataComponents(components)
+	sizes := make(map[string]int64, len(names))
+	for _, name := range names {
+		if name == metadataFile {
+			sizes[name] = 0
+			continue
+		}
+		info, err := storagefs.Stat(filepath.Join(path, name))
+		if err != nil {
+			return nil, false
+		}
+		if info.IsDir() {
+			return nil, false
+		}
+		sizes[name] = info.Size()
+	}
+	return sizes, true
 }
 
 func ensureStringsFile(path string, sync bool) error {
