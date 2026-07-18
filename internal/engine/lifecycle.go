@@ -265,7 +265,11 @@ func (s *Shard) startCompactionPlan(signature string) bool {
 	}
 	started := s.opts.scheduler.start(signature)
 	if !started {
-		s.compactionStats.recordSkip(compactionSkipDuplicateCandidate)
+		reason := compactionSkipDuplicateCandidate
+		if snap := s.opts.scheduler.snapshotCopy(); snap.LastSkipReason != "" {
+			reason = snap.LastSkipReason
+		}
+		s.compactionStats.recordSkip(reason)
 	}
 	return started
 }

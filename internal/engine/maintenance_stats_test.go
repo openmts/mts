@@ -83,6 +83,7 @@ func TestMaintenanceStatsSnapshotIncludesLimitsAndSkips(t *testing.T) {
 		Path:                    t.TempDir(),
 		ShardDuration:           time.Hour,
 		MaxConcurrentDownsample: 3,
+		MaxConcurrentCompaction: 2,
 	})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
@@ -99,6 +100,10 @@ func TestMaintenanceStatsSnapshotIncludesLimitsAndSkips(t *testing.T) {
 		_ = eng.Close(ctx)
 		t.Fatalf("DownsampleMaxConcurrent = %d, want 3", stats.DownsampleMaxConcurrent)
 	}
+	if stats.CompactionMaxConcurrent != 2 {
+		_ = eng.Close(ctx)
+		t.Fatalf("CompactionMaxConcurrent = %d, want 2", stats.CompactionMaxConcurrent)
+	}
 	if stats.DownsampleSkipped != 5 {
 		_ = eng.Close(ctx)
 		t.Fatalf("DownsampleSkipped = %d, want 5", stats.DownsampleSkipped)
@@ -112,19 +117,31 @@ func TestMaintenanceStatsSnapshotIncludesLimitsAndSkips(t *testing.T) {
 		t.Fatalf("CompactionSkipped = %d, want >=1", stats.CompactionSkipped)
 	}
 	metrics := eng.MetricsSnapshot()
-	found := false
+	foundDownsample := false
+	foundCompaction := false
 	for _, metric := range metrics {
 		if metric.Name == "mts_maintenance_downsample_max_concurrent" {
-			found = true
+			foundDownsample = true
 			if metric.Value != 3 {
 				_ = eng.Close(ctx)
-				t.Fatalf("metric value = %v, want 3", metric.Value)
+				t.Fatalf("downsample metric value = %v, want 3", metric.Value)
+			}
+		}
+		if metric.Name == "mts_maintenance_compaction_max_concurrent" {
+			foundCompaction = true
+			if metric.Value != 2 {
+				_ = eng.Close(ctx)
+				t.Fatalf("compaction metric value = %v, want 2", metric.Value)
 			}
 		}
 	}
-	if !found {
+	if !foundDownsample {
 		_ = eng.Close(ctx)
 		t.Fatal("missing mts_maintenance_downsample_max_concurrent metric")
+	}
+	if !foundCompaction {
+		_ = eng.Close(ctx)
+		t.Fatal("missing mts_maintenance_compaction_max_concurrent metric")
 	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() error = %v", err)

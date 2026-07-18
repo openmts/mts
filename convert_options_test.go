@@ -70,7 +70,9 @@ func TestToModelOptionsPreservesStorageConfiguration(t *testing.T) {
 			CompactionBytesLimit:  20,
 			CompressionBytesLimit: 21,
 		},
-		Logger: logger,
+		MaxConcurrentDownsample: 4,
+		MaxConcurrentCompaction: 2,
+		Logger:                  logger,
 		User: UserOptions{
 			Endpoint:             "local",
 			PasswordAuthDisabled: true,
@@ -86,6 +88,8 @@ func TestToModelOptionsPreservesStorageConfiguration(t *testing.T) {
 		got.Retention != opts.Retention ||
 		got.MemTableMaxSamples != opts.MemTableMaxSamples ||
 		got.FlushSync != opts.FlushSync ||
+		got.MaxConcurrentDownsample != opts.MaxConcurrentDownsample ||
+		got.MaxConcurrentCompaction != opts.MaxConcurrentCompaction ||
 		got.Logger != logger {
 		t.Fatalf("toModelOptions() basic fields = %#v", got)
 	}

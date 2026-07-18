@@ -17,6 +17,7 @@ func toModelOptions(opts Options) model.Options {
 		StorageMemory:           toModelStorageMemoryOptions(opts.StorageMemory),
 		Cardinality:             toModelCardinalityOptions(opts.Cardinality),
 		MaxConcurrentDownsample: opts.MaxConcurrentDownsample,
+		MaxConcurrentCompaction: opts.MaxConcurrentCompaction,
 		QueryProtection: model.QueryProtectionOptions{
 			DefaultMaxSamples: opts.QueryProtection.DefaultMaxSamples,
 			DefaultLimit:      opts.QueryProtection.DefaultLimit,

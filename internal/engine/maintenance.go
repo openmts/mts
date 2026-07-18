@@ -23,6 +23,7 @@ type MaintenanceStats struct {
 	CompactionSkipped       int
 	CompactionFailure       int
 	CompactionLastSkip      string
+	CompactionMaxConcurrent int
 	DownsampleActive        int
 	DownsampleInflight      int
 	DownsampleSkipped       uint64
@@ -38,9 +39,19 @@ func (e *Engine) MaintenanceStatsSnapshot() MaintenanceStats {
 	inflight := e.downsampleInflight
 	skipped := e.downsampleSkipped
 	e.downsampleMu.Unlock()
-	maxConcurrent := e.opts.MaxConcurrentDownsample
-	if maxConcurrent <= 0 {
-		maxConcurrent = defaultMaxConcurrentDownsample
+	maxDownsample := e.opts.MaxConcurrentDownsample
+	if maxDownsample <= 0 {
+		maxDownsample = defaultMaxConcurrentDownsample
+	}
+	maxCompaction := e.opts.MaxConcurrentCompaction
+	if maxCompaction <= 0 {
+		maxCompaction = defaultMaxConcurrentCompaction
+	}
+	if e.compactionScheduler != nil {
+		snap := e.compactionScheduler.snapshotCopy()
+		if snap.MaxConcurrent > 0 {
+			maxCompaction = snap.MaxConcurrent
+		}
 	}
 	return MaintenanceStats{
 		CompactionActive:        compaction.Active,
@@ -48,11 +59,12 @@ func (e *Engine) MaintenanceStatsSnapshot() MaintenanceStats {
 		CompactionSkipped:       compaction.Skipped,
 		CompactionFailure:       compaction.Failure,
 		CompactionLastSkip:      compaction.LastSkipReason,
+		CompactionMaxConcurrent: maxCompaction,
 		DownsampleActive:        downsample.Active,
 		DownsampleInflight:      inflight,
 		DownsampleSkipped:       skipped,
 		DownsampleFailure:       downsample.Failure,
-		DownsampleMaxConcurrent: maxConcurrent,
+		DownsampleMaxConcurrent: maxDownsample,
 		MaintenanceErrorCount:   len(e.MaintenanceErrors(context.Background())),
 	}
 }

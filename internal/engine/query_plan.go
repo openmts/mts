@@ -100,6 +100,14 @@ func (e *Engine) BuildQueryPlan(ctx context.Context, query model.Query) (QueryPl
 	explain.MatchedShards = len(shards)
 	explain.SkippedShards = candidateCount - len(shards)
 	explain.Pushdowns = append(explain.Pushdowns, "shard_time")
+	partStats := estimateMatchedPartStats(shards, query)
+	explain.CandidateParts = partStats.candidateParts
+	explain.MatchedParts = partStats.matchedParts
+	explain.SkippedParts = partStats.skippedParts
+	explain.EstimatedPartRows = partStats.estimatedRows
+	if partStats.matchedParts > 0 {
+		explain.Pushdowns = append(explain.Pushdowns, "part_time")
+	}
 	explain.Cost = estimateQueryCost(query, explain)
 	return QueryPlan{
 		Query:                query,
@@ -114,39 +122,48 @@ func (e *Engine) BuildQueryPlan(ctx context.Context, query model.Query) (QueryPl
 	}, nil
 }
 
-func estimateQueryCost(query model.Query, explain model.QueryExplain) model.QueryCost {
-	estimate := int64(explain.SeriesCount)
-	if explain.FieldCount > 0 {
-		estimate *= int64(explain.FieldCount)
-	}
-	if explain.MatchedShards > 0 {
-		estimate *= int64(explain.MatchedShards)
-	}
-	// 时间窗启发式：窗越长扫描潜力越高，按小时量级放大，避免仅按 series×field 低估。
-	if query.EndTime > query.StartTime {
-		windowHours := (query.EndTime - query.StartTime) / int64(time.Hour)
-		if windowHours > 1 {
-			if windowHours > 24*30 {
-				windowHours = 24 * 30
-			}
-			estimate *= windowHours
+type matchedPartStats struct {
+	candidateParts int
+	matchedParts   int
+	skippedParts   int
+	estimatedRows  int64
+}
+
+func estimateMatchedPartStats(shards []*Shard, query model.Query) matchedPartStats {
+	stats := matchedPartStats{}
+	for _, shard := range shards {
+		if shard == nil {
+			continue
 		}
+		candidate, matched, rows := shard.estimateQueryPartStats(query.StartTime, query.EndTime)
+		stats.candidateParts += candidate
+		stats.matchedParts += matched
+		stats.skippedParts += candidate - matched
+		stats.estimatedRows += rows
 	}
+	return stats
+}
+
+func estimateQueryCost(query model.Query, explain model.QueryExplain) model.QueryCost {
+	estimate := estimateQuerySamples(query, explain)
 	if query.Limit > 0 && estimate > int64(query.Limit) {
 		estimate = int64(query.Limit)
 	}
 	cost := model.QueryCost{
-		SeriesCount:      explain.SeriesCount,
-		FieldCount:       explain.FieldCount,
-		CandidateShards:  explain.CandidateShards,
-		MatchedShards:    explain.MatchedShards,
-		Limit:            query.Limit,
-		Offset:           query.Offset,
-		WindowNanos:      int64(query.Window),
-		Ordered:          query.Order.By != model.QueryOrderByNone,
-		Cursor:           query.Cursor != "",
-		EstimatedSamples: estimate,
-		PlanClass:        "scan",
+		SeriesCount:       explain.SeriesCount,
+		FieldCount:        explain.FieldCount,
+		CandidateShards:   explain.CandidateShards,
+		MatchedShards:     explain.MatchedShards,
+		CandidateParts:    explain.CandidateParts,
+		MatchedParts:      explain.MatchedParts,
+		Limit:             query.Limit,
+		Offset:            query.Offset,
+		WindowNanos:       int64(query.Window),
+		Ordered:           query.Order.By != model.QueryOrderByNone,
+		Cursor:            query.Cursor != "",
+		EstimatedPartRows: explain.EstimatedPartRows,
+		EstimatedSamples:  estimate,
+		PlanClass:         "scan",
 	}
 	if explain.SeriesCount == 0 || explain.FieldCount == 0 || explain.MatchedShards == 0 {
 		cost.PlanClass = "empty"
@@ -162,4 +179,45 @@ func estimateQueryCost(query model.Query, explain model.QueryExplain) model.Quer
 		cost.PlanClass = "group_aggregate"
 	}
 	return cost
+}
+
+func estimateQuerySamples(query model.Query, explain model.QueryExplain) int64 {
+	// 优先使用 part 元数据行数（按时间窗比例裁剪），再按字段数放大。
+	if explain.EstimatedPartRows > 0 {
+		estimate := explain.EstimatedPartRows
+		if explain.FieldCount > 0 {
+			estimate *= int64(explain.FieldCount)
+		}
+		if explain.SeriesCount > 0 && explain.MatchedParts > 0 {
+			// part rows 已覆盖该 shard 内全部 series；用匹配 series 占比做保守缩放。
+			// 无 series 级 part 统计时，取 min(1, series 比例近似) 不适用；保留 rows*fields 上界，
+			// 并与 series*fields 下界取 max，避免过低。
+			seriesFloor := int64(explain.SeriesCount)
+			if explain.FieldCount > 0 {
+				seriesFloor *= int64(explain.FieldCount)
+			}
+			if estimate < seriesFloor {
+				estimate = seriesFloor
+			}
+		}
+		return estimate
+	}
+	// 回退：启发式 series×fields×shards×时间窗小时数。
+	estimate := int64(explain.SeriesCount)
+	if explain.FieldCount > 0 {
+		estimate *= int64(explain.FieldCount)
+	}
+	if explain.MatchedShards > 0 {
+		estimate *= int64(explain.MatchedShards)
+	}
+	if query.EndTime > query.StartTime {
+		windowHours := (query.EndTime - query.StartTime) / int64(time.Hour)
+		if windowHours > 1 {
+			if windowHours > 24*30 {
+				windowHours = 24 * 30
+			}
+			estimate *= windowHours
+		}
+	}
+	return estimate
 }

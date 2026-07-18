@@ -498,6 +498,64 @@ func (s *Shard) approxWALMemoryBytesLocked() int64 {
 	return s.wal.ApproxMemoryBytes()
 }
 
+func (s *Shard) estimateQueryPartStats(start, end int64) (candidate int, matched int, estimatedRows int64) {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	parts := s.manifest.Parts
+	candidate = len(parts)
+	for _, meta := range parts {
+		if !partTimeOverlaps(meta.MinTime, meta.MaxTime, start, end) {
+			continue
+		}
+		matched++
+		estimatedRows += proportionalPartRows(meta, start, end)
+	}
+	// MemTable 中尚未落盘的样本也计入扫描潜力。
+	if s.mem != nil {
+		memSamples := s.mem.SampleCount()
+		if memSamples > 0 {
+			estimatedRows += int64(memSamples)
+		}
+	}
+	return candidate, matched, estimatedRows
+}
+
+func partTimeOverlaps(minTime, maxTime, start, end int64) bool {
+	return maxTime >= start && minTime <= end
+}
+
+func proportionalPartRows(meta sstable.PartMeta, start, end int64) int64 {
+	rows := int64(meta.RowsCount)
+	if rows <= 0 {
+		return 0
+	}
+	partSpan := meta.MaxTime - meta.MinTime
+	if partSpan <= 0 {
+		return rows
+	}
+	// 查询窗与 part 时间范围交集长度 / part 全长 * rows。
+	overlapStart := meta.MinTime
+	if start > overlapStart {
+		overlapStart = start
+	}
+	overlapEnd := meta.MaxTime
+	if end < overlapEnd {
+		overlapEnd = end
+	}
+	if overlapEnd < overlapStart {
+		return 0
+	}
+	overlap := overlapEnd - overlapStart
+	if overlap >= partSpan {
+		return rows
+	}
+	scaled := rows * overlap / partSpan
+	if scaled <= 0 {
+		return 1
+	}
+	return scaled
+}
+
 func (s *Shard) Query(query memtable.Query) ([]model.ColumnData, error) {
 	stream, err := s.ScanColumns(query)
 	if err != nil {

@@ -76,7 +76,7 @@ func OpenWithDeps(_ context.Context, opts model.Options, deps Deps) (*Engine, er
 		metadata:            metadata,
 		shards:              make(map[string]*Shard),
 		memory:              newStorageMemoryLimiter(opts.StorageMemory),
-		compactionScheduler: newCompactionScheduler(),
+		compactionScheduler: newCompactionScheduler(opts.MaxConcurrentCompaction),
 		downsampleRunning:   make(map[string]struct{}),
 		logger:              opts.Logger,
 	}

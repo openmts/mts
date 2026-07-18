@@ -38,6 +38,8 @@ type Options struct {
 	Cardinality            CardinalityOptions
 	// MaxConcurrentDownsample 限制后台降采样策略的全局并发数，<=0 使用默认值 2。
 	MaxConcurrentDownsample int
+	// MaxConcurrentCompaction 限制全局并发 compaction 任务数，<=0 使用默认值 1。
+	MaxConcurrentCompaction int
 	// QueryProtection 控制未显式设置 limit/budget 时的默认读取保护。
 	QueryProtection QueryProtectionOptions
 	// MemTableDisorderFlushRatio 当前 MemTable 乱序占比达到阈值时更积极 flush；<=0 关闭。
@@ -169,6 +171,9 @@ func (opts Options) Validate() error {
 		return err
 	}
 	if err := validateNonNegativeInt("max concurrent downsample", opts.MaxConcurrentDownsample); err != nil {
+		return err
+	}
+	if err := validateNonNegativeInt("max concurrent compaction", opts.MaxConcurrentCompaction); err != nil {
 		return err
 	}
 	if err := validateNonNegativeInt("query protection default max samples", opts.QueryProtection.DefaultMaxSamples); err != nil {

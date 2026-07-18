@@ -25,6 +25,7 @@ func (e *Engine) MetricsSnapshot() []observability.Metric {
 	registry := observability.NewRegistry()
 	recordStorageMemoryMetrics(registry, snapshot)
 	recordCompactionMetrics(registry, stats)
+	recordTombstoneMetrics(registry, production)
 	recordWALMetrics(registry, e.walMetricsSnapshot())
 	recordMemTableMetrics(registry, production)
 	recordSSTableMetrics(registry, production)
@@ -76,6 +77,7 @@ type productionMetrics struct {
 	RecoveryIssues          int
 	RecoveryErrors          int
 	RecoveryFatalErrors     int
+	TombstoneCount          int
 }
 
 func (e *Engine) productionMetricsSnapshot() productionMetrics {
@@ -96,6 +98,7 @@ func (e *Engine) productionMetricsSnapshot() productionMetrics {
 		out.RecoveryIssues += len(shard.recoveryReport.Issues)
 		out.RecoveryErrors += recoveryErrorCount(shard.recoveryReport)
 		out.RecoveryFatalErrors += recoveryFatalCount(shard.recoveryReport)
+		out.TombstoneCount += len(shard.tombstones)
 		for _, part := range shard.manifest.Parts {
 			mergePartMetrics(&out, part)
 		}

@@ -6,7 +6,7 @@ MTS 是一个单机嵌入式时序存储库，面向 Go 应用内的本地时序
 
 当前稳定对外接口包括 Go library 根包 `github.com/openmts/mts`、本地维护 CLI `cmd/mts-storage` 和服务进程 `cmd/mts-server`。`internal/queryservice` 和 `internal/service` 中的内部 HTTP 实现不作为当前外部稳定 API。
 
-稳定性、磁盘格式与 experimental 边界见 `docs/compatibility.md`。
+稳定性、磁盘格式与 experimental 边界见 `docs/compatibility.md`。生产查询保护、删除回收与 Nightly 门禁见 `docs/ops/`。
 
 ## 安装
 

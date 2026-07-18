@@ -135,19 +135,43 @@ func fromModelQueryBudget(budget model.QueryBudget) QueryBudget {
 
 func fromModelQueryExplain(explain model.QueryExplain) QueryExplain {
 	return QueryExplain{
-		Database:        explain.Database,
-		RetentionPolicy: explain.RetentionPolicy,
-		Measurement:     explain.Measurement,
-		ReadEpoch:       explain.ReadEpoch,
-		TagFilters:      cloneStringMap(explain.TagFilters),
-		FieldFilters:    append([]string(nil), explain.FieldFilters...),
-		SeriesCount:     explain.SeriesCount,
-		FieldCount:      explain.FieldCount,
-		CandidateShards: explain.CandidateShards,
-		MatchedShards:   explain.MatchedShards,
-		SkippedShards:   explain.SkippedShards,
-		Pushdowns:       append([]string(nil), explain.Pushdowns...),
-		Budget:          fromModelQueryBudget(explain.Budget),
+		Database:          explain.Database,
+		RetentionPolicy:   explain.RetentionPolicy,
+		Measurement:       explain.Measurement,
+		ReadEpoch:         explain.ReadEpoch,
+		TagFilters:        cloneStringMap(explain.TagFilters),
+		FieldFilters:      append([]string(nil), explain.FieldFilters...),
+		SeriesCount:       explain.SeriesCount,
+		FieldCount:        explain.FieldCount,
+		CandidateShards:   explain.CandidateShards,
+		MatchedShards:     explain.MatchedShards,
+		SkippedShards:     explain.SkippedShards,
+		CandidateParts:    explain.CandidateParts,
+		MatchedParts:      explain.MatchedParts,
+		SkippedParts:      explain.SkippedParts,
+		EstimatedPartRows: explain.EstimatedPartRows,
+		Pushdowns:         append([]string(nil), explain.Pushdowns...),
+		Budget:            fromModelQueryBudget(explain.Budget),
+		Cost:              fromModelQueryCost(explain.Cost),
+	}
+}
+
+func fromModelQueryCost(cost model.QueryCost) QueryCost {
+	return QueryCost{
+		SeriesCount:       cost.SeriesCount,
+		FieldCount:        cost.FieldCount,
+		CandidateShards:   cost.CandidateShards,
+		MatchedShards:     cost.MatchedShards,
+		CandidateParts:    cost.CandidateParts,
+		MatchedParts:      cost.MatchedParts,
+		Limit:             cost.Limit,
+		Offset:            cost.Offset,
+		WindowNanos:       cost.WindowNanos,
+		Ordered:           cost.Ordered,
+		Cursor:            cost.Cursor,
+		EstimatedPartRows: cost.EstimatedPartRows,
+		EstimatedSamples:  cost.EstimatedSamples,
+		PlanClass:         cost.PlanClass,
 	}
 }
 

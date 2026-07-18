@@ -56,3 +56,25 @@ Experimental 功能变更不构成 major，但应在 CHANGELOG 记录。
 5. 关键路径 bench 对比（median 劣化 >10% 需说明）
 
 完整商用门禁：`make ci`（`scripts/ci_gate.sh`）。
+
+
+## 5. Format / API 兼容矩阵
+
+| 维度 | 当前策略 | 破坏性变更门槛 |
+| --- | --- | --- |
+| Public Go API (`github.com/openmts/mts`) | semver；新增字段默认零值兼容 | major：删除/改语义 |
+| 错误 sentinel | `errors.Is` 稳定集合见上文 | major：移除 sentinel |
+| WAL segment | magic + version；未知 version fail-fast | format major + CHANGELOG |
+| SSTable part metadata | version 校验；不支持则拒绝 part | format major + CHANGELOG |
+| Manifest | 版本不匹配 fail-fast | format major + CHANGELOG |
+| QueryExplain 扩展字段 | minor 可增字段；旧客户端忽略未知 JSON 字段 | major：删除/改类型 |
+| 配置 Options 新字段 | minor；零值保持旧行为或安全默认 | major：改变零值安全语义 |
+
+## 6. 本轮相关默认变更（兼容说明）
+
+| 配置 | 默认 | 兼容性 |
+| --- | --- | --- |
+| `QueryProtection.DefaultMaxSamples` | `DefaultOptions` 为 1e6；零值 Options 不注入 | 显式 budget 优先 |
+| `MemTableDisorderFlushRatio` | 0.25（DefaultOptions） | `<=0` 关闭 |
+| `MaxConcurrentCompaction` | 归一化默认 1 | `<=0` 使用默认 |
+| `MaxConcurrentDownsample` | 归一化默认 2 | 既有行为 |

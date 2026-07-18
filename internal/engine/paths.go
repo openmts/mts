@@ -18,6 +18,7 @@ const (
 	defaultCascadeSteps            = 8
 	defaultQueryEndTime            = int64(1<<63 - 1)
 	defaultMaxConcurrentDownsample = 2
+	defaultMaxConcurrentCompaction = 1
 	defaultDisorderFlushMinSamples = 1024
 )
 
@@ -38,6 +39,9 @@ func normalizeOptions(opts model.Options) model.Options {
 	opts.Compaction = normalizeCompactionOptions(opts.Compaction, opts.Compression)
 	if opts.MaxConcurrentDownsample <= 0 {
 		opts.MaxConcurrentDownsample = defaultMaxConcurrentDownsample
+	}
+	if opts.MaxConcurrentCompaction <= 0 {
+		opts.MaxConcurrentCompaction = defaultMaxConcurrentCompaction
 	}
 	if opts.MemTableDisorderFlushRatio > 0 && opts.MemTableDisorderFlushMinSamples <= 0 {
 		opts.MemTableDisorderFlushMinSamples = defaultDisorderFlushMinSamples

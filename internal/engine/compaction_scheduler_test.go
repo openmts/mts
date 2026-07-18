@@ -13,7 +13,7 @@ func TestBackgroundCompactionSkipsWhenStorageMemoryBusy(t *testing.T) {
 	engine := &Engine{
 		opts:                model.Options{StorageMemory: memoryOptions},
 		memory:              newStorageMemoryLimiter(memoryOptions),
-		compactionScheduler: newCompactionScheduler(),
+		compactionScheduler: newCompactionScheduler(0),
 	}
 	release, err := engine.memory.Reserve(storageMemoryWrite, 0, 11)
 	if err != nil {
@@ -33,7 +33,7 @@ func TestBackgroundCompactionSkipsWhenStorageMemoryBusy(t *testing.T) {
 }
 
 func TestCompactionSchedulerRejectsDuplicateCandidateSignature(t *testing.T) {
-	scheduler := newCompactionScheduler()
+	scheduler := newCompactionScheduler(0)
 	if !scheduler.start("level:1|a|b") {
 		t.Fatal("first start = false, want true")
 	}
@@ -88,5 +88,45 @@ func TestApplyRetentionWaitsForShardLifecycleLock(t *testing.T) {
 	}
 	if files.removeAllCalls != 1 {
 		t.Fatalf("RemoveAll calls = %d, want 1", files.removeAllCalls)
+	}
+}
+
+func TestCompactionSchedulerEnforcesMaxConcurrent(t *testing.T) {
+	scheduler := newCompactionScheduler(1)
+	if !scheduler.start("a") {
+		t.Fatal("first start = false, want true")
+	}
+	if scheduler.start("b") {
+		t.Fatal("second start under limit = true, want false")
+	}
+	snap := scheduler.snapshot()
+	if snap.ConcurrencySkips != 1 {
+		t.Fatalf("ConcurrencySkips = %d, want 1", snap.ConcurrencySkips)
+	}
+	if snap.LastSkipReason != compactionSkipConcurrencyLimit {
+		t.Fatalf("LastSkipReason = %q, want %q", snap.LastSkipReason, compactionSkipConcurrencyLimit)
+	}
+	if snap.MaxConcurrent != 1 {
+		t.Fatalf("MaxConcurrent = %d, want 1", snap.MaxConcurrent)
+	}
+	scheduler.finish("a")
+	if !scheduler.start("b") {
+		t.Fatal("start after finish = false, want true")
+	}
+	scheduler.finish("b")
+}
+
+func TestMaintenanceStatsExposeCompactionMaxConcurrent(t *testing.T) {
+	eng := &Engine{
+		opts: model.Options{
+			MaxConcurrentCompaction: 3,
+			MaxConcurrentDownsample: 2,
+		},
+		compactionScheduler: newCompactionScheduler(3),
+		downsampleRunning:   make(map[string]struct{}),
+	}
+	stats := eng.MaintenanceStatsSnapshot()
+	if stats.CompactionMaxConcurrent != 3 {
+		t.Fatalf("CompactionMaxConcurrent = %d, want 3", stats.CompactionMaxConcurrent)
 	}
 }

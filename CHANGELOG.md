@@ -4,6 +4,17 @@
 
 ### Added
 
+- 查询默认保护 `QueryProtection` 与 MemTable 乱序降载 flush。
+- 查询代价校准：`MatchedParts` / `EstimatedPartRows` / part 行数比例估计。
+- `MaxConcurrentCompaction` 全局 compaction 并发配额与维护指标。
+- SSTable block CRC round-trip fuzz 测试。
+- tombstone 待回收 gauge：`mts_tombstones_pending`。
+- 运维文档：`docs/ops/nightly-gates.md`、`delete-reclaim.md`、`query-protection.md`。
+- 兼容矩阵扩展见 `docs/compatibility.md`。
+
+### Added (historical)
+
+
 - 增加根包 README、package godoc 和可执行示例。
 - 增加 `DefaultOptions(path)`、`Options.Validate()`、`ErrInvalidOptions`。
 - 增加公共错误类别 `ErrNotFound`、`ErrUnsupported`。

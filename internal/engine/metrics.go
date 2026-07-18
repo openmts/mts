@@ -57,6 +57,10 @@ func recordCompactionMetrics(registry *observability.Registry, stats CompactionS
 	registry.AddCounter("mts_compaction_safe_delete_parts_total", "Input parts safely removed after manifest commit.", float64(stats.SafeDeleteParts))
 }
 
+func recordTombstoneMetrics(registry *observability.Registry, snapshot productionMetrics) {
+	registry.SetGauge("mts_tombstones_pending", "Logical tombstones pending physical reclaim via compaction.", float64(snapshot.TombstoneCount))
+}
+
 func recordWALMetrics(registry *observability.Registry, snapshot wal.Metrics) {
 	registry.AddCounter("mts_wal_append_records_total", "WAL records appended.", float64(snapshot.AppendRecords))
 	registry.AddCounter("mts_wal_append_errors_total", "WAL append errors.", float64(snapshot.AppendErrors))
@@ -204,6 +208,7 @@ func recordMaintenanceMetrics(registry *observability.Registry, stats Maintenanc
 	registry.SetGauge("mts_maintenance_downsample_inflight", "In-flight downsample policy runs.", float64(stats.DownsampleInflight))
 	registry.SetGauge("mts_maintenance_downsample_active", "Active downsample runs recorded by stats.", float64(stats.DownsampleActive))
 	registry.SetGauge("mts_maintenance_downsample_max_concurrent", "Configured max concurrent downsample runs.", float64(stats.DownsampleMaxConcurrent))
+	registry.SetGauge("mts_maintenance_compaction_max_concurrent", "Configured max concurrent compaction tasks.", float64(stats.CompactionMaxConcurrent))
 	registry.SetGauge("mts_maintenance_error_count", "Shard maintenance errors currently recorded.", float64(stats.MaintenanceErrorCount))
 	registry.AddCounter("mts_maintenance_compaction_skipped_total", "Background compaction skips.", float64(stats.CompactionSkipped))
 	registry.AddCounter("mts_maintenance_compaction_failures_total", "Compaction failures.", float64(stats.CompactionFailure))

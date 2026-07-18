@@ -330,34 +330,41 @@ const (
 )
 
 type QueryExplain struct {
-	Database        string            `json:"database"`
-	RetentionPolicy string            `json:"retention_policy"`
-	Measurement     string            `json:"measurement"`
-	ReadEpoch       int64             `json:"read_epoch"`
-	TagFilters      map[string]string `json:"tag_filters"`
-	FieldFilters    []string          `json:"field_filters"`
-	SeriesCount     int               `json:"series_count"`
-	FieldCount      int               `json:"field_count"`
-	CandidateShards int               `json:"candidate_shards"`
-	MatchedShards   int               `json:"matched_shards"`
-	SkippedShards   int               `json:"skipped_shards"`
-	Pushdowns       []string          `json:"pushdowns"`
-	Budget          QueryBudget       `json:"budget"`
-	Cost            QueryCost         `json:"cost"`
+	Database          string            `json:"database"`
+	RetentionPolicy   string            `json:"retention_policy"`
+	Measurement       string            `json:"measurement"`
+	ReadEpoch         int64             `json:"read_epoch"`
+	TagFilters        map[string]string `json:"tag_filters"`
+	FieldFilters      []string          `json:"field_filters"`
+	SeriesCount       int               `json:"series_count"`
+	FieldCount        int               `json:"field_count"`
+	CandidateShards   int               `json:"candidate_shards"`
+	MatchedShards     int               `json:"matched_shards"`
+	SkippedShards     int               `json:"skipped_shards"`
+	CandidateParts    int               `json:"candidate_parts"`
+	MatchedParts      int               `json:"matched_parts"`
+	SkippedParts      int               `json:"skipped_parts"`
+	EstimatedPartRows int64             `json:"estimated_part_rows"`
+	Pushdowns         []string          `json:"pushdowns"`
+	Budget            QueryBudget       `json:"budget"`
+	Cost              QueryCost         `json:"cost"`
 }
 
 type QueryCost struct {
-	SeriesCount      int    `json:"series_count"`
-	FieldCount       int    `json:"field_count"`
-	CandidateShards  int    `json:"candidate_shards"`
-	MatchedShards    int    `json:"matched_shards"`
-	Limit            int    `json:"limit"`
-	Offset           int    `json:"offset"`
-	WindowNanos      int64  `json:"window_nanos"`
-	Ordered          bool   `json:"ordered"`
-	Cursor           bool   `json:"cursor"`
-	EstimatedSamples int64  `json:"estimated_samples"`
-	PlanClass        string `json:"plan_class"`
+	SeriesCount       int    `json:"series_count"`
+	FieldCount        int    `json:"field_count"`
+	CandidateShards   int    `json:"candidate_shards"`
+	MatchedShards     int    `json:"matched_shards"`
+	CandidateParts    int    `json:"candidate_parts"`
+	MatchedParts      int    `json:"matched_parts"`
+	Limit             int    `json:"limit"`
+	Offset            int    `json:"offset"`
+	WindowNanos       int64  `json:"window_nanos"`
+	Ordered           bool   `json:"ordered"`
+	Cursor            bool   `json:"cursor"`
+	EstimatedPartRows int64  `json:"estimated_part_rows"`
+	EstimatedSamples  int64  `json:"estimated_samples"`
+	PlanClass         string `json:"plan_class"`
 }
 
 type QueryStats struct {
@@ -396,25 +403,27 @@ type StorageQuery struct {
 }
 
 type Options struct {
-	Path                   string
-	DefaultDatabase        string
-	DefaultRetentionPolicy string
-	ShardDuration          time.Duration
-	Retention              time.Duration
-	MemTableMaxSamples     int
-	WAL                    WALOptions
-	FlushSync              bool
-	Compaction             CompactionOptions
-	Compression            CompressionOptions
-	StorageMemory          StorageMemoryOptions
-	Cardinality            CardinalityOptions
+	Path                    string
+	DefaultDatabase         string
+	DefaultRetentionPolicy  string
+	ShardDuration           time.Duration
+	Retention               time.Duration
+	MemTableMaxSamples      int
+	WAL                     WALOptions
+	FlushSync               bool
+	Compaction              CompactionOptions
+	Compression             CompressionOptions
+	StorageMemory           StorageMemoryOptions
+	Cardinality             CardinalityOptions
 	MaxConcurrentDownsample int
-	QueryProtection        QueryProtectionOptions
+	// MaxConcurrentCompaction 限制全局并发 compaction 任务数；<=0 使用默认值。
+	MaxConcurrentCompaction int
+	QueryProtection         QueryProtectionOptions
 	// MemTableDisorderFlushRatio 当前 MemTable 乱序样本占比达到该阈值时触发更积极 flush；<=0 关闭。
 	MemTableDisorderFlushRatio float64
 	// MemTableDisorderFlushMinSamples 乱序降载生效的最小追加样本数；<=0 时使用默认。
 	MemTableDisorderFlushMinSamples int
-	Logger                 *slog.Logger
+	Logger                          *slog.Logger
 }
 
 // QueryProtectionOptions 控制查询默认读取保护。
