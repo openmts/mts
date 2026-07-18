@@ -4,6 +4,10 @@
 
 ### Added
 
+- POC：列式 WAL（segment formatID=2）与跨 shard 有界并行 compact。
+- `MaxConcurrentCompaction` 默认归一化为 `min(GOMAXPROCS, 4)`。
+
+
 - 查询默认保护 `QueryProtection` 与 MemTable 乱序降载 flush。
 - 查询代价校准：`MatchedParts` / `EstimatedPartRows` / part 行数比例估计。
 - `MaxConcurrentCompaction` 全局 compaction 并发配额与维护指标。

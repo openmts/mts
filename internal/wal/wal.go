@@ -24,7 +24,7 @@ const (
 
 const (
 	walSegmentMagic     = "MTSWAL2"
-	walSegmentFormatID  = uint16(1)
+	walSegmentFormatID  = uint16(2)
 	walSegmentHeaderLen = len(walSegmentMagic) + 2 + 2 + 4
 )
 

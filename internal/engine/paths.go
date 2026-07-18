@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"time"
 
@@ -41,7 +42,7 @@ func normalizeOptions(opts model.Options) model.Options {
 		opts.MaxConcurrentDownsample = defaultMaxConcurrentDownsample
 	}
 	if opts.MaxConcurrentCompaction <= 0 {
-		opts.MaxConcurrentCompaction = defaultMaxConcurrentCompaction
+		opts.MaxConcurrentCompaction = defaultParallelCompactionLimit()
 	}
 	if opts.MemTableDisorderFlushRatio > 0 && opts.MemTableDisorderFlushMinSamples <= 0 {
 		opts.MemTableDisorderFlushMinSamples = defaultDisorderFlushMinSamples
@@ -223,4 +224,15 @@ func shardDir(root string, database string, policy string, start int64) string {
 
 func catalogDir(root string) string {
 	return filepath.Join(root, "catalog")
+}
+
+func defaultParallelCompactionLimit() int {
+	limit := runtime.GOMAXPROCS(0)
+	if limit < 1 {
+		return defaultMaxConcurrentCompaction
+	}
+	if limit > 4 {
+		return 4
+	}
+	return limit
 }

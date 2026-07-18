@@ -27,28 +27,6 @@ func appendValuePayload(dst []byte, value model.FieldValue) ([]byte, error) {
 	}
 }
 
-func appendTypedValuePayload(
-	dst []byte,
-	field model.ResolvedTypedFieldColumn,
-	row int,
-) ([]byte, error) {
-	switch field.Type {
-	case model.FieldFloat64:
-		return binary.LittleEndian.AppendUint64(dst, math.Float64bits(field.Float64Values[row])), nil
-	case model.FieldInt64:
-		return binary.AppendVarint(dst, field.Int64Values[row]), nil
-	case model.FieldString:
-		return codec.AppendString(dst, field.StringValues[row]), nil
-	case model.FieldBool:
-		if field.BoolValues[row] {
-			return append(dst, 1), nil
-		}
-		return append(dst, 0), nil
-	default:
-		return nil, fmt.Errorf("unsupported typed field value type %d", field.Type)
-	}
-}
-
 func typedResolvedFieldLen(field model.ResolvedTypedFieldColumn) int {
 	switch field.Type {
 	case model.FieldFloat64:
@@ -174,6 +152,18 @@ func (r *batchReader) float64() (model.FieldValue, error) {
 	value := math.Float64frombits(binary.LittleEndian.Uint64(r.rest[:8]))
 	r.rest = r.rest[8:]
 	return model.Float64Value(value), nil
+}
+
+func (r *batchReader) rawBytes(n int, name string) ([]byte, error) {
+	if n < 0 {
+		return nil, fmt.Errorf("decode wal %s: negative length", name)
+	}
+	if len(r.rest) < n {
+		return nil, fmt.Errorf("decode wal %s: truncated payload", name)
+	}
+	out := r.rest[:n]
+	r.rest = r.rest[n:]
+	return out, nil
 }
 
 func (r *batchReader) done(name string) error {

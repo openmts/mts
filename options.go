@@ -38,7 +38,7 @@ type Options struct {
 	Cardinality            CardinalityOptions
 	// MaxConcurrentDownsample 限制后台降采样策略的全局并发数，<=0 使用默认值 2。
 	MaxConcurrentDownsample int
-	// MaxConcurrentCompaction 限制全局并发 compaction 任务数，<=0 使用默认值 1。
+	// MaxConcurrentCompaction 限制跨 shard 并发 compaction 数；<=0 时归一化为 min(GOMAXPROCS,4)。
 	MaxConcurrentCompaction int
 	// QueryProtection 控制未显式设置 limit/budget 时的默认读取保护。
 	QueryProtection QueryProtectionOptions

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/openmts/mts/internal/model"
@@ -29,35 +30,97 @@ func (e *Engine) CompactWithResult(ctx context.Context) (CompactionResult, error
 		return CompactionResult{State: compactionTaskFailed, Error: err.Error()}, err
 	}
 	started := time.Now()
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	shards := e.snapshotShards()
+	workers := e.compactWorkerLimit()
+	type shardOutcome struct {
+		result CompactionResult
+		err    error
+	}
+	outcomes := make([]shardOutcome, len(shards))
+	if workers <= 1 || len(shards) <= 1 {
+		for index, shard := range shards {
+			if err := ctx.Err(); err != nil {
+				result := CompactionResult{State: compactionTaskFailed, Error: err.Error(), Duration: time.Since(started)}
+				return result, err
+			}
+			outcomes[index].result, outcomes[index].err = shard.CompactWithResult()
+		}
+	} else {
+		sem := make(chan struct{}, workers)
+		var wg sync.WaitGroup
+		for index, shard := range shards {
+			if err := ctx.Err(); err != nil {
+				break
+			}
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(index int, shard *Shard) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				if err := ctx.Err(); err != nil {
+					outcomes[index] = shardOutcome{
+						result: CompactionResult{State: compactionTaskFailed, Error: err.Error()},
+						err:    err,
+					}
+					return
+				}
+				result, err := shard.CompactWithResult()
+				outcomes[index] = shardOutcome{result: result, err: err}
+			}(index, shard)
+		}
+		wg.Wait()
+	}
 	result := CompactionResult{State: compactionTaskNoop}
-	for _, shard := range e.shards {
-		shardResult, err := shard.CompactWithResult()
-		result = mergeCompactionResult(result, shardResult)
-		if err != nil {
+	var firstErr error
+	for _, outcome := range outcomes {
+		result = mergeCompactionResult(result, outcome.result)
+		if outcome.err != nil && firstErr == nil {
+			firstErr = outcome.err
 			result.State = compactionTaskFailed
-			result.Duration = time.Since(started)
-			result.Error = err.Error()
-			e.logger.Warn("compaction failed",
-				"duration_ms", result.Duration.Milliseconds(),
-				"error", err,
-			)
-			return result, err
+			result.Error = outcome.err.Error()
 		}
 	}
 	result.Duration = time.Since(started)
 	if result.Shards > 0 && result.State == compactionTaskNoop {
 		result.State = compactionTaskSucceeded
 	}
+	if firstErr != nil {
+		e.logger.Warn("compaction failed",
+			"duration_ms", result.Duration.Milliseconds(),
+			"error", firstErr,
+			"workers", workers,
+		)
+		return result, firstErr
+	}
 	if result.State == compactionTaskSucceeded {
 		e.logger.Info("compaction completed",
 			"duration_ms", result.Duration.Milliseconds(),
 			"input_parts", result.InputParts,
 			"output_parts", result.OutputParts,
+			"workers", workers,
 		)
 	}
 	return result, nil
+}
+
+func (e *Engine) snapshotShards() []*Shard {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	shards := make([]*Shard, 0, len(e.shards))
+	for _, shard := range e.shards {
+		shards = append(shards, shard)
+	}
+	return shards
+}
+
+func (e *Engine) compactWorkerLimit() int {
+	if e == nil {
+		return 1
+	}
+	if e.opts.MaxConcurrentCompaction > 0 {
+		return e.opts.MaxConcurrentCompaction
+	}
+	return defaultParallelCompactionLimit()
 }
 
 func (e *Engine) ApplyRetention(_ context.Context, now time.Time) error {

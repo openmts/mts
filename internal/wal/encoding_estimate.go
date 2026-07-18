@@ -4,14 +4,6 @@ import (
 	"github.com/openmts/mts/internal/model"
 )
 
-func estimateBatchSize(records []model.ResolvedPoint) int {
-	size := uvarintSize(uint64(len(records)))
-	for _, record := range records {
-		size += estimatePointSize(record)
-	}
-	return size
-}
-
 func estimateTypedBatchSize(
 	batch model.ResolvedTypedBatch,
 	rows []int,

@@ -14,67 +14,6 @@ func encodeBatch(records []model.ResolvedPoint) ([]byte, error) {
 	return encodeBatchInto(nil, records)
 }
 
-func encodeBatchInto(dst []byte, records []model.ResolvedPoint) ([]byte, error) {
-	identities, identityRefs := batchIdentities(records)
-	fieldNames, fieldNameRefs := batchFieldNames(records)
-	size := estimateBatchSize(records)
-	if cap(dst) < size {
-		dst = make([]byte, 0, size)
-	} else {
-		dst = dst[:0]
-	}
-	dst = binary.AppendUvarint(dst, uint64(len(identities)))
-	for _, identity := range identities {
-		dst = appendIdentity(dst, identity)
-	}
-	dst = binary.AppendUvarint(dst, uint64(len(fieldNames)))
-	for _, name := range fieldNames {
-		dst = codec.AppendString(dst, name)
-	}
-	dst = binary.AppendUvarint(dst, uint64(len(records)))
-	for index, record := range records {
-		var err error
-		dst, err = appendPoint(dst, record, identityRefs[index], fieldNameRefs[index])
-		if err != nil {
-			return nil, err
-		}
-	}
-	return dst, nil
-}
-
-func encodeTypedBatchInto(
-	dst []byte,
-	batch model.ResolvedTypedBatch,
-	rows []int,
-) ([]byte, error) {
-	if err := validateResolvedTypedBatch(batch, rows); err != nil {
-		return nil, err
-	}
-	identityRows, identityRefs := typedBatchIdentities(batch, rows)
-	size := estimateTypedBatchSize(batch, rows, identityRows)
-	if cap(dst) < size {
-		dst = make([]byte, 0, size)
-	} else {
-		dst = dst[:0]
-	}
-	tagOrder := typedTagOrder(batch.Tags)
-	dst = binary.AppendUvarint(dst, uint64(len(identityRows)))
-	for _, row := range identityRows {
-		dst = appendTypedIdentity(dst, batch, row, tagOrder)
-	}
-	dst = appendTypedFieldNames(dst, batch.Fields)
-	dst = binary.AppendUvarint(dst, uint64(typedRowCount(batch, rows)))
-	for position, ref := range identityRefs {
-		row := typedRowIndex(rows, position)
-		var err error
-		dst, err = appendTypedPoint(dst, batch, row, ref)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return dst, nil
-}
-
 func validateResolvedTypedBatch(batch model.ResolvedTypedBatch, rows []int) error {
 	count := len(batch.Timestamps)
 	if len(batch.SeriesIDs) != count || len(batch.WriteSeqs) != count {
@@ -323,37 +262,6 @@ func identityKeyWithScratch(point model.ResolvedPoint, dst []byte) (string, []by
 	return string(dst), dst
 }
 
-func batchFieldNames(records []model.ResolvedPoint) ([]string, [][]int) {
-	names := make([]string, 0)
-	refs := make([][]int, len(records))
-	arena := make([]int, totalFieldCount(records))
-	offset := 0
-	seen := make(map[string]int)
-	for pointIndex, record := range records {
-		pointRefs := arena[offset : offset+len(record.Fields)]
-		offset += len(record.Fields)
-		for fieldIndex, field := range record.Fields {
-			ref, ok := seen[field.FieldName]
-			if !ok {
-				ref = len(names)
-				seen[field.FieldName] = ref
-				names = append(names, field.FieldName)
-			}
-			pointRefs[fieldIndex] = ref
-		}
-		refs[pointIndex] = pointRefs
-	}
-	return names, refs
-}
-
-func totalFieldCount(records []model.ResolvedPoint) int {
-	total := 0
-	for _, record := range records {
-		total += len(record.Fields)
-	}
-	return total
-}
-
 func appendIdentity(dst []byte, identity batchIdentity) []byte {
 	dst = codec.AppendString(dst, identity.database)
 	dst = codec.AppendString(dst, identity.retentionPolicy)
@@ -371,45 +279,6 @@ func appendTypedIdentity(
 	dst = codec.AppendString(dst, batch.RetentionPolicy)
 	dst = codec.AppendString(dst, batch.Measurement)
 	return appendTypedTags(dst, batch.Tags, row, tagOrder)
-}
-
-func appendTypedFieldNames(dst []byte, fields []model.ResolvedTypedFieldColumn) []byte {
-	dst = binary.AppendUvarint(dst, uint64(len(fields)))
-	for _, field := range fields {
-		dst = codec.AppendString(dst, field.Name)
-	}
-	return dst
-}
-
-func decodeBatch(payload []byte) ([]model.ResolvedPoint, error) {
-	if len(payload) == 0 {
-		return nil, fmt.Errorf("empty wal batch")
-	}
-	reader := newBatchReader(payload)
-	identities, err := readBatchIdentities(reader)
-	if err != nil {
-		return nil, err
-	}
-	fieldNames, err := readBatchFieldNames(reader)
-	if err != nil {
-		return nil, err
-	}
-	count, err := reader.intCount("point count")
-	if err != nil {
-		return nil, err
-	}
-	records := make([]model.ResolvedPoint, 0, count)
-	for range count {
-		record, err := readPoint(reader, identities, fieldNames)
-		if err != nil {
-			return nil, err
-		}
-		records = append(records, record)
-	}
-	if err := reader.done("wal batch"); err != nil {
-		return nil, err
-	}
-	return records, nil
 }
 
 func readBatchIdentities(reader *batchReader) ([]batchIdentity, error) {
@@ -450,22 +319,6 @@ func readIdentity(reader *batchReader) (batchIdentity, error) {
 	}, err
 }
 
-func readBatchFieldNames(reader *batchReader) ([]string, error) {
-	count, err := reader.intCount("field name count")
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, count)
-	for index := range count {
-		name, err := reader.string("field name")
-		if err != nil {
-			return nil, err
-		}
-		names[index] = name
-	}
-	return names, nil
-}
-
 func appendPoint(
 	dst []byte,
 	point model.ResolvedPoint,
@@ -490,73 +343,6 @@ func appendPoint(
 	return dst, nil
 }
 
-func appendTypedPoint(
-	dst []byte,
-	batch model.ResolvedTypedBatch,
-	row int,
-	identityRef int,
-) ([]byte, error) {
-	dst = binary.AppendUvarint(dst, uint64(identityRef))
-	dst = binary.AppendUvarint(dst, batch.SeriesIDs[row])
-	dst = binary.AppendVarint(dst, batch.Timestamps[row])
-	dst = binary.AppendUvarint(dst, batch.WriteSeqs[row])
-	dst = binary.AppendUvarint(dst, uint64(len(batch.Fields)))
-	for fieldNameRef, field := range batch.Fields {
-		var err error
-		dst, err = appendTypedField(dst, field, row, fieldNameRef)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return dst, nil
-}
-
-func readPoint(
-	reader *batchReader,
-	identities []batchIdentity,
-	fieldNames []string,
-) (model.ResolvedPoint, error) {
-	identityRef, err := reader.intCount("identity ref")
-	if err != nil {
-		return model.ResolvedPoint{}, err
-	}
-	if identityRef >= len(identities) {
-		return model.ResolvedPoint{}, fmt.Errorf("decode wal identity ref %d out of range", identityRef)
-	}
-	identity := identities[identityRef]
-	seriesID, timestamp, writeSeq, err := readPointHeader(reader)
-	if err != nil {
-		return model.ResolvedPoint{}, err
-	}
-	fields, err := readFields(reader, fieldNames)
-	if err != nil {
-		return model.ResolvedPoint{}, err
-	}
-	return model.ResolvedPoint{
-		Database:        identity.database,
-		RetentionPolicy: identity.retentionPolicy,
-		Measurement:     identity.measurement,
-		Tags:            cloneStringMap(identity.tags),
-		SeriesID:        seriesID,
-		Timestamp:       timestamp,
-		WriteSeq:        writeSeq,
-		Fields:          fields,
-	}, nil
-}
-
-func readPointHeader(reader *batchReader) (uint64, int64, uint64, error) {
-	seriesID, err := reader.uvarint("series id")
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	timestamp, err := reader.varint("timestamp")
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	writeSeq, err := reader.uvarint("write seq")
-	return seriesID, timestamp, writeSeq, err
-}
-
 func appendField(dst []byte, field model.ResolvedField, fieldNameRef int) ([]byte, error) {
 	if field.Type != field.Value.Type {
 		return nil, fmt.Errorf("field %s type %d does not match value type %d", field.FieldName, field.Type, field.Value.Type)
@@ -565,69 +351,6 @@ func appendField(dst []byte, field model.ResolvedField, fieldNameRef int) ([]byt
 	dst = binary.AppendUvarint(dst, uint64(fieldNameRef))
 	dst = append(dst, byte(field.Type))
 	return appendValuePayload(dst, field.Value)
-}
-
-func appendTypedField(
-	dst []byte,
-	field model.ResolvedTypedFieldColumn,
-	row int,
-	fieldNameRef int,
-) ([]byte, error) {
-	dst = binary.AppendUvarint(dst, uint64(field.FieldID))
-	dst = binary.AppendUvarint(dst, uint64(fieldNameRef))
-	dst = append(dst, byte(field.Type))
-	return appendTypedValuePayload(dst, field, row)
-}
-
-func readFields(reader *batchReader, fieldNames []string) ([]model.ResolvedField, error) {
-	count, err := reader.intCount("field count")
-	if err != nil {
-		return nil, err
-	}
-	if count == 0 {
-		return nil, nil
-	}
-	fields := make([]model.ResolvedField, 0, count)
-	for range count {
-		field, err := readField(reader, fieldNames)
-		if err != nil {
-			return nil, err
-		}
-		fields = append(fields, field)
-	}
-	return fields, nil
-}
-
-func readField(reader *batchReader, fieldNames []string) (model.ResolvedField, error) {
-	id, err := reader.uvarint("field id")
-	if err != nil {
-		return model.ResolvedField{}, err
-	}
-	fieldID, err := uint32Value("field id", id)
-	if err != nil {
-		return model.ResolvedField{}, err
-	}
-	nameRef, err := reader.intCount("field name ref")
-	if err != nil {
-		return model.ResolvedField{}, err
-	}
-	if nameRef >= len(fieldNames) {
-		return model.ResolvedField{}, fmt.Errorf("decode wal field name ref %d out of range", nameRef)
-	}
-	fieldType, err := reader.byte("field type")
-	if err != nil {
-		return model.ResolvedField{}, err
-	}
-	value, err := readValuePayload(model.FieldType(fieldType), reader)
-	if err != nil {
-		return model.ResolvedField{}, err
-	}
-	return model.ResolvedField{
-		FieldID:   fieldID,
-		FieldName: fieldNames[nameRef],
-		Type:      model.FieldType(fieldType),
-		Value:     value,
-	}, nil
 }
 
 func appendTags(dst []byte, tags map[string]string) []byte {

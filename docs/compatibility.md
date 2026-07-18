@@ -78,3 +78,9 @@ Experimental 功能变更不构成 major，但应在 CHANGELOG 记录。
 | `MemTableDisorderFlushRatio` | 0.25（DefaultOptions） | `<=0` 关闭 |
 | `MaxConcurrentCompaction` | 归一化默认 1 | `<=0` 使用默认 |
 | `MaxConcurrentDownsample` | 归一化默认 2 | 既有行为 |
+
+
+## 7. POC 格式说明（2026-07-18）
+
+当前为 POC：**不承诺旧 WAL formatID=1 可读**。WAL segment formatID=2，写入统一列式 batch payload。
+并行 compact 默认跨 shard，受 `MaxConcurrentCompaction` 限制。
