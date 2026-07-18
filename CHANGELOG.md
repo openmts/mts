@@ -4,6 +4,9 @@
 
 ### Added
 
+- `PointsToTypedBatch` 与 `Engine.WritePointsAsTypedBatch`：同构 `[]Point` 转列式写入。
+- wide 布局 bench：`BenchmarkEngineWriteTypedWideBatch` 对比 `Write` / `WriteTypedBatch`。
+
 - 列式 WAL 编码路径减少中间列矩阵分配；`Compaction.MaxConcurrent` 与 `MaxConcurrentCompaction` 配额可配置同步。
 
 

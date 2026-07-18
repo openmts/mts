@@ -67,6 +67,9 @@ type TypedFieldColumn struct {
 // 时 Timestamps 使用 Unix nanosecond；设置 Precision 后，WriteTypedBatch
 // 会先转换为纳秒存储。Tags 中每列的 Values 长度、每个字段值切片长度都必须与
 // Timestamps 一致。
+//
+// 若调用侧持有同构 []Point，可先用 PointsToTypedBatch 转换，或直接调用
+// Engine.WritePointsAsTypedBatch。
 type TypedBatch struct {
 	Database        string             `json:"database"`
 	RetentionPolicy string             `json:"retention_policy"`

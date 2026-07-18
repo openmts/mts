@@ -133,6 +133,19 @@ batch := mts.TypedBatch{
 err := engine.WriteTypedBatch(ctx, batch, mts.WriteOptions{Sync: true})
 ```
 
+若调用侧仍是 `[]Point`，可用包级转换函数走列式路径：
+
+```go
+batch, err := mts.PointsToTypedBatch(points)
+if err != nil {
+	// 异构 batch：measurement/字段集合/类型不一致
+	return err
+}
+err = engine.WriteTypedBatch(ctx, batch, mts.WriteOptions{Sync: true})
+// 或一步完成：
+// err = engine.WritePointsAsTypedBatch(ctx, points, mts.WriteOptions{Sync: true})
+```
+
 ## 降采样
 
 MTS 支持本地降采样策略，结果写入显式目标 retention policy。查询降采样结果时使用 `FromDownsamplePolicy`：

@@ -32,6 +32,18 @@ func (e *Engine) WriteTypedBatch(ctx context.Context, batch TypedBatch, opts Wri
 	return publicError(e.runtime.Storage().WriteTypedBatch(ctx, converted, toModelWriteOptions(opts)))
 }
 
+// WritePointsAsTypedBatch 将同构 []Point 转换为列式 TypedBatch 后写入。
+//
+// 适合调用方仍持有 []Point，但希望走 WriteTypedBatch 热路径的场景。
+// 转换规则与 PointsToTypedBatch 相同；若 batch 异构则返回错误。
+func (e *Engine) WritePointsAsTypedBatch(ctx context.Context, points []Point, opts WriteOptions) error {
+	batch, err := PointsToTypedBatch(points)
+	if err != nil {
+		return err
+	}
+	return e.WriteTypedBatch(ctx, batch, opts)
+}
+
 // Flush 将当前内存数据刷写为本地 SSTable。
 func (e *Engine) Flush(ctx context.Context) error {
 	return publicError(e.runtime.Storage().Flush(ctx))
