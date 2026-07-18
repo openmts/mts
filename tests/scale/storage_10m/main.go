@@ -103,6 +103,7 @@ type config struct {
 	memTableMaxSamples   int
 	compressionAlgorithm string
 	valuePageSamples     int
+	omitWriteSeq         bool
 	durability           string
 	queryStart           int64
 	queryEnd             int64
@@ -252,6 +253,11 @@ func parseConfig(args []string) (config, error) {
 		0,
 		"SSTable value page samples; 0 uses engine default",
 	)
+	omitWriteSeq := flags.Bool(
+		"omit-write-seq",
+		false,
+		"omit per-sample writeSeq in SSTable value pages (decode as 0)",
+	)
 	durability := flags.String(
 		"durability",
 		durabilityBuffered,
@@ -313,6 +319,7 @@ func parseConfig(args []string) (config, error) {
 		memTableMaxSamples:   *memTableMaxSamples,
 		compressionAlgorithm: *compressionAlgorithm,
 		valuePageSamples:     *valuePageSamples,
+		omitWriteSeq:         *omitWriteSeq,
 		durability:           *durability,
 		queryStart:           *queryStart,
 		queryEnd:             *queryEnd,
@@ -628,19 +635,20 @@ func openScaleEngine(ctx context.Context, dir string, cfg config) (*mts.Engine, 
 		MemTableMaxSamples: memTableMaxSamples,
 		WAL:                mts.WALOptions{Sync: durability.walSync},
 		FlushSync:          durability.flushSync,
-		Compression:        scaleCompressionOptions(cfg.compressionAlgorithm, cfg.valuePageSamples),
+		Compression:        scaleCompressionOptions(cfg.compressionAlgorithm, cfg.valuePageSamples, cfg.omitWriteSeq),
 	})
 }
 
-func scaleCompressionOptions(algorithm string, valuePageSamples int) mts.CompressionOptions {
+func scaleCompressionOptions(algorithm string, valuePageSamples int, omitWriteSeq bool) mts.CompressionOptions {
 	if algorithm == "" || algorithm == compressionOff {
-		return mts.CompressionOptions{ValuePageSamples: valuePageSamples}
+		return mts.CompressionOptions{ValuePageSamples: valuePageSamples, OmitWriteSeq: omitWriteSeq}
 	}
 	return mts.CompressionOptions{
 		Enabled:          true,
 		Algorithm:        algorithm,
 		MinPageValues:    1,
 		ValuePageSamples: valuePageSamples,
+		OmitWriteSeq:     omitWriteSeq,
 	}
 }
 

@@ -4,6 +4,7 @@
 
 ### Added
 
+- SSTable 字符串字典强化（const/ordinal RLE）与 `Compression.OmitWriteSeq` 可省略写序号。
 - SSTable 时序编码 P1：Gorilla float 位打包、固定步长时间戳、int/writeSeq delta-RLE。
 
 - SSTable `ValuePageSamples` 可配置（默认 1024）；未显式 `Algorithm` 时 L0=snappy、L1+=zstd 分层压缩。

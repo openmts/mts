@@ -62,6 +62,7 @@ func TestToModelOptionsPreservesStorageConfiguration(t *testing.T) {
 			String:           "plain",
 			MinPageValues:    13,
 			ValuePageSamples: 1024,
+			OmitWriteSeq:     true,
 		},
 		StorageMemory: StorageMemoryOptions{
 			SoftSampleLimit:       14,
@@ -126,6 +127,7 @@ func TestToModelOptionsPreservesStorageConfiguration(t *testing.T) {
 	if got.Compression.Algorithm != "snappy" ||
 		got.Compression.MinPageValues != 13 ||
 		got.Compression.ValuePageSamples != 1024 ||
+		!got.Compression.OmitWriteSeq ||
 		got.StorageMemory.QueryBytesLimit != 18 ||
 		got.StorageMemory.CompressionBytesLimit != 21 {
 		t.Fatalf("toModelOptions() compression/memory = %#v %#v", got.Compression, got.StorageMemory)

@@ -133,6 +133,9 @@ type CompressionOptions struct {
 	Algorithm        string
 	MinPageValues    int
 	ValuePageSamples int
+	// OmitWriteSeq 省略 SSTable 中 per-sample writeSeq（解码为 0）。
+	// 在不需要写序/版本冲突语义时，可显著降低存储体积。
+	OmitWriteSeq bool
 }
 
 // DefaultOptions 返回适合本地单机嵌入式使用的推荐配置。

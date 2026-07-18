@@ -73,6 +73,11 @@ func decodeWriteSeqs(codecID byte, payload []byte, count int) ([]uint64, error) 
 		return writeSeqs, payloadReader.done("write seqs")
 	case compressionRLE:
 		return decodeDeltaRLEWriteSeqs(payload, count)
+	case compressionOmitted:
+		if len(payload) != 0 {
+			return nil, fmt.Errorf("omitted write seq payload must be empty")
+		}
+		return make([]uint64, count), nil
 	default:
 		return nil, fmt.Errorf("unknown write seq compression %d", codecID)
 	}

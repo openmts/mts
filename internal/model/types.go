@@ -514,6 +514,9 @@ type CompressionOptions struct {
 	MinPageValues int
 	// ValuePageSamples 控制 values.bin 每页样本数；0 表示使用引擎默认。
 	ValuePageSamples int
+	// OmitWriteSeq 为 true 时，SSTable value page 不存储 per-sample writeSeq，
+	// 解码时使用 0。适用于无需版本冲突/写序精确性的 POC 吞吐与体积优化。
+	OmitWriteSeq bool
 }
 
 type WriteOptions struct {

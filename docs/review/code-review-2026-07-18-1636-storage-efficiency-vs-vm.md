@@ -133,14 +133,17 @@ MTS 已有专用编码骨架（默认）：
 | P1-1 Gorilla float | **已完成** | `compressionXOR` 载荷改为 leading/trailing 位打包；POC 不兼容旧 uvarint-xor |
 | P1-2 固定 step 时间戳 | **已完成** | 新 codec `compressionConstStep`：`base + step` |
 | P1-3 Int RLE | **已完成** | 新 codec `compressionRLE`，与 delta 自动择短 |
-| P1-4 Bool/String | 未做 | 下阶段 |
-| P1-5 writeSeq RLE | **已完成（部分）** | 递增 writeSeq 走 delta-RLE；尚未做“可省略 writeSeq” |
+| P1-4 Bool/String | **已完成（部分）** | bool 本就是 bitset；string 增 const/ordinal RLE |
+| P1-5 writeSeq | **已完成** | delta-RLE + `OmitWriteSeq` 可省略（解码为 0） |
 
 **10M 复测（zstd + value-page-samples=4096 + typed + compact）**：
 - P0 后：约 **479 MiB**
 - 仅 P1 typed 编码初版：约 **476 MiB**（writeSeq 税掩盖）
 - P1 + writeSeq RLE：约 **115 MiB**（`data_bytes=120603121`）
+- P1-4/P1-5（+string const/RLE + omit-write-seq）：约 **113.6 MiB**（`data_bytes=119109606`）
 - 相对 P0：约 **-76%**；相对 VM ~10 MiB 仍约 **11~12x**
+- 说明：string/bool/writeSeq 已近下界，剩余主要是 float 单调乘子列与布局固定税（P2）
+
 
 
 ---

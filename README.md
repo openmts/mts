@@ -124,6 +124,7 @@ opts.Compression = mts.CompressionOptions{
     Algorithm:        "zstd", // 全局显式算法；留空时 L0=snappy、L1+=zstd
     ValuePageSamples: 4096,  // 默认 1024；更大通常更省盘
     // Float 默认 xor=Gorilla 位打包；Timestamp 自动 const-step；Int/writeSeq 自动 RLE
+    // OmitWriteSeq: true, // 不需要写序时可进一步省空间
     MinPageValues:    1,
 }
 ```

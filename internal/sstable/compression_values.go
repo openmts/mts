@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/openmts/mts/internal/codec"
 	"github.com/openmts/mts/internal/model"
 )
 
@@ -105,33 +104,6 @@ func estimateStringValuesSize(samples []model.VersionedSample) int {
 		size += binary.MaxVarintLen64 + len(sample.Value.String)
 	}
 	return size
-}
-
-func appendDictionaryStringValues(dst []byte, samples []model.VersionedSample) []byte {
-	ids := make(map[string]int, len(samples))
-	dict := make([]string, 0, len(samples))
-	ordinals := make([]int, 0, len(samples))
-	for _, sample := range samples {
-		id, ok := ids[sample.Value.String]
-		if !ok {
-			id = len(dict)
-			ids[sample.Value.String] = id
-			dict = append(dict, sample.Value.String)
-		}
-		ordinals = append(ordinals, id)
-	}
-	return appendDictionaryPayload(dst, dict, ordinals)
-}
-
-func appendDictionaryPayload(dst []byte, dict []string, ordinals []int) []byte {
-	dst = binary.AppendUvarint(dst, uint64(len(dict)))
-	for _, value := range dict {
-		dst = codec.AppendString(dst, value)
-	}
-	for _, ordinal := range ordinals {
-		dst = binary.AppendUvarint(dst, uint64(ordinal))
-	}
-	return dst
 }
 
 func readCodecValues(
@@ -602,78 +574,9 @@ func readDictionaryStringValues(
 	if codecID != compressionDictionary {
 		return nil, fmt.Errorf("unknown string compression %d", codecID)
 	}
-	dict, err := readStringDictionary(reader)
+	dict, mode, err := readStringDictionary(reader)
 	if err != nil {
 		return nil, err
 	}
-	return readStringDictionaryOrdinals(reader, dict, count)
-}
-
-func readDictionaryStringSampleValues(
-	reader *blockReader,
-	codecID byte,
-	timestamps []int64,
-	writeSeqs []uint64,
-	query Query,
-) ([]model.VersionedSample, error) {
-	if codecID != compressionDictionary {
-		return nil, fmt.Errorf("unknown string compression %d", codecID)
-	}
-	dict, err := readStringDictionary(reader)
-	if err != nil {
-		return nil, err
-	}
-	samples := make([]model.VersionedSample, 0, compressedQueryCapacity(len(timestamps), query))
-	for index, timestamp := range timestamps {
-		ordinal, err := reader.intCount("string dictionary ordinal")
-		if err != nil {
-			return nil, err
-		}
-		if ordinal >= len(dict) {
-			return nil, fmt.Errorf("string dictionary ordinal %d out of range", ordinal)
-		}
-		if timestamp < query.Start || timestamp > query.End {
-			continue
-		}
-		samples = append(samples, model.VersionedSample{
-			Timestamp: timestamp,
-			WriteSeq:  writeSeqs[index],
-			Value:     model.StringValue(dict[ordinal]),
-		})
-	}
-	return samples, nil
-}
-
-func readStringDictionary(reader *blockReader) ([]string, error) {
-	dictCount, err := reader.intCount("string dictionary count")
-	if err != nil {
-		return nil, err
-	}
-	dict := make([]string, dictCount)
-	for index := range dictCount {
-		dict[index], err = reader.string("string dictionary value")
-		if err != nil {
-			return nil, err
-		}
-	}
-	return dict, nil
-}
-
-func readStringDictionaryOrdinals(
-	reader *blockReader,
-	dict []string,
-	count int,
-) ([]model.FieldValue, error) {
-	values := make([]model.FieldValue, count)
-	for index := range count {
-		ordinal, err := reader.intCount("string dictionary ordinal")
-		if err != nil {
-			return nil, err
-		}
-		if ordinal >= len(dict) {
-			return nil, fmt.Errorf("string dictionary ordinal %d out of range", ordinal)
-		}
-		values[index] = model.StringValue(dict[ordinal])
-	}
-	return values, nil
+	return readStringDictionaryOrdinals(reader, dict, mode, count)
 }

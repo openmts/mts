@@ -15,6 +15,7 @@ const (
 	compressionDictionary
 	compressionRLE
 	compressionConstStep
+	compressionOmitted
 )
 
 const defaultCompressionMinPageValues = 8
@@ -65,7 +66,7 @@ func marshalCompressedValueBlock(
 	if err != nil {
 		return nil, err
 	}
-	dst, err = appendSampleWriteSeqsPayloadWithCompression(dst, column.Samples, opts.Algorithm, budget...)
+	dst, err = appendSampleWriteSeqsPayloadWithCompression(dst, column.Samples, opts.Algorithm, opts.OmitWriteSeq, budget...)
 	if err != nil {
 		return nil, err
 	}
@@ -283,8 +284,12 @@ func appendSampleWriteSeqsPayloadWithCompression(
 	dst []byte,
 	samples []model.VersionedSample,
 	algorithm string,
+	omitWriteSeq bool,
 	budget ...CompressionMemoryBudget,
 ) ([]byte, error) {
+	if omitWriteSeq {
+		return appendCodecPayloadWithCompression(dst, compressionOmitted, nil, algorithm, budget...)
+	}
 	codecID, payload := encodeWriteSeqs(samples)
 	return appendCodecPayloadWithCompression(dst, codecID, payload, algorithm, budget...)
 }
