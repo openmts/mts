@@ -10,7 +10,7 @@
 - [x] P2-06 Makefile/CI race 与门禁
 - [x] P2-07 compatibility.md
 - [x] full test/e2e/lint/bench
-- [ ] P2-04 mts-server 协议 registry（下轮）
+- [x] P2-04 mts-server 协议 registry（本轮完成）
 
 ## 实现备注
 - MemTable：`Stats.OutOfOrderSamples/DuplicateSamples/AppendedSamples` + `mts_memtable_*` counters
