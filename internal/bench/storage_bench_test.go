@@ -55,6 +55,42 @@ func BenchmarkEngineWriteTypedWideBatch(b *testing.B) {
 	benchmarkEngineWriteTyped(b, makeWideBenchTypedBatch)
 }
 
+// BenchmarkEngineWritePointsAsTypedWideBatch 对比：[]Point -> PointsToTypedBatch -> WriteTypedBatch。
+// 与 WriteWide / TypedWide 使用同一 wide 字段布局与 MemTable 策略。
+func BenchmarkEngineWritePointsAsTypedWideBatch(b *testing.B) {
+	benchmarkEngineWritePointsAsTypedWide(b, makeWideBenchPoints)
+}
+
+func benchmarkEngineWritePointsAsTypedWide(
+	b *testing.B,
+	makePoints func(count int, series int) []mts.Point,
+) {
+	ctx := context.Background()
+	for _, points := range []int{1000, 10000} {
+		b.Run(fmt.Sprintf("points=%d", points), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				dir := b.TempDir()
+				eng, err := mts.Open(ctx, mts.Options{
+					Path:               dir,
+					ShardDuration:      time.Hour,
+					MemTableMaxSamples: points*10 + 1,
+				})
+				if err != nil {
+					b.Fatalf("Open() error = %v", err)
+				}
+				if err := eng.WritePointsAsTypedBatch(ctx, makePoints(points, 100), mts.WriteOptions{Sync: true}); err != nil {
+					closeErr := eng.Close(ctx)
+					b.Fatalf("WritePointsAsTypedBatch() error = %v close = %v", err, closeErr)
+				}
+				if err := eng.Close(ctx); err != nil {
+					b.Fatalf("Close() error = %v", err)
+				}
+			}
+		})
+	}
+}
+
 func benchmarkEngineWriteTyped(
 	b *testing.B,
 	makeBatch func(count int, series int) mts.TypedBatch,
