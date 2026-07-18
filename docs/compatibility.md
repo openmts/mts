@@ -42,6 +42,12 @@
 - 打开时优先使用嵌入 size；`OpenPart` 深校验仍验证组件存在与损坏拒绝。
 - 残缺测试 fixture 可不嵌入 size，打开路径回退 Stat。
 
+
+### 压缩默认策略（POC）
+
+- 未显式配置时，默认：`Timestamp=delta-of-delta`、`Float=xor`、`Int=delta`、`String=dictionary`。
+- 显式 `plain` 不会被覆盖；`Enabled=false` 时仍走未压缩 page 路径。
+
 ## 3. Experimental 功能
 
 以下能力可用，但语义/指标名可能在 minor 版本调整：

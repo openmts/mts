@@ -27,6 +27,8 @@ func (e *Engine) MetricsSnapshot() []observability.Metric {
 	recordCompactionMetrics(registry, stats)
 	recordTombstoneMetrics(registry, production)
 	recordWALMetrics(registry, e.walMetricsSnapshot())
+	batchesTotal, parallelBatches, parallelShards, parallelErrors := e.writeIngest.snapshot()
+	recordWriteIngestMetrics(registry, batchesTotal, parallelBatches, parallelShards, parallelErrors)
 	recordMemTableMetrics(registry, production)
 	recordSSTableMetrics(registry, production)
 	recordQueryMetrics(registry, queryStats)

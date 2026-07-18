@@ -37,6 +37,7 @@ func normalizeOptions(opts model.Options) model.Options {
 		opts.MemTableMaxSamples = defaultMemTableSamples
 	}
 	opts.StorageMemory = normalizeStorageMemoryOptions(opts.StorageMemory)
+	opts.Compression = normalizeCompressionOptions(opts.Compression)
 	opts.Compaction = normalizeCompactionOptions(opts.Compaction, opts.Compression)
 	if opts.MaxConcurrentDownsample <= 0 {
 		opts.MaxConcurrentDownsample = defaultMaxConcurrentDownsample
@@ -160,6 +161,26 @@ func normalizeCompactionLevel(
 		level.Compression = globalCompression
 	}
 	return level
+}
+
+func normalizeCompressionOptions(opts model.CompressionOptions) model.CompressionOptions {
+	// POC：顺序 float 场景默认走专用编码；显式 plain/off 仍可关闭。
+	if opts.Timestamp == "" {
+		opts.Timestamp = "delta-of-delta"
+	}
+	if opts.Float == "" {
+		opts.Float = "xor"
+	}
+	if opts.Int == "" {
+		opts.Int = "delta"
+	}
+	if opts.String == "" {
+		opts.String = "dictionary"
+	}
+	if opts.MinPageValues < 0 {
+		opts.MinPageValues = 0
+	}
+	return opts
 }
 
 func compressionConfigured(opts model.CompressionOptions) bool {

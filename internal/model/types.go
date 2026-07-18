@@ -345,6 +345,10 @@ type QueryExplain struct {
 	MatchedParts      int               `json:"matched_parts"`
 	SkippedParts      int               `json:"skipped_parts"`
 	EstimatedPartRows int64             `json:"estimated_part_rows"`
+	IndexRowsRead     int               `json:"index_rows_read"`
+	IndexRowsSkipped  int               `json:"index_rows_skipped"`
+	ValuePagesRead    int               `json:"value_pages_read"`
+	ValuePagesSkipped int               `json:"value_pages_skipped"`
 	Pushdowns         []string          `json:"pushdowns"`
 	Budget            QueryBudget       `json:"budget"`
 	Cost              QueryCost         `json:"cost"`

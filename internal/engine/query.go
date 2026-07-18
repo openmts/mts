@@ -125,7 +125,9 @@ func (e *Engine) QueryWithExplain(
 		return nil, plan.Explain, model.QueryStats{}, err
 	}
 	columns, err := e.collectQueryColumns(iter)
-	return columns, plan.Explain, iter.Stats(), err
+	stats := iter.Stats()
+	plan.Explain = attachQuerySkipStats(plan.Explain, stats)
+	return columns, plan.Explain, stats, err
 }
 
 func (e *Engine) collectQueryColumns(iter *columnIterator) ([]model.ColumnSeries, error) {

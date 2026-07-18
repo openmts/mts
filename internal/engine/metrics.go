@@ -78,6 +78,13 @@ func recordWALMetrics(registry *observability.Registry, snapshot wal.Metrics) {
 	registry.SetGauge("mts_wal_pending_bytes", "Pending WAL bytes before fsync.", float64(snapshot.PendingBytes))
 }
 
+func recordWriteIngestMetrics(registry *observability.Registry, batchesTotal, parallelBatches, parallelShards, parallelErrors uint64) {
+	registry.AddCounter("mts_write_batches_total", "Write batches routed to shards.", float64(batchesTotal))
+	registry.AddCounter("mts_write_parallel_batches_total", "Write calls that fanned out across multiple shards.", float64(parallelBatches))
+	registry.AddCounter("mts_write_parallel_shards_total", "Shard batches executed under multi-shard parallel writes.", float64(parallelShards))
+	registry.AddCounter("mts_write_parallel_errors_total", "Multi-shard parallel write calls that returned at least one shard error.", float64(parallelErrors))
+}
+
 func recordMemTableMetrics(registry *observability.Registry, snapshot productionMetrics) {
 	registry.SetGauge("mts_memtable_samples", "MemTable samples currently buffered.", float64(snapshot.MemTableSamples))
 	registry.SetGauge("mts_memtable_estimated_bytes", "Estimated MemTable bytes currently buffered.", float64(snapshot.MemTableBytes))

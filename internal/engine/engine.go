@@ -21,6 +21,7 @@ type Engine struct {
 	metadata              MetadataStore
 	shards                map[string]*Shard
 	writeSeq              atomic.Uint64
+	writeIngest           writeIngestStats
 	memory                *storageMemoryLimiter
 	compactionScheduler   *compactionScheduler
 	queryStatsMu          sync.Mutex
@@ -193,7 +194,7 @@ func (e *Engine) writeResolved(resolved []model.ResolvedPoint, opts model.WriteO
 		return err
 	}
 	e.mu.Unlock()
-	if err := writeShardBatches(batches, opts.Sync); err != nil {
+	if err := writeShardBatchesTracked(e, batches, opts.Sync); err != nil {
 		return err
 	}
 	e.mu.Lock()
@@ -219,7 +220,7 @@ func (e *Engine) writeResolvedTyped(batch model.ResolvedTypedBatch, opts model.W
 		return err
 	}
 	e.mu.Unlock()
-	if err := writeTypedShardBatches(batch, batches, opts.Sync); err != nil {
+	if err := writeTypedShardBatchesTracked(e, batch, batches, opts.Sync); err != nil {
 		return err
 	}
 	e.mu.Lock()

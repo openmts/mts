@@ -221,3 +221,32 @@ func estimateQuerySamples(query model.Query, explain model.QueryExplain) int64 {
 	}
 	return estimate
 }
+
+func attachQuerySkipStats(explain model.QueryExplain, stats model.QueryStats) model.QueryExplain {
+	explain.IndexRowsRead = stats.IndexRowsRead
+	explain.IndexRowsSkipped = stats.IndexRowsSkipped
+	explain.ValuePagesRead = stats.ValuePagesRead
+	explain.ValuePagesSkipped = stats.ValuePagesSkipped
+	if stats.PartsSkipped > explain.SkippedParts {
+		explain.SkippedParts = stats.PartsSkipped
+	}
+	if stats.PartsScanned > 0 && explain.MatchedParts == 0 {
+		explain.MatchedParts = stats.PartsScanned
+	}
+	if stats.ValuePagesSkipped > 0 {
+		explain.Pushdowns = appendUniquePushdown(explain.Pushdowns, "value_page_time")
+	}
+	if stats.IndexRowsSkipped > 0 {
+		explain.Pushdowns = appendUniquePushdown(explain.Pushdowns, "index_row_time")
+	}
+	return explain
+}
+
+func appendUniquePushdown(values []string, item string) []string {
+	for _, existing := range values {
+		if existing == item {
+			return values
+		}
+	}
+	return append(values, item)
+}

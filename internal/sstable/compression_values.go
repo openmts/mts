@@ -26,11 +26,13 @@ func encodeTypedValues(column model.ColumnData, opts model.CompressionOptions) (
 }
 
 func encodeFloatValues(samples []model.VersionedSample, policy string) (byte, []byte, error) {
-	plain := appendFloatValues(make([]byte, 0, len(samples)*8), samples)
-	if compressionPolicy(policy, "xor") == "plain" {
-		return compressionPlain, plain, nil
+	selected := compressionPolicy(policy, "xor")
+	if selected == "plain" {
+		return compressionPlain, appendFloatValues(make([]byte, 0, len(samples)*8), samples), nil
 	}
+	// 顺序 float 默认优先 XOR；仅当 XOR 未更短时回退 plain。
 	candidate := appendXORFloatValues(make([]byte, 0, len(samples)*binary.MaxVarintLen64), samples)
+	plain := appendFloatValues(make([]byte, 0, len(samples)*8), samples)
 	if len(candidate) < len(plain) {
 		return compressionXOR, candidate, nil
 	}

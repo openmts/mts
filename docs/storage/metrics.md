@@ -20,6 +20,15 @@
 | `mts_wal_pending_records` | gauge | 未 fsync 记录数 | 接近批量阈值长期不下降时告警 |
 | `mts_wal_pending_bytes` | gauge | 未 fsync 字节数 | 接近内存预算时告警 |
 
+## Write Ingest
+
+| 指标 | 类型 | 含义 | 告警建议 |
+| --- | --- | --- | --- |
+| `mts_write_batches_total` | counter | 路由到 shard 的写 batch 数 | 与 QPS 对照 |
+| `mts_write_parallel_batches_total` | counter | 跨多 shard 并行写次数 | 观察多核写扩展 |
+| `mts_write_parallel_shards_total` | counter | 并行写涉及的 shard batch 数 | 与并行 batch 比值约等于平均并行度 |
+| `mts_write_parallel_errors_total` | counter | 并行写至少一 shard 失败次数 | 大于 0 排查写路径/磁盘 |
+
 ## MemTable 和 SSTable
 
 | 指标 | 类型 | 含义 | 告警建议 |
