@@ -4,6 +4,7 @@
 
 ### Added
 
+- 冷层 L1+ 默认更大 value page（16384）与更强 zstd（SpeedDefault）；scale 默认 shard 7d。
 - SSTable float 自动选择 const-step / 整数值 delta-RLE / Gorilla 最短编码。
 - SSTable 字符串字典强化（const/ordinal RLE）与 `Compression.OmitWriteSeq` 可省略写序号。
 - SSTable 时序编码 P1：Gorilla float 位打包、固定步长时间戳、int/writeSeq delta-RLE。

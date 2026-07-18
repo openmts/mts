@@ -142,8 +142,10 @@ MTS 已有专用编码骨架（默认）：
 - P1 + writeSeq RLE：约 **115 MiB**（`data_bytes=120603121`）
 - P1-4/P1-5（+string const/RLE + omit-write-seq）：约 **113.6 MiB**（`data_bytes=119109606`）
 - **float const-step / int-as-float RLE**：约 **75.8 MiB**（`data_bytes=79425428`）
-- 相对 P0：约 **-84%**；相对 VM ~10 MiB 约 **7.6x**
-- 说明：typed 编码深度已进入阶段 B 目标带（40~80MiB）；剩余主要是布局固定税与 zstd 后再压缩空间（P2）
+- **P2 冷层 page + zstd 强化 + 7d shard**：约 **63.7 MiB**（`data_bytes=66804649`，shard 116→17）
+- 相对 P0：约 **-87%**；相对 VM ~10 MiB 约 **6.4x**
+- 说明：已进入阶段 B 目标带中段；下步仍可做 part 组件合并与更高 zstd 级
+
 
 
 
@@ -153,6 +155,7 @@ MTS 已有专用编码骨架（默认）：
 ### P2 — 布局与合并（目标：稳态体积与 VM 同量级逼近）
 
 #### P2-1 大 block 合并与“冷层重压”
+**状态**：部分完成（L1+ page=16384 + zstd SpeedDefault）
 **EARS**：当 part 进入 L2+ 时，系统应重编码为更大 page + zstd 高压缩级。  
 **验收**：flush 瞬时体积可偏大，但 compact 后稳态体积显著下降（双阶段体积曲线）。
 
@@ -161,6 +164,7 @@ MTS 已有专用编码骨架（默认）：
 **验收**：高 shard 数场景下元数据占比下降可测。
 
 #### P2-3 Shard 策略与时间对齐
+**状态**：scale 默认 7d（10M 场景 shard 116→17）
 **EARS**：对等间隔高密度写入，系统应避免无意义的过细 shard 切片导致 100+ 微小 part。  
 **验收**：同 10M 数据 part/shard 数下降，固定开销下降。
 

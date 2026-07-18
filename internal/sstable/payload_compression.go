@@ -202,10 +202,11 @@ func getZSTDEncoder() (*zstd.Encoder, error) {
 	if value := zstdEncoders.Get(); value != nil {
 		return value.(*zstd.Encoder), nil
 	}
+	// SpeedDefault 在 POC 体积优化中显著优于 SpeedFastest，写放大可接受。
 	return zstd.NewWriter(
 		nil,
 		zstd.WithEncoderConcurrency(1),
-		zstd.WithEncoderLevel(zstd.SpeedFastest),
+		zstd.WithEncoderLevel(zstd.SpeedDefault),
 		zstd.WithLowerEncoderMem(true),
 	)
 }

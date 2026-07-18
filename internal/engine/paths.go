@@ -162,31 +162,50 @@ func normalizeCompactionLevel(
 		level.Compression = defaultLevelCompression(level.Level, globalCompression)
 	} else {
 		level.Compression = normalizeCompressionOptions(level.Compression)
-		// 层级未指定页大小时继承全局，保证 flush/compact 页参数一致。
+		// 层级未指定页大小时继承全局。
 		if level.Compression.ValuePageSamples <= 0 && globalCompression.ValuePageSamples > 0 {
 			level.Compression.ValuePageSamples = globalCompression.ValuePageSamples
+		}
+		// 显式层级压缩时，L1+ 仍抬高页大小（可用层级 ValuePageSamples 覆盖更大值）。
+		if level.Level >= 1 {
+			level.Compression.ValuePageSamples = coldTierValuePageSamples(level.Compression.ValuePageSamples)
 		}
 	}
 	return level
 }
 
 // defaultLevelCompression 在未显式配置层级压缩时应用分层策略：
-// L0 优先写吞吐（snappy），L1+ 优先存储效率（zstd）。
-// 若全局 Algorithm 已显式指定，则全层级沿用全局算法。
+// L0 优先写吞吐（snappy），L1+ 优先存储效率（zstd + 更大 value page）。
+// 若全局 Algorithm 已显式指定，则全层级沿用全局算法，但 L1+ 仍可放大 page。
 func defaultLevelCompression(level int, global model.CompressionOptions) model.CompressionOptions {
 	out := normalizeCompressionOptions(global)
 	if !out.Enabled {
 		return out
 	}
-	if strings.TrimSpace(global.Algorithm) != "" {
-		return out
+	if strings.TrimSpace(global.Algorithm) == "" {
+		if level <= 0 {
+			out.Algorithm = "snappy"
+		} else {
+			out.Algorithm = "zstd"
+		}
 	}
-	if level <= 0 {
-		out.Algorithm = "snappy"
-		return out
+	if level >= 1 {
+		out.ValuePageSamples = coldTierValuePageSamples(out.ValuePageSamples)
 	}
-	out.Algorithm = "zstd"
 	return out
+}
+
+// coldTierValuePageSamples 抬高 L1+ 页大小，摊薄 page 头与通用压缩帧开销。
+const defaultColdTierValuePageSamples = 16384
+
+func coldTierValuePageSamples(configured int) int {
+	if configured <= 0 {
+		return defaultColdTierValuePageSamples
+	}
+	if configured < defaultColdTierValuePageSamples {
+		return defaultColdTierValuePageSamples
+	}
+	return configured
 }
 
 func normalizeCompressionOptions(opts model.CompressionOptions) model.CompressionOptions {

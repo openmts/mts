@@ -20,7 +20,7 @@ const defaultMemTableMaxSamples = 8192
 
 const defaultQueryLimit = 2000
 
-const defaultScaleShardDuration = 24 * time.Hour
+const defaultScaleShardDuration = 168 * time.Hour // 7d：降低 10M 跨度下的 shard/part 固定税
 
 const defaultScaleTimestampStep = time.Second
 

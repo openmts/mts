@@ -51,6 +51,9 @@ func TestDefaultLevelCompressionUsesTieredAlgorithms(t *testing.T) {
 	if l1.Algorithm != "zstd" {
 		t.Fatalf("L1 algorithm = %q, want zstd", l1.Algorithm)
 	}
+	if l1.ValuePageSamples != defaultColdTierValuePageSamples {
+		t.Fatalf("L1 page samples = %d, want cold-tier %d", l1.ValuePageSamples, defaultColdTierValuePageSamples)
+	}
 	explicit := model.CompressionOptions{Enabled: true, Algorithm: "lz4"}
 	if got := defaultLevelCompression(1, explicit); got.Algorithm != "lz4" {
 		t.Fatalf("explicit algorithm overwritten: %q", got.Algorithm)
@@ -67,7 +70,19 @@ func TestNormalizeCompactionLevelInheritsTieredCompression(t *testing.T) {
 	if !level.Compression.Enabled || level.Compression.Algorithm != "zstd" {
 		t.Fatalf("level compression = %+v, want enabled zstd", level.Compression)
 	}
-	if level.Compression.ValuePageSamples != 4096 {
-		t.Fatalf("page samples = %d, want 4096", level.Compression.ValuePageSamples)
+	if level.Compression.ValuePageSamples != defaultColdTierValuePageSamples {
+		t.Fatalf("page samples = %d, want cold-tier %d", level.Compression.ValuePageSamples, defaultColdTierValuePageSamples)
+	}
+}
+
+func TestColdTierValuePageSamples(t *testing.T) {
+	if got := coldTierValuePageSamples(0); got != defaultColdTierValuePageSamples {
+		t.Fatalf("default = %d", got)
+	}
+	if got := coldTierValuePageSamples(1024); got != defaultColdTierValuePageSamples {
+		t.Fatalf("boost small = %d", got)
+	}
+	if got := coldTierValuePageSamples(32768); got != 32768 {
+		t.Fatalf("keep large = %d", got)
 	}
 }
