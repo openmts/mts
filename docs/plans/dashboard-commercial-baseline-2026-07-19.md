@@ -182,3 +182,8 @@
 - 共享组件 i18n：ConfirmDialog / PermissionDenied / UserModals / UserGrantPanel
 - 就绪中心自动覆盖文案 i18n
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份；清单数据层双语
+
+## P42 状态（2026-07-20）
+- 清单数据层双语：productionChecklist / backupDrill / edgeHttpsAcceptance / backupSchedule
+- 共享 localizedText；Readiness/Storage 随 locale 展示
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份

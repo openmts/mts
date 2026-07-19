@@ -6,6 +6,7 @@ import {
   drillProgress,
   requiredDrillSteps,
 } from './backupDrill.ts'
+import { textForLocale } from './localizedText.ts'
 
 test('backup drill has core required steps', () => {
   const ids = BACKUP_DRILL_STEPS.map((s) => s.id)
@@ -21,4 +22,13 @@ test('drillProgress counts required and overall', () => {
   assert.equal(p.completed, 2)
   assert.ok(p.requiredCompleted >= 2)
   assert.ok(p.ratio > 0 && p.ratio < 1)
+})
+
+test('backupDrill bilingual titles and details', () => {
+  for (const item of BACKUP_DRILL_STEPS) {
+    assert.ok(item.title.zh && item.title.en, item.id + ' title')
+    assert.ok(item.detail.zh && item.detail.en, item.id + ' detail')
+    assert.ok(textForLocale(item.title, 'en'))
+    assert.ok(textForLocale(item.detail, 'zh'))
+  }
 })

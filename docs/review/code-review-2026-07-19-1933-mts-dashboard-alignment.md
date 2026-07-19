@@ -548,3 +548,7 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 共享组件中文硬编码收口（ConfirmDialog / PermissionDenied / UserModals / UserGrantPanel）
 - 就绪中心自动覆盖 i18n
 - 状态：已实现；仍不宣称可商用完成（部署侧验收 + 清单数据层双语）
+
+## P42（2026-07-20）
+- 运维清单/备份演练/边缘HTTPS/备份编排 title·detail 数据层双语
+- 状态：已实现；仍不宣称可商用完成（部署侧验收）

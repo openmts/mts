@@ -6,6 +6,7 @@ import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
+import { textForLocale, type LocaleCode } from '@/utils/localizedText'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import {
@@ -68,7 +69,8 @@ interface VersionResponse {
 }
 
 const { isAdmin, currentUser } = useAuth()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const router = useRouter()
 
 const state = ref<ReadinessState>(loadReadinessState())
@@ -444,11 +446,11 @@ onMounted(() => {
           />
           <div class="min-w-0">
             <p class="font-medium text-slate-800 dark:text-slate-100">
-              {{ item.title }}
+              {{ textForLocale(item.title, uiLocale) }}
               <span class="ml-1 text-[11px] font-normal mts-muted">{{ item.severity === 'required' ? t('required') : t('recommended') }}</span>
               <span v-if="item.automated" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">{{ t('partialAuto') }}</span>
             </p>
-            <p class="text-xs mts-muted">{{ item.detail }}</p>
+            <p class="text-xs mts-muted">{{ textForLocale(item.detail, uiLocale) }}</p>
           </div>
         </li>
       </ol>
@@ -476,10 +478,10 @@ onMounted(() => {
           />
           <div class="min-w-0">
             <p class="font-medium text-slate-800 dark:text-slate-100">
-              {{ step.title }}
+              {{ textForLocale(step.title, uiLocale) }}
               <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? t('required') : t('recommended') }}</span>
             </p>
-            <p class="text-xs mts-muted">{{ step.detail }}</p>
+            <p class="text-xs mts-muted">{{ textForLocale(step.detail, uiLocale) }}</p>
           </div>
         </li>
       </ol>
@@ -508,10 +510,10 @@ onMounted(() => {
           />
           <div class="min-w-0 flex-1">
             <p class="font-medium text-slate-800 dark:text-slate-100">
-              {{ step.title }}
+              {{ textForLocale(step.title, uiLocale) }}
               <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? t('required') : t('recommended') }}</span>
             </p>
-            <p class="text-xs mts-muted">{{ step.detail }}</p>
+            <p class="text-xs mts-muted">{{ textForLocale(step.detail, uiLocale) }}</p>
             <pre
               v-if="step.example"
               class="mt-1 overflow-x-auto rounded bg-slate-950 px-2 py-1 text-[11px] text-emerald-300"

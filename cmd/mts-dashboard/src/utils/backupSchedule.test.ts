@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { BACKUP_SCHEDULE_STEPS, backupScheduleProgress } from './backupSchedule.ts'
+import { textForLocale } from './localizedText.ts'
 
 test('backup schedule has required orchestration steps', () => {
   const ids = BACKUP_SCHEDULE_STEPS.map((s) => s.id)
@@ -15,4 +16,13 @@ test('backupScheduleProgress counts required', () => {
   assert.equal(p.requiredDone, 2)
   assert.ok(p.requiredTotal >= 4)
   assert.ok(p.ratio > 0 && p.ratio < 1)
+})
+
+test('backupSchedule bilingual titles and details', () => {
+  for (const item of BACKUP_SCHEDULE_STEPS) {
+    assert.ok(item.title.zh && item.title.en, item.id + ' title')
+    assert.ok(item.detail.zh && item.detail.en, item.id + ' detail')
+    assert.ok(textForLocale(item.title, 'en'))
+    assert.ok(textForLocale(item.detail, 'zh'))
+  }
 })

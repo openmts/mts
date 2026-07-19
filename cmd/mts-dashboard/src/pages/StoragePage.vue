@@ -10,6 +10,7 @@ import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
+import { textForLocale, type LocaleCode } from '@/utils/localizedText'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { formatBytes } from '@/utils/formatBytes'
 import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
@@ -39,7 +40,8 @@ interface ExportResponse { export: ExportData }
 
 const { isAdmin } = useAuth()
 const { success, error: notifyError } = useNotify()
-const { t } = useI18n()
+const { t , locale } = useI18n()
+const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const validateResult = ref<ValidateResponse | null>(null)
 const snapshotResult = ref<SnapshotResponse | null>(null)
 const dataSnapshotResult = ref<DataSnapshotResponse | null>(null)
@@ -283,11 +285,11 @@ async function confirmDelete() {
           />
           <div class="min-w-0">
             <p class="font-medium text-slate-800 dark:text-slate-100">
-              {{ step.title }}
+              {{ textForLocale(step.title, uiLocale) }}
               <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? t('storageRequired') : t('storageRecommended') }}</span>
               <span v-if="step.inDashboard" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">Dashboard</span>
             </p>
-            <p class="text-xs mts-muted">{{ step.detail }}</p>
+            <p class="text-xs mts-muted">{{ textForLocale(step.detail, uiLocale) }}</p>
           </div>
         </li>
       </ol>
@@ -321,11 +323,11 @@ async function confirmDelete() {
           />
           <div class="min-w-0">
             <p class="font-medium text-slate-800 dark:text-slate-100">
-              {{ step.title }}
+              {{ textForLocale(step.title, uiLocale) }}
               <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? t('storageRequired') : t('storageRecommended') }}</span>
               <span v-if="step.partialAutomated" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">{{ t('storagePartialAuto') }}</span>
             </p>
-            <p class="text-xs mts-muted">{{ step.detail }}</p>
+            <p class="text-xs mts-muted">{{ textForLocale(step.detail, uiLocale) }}</p>
           </div>
         </li>
       </ol>

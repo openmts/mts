@@ -4,12 +4,9 @@ export type RoleName = 'admin' | 'user'
 
 export type AccessLevel = 'full' | 'self' | 'data_scoped' | 'none'
 
-export type LocaleCode = 'zh' | 'en'
-
-export interface LocalizedText {
-  zh: string
-  en: string
-}
+export type { LocaleCode, LocalizedText } from './localizedText.ts'
+export { textForLocale } from './localizedText.ts'
+import type { LocaleCode, LocalizedText } from './localizedText.ts'
 
 export interface CapabilityRow {
   id: string
@@ -28,11 +25,6 @@ export const ACCESS_LEVEL_LABEL: Record<AccessLevel, LocalizedText> = {
   self: { zh: '仅自身', en: 'Self only' },
   data_scoped: { zh: '库级授权', en: 'DB-scoped' },
   none: { zh: '无', en: 'None' },
-}
-
-export function textForLocale(text: LocalizedText | undefined, locale: LocaleCode = 'zh'): string {
-  if (!text) return ''
-  return locale === 'en' ? text.en : text.zh
 }
 
 /** 控制台能力矩阵（角色 × 能力） */
