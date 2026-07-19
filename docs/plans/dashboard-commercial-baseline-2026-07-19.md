@@ -6,13 +6,26 @@
 - 管理页统一结果条与空状态（P9–P10）
 - 全局 loading、会话过期提示（P11）
 - 安全响应头默认集 + 前端契约（P12）
+- 服务侧可商用冒烟 + 生产清单纯数据（P13）
+- 404 / 权限拒绝 EmptyState 收口（P13）
+
+## 自动化覆盖（见 `productionChecklist.ts`）
+| 项 | 严重度 | 自动化 |
+|---|---|---|
+| 边缘 HTTPS / TLS | required | 否（边缘层） |
+| 安全响应头 | required | 是（服务侧测试） |
+| 修改默认 admin 密码 | required | 否（运维策略） |
+| 健康与指标接入 | required | 部分（healthz/readyz 冒烟） |
+| 备份与快照演练 | recommended | 否 |
+| 登录-查询-写入-运维冒烟 | required | 是（服务侧 smoke） |
+| 权限矩阵复核 | recommended | 否 |
 
 ## 建议上线前再确认
 1. 反向代理 HTTPS、HSTS（由边缘层配置）
-2. 修改默认 admin 密码策略已提示；生产强制改密
+2. 修改默认 admin 密码；生产禁止长期 `admin/admin`
 3. 备份/快照与恢复演练
 4. 浏览器冒烟：登录 → 查询 → 写入 → 运维 flush（人工或 Playwright）
-5. 监控：`/healthz` `/readyz` `/metrics` 接入
+5. 监控：`/healthz` `/readyz` `/metrics` 接入告警
 
 ## 核心冒烟路径
 - `/login`
@@ -21,3 +34,6 @@
 - `/write`
 - `/databases`（admin）
 - `/operations`（admin）
+
+## 服务侧自动化入口
+- `go test ./cmd/mts-server -run TestCommercialDashboardSmoke -count=1`

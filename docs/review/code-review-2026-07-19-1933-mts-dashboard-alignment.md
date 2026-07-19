@@ -381,3 +381,11 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 
 ## P12 状态（2026-07-19）
 - Databases 空态、安全响应头、冒烟契约：已完成
+
+
+## P13 状态（2026-07-19）
+- 服务侧可商用冒烟 `TestCommercialDashboardSmoke`：已完成
+- 生产清单 `productionChecklist`：已完成
+- NotFound / PermissionDenied EmptyState 收口：已完成
+- 文档：`docs/plans/dashboard-ux-p13-2026-07-19.md`
+- **仍不宣称可商用目标完成**：Playwright UI e2e、生产 HTTPS/HSTS/runbook、RBAC 矩阵可视化
