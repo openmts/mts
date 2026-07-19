@@ -81,6 +81,10 @@ test('buildAcceptancePack aggregates archive client server ops', () => {
   assert.equal(pack.signoff_completeness.filled_count, 0)
   assert.match(md, /签核备注完整性/)
   assert.match(md, /不计入就绪评分/)
+  assert.ok(pack.export_preflight.warn_count >= 1)
+  assert.ok(pack.export_preflight.items.some((i) => i.id === 'signoff'))
+  assert.match(md, /导出前预检/)
+  assert.match(md, /预检不阻止导出/)
 })
 
 test('acceptance pack signoff completeness reflects archive notes', () => {

@@ -13,6 +13,10 @@ import {
   signoffFieldLabel,
   type SignoffNoteField,
 } from './signoffExport.ts'
+import {
+  buildExportPreflight,
+  type ExportPreflightItem,
+} from './exportPreflight.ts'
 
 export const ACCEPTANCE_PACK_KIND = 'mts.acceptance.pack' as const
 export const ACCEPTANCE_PACK_VERSION = 1 as const
@@ -61,6 +65,13 @@ export interface AcceptancePackPayload {
     filled_labels: string[]
     missing_labels: string[]
   }
+  /** 导出前预检摘要（不计分；不代表验收完成） */
+  export_preflight: {
+    warn_count: number
+    info_count: number
+    ok_count: number
+    items: Pick<ExportPreflightItem, 'id' | 'level' | 'message' | 'target'>[]
+  }
 }
 
 const copy = {
@@ -96,6 +107,11 @@ const copy = {
     signoffComplete: '已齐',
     signoffIncomplete: '未齐',
     signoffNotScored: '不计入就绪评分，不代表验收完成',
+    preflight: '## 导出前预检',
+    preflightWarn: 'warn',
+    preflightInfo: 'info',
+    preflightOk: 'ok',
+    preflightNotScored: '预检不阻止导出，不代表生产验收完成',
   },
   en: {
     disclaimer:
@@ -129,6 +145,11 @@ const copy = {
     signoffComplete: 'complete',
     signoffIncomplete: 'incomplete',
     signoffNotScored: 'Not scored; does not complete acceptance',
+    preflight: '## Export preflight',
+    preflightWarn: 'warn',
+    preflightInfo: 'info',
+    preflightOk: 'ok',
+    preflightNotScored: 'Preflight does not block export or complete acceptance',
   },
 } as const
 
@@ -150,6 +171,19 @@ export function buildAcceptancePack(input: AcceptancePackInput): AcceptancePackP
     : null
   const deploy_kit = input.deployKit ?? buildDeployKitSummary(locale)
   const sc = assessSignoffCompleteness(input.archive.signoff_notes ?? input.archive.state?.signoffNotes)
+  const score = input.archive.score
+  const pf = buildExportPreflight({
+    locale,
+    requiredChecklistRatio: (score.checklist ?? 0) / 100,
+    edgeHttpsRequiredRatio: (score.edgeHttps ?? 0) / 100,
+    backupScheduleRequiredRatio: (score.backupSchedule ?? 0) / 100,
+    doctorLoaded: !!input.archive.doctor?.loaded,
+    doctorOk: input.archive.doctor?.ok,
+    doctorWarnCount: input.archive.doctor?.warn_count,
+    httpTlsEnabled: input.archive.doctor?.http_tls_enabled ?? null,
+    signoffNotes: input.archive.signoff_notes ?? input.archive.state?.signoffNotes,
+    deployKitReviewed: !!input.archive.state?.deployKit?.reviewed,
+  })
   return {
     version: ACCEPTANCE_PACK_VERSION,
     kind: ACCEPTANCE_PACK_KIND,
@@ -177,6 +211,17 @@ export function buildAcceptancePack(input: AcceptancePackInput): AcceptancePackP
       total: sc.total,
       filled_labels: sc.filled.map((f) => signoffFieldLabel(f, locale)),
       missing_labels: sc.missing.map((f) => signoffFieldLabel(f, locale)),
+    },
+    export_preflight: {
+      warn_count: pf.warnCount,
+      info_count: pf.infoCount,
+      ok_count: pf.okCount,
+      items: pf.items.map((i) => ({
+        id: i.id,
+        level: i.level,
+        message: i.message,
+        target: i.target,
+      })),
     },
   }
 }
@@ -247,6 +292,14 @@ export function formatAcceptancePackMarkdown(pack: AcceptancePackPayload): strin
     `- ${t.signoffMissing}${sep}${pack.signoff_completeness.missing_labels.join(locale === 'en' ? ', ' : '、') || '—'}`,
   )
   lines.push(`- ${t.signoffNotScored}`)
+  lines.push('', t.preflight, '')
+  lines.push(
+    `- ${t.preflightOk}${sep}${pack.export_preflight.ok_count} · ${t.preflightWarn}${sep}${pack.export_preflight.warn_count} · ${t.preflightInfo}${sep}${pack.export_preflight.info_count}`,
+  )
+  for (const item of pack.export_preflight.items.filter((x) => x.level !== 'ok' || x.id === 'footer').slice(0, 12)) {
+    lines.push(`- [${item.level}] ${item.id}: ${item.message}`)
+  }
+  lines.push(`- ${t.preflightNotScored}`)
   lines.push('', t.ops, '')
   if (!pack.ops_actions.length) {
     lines.push(`- ${t.empty}`)

@@ -462,7 +462,7 @@ watch(
       <span>{{ t('readinessArchiveHint') }}</span>
     </div>
 
-    <div class="mts-card p-4" data-testid="readiness-export-preflight">
+    <div id="export-preflight" class="mts-card p-4 scroll-mt-20" data-testid="readiness-export-preflight">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">{{ t('readinessExportPreflight') }}</h2>
         <span class="text-xs mts-muted" data-testid="readiness-preflight-summary">

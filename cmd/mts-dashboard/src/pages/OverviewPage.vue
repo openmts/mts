@@ -18,6 +18,7 @@ import {
   assessSignoffCompleteness,
   signoffFieldLabel,
 } from '@/utils/signoffExport'
+import { buildExportPreflight } from '@/utils/exportPreflight'
 import { formatMessage } from '@/utils/formatMessage'
 import type { LocaleCode } from '@/utils/localizedText'
 import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3, FileCode2 } from 'lucide-vue-next'
@@ -103,8 +104,41 @@ const signoffMissingLabels = computed(() =>
   signoffCompleteness.value.missing.map((f) => signoffFieldLabel(f, uiLocale.value)),
 )
 
+const overviewPreflight = computed(() => {
+  const state = localReadiness.value
+  const requiredItems = requiredChecklist()
+  const requiredDone = requiredItems.filter((i) => !!state.production[i.id]).length
+  const requiredRatio = requiredItems.length === 0 ? 1 : requiredDone / requiredItems.length
+  const edgeDone = completedIds(state.edgeHttps)
+  const edgeStats = edgeHttpsProgress(edgeDone)
+  const edgeRatio =
+    edgeStats.requiredTotal === 0 ? 1 : edgeStats.requiredDone / edgeStats.requiredTotal
+  const scheduleDone = completedIds(state.backupSchedule)
+  const scheduleStats = backupScheduleProgress(scheduleDone)
+  const scheduleRatio =
+    scheduleStats.requiredTotal === 0 ? 1 : scheduleStats.requiredDone / scheduleStats.requiredTotal
+  const doctorWarnCount = doctorChecks.value.filter((c) => c.level === 'warn').length
+  const doctorLoaded = showAdminPanels.value && doctorTLS.value != null
+  return buildExportPreflight({
+    locale: uiLocale.value,
+    requiredChecklistRatio: requiredRatio,
+    edgeHttpsRequiredRatio: edgeRatio,
+    backupScheduleRequiredRatio: scheduleRatio,
+    doctorLoaded,
+    doctorOk: doctorLoaded ? doctorWarnCount === 0 : undefined,
+    doctorWarnCount,
+    httpTlsEnabled: doctorTLS.value,
+    signoffNotes: state.signoffNotes,
+    deployKitReviewed: !!state.deployKit?.reviewed,
+  })
+})
+
 function goSignoffNotes() {
   router.push({ path: '/ops/readiness', hash: '#signoff-notes' })
+}
+
+function goExportPreflight() {
+  router.push({ path: '/ops/readiness', hash: '#export-preflight' })
 }
 
 const sessionSummary = computed(() => {
@@ -362,6 +396,23 @@ const showAdminPanels = computed(() => isAdmin.value)
         }}
         <span class="mts-muted"> · {{ t('overviewSignoffHint') }}</span>
       </p>
+      <div class="basis-full flex flex-wrap items-center gap-2 text-[11px]" data-testid="overview-export-preflight">
+        <span
+          :class="overviewPreflight.warnCount > 0 ? 'text-amber-700 dark:text-amber-200' : 'text-emerald-700 dark:text-emerald-300'"
+        >
+          {{
+            formatMessage(t('overviewPreflightSummary'), {
+              warn: String(overviewPreflight.warnCount),
+              info: String(overviewPreflight.infoCount),
+              ok: String(overviewPreflight.okCount),
+            })
+          }}
+        </span>
+        <button type="button" class="mts-btn !px-2 !py-0.5 text-[11px]" data-testid="overview-go-preflight" @click="goExportPreflight">
+          {{ t('overviewGoPreflight') }}
+        </button>
+        <span class="mts-muted">{{ t('overviewPreflightHint') }}</span>
+      </div>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
