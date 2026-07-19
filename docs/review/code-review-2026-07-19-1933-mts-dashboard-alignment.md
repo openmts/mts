@@ -404,5 +404,11 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 
 ## P16 状态（2026-07-20）
 - 实时 grants：`/access/grants`
-- 指标浏览：`/metrics` + prometheus 解析
+- 指标浏览：`/observability/metrics` + prometheus 解析
 - **仍不宣称可商用目标完成**：Playwright UI e2e、边缘 HTTPS 落地
+
+
+## P17 状态（2026-07-20）
+- Playwright 浏览器商业冒烟：`npm run test:e2e` 通过
+- 指标页路由修正为 `/observability/metrics`（避免与 Prometheus `/metrics` 冲突）
+- **仍不宣称可商用目标完成**：边缘 HTTPS/HSTS 部署落地、CI 浏览器安装约定

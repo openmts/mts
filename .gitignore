@@ -30,3 +30,8 @@ mutex.out
 *.coverprofile
 coverage.out
 cmd/mts-server/data/
+
+# dashboard playwright runtime
+cmd/mts-dashboard/.e2e-runtime/
+cmd/mts-dashboard/test-results/
+cmd/mts-dashboard/playwright-report/

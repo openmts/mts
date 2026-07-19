@@ -37,7 +37,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'health-ready-metrics',
     severity: 'required',
     title: '健康与指标接入',
-    detail: '/healthz /readyz /metrics 接入监控与告警；Dashboard /metrics 可只读浏览。',
+    detail: '/healthz /readyz /metrics 接入监控与告警；Dashboard /observability/metrics 可只读浏览。',
     automated: true,
   },
   {
@@ -51,7 +51,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'smoke-login-query-write',
     severity: 'required',
     title: '核心冒烟：登录-查询-写入-运维',
-    detail: 'TestCommercialDashboardSmoke 覆盖服务侧闭环；浏览器 UI 仍建议人工/Playwright。',
+    detail: 'TestCommercialDashboardSmoke + Playwright commercial-smoke 覆盖登录/改密/写/查/运维。',
     automated: true,
   },
   {

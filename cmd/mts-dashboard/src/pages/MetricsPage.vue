@@ -61,7 +61,7 @@ onMounted(() => { void load() })
           指标浏览
         </h1>
         <p class="text-xs mts-muted">
-          读取 Prometheus 文本 <code class="font-mono">/metrics</code>（只读浏览，便于对照监控接入）。
+          读取后端 Prometheus 文本接口 <code class="font-mono">/metrics</code>（页面路由为 /observability/metrics，避免与监控抓取路径冲突）。
           <span v-if="lastRefreshed">刷新于 {{ lastRefreshed }}</span>
         </p>
       </div>

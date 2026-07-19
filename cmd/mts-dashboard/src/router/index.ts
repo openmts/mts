@@ -34,7 +34,7 @@ const router = createRouter({
         { path: 'write', name: 'Write', component: () => import('@/pages/WritePage.vue') },
         { path: 'access', name: 'AccessMatrix', component: () => import('@/pages/AccessMatrixPage.vue') },
         { path: 'access/grants', name: 'AccessGrants', component: () => import('@/pages/AccessGrantsPage.vue'), meta: { admin: true } },
-        { path: 'metrics', name: 'Metrics', component: () => import('@/pages/MetricsPage.vue'), meta: { admin: true } },
+        { path: 'observability/metrics', name: 'Metrics', component: () => import('@/pages/MetricsPage.vue'), meta: { admin: true } },
         { path: ':pathMatch(.*)*', name: 'NotFound', component: () => import('@/pages/NotFoundPage.vue') },
       ],
     },

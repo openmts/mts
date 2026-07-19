@@ -39,6 +39,8 @@
 ```bash
 go test ./cmd/mts-server -run TestCommercialDashboardSmoke -count=1
 cd cmd/mts-dashboard && npm run test && npm run build
+# 首次需要：npm run test:e2e:install
+cd cmd/mts-dashboard && npm run test:e2e
 make test && make e2e && make lint
 ```
 
