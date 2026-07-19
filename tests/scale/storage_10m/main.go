@@ -72,6 +72,14 @@ type report struct {
 	Frees                             uint64               `json:"frees"`
 	NumGC                             uint32               `json:"num_gc"`
 	RSSPeakBytes                      int64                `json:"rss_peak_bytes"`
+	WriteRSSPeakBytes                 int64                `json:"write_rss_peak_bytes"`
+	CompactRSSPeakBytes               int64                `json:"compact_rss_peak_bytes"`
+	ColdQueryRSSPeakBytes             int64                `json:"cold_query_rss_peak_bytes"`
+	HotQueryRSSPeakBytes              int64                `json:"hot_query_rss_peak_bytes"`
+	WriteRSSCurrentBytes              int64                `json:"write_rss_current_bytes"`
+	CompactRSSCurrentBytes            int64                `json:"compact_rss_current_bytes"`
+	ColdQueryRSSCurrentBytes          int64                `json:"cold_query_rss_current_bytes"`
+	HotQueryRSSCurrentBytes           int64                `json:"hot_query_rss_current_bytes"`
 	Rows                              int                  `json:"rows"`
 	DataBytes                         int64                `json:"data_bytes"`
 	ShardCount                        int                  `json:"shard_count"`
@@ -199,6 +207,14 @@ func run(args []string) (err error) {
 		Frees:                             mem.Frees,
 		NumGC:                             mem.NumGC,
 		RSSPeakBytes:                      rssPeakBytes(),
+		WriteRSSPeakBytes:                 workload.writeRSSPeakBytes,
+		CompactRSSPeakBytes:               workload.compactRSSPeakBytes,
+		ColdQueryRSSPeakBytes:             workload.coldQueryRSSPeakBytes,
+		HotQueryRSSPeakBytes:              workload.hotQueryRSSPeakBytes,
+		WriteRSSCurrentBytes:              workload.writeRSSCurrentBytes,
+		CompactRSSCurrentBytes:            workload.compactRSSCurrentBytes,
+		ColdQueryRSSCurrentBytes:          workload.coldQueryRSSCurrentBytes,
+		HotQueryRSSCurrentBytes:           workload.hotQueryRSSCurrentBytes,
 		Rows:                              workload.rows,
 		DataBytes:                         dataBytes,
 		ShardCount:                        shardCount,
@@ -486,6 +502,14 @@ type workloadResult struct {
 	levelDistributionAfterCompaction  map[int]int
 	compactionResult                  mts.CompactionResult
 	compactionStats                   mts.CompactionStats
+	writeRSSPeakBytes                 int64
+	compactRSSPeakBytes               int64
+	coldQueryRSSPeakBytes             int64
+	hotQueryRSSPeakBytes              int64
+	writeRSSCurrentBytes              int64
+	compactRSSCurrentBytes            int64
+	coldQueryRSSCurrentBytes          int64
+	hotQueryRSSCurrentBytes           int64
 }
 
 type sstableSnapshot struct {
@@ -543,6 +567,8 @@ func writeAndMaybeCompact(
 		return err
 	}
 	result.writeDuration = writeDuration
+	result.writeRSSPeakBytes = rssPeakBytes()
+	result.writeRSSCurrentBytes = currentRSSBytes()
 	beforeCompaction, err := captureSSTableSnapshot(dir)
 	if err != nil {
 		return fmt.Errorf("snapshot before compaction: %w", err)
@@ -569,6 +595,8 @@ func compactScaleWorkload(
 	result.compactionDuration = time.Since(compactStarted)
 	result.backlogDrain = result.compactionDuration
 	result.compactionResult = compactionResult
+	result.compactRSSPeakBytes = rssPeakBytes()
+	result.compactRSSCurrentBytes = currentRSSBytes()
 	afterCompaction, err := captureSSTableSnapshot(dir)
 	if err != nil {
 		return fmt.Errorf("snapshot after compaction: %w", err)
@@ -592,14 +620,22 @@ func queryOpenEngine(ctx context.Context, eng *mts.Engine, cfg config, result *w
 	if err != nil {
 		return fmt.Errorf("query rows: %w", err)
 	}
+	coldRSS := rssPeakBytes()
+	coldCurrent := currentRSSBytes()
 	_, hotLatency, err := timedQueryLimitedRows(ctx, eng, query, cfg.verify)
 	if err != nil {
 		return fmt.Errorf("query rows hot: %w", err)
 	}
+	hotRSS := rssPeakBytes()
+	hotCurrent := currentRSSBytes()
 	result.rows = rows
 	result.queryLatency = latency
 	result.coldQueryLatency = latency
 	result.hotQueryLatency = hotLatency
+	result.coldQueryRSSPeakBytes = coldRSS
+	result.hotQueryRSSPeakBytes = hotRSS
+	result.coldQueryRSSCurrentBytes = coldCurrent
+	result.hotQueryRSSCurrentBytes = hotCurrent
 	return nil
 }
 

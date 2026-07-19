@@ -24,6 +24,9 @@ type pageDecodeKey struct {
 
 const defaultPageDecodeCacheLimit = 256
 
+// pageDecodeCacheMaxSamples 超过该样本数的解码结果不缓存，避免 compact/全表扫灌爆堆。
+const pageDecodeCacheMaxSamples = 512
+
 func newPageDecodeCache(limit int) *pageDecodeCache {
 	if limit <= 0 {
 		limit = defaultPageDecodeCacheLimit
@@ -49,7 +52,7 @@ func (c *pageDecodeCache) get(key pageDecodeKey) ([]model.VersionedSample, bool)
 }
 
 func (c *pageDecodeCache) put(key pageDecodeKey, samples []model.VersionedSample) {
-	if c == nil || len(samples) == 0 {
+	if c == nil || len(samples) == 0 || len(samples) > pageDecodeCacheMaxSamples {
 		return
 	}
 	stored := cloneVersionedSamples(samples)

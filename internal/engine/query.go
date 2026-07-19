@@ -541,21 +541,24 @@ func decorateColumn(
 	tags map[string]string,
 	fieldName string,
 ) model.ColumnSeries {
-	series := model.ColumnSeries{
+	// snapshot tags 在查询生命周期内只读，多字段共享同一 map，避免 10 字段重复 clone。
+	count := len(column.Samples)
+	timestamps := make([]int64, count)
+	values := make([]model.FieldValue, count)
+	for index, sample := range column.Samples {
+		timestamps[index] = sample.Timestamp
+		values[index] = sample.Value
+	}
+	return model.ColumnSeries{
 		SeriesID:    column.SeriesID,
 		Measurement: measurement,
-		Tags:        cloneTags(tags),
+		Tags:        tags,
 		FieldID:     column.FieldID,
 		FieldName:   fieldName,
 		FieldType:   column.FieldType,
-		Timestamps:  make([]int64, 0, len(column.Samples)),
-		Values:      make([]model.FieldValue, 0, len(column.Samples)),
+		Timestamps:  timestamps,
+		Values:      values,
 	}
-	for _, sample := range column.Samples {
-		series.Timestamps = append(series.Timestamps, sample.Timestamp)
-		series.Values = append(series.Values, sample.Value)
-	}
-	return series
 }
 
 func (e *Engine) checkQueryMemoryBudget(queryBytes int64) error {

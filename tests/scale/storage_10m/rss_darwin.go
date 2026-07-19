@@ -11,3 +11,7 @@ func rssPeakBytes() int64 {
 	}
 	return usage.Maxrss
 }
+
+func currentRSSBytes() int64 {
+	return rssPeakBytes()
+}

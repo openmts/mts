@@ -35,3 +35,22 @@ func TestPageDecodeCacheRoundTripAndEvict(t *testing.T) {
 		t.Fatal("key3 missing")
 	}
 }
+
+
+func TestPageDecodeCacheSkipsLargePages(t *testing.T) {
+	cache := newPageDecodeCache(8)
+	key := pageDecodeKey{offset: 1, size: 2, start: 3, end: 4}
+	large := make([]model.VersionedSample, pageDecodeCacheMaxSamples+1)
+	for i := range large {
+		large[i] = model.VersionedSample{Timestamp: int64(i), Value: model.Float64Value(1)}
+	}
+	cache.put(key, large)
+	if _, ok := cache.get(key); ok {
+		t.Fatal("large page should not be cached")
+	}
+	small := large[:pageDecodeCacheMaxSamples]
+	cache.put(key, small)
+	if _, ok := cache.get(key); !ok {
+		t.Fatal("boundary-size page should be cached")
+	}
+}

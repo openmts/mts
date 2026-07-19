@@ -183,13 +183,22 @@ func alignedSeriesColumns(columns []model.ColumnSeries) bool {
 
 func alignedRowsFromSeriesColumns(columns []model.ColumnSeries) []model.Row {
 	first := columns[0]
-	rows := make([]model.Row, 0, len(first.Timestamps))
+	// 同一 series 的 tags 只读共享，避免每行 cloneStringMap。
+	sharedTags := first.Tags
+	fieldCap := len(columns)
+	rows := make([]model.Row, len(first.Timestamps))
 	for index, timestamp := range first.Timestamps {
-		row := newRowFromColumn(first, timestamp)
+		fields := make(map[string]model.FieldValue, fieldCap)
 		for _, column := range columns {
-			row.Fields[column.FieldName] = column.Values[index]
+			fields[column.FieldName] = column.Values[index]
 		}
-		rows = append(rows, row)
+		rows[index] = model.Row{
+			SeriesID:    first.SeriesID,
+			Measurement: first.Measurement,
+			Tags:        sharedTags,
+			Timestamp:   timestamp,
+			Fields:      fields,
+		}
 	}
 	return rows
 }
@@ -222,20 +231,17 @@ func newRowFromColumn(column model.ColumnSeries, timestamp int64) model.Row {
 	return model.Row{
 		SeriesID:    column.SeriesID,
 		Measurement: column.Measurement,
-		Tags:        cloneStringMap(column.Tags),
+		Tags:        column.Tags, // 列装饰后 tags 只读，行间可共享
 		Timestamp:   timestamp,
 		Fields:      make(map[string]model.FieldValue),
 	}
 }
 
 func cloneRow(row model.Row) model.Row {
-	row.Tags = cloneStringMap(row.Tags)
+	// Tags 在查询路径中只读共享（catalog snapshot / 列装饰），仅克隆 Fields
+	// 以满足 iterator 语义并避免每行 map 分配。
 	row.Fields = cloneFieldMap(row.Fields)
 	return row
-}
-
-func cloneStringMap(values map[string]string) map[string]string {
-	return collections.CloneMap(values)
 }
 
 func cloneFieldMap(values map[string]model.FieldValue) map[string]model.FieldValue {
