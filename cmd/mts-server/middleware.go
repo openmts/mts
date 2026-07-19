@@ -21,6 +21,20 @@ type statusRecorder struct {
 	status int
 }
 
+// applySecurityHeaders 设置可商用后台默认安全响应头（API + Dashboard 静态资源共用）。
+func applySecurityHeaders(header http.Header) {
+	if header == nil {
+		return
+	}
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set("X-Frame-Options", "DENY")
+	header.Set("Referrer-Policy", "no-referrer")
+	header.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+	header.Set("Cross-Origin-Opener-Policy", "same-origin")
+	// SPA 产物为同域静态资源；style 可能含构建期注入，保留 self。
+	header.Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'")
+}
+
 func (r *serverRuntime) wrapHTTP(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		cfg := r.currentConfig()
@@ -29,8 +43,7 @@ func (r *serverRuntime) wrapHTTP(handler http.Handler) http.Handler {
 			requestID = r.nextRequestID()
 		}
 		writer.Header().Set(headerRequestID, requestID)
-		writer.Header().Set("X-Content-Type-Options", "nosniff")
-		writer.Header().Set("X-Frame-Options", "DENY")
+		applySecurityHeaders(writer.Header())
 		ctx := context.WithValue(request.Context(), contextRequestID, requestID)
 		if timeout := time.Duration(cfg.Limits.RequestTimeout); timeout > 0 {
 			var cancel context.CancelFunc

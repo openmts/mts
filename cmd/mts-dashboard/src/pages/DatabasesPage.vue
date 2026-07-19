@@ -12,6 +12,7 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
+import { useI18n } from '@/composables/useI18n'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
 interface Series { id: number; measurement: string; tags: Record<string, string> }
@@ -34,6 +35,7 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
+const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
 const databases = ref<DatabaseEntry[]>([])
 const newDbName = ref('')
@@ -213,13 +215,31 @@ function fieldTypeName(t: number): string {
   <div v-else class="space-y-4">
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
-    <div class="flex gap-2">
-      <input v-model="newDbName" type="text" placeholder="新数据库名称" class="w-64 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="createDatabase" />
-      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="createDatabase">
-        <Plus class="h-4 w-4" /> 创建数据库
-      </button>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('databases') }}</h1>
+        <p class="text-xs mts-muted">管理数据库、measurement 元数据与保留策略</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <input v-model="newDbName" type="text" placeholder="新数据库名称" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="createDatabase" />
+        <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="createDatabase">
+          <Plus class="h-4 w-4" /> 创建数据库
+        </button>
+      </div>
     </div>
-    <div class="space-y-2">
+
+    <div v-if="!databases.length" class="mts-card">
+      <EmptyState
+        title="暂无数据库"
+        description="创建首个数据库后，可在此展开查看 measurement、字段类型与保留策略。"
+      >
+        <template #action>
+          <button type="button" class="mts-btn-primary" @click="createDatabase">创建数据库</button>
+        </template>
+      </EmptyState>
+    </div>
+
+    <div v-else class="space-y-2">
       <div v-for="db in databases" :key="db.name" class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
           <button class="flex items-center gap-2 text-left" @click="toggleExpand(db)">
@@ -234,7 +254,7 @@ function fieldTypeName(t: number): string {
         <div v-if="db.expanded && db.loaded" class="border-t border-slate-100">
           <div class="px-6 py-3">
             <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">Measurements</p>
-            <div v-if="!db.measurements.length" class="text-xs text-slate-400 dark:text-slate-500">暂无 measurement</div>
+            <EmptyState v-if="!db.measurements.length" compact title="暂无 measurement" description="写入数据后将自动出现。" />
             <div v-for="meas in db.measurements" :key="meas.name" class="mb-2 rounded border border-slate-100">
               <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" @click="toggleMeasurement(meas, db.name)">
                 <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
