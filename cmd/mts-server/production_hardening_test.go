@@ -126,6 +126,7 @@ func TestHTTPProductionAdminEndpointBranches(t *testing.T) {
 		"/api/v1/admin/api-spec",
 		"/api/v1/admin/error-codes",
 		"/api/v1/admin/storage/export",
+		"/api/v1/admin/doctor",
 	}
 	for _, path := range paths {
 		t.Run("unauthenticated"+path, func(t *testing.T) {

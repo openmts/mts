@@ -424,3 +424,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - data_dir 旁路恢复自动化：`TestDataDirSidePathRestoreDrill`
 - TLS 启用时 HSTS + doctor 边缘 HTTPS 提示
 - **仍不宣称可商用目标完成**：生产边缘证书/HSTS 人工验收、跨主机备份编排
+
+
+## P20 状态（2026-07-20）
+- `GET /api/v1/admin/doctor` 结构化检查 + Overview 展示
+- 边缘 HTTPS/HSTS 人工验收清单（Storage + edgeHttpsAcceptance）
+- **仍不宣称可商用目标完成**：生产边缘证书人工验收执行、跨主机备份编排、UI 一键旁路恢复

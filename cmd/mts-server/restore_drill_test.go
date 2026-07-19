@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -96,6 +98,56 @@ func TestRunDoctorChecksWarnsWithoutTLS(t *testing.T) {
 	for _, part := range []string{"data_dir ready", "backup_dir ready", "http tls disabled"} {
 		if !strings.Contains(joined, part) {
 			t.Fatalf("doctor lines missing %q: %q", part, joined)
+		}
+	}
+}
+
+func TestEvaluateDoctorStructured(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.Backup.Dir = filepath.Join(t.TempDir(), "backups")
+	cfg.HTTP.TLS.Enabled = false
+	resp, err := evaluateDoctor(cfg)
+	if err != nil {
+		t.Fatalf("evaluateDoctor error = %v", err)
+	}
+	if !resp.OK {
+		t.Fatalf("ok = false, want true with warnings")
+	}
+	if resp.HTTPTLSEnabled {
+		t.Fatal("http_tls_enabled = true, want false")
+	}
+	if len(resp.Checks) == 0 || len(resp.Lines) != len(resp.Checks) {
+		t.Fatalf("checks/lines mismatch: %#v", resp)
+	}
+	joined := strings.Join(resp.Lines, "\n")
+	for _, part := range []string{"data_dir ready", "backup_dir ready", "http tls disabled"} {
+		if !strings.Contains(joined, part) {
+			t.Fatalf("missing %q in %q", part, joined)
+		}
+	}
+}
+
+func TestAdminDoctorHTTP(t *testing.T) {
+	runtime := openTestRuntimeWithAdminToken(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	t.Cleanup(server.Close)
+
+	getJSONWithHeaders(t, server.URL+routeAdminDoctor, nil, http.StatusUnauthorized, &errorResponse{})
+
+	headers := map[string]string{"Authorization": "Bearer test-admin-token"}
+	var body doctorResponse
+	getJSONWithHeaders(t, server.URL+routeAdminDoctor, headers, http.StatusOK, &body)
+	if !body.OK {
+		t.Fatalf("doctor ok=false: %#v", body)
+	}
+	if len(body.Checks) == 0 {
+		t.Fatal("doctor checks empty")
+	}
+	// 有 admin_token 时 auth_hardening 不应再出现 warn
+	for _, c := range body.Checks {
+		if c.Code == "auth_hardening" {
+			t.Fatalf("unexpected auth_hardening check: %#v", c)
 		}
 	}
 }

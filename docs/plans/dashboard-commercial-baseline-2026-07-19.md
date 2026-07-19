@@ -14,11 +14,12 @@
 - Playwright 浏览器商业冒烟（P17）
 - 备份演练引导 + Make/CI 入口（P18）
 - 旁路恢复自动化 + TLS/HSTS doctor（P19）
+- Admin doctor API + Overview 展示 + 边缘 HTTPS 验收清单（P20）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
 |---|---|---|
-| 边缘 HTTPS / TLS | required | 部分（doctor + TLS 时 HSTS；边缘证书人工） |
+| 边缘 HTTPS / TLS | required | 部分（doctor API + TLS 时 HSTS + 验收清单；边缘证书人工） |
 | 安全响应头 | required | 是（服务侧测试） |
 | 修改默认 admin 密码 | required | 是（must_change 门禁+单测） |
 | 健康与指标接入 | required | 是（冒烟 + Dashboard /observability/metrics 浏览） |
@@ -45,6 +46,7 @@
 - `go test ./cmd/mts-server -run TestCommercialDashboardSmoke -count=1`
 - `cd cmd/mts-dashboard && npm run test:e2e`
 - `go test ./cmd/mts-server -run TestDataDirSidePathRestoreDrill -count=1`
+- `go test ./cmd/mts-server -run TestAdminDoctorHTTP -count=1`
 
 ## 文档入口
 - 生产 Runbook：`docs/ops/dashboard-production-runbook.md`

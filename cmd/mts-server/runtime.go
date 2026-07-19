@@ -219,6 +219,9 @@ func (r *serverRuntime) shutdown(ctx context.Context) error {
 			err = errors.Join(err, ctx.Err())
 		}
 	}
+	if r.audit != nil {
+		r.audit.close()
+	}
 	if r.engine != nil {
 		err = errors.Join(err, r.engine.Close(ctx))
 	}

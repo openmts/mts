@@ -48,6 +48,18 @@ cd cmd/mts-dashboard && npm run test:e2e
 make test && make e2e && make lint
 ```
 
+
+
+## 2.1 边缘 HTTPS / HSTS 验收（人工）
+
+1. 反向代理/LB 配置有效证书并对浏览器暴露 HTTPS。
+2. 确认明文 HTTP 跳转到 HTTPS（301/308）。
+3. 在确认全站 HTTPS 后启用 HSTS；若 `mts-server` 开启 HTTP TLS，服务会自动发送 `Strict-Transport-Security`。
+4. 调用 `GET /api/v1/admin/doctor` 或 `mts-server doctor`，处理 warn 项。
+5. 经 HTTPS 完成登录 → 查询 → 运维冒烟。
+
+Dashboard 存储页提供同口径勾选清单（`edgeHttpsAcceptance.ts`）。
+
 ## 3. 首次登录与账号
 
 1. 服务启动且密码认证开启时，会 bootstrap 默认管理员 `admin`（默认密码 `admin`，以配置为准）。

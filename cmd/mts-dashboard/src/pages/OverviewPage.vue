@@ -5,7 +5,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
-import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle } from 'lucide-vue-next'
+import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck } from 'lucide-vue-next'
 
 interface HealthResponse extends HealthSnapshot {}
 interface StorageMemorySnapshot {
@@ -20,6 +20,8 @@ interface CompactionStatsResponse { stats: CompactionStats }
 interface MaintenanceStatsResponse { stats: MaintenanceStats }
 interface MaintenanceErrorsResponse { errors: string[] }
 interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks'] }
+interface DoctorCheck { level: string; code: string; message: string }
+interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[] }
 
 const { isAdmin } = useAuth()
 const { t } = useI18n()
@@ -31,6 +33,8 @@ const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
+const doctorChecks = ref<DoctorCheck[]>([])
+const doctorTLS = ref<boolean | null>(null)
 const loadError = ref('')
 const adminPartialError = ref('')
 const loading = ref(false)
@@ -67,6 +71,7 @@ async function loadOverview() {
         apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance'),
         apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors'),
         apiGet<AdminHealthResponse | HealthSnapshot>('/api/v1/admin/health'),
+        apiGet<DoctorResponse>('/api/v1/admin/doctor'),
       ])
       const errs: string[] = []
       if (results[0].status === 'fulfilled') memorySnapshot.value = results[0].value.snapshot
@@ -98,12 +103,22 @@ async function loadOverview() {
           if (h.reasons?.length) healthReasons.value = h.reasons
         }
       }
+      if (results[5].status === 'fulfilled') {
+        doctorChecks.value = results[5].value.checks ?? []
+        doctorTLS.value = !!results[5].value.http_tls_enabled
+      } else {
+        doctorChecks.value = []
+        doctorTLS.value = null
+        errs.push(results[5].reason instanceof Error ? results[5].reason.message : 'doctor')
+      }
       if (errs.length) adminPartialError.value = errs.join('；')
     } else {
       memorySnapshot.value = null
       compactionStats.value = null
       maintenanceStats.value = null
       maintenanceErrors.value = []
+      doctorChecks.value = []
+      doctorTLS.value = null
     }
     lastRefreshed.value = new Date().toLocaleTimeString()
   } catch (e) {
@@ -202,6 +217,42 @@ const showAdminPanels = computed(() => isAdmin.value)
               <td class="px-2 py-2 font-mono text-xs">{{ c.name }}</td>
               <td class="px-2 py-2 text-xs" :class="c.status === 'ok' || c.status === 'passed' ? 'text-green-600' : 'text-red-600'">{{ c.status }}</td>
               <td class="px-2 py-2 text-xs mts-muted">{{ c.reason || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <div v-if="showAdminPanels && doctorChecks.length" class="mts-panel">
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <ShieldCheck class="h-4 w-4 text-slate-500" />
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('doctorTitle') }}</h2>
+          <span class="text-xs mts-muted">({{ doctorChecks.length }})</span>
+        </div>
+        <span class="text-xs mts-muted">
+          HTTP TLS:
+          <span :class="doctorTLS ? 'text-green-600' : 'text-amber-600'">
+            {{ doctorTLS === null ? '—' : doctorTLS ? t('enabled') : t('disabled') }}
+          </span>
+        </span>
+      </div>
+      <p class="mb-3 text-xs mts-muted">{{ t('doctorDesc') }}</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
+              <th class="px-2 py-2">Level</th>
+              <th class="px-2 py-2">Code</th>
+              <th class="px-2 py-2">Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(c, i) in doctorChecks" :key="i" class="border-b border-slate-100 dark:border-slate-800">
+              <td class="px-2 py-2 text-xs" :class="c.level === 'ok' ? 'text-green-600' : 'text-amber-600'">{{ c.level }}</td>
+              <td class="px-2 py-2 font-mono text-xs">{{ c.code }}</td>
+              <td class="px-2 py-2 text-xs mts-muted">{{ c.message }}</td>
             </tr>
           </tbody>
         </table>

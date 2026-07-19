@@ -588,6 +588,15 @@ func operationCatalog() []operation {
 			GRPCFn:      grpcCompactionStats,
 		},
 		{
+			Name:        "admin_doctor",
+			Namespace:   "admin",
+			Description: "production doctor readiness checks",
+			Auth:        authAdmin,
+			HTTPMethods: []string{http.MethodGet},
+			HTTPPaths:   []string{routeAdminDoctor},
+			HTTPHandler: (*serverRuntime).handleAdminDoctor,
+		},
+		{
 			Name:        "admin_health",
 			Namespace:   "admin",
 			Description: "admin health snapshot",

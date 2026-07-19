@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -96,49 +95,6 @@ func doctorCommand(stdout io.Writer) *cli.Command {
 			return err
 		},
 	}
-}
-
-// runDoctorChecks 输出可商用部署前检查项（目录权限、TLS 文件、边缘 HTTPS 提示等）。
-func runDoctorChecks(cfg config) ([]string, error) {
-	lines := make([]string, 0, 16)
-	if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
-		return nil, err
-	}
-	lines = append(lines, "ok: data_dir ready: "+cfg.DataDir)
-	backupDir := cfg.Backup.Dir
-	if backupDir == "" {
-		backupDir = filepath.Join(cfg.DataDir, "backups")
-	}
-	if err := os.MkdirAll(backupDir, 0700); err != nil {
-		return nil, err
-	}
-	lines = append(lines, "ok: backup_dir ready: "+backupDir)
-
-	if cfg.HTTP.TLS.Enabled {
-		if _, err := buildTLSConfig(cfg.HTTP.TLS); err != nil {
-			return nil, fmt.Errorf("http tls: %w", err)
-		}
-		lines = append(lines, "ok: http tls enabled (HSTS will be emitted by server)")
-	} else {
-		lines = append(lines, "warn: http tls disabled; terminate HTTPS/HSTS at reverse proxy edge")
-	}
-	if cfg.GRPC.TLS.Enabled {
-		if _, err := buildTLSConfig(cfg.GRPC.TLS); err != nil {
-			return nil, fmt.Errorf("grpc tls: %w", err)
-		}
-		lines = append(lines, "ok: grpc tls enabled")
-	} else if cfg.GRPC.Enabled {
-		lines = append(lines, "warn: grpc tls disabled; keep gRPC on private network or enable tls")
-	}
-	if !cfg.User.PasswordAuthDisabled {
-		lines = append(lines, "ok: password auth enabled (bootstrap admin requires password change)")
-	} else {
-		lines = append(lines, "warn: password auth disabled")
-	}
-	if strings.TrimSpace(cfg.Auth.AdminToken) == "" && !cfg.Auth.RequireUser {
-		lines = append(lines, "warn: admin_token empty and require_user=false; tighten auth for production")
-	}
-	return lines, nil
 }
 
 func initConfigCommand(stdout io.Writer) *cli.Command {

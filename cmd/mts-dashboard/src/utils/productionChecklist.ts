@@ -16,7 +16,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'https-edge',
     severity: 'required',
     title: '边缘 HTTPS / TLS',
-    detail: '边缘终止 TLS/HSTS，或启用 mts-server HTTP TLS（启用后自动发 HSTS）；doctor 会检查并提示。',
+    detail: '边缘终止 TLS/HSTS，或启用 mts-server HTTP TLS（启用后自动发 HSTS）；见 edgeHttpsAcceptance 清单与 doctor API。',
     automated: true,
   },
   {
@@ -52,6 +52,13 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     severity: 'required',
     title: '核心冒烟：登录-查询-写入-运维',
     detail: 'TestCommercialDashboardSmoke + Playwright commercial-smoke 覆盖登录/改密/写/查/运维。',
+    automated: true,
+  },
+  {
+    id: 'admin-doctor',
+    severity: 'recommended',
+    title: '部署 Doctor API',
+    detail: 'GET /api/v1/admin/doctor + Overview 展示；CLI mts-server doctor 同口径。',
     automated: true,
   },
   {

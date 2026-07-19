@@ -11,6 +11,7 @@ import { useI18n } from '@/composables/useI18n'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { formatBytes } from '@/utils/formatBytes'
 import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
+import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
 import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList } from 'lucide-vue-next'
 
 interface ValidateResponse { ok: boolean; data_dir: string; health: Record<string, unknown> }
@@ -33,6 +34,9 @@ const listLoading = ref(false)
 const deleteOpen = ref(false)
 const deleteName = ref('')
 const deleteLoading = ref(false)
+const edgeDone = ref<Record<string, boolean>>({})
+const edgeSteps = EDGE_HTTPS_ACCEPTANCE_STEPS
+const edgeStats = computed(() => edgeHttpsProgress(Object.keys(edgeDone.value).filter((k) => edgeDone.value[k])))
 const drillDone = ref<Record<string, boolean>>({
   validate: false,
   snapshot: false,
@@ -40,6 +44,10 @@ const drillDone = ref<Record<string, boolean>>({
 })
 const drillSteps = BACKUP_DRILL_STEPS
 const drillStats = computed(() => drillProgress(Object.entries(drillDone.value).filter(([, v]) => v).map(([k]) => k)))
+function toggleEdge(id: string, checked: boolean) {
+  edgeDone.value = { ...edgeDone.value, [id]: checked }
+}
+
 function toggleHostDrill(id: string, checked: boolean) {
   drillDone.value = { ...drillDone.value, [id]: checked }
 }
@@ -202,6 +210,44 @@ async function confirmDelete() {
               {{ step.title }}
               <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? '必做' : '推荐' }}</span>
               <span v-if="step.inDashboard" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">Dashboard</span>
+            </p>
+            <p class="text-xs mts-muted">{{ step.detail }}</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+
+
+    <div class="mts-card p-4">
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          边缘 HTTPS / HSTS 验收
+        </h2>
+        <span class="text-xs mts-muted">
+          进度 {{ edgeStats.done }}/{{ edgeStats.total }}
+          · 必做 {{ edgeStats.requiredDone }}/{{ edgeStats.requiredTotal }}
+        </span>
+      </div>
+      <p class="mb-3 text-xs mts-muted">
+        证书与跳转由边缘层人工验收；本机 TLS 时 HSTS/doctor 已自动化。详见 runbook 第 2 节。
+      </p>
+      <ol class="space-y-2">
+        <li
+          v-for="step in edgeSteps"
+          :key="step.id"
+          class="flex items-start gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-800"
+        >
+          <input
+            type="checkbox"
+            class="mt-1"
+            :checked="!!edgeDone[step.id]"
+            @change="toggleEdge(step.id, ($event.target as HTMLInputElement).checked)"
+          />
+          <div class="min-w-0">
+            <p class="font-medium text-slate-800 dark:text-slate-100">
+              {{ step.title }}
+              <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? '必做' : '推荐' }}</span>
+              <span v-if="step.partialAutomated" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">部分自动</span>
             </p>
             <p class="text-xs mts-muted">{{ step.detail }}</p>
           </div>

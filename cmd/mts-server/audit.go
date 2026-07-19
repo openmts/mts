@@ -26,6 +26,8 @@ type auditLog struct {
 	engine    *mts.Engine
 	dbCreated bool
 	ch        chan auditEvent
+	closed    bool
+	done      chan struct{}
 }
 
 type userAuditResponse struct {
@@ -50,14 +52,41 @@ func newAuditLog(limit int) *auditLog {
 	if limit <= 0 {
 		limit = 256
 	}
-	l := &auditLog{limit: limit, ch: make(chan auditEvent, 1024)}
+	l := &auditLog{
+		limit: limit,
+		ch:    make(chan auditEvent, 1024),
+		done:  make(chan struct{}),
+	}
 	go l.persistLoop()
 	return l
 }
 
 func (l *auditLog) persistLoop() {
+	defer close(l.done)
 	for event := range l.ch {
 		_ = l.persistEvent(event)
+	}
+}
+
+// close 停止异步持久化，并在关闭后禁止继续写引擎。
+func (l *auditLog) close() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	l.closed = true
+	l.engine = nil
+	ch := l.ch
+	l.mu.Unlock()
+	if ch != nil {
+		close(ch)
+	}
+	if l.done != nil {
+		<-l.done
 	}
 }
 
@@ -69,31 +98,51 @@ func (l *auditLog) record(event auditEvent) {
 		event.Time = time.Now().UTC()
 	}
 	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
 	l.events = append(l.events, event)
 	if len(l.events) > l.limit {
 		l.events = append([]auditEvent(nil), l.events[len(l.events)-l.limit:]...)
 	}
+	ch := l.ch
 	l.mu.Unlock()
 
+	if ch == nil {
+		return
+	}
 	select {
-	case l.ch <- event:
+	case ch <- event:
 	default:
 		// channel full, drop event to avoid blocking
 	}
 }
 
 func (l *auditLog) persistEvent(event auditEvent) error {
-	if l.engine == nil {
+	l.mu.Lock()
+	eng := l.engine
+	closed := l.closed
+	l.mu.Unlock()
+	if closed || eng == nil {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	l.mu.Lock()
+	if l.closed || l.engine == nil {
+		l.mu.Unlock()
+		return nil
+	}
 	if !l.dbCreated {
 		_ = l.engine.CreateDatabase(ctx, "_internal")
 		l.dbCreated = true
 	}
+	eng = l.engine
 	l.mu.Unlock()
+	if eng == nil {
+		return nil
+	}
 	fields := map[string]mts.FieldValue{
 		"action": mts.StringValue(event.Action),
 	}
@@ -114,7 +163,7 @@ func (l *auditLog) persistEvent(event auditEvent) error {
 		Fields:      fields,
 		Timestamp:   event.Time.UnixNano(),
 	}
-	return l.engine.Write(ctx, []mts.Point{point}, mts.WriteOptions{})
+	return eng.Write(ctx, []mts.Point{point}, mts.WriteOptions{})
 }
 
 func (l *auditLog) list(userName string) []auditEvent {
