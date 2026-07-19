@@ -94,5 +94,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('ops-export-log')).toBeVisible()
   await page.locator('[data-testid="skip-to-main"]').evaluate((el: HTMLElement) => el.focus())
   await expect(page.getByTestId('skip-to-main')).toBeFocused()
+
+  // 13) 用户/数据库筛选入口
+  await page.goto('/users')
+  await expect(page.getByTestId('users-filter')).toBeVisible()
+  await page.goto('/databases')
+  await expect(page.getByTestId('databases-filter')).toBeVisible()
 })
 

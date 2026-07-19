@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
+import { useI18n } from '@/composables/useI18n'
 import { Plus, Trash2, Key, Lock } from 'lucide-vue-next'
 import UserModals from '@/components/UserModals.vue'
 import UserGrantPanel from '@/components/UserGrantPanel.vue'
@@ -11,6 +12,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { filterUsers } from '@/utils/listFilter'
 
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
 interface UsersResponse { users: User[] }
@@ -18,8 +20,12 @@ interface DatabaseGrant { database: string; permission: string }
 interface PermissionsResponse { grants: DatabaseGrant[] }
 
 const users = ref<User[]>([])
+const userFilter = ref('')
+const roleFilter = ref('')
+const filteredUsers = computed(() => filterUsers(users.value, userFilter.value, roleFilter.value))
 const databases = ref<string[]>([])
 const { currentUser, isAdmin } = useAuth()
+const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
@@ -251,16 +257,41 @@ function openSetPassword(name: string) {
       普通用户仅可修改自己的密码。用户列表与授权管理需管理员权限。
     </div>
 
-    <div v-else-if="!users.length" class="mts-card">
-      <EmptyState title="暂无用户" description="创建用户后可在此管理角色、密码与数据库授权。">
-        <template #action>
+    <template v-else>
+    <div class="flex flex-wrap items-end gap-3" data-testid="users-filter-bar">
+      <label class="text-xs mts-muted">{{ t('filter') }}
+        <input
+          v-model="userFilter"
+          type="search"
+          class="mts-input mt-1 min-w-[12rem]"
+          data-testid="users-filter"
+          :placeholder="t('usersFilterPlaceholder')"
+        />
+      </label>
+      <label class="text-xs mts-muted">{{ t('accountRole') }}
+        <select v-model="roleFilter" class="mts-input mt-1" data-testid="users-role-filter">
+          <option value="">{{ t('usersAllRoles') }}</option>
+          <option value="admin">admin</option>
+          <option value="user">user</option>
+        </select>
+      </label>
+      <span class="text-xs mts-muted" data-testid="users-filter-count">{{ filteredUsers.length }} / {{ users.length }}</span>
+    </div>
+
+    <div v-if="!filteredUsers.length" class="mts-card">
+      <EmptyState
+        data-testid="users-empty-filter"
+        :title="users.length ? t('usersFilterEmpty') : t('usersEmpty')"
+        :description="users.length ? t('usersFilterEmptyDesc') : t('usersEmptyDesc')"
+      >
+        <template v-if="!users.length" #action>
           <button type="button" class="mts-btn-primary" @click="showCreate = true">新建用户</button>
         </template>
       </EmptyState>
     </div>
 
     <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <table class="w-full text-sm">
+    <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
             <th class="px-4 py-2.5">用户</th>
@@ -270,7 +301,7 @@ function openSetPassword(name: string) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="u in users" :key="u.name" class="border-b border-slate-50 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+          <tr v-for="u in filteredUsers" :key="u.name" class="border-b border-slate-50 hover:bg-slate-50 dark:hover:bg-slate-800/40">
             <td class="px-4 py-3">
               <button class="text-left font-medium text-slate-800 dark:text-slate-100 hover:underline" @click="selectUser(u)">{{ u.name }}</button>
               <span v-if="u.display_name" class="ml-2 text-xs text-slate-400 dark:text-slate-500">{{ u.display_name }}</span>
@@ -290,6 +321,8 @@ function openSetPassword(name: string) {
         </tbody>
       </table>
     </div>
+
+    </template>
 
     <UserGrantPanel
       v-if="isAdmin && selectedUser"

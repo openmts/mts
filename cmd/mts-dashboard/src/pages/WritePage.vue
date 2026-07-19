@@ -11,6 +11,7 @@ import { useI18n } from '@/composables/useI18n'
 import { Send, Plus, Trash2 } from 'lucide-vue-next'
 import EmptyState from '@/components/EmptyState.vue'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
+import { registerDirtyChecker } from '@/utils/routeDirty'
 import {
   fieldTypes, buildFormPoints, parseLineProtocolDetailed, parsePrometheusText, type FormRow,
 } from '@/composables/usePointParsers'
@@ -76,7 +77,10 @@ function createEmptyRow(): FormRow {
   }
 }
 
+let unregisterDirty: (() => void) | null = null
+
 onMounted(async () => {
+  unregisterDirty = registerDirtyChecker('write', () => formDirty.value)
   window.addEventListener('beforeunload', onBeforeUnload)
   const result = await listDatabasesDetailed()
   databases.value = result.names
@@ -87,6 +91,8 @@ onMounted(async () => {
   markWriteClean()
 })
 onBeforeUnmount(() => {
+  unregisterDirty?.()
+  unregisterDirty = null
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
 

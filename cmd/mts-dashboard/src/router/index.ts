@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { setRouteLoading } from '@/composables/useGlobalLoading'
+import { allowNavigationWhenDirty, anyRouteDirty } from '@/utils/routeDirty'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -47,8 +48,19 @@ const router = createRouter({
 
 export { sanitizeRedirect } from '@/utils/redirect'
 
-router.beforeEach((to) => {
+router.beforeEach((to, from) => {
   setRouteLoading(true)
+  // 脏表单离开确认（查询/写入等页注册 checker）
+  if (from.matched.length && to.fullPath !== from.fullPath && anyRouteDirty()) {
+    const leave = allowNavigationWhenDirty(
+      true,
+      '有未保存的表单更改，确定离开当前页面？',
+    )
+    if (!leave) {
+      setRouteLoading(false)
+      return false
+    }
+  }
   const { ensureSession, isAuthenticated, isAdmin, mustChangePassword } = useAuth()
   const ok = ensureSession()
 

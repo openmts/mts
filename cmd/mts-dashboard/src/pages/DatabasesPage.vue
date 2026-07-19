@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { listDatabases, listMeasurements, listRetentionPolicies } from '@/api/meta'
 import {
@@ -13,6 +13,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { filterByName } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
@@ -39,6 +40,8 @@ const { isAdmin } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
 const databases = ref<DatabaseEntry[]>([])
+const dbFilter = ref('')
+const filteredDatabases = computed(() => filterByName(databases.value, dbFilter.value))
 const newDbName = ref('')
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
@@ -229,19 +232,33 @@ function fieldTypeName(t: number): string {
       </div>
     </div>
 
-    <div v-if="!databases.length" class="mts-card">
+    <div class="flex flex-wrap items-end gap-3" data-testid="databases-filter-bar">
+      <label class="text-xs mts-muted">{{ t('filter') }}
+        <input
+          v-model="dbFilter"
+          type="search"
+          class="mts-input mt-1 min-w-[12rem]"
+          data-testid="databases-filter"
+          :placeholder="t('databasesFilterPlaceholder')"
+        />
+      </label>
+      <span class="text-xs mts-muted" data-testid="databases-filter-count">{{ filteredDatabases.length }} / {{ databases.length }}</span>
+    </div>
+
+    <div v-if="!filteredDatabases.length" class="mts-card">
       <EmptyState
-        title="暂无数据库"
-        description="创建首个数据库后，可在此展开查看 measurement、字段类型与保留策略。"
+        data-testid="databases-empty-filter"
+        :title="databases.length ? t('databasesFilterEmpty') : t('databasesEmpty')"
+        :description="databases.length ? t('databasesFilterEmptyDesc') : t('databasesEmptyDesc')"
       >
-        <template #action>
+        <template v-if="!databases.length" #action>
           <button type="button" class="mts-btn-primary" @click="createDatabase">创建数据库</button>
         </template>
       </EmptyState>
     </div>
 
     <div v-else class="space-y-2">
-      <div v-for="db in databases" :key="db.name" class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+<div v-for="db in filteredDatabases" :key="db.name" class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
           <button class="flex items-center gap-2 text-left" @click="toggleExpand(db)">
             <component :is="db.expanded ? ChevronDown : ChevronRight" class="h-4 w-4 text-slate-400 dark:text-slate-500" />

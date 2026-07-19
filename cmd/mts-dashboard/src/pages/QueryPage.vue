@@ -12,6 +12,7 @@ import { rowsToCSV, downloadText } from '@/utils/csv'
 import { loadQueryPrefs, saveQueryPrefs } from '@/utils/queryPrefs'
 import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
+import { registerDirtyChecker } from '@/utils/routeDirty'
 import { latencyFromNanos } from '@/utils/queryLatency'
 import {
   RESULT_COLUMN_KEYS,
@@ -118,7 +119,10 @@ function onQueryKeydown(e: KeyboardEvent) {
   }
 }
 
+let unregisterDirty: (() => void) | null = null
+
 onMounted(async () => {
+  unregisterDirty = registerDirtyChecker('query', () => formDirty.value)
   window.addEventListener('keydown', onQueryKeydown)
   window.addEventListener('beforeunload', onBeforeUnload)
   try { await loadDatabases() }
@@ -127,6 +131,8 @@ onMounted(async () => {
   markFormClean()
 })
 onBeforeUnmount(() => {
+  unregisterDirty?.()
+  unregisterDirty = null
   window.removeEventListener('keydown', onQueryKeydown)
   window.removeEventListener('beforeunload', onBeforeUnload)
   cancelQuery()
