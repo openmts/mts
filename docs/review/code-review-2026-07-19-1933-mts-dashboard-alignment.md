@@ -373,3 +373,7 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 
 ## P10 状态（2026-07-19）
 - Storage/Users/Config/Overview/Databases 结果条与空状态对齐
+
+
+## P11 状态（2026-07-19）
+- 全局 loading / skeleton / 会话提示：已完成

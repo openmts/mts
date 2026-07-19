@@ -1,19 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { sanitizeRedirect } from '@/router'
+import { loginReasonMessage } from '@/utils/authReason'
 import { Server } from 'lucide-vue-next'
 
 const router = useRouter()
 const { login } = useAuth()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const username = ref('admin')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
+const reasonHint = computed(() =>
+  loginReasonMessage(router.currentRoute.value.query.reason, locale.value),
+)
 
 async function handleLogin() {
   if (!username.value.trim() || !password.value) {
@@ -44,6 +48,10 @@ async function handleLogin() {
         <h1 class="text-xl font-semibold text-slate-800 dark:text-slate-100">{{ t('loginTitle') }}</h1>
         <p class="text-sm text-slate-500 dark:text-slate-400">{{ t('loginSubtitle') }}</p>
       </div>
+
+      <p v-if="reasonHint" class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+        {{ reasonHint }}
+      </p>
 
       <form class="space-y-4" @submit.prevent="handleLogin">
         <div>

@@ -104,6 +104,9 @@ export const messages = {
     renameHistory: '重命名',
     removeHistory: '删除条目',
     save: '保存',
+    sessionLeft: '剩余',
+    sessionExpiry: '会话剩余时间',
+    sessionExpired: '登录已过期，请重新登录',
   },
   en: {
     appName: 'MTS Dashboard',
@@ -208,6 +211,9 @@ export const messages = {
     renameHistory: 'Rename',
     removeHistory: 'Remove',
     save: 'Save',
+    sessionLeft: 'Left',
+    sessionExpiry: 'Session time left',
+    sessionExpired: 'Session expired, please sign in again',
   },
 } as const
 

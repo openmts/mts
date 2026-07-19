@@ -2,6 +2,7 @@
 import { ref, provide } from 'vue'
 import SidebarNav from '@/components/SidebarNav.vue'
 import TopBar from '@/components/TopBar.vue'
+import PageSkeleton from '@/components/PageSkeleton.vue'
 
 const sidebarOpen = ref(false)
 function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value }
@@ -16,7 +17,14 @@ provide('closeSidebar', closeSidebar)
     <div class="flex flex-1 flex-col overflow-hidden">
       <TopBar @toggle-sidebar="toggleSidebar" />
       <main class="flex-1 overflow-auto p-4 sm:p-6">
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <Suspense>
+            <component :is="Component" />
+            <template #fallback>
+              <PageSkeleton />
+            </template>
+          </Suspense>
+        </RouterView>
       </main>
     </div>
   </div>

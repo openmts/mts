@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import { setRouteLoading } from '@/composables/useGlobalLoading'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -35,6 +36,7 @@ const router = createRouter({
 export { sanitizeRedirect } from '@/utils/redirect'
 
 router.beforeEach((to) => {
+  setRouteLoading(true)
   const { ensureSession, isAuthenticated, isAdmin } = useAuth()
   const ok = ensureSession()
 
@@ -44,15 +46,23 @@ router.beforeEach((to) => {
   }
 
   if (!ok || !isAuthenticated.value) {
-    return { name: 'Login', query: { redirect: to.fullPath } }
+    return { name: 'Login', query: { redirect: to.fullPath, reason: 'auth' } }
   }
 
   if (to.meta.admin && !isAdmin.value) {
-    // 允许进入路由，由页面显示权限空态；也可硬跳 Overview。这里保留进入以显示 PermissionDenied。
+    // 允许进入路由，由页面显示权限空态
     return true
   }
 
   return true
+})
+
+router.afterEach(() => {
+  setRouteLoading(false)
+})
+
+router.onError(() => {
+  setRouteLoading(false)
 })
 
 export default router

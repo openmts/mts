@@ -1,3 +1,4 @@
+import { beginRequest, endRequest } from '@/composables/useGlobalLoading'
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 const TOKEN_KEY = 'mts_bearer_token'
 const USER_KEY = 'mts_user_name'
@@ -209,35 +210,40 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   const method = (options.method || 'GET').toUpperCase()
   const headers = authHeaders(options.headers as Record<string, string> | undefined, method)
-  let response: Response
+  beginRequest()
   try {
-    response = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      method,
-      headers,
-    })
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new APIClientError(499, 'canceled', '请求已取消')
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        method,
+        headers,
+      })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new APIClientError(499, 'canceled', '请求已取消')
+      }
+      throw err
     }
-    throw err
-  }
-  if (!response.ok) {
-    const err = await readAPIError(response)
-    handleAuthFailure(path, response.status, err.code)
-    throw new APIClientError(response.status, err.code, err.message)
-  }
-  if (response.status === 204) {
-    return undefined as T
-  }
-  const text = await response.text()
-  if (!text) {
-    return undefined as T
-  }
-  try {
-    return JSON.parse(text) as T
-  } catch (_) {
-    throw new APIClientError(response.status, 'internal', '响应不是合法 JSON')
+    if (!response.ok) {
+      const err = await readAPIError(response)
+      handleAuthFailure(path, response.status, err.code)
+      throw new APIClientError(response.status, err.code, err.message)
+    }
+    if (response.status === 204) {
+      return undefined as T
+    }
+    const text = await response.text()
+    if (!text) {
+      return undefined as T
+    }
+    try {
+      return JSON.parse(text) as T
+    } catch (_) {
+      throw new APIClientError(response.status, 'internal', '响应不是合法 JSON')
+    }
+  } finally {
+    endRequest()
   }
 }
 
@@ -279,85 +285,90 @@ export async function apiPostNDJSONStream(
     throw new APIClientError(401, 'unauthenticated', '登录已过期，请重新登录')
   }
   const headers = authHeaders(init.headers as Record<string, string> | undefined, 'POST')
-  let response: Response
+  beginRequest()
   try {
-    response = await fetch(`${API_BASE}${path}`, {
-      ...init,
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    })
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new APIClientError(499, 'canceled', '请求已取消')
-    }
-    throw err
-  }
-  if (!response.ok) {
-    const err = await readAPIError(response)
-    handleAuthFailure(path, response.status, err.code)
-    throw new APIClientError(response.status, err.code, err.message)
-  }
-  if (!response.body) {
-    const text = await response.text()
-    let lines = 0
-    for (const line of text.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      lines += 1
-      try {
-        onLine(trimmed, JSON.parse(trimmed), false)
-      } catch {
-        onLine(trimmed, null, true)
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}${path}`, {
+        ...init,
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new APIClientError(499, 'canceled', '请求已取消')
       }
+      throw err
+    }
+    if (!response.ok) {
+      const err = await readAPIError(response)
+      handleAuthFailure(path, response.status, err.code)
+      throw new APIClientError(response.status, err.code, err.message)
+    }
+    if (!response.body) {
+      const text = await response.text()
+      let lines = 0
+      for (const line of text.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        lines += 1
+        try {
+          onLine(trimmed, JSON.parse(trimmed), false)
+        } catch {
+          onLine(trimmed, null, true)
+        }
+      }
+      return { status: response.status, lines }
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let lines = 0
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let idx = buffer.indexOf('\n')
+        while (idx >= 0) {
+          const line = buffer.slice(0, idx).trim()
+          buffer = buffer.slice(idx + 1)
+          if (line) {
+            lines += 1
+            try {
+              onLine(line, JSON.parse(line), false)
+            } catch {
+              onLine(line, null, true)
+            }
+          }
+          idx = buffer.indexOf('\n')
+        }
+      }
+      buffer += decoder.decode()
+      const tail = buffer.trim()
+      if (tail) {
+        lines += 1
+        try {
+          onLine(tail, JSON.parse(tail), false)
+        } catch {
+          onLine(tail, null, true)
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new APIClientError(499, 'canceled', '请求已取消')
+      }
+      throw err
+    } finally {
+      try {
+        reader.releaseLock()
+      } catch (_) { /* ignore */ }
     }
     return { status: response.status, lines }
-  }
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let lines = 0
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      let idx = buffer.indexOf('\n')
-      while (idx >= 0) {
-        const line = buffer.slice(0, idx).trim()
-        buffer = buffer.slice(idx + 1)
-        if (line) {
-          lines += 1
-          try {
-            onLine(line, JSON.parse(line), false)
-          } catch {
-            onLine(line, null, true)
-          }
-        }
-        idx = buffer.indexOf('\n')
-      }
-    }
-    buffer += decoder.decode()
-    const tail = buffer.trim()
-    if (tail) {
-      lines += 1
-      try {
-        onLine(tail, JSON.parse(tail), false)
-      } catch {
-        onLine(tail, null, true)
-      }
-    }
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new APIClientError(499, 'canceled', '请求已取消')
-    }
-    throw err
   } finally {
-    try {
-      reader.releaseLock()
-    } catch (_) { /* ignore */ }
+    endRequest()
   }
-  return { status: response.status, lines }
 }
 
 export interface LoginResponse {
