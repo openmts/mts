@@ -32,6 +32,7 @@ const router = createRouter({
         { path: 'api-spec', name: 'ApiSpec', component: () => import('@/pages/ApiSpecPage.vue'), meta: { admin: true } },
         { path: 'storage', name: 'Storage', component: () => import('@/pages/StoragePage.vue'), meta: { admin: true } },
         { path: 'ops/readiness', name: 'Readiness', component: () => import('@/pages/ReadinessPage.vue'), meta: { admin: true } },
+        { path: 'about', name: 'About', component: () => import('@/pages/AboutPage.vue') },
         { path: 'write', name: 'Write', component: () => import('@/pages/WritePage.vue') },
         { path: 'access', name: 'AccessMatrix', component: () => import('@/pages/AccessMatrixPage.vue') },
         { path: 'access/grants', name: 'AccessGrants', component: () => import('@/pages/AccessGrantsPage.vue'), meta: { admin: true } },

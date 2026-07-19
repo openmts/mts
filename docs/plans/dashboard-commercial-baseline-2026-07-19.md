@@ -19,6 +19,7 @@
 - 可商用就绪中心 + 备份编排指引 + 清单持久化（P22）
 - 备份编排脚本 + 就绪快捷动作 + 脚本自检（P23）
 - 就绪评分含 doctor + Overview 入口 + CI 备份自检（P24）
+- 就绪导出/导入/演练归档 + About 版本 + e2e 加深（P25）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -47,6 +48,7 @@
 - `/operations`（admin）
 - `/storage`（admin）
 - `/ops/readiness`（admin）
+- `/about`
 
 ## 服务侧自动化入口
 - `go test ./cmd/mts-server -run TestCommercialDashboardSmoke -count=1`
@@ -62,3 +64,10 @@
 ## 文档入口
 - 生产 Runbook：`docs/ops/dashboard-production-runbook.md`
 - 权限矩阵页：Dashboard `/access`
+
+
+## P25 状态（2026-07-20）
+- 就绪状态 JSON 导出/导入（merge/replace）+ 演练归档 JSON/Markdown
+- `GET /api/v1/admin/version` + About 页（服务端 version/commit/built_at）
+- Playwright：就绪勾选持久化、Storage data-snapshot、About
+- **仍不宣称可商用目标完成**：真实边缘证书验收执行、目标环境 cron/systemd 安装与演练归档

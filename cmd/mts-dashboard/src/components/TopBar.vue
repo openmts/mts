@@ -31,6 +31,7 @@ const pageTitle = computed(() => {
     ApiSpec: t.value('apiSpec'),
     Storage: t.value('storage'),
     Readiness: t.value('readiness'),
+    About: t.value('about'),
     Write: t.value('write'),
     NotFound: '404',
   }

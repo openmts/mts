@@ -407,7 +407,7 @@ async function confirmDelete() {
         先创建 data_dir 快照，再恢复到 backups/restore-drill-*（不会覆盖 live data_dir）。
       </p>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <button
+        <button data-testid="storage-data-snapshot"
           type="button"
           class="mts-btn-primary justify-center py-2"
           :disabled="loading === 'data-snapshot'"

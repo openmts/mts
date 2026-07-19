@@ -20,7 +20,28 @@ import {
   type ReadinessState,
 } from '@/utils/readinessState'
 import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
-import { ClipboardCheck, ExternalLink, RefreshCw, ShieldCheck, HardDrive, FileCode2 } from 'lucide-vue-next'
+import {
+  buildReadinessExport,
+  downloadJSON,
+  downloadText,
+  parseReadinessImport,
+  persistImportedReadiness,
+} from '@/utils/readinessIO'
+import {
+  archiveFilenames,
+  buildReadinessArchive,
+  formatReadinessArchiveMarkdown,
+} from '@/utils/readinessArchive'
+import {
+  ClipboardCheck,
+  Download,
+  ExternalLink,
+  FileCode2,
+  HardDrive,
+  RefreshCw,
+  ShieldCheck,
+  Upload,
+} from 'lucide-vue-next'
 
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse {
@@ -30,7 +51,7 @@ interface DoctorResponse {
   lines?: string[]
 }
 
-const { isAdmin } = useAuth()
+const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
 const router = useRouter()
 
@@ -38,6 +59,10 @@ const state = ref<ReadinessState>(loadReadinessState())
 const doctor = ref<DoctorResponse | null>(null)
 const doctorError = ref('')
 const loadingDoctor = ref(false)
+const actionMsg = ref('')
+const actionKind = ref<'ok' | 'error' | 'info'>('info')
+const importMerge = ref(true)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const productionDone = computed(() => completedIds(state.value.production))
 const edgeDone = computed(() => completedIds(state.value.edgeHttps))
@@ -78,6 +103,11 @@ const scoreBreakdown = computed(() => {
 const readinessScore = computed(() => scoreBreakdown.value.total)
 const scoreLevel = computed(() => readinessLevel(readinessScore.value))
 
+function flash(kind: 'ok' | 'error' | 'info', message: string) {
+  actionKind.value = kind
+  actionMsg.value = message
+}
+
 function toggle(
   section: 'production' | 'edgeHttps' | 'backupSchedule',
   id: string,
@@ -101,6 +131,56 @@ async function loadDoctor() {
 
 function go(path: string) {
   void router.push(path)
+}
+
+function exportState() {
+  const payload = buildReadinessExport(state.value)
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  downloadJSON(`mts-readiness-${stamp}.json`, payload)
+  flash('ok', t.value('readinessExportOk'))
+}
+
+function openImport() {
+  fileInput.value?.click()
+}
+
+async function onImportFile(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const text = await file.text()
+    const parsed = parseReadinessImport(JSON.parse(text) as unknown)
+    if (!parsed.ok) {
+      flash('error', `${t.value('readinessImportFail')}: ${parsed.error}`)
+      return
+    }
+    state.value = persistImportedReadiness(parsed.state, { merge: importMerge.value })
+    flash('ok', t.value('readinessImportOk'))
+  } catch (e) {
+    flash('error', `${t.value('readinessImportFail')}: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
+function downloadArchive() {
+  const archive = buildReadinessArchive({
+    operator: currentUser.value || 'admin',
+    state: state.value,
+    score: scoreBreakdown.value,
+    doctor: {
+      loaded: doctor.value != null && !doctorError.value,
+      ok: doctor.value?.ok,
+      http_tls_enabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
+      warn_count: doctorWarns.value.length,
+      checks: doctor.value?.checks,
+      error: doctorError.value || undefined,
+    },
+  })
+  const names = archiveFilenames()
+  downloadJSON(names.json, archive)
+  downloadText(names.md, formatReadinessArchiveMarkdown(archive), 'text/markdown')
+  flash('ok', t.value('readinessArchiveOk'))
 }
 
 const quickActions = [
@@ -134,7 +214,19 @@ onMounted(() => {
           {{ t('readinessUpdatedAt') }} {{ new Date(state.updatedAt).toLocaleString() }}
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button" class="mts-btn" data-testid="readiness-export" @click="exportState">
+          <Download class="h-3.5 w-3.5" />
+          {{ t('readinessExport') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="readiness-import" @click="openImport">
+          <Upload class="h-3.5 w-3.5" />
+          {{ t('readinessImport') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="readiness-archive" @click="downloadArchive">
+          <FileCode2 class="h-3.5 w-3.5" />
+          {{ t('readinessArchive') }}
+        </button>
         <button class="mts-btn" :disabled="loadingDoctor" @click="loadDoctor">
           <RefreshCw class="h-3.5 w-3.5" :class="loadingDoctor ? 'animate-spin' : ''" />
           {{ t('refresh') }}
@@ -146,17 +238,45 @@ onMounted(() => {
       </div>
     </div>
 
+    <input
+      ref="fileInput"
+      type="file"
+      accept="application/json,.json"
+      class="hidden"
+      data-testid="readiness-import-file"
+      @change="onImportFile"
+    />
+
+    <div class="flex flex-wrap items-center gap-3 text-xs mts-muted">
+      <label class="inline-flex items-center gap-1">
+        <input v-model="importMerge" type="checkbox" data-testid="readiness-import-merge" />
+        {{ t('readinessImportMerge') }}
+      </label>
+      <span>{{ t('readinessArchiveHint') }}</span>
+    </div>
+
     <ActionResultBanner
       v-if="doctorError"
       kind="error"
       :message="doctorError"
       @dismiss="doctorError = ''"
     />
+    <ActionResultBanner
+      v-if="actionMsg"
+      :kind="actionKind"
+      :message="actionMsg"
+      data-testid="readiness-action"
+      @dismiss="actionMsg = ''"
+    />
 
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="mts-card p-4">
         <p class="text-xs mts-muted">{{ t('readinessScore') }}</p>
-        <p class="mt-1 text-3xl font-semibold" :class="scoreLevel === 'good' ? 'text-green-600' : scoreLevel === 'warn' ? 'text-amber-600' : 'text-red-600'">
+        <p
+          class="mt-1 text-3xl font-semibold"
+          :class="scoreLevel === 'good' ? 'text-green-600' : scoreLevel === 'warn' ? 'text-amber-600' : 'text-red-600'"
+          data-testid="readiness-score"
+        >
           {{ readinessScore }}%
         </p>
         <p class="mt-2 text-[11px] mts-muted">
@@ -218,20 +338,15 @@ onMounted(() => {
 
     <div class="mts-panel">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div class="flex items-center gap-2">
-          <ShieldCheck class="h-4 w-4 text-slate-500" />
-          <h2 class="text-sm font-semibold">{{ t('doctorTitle') }}</h2>
-        </div>
+        <h2 class="flex items-center gap-2 text-sm font-semibold">
+          <ShieldCheck class="h-4 w-4" />
+          Doctor
+        </h2>
         <span class="text-xs mts-muted">
-          HTTP TLS:
-          <span :class="doctor?.http_tls_enabled ? 'text-green-600' : 'text-amber-600'">
-            {{ doctor == null ? '—' : doctor.http_tls_enabled ? t('enabled') : t('disabled') }}
-          </span>
-          · ok={{ doctor?.ok ?? '—' }} · warn={{ doctorWarns.length }} · ok_rows={{ doctorOKs.length }}
+          ok={{ doctor?.ok ?? '—' }} · warn={{ doctorWarns.length }} · tls={{ doctor?.http_tls_enabled ?? '—' }}
         </span>
       </div>
-      <p v-if="!doctor && !doctorError" class="text-sm mts-muted">—</p>
-      <div v-else-if="doctor" class="overflow-x-auto">
+      <div v-if="doctor" class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
@@ -249,6 +364,8 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
+      <p v-else class="text-xs mts-muted">{{ loadingDoctor ? t('loading') : '—' }}</p>
+      <p v-if="doctorOKs.length" class="mt-2 text-[11px] mts-muted">ok checks: {{ doctorOKs.length }}</p>
     </div>
 
     <div class="mts-card p-4">
@@ -265,6 +382,7 @@ onMounted(() => {
           <input
             type="checkbox"
             class="mt-1"
+            :data-testid="`readiness-prod-${item.id}`"
             :checked="!!state.production[item.id]"
             @change="toggle('production', item.id, ($event.target as HTMLInputElement).checked)"
           />
@@ -296,6 +414,7 @@ onMounted(() => {
           <input
             type="checkbox"
             class="mt-1"
+            :data-testid="`readiness-edge-${step.id}`"
             :checked="!!state.edgeHttps[step.id]"
             @change="toggle('edgeHttps', step.id, ($event.target as HTMLInputElement).checked)"
           />
@@ -327,6 +446,7 @@ onMounted(() => {
           <input
             type="checkbox"
             class="mt-1"
+            :data-testid="`readiness-sched-${step.id}`"
             :checked="!!state.backupSchedule[step.id]"
             @change="toggle('backupSchedule', step.id, ($event.target as HTMLInputElement).checked)"
           />

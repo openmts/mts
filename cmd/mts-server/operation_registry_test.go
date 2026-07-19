@@ -123,6 +123,7 @@ func TestOperationRegistryMountsCoreHTTPPaths(t *testing.T) {
 		routeAdminStatsCompaction,
 		routeAdminHealth,
 		routeAdminDoctor,
+		routeAdminVersion,
 		routeAdminDownsamplePolicies,
 		routeAdminDownsamplePrefix,
 		routeAdminDownsampleStatuses,

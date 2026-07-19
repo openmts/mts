@@ -458,3 +458,10 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - CI `scripts/ci_gate.sh` 纳入 `mts-backup-selfcheck`
 - 备份文档补充 login 取 Token 示例
 - **仍不宣称可商用目标完成**：真实边缘证书验收执行、目标环境 cron/systemd 安装与演练归档
+
+
+## P25 状态（2026-07-20）
+- 就绪中心导出/导入/演练归档
+- About + `GET /api/v1/admin/version`
+- Playwright 加深：勾选持久化、data-snapshot、About
+- 状态：已实现；**仍不宣称可商用目标完成**

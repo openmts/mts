@@ -597,6 +597,15 @@ func operationCatalog() []operation {
 			HTTPHandler: (*serverRuntime).handleAdminDoctor,
 		},
 		{
+			Name:        "admin_version",
+			Namespace:   "admin",
+			Description: "server build version information",
+			Auth:        authAdmin,
+			HTTPMethods: []string{http.MethodGet},
+			HTTPPaths:   []string{routeAdminVersion},
+			HTTPHandler: (*serverRuntime).handleAdminVersion,
+		},
+		{
 			Name:        "admin_health",
 			Namespace:   "admin",
 			Description: "admin health snapshot",

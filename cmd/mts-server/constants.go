@@ -61,6 +61,7 @@ const (
 	routeAdminStorageDataSnapshots = "/api/v1/admin/storage/data-snapshots"
 	routeAdminAudit                = "/api/v1/admin/audit"
 	routeAdminDoctor               = "/api/v1/admin/doctor"
+	routeAdminVersion              = "/api/v1/admin/version"
 	routePprofPrefix               = "/debug/pprof/"
 	routePprofCmdline              = "/debug/pprof/cmdline"
 	routePprofProfile              = "/debug/pprof/profile"

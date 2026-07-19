@@ -239,6 +239,12 @@ type maintenanceErrorsResponse struct {
 	Errors []string `json:"errors"`
 }
 
+type versionResponse struct {
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	BuiltAt string `json:"built_at"`
+}
+
 type apiSpecResponse struct {
 	Version    string         `json:"version"`
 	Namespaces []apiNamespace `json:"namespaces"`
