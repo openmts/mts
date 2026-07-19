@@ -12,6 +12,7 @@ import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { formatBytes } from '@/utils/formatBytes'
 import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
 import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
+import { completedIds, loadReadinessState, setReadinessFlag } from '@/utils/readinessState'
 import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList } from 'lucide-vue-next'
 
 interface ValidateResponse { ok: boolean; data_dir: string; health: Record<string, unknown> }
@@ -50,9 +51,10 @@ const listLoading = ref(false)
 const deleteOpen = ref(false)
 const deleteName = ref('')
 const deleteLoading = ref(false)
-const edgeDone = ref<Record<string, boolean>>({})
+const readiness = ref(loadReadinessState())
+const edgeDone = computed(() => readiness.value.edgeHttps)
 const edgeSteps = EDGE_HTTPS_ACCEPTANCE_STEPS
-const edgeStats = computed(() => edgeHttpsProgress(Object.keys(edgeDone.value).filter((k) => edgeDone.value[k])))
+const edgeStats = computed(() => edgeHttpsProgress(completedIds(edgeDone.value)))
 const drillDone = ref<Record<string, boolean>>({
   validate: false,
   snapshot: false,
@@ -63,7 +65,7 @@ const drillDone = ref<Record<string, boolean>>({
 const drillSteps = BACKUP_DRILL_STEPS
 const drillStats = computed(() => drillProgress(Object.entries(drillDone.value).filter(([, v]) => v).map(([k]) => k)))
 function toggleEdge(id: string, checked: boolean) {
-  edgeDone.value = { ...edgeDone.value, [id]: checked }
+  readiness.value = setReadinessFlag('edgeHttps', id, checked)
 }
 
 function toggleHostDrill(id: string, checked: boolean) {

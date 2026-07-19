@@ -50,6 +50,10 @@ make test && make e2e && make lint
 
 
 
+## 2.0 可商用就绪中心
+
+打开 Dashboard `/ops/readiness`：聚合生产清单、边缘 HTTPS 验收、备份编排指引与 doctor 状态；勾选状态保存在浏览器 localStorage。
+
 ## 2.1 边缘 HTTPS / HSTS 验收（人工）
 
 1. 反向代理/LB 配置有效证书并对浏览器暴露 HTTPS。

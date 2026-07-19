@@ -52,4 +52,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByRole('main').getByText('实时授权总览')).toBeVisible()
   await page.goto('/observability/metrics')
   await expect(page.getByRole('main').getByText('指标浏览')).toBeVisible()
+
+  // 7) 存储与可商用就绪中心
+  await page.goto('/storage')
+  await expect(page.getByRole('main').getByText(/存储|旁路恢复|备份演练/)).toBeVisible()
+  await page.goto('/ops/readiness')
+  await expect(page.getByRole('main').getByText(/就绪中心|Commercial readiness|可商用就绪/)).toBeVisible()
 })

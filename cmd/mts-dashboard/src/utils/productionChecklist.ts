@@ -62,10 +62,24 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
   },
   {
+    id: 'readiness-center',
+    severity: 'recommended',
+    title: '可商用就绪中心',
+    detail: 'Dashboard /ops/readiness 聚合清单、HTTPS 验收、备份编排与 doctor。',
+    automated: true,
+  },
+  {
     id: 'admin-doctor',
     severity: 'recommended',
     title: '部署 Doctor API',
     detail: 'GET /api/v1/admin/doctor + Overview 展示；CLI mts-server doctor 同口径。',
+    automated: true,
+  },
+  {
+    id: 'backup-schedule',
+    severity: 'recommended',
+    title: '跨主机定时备份编排',
+    detail: '就绪中心 backupSchedule 指引 + 示例 cron/rsync；实际调度在部署侧。',
     automated: true,
   },
   {

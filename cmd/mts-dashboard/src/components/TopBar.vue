@@ -30,6 +30,7 @@ const pageTitle = computed(() => {
     Audit: t.value('audit'),
     ApiSpec: t.value('apiSpec'),
     Storage: t.value('storage'),
+    Readiness: t.value('readiness'),
     Write: t.value('write'),
     NotFound: '404',
   }

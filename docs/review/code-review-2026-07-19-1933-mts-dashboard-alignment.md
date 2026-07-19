@@ -436,3 +436,10 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - `POST /api/v1/admin/storage/data-snapshot` / `restore-drill` / `GET data-snapshots`
 - Storage 页一键旁路恢复编排 + 演练清单联动
 - **仍不宣称可商用目标完成**：生产边缘证书人工验收、跨主机定时备份编排
+
+
+## P22 状态（2026-07-20）
+- `/ops/readiness` 可商用就绪中心：生产清单 + HTTPS 验收 + 备份编排 + doctor
+- 勾选状态 localStorage 持久化，Storage 边缘 HTTPS 清单共用
+- Playwright 冒烟覆盖 storage/readiness
+- **仍不宣称可商用目标完成**：真实边缘证书验收执行、跨主机定时备份在生产环境的实际部署

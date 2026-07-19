@@ -16,6 +16,7 @@
 - 旁路恢复自动化 + TLS/HSTS doctor（P19）
 - Admin doctor API + Overview 展示 + 边缘 HTTPS 验收清单（P20）
 - data_dir 快照/旁路恢复 API + Storage 编排（P21）
+- 可商用就绪中心 + 备份编排指引 + 清单持久化（P22）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -42,6 +43,8 @@
 - `/write`
 - `/databases`（admin）
 - `/operations`（admin）
+- `/storage`（admin）
+- `/ops/readiness`（admin）
 
 ## 服务侧自动化入口
 - `go test ./cmd/mts-server -run TestCommercialDashboardSmoke -count=1`
