@@ -5,6 +5,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
+import { formatMessage } from '@/utils/formatMessage'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import {
@@ -349,7 +350,7 @@ onMounted(() => {
         <p class="text-xs mts-muted">{{ t('readinessRequiredChecklist') }}</p>
         <p class="mt-1 text-lg font-semibold">{{ requiredDoneCount }}/{{ requiredItems.length }}</p>
         <p class="text-[11px] mts-muted">
-          自动覆盖 {{ productionCoverage.automated }}/{{ productionCoverage.total }}
+          {{ formatMessage(t('readinessAutoCoverage'), { done: productionCoverage.automated, total: productionCoverage.total }) }}
         </p>
       </div>
       <div class="mts-card p-4">

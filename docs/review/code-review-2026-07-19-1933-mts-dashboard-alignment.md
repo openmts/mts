@@ -543,3 +543,8 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 权限矩阵数据层双语：areaKey + LocalizedText（area/capability/notes）
 - 区域筛选与展示解耦；e2e 覆盖语言切换后的矩阵行
 - 状态：已实现；仍不宣称可商用完成（部署侧验收 + 共享组件 i18n）
+
+## P41（2026-07-20）
+- 共享组件中文硬编码收口（ConfirmDialog / PermissionDenied / UserModals / UserGrantPanel）
+- 就绪中心自动覆盖 i18n
+- 状态：已实现；仍不宣称可商用完成（部署侧验收 + 清单数据层双语）

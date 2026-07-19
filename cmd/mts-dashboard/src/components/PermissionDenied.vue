@@ -8,7 +8,7 @@ const { t } = useI18n()
 <template>
   <EmptyState
     :title="t('permissionDenied')"
-    description="当前账号缺少此页面所需的管理权限。请使用管理员登录，或联系管理员授权后重试。"
+    :description="t('permissionDeniedDesc')"
   >
     <template #icon>
       <span class="text-lg" aria-hidden="true">⛔</span>

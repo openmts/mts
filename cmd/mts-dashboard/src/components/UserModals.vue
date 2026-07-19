@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, watch } from 'vue'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
+import { useI18n } from '@/composables/useI18n'
+import { formatMessage } from '@/utils/formatMessage'
 
 const props = defineProps<{
   showCreate: boolean
@@ -27,6 +29,7 @@ const emit = defineEmits<{
   'change-password': []
 }>()
 
+const { t } = useI18n()
 let trap: FocusTrapHandle | null = null
 
 function closeAll() {
@@ -97,19 +100,19 @@ onBeforeUnmount(() => {
       aria-labelledby="create-user-title"
       data-dialog-panel
     >
-      <h3 id="create-user-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">新建用户</h3>
+      <h3 id="create-user-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('usersCreateTitle') }}</h3>
       <div class="space-y-2">
-        <input :value="newUser.name" @input="emit('update:newUser', { ...newUser, name: ($event.target as HTMLInputElement).value })" placeholder="用户名" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
-        <input :value="newUser.display_name" @input="emit('update:newUser', { ...newUser, display_name: ($event.target as HTMLInputElement).value })" placeholder="显示名 (可选)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
+        <input :value="newUser.name" @input="emit('update:newUser', { ...newUser, name: ($event.target as HTMLInputElement).value })" :placeholder="t('username')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
+        <input :value="newUser.display_name" @input="emit('update:newUser', { ...newUser, display_name: ($event.target as HTMLInputElement).value })" :placeholder="t('displayNameOptional')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
         <select :value="newUser.role" @change="emit('update:newUser', { ...newUser, role: ($event.target as HTMLSelectElement).value })" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800">
-          <option value="user">普通用户</option>
-          <option value="admin">管理员</option>
+          <option value="user">{{ t('roleUser') }}</option>
+          <option value="admin">{{ t('roleAdmin') }}</option>
         </select>
-        <input :value="newUser.password" @input="emit('update:newUser', { ...newUser, password: ($event.target as HTMLInputElement).value })" type="password" placeholder="密码 (可选)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
+        <input :value="newUser.password" @input="emit('update:newUser', { ...newUser, password: ($event.target as HTMLInputElement).value })" type="password" :placeholder="t('passwordOptional')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
-        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showCreate', false)">取消</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('create-user')">创建</button>
+        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showCreate', false)">{{ t('cancel') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('create-user')">{{ t('create') }}</button>
       </div>
     </div>
   </div>
@@ -128,11 +131,11 @@ onBeforeUnmount(() => {
       aria-labelledby="set-password-title"
       data-dialog-panel
     >
-      <h3 id="set-password-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">设置密码 · {{ setPasswordUser }}</h3>
-      <input :value="setPasswordValue" @input="emit('update:setPasswordValue', ($event.target as HTMLInputElement).value)" type="password" placeholder="输入新密码" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="emit('set-password')" />
+      <h3 id="set-password-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ formatMessage(t('usersSetPasswordTitle'), { name: setPasswordUser }) }}</h3>
+      <input :value="setPasswordValue" @input="emit('update:setPasswordValue', ($event.target as HTMLInputElement).value)" type="password" :placeholder="t('usersNewPasswordPlaceholder')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="emit('set-password')" />
       <div class="mt-4 flex flex-wrap justify-end gap-2">
-        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showSetPassword', false)">取消</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('set-password')">设置</button>
+        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showSetPassword', false)">{{ t('cancel') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('set-password')">{{ t('usersSetAction') }}</button>
       </div>
     </div>
   </div>
@@ -151,14 +154,14 @@ onBeforeUnmount(() => {
       aria-labelledby="change-password-title"
       data-dialog-panel
     >
-      <h3 id="change-password-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">修改我的密码</h3>
+      <h3 id="change-password-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('usersChangeMyPassword') }}</h3>
       <div class="space-y-2">
-        <input :value="selfOldPassword" @input="emit('update:selfOldPassword', ($event.target as HTMLInputElement).value)" type="password" placeholder="当前密码" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
-        <input :value="selfNewPassword" @input="emit('update:selfNewPassword', ($event.target as HTMLInputElement).value)" type="password" placeholder="新密码" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="emit('change-password')" />
+        <input :value="selfOldPassword" @input="emit('update:selfOldPassword', ($event.target as HTMLInputElement).value)" type="password" :placeholder="t('accountOldPassword')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
+        <input :value="selfNewPassword" @input="emit('update:selfNewPassword', ($event.target as HTMLInputElement).value)" type="password" :placeholder="t('accountNewPassword')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="emit('change-password')" />
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
-        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showChangeSelfPassword', false)">取消</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('change-password')">确认修改</button>
+        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showChangeSelfPassword', false)">{{ t('cancel') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('change-password')">{{ t('usersConfirmChange') }}</button>
       </div>
     </div>
   </div>

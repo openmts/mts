@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
+import { useI18n } from '@/composables/useI18n'
+import { formatMessage } from '@/utils/formatMessage'
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -13,8 +15,8 @@ const props = withDefaults(defineProps<{
   requireText?: string
   loading?: boolean
 }>(), {
-  confirmLabel: '确认',
-  cancelLabel: '取消',
+  confirmLabel: '',
+  cancelLabel: '',
   danger: false,
   requireText: '',
   loading: false,
@@ -26,12 +28,19 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
+const { t } = useI18n()
 const input = ref('')
-const panelRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLInputElement | null>(null)
 const primaryRef = ref<HTMLButtonElement | null>(null)
-const titleId = `confirm-title-${Math.random().toString(36).slice(2, 8)}`
+const panelRef = ref<HTMLElement | null>(null)
+const titleId = `confirm-title-${Math.random().toString(36).slice(2, 9)}`
 let trap: FocusTrapHandle | null = null
+
+const resolvedConfirm = computed(() => props.confirmLabel || t.value('confirm'))
+const resolvedCancel = computed(() => props.cancelLabel || t.value('cancel'))
+const requireHint = computed(() =>
+  props.requireText ? formatMessage(t.value('typeToConfirm'), { text: props.requireText }) : '',
+)
 
 const canConfirm = computed(() => {
   if (props.loading) return false
@@ -108,7 +117,7 @@ onBeforeUnmount(() => {
       <p class="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{{ message }}</p>
       <div v-if="requireText" class="mt-3">
         <label class="mb-1 block text-xs text-slate-500 dark:text-slate-400">
-          请输入 <span class="font-mono text-slate-700 dark:text-slate-200">{{ requireText }}</span> 确认
+          {{ requireHint }}
         </label>
         <input
           ref="inputRef"
@@ -123,7 +132,7 @@ onBeforeUnmount(() => {
           class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           :disabled="loading"
           @click="close"
-        >{{ cancelLabel }}</button>
+        >{{ resolvedCancel }}</button>
         <button
           ref="primaryRef"
           type="button"
@@ -131,7 +140,7 @@ onBeforeUnmount(() => {
           :class="danger ? 'bg-red-600 hover:bg-red-500' : 'bg-slate-800 hover:bg-slate-700'"
           :disabled="!canConfirm"
           @click="onConfirm"
-        >{{ loading ? '处理中…' : confirmLabel }}</button>
+        >{{ loading ? t('processing') : resolvedConfirm }}</button>
       </div>
     </div>
   </div>
