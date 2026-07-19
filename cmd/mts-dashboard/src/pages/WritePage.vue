@@ -7,7 +7,9 @@ import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
+import type { MessageKey } from '@/i18n/messages'
 import { Send, Plus, Trash2 } from 'lucide-vue-next'
 import EmptyState from '@/components/EmptyState.vue'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
@@ -33,6 +35,9 @@ const actionError = ref('')
 const metaHint = ref('')
 const { success, error: notifyError } = useNotify()
 const { t } = useI18n()
+function trErr(key: MessageKey, vars: Record<string, string | number> = {}) {
+  return formatMessage(t.value(key), vars)
+}
 const { currentUser, isAdmin } = useAuth()
 const authzHint = ref('')
 
@@ -84,7 +89,7 @@ onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
   const result = await listDatabasesDetailed()
   databases.value = result.names
-  metaHint.value = result.error || (result.source === 'manual' ? '可手动输入 database' : '')
+  metaHint.value = result.error || (result.source === 'manual' ? t.value('writeManualDbHint') : '')
   if (databases.value.length && !selectedDb.value) {
     selectedDb.value = databases.value[0]
   }
@@ -110,30 +115,30 @@ watch(selectedDb, async (db) => {
 })
 
 function buildTypedBatch(): Record<string, unknown> {
-  if (!typedMeasurement.value.trim()) throw new Error('measurement 不能为空')
+  if (!typedMeasurement.value.trim()) throw new Error(trErr('writeErrMeasurementRequired'))
   const fieldColsBuilt: Record<string, unknown>[] = []
   let n = 0
   for (const col of typedFieldCols.value) {
     const name = col.name.trim()
-    if (!name) throw new Error('field name 不能为空')
+    if (!name) throw new Error(trErr('writeErrFieldNameRequired'))
     const vals = col.values.split('\n').map((s) => s.trim()).filter(Boolean)
-    if (!vals.length) throw new Error(`字段 ${name} 值不能为空`)
+    if (!vals.length) throw new Error(trErr('writeErrFieldValuesEmpty', { name }))
     if (!n) n = vals.length
-    else if (vals.length !== n) throw new Error(`字段 ${name} 行数 ${vals.length} 与主列 ${n} 不一致`)
+    else if (vals.length !== n) throw new Error(trErr('writeErrFieldRowMismatch', { name, got: vals.length, want: n }))
     const fieldCol: Record<string, unknown> = { name }
     if (col.type === 'int') {
       fieldCol.type = 2
       fieldCol.int64_values = vals.map((v) => {
-        if (!/^-?\d+$/.test(v)) throw new Error(`非法整数: ${v}`)
+        if (!/^-?\d+$/.test(v)) throw new Error(trErr('writeErrBadInt', { value: v }))
         const num = Number(v)
-        if (!Number.isSafeInteger(num)) throw new Error(`整数越界: ${v}`)
+        if (!Number.isSafeInteger(num)) throw new Error(trErr('writeErrIntOverflow', { value: v }))
         return num
       })
     } else if (col.type === 'float') {
       fieldCol.type = 1
       fieldCol.float64_values = vals.map((v) => {
         const num = Number(v)
-        if (!Number.isFinite(num)) throw new Error(`非法浮点: ${v}`)
+        if (!Number.isFinite(num)) throw new Error(trErr('writeErrBadFloat', { value: v }))
         return num
       })
     } else if (col.type === 'bool') {
@@ -142,7 +147,7 @@ function buildTypedBatch(): Record<string, unknown> {
         const s = v.toLowerCase()
         if (s === 'true' || s === '1') return true
         if (s === 'false' || s === '0') return false
-        throw new Error(`非法 bool: ${v}`)
+        throw new Error(trErr('writeErrBadBool', { value: v }))
       })
     } else {
       fieldCol.type = 3
@@ -150,21 +155,21 @@ function buildTypedBatch(): Record<string, unknown> {
     }
     fieldColsBuilt.push(fieldCol)
   }
-  if (!n) throw new Error('至少需要一个字段列')
+  if (!n) throw new Error(trErr('writeErrNeedFieldCol'))
   let ts = typedTimestamps.value.split('\n').map((s) => s.trim()).filter(Boolean).map(Number)
   if (!ts.length) {
     const now = Date.now()
     ts = Array.from({ length: n }, (_, i) => now + i)
   }
-  if (ts.length !== n) throw new Error('时间戳行数需与字段值一致')
-  if (ts.some((x) => !Number.isSafeInteger(x))) throw new Error('时间戳必须是安全整数（ms）')
+  if (ts.length !== n) throw new Error(trErr('writeErrTsRowMismatch'))
+  if (ts.some((x) => !Number.isSafeInteger(x))) throw new Error(trErr('writeErrTsNotInt'))
   const tagCols: { name: string; values: string[] }[] = []
   for (const col of typedTagCols.value) {
     const name = col.name.trim()
     if (!name) continue
     const values = col.values.split('\n').map((s) => s.trim()).filter(Boolean)
     if (!values.length) continue
-    if (values.length !== n) throw new Error(`tag ${name} 行数需为 ${n}`)
+    if (values.length !== n) throw new Error(trErr('writeErrTagRowMismatch', { name, want: n }))
     tagCols.push({ name, values })
   }
   const batch: Record<string, unknown> = {
@@ -182,7 +187,7 @@ function buildTypedBatch(): Record<string, unknown> {
 async function checkWriteAuthz() {
   authzHint.value = ''
   if (!selectedDb.value.trim()) {
-    authzHint.value = '请先填写 database'
+    authzHint.value = t.value('writeNeedDatabase')
     notifyError(authzHint.value)
     return
   }
@@ -193,8 +198,8 @@ async function checkWriteAuthz() {
       user_name: isAdmin.value ? undefined : currentUser.value || undefined,
     })
     authzHint.value = allowed
-      ? `写权限预检通过：${selectedDb.value}`
-      : `写权限预检拒绝：${selectedDb.value}`
+      ? formatMessage(t.value('writeAuthzPassShort'), { db: selectedDb.value })
+      : formatMessage(t.value('writeAuthzDenyShort'), { db: selectedDb.value })
     if (allowed) success(authzHint.value)
     else notifyError(authzHint.value)
   } catch (e) {
@@ -211,7 +216,7 @@ async function submit() {
     if (writeMode.value === 'typed') {
       const batch = buildTypedBatch()
       await apiPost('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } })
-      result.value = { ok: true, message: `TypedBatch 写入成功（${(batch.timestamps as number[]).length} 点）` }
+      result.value = { ok: true, message: formatMessage(t.value('writeTypedSuccess'), { count: (batch.timestamps as number[]).length }) }
       success(result.value.message)
       markWriteClean()
       return
@@ -222,22 +227,22 @@ async function submit() {
     } else if (writeMode.value === 'line') {
       const parsed = parseLineProtocolDetailed(lineInput.value)
       if (parsed.errors.length) {
-        const summary = parsed.errors.slice(0, 5).join('；') + (parsed.errors.length > 5 ? ` 等共 ${parsed.errors.length} 处` : '')
+        const summary = parsed.errors.slice(0, 5).join('; ') + (parsed.errors.length > 5 ? formatMessage(t.value('writeLineMoreErrors'), { count: parsed.errors.length }) : '')
         if (!parsed.points.length) throw new Error(summary)
-        notifyError(`Line Protocol 部分行无效：${summary}`)
+        notifyError(formatMessage(t.value('writeLinePartialInvalid'), { summary }))
       }
       points = parsed.points
     } else {
       points = parsePrometheusText(lineInput.value)
     }
-    if (!points.length) throw new Error('没有可写入的点')
+    if (!points.length) throw new Error(trErr('writeErrNoPoints'))
     for (const p of points) {
       p.database = selectedDb.value
       p.retention_policy = retentionPolicy.value
     }
     const writePath = usePointsTyped.value ? '/api/v1/data/write/points-typed' : '/api/v1/data/write'
     await apiPost(writePath, { points, options: { sync: syncWrite.value } })
-    result.value = { ok: true, message: `写入成功（${points.length} 点，${writePath}）` }
+    result.value = { ok: true, message: formatMessage(t.value('writeSuccessPoints'), { count: points.length, path: writePath }) }
     success(result.value.message)
     markWriteClean()
   } catch (e) {
@@ -285,7 +290,7 @@ const modeLabel = computed(() => ({
         <input v-model="syncWrite" type="checkbox" /> Sync
       </label>
       <label v-if="writeMode!=='typed'" class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 md:mt-6">
-        <input v-model="usePointsTyped" type="checkbox" /> points-typed 路径
+        <input v-model="usePointsTyped" type="checkbox" /> {{ t('writePointsTypedPath') }}
       </label>
     </div>
     <p v-if="metaHint" class="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{{ metaHint }}</p>
@@ -298,7 +303,7 @@ const modeLabel = computed(() => ({
         <div class="grid gap-2 md:grid-cols-3">
           <input v-model="row.measurement" placeholder="measurement" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
           <input v-model="row.timestamp" placeholder="timestamp ms" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
-          <div class="text-[11px] text-slate-400 dark:text-slate-500">tags/fields 在下方</div>
+          <div class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('writeFormTagsFieldsHint') }}</div>
         </div>
         <div class="mt-2 grid gap-2 md:grid-cols-2">
           <div>
@@ -322,30 +327,30 @@ const modeLabel = computed(() => ({
           </div>
         </div>
       </div>
-      <button class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300" @click="addRow"><Plus class="h-3 w-3" /> 添加行</button>
+      <button class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300" @click="addRow"><Plus class="h-3 w-3" /> {{ t('writeAddRow') }}</button>
     </div>
 
     <div v-else-if="writeMode==='typed'" class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <p class="text-xs text-slate-500 dark:text-slate-400">直接构造 TypedBatch 调用 <code>/api/v1/data/write/typed</code>（推荐高性能路径；支持多 tag/多 field 列）</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('writeTypedHint') }}</p>
       <div class="grid gap-3 md:grid-cols-2">
         <label class="text-xs">Measurement<input v-model="typedMeasurement" class="mts-input mt-1" /></label>
-        <label class="text-xs">Timestamps ms（可选，每行一个；空则自动生成）
+        <label class="text-xs">{{ t('writeTimestampsMs') }}
           <textarea v-model="typedTimestamps" rows="3" class="mts-input mt-1 font-mono text-xs" />
         </label>
       </div>
       <div>
-        <div class="mb-2 flex items-center justify-between text-xs font-medium">Tag 列
-          <button type="button" class="text-slate-500" @click="addTypedTagCol">+ tag 列</button>
+        <div class="mb-2 flex items-center justify-between text-xs font-medium">{{ t('writeTagCols') }}
+          <button type="button" class="text-slate-500" @click="addTypedTagCol">{{ t('writeAddTagCol') }}</button>
         </div>
         <div v-for="(col, i) in typedTagCols" :key="'t'+i" class="mb-2 grid gap-2 rounded border border-slate-100 p-2 dark:border-slate-800 md:grid-cols-3">
           <input v-model="col.name" class="mts-input text-xs" placeholder="tag name" />
-          <textarea v-model="col.values" rows="3" class="mts-input font-mono text-xs md:col-span-2" placeholder="每行一个 value" />
-          <button type="button" class="text-xs text-red-500 md:col-span-3" @click="removeTypedTagCol(i)">删除 tag 列</button>
+          <textarea v-model="col.values" rows="3" class="mts-input font-mono text-xs md:col-span-2" :placeholder="t('writePerLineValue')" />
+          <button type="button" class="text-xs text-red-500 md:col-span-3" @click="removeTypedTagCol(i)">{{ t('writeRemoveTagCol') }}</button>
         </div>
       </div>
       <div>
-        <div class="mb-2 flex items-center justify-between text-xs font-medium">Field 列
-          <button type="button" class="text-slate-500" @click="addTypedFieldCol">+ field 列</button>
+        <div class="mb-2 flex items-center justify-between text-xs font-medium">{{ t('writeFieldCols') }}
+          <button type="button" class="text-slate-500" @click="addTypedFieldCol">{{ t('writeAddFieldCol') }}</button>
         </div>
         <div v-for="(col, i) in typedFieldCols" :key="'f'+i" class="mb-2 grid gap-2 rounded border border-slate-100 p-2 dark:border-slate-800 md:grid-cols-4">
           <input v-model="col.name" class="mts-input text-xs" placeholder="field name" />
@@ -355,8 +360,8 @@ const modeLabel = computed(() => ({
             <option value="string">string</option>
             <option value="bool">bool</option>
           </select>
-          <textarea v-model="col.values" rows="3" class="mts-input font-mono text-xs md:col-span-2" placeholder="每行一个 value" />
-          <button type="button" class="text-xs text-red-500 md:col-span-4" :disabled="typedFieldCols.length<=1" @click="removeTypedFieldCol(i)">删除 field 列</button>
+          <textarea v-model="col.values" rows="3" class="mts-input font-mono text-xs md:col-span-2" :placeholder="t('writePerLineValue')" />
+          <button type="button" class="text-xs text-red-500 md:col-span-4" :disabled="typedFieldCols.length<=1" @click="removeTypedFieldCol(i)">{{ t('writeRemoveFieldCol') }}</button>
         </div>
       </div>
     </div>
@@ -367,20 +372,20 @@ const modeLabel = computed(() => ({
 
     <div class="flex flex-wrap items-center gap-2">
       <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" :disabled="loading" @click="submit">
-        <Send class="h-4 w-4" /> {{ loading ? t('loading') : '写入' }}
+        <Send class="h-4 w-4" /> {{ loading ? t('loading') : t('writeSubmit') }}
       </button>
       <span
         v-if="formDirty"
         class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
-      >未提交变更</span>
+      >{{ t('writeDirtyBadge') }}</span>
     </div>
     <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
     <p v-if="result?.ok" class="mts-alert-ok">{{ result.message }}</p>
     <div v-else-if="!loading && !actionError && !result" class="mts-card">
       <EmptyState
         compact
-        title="等待写入"
-        description="选择写入模式并填写数据后点击写入。推荐 TypedBatch 列式写入以获得更高吞吐。"
+        :title="t('writeEmptyTitle')"
+        :description="t('writeEmptyDesc')"
       />
     </div>
   </div>

@@ -4,6 +4,8 @@ import { apiGet, apiPost, getAdminToken, setAdminToken, getDataToken, setDataTok
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { useI18n } from '@/composables/useI18n'
+import { formatMessage } from '@/utils/formatMessage'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -19,6 +21,7 @@ interface SchemaField { name: string; description: string }
 interface SchemaResponse { fields: SchemaField[] }
 
 const { isAdmin } = useAuth()
+const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
 const config = ref<Record<string, unknown> | null>(null)
 const validateResult = ref<ValidateResponse | null>(null)
@@ -65,10 +68,10 @@ async function handleValidate() {
   try {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/config/validate', { config: config.value })
     if (validateResult.value.ok) {
-      actionResult.value = makeActionResult('ok', '配置验证通过')
-      success('配置验证通过')
+      actionResult.value = makeActionResult('ok', t.value('configValidateOk'))
+      success(t.value('configValidateOk'))
     } else {
-      const msg = `配置验证失败: ${validateResult.value.error || ''}`
+      const msg = formatMessage(t.value('configValidateFail'), { error: validateResult.value.error || '' })
       actionResult.value = makeActionResult('error', msg)
       notifyError(msg)
     }
@@ -84,9 +87,9 @@ async function handleReload() {
   reloadResult.value = null
   try {
     reloadResult.value = await apiPost<ReloadResponse>('/api/v1/admin/config/reload')
-    actionResult.value = makeActionResult('ok', reloadResult.value.fields?.length ? `配置已重载，变更字段: ${reloadResult.value.fields.join(', ')}` : '配置已重载')
+    actionResult.value = makeActionResult('ok', reloadResult.value.fields?.length ? formatMessage(t.value('configReloadOkFields'), { fields: reloadResult.value.fields.join(', ') }) : t.value('configReloadOk'))
     await loadConfig()
-    success('配置已热重载')
+    success(t.value('configReloadToast'))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -97,7 +100,7 @@ async function handleReload() {
 function saveServiceTokens() {
   setAdminToken(adminTokenInput.value)
   setDataToken(dataTokenInput.value)
-  success('服务级 Token 已保存到 sessionStorage')
+  success(t.value('configTokenSaved'))
 }
 
 function clearServiceTokens() {
@@ -105,14 +108,14 @@ function clearServiceTokens() {
   dataTokenInput.value = ''
   setAdminToken('')
   setDataToken('')
-  actionResult.value = makeActionResult('ok', '服务级 Token 已清除')
-  success('服务级 Token 已清除')
+  actionResult.value = makeActionResult('ok', t.value('configTokenCleared'))
+  success(t.value('configTokenCleared'))
 }
 
 function statusLabel(httpStatus: number): string {
-  if (httpStatus >= 200 && httpStatus < 300) return '成功'
-  if (httpStatus >= 400 && httpStatus < 500) return '客户端错误'
-  if (httpStatus >= 500) return '服务端错误'
+  if (httpStatus >= 200 && httpStatus < 300) return t.value('configHttpOk')
+  if (httpStatus >= 400 && httpStatus < 500) return t.value('configHttpClientErr')
+  if (httpStatus >= 500) return t.value('configHttpServerErr')
   return ''
 }
 </script>
@@ -129,47 +132,47 @@ function statusLabel(httpStatus: number): string {
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 
     <div class="mts-panel">
-      <h2 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">服务级 Token（可选）</h2>
-      <p class="mb-4 text-xs mts-muted">当服务启用 admin_token / data_tokens 时，可在此配置。保存在 sessionStorage（会话级）。</p>
+      <h2 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configTokenTitle') }}</h2>
+      <p class="mb-4 text-xs mts-muted">{{ t('configTokenHint') }}</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="mb-1 block text-xs mts-muted">X-MTS-Admin-Token</label>
-          <input v-model="adminTokenInput" type="password" class="mts-input" placeholder="可选" />
+          <input v-model="adminTokenInput" type="password" class="mts-input"  :placeholder="t('optional')" />
         </div>
         <div>
           <label class="mb-1 block text-xs mts-muted">X-MTS-Data-Token</label>
-          <input v-model="dataTokenInput" type="password" class="mts-input" placeholder="可选" />
+          <input v-model="dataTokenInput" type="password" class="mts-input"  :placeholder="t('optional')" />
         </div>
       </div>
       <div class="mt-3 flex gap-2">
-        <button class="mts-btn-primary" @click="saveServiceTokens">保存</button>
-        <button class="mts-btn" @click="clearServiceTokens">清除</button>
+        <button class="mts-btn-primary" @click="saveServiceTokens">{{ t('configTokenSave') }}</button>
+        <button class="mts-btn" @click="clearServiceTokens">{{ t('configTokenClear') }}</button>
       </div>
     </div>
 
     <div class="flex flex-wrap gap-3">
-      <button class="mts-btn-primary" @click="handleValidate"><CheckCircle class="h-4 w-4" />验证配置</button>
-      <button class="mts-btn-primary" @click="handleReload"><RefreshCw class="h-4 w-4" />热重载</button>
+      <button class="mts-btn-primary" @click="handleValidate"><CheckCircle class="h-4 w-4" />{{ t('configValidate') }}</button>
+      <button class="mts-btn-primary" @click="handleReload"><RefreshCw class="h-4 w-4" />{{ t('configReload') }}</button>
     </div>
     <div v-if="validateResult" :class="validateResult.ok ? 'mts-alert-ok' : 'mts-alert-error'">
-      <p v-if="validateResult.ok">配置验证通过</p>
-      <p v-else>配置验证失败: {{ validateResult.error }}</p>
+      <p v-if="validateResult.ok">{{ t('configValidateOk') }}</p>
+      <p v-else>{{ formatMessage(t('configValidateFail'), { error: validateResult.error || '' }) }}</p>
     </div>
     <div v-if="reloadResult" class="mts-alert-ok">
-      <p>配置已重载<span v-if="reloadResult.fields?.length">，变更字段: {{ reloadResult.fields.join(', ') }}</span></p>
+      <p>{{ reloadResult.fields?.length ? formatMessage(t('configReloadOkFields'), { fields: reloadResult.fields.join(', ') }) : t('configReloadOk') }}</p>
     </div>
 
     <div v-if="config" class="mts-panel">
-      <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">有效配置</h2>
+      <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configEffective') }}</h2>
       <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400">{{ JSON.stringify(config, null, 2) }}</pre>
     </div>
 
     <div class="mts-panel">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">配置 Schema</h2>
-        <input v-model="schemaFilter" class="mts-input max-w-xs text-xs" placeholder="过滤 name/description" />
+        <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configSchema') }}</h2>
+        <input v-model="schemaFilter" class="mts-input max-w-xs text-xs"  :placeholder="t('configSchemaFilter')" />
       </div>
-      <EmptyState v-if="!filteredSchema.length" compact title="暂无 schema" description="调整过滤条件，或确认服务已返回配置 schema。" />
+      <EmptyState v-if="!filteredSchema.length" compact :title="t('configSchemaEmpty')" :description="t('configSchemaEmptyDesc')" />
       <div v-else class="max-h-80 overflow-auto">
         <table class="w-full text-sm">
           <thead>
@@ -189,15 +192,15 @@ function statusLabel(httpStatus: number): string {
     </div>
 
     <div class="mts-panel">
-      <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">错误码契约</h2>
-      <EmptyState v-if="!errorCodes.length" compact title="暂无错误码" description="错误码契约尚未加载或服务未返回数据。" />
+      <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configErrorCodes') }}</h2>
+      <EmptyState v-if="!errorCodes.length" compact :title="t('configErrorCodesEmpty')" :description="t('configErrorCodesEmptyDesc')" />
       <table v-else class="w-full text-sm">
         <thead>
           <tr class="border-b border-slate-200 text-left dark:border-slate-700">
             <th class="pb-2 text-xs font-medium mts-muted">Code</th>
             <th class="pb-2 text-xs font-medium mts-muted">HTTP</th>
             <th class="pb-2 text-xs font-medium mts-muted">gRPC</th>
-            <th class="pb-2 text-xs font-medium mts-muted">说明</th>
+            <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColDescription') }}</th>
           </tr>
         </thead>
         <tbody>

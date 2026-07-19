@@ -8,6 +8,7 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { formatBytes } from '@/utils/formatBytes'
@@ -107,7 +108,7 @@ async function doValidate() {
   try {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/storage/validate')
     drillDone.value = { ...drillDone.value, validate: true }
-    const msg = validateResult.value.ok ? '验证通过' : '验证完成（存在问题）'
+    const msg = validateResult.value.ok ? t.value('storageValidateOk') : t.value('storageValidateDone')
     actionResult.value = makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg)
     success(msg)
   } catch (e) {
@@ -140,9 +141,9 @@ async function doDataSnapshot() {
   try {
     dataSnapshotResult.value = await apiPost<DataSnapshotResponse>('/api/v1/admin/storage/data-snapshot', { flush: true })
     drillDone.value = { ...drillDone.value, 'data-snapshot': true }
-    const msg = `data_dir 快照：${dataSnapshotResult.value.path || 'ok'}（files=${dataSnapshotResult.value.files ?? 0}）`
+    const msg = formatMessage(t.value('storageDataSnapshotMsg'), { path: dataSnapshotResult.value.path || 'ok', files: dataSnapshotResult.value.files ?? 0 })
     actionResult.value = makeActionResult('ok', msg)
-    success('data_dir 快照完成')
+    success(t.value('storageDataSnapshotOk'))
     await loadDataSnapshots()
   } catch (e) {
     const msg = formatCaughtError(e)
@@ -162,10 +163,10 @@ async function doRestoreDrill() {
     const ok = !!restoreDrillResult.value.ok && (restoreDrillResult.value.check_fatals ?? 0) === 0
     drillDone.value = { ...drillDone.value, 'restore-side': ok }
     const msg = ok
-      ? `旁路恢复完成：${restoreDrillResult.value.target}`
-      : `旁路恢复存在致命问题：fatals=${restoreDrillResult.value.check_fatals ?? '?'}`
+      ? formatMessage(t.value('storageRestoreDone'), { target: restoreDrillResult.value.target })
+      : formatMessage(t.value('storageRestoreFatal'), { fatals: restoreDrillResult.value.check_fatals ?? '?' })
     actionResult.value = makeActionResult(ok ? 'ok' : 'warn', msg)
-    if (ok) success('旁路恢复演练完成')
+    if (ok) success(t.value('storageRestoreOk'))
     else notifyError(msg)
     await loadDataSnapshots()
   } catch (e) {
@@ -182,8 +183,8 @@ async function doExport() {
     const data = await apiGet<ExportResponse>('/api/v1/admin/storage/export')
     exportData.value = data.export
     drillDone.value = { ...drillDone.value, 'export-config': true }
-    actionResult.value = makeActionResult('ok', '配置已导出，可下载 JSON')
-    success('配置已导出')
+    actionResult.value = makeActionResult('ok', t.value('storageConfigExported'))
+    success(t.value('storageConfigExportToast'))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -203,8 +204,8 @@ function downloadExport() {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
-  actionResult.value = makeActionResult('ok', '已开始下载导出文件')
-  success('已开始下载')
+  actionResult.value = makeActionResult('ok', t.value('storageDownloadStarted'))
+  success(t.value('storageDownloadToast'))
 }
 
 function requestDelete(name: string) {
@@ -217,8 +218,8 @@ async function confirmDelete() {
   try {
     await apiDelete(`/api/v1/admin/storage/snapshots?name=${encodeURIComponent(deleteName.value)}`)
     deleteOpen.value = false
-    actionResult.value = makeActionResult('ok', `快照已删除：${deleteName.value}`)
-    success('快照已删除')
+    actionResult.value = makeActionResult('ok', formatMessage(t.value('storageSnapshotDeleted'), { name: deleteName.value }))
+    success(t.value('storageSnapshotDeletedToast'))
     await loadSnapshots()
   } catch (e) {
     const msg = formatCaughtError(e)
@@ -237,10 +238,10 @@ async function confirmDelete() {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('storage') }}</h1>
-        <p class="text-xs mts-muted">验证 · 快照 · 配置导出</p>
+        <p class="text-xs mts-muted">{{ t('storageSubtitle') }}</p>
       </div>
       <button class="mts-btn" :disabled="listLoading" @click="() => { void loadSnapshots(); void loadDataSnapshots() }">
-        <RefreshCw class="h-3.5 w-3.5" /> 刷新快照
+        <RefreshCw class="h-3.5 w-3.5" /> {{ t('storageRefreshSnapshots') }}
       </button>
     </div>
 
@@ -250,16 +251,15 @@ async function confirmDelete() {
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <ClipboardList class="h-4 w-4" />
-          备份演练清单
+          {{ t('storageBackupDrill') }}
         </h2>
         <span class="text-xs mts-muted">
-          进度 {{ drillStats.completed }}/{{ drillStats.total }}
-          · 必做 {{ drillStats.requiredCompleted }}/{{ drillStats.requiredTotal }}
+          {{ t('storageProgress') }} {{ drillStats.completed }}/{{ drillStats.total }}
+          · {{ t('storageRequired') }} {{ drillStats.requiredCompleted }}/{{ drillStats.requiredTotal }}
         </span>
       </div>
       <p class="mb-3 text-xs mts-muted">
-        控制台可完成校验/配置快照/data_dir 快照/旁路恢复/导出；异地拷贝仍需按
-        <code class="font-mono">docs/ops/dashboard-production-runbook.md</code> 在主机侧执行。
+        {{ t('storageBackupDrillHint') }}
       </p>
       <ol class="space-y-2">
         <li
@@ -284,7 +284,7 @@ async function confirmDelete() {
           <div class="min-w-0">
             <p class="font-medium text-slate-800 dark:text-slate-100">
               {{ step.title }}
-              <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? '必做' : '推荐' }}</span>
+              <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? t('storageRequired') : t('storageRecommended') }}</span>
               <span v-if="step.inDashboard" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">Dashboard</span>
             </p>
             <p class="text-xs mts-muted">{{ step.detail }}</p>
@@ -297,15 +297,15 @@ async function confirmDelete() {
     <div id="edge-https" class="mts-card p-4 scroll-mt-20">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-          边缘 HTTPS / HSTS 验收
+          {{ t('storageEdgeHttps') }}
         </h2>
         <span class="text-xs mts-muted">
-          进度 {{ edgeStats.done }}/{{ edgeStats.total }}
-          · 必做 {{ edgeStats.requiredDone }}/{{ edgeStats.requiredTotal }}
+          {{ t('storageProgress') }} {{ edgeStats.done }}/{{ edgeStats.total }}
+          · {{ t('storageRequired') }} {{ edgeStats.requiredDone }}/{{ edgeStats.requiredTotal }}
         </span>
       </div>
       <p class="mb-3 text-xs mts-muted">
-        证书与跳转由边缘层人工验收；本机 TLS 时 HSTS/doctor 已自动化。详见 runbook 第 2 节。
+        {{ t('storageEdgeHttpsHint') }}
       </p>
       <ol class="space-y-2">
         <li
@@ -322,8 +322,8 @@ async function confirmDelete() {
           <div class="min-w-0">
             <p class="font-medium text-slate-800 dark:text-slate-100">
               {{ step.title }}
-              <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? '必做' : '推荐' }}</span>
-              <span v-if="step.partialAutomated" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">部分自动</span>
+              <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? t('storageRequired') : t('storageRecommended') }}</span>
+              <span v-if="step.partialAutomated" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">{{ t('storagePartialAuto') }}</span>
             </p>
             <p class="text-xs mts-muted">{{ step.detail }}</p>
           </div>
@@ -333,8 +333,8 @@ async function confirmDelete() {
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div class="mts-panel">
-        <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">存储验证</h3></div>
-        <button :disabled="loading === 'validate'" class="mts-btn-primary w-full justify-center py-2" @click="doValidate">{{ loading === 'validate' ? t('loading') : '执行验证' }}</button>
+        <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('storageValidateTitle') }}</h3></div>
+        <button :disabled="loading === 'validate'" class="mts-btn-primary w-full justify-center py-2" @click="doValidate">{{ loading === 'validate' ? t('loading') : t('storageValidateRun') }}</button>
         <pre v-if="validateResult" class="mt-3 max-h-40 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(validateResult, null, 2) }}</pre>
       </div>
       <div class="mts-panel">
@@ -345,25 +345,25 @@ async function confirmDelete() {
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('export') }}</h3></div>
         <button :disabled="loading === 'export'" class="mts-btn-primary w-full justify-center py-2" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
-        <button v-if="exportData" class="mts-btn mt-2 w-full justify-center" @click="downloadExport">下载 JSON</button>
+        <button v-if="exportData" class="mts-btn mt-2 w-full justify-center" @click="downloadExport">{{ t('storageDownloadJson') }}</button>
       </div>
     </div>
 
     <div class="mts-card overflow-hidden">
       <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs mts-muted dark:border-slate-800">
         <span>{{ t('snapshots') }}</span>
-        <span>{{ snapshots.length }} 个</span>
+        <span>{{ formatMessage(t('storageSnapshotCount'), { count: snapshots.length }) }}</span>
       </div>
       <EmptyState
         v-if="listLoading"
         compact
         :title="t('loading')"
-        description="正在加载快照列表…"
+        description="{{ t('storageLoadingSnapshots') }}"
       />
       <EmptyState
         v-else-if="!snapshots.length"
-        title="暂无快照"
-        description="创建快照后可在此管理；删除操作不可恢复。"
+        :title="t('storageNoSnapshots')"
+        :description="t('storageNoSnapshotsDesc')"
       >
         <template #action>
           <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot'" @click="doSnapshot">{{ t('createSnapshot') }}</button>
@@ -372,9 +372,9 @@ async function confirmDelete() {
       <table v-else class="w-full text-sm">
         <thead>
           <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-            <th class="px-4 py-2">名称</th>
-            <th class="px-4 py-2">大小</th>
-            <th class="px-4 py-2">时间</th>
+            <th class="px-4 py-2">{{ t('storageColName') }}</th>
+            <th class="px-4 py-2">{{ t('storageColSize') }}</th>
+            <th class="px-4 py-2">{{ t('storageColTime') }}</th>
             <th class="px-4 py-2"></th>
           </tr>
         </thead>
@@ -394,18 +394,18 @@ async function confirmDelete() {
     </div>
 
     <div v-if="exportData" class="mts-panel">
-      <h3 class="mb-2 text-sm font-semibold">导出预览</h3>
+      <h3 class="mb-2 text-sm font-semibold">{{ t('storageExportPreview') }}</h3>
       <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400">{{ JSON.stringify(exportData, null, 2) }}</pre>
     </div>
 
     
     <div id="data-restore" class="mts-panel scroll-mt-20">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">data_dir 旁路恢复编排</h3>
-        <span class="text-xs mts-muted">真实存储拷贝（storagecheck）</span>
+        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('storageDataDirRestore') }}</h3>
+        <span class="text-xs mts-muted">{{ t('storageDataDirRestoreHint') }}</span>
       </div>
       <p class="mb-3 text-xs mts-muted">
-        先创建 data_dir 快照，再恢复到 backups/restore-drill-*（不会覆盖 live data_dir）。
+        {{ t('storageDataDirRestoreDesc') }}
       </p>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <button data-testid="storage-data-snapshot"
@@ -414,7 +414,7 @@ async function confirmDelete() {
           :disabled="loading === 'data-snapshot'"
           @click="doDataSnapshot"
         >
-          {{ loading === 'data-snapshot' ? t('loading') : '创建 data_dir 快照' }}
+          {{ loading === 'data-snapshot' ? t('loading') : t('storageCreateDataSnapshot') }}
         </button>
         <button
           type="button"
@@ -422,7 +422,7 @@ async function confirmDelete() {
           :disabled="loading === 'restore-drill'"
           @click="doRestoreDrill"
         >
-          {{ loading === 'restore-drill' ? t('loading') : '执行旁路恢复演练' }}
+          {{ loading === 'restore-drill' ? t('loading') : t('storageRunRestoreDrill') }}
         </button>
       </div>
       <pre v-if="dataSnapshotResult" class="mt-3 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(dataSnapshotResult, null, 2) }}</pre>
@@ -451,9 +451,9 @@ async function confirmDelete() {
 
 <ConfirmDialog
       v-model:open="deleteOpen"
-      title="删除快照"
-      :message="`确定删除快照 ${deleteName}？此操作不可恢复。`"
-      confirm-label="删除"
+      :title="t('storageDeleteSnapshotTitle')"
+      :message="formatMessage(t('storageDeleteSnapshotMsg'), { name: deleteName })"
+      :confirm-label="t('delete')"
       danger
       :loading="deleteLoading"
       @confirm="confirmDelete"

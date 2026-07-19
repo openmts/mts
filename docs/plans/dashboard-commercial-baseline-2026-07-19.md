@@ -31,6 +31,7 @@
 - 降采样 run-range/状态明细/区间校验（P34）
 - 文档标题与对话框 a11y（P35）
 - 快捷键帮助与最近访问（P36）
+- 查询/写入/配置/存储 i18n 收口（P37）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -152,4 +153,9 @@
 - 快捷键帮助（? / 顶栏）+ 焦点陷阱
 - 最近访问路由条（sessionStorage）
 - TopBar 标题与 document.title 共用映射
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份
+
+
+## P37 状态（2026-07-20）
+- Query/Write/Config/Storage 用户可见文案 i18n + formatMessage
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份
