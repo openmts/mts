@@ -37,7 +37,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'health-ready-metrics',
     severity: 'required',
     title: '健康与指标接入',
-    detail: '/healthz /readyz /metrics 接入监控与告警。',
+    detail: '/healthz /readyz /metrics 接入监控与告警；Dashboard /metrics 可只读浏览。',
     automated: true,
   },
   {
@@ -65,7 +65,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'rbac-matrix-ui',
     severity: 'recommended',
     title: '权限矩阵可视化',
-    detail: 'Dashboard /access 展示 admin/user 能力对照；实时 grants 仍需人工复核。',
+    detail: 'Dashboard /access 能力对照 + /access/grants 实时 grants 汇总。',
     automated: true,
   },
   {

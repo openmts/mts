@@ -400,3 +400,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 ## P15 状态（2026-07-19）
 - 强制改密：`must_change_password` metadata + API 门禁 + 前端强制改密页
 - **仍不宣称可商用目标完成**：Playwright UI e2e、实时 grants 拉取可视化
+
+
+## P16 状态（2026-07-20）
+- 实时 grants：`/access/grants`
+- 指标浏览：`/metrics` + prometheus 解析
+- **仍不宣称可商用目标完成**：Playwright UI e2e、边缘 HTTPS 落地

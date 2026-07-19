@@ -10,6 +10,7 @@
 - 404 / 权限拒绝 EmptyState 收口（P13）
 - 生产 Runbook + 权限能力矩阵可视化（P14）
 - 强制修改 bootstrap 默认密码（P15）
+- 实时 grants 总览 + /metrics 浏览（P16）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -17,10 +18,10 @@
 | 边缘 HTTPS / TLS | required | 否（边缘层） |
 | 安全响应头 | required | 是（服务侧测试） |
 | 修改默认 admin 密码 | required | 是（must_change 门禁+单测） |
-| 健康与指标接入 | required | 部分（healthz/readyz 冒烟） |
+| 健康与指标接入 | required | 是（冒烟 + Dashboard /metrics 浏览） |
 | 备份与快照演练 | recommended | 否 |
 | 登录-查询-写入-运维冒烟 | required | 是（服务侧 smoke） |
-| 权限矩阵复核 | recommended | 部分（矩阵页+单测；实时 grants 仍人工） |
+| 权限矩阵复核 | recommended | 是（矩阵页 + /access/grants 实时汇总） |
 
 ## 建议上线前再确认
 1. 反向代理 HTTPS、HSTS（由边缘层配置）

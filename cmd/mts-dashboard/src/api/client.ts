@@ -268,6 +268,36 @@ export function apiGet<T>(path: string, init: RequestInit = {}): Promise<T> {
   return request<T>(path, { ...init, method: 'GET' })
 }
 
+/** 拉取非 JSON 文本响应（如 Prometheus /metrics） */
+export async function apiGetText(path: string, init: RequestInit = {}): Promise<string> {
+  if (bearerToken && isTokenExpired()) {
+    triggerAuthFailed()
+    throw new APIClientError(401, 'unauthenticated', '登录已过期，请重新登录')
+  }
+  const method = 'GET'
+  const headers = authHeaders(init.headers as Record<string, string> | undefined, method)
+  beginRequest()
+  try {
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}${path}`, { ...init, method, headers })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new APIClientError(499, 'canceled', '请求已取消')
+      }
+      throw err
+    }
+    if (!response.ok) {
+      const err = await readAPIError(response)
+      handleAuthFailure(path, response.status, err.code)
+      throw new APIClientError(response.status, err.code, err.message)
+    }
+    return await response.text()
+  } finally {
+    endRequest()
+  }
+}
+
 export function apiPost<T>(path: string, body?: unknown, init: RequestInit = {}): Promise<T> {
   return request<T>(path, {
     ...init,

@@ -137,7 +137,9 @@ function levelLabel(level: AccessLevel): string {
       <code class="font-mono">/api/v1/users/.../database-permissions</code>
       与
       <code class="font-mono">/api/v1/authz/database/check</code>
-      落实。
+      落实。管理员可打开
+      <RouterLink class="underline" to="/access/grants">实时授权总览</RouterLink>
+      复核当前 grants。
     </p>
   </div>
 </template>
