@@ -172,3 +172,8 @@
 - Metrics / AccessMatrix / AccessGrants / ApiSpec / NotFound i18n
 - 权限等级标签随语言切换；Playwright 覆盖矩阵/授权/指标/404
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份
+
+## P40 状态（2026-07-20）
+- 权限矩阵 capability 行数据双语（area/capability/notes + areaKey 筛选）
+- 矩阵单元测试全量双语；Playwright 覆盖 locale 切换后的矩阵行
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份；共享组件中文硬编码收口

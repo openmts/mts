@@ -4,149 +4,208 @@ export type RoleName = 'admin' | 'user'
 
 export type AccessLevel = 'full' | 'self' | 'data_scoped' | 'none'
 
+export type LocaleCode = 'zh' | 'en'
+
+export interface LocalizedText {
+  zh: string
+  en: string
+}
+
 export interface CapabilityRow {
   id: string
-  area: string
-  capability: string
+  /** 稳定区域键，用于筛选 */
+  areaKey: string
+  area: LocalizedText
+  capability: LocalizedText
   admin: AccessLevel
   user: AccessLevel
   route?: string
-  notes?: string
+  notes?: LocalizedText
 }
 
-export const ACCESS_LEVEL_LABEL: Record<AccessLevel, { zh: string; en: string }> = {
+export const ACCESS_LEVEL_LABEL: Record<AccessLevel, LocalizedText> = {
   full: { zh: '全部', en: 'Full' },
   self: { zh: '仅自身', en: 'Self only' },
   data_scoped: { zh: '库级授权', en: 'DB-scoped' },
   none: { zh: '无', en: 'None' },
 }
 
+export function textForLocale(text: LocalizedText | undefined, locale: LocaleCode = 'zh'): string {
+  if (!text) return ''
+  return locale === 'en' ? text.en : text.zh
+}
+
 /** 控制台能力矩阵（角色 × 能力） */
 export const RBAC_CAPABILITY_MATRIX: CapabilityRow[] = [
   {
     id: 'overview-health',
-    area: '概览',
-    capability: '基础健康 /readyz /healthz',
+    areaKey: 'overview',
+    area: { zh: '概览', en: 'Overview' },
+    capability: { zh: '基础健康 /readyz /healthz', en: 'Basic health /readyz /healthz' },
     admin: 'full',
     user: 'full',
     route: '/',
   },
   {
     id: 'overview-admin-stats',
-    area: '概览',
-    capability: '管理统计 /admin/health /maintenance',
+    areaKey: 'overview',
+    area: { zh: '概览', en: 'Overview' },
+    capability: {
+      zh: '管理统计 /admin/health /maintenance',
+      en: 'Admin stats /admin/health /maintenance',
+    },
     admin: 'full',
     user: 'none',
     route: '/',
   },
   {
     id: 'query',
-    area: '数据面',
-    capability: '查询 rows/columns/stream/explain',
+    areaKey: 'data',
+    area: { zh: '数据面', en: 'Data plane' },
+    capability: {
+      zh: '查询 rows/columns/stream/explain',
+      en: 'Query rows/columns/stream/explain',
+    },
     admin: 'full',
     user: 'data_scoped',
     route: '/query',
-    notes: '非 admin 需对目标库持有 read 权限',
+    notes: {
+      zh: '非 admin 需对目标库持有 read 权限',
+      en: 'Non-admin needs read grant on target database',
+    },
   },
   {
     id: 'write',
-    area: '数据面',
-    capability: '写入 points/typed/line/prom',
+    areaKey: 'data',
+    area: { zh: '数据面', en: 'Data plane' },
+    capability: {
+      zh: '写入 points/typed/line/prom',
+      en: 'Write points/typed/line/prom',
+    },
     admin: 'full',
     user: 'data_scoped',
     route: '/write',
-    notes: '非 admin 需对目标库持有 write 权限',
+    notes: {
+      zh: '非 admin 需对目标库持有 write 权限',
+      en: 'Non-admin needs write grant on target database',
+    },
   },
   {
     id: 'delete-range',
-    area: '数据面',
-    capability: '范围删除',
+    areaKey: 'data',
+    area: { zh: '数据面', en: 'Data plane' },
+    capability: { zh: '范围删除', en: 'Range delete' },
     admin: 'full',
     user: 'data_scoped',
     route: '/query',
-    notes: '走 data/delete，受库级 write 约束',
+    notes: {
+      zh: '走 data/delete，受库级 write 约束',
+      en: 'Uses data/delete; constrained by DB write grant',
+    },
   },
   {
     id: 'users-list',
-    area: '用户',
-    capability: '用户列表与管理',
+    areaKey: 'users',
+    area: { zh: '用户', en: 'Users' },
+    capability: { zh: '用户列表与管理', en: 'User list and management' },
     admin: 'full',
     user: 'self',
     route: '/users',
-    notes: '普通用户可改自身密码；创建/授权仅 admin',
+    notes: {
+      zh: '普通用户可改自身密码；创建/授权仅 admin',
+      en: 'Users may change own password; create/grants are admin-only',
+    },
   },
   {
     id: 'users-grant',
-    area: '用户',
-    capability: '库级读写授权',
+    areaKey: 'users',
+    area: { zh: '用户', en: 'Users' },
+    capability: { zh: '库级读写授权', en: 'DB read/write grants' },
     admin: 'full',
     user: 'none',
     route: '/users',
   },
   {
     id: 'databases',
-    area: '管理面',
-    capability: '数据库 / RP 管理',
+    areaKey: 'admin',
+    area: { zh: '管理面', en: 'Admin plane' },
+    capability: { zh: '数据库 / RP 管理', en: 'Database / RP management' },
     admin: 'full',
     user: 'none',
     route: '/databases',
   },
   {
     id: 'operations',
-    area: '管理面',
-    capability: 'Flush / Compact / Retention',
+    areaKey: 'admin',
+    area: { zh: '管理面', en: 'Admin plane' },
+    capability: { zh: 'Flush / Compact / Retention', en: 'Flush / Compact / Retention' },
     admin: 'full',
     user: 'none',
     route: '/operations',
   },
   {
     id: 'downsample',
-    area: '管理面',
-    capability: '降采样策略与动作',
+    areaKey: 'admin',
+    area: { zh: '管理面', en: 'Admin plane' },
+    capability: { zh: '降采样策略与动作', en: 'Downsample policies and actions' },
     admin: 'full',
     user: 'none',
     route: '/downsample',
   },
   {
     id: 'storage',
-    area: '管理面',
-    capability: '快照 / 校验 / 导出',
+    areaKey: 'admin',
+    area: { zh: '管理面', en: 'Admin plane' },
+    capability: { zh: '快照 / 校验 / 导出', en: 'Snapshot / validate / export' },
     admin: 'full',
     user: 'none',
     route: '/storage',
   },
   {
     id: 'config',
-    area: '管理面',
-    capability: '配置查看 / reload / schema',
+    areaKey: 'admin',
+    area: { zh: '管理面', en: 'Admin plane' },
+    capability: {
+      zh: '配置查看 / reload / schema',
+      en: 'Config view / reload / schema',
+    },
     admin: 'full',
     user: 'none',
     route: '/config',
   },
   {
     id: 'audit',
-    area: '管理面',
-    capability: '审计日志浏览',
+    areaKey: 'admin',
+    area: { zh: '管理面', en: 'Admin plane' },
+    capability: { zh: '审计日志浏览', en: 'Audit log browse' },
     admin: 'full',
     user: 'none',
     route: '/audit',
   },
   {
     id: 'api-spec',
-    area: '管理面',
-    capability: 'API Spec 浏览',
+    areaKey: 'admin',
+    area: { zh: '管理面', en: 'Admin plane' },
+    capability: { zh: 'API Spec 浏览', en: 'API Spec browse' },
     admin: 'full',
     user: 'none',
     route: '/api-spec',
   },
   {
     id: 'authz-check',
-    area: '鉴权',
-    capability: 'authz/database/check 预检',
+    areaKey: 'authz',
+    area: { zh: '鉴权', en: 'Authz' },
+    capability: {
+      zh: 'authz/database/check 预检',
+      en: 'authz/database/check preflight',
+    },
     admin: 'full',
     user: 'self',
     route: '/query',
-    notes: '前端查询/写入前可对当前用户做权限预检',
+    notes: {
+      zh: '前端查询/写入前可对当前用户做权限预检',
+      en: 'Dashboard may preflight current user grants before query/write',
+    },
   },
 ]
 
@@ -158,13 +217,18 @@ export function capabilitiesForRole(role: RoleName, rows = RBAC_CAPABILITY_MATRI
   return rows.filter((r) => levelForRole(r, role) !== 'none')
 }
 
-export function matrixAreas(rows = RBAC_CAPABILITY_MATRIX): string[] {
+export interface MatrixAreaOption {
+  key: string
+  label: LocalizedText
+}
+
+export function matrixAreas(rows = RBAC_CAPABILITY_MATRIX): MatrixAreaOption[] {
   const seen = new Set<string>()
-  const out: string[] = []
+  const out: MatrixAreaOption[] = []
   for (const r of rows) {
-    if (!seen.has(r.area)) {
-      seen.add(r.area)
-      out.push(r.area)
+    if (!seen.has(r.areaKey)) {
+      seen.add(r.areaKey)
+      out.push({ key: r.areaKey, label: r.area })
     }
   }
   return out

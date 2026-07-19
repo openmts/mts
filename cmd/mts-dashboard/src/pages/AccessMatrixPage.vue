@@ -7,7 +7,9 @@ import {
   countByLevel,
   levelForRole,
   matrixAreas,
+  textForLocale,
   type AccessLevel,
+  type LocaleCode,
   type RoleName,
 } from '@/utils/rbacMatrix'
 import { Shield } from 'lucide-vue-next'
@@ -18,13 +20,16 @@ const { currentRole } = useAuth()
 const { t, locale } = useI18n()
 const roleFilter = ref<'all' | RoleName>('all')
 const areaFilter = ref('')
-const areas = matrixAreas()
+const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
+const areas = computed(() =>
+  matrixAreas().map((a) => ({ key: a.key, label: textForLocale(a.label, uiLocale.value) })),
+)
 
 const displayRole = computed(() => (currentRole.value === 'admin' ? 'admin' : 'user') as RoleName)
 
 const rows = computed(() => {
   return RBAC_CAPABILITY_MATRIX.filter((r) => {
-    if (areaFilter.value && r.area !== areaFilter.value) return false
+    if (areaFilter.value && r.areaKey !== areaFilter.value) return false
     if (roleFilter.value === 'all') return true
     return levelForRole(r, roleFilter.value) !== 'none'
   })
@@ -47,7 +52,7 @@ function levelClass(level: AccessLevel): string {
 }
 
 function levelLabel(level: AccessLevel): string {
-  return ACCESS_LEVEL_LABEL[level][locale.value === 'en' ? 'en' : 'zh']
+  return textForLocale(ACCESS_LEVEL_LABEL[level], uiLocale.value)
 }
 </script>
 
@@ -91,7 +96,7 @@ function levelLabel(level: AccessLevel): string {
       <label class="text-xs mts-muted ml-2">{{ t('accessMatrixArea') }}</label>
       <select v-model="areaFilter" class="mts-input w-auto text-sm">
         <option value="">{{ t('accessMatrixAllAreas') }}</option>
-        <option v-for="a in areas" :key="a" :value="a">{{ a }}</option>
+        <option v-for="a in areas" :key="a.key" :value="a.key">{{ a.label }}</option>
       </select>
     </div>
 
@@ -113,8 +118,8 @@ function levelLabel(level: AccessLevel): string {
             :key="row.id"
             class="border-b border-slate-100 dark:border-slate-800"
           >
-            <td class="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{{ row.area }}</td>
-            <td class="px-3 py-2 text-slate-800 dark:text-slate-100">{{ row.capability }}</td>
+            <td class="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{{ textForLocale(row.area, uiLocale) }}</td>
+            <td class="px-3 py-2 text-slate-800 dark:text-slate-100">{{ textForLocale(row.capability, uiLocale) }}</td>
             <td class="px-3 py-2">
               <span class="inline-flex rounded-full px-2 py-0.5 text-xs" :class="levelClass(row.admin)">
                 {{ levelLabel(row.admin) }}
@@ -126,7 +131,7 @@ function levelLabel(level: AccessLevel): string {
               </span>
             </td>
             <td class="px-3 py-2 font-mono text-xs text-slate-500 dark:text-slate-400">{{ row.route || '—' }}</td>
-            <td class="px-3 py-2 text-xs mts-muted">{{ row.notes || '—' }}</td>
+            <td class="px-3 py-2 text-xs mts-muted">{{ textForLocale(row.notes, uiLocale) || '—' }}</td>
           </tr>
           <tr v-if="!rows.length">
             <td colspan="6" class="px-3 py-8 text-center text-sm mts-muted">{{ t('accessMatrixEmpty') }}</td>

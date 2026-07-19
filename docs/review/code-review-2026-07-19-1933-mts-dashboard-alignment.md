@@ -537,4 +537,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 ## P39（2026-07-20）
 - Metrics/Access/ApiSpec/NotFound i18n
 - 矩阵 level 标签 locale 切换；e2e 加深
-- 状态：已实现；仍不宣称可商用完成（矩阵 capability 行双语可后续）
+- 状态：已实现；矩阵 capability 行双语已由 P40 收口；仍不宣称可商用完成
+
+## P40（2026-07-20）
+- 权限矩阵数据层双语：areaKey + LocalizedText（area/capability/notes）
+- 区域筛选与展示解耦；e2e 覆盖语言切换后的矩阵行
+- 状态：已实现；仍不宣称可商用完成（部署侧验收 + 共享组件 i18n）

@@ -27,14 +27,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page).not.toHaveURL(/login|force-change/)
   await expect(page.getByText(/概览|健康|Healthy|Ready/i).first()).toBeVisible()
   await expect(page.getByTestId('overview-summary')).toBeVisible()
-  await expect(page).toHaveTitle(/概览|Overview/)
+  await expect(page).toHaveTitle(/仪表盘|概览|Overview/)
 
   // 3) Line Protocol 写入
   await page.goto('/write')
   await page.getByRole('main').getByRole('button', { name: 'Line Protocol' }).click()
   await page.getByRole('main').locator('textarea').first().fill('cpu,host=e2e-playwright usage=0.42 1000')
   await page.getByRole('main').getByRole('button', { name: '写入', exact: true }).click()
-  await expect(page.getByRole('main').getByText(/写入成功/)).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('main').getByText(/写入成功/).first()).toBeVisible({ timeout: 20_000 })
 
   // 4) 查询页可达
   await page.goto('/query')
@@ -42,27 +42,27 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // 5) 运维 Flush（确认按钮文案为「执行」）
   await page.goto('/operations')
-  await expect(page.getByRole('main').getByRole('heading', { name: '运维' })).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /^(运维|Operations)$/ })).toBeVisible()
   await page.getByRole('main').getByRole('button', { name: /Flush/ }).first().click()
   await page.getByRole('button', { name: '执行', exact: true }).click()
   await expect(page.getByRole('main').getByText('Flush 已完成').first()).toBeVisible({ timeout: 20_000 })
 
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')
-  await expect(page.getByRole('main').getByText('权限能力矩阵')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵|Capability matrix/ })).toBeVisible()
   await page.goto('/access/grants')
-  await expect(page.getByRole('main').getByText('实时授权总览')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
   await page.goto('/observability/metrics')
-  await expect(page.getByRole('main').getByText('指标浏览')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /指标浏览|Metrics explorer/ })).toBeVisible()
 
   // 7) 存储与 data-snapshot 入口
   await page.goto('/storage')
-  await expect(page.getByRole('main').getByText(/存储|旁路恢复|备份演练/)).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /^(存储|Storage)$/ })).toBeVisible()
   await expect(page.getByTestId('storage-data-snapshot')).toBeVisible()
 
   // 8) 就绪中心：勾选持久化 + 导出/归档入口
   await page.goto('/ops/readiness')
-  await expect(page.getByRole('main').getByText(/就绪中心|Commercial readiness|可商用就绪/)).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /就绪中心|Commercial readiness|可商用就绪/ })).toBeVisible()
   const firstCheckbox = page.locator('[data-testid^="readiness-prod-"]').first()
   await firstCheckbox.check()
   await expect(firstCheckbox).toBeChecked()
@@ -122,14 +122,26 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('overview-go-readiness').click()
   await expect(page).toHaveURL(/ops\/readiness/)
 
-  // 16) 权限矩阵 / 实时授权 / 指标 / 404
+  // 16) 权限矩阵 / 实时授权 / 指标 / 404（含矩阵行双语）
   await page.goto('/access')
-  await expect(page.getByRole('main').getByText(/权限能力矩阵|Capability matrix/)).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵|Capability matrix/ })).toBeVisible()
+  // 使用 table cell，避免命中 select 中隐藏的 option
+  await expect(page.getByRole('main').getByRole('cell', { name: '数据面' }).first()).toBeVisible()
+  await expect(page.getByRole('main').getByRole('cell', { name: /查询 rows/i }).first()).toBeVisible()
+  // 切换语言后 capability 行与区域标签应为英文
+  const localeBtn = page.locator('header button').filter({ has: page.locator('.sr-only', { hasText: /^(zh|en)$/ }) })
+  await localeBtn.click()
+  await expect(page.getByRole('main').getByRole('heading', { name: /Capability matrix/ })).toBeVisible()
+  await expect(page.getByRole('main').getByRole('cell', { name: 'Data plane' }).first()).toBeVisible()
+  await expect(page.getByRole('main').getByRole('cell', { name: /Query rows\/columns\/stream\/explain/i }).first()).toBeVisible()
+  await expect(page.getByRole('main').getByRole('cell', { name: /Non-admin needs read grant/i }).first()).toBeVisible()
+  // 切回中文，避免后续步骤依赖中文文案
+  await localeBtn.click()
+  await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵/ })).toBeVisible()
   await page.goto('/access/grants')
-  await expect(page.getByRole('main').getByText(/实时授权|Live grants/)).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
   await page.goto('/observability/metrics')
-  await expect(page.getByRole('main').getByText(/指标浏览|Metrics explorer/)).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /指标浏览|Metrics explorer/ })).toBeVisible()
   await page.goto('/this-route-should-404')
-  await expect(page.getByText(/页面不存在|Page not found|404/)).toBeVisible()
+  await expect(page.getByText(/页面不存在|Page not found|404/).first()).toBeVisible()
 })
-
