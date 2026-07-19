@@ -18,7 +18,7 @@ func (r *serverRuntime) handleAdminDatabases(writer http.ResponseWriter, request
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, measurementsResponse{Measurements: databases})
+		writeHTTPJSON(writer, http.StatusOK, measurementsResponse{Databases: databases, Measurements: databases})
 	case http.MethodPost:
 		var req databaseRequest
 		if err := decodeHTTPJSON(request, &req); err != nil {

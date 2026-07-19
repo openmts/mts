@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { apiPost } from '@/api/client'
-import { listDatabases, listRetentionPolicies } from '@/api/meta'
+import { listDatabasesDetailed, listRetentionPolicies } from '@/api/meta'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
@@ -24,6 +24,7 @@ const formRows = ref<FormRow[]>([createEmptyRow()])
 const result = ref<{ ok: boolean; message: string } | null>(null)
 const loading = ref(false)
 const actionError = ref('')
+const metaHint = ref('')
 const { success, error: notifyError } = useNotify()
 const { t } = useI18n()
 
@@ -46,11 +47,11 @@ function createEmptyRow(): FormRow {
 }
 
 onMounted(async () => {
-  try {
-    databases.value = await listDatabases()
-    if (databases.value.length) selectedDb.value = databases.value[0]
-  } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '加载数据库失败'
+  const result = await listDatabasesDetailed()
+  databases.value = result.names
+  metaHint.value = result.error || (result.source === 'manual' ? '可手动输入 database' : '')
+  if (databases.value.length && !selectedDb.value) {
+    selectedDb.value = databases.value[0]
   }
 })
 
@@ -175,14 +176,12 @@ const modeLabel = computed(() => ({
 
     <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-4">
       <label class="text-xs text-slate-500">Database
-        <select v-model="selectedDb" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
-          <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
-        </select>
+        <input v-model="selectedDb" list="write-db-list" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="database" />
+        <datalist id="write-db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
       </label>
       <label class="text-xs text-slate-500">RP
-        <select v-model="retentionPolicy" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
-          <option v-for="rp in (retentionPolicies.length?retentionPolicies:['autogen'])" :key="rp" :value="rp">{{ rp }}</option>
-        </select>
+        <input v-model="retentionPolicy" list="write-rp-list" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="autogen" />
+        <datalist id="write-rp-list"><option v-for="rp in (retentionPolicies.length?retentionPolicies:['autogen'])" :key="rp" :value="rp" /></datalist>
       </label>
       <label class="flex items-center gap-2 text-xs text-slate-600 md:mt-6">
         <input v-model="syncWrite" type="checkbox" /> Sync
@@ -191,6 +190,7 @@ const modeLabel = computed(() => ({
         <input v-model="usePointsTyped" type="checkbox" /> points-typed 路径
       </label>
     </div>
+    <p v-if="metaHint" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{{ metaHint }}</p>
 
     <div v-if="writeMode==='form'" class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div v-for="(row, idx) in formRows" :key="idx" class="rounded border border-slate-100 p-3 dark:border-slate-800">

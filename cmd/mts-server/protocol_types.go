@@ -179,7 +179,9 @@ type retentionPoliciesResponse struct {
 }
 
 type measurementsResponse struct {
-	Measurements []string `json:"measurements"`
+	// Databases 为正式字段；Measurements 保留兼容历史客户端。
+	Databases    []string `json:"databases,omitempty"`
+	Measurements []string `json:"measurements,omitempty"`
 }
 
 type fieldsResponse struct {

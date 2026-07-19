@@ -118,11 +118,11 @@ async function confirmDelete() {
 }
 
 async function togglePolicy(policy: DownsamplePolicy) {
-  const action = policy.enabled ? 'pause' : 'resume'
+  const action = policy.enabled ? 'disable' : 'enable'
   try {
     await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`)
     await loadData()
-    success(policy.enabled ? '策略已暂停' : '策略已恢复')
+    success(policy.enabled ? '策略已禁用' : '策略已启用')
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '操作失败'
     notifyError(actionError.value)
@@ -180,7 +180,7 @@ function formatDuration(ns: number) {
             <td class="px-4 py-3 font-medium text-slate-700">{{ policy.name }}</td>
             <td class="px-4 py-3 text-slate-600">{{ policy.source_database }}/{{ policy.source_measurement }} → {{ policy.target_database }}/{{ policy.target_measurement }}</td>
             <td class="px-4 py-3 text-slate-600">{{ formatDuration(policy.interval) }}</td>
-            <td class="px-4 py-3"><span :class="policy.enabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'" class="rounded px-2 py-0.5 text-xs font-medium">{{ policy.enabled ? '运行中' : '已暂停' }}</span></td>
+            <td class="px-4 py-3"><span :class="policy.enabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'" class="rounded px-2 py-0.5 text-xs font-medium">{{ policy.enabled ? '已启用' : '已禁用' }}</span></td>
             <td class="px-4 py-3 text-xs text-slate-500">{{ getStatus(policy.name) ? formatUnix(getStatus(policy.name)!.completed_until_unix) : '-' }}</td>
             <td class="px-4 py-3">
               <div class="flex items-center gap-1">

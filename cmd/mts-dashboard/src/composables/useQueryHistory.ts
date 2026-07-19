@@ -15,6 +15,9 @@ export interface QueryHistoryItem {
     start_time: string
     end_time: string
     fields: string
+    tags?: string
+    order?: 'asc' | 'desc' | ''
+    offset?: string
     limit: string
   }
 }

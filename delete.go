@@ -13,13 +13,13 @@ import (
 // Tags 非空时仅删除精确匹配的 series。删除通过 tombstone 生效，查询立即不可见，
 // 磁盘回收依赖后续 compaction。
 type DeleteRequest struct {
-	Database        string
-	RetentionPolicy string
-	Measurement     string
-	Tags            map[string]string
-	StartTime       int64
-	EndTime         int64
-	Precision       TimePrecision
+	Database        string            `json:"database,omitempty"`
+	RetentionPolicy string            `json:"retention_policy,omitempty"`
+	Measurement     string            `json:"measurement"`
+	Tags            map[string]string `json:"tags,omitempty"`
+	StartTime       int64             `json:"start_time,omitempty"`
+	EndTime         int64             `json:"end_time,omitempty"`
+	Precision       TimePrecision     `json:"precision,omitempty"`
 }
 
 // Delete 删除匹配的本地时序数据。

@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { apiPost, apiPostNDJSONStream, APIClientError } from '@/api/client'
-import { listDatabases, listMeasurements, listRetentionPolicies } from '@/api/meta'
+import { listDatabasesDetailed, listMeasurements, listRetentionPolicies } from '@/api/meta'
 import { parseTimeInt } from '@/utils/time'
 
 export interface QueryResultRow {
@@ -30,6 +30,8 @@ export function useQueryWorkbench() {
   const measurements = ref<string[]>([])
   const retentionPolicies = ref<string[]>([])
   const measurementsLoading = ref(false)
+  const metaSource = ref<'admin' | 'manual' | 'partial'>('admin')
+  const metaHint = ref('')
   const queryForm = ref({
     database: '',
     retention_policy: 'autogen',
@@ -37,12 +39,16 @@ export function useQueryWorkbench() {
     start_time: '',
     end_time: '',
     fields: '',
+    tags: '', // key=value,key2=value2
+    order: 'asc' as 'asc' | 'desc' | '',
+    offset: '',
     limit: '100',
   })
   const queryMode = ref<QueryMode>('rows')
   const rows = ref<QueryResultRow[]>([])
   const queryStats = ref<QueryStatsData | null>(null)
   const rawOutput = ref('')
+  const columnSeries = ref<unknown[]>([])
   const streamMeta = ref({ lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 })
   const actionError = ref('')
   const loading = ref(false)
@@ -50,7 +56,10 @@ export function useQueryWorkbench() {
   let requestSeq = 0
 
   async function loadDatabases() {
-    databases.value = await listDatabases()
+    const result = await listDatabasesDetailed()
+    databases.value = result.names
+    metaSource.value = result.source
+    metaHint.value = result.error || (result.source === 'manual' ? '可手动输入 database' : '')
     if (databases.value.length && !queryForm.value.database) {
       queryForm.value.database = databases.value[0]
     }
@@ -59,23 +68,43 @@ export function useQueryWorkbench() {
   async function loadDbChildren(db: string) {
     measurements.value = []
     retentionPolicies.value = []
-    queryForm.value.measurement = ''
-    queryForm.value.retention_policy = 'autogen'
+    if (!queryForm.value.measurement) queryForm.value.measurement = ''
     if (!db) return
     measurementsLoading.value = true
     try {
-      const [meas, rps] = await Promise.all([
-        listMeasurements(db),
-        listRetentionPolicies(db),
-      ])
+      const meas = await listMeasurements(db)
       measurements.value = meas
-      retentionPolicies.value = rps.map((p) => p.name)
-      if (measurements.value.length) {
-        queryForm.value.measurement = measurements.value[0]
+      if (meas.length && !queryForm.value.measurement) {
+        queryForm.value.measurement = meas[0]
+      }
+      try {
+        const rps = await listRetentionPolicies(db)
+        retentionPolicies.value = rps.map((p) => p.name)
+        if (retentionPolicies.value.length && !retentionPolicies.value.includes(queryForm.value.retention_policy)) {
+          queryForm.value.retention_policy = retentionPolicies.value[0]
+        }
+      } catch {
+        // RP 列表失败时允许手填
+        retentionPolicies.value = []
       }
     } finally {
       measurementsLoading.value = false
     }
+  }
+
+  function parseTags(text: string): Record<string, string> {
+    const tags: Record<string, string> = {}
+    for (const part of text.split(',')) {
+      const s = part.trim()
+      if (!s) continue
+      const eq = s.indexOf('=')
+      if (eq <= 0) throw new Error(`tag 格式无效: ${s}（需要 key=value）`)
+      const k = s.slice(0, eq).trim()
+      const v = s.slice(eq + 1).trim()
+      if (!k) throw new Error(`tag key 为空: ${s}`)
+      tags[k] = v
+    }
+    return tags
   }
 
   function buildQuery(): Record<string, unknown> {
@@ -97,6 +126,21 @@ export function useQueryWorkbench() {
     }
     if (queryForm.value.fields) {
       query.fields = queryForm.value.fields.split(',').map((s) => s.trim()).filter(Boolean)
+    }
+    if (queryForm.value.tags.trim()) {
+      query.tags = parseTags(queryForm.value.tags)
+    }
+    if (queryForm.value.order === 'asc' || queryForm.value.order === 'desc') {
+      // QueryOrder: by=1(time), direction=1(asc)/2(desc)
+      query.order = {
+        by: 1,
+        direction: queryForm.value.order === 'desc' ? 2 : 1,
+      }
+    }
+    if (queryForm.value.offset) {
+      const off = parseTimeInt(queryForm.value.offset)
+      if (off === null || off < 0) throw new Error('offset 必须是非负整数')
+      query.offset = off
     }
     if (queryForm.value.limit) {
       const lim = parseTimeInt(queryForm.value.limit)
@@ -125,6 +169,7 @@ export function useQueryWorkbench() {
     actionError.value = ''
     loading.value = true
     rows.value = []
+    columnSeries.value = []
     queryStats.value = null
     rawOutput.value = ''
     streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
@@ -163,6 +208,7 @@ export function useQueryWorkbench() {
           { signal },
         )
         if (seq !== requestSeq) return
+        columnSeries.value = data.columns ?? []
         rawOutput.value = JSON.stringify(data.columns, null, 2)
         if (data.stats) queryStats.value = data.stats
       } else {
@@ -232,9 +278,12 @@ export function useQueryWorkbench() {
     measurements,
     retentionPolicies,
     measurementsLoading,
+    metaSource,
+    metaHint,
     queryForm,
     queryMode,
     rows,
+    columnSeries,
     queryStats,
     rawOutput,
     streamMeta,
