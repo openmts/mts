@@ -4,8 +4,16 @@ import { useRouter } from 'vue-router'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
+import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
+import { copyText } from '@/utils/clipboard'
+import {
+  DEPLOY_TEMPLATES,
+  deployKitFilename,
+  formatDeployKitMarkdown,
+  formatDeployTemplateLabel,
+} from '@/utils/deployTemplates'
 import { textForLocale, type LocaleCode } from '@/utils/localizedText'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -72,6 +80,7 @@ const { isAdmin, currentUser } = useAuth()
 const { t, locale } = useI18n()
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const router = useRouter()
+const { success, error: notifyError } = useNotify()
 
 const state = ref<ReadinessState>(loadReadinessState())
 const doctor = ref<DoctorResponse | null>(null)
@@ -243,11 +252,28 @@ const quickActions = [
   { id: 'edge-https', labelKey: 'readinessGoEdgeHttps', path: '/storage#edge-https' },
 ] as const
 
-const backupScriptHint = `export MTS_BASE_URL='https://mts.example.com'
-export MTS_ADMIN_TOKEN='***'
-export MTS_BACKUP_REMOTE='backup@host:/var/backups/mts'
+const deployTemplates = DEPLOY_TEMPLATES
+const backupScriptHint = deployTemplates.find((x) => x.id === 'backup-env')?.body
+  ? `${deployTemplates.find((x) => x.id === 'backup-env')!.body.trim()}
 ./scripts/mts-backup.sh --dry-run
 ./scripts/mts-backup.sh`
+  : `export MTS_BASE_URL='https://mts.example.com'
+export MTS_ADMIN_TOKEN='***'
+./scripts/mts-backup.sh`
+
+async function copyDeployBody(body: string) {
+  const r = await copyText(body)
+  if (r.ok) success(t.value('readinessCopied'))
+  else notifyError(t.value('readinessCopyFailed'))
+}
+
+function downloadDeployKit() {
+  const md = formatDeployKitMarkdown(uiLocale.value)
+  downloadText(deployKitFilename(), md, 'text/markdown')
+  success(t.value('readinessDeployKitDownloaded'))
+  flash('ok', t.value('readinessDeployKitDownloaded'))
+}
+
 
 onMounted(() => {
   if (isAdmin.value) {
@@ -387,13 +413,51 @@ onMounted(() => {
           {{ t(a.labelKey) }}
         </button>
       </div>
-      <div class="mt-4">
-        <p class="mb-1 flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-200">
-          <FileCode2 class="h-3.5 w-3.5" />
-          {{ t('readinessBackupScript') }}
-        </p>
-        <p class="mb-2 text-xs mts-muted">{{ t('readinessBackupScriptHint') }}</p>
-        <pre class="overflow-x-auto rounded bg-slate-950 p-3 text-[11px] text-emerald-300">{{ backupScriptHint }}</pre>
+      <div class="mt-4 space-y-3" data-testid="readiness-deploy-kit">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p class="mb-1 flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-200">
+              <FileCode2 class="h-3.5 w-3.5" />
+              {{ t('readinessDeployKit') }}
+            </p>
+            <p class="text-xs mts-muted">{{ t('readinessDeployKitHint') }}</p>
+            <p class="mt-1 text-[11px] text-amber-700 dark:text-amber-200">{{ t('readinessDeployManualNote') }}</p>
+          </div>
+          <button
+            type="button"
+            class="mts-btn"
+            data-testid="readiness-deploy-kit-download"
+            @click="downloadDeployKit"
+          >
+            <Download class="h-3.5 w-3.5" />
+            {{ t('readinessDeployKitDownload') }}
+          </button>
+        </div>
+        <div
+          v-for="tpl in deployTemplates"
+          :key="tpl.id"
+          class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+          :data-testid="`deploy-tpl-${tpl.id}`"
+        >
+          <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-xs font-medium text-slate-800 dark:text-slate-100">{{ formatDeployTemplateLabel(tpl, uiLocale) }}</p>
+              <p class="text-[11px] mts-muted">{{ textForLocale(tpl.description, uiLocale) }} · <span class="font-mono">{{ tpl.filename }}</span></p>
+            </div>
+            <button
+              type="button"
+              class="mts-btn"
+              :data-testid="`deploy-copy-${tpl.id}`"
+              @click="copyDeployBody(tpl.body)"
+            >{{ t('readinessCopy') }}</button>
+          </div>
+          <pre class="max-h-40 overflow-auto rounded bg-slate-950 p-3 text-[11px] text-emerald-300">{{ tpl.body }}</pre>
+        </div>
+        <div>
+          <p class="mb-1 text-xs font-medium text-slate-700 dark:text-slate-200">{{ t('readinessBackupScript') }}</p>
+          <p class="mb-2 text-xs mts-muted">{{ t('readinessBackupScriptHint') }}</p>
+          <pre class="overflow-x-auto rounded bg-slate-950 p-3 text-[11px] text-emerald-300">{{ backupScriptHint }}</pre>
+        </div>
       </div>
     </div>
 
