@@ -2,7 +2,6 @@ package sstable
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/openmts/mts/internal/model"
 )
@@ -39,26 +38,20 @@ func readWindowedFloatConstStep(
 	if fullCount == 0 || len(timestamps) == 0 {
 		return nil, nil
 	}
-	baseBits, err := reader.fixedInt64("float const-step base")
+	params, err := readFloatConstStepParams(reader)
 	if err != nil {
 		return nil, err
 	}
-	stepBits, err := reader.fixedInt64("float const-step step")
-	if err != nil {
-		return nil, err
-	}
-	base := math.Float64frombits(uint64(baseBits))
-	step := math.Float64frombits(uint64(stepBits))
 	samples := make([]model.VersionedSample, 0, len(timestamps))
 	for offset, timestamp := range timestamps {
-		global := start + offset
 		if timestamp < query.Start || timestamp > query.End {
 			continue
 		}
+		pageIndex := start + offset
 		samples = append(samples, model.VersionedSample{
 			Timestamp: timestamp,
 			WriteSeq:  writeSeqs[offset],
-			Value:     model.Float64Value(base + float64(global)*step),
+			Value:     model.Float64Value(floatConstStepValue(params, pageIndex)),
 		})
 	}
 	return samples, nil

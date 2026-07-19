@@ -31,8 +31,8 @@ func TestFloatConstStepRoundTripForScaleLikeSeries(t *testing.T) {
 			if codec != compressionConstStep && codec != compressionRLE && codec != compressionDelta {
 				t.Fatalf("codec=%d want const-step/rle/delta", codec)
 			}
-			if codec == compressionConstStep && len(payload) != 16 {
-				t.Fatalf("const-step payload len=%d want 16", len(payload))
+			if codec == compressionConstStep && len(payload) != 16 && len(payload) != 17 {
+				t.Fatalf("const-step payload len=%d want 16/17 or 17", len(payload))
 			}
 			if len(payload) >= 256*8 {
 				t.Fatalf("payload too large: %d", len(payload))
@@ -244,5 +244,42 @@ func TestFloatIntSamplePath(t *testing.T) {
 	})
 	if _, ok := floatSamplesAsIntSamples(inf); ok {
 		t.Fatal("inf accepted")
+	}
+}
+
+func TestDetectFloatIndexScaleForPageLocalSeries(t *testing.T) {
+	samples := make([]model.VersionedSample, 64)
+	for i := range samples {
+		global := 1000 + i
+		samples[i] = model.VersionedSample{
+			Timestamp: int64(i),
+			Value:     model.Float64Value(float64(global) * 1.1),
+		}
+	}
+	start, scale, ok := detectFloatIndexScale(samples)
+	if !ok {
+		t.Fatal("detectFloatIndexScale() = false")
+	}
+	if start != 1000 || scale != 1.1 {
+		t.Fatalf("start=%d scale=%v want 1000/1.1", start, scale)
+	}
+	codec, payload, err := encodeFloatValues(samples, "xor")
+	if err != nil {
+		t.Fatalf("encodeFloatValues() error = %v", err)
+	}
+	if codec != compressionConstStep {
+		t.Fatalf("codec=%d want const-step", codec)
+	}
+	if len(payload) != 17 {
+		t.Fatalf("payload len=%d want 17", len(payload))
+	}
+	values, err := readCompressedFloatValues(newBlockReader(payload), codec, len(samples))
+	if err != nil {
+		t.Fatalf("decode error = %v", err)
+	}
+	for i, sample := range samples {
+		if values[i].Float64 != sample.Value.Float64 {
+			t.Fatalf("value[%d]=%v want %v", i, values[i].Float64, sample.Value.Float64)
+		}
 	}
 }

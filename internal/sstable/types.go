@@ -129,6 +129,7 @@ type Part struct {
 	files          *partReadFiles
 	componentSizes map[string]int64
 	stats          *readStats
+	pageCache      *pageDecodeCache
 }
 
 type partReadFiles struct {

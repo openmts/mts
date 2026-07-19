@@ -25,6 +25,9 @@ func encodeTypedValues(column model.ColumnData, opts model.CompressionOptions) (
 }
 
 func encodeFloatValues(samples []model.VersionedSample, policy string) (byte, []byte, error) {
+	if len(samples) == 0 {
+		return compressionPlain, nil, nil
+	}
 	selected := compressionPolicy(policy, "xor")
 	if selected == "plain" {
 		return compressionPlain, appendFloatValues(make([]byte, 0, len(samples)*8), samples), nil
@@ -33,13 +36,9 @@ func encodeFloatValues(samples []model.VersionedSample, policy string) (byte, []
 	bestCodec := compressionPlain
 	best := plain
 
-	// 1) 等差数列：base + i*step（覆盖 scale 的 f0..f4 / host 步进）。
-	if base, step, ok := detectFloatConstStep(samples); ok {
-		candidate := appendFloatConstStepValues(make([]byte, 0, 16), base, step)
-		if len(candidate) < len(best) {
-			bestCodec = compressionConstStep
-			best = candidate
-		}
+	// 1) 等差 / index*scale（覆盖 scale 的 f0..f4）。读路径 O(窗口) 且载荷极小，优先选用。
+	if payload, ok := encodeFloatConstStepPayload(samples); ok {
+		return compressionConstStep, payload, nil
 	}
 
 	// 2) 整数值 float：复用 int delta / RLE。

@@ -60,6 +60,7 @@ func openPart(path string, validateDeep bool) (*Part, error) {
 		seriesRows:     seriesRows,
 		files:          files,
 		componentSizes: componentSizes,
+		pageCache:      newPageDecodeCache(defaultPageDecodeCacheLimit),
 	}
 	if err := validateOpenedPart(part, validateDeep); err != nil {
 		closeErr := files.close()
@@ -422,11 +423,22 @@ func (p *Part) readValueColumnLazyTime(
 	}
 	// 压缩 value page 自带 timestamps，无需加载行级 time block。
 	if len(data) > 0 && data[0] == valueEncodingPageCompressed {
+		cacheKey := pageDecodeKey{
+			offset: ref.ValueRef.Offset,
+			size:   ref.ValueRef.Size,
+			start:  query.Start,
+			end:    query.End,
+		}
+		if samples, ok := p.pageCache.get(cacheKey); ok {
+			payload.Release()
+			return columnFromBlock(seriesID, valueBlock{Samples: samples}), *timeLoaded, nil
+		}
 		block, err := unmarshalCompressedValueBlock(data, query)
 		payload.Release()
 		if err != nil {
 			return model.ColumnData{}, false, fmt.Errorf("decode value block: %w", err)
 		}
+		p.pageCache.put(cacheKey, block.Samples)
 		return columnFromBlock(seriesID, block), *timeLoaded, nil
 	}
 	if err := p.ensureRowTimestamps(timeRef, rowTimestamps, timeLoaded, query); err != nil {
@@ -581,6 +593,14 @@ func (p *Part) readValuePagesFromRefs(
 }
 
 func (p *Part) readValuePage(ref blockRef, rowTimestamps []int64, query Query) (valueBlock, error) {
+	cacheKey := pageDecodeKey{offset: ref.Offset, size: ref.Size, start: query.Start, end: query.End}
+	if samples, ok := p.pageCache.get(cacheKey); ok {
+		if p.stats != nil {
+			p.stats.ValuePagesRead++
+		}
+		recordValuePageRead(query)
+		return valueBlock{Samples: samples}, nil
+	}
 	payload, err := p.readBlockPayload(valuesFile, ref)
 	if err != nil {
 		return valueBlock{}, err
@@ -594,6 +614,7 @@ func (p *Part) readValuePage(ref blockRef, rowTimestamps []int64, query Query) (
 	if err != nil {
 		return valueBlock{}, fmt.Errorf("decode value page: %w", err)
 	}
+	p.pageCache.put(cacheKey, block.Samples)
 	return block, nil
 }
 

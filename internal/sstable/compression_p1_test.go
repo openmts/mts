@@ -577,7 +577,8 @@ func TestGorillaReuseAndBitEdges(t *testing.T) {
 	// consumeAligned with short rest should fail
 	br := &blockReader{rest: []byte{0x80}}
 	bitR := newBitReader(bytes.Repeat([]byte{0xff}, 2))
-	bitR.pos = 9
+	bitR.byte = 1
+	bitR.bit = 1
 	if err := bitR.consumeAligned(br); err == nil {
 		t.Fatal("consumeAligned short rest error = nil")
 	}
@@ -678,7 +679,8 @@ func TestP1CoverageBoosters(t *testing.T) {
 	// consumeAligned when usedBytes > len(data)
 	br := &blockReader{rest: bytes.Repeat([]byte{1}, 8)}
 	bitR := newBitReader([]byte{0xff})
-	bitR.pos = 100
+	bitR.byte = 12
+	bitR.bit = 4
 	if err := bitR.consumeAligned(br); err == nil {
 		t.Fatal("consumeAligned oversize error = nil")
 	}

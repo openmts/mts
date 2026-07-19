@@ -37,9 +37,11 @@ func (w *bitWriter) bytes() []byte {
 }
 
 // bitReader 按 MSB-first 读取位流。
+// 使用缓冲 bit 寄存器，避免 Gorilla 热路径中逐位 /8 %8 计算。
 type bitReader struct {
 	data []byte
-	pos  int
+	byte int
+	bit  int // 当前字节内已消费位数 [0,8)
 }
 
 func newBitReader(data []byte) *bitReader {
@@ -47,13 +49,16 @@ func newBitReader(data []byte) *bitReader {
 }
 
 func (r *bitReader) readBit() (uint64, error) {
-	byteIndex := r.pos / 8
-	if byteIndex >= len(r.data) {
+	if r.byte >= len(r.data) {
 		return 0, fmt.Errorf("truncated bit stream")
 	}
-	shift := 7 - (r.pos % 8)
-	bit := uint64((r.data[byteIndex] >> uint(shift)) & 1)
-	r.pos++
+	shift := 7 - r.bit
+	bit := uint64((r.data[r.byte] >> uint(shift)) & 1)
+	r.bit++
+	if r.bit == 8 {
+		r.bit = 0
+		r.byte++
+	}
 	return bit, nil
 }
 
@@ -61,19 +66,40 @@ func (r *bitReader) readBits(n int) (uint64, error) {
 	if n <= 0 {
 		return 0, nil
 	}
+	if n > 64 {
+		return 0, fmt.Errorf("readBits n=%d exceeds 64", n)
+	}
 	var value uint64
-	for index := 0; index < n; index++ {
-		bit, err := r.readBit()
-		if err != nil {
-			return 0, err
+	for n > 0 {
+		if r.byte >= len(r.data) {
+			return 0, fmt.Errorf("truncated bit stream")
 		}
-		value = (value << 1) | bit
+		avail := 8 - r.bit
+		take := n
+		if take > avail {
+			take = avail
+		}
+		// 从当前字节 MSB 侧取 take 位。
+		shift := avail - take
+		mask := byte((1 << uint(take)) - 1)
+		chunk := uint64((r.data[r.byte] >> uint(shift)) & mask)
+		value = (value << uint(take)) | chunk
+		r.bit += take
+		if r.bit == 8 {
+			r.bit = 0
+			r.byte++
+		}
+		n -= take
 	}
 	return value, nil
 }
 
+func (r *bitReader) bitsRead() int {
+	return r.byte*8 + r.bit
+}
+
 func (r *bitReader) consumeAligned(reader *blockReader) error {
-	usedBytes := (r.pos + 7) / 8
+	usedBytes := (r.bitsRead() + 7) / 8
 	if usedBytes > len(r.data) {
 		return fmt.Errorf("truncated bit stream payload")
 	}
