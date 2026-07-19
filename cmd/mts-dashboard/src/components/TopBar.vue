@@ -5,7 +5,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Menu, Moon, Sun, Languages, Search } from 'lucide-vue-next'
+import { Menu, Moon, Sun, Languages, Search, Keyboard } from 'lucide-vue-next'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
 import {
   emptySessionGuardState,
@@ -13,6 +13,8 @@ import {
   shouldShowSessionBadge,
   type SessionGuardState,
 } from '@/utils/sessionGuard'
+import { resolveRouteTitleKey } from '@/utils/pageTitle'
+import type { MessageKey } from '@/i18n/messages'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,31 +27,12 @@ let timer: ReturnType<typeof setInterval> | null = null
 const guardState = ref<SessionGuardState>(emptySessionGuardState())
 let expireInFlight = false
 
-const emit = defineEmits<{ 'toggle-sidebar': []; 'open-command-palette': [] }>()
+const emit = defineEmits<{ 'toggle-sidebar': []; 'open-command-palette': []; 'open-shortcuts': [] }>()
 
 const pageTitle = computed(() => {
-  const name = route.name as string | undefined
-  const map: Record<string, string> = {
-    Overview: t.value('overview'),
-    Databases: t.value('databases'),
-    Users: t.value('users'),
-    Config: t.value('config'),
-    Operations: t.value('operations'),
-    Downsample: t.value('downsample'),
-    Query: t.value('query'),
-    Audit: t.value('audit'),
-    ApiSpec: t.value('apiSpec'),
-    Storage: t.value('storage'),
-    Readiness: t.value('readiness'),
-    About: t.value('about'),
-    Account: t.value('account'),
-    Write: t.value('write'),
-    AccessMatrix: t.value('accessMatrix'),
-    AccessGrants: t.value('accessGrants'),
-    Metrics: t.value('metrics'),
-    NotFound: '404',
-  }
-  return name ? (map[name] ?? name) : ''
+  const key = resolveRouteTitleKey(route.name)
+  if (!key) return route.name ? String(route.name) : ''
+  return t.value(key as MessageKey)
 })
 
 const sessionView = computed(() => {
@@ -148,6 +131,16 @@ onBeforeUnmount(() => {
         <Search class="h-3.5 w-3.5" />
         <span>{{ t('commandPaletteShort') }}</span>
         <kbd class="rounded border border-slate-200 px-1 text-[10px] dark:border-slate-600">⌘K</kbd>
+      </button>
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+        data-testid="topbar-shortcuts"
+        :title="t('shortcutHelpTitle')"
+        @click="emit('open-shortcuts')"
+      >
+        <Keyboard class="h-3.5 w-3.5" />
+        <span class="hidden sm:inline">?</span>
       </button>
       <span
         v-if="showSessionBadge && sessionView.label"

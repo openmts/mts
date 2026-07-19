@@ -519,3 +519,8 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 降采样对话框 focus trap
 - 脏表单离开确认 i18n
 - 状态：已实现；仍不宣称可商用完成
+
+## P36（2026-07-20）
+- ShortcutsHelp + recent routes
+- TopBar 标题复用 pageTitle
+- 状态：已实现；仍不宣称可商用完成
