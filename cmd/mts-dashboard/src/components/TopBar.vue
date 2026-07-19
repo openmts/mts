@@ -5,7 +5,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Menu, Moon, Sun, Languages } from 'lucide-vue-next'
+import { Menu, Moon, Sun, Languages, Search } from 'lucide-vue-next'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
 import {
   emptySessionGuardState,
@@ -25,7 +25,7 @@ let timer: ReturnType<typeof setInterval> | null = null
 const guardState = ref<SessionGuardState>(emptySessionGuardState())
 let expireInFlight = false
 
-defineEmits<{ 'toggle-sidebar': [] }>()
+const emit = defineEmits<{ 'toggle-sidebar': []; 'open-command-palette': [] }>()
 
 const pageTitle = computed(() => {
   const name = route.name as string | undefined
@@ -131,13 +131,24 @@ onBeforeUnmount(() => {
     <div class="flex items-center gap-3">
       <button
         class="rounded p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:hidden"
-        @click="$emit('toggle-sidebar')"
+        @click="emit('toggle-sidebar')"
       >
         <Menu class="h-5 w-5" />
       </button>
       <h1 class="max-w-[40vw] truncate text-base font-medium text-slate-800 dark:text-slate-100 sm:max-w-none sm:text-lg">{{ pageTitle }}</h1>
     </div>
     <div class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+      <button
+        type="button"
+        class="hidden items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 sm:inline-flex"
+        :title="t('commandPaletteTitle')"
+        data-testid="topbar-command-palette"
+        @click="emit('open-command-palette')"
+      >
+        <Search class="h-3.5 w-3.5" />
+        <span>{{ t('commandPaletteShort') }}</span>
+        <kbd class="rounded border border-slate-200 px-1 text-[10px] dark:border-slate-600">⌘K</kbd>
+      </button>
       <span
         v-if="showSessionBadge && sessionView.label"
         class="hidden rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline"

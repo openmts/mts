@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import { useI18n } from '@/composables/useI18n'
+import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
-import { ScrollText, Download, RefreshCw } from 'lucide-vue-next'
+import {
+  auditRangeToLocalInputs,
+  filterAuditEvents,
+  type AuditQuickRange,
+} from '@/utils/commandPalette'
+import { ScrollText, Download, RefreshCw, Eraser } from 'lucide-vue-next'
 
 interface User { name: string; display_name?: string }
 interface UsersResponse { users: User[] }
@@ -22,15 +29,26 @@ interface AuditResponse { events: AuditEvent[]; total?: number }
 
 const { isAdmin } = useAuth()
 const { t } = useI18n()
-const { success, error: notifyError } = useNotify()
+const { success, error: notifyError, warn } = useNotify()
 const users = ref<User[]>([])
 const selectedUser = ref('')
 const actionFilter = ref('')
 const sinceLocal = ref('')
 const untilLocal = ref('')
+const clientQuery = ref('')
 const auditEvents = ref<AuditEvent[]>([])
 const loading = ref(false)
 const loadError = ref('')
+
+const displayedEvents = computed(() => filterAuditEvents(auditEvents.value, clientQuery.value))
+const filteredCount = computed(() => displayedEvents.value.length)
+
+const quickRanges: { id: AuditQuickRange; labelKey: MessageKey }[] = [
+  { id: '1h', labelKey: 'auditRange1h' },
+  { id: '24h', labelKey: 'auditRange24h' },
+  { id: '7d', labelKey: 'auditRange7d' },
+  { id: '30d', labelKey: 'auditRange30d' },
+]
 
 onMounted(async () => {
   if (!isAdmin.value) return
@@ -66,7 +84,6 @@ async function loadAudit() {
     const data = await apiGet<AuditResponse>(`/api/v1/admin/audit${qs ? `?${qs}` : ''}`)
     auditEvents.value = data.events ?? []
   } catch (e) {
-    // fallback: per-user endpoint if global unavailable
     if (selectedUser.value) {
       try {
         const data = await apiGet<AuditResponse>(`/api/v1/users/${encodeURIComponent(selectedUser.value)}/audit`)
@@ -74,7 +91,7 @@ async function loadAudit() {
         loadError.value = ''
         return
       } catch (e2) {
-        loadError.value = e2 instanceof Error ? e2.message : '加载审计日志失败'
+        loadError.value = formatCaughtError(e2)
       }
     } else {
       loadError.value = formatCaughtError(e)
@@ -86,25 +103,52 @@ async function loadAudit() {
   }
 }
 
-function exportJSON() {
-  const blob = new Blob([JSON.stringify(auditEvents.value, null, 2)], { type: 'application/json' })
+function applyQuickRange(range: AuditQuickRange) {
+  const r = auditRangeToLocalInputs(range)
+  sinceLocal.value = r.since
+  untilLocal.value = r.until
+  void loadAudit()
+}
+
+function clearFilters() {
+  selectedUser.value = ''
+  actionFilter.value = ''
+  sinceLocal.value = ''
+  untilLocal.value = ''
+  clientQuery.value = ''
+  void loadAudit()
+}
+
+function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `mts-audit-${Date.now()}.json`
+  a.download = filename
   a.rel = 'noopener'
   document.body.appendChild(a)
   a.click()
-  document.body.removeChild(a)
+  a.remove()
   URL.revokeObjectURL(url)
-  success('审计日志已导出 JSON')
+}
+
+function exportJSON() {
+  if (!displayedEvents.value.length) {
+    warn(t.value('auditExportEmpty'))
+    return
+  }
+  const blob = new Blob([JSON.stringify(displayedEvents.value, null, 2)], { type: 'application/json' })
+  downloadBlob(`mts-audit-${Date.now()}.json`, blob)
+  success(t.value('auditExportJSONOk'))
 }
 
 function exportCSV() {
-  if (!auditEvents.value.length) return
+  if (!displayedEvents.value.length) {
+    warn(t.value('auditExportEmpty'))
+    return
+  }
   const header = ['time', 'user_name', 'action', 'database', 'detail']
   const lines = [header.join(',')]
-  for (const e of auditEvents.value) {
+  for (const e of displayedEvents.value) {
     const cols = [e.time, e.user_name, e.action, e.database || '', e.detail || ''].map((v) => {
       const s = String(v ?? '')
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -112,96 +156,128 @@ function exportCSV() {
     lines.push(cols.join(','))
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `mts-audit-${Date.now()}.csv`
-  a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-  success('审计日志已导出 CSV')
+  downloadBlob(`mts-audit-${Date.now()}.csv`, blob)
+  success(t.value('auditExportCSVOk'))
 }
-
-const filteredCount = computed(() => auditEvents.value.length)
 </script>
 
 <template>
   <PermissionDenied v-if="!isAdmin" />
   <div v-else class="space-y-6">
-    <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ loadError }}</p>
-    <p class="mts-alert-warn">审计同时写入内存环与 <code>_internal.audit_log</code>；列表会合并持久化读回，重启后仍可查询。</p>
+    <div>
+      <h1 class="mts-title flex items-center gap-2">
+        <ScrollText class="h-5 w-5" />
+        {{ t('auditTitle') }}
+      </h1>
+      <p class="text-xs mts-muted">{{ t('auditDesc') }}</p>
+    </div>
 
-    <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-5">
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('user') }}
-        <select v-model="selectedUser" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800">
-          <option value="">全部用户</option>
+    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
+    <p class="mts-alert-warn">{{ t('auditHint') }}</p>
+
+    <div class="flex flex-wrap gap-2" data-testid="audit-quick-ranges">
+      <button
+        v-for="r in quickRanges"
+        :key="r.id"
+        type="button"
+        class="mts-btn"
+        :data-testid="`audit-range-${r.id}`"
+        @click="applyQuickRange(r.id)"
+      >
+        {{ t(r.labelKey as MessageKey) }}
+      </button>
+      <button type="button" class="mts-btn" data-testid="audit-clear-filters" @click="clearFilters">
+        <Eraser class="h-3.5 w-3.5" />
+        {{ t('auditClearFilters') }}
+      </button>
+    </div>
+
+    <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-6">
+      <label class="text-xs mts-muted">{{ t('user') }}
+        <select v-model="selectedUser" class="mts-input mt-1" data-testid="audit-user">
+          <option value="">{{ t('auditAllUsers') }}</option>
           <option v-for="user in users" :key="user.name" :value="user.name">{{ user.display_name || user.name }}</option>
         </select>
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('action') }}
-        <input v-model="actionFilter" placeholder="login / flush ..." class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
+      <label class="text-xs mts-muted">{{ t('action') }}
+        <input
+          v-model="actionFilter"
+          :placeholder="t('auditActionPlaceholder')"
+          class="mts-input mt-1"
+          data-testid="audit-action"
+        />
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('since') }}
-        <input v-model="sinceLocal" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
+      <label class="text-xs mts-muted">{{ t('since') }}
+        <input v-model="sinceLocal" type="datetime-local" class="mts-input mt-1" data-testid="audit-since" />
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('until') }}
-        <input v-model="untilLocal" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
+      <label class="text-xs mts-muted">{{ t('until') }}
+        <input v-model="untilLocal" type="datetime-local" class="mts-input mt-1" data-testid="audit-until" />
       </label>
-      <div class="flex items-end gap-2">
-        <button :disabled="loading" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" @click="loadAudit">
-          <span class="inline-flex items-center gap-1"><RefreshCw class="h-3.5 w-3.5" />{{ loading ? t('loading') : t('filter') }}</span>
+      <label class="text-xs mts-muted">{{ t('auditClientFilter') }}
+        <input
+          v-model="clientQuery"
+          :placeholder="t('auditClientFilterPlaceholder')"
+          class="mts-input mt-1"
+          data-testid="audit-client-filter"
+        />
+      </label>
+      <div class="flex flex-wrap items-end gap-2">
+        <button type="button" :disabled="loading" class="mts-btn-primary" data-testid="audit-reload" @click="loadAudit">
+          <RefreshCw class="h-3.5 w-3.5" />
+          {{ loading ? t('loading') : t('filter') }}
         </button>
-        <button class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700" :disabled="!auditEvents.length" @click="exportJSON">
-          <span class="inline-flex items-center gap-1"><Download class="h-3.5 w-3.5" />{{ t('export') }}</span>
+        <button type="button" class="mts-btn" data-testid="audit-export-json" @click="exportJSON">
+          <Download class="h-3.5 w-3.5" />
+          {{ t('export') }}
         </button>
-        <button class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700" :disabled="!auditEvents.length" @click="exportCSV">CSV</button>
+        <button type="button" class="mts-btn" data-testid="audit-export-csv" @click="exportCSV">CSV</button>
       </div>
     </div>
 
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:border-slate-800">
-        <span class="inline-flex items-center gap-1"><ScrollText class="h-3.5 w-3.5" /> 审计事件</span>
-        <span>{{ filteredCount }} 条</span>
+      <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs mts-muted dark:border-slate-800">
+        <span class="inline-flex items-center gap-1"><ScrollText class="h-3.5 w-3.5" /> {{ t('auditEvents') }}</span>
+        <span data-testid="audit-count">{{ filteredCount }} / {{ auditEvents.length }}</span>
       </div>
-      <div v-if="!auditEvents.length">
+      <div v-if="!displayedEvents.length">
         <EmptyState
           v-if="loading"
           compact
           :title="t('loading')"
-          description="正在拉取审计事件…"
+          :description="t('auditLoadingDesc')"
         />
         <EmptyState
           v-else
-          title="暂无审计记录"
-          description="可调整用户/时间筛选后重试；审计同时来自内存环与 _internal.audit_log。"
+          :title="t('auditEmptyTitle')"
+          :description="t('auditEmptyDesc')"
         >
           <template #action>
-            <button type="button" class="mts-btn-primary" :disabled="loading" @click="loadAudit">刷新</button>
+            <button type="button" class="mts-btn-primary" :disabled="loading" @click="loadAudit">{{ t('refresh') }}</button>
           </template>
         </EmptyState>
       </div>
-      <table v-else class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-200 dark:border-slate-700 text-left dark:border-slate-800">
-            <th class="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">时间</th>
-            <th class="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">用户</th>
-            <th class="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">操作</th>
-            <th class="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">库</th>
-            <th class="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">详情</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(evt, idx) in auditEvents" :key="idx" class="border-b border-slate-100 last:border-b-0 dark:border-slate-800">
-            <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{{ evt.time }}</td>
-            <td class="px-4 py-3 text-xs text-slate-700 dark:text-slate-200">{{ evt.user_name }}</td>
-            <td class="px-4 py-3 text-xs font-medium text-slate-700 dark:text-slate-200">{{ evt.action }}</td>
-            <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ evt.database || '—' }}</td>
-            <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ evt.detail || '—' }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="overflow-x-auto">
+        <table class="w-full text-sm" data-testid="audit-table">
+          <thead>
+            <tr class="border-b border-slate-200 text-left dark:border-slate-700">
+              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('auditColTime') }}</th>
+              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('user') }}</th>
+              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('action') }}</th>
+              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('database') }}</th>
+              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('auditColDetail') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(evt, idx) in displayedEvents" :key="idx" class="border-b border-slate-100 last:border-b-0 dark:border-slate-800">
+              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{{ evt.time }}</td>
+              <td class="px-4 py-3 text-xs text-slate-700 dark:text-slate-200">{{ evt.user_name }}</td>
+              <td class="px-4 py-3 text-xs font-medium text-slate-700 dark:text-slate-200">{{ evt.action }}</td>
+              <td class="px-4 py-3 text-xs mts-muted">{{ evt.database || '—' }}</td>
+              <td class="px-4 py-3 text-xs mts-muted">{{ evt.detail || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>

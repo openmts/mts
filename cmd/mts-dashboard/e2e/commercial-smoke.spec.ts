@@ -79,4 +79,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/account')
   await expect(page.getByTestId('account-password-form')).toBeVisible()
   await expect(page.getByTestId('session-badge')).toBeVisible()
+
+  // 11) 命令面板跳转
+  await page.keyboard.press('Control+KeyK')
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('audit')
+  await page.getByTestId('command-item-audit').click()
+  await expect(page).toHaveURL(/\/audit/)
+  await expect(page.getByTestId('audit-quick-ranges')).toBeVisible()
 })
