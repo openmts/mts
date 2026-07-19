@@ -4,8 +4,11 @@ import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
+import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { CheckCircle, Camera, Download, Trash2, RefreshCw } from 'lucide-vue-next'
 
 interface ValidateResponse { ok: boolean; data_dir: string; health: Record<string, unknown> }
@@ -22,56 +25,70 @@ const validateResult = ref<ValidateResponse | null>(null)
 const snapshotResult = ref<SnapshotResponse | null>(null)
 const snapshots = ref<SnapshotInfo[]>([])
 const exportData = ref<ExportData | null>(null)
-const actionError = ref('')
+const actionResult = ref<ActionResult | null>(null)
 const loading = ref('')
+const listLoading = ref(false)
 const deleteOpen = ref(false)
 const deleteName = ref('')
 const deleteLoading = ref(false)
 
 async function loadSnapshots() {
+  listLoading.value = true
   try {
     const data = await apiGet<SnapshotsResponse>('/api/v1/admin/storage/snapshots')
     snapshots.value = data.snapshots ?? []
-  } catch (e) {
-    // 列表接口失败不阻断主流程
+  } catch {
     snapshots.value = []
+  } finally {
+    listLoading.value = false
   }
 }
 
 onMounted(() => { if (isAdmin.value) void loadSnapshots() })
 
 async function doValidate() {
-  loading.value = 'validate'; actionError.value = ''
+  loading.value = 'validate'
+  actionResult.value = null
   try {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/storage/validate')
-    success(validateResult.value.ok ? '验证通过' : '验证完成（存在问题）')
+    const msg = validateResult.value.ok ? '验证通过' : '验证完成（存在问题）'
+    actionResult.value = makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg)
+    success(msg)
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '验证失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '验证失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   } finally { loading.value = '' }
 }
 
 async function doSnapshot() {
-  loading.value = 'snapshot'; actionError.value = ''
+  loading.value = 'snapshot'
+  actionResult.value = null
   try {
     snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot')
+    const msg = `${t.value('createSnapshot')}：${snapshotResult.value.path || 'ok'}`
+    actionResult.value = makeActionResult('ok', msg)
     success(t.value('createSnapshot'))
     await loadSnapshots()
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '快照失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '快照失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   } finally { loading.value = '' }
 }
 
 async function doExport() {
-  loading.value = 'export'; actionError.value = ''
+  loading.value = 'export'
+  actionResult.value = null
   try {
     const data = await apiGet<ExportResponse>('/api/v1/admin/storage/export')
     exportData.value = data.export
+    actionResult.value = makeActionResult('ok', '配置已导出，可下载 JSON')
     success('配置已导出')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '导出失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '导出失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   } finally { loading.value = '' }
 }
 
@@ -87,6 +104,7 @@ function downloadExport() {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+  actionResult.value = makeActionResult('ok', '已开始下载导出文件')
   success('已开始下载')
 }
 
@@ -100,11 +118,13 @@ async function confirmDelete() {
   try {
     await apiDelete(`/api/v1/admin/storage/snapshots?name=${encodeURIComponent(deleteName.value)}`)
     deleteOpen.value = false
+    actionResult.value = makeActionResult('ok', `快照已删除：${deleteName.value}`)
     success('快照已删除')
     await loadSnapshots()
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '删除失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '删除失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   } finally {
     deleteLoading.value = false
   }
@@ -120,72 +140,89 @@ function formatBytes(n: number): string {
 <template>
   <PermissionDenied v-if="!isAdmin" />
   <div v-else class="space-y-6">
-    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('storage') }}</h1>
+        <p class="text-xs mts-muted">验证 · 快照 · 配置导出</p>
+      </div>
+      <button class="mts-btn" :disabled="listLoading" @click="loadSnapshots">
+        <RefreshCw class="h-3.5 w-3.5" /> 刷新快照
+      </button>
+    </div>
+
+    <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
+
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-        <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500 dark:text-slate-400 dark:text-slate-500" /><h3 class="text-sm font-semibold">存储验证</h3></div>
-        <button :disabled="loading === 'validate'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" @click="doValidate">{{ loading === 'validate' ? t('loading') : '执行验证' }}</button>
+      <div class="mts-panel">
+        <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">存储验证</h3></div>
+        <button :disabled="loading === 'validate'" class="mts-btn-primary w-full justify-center py-2" @click="doValidate">{{ loading === 'validate' ? t('loading') : '执行验证' }}</button>
+        <pre v-if="validateResult" class="mt-3 max-h-40 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(validateResult, null, 2) }}</pre>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-        <div class="mb-3 flex items-center gap-2"><Camera class="h-5 w-5 text-slate-500 dark:text-slate-400 dark:text-slate-500" /><h3 class="text-sm font-semibold">{{ t('createSnapshot') }}</h3></div>
-        <button :disabled="loading === 'snapshot'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
+      <div class="mts-panel">
+        <div class="mb-3 flex items-center gap-2"><Camera class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('createSnapshot') }}</h3></div>
+        <button :disabled="loading === 'snapshot'" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
+        <p v-if="snapshotResult?.path" class="mt-2 break-all font-mono text-[11px] mts-muted">{{ snapshotResult.path }}</p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-        <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500 dark:text-slate-400 dark:text-slate-500" /><h3 class="text-sm font-semibold">配置导出</h3></div>
-        <button :disabled="loading === 'export'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
+      <div class="mts-panel">
+        <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('export') }}</h3></div>
+        <button :disabled="loading === 'export'" class="mts-btn-primary w-full justify-center py-2" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
+        <button v-if="exportData" class="mts-btn mt-2 w-full justify-center" @click="downloadExport">下载 JSON</button>
       </div>
     </div>
 
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 dark:border-slate-800">
-        <h3 class="text-sm font-semibold">{{ t('snapshots') }}</h3>
-        <button class="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="loadSnapshots"><RefreshCw class="h-3.5 w-3.5" />{{ t('refresh') }}</button>
+    <div class="mts-card overflow-hidden">
+      <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs mts-muted dark:border-slate-800">
+        <span>{{ t('snapshots') }}</span>
+        <span>{{ snapshots.length }} 个</span>
       </div>
-      <div v-if="!snapshots.length" class="p-6 text-center text-sm text-slate-400 dark:text-slate-500">暂无快照</div>
+      <EmptyState
+        v-if="listLoading"
+        compact
+        :title="t('loading')"
+        description="正在加载快照列表…"
+      />
+      <EmptyState
+        v-else-if="!snapshots.length"
+        title="暂无快照"
+        description="创建快照后可在此管理；删除操作不可恢复。"
+      >
+        <template #action>
+          <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot'" @click="doSnapshot">{{ t('createSnapshot') }}</button>
+        </template>
+      </EmptyState>
       <table v-else class="w-full text-sm">
         <thead>
-          <tr class="border-b border-slate-100 text-left text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:border-slate-800">
+          <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
             <th class="px-4 py-2">名称</th>
             <th class="px-4 py-2">大小</th>
             <th class="px-4 py-2">时间</th>
-            <th class="px-4 py-2">操作</th>
+            <th class="px-4 py-2"></th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="s in snapshots" :key="s.name" class="border-b border-slate-50 dark:border-slate-800">
+          <tr v-for="s in snapshots" :key="s.name" class="border-b border-slate-100 dark:border-slate-800">
             <td class="px-4 py-2 font-mono text-xs">{{ s.name }}</td>
             <td class="px-4 py-2 text-xs">{{ formatBytes(s.size_bytes) }}</td>
-            <td class="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ s.mod_time }}</td>
-            <td class="px-4 py-2">
-              <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:text-red-300" :title="t('delete')" @click="requestDelete(s.name)"><Trash2 class="h-4 w-4" /></button>
+            <td class="px-4 py-2 text-xs mts-muted">{{ s.mod_time }}</td>
+            <td class="px-4 py-2 text-right">
+              <button class="rounded p-1 text-slate-400 hover:text-red-600" :title="t('delete')" @click="requestDelete(s.name)">
+                <Trash2 class="h-4 w-4" />
+              </button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div v-if="validateResult" class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-      <h3 class="mb-3 text-sm font-semibold">验证结果</h3>
-      <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">数据目录: {{ validateResult.data_dir }}</p>
-      <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-slate-900 p-3 text-xs text-green-400">{{ JSON.stringify(validateResult.health, null, 2) }}</pre>
-    </div>
-    <div v-if="snapshotResult" class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-      <h3 class="mb-2 text-sm font-semibold">最近创建</h3>
-      <p class="text-sm" :class="snapshotResult.ok ? 'text-green-700 dark:text-green-200' : 'text-red-700 dark:text-red-200'">{{ snapshotResult.ok ? '成功' : '失败' }}</p>
-      <p v-if="snapshotResult.path" class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ snapshotResult.path }}</p>
-    </div>
-    <div v-if="exportData" class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-      <div class="mb-2 flex items-center justify-between gap-2">
-        <h3 class="text-sm font-semibold">配置导出</h3>
-        <button class="rounded-lg border border-slate-200 px-3 py-1 text-xs dark:border-slate-700" @click="downloadExport">下载 JSON</button>
-      </div>
+    <div v-if="exportData" class="mts-panel">
+      <h3 class="mb-2 text-sm font-semibold">导出预览</h3>
       <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400">{{ JSON.stringify(exportData, null, 2) }}</pre>
     </div>
 
     <ConfirmDialog
       v-model:open="deleteOpen"
       title="删除快照"
-      :message="`确定删除快照 ${deleteName}？`"
+      :message="`确定删除快照 ${deleteName}？此操作不可恢复。`"
       confirm-label="删除"
       danger
       :loading="deleteLoading"

@@ -4,6 +4,9 @@ import { apiGet, apiPost, getAdminToken, setAdminToken, getDataToken, setDataTok
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import PermissionDenied from '@/components/PermissionDenied.vue'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { RefreshCw, CheckCircle } from 'lucide-vue-next'
 
 interface ConfigResponse { config: Record<string, unknown> }
@@ -23,7 +26,7 @@ const errorCodes = ref<ErrorCodeSpec[]>([])
 const schemaFields = ref<SchemaField[]>([])
 const schemaFilter = ref('')
 const loadError = ref('')
-const actionError = ref('')
+const actionResult = ref<ActionResult | null>(null)
 const adminTokenInput = ref(getAdminToken())
 const dataTokenInput = ref(getDataToken())
 
@@ -56,27 +59,37 @@ onMounted(async () => {
 })
 
 async function handleValidate() {
-  actionError.value = ''
+  actionResult.value = null
   validateResult.value = null
   try {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/config/validate', { config: config.value })
-    if (validateResult.value.ok) success('配置验证通过')
+    if (validateResult.value.ok) {
+      actionResult.value = makeActionResult('ok', '配置验证通过')
+      success('配置验证通过')
+    } else {
+      const msg = `配置验证失败: ${validateResult.value.error || ''}`
+      actionResult.value = makeActionResult('error', msg)
+      notifyError(msg)
+    }
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '验证失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '验证失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
 async function handleReload() {
-  actionError.value = ''
+  actionResult.value = null
   reloadResult.value = null
   try {
     reloadResult.value = await apiPost<ReloadResponse>('/api/v1/admin/config/reload')
+    actionResult.value = makeActionResult('ok', reloadResult.value.fields?.length ? `配置已重载，变更字段: ${reloadResult.value.fields.join(', ')}` : '配置已重载')
     await loadConfig()
     success('配置已热重载')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '重载失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '重载失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -91,6 +104,7 @@ function clearServiceTokens() {
   dataTokenInput.value = ''
   setAdminToken('')
   setDataToken('')
+  actionResult.value = makeActionResult('ok', '服务级 Token 已清除')
   success('服务级 Token 已清除')
 }
 
@@ -105,8 +119,13 @@ function statusLabel(httpStatus: number): string {
 <template>
   <PermissionDenied v-if="!isAdmin" />
   <div v-else class="space-y-6">
-    <p v-if="loadError" class="mts-alert-error">{{ loadError }}</p>
-    <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
+    <ActionResultBanner
+      v-if="loadError"
+      kind="error"
+      :message="loadError"
+      @dismiss="loadError = ''"
+    />
+    <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 
     <div class="mts-panel">
       <h2 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">服务级 Token（可选）</h2>
@@ -149,7 +168,7 @@ function statusLabel(httpStatus: number): string {
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">配置 Schema</h2>
         <input v-model="schemaFilter" class="mts-input max-w-xs text-xs" placeholder="过滤 name/description" />
       </div>
-      <div v-if="!filteredSchema.length" class="text-sm mts-muted">暂无 schema</div>
+      <EmptyState v-if="!filteredSchema.length" compact title="暂无 schema" description="调整过滤条件，或确认服务已返回配置 schema。" />
       <div v-else class="max-h-80 overflow-auto">
         <table class="w-full text-sm">
           <thead>
@@ -170,7 +189,7 @@ function statusLabel(httpStatus: number): string {
 
     <div class="mts-panel">
       <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">错误码契约</h2>
-      <div v-if="!errorCodes.length" class="text-sm mts-muted">暂无数据</div>
+      <EmptyState v-if="!errorCodes.length" compact title="暂无错误码" description="错误码契约尚未加载或服务未返回数据。" />
       <table v-else class="w-full text-sm">
         <thead>
           <tr class="border-b border-slate-200 text-left dark:border-slate-700">

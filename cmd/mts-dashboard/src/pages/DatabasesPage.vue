@@ -8,6 +8,9 @@ import {
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
@@ -35,7 +38,7 @@ const { success, error: notifyError } = useNotify()
 const databases = ref<DatabaseEntry[]>([])
 const newDbName = ref('')
 const loadError = ref('')
-const actionError = ref('')
+const actionResult = ref<ActionResult | null>(null)
 const confirmOpen = ref(false)
 const confirmDbName = ref('')
 const confirmLoading = ref(false)
@@ -59,7 +62,7 @@ onMounted(async () => {
 })
 async function loadDatabaseDetails(db: DatabaseEntry) {
   db.loading = true
-  actionError.value = ''
+  actionResult.value = null
   try {
     const [meas, rps] = await Promise.all([
       listMeasurements(db.name),
@@ -75,7 +78,7 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
     db.retentionPolicies = rps.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
     db.loaded = true
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '加载详情失败'
+    const msg = e instanceof Error ? e.message : '加载详情失败'; actionResult.value = makeActionResult('error', msg)
     db.loaded = false
     db.expanded = false
   } finally {
@@ -102,7 +105,7 @@ async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
       meas.fields = fieldsData.fields ?? []
       meas.series = seriesData.series ?? []
     } catch (e) {
-      actionError.value = e instanceof Error ? e.message : '加载元数据失败'
+      const msg = e instanceof Error ? e.message : '加载元数据失败'; actionResult.value = makeActionResult('error', msg)
     } finally {
       meas.loading = false
     }
@@ -110,7 +113,7 @@ async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
 }
 async function createDatabase() {
   if (!newDbName.value.trim()) return
-  actionError.value = ''
+  actionResult.value = null
   try {
     await apiPost('/api/v1/admin/databases', { name: newDbName.value.trim() })
     databases.value.push({
@@ -124,10 +127,12 @@ async function createDatabase() {
       newRpDuration: '',
     })
     newDbName.value = ''
+    actionResult.value = makeActionResult('ok', '数据库已创建')
     success('数据库已创建')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '创建失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '创建失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 function requestDeleteDatabase(name: string) {
@@ -138,15 +143,16 @@ async function confirmDeleteDatabase() {
   const name = confirmDbName.value
   if (!name) return
   confirmLoading.value = true
-  actionError.value = ''
+  actionResult.value = null
   try {
     await apiDelete(`/api/v1/admin/databases/${encodeURIComponent(name)}`)
     databases.value = databases.value.filter((d) => d.name !== name)
     confirmOpen.value = false
     success(`数据库 ${name} 已删除`)
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '删除失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '删除失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   } finally {
     confirmLoading.value = false
   }
@@ -160,11 +166,12 @@ async function createRetentionPolicy(db: DatabaseEntry) {
   try {
     durationNs = parseDuration(dur)
   } catch {
-    actionError.value = '无效的 duration 格式 (如 24h, 7d, 30m)'
-    notifyError(actionError.value)
+    const msg = '无效的 duration 格式 (如 24h, 7d, 30m)'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
     return
   }
-  actionError.value = ''
+  actionResult.value = null
   try {
     await apiPost(`/api/v1/admin/databases/${encodeURIComponent(db.name)}/retention-policies`, {
       policy: { name, duration: durationNs },
@@ -172,10 +179,12 @@ async function createRetentionPolicy(db: DatabaseEntry) {
     db.retentionPolicies.push({ name, duration: durationNs })
     db.newRpName = ''
     db.newRpDuration = ''
+    actionResult.value = makeActionResult('ok', '保留策略已创建')
     success('保留策略已创建')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '创建保留策略失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '创建保留策略失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 function parseDuration(s: string): number {
@@ -202,8 +211,8 @@ function fieldTypeName(t: number): string {
 <template>
   <PermissionDenied v-if="!isAdmin" />
   <div v-else class="space-y-4">
-    <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ loadError }}</p>
-    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
+    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
+    <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
     <div class="flex gap-2">
       <input v-model="newDbName" type="text" placeholder="新数据库名称" class="w-64 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="createDatabase" />
       <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="createDatabase">

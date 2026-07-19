@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
 import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle } from 'lucide-vue-next'
 
@@ -150,8 +151,18 @@ const showAdminPanels = computed(() => isAdmin.value)
       </div>
     </div>
 
-    <p v-if="loadError" class="mts-alert-error">{{ loadError }}</p>
-    <p v-else-if="adminPartialError" class="mts-alert-warn">{{ t('partialAdminStats') }}：{{ adminPartialError }}</p>
+    <ActionResultBanner
+      v-if="loadError"
+      kind="error"
+      :message="loadError"
+      @dismiss="loadError = ''"
+    />
+    <ActionResultBanner
+      v-else-if="adminPartialError"
+      kind="warn"
+      :message="`${t('partialAdminStats')}：${adminPartialError}`"
+      :dismissible="false"
+    />
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <div class="mts-card p-5">

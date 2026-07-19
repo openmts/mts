@@ -6,6 +6,9 @@ import { Plus, Trash2, Key, Lock } from 'lucide-vue-next'
 import UserModals from '@/components/UserModals.vue'
 import UserGrantPanel from '@/components/UserGrantPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
@@ -18,7 +21,7 @@ const databases = ref<string[]>([])
 const { currentUser, isAdmin } = useAuth()
 const { success, error: notifyError } = useNotify()
 const loadError = ref('')
-const actionError = ref('')
+const actionResult = ref<ActionResult | null>(null)
 const showCreate = ref(false)
 const newUser = ref({ name: '', display_name: '', password: '', role: 'user' })
 const selectedUser = ref<User | null>(null)
@@ -55,7 +58,7 @@ async function loadUsers() {
 
 async function createUser() {
   if (!newUser.value.name.trim()) return
-  actionError.value = ''
+  actionResult.value = null
   try {
     await apiPost('/api/v1/users', {
       name: newUser.value.name.trim(),
@@ -66,30 +69,34 @@ async function createUser() {
     showCreate.value = false
     newUser.value = { name: '', display_name: '', role: 'user', password: '' }
     await loadUsers()
+    actionResult.value = makeActionResult('ok', '用户已创建')
     success('用户已创建')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '创建失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '创建失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
 async function doSetPassword() {
   if (!setPasswordValue.value) return
-  actionError.value = ''
+  actionResult.value = null
   try {
     await apiPut(`/api/v1/users/${encodeURIComponent(setPasswordUser.value)}/password`, { password: setPasswordValue.value })
     showSetPassword.value = false
     setPasswordValue.value = ''
+    actionResult.value = makeActionResult('ok', '密码已设置')
     success('密码已设置')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '设置密码失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '设置密码失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
 async function doChangeSelfPassword() {
   if (!selfOldPassword.value || !selfNewPassword.value) return
-  actionError.value = ''
+  actionResult.value = null
   try {
     await apiPost('/api/v1/auth/password', {
       user_name: currentUser.value,
@@ -99,10 +106,12 @@ async function doChangeSelfPassword() {
     showChangeSelfPassword.value = false
     selfOldPassword.value = ''
     selfNewPassword.value = ''
+    actionResult.value = makeActionResult('ok', '密码已修改')
     success('密码已修改')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '修改密码失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '修改密码失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -120,10 +129,13 @@ async function confirmDelete() {
     await loadUsers()
     if (selectedUser.value?.name === name) selectedUser.value = null
     deleteOpen.value = false
-    success(`用户 ${name} 已删除`)
+    const okMsg = `用户 ${name} 已删除`
+    actionResult.value = makeActionResult('ok', okMsg)
+    success(okMsg)
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '删除失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '删除失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   } finally {
     deleteLoading.value = false
   }
@@ -133,10 +145,13 @@ async function toggleDisable(user: User) {
   try {
     await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled })
     await loadUsers()
-    success(user.disabled ? '用户已启用' : '用户已禁用')
+    const okMsg = user.disabled ? '用户已启用' : '用户已禁用'
+    actionResult.value = makeActionResult('ok', okMsg)
+    success(okMsg)
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '操作失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '操作失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -146,7 +161,7 @@ async function selectUser(user: User) {
     const data = await apiGet<PermissionsResponse>(`/api/v1/users/${encodeURIComponent(user.name)}/database-permissions`)
     userGrants.value = data.grants ?? []
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '加载权限失败'
+    const msg = e instanceof Error ? e.message : '加载权限失败'; actionResult.value = makeActionResult('error', msg)
   }
 }
 
@@ -164,7 +179,7 @@ function toggleGrantPerm(perm: string) {
 
 async function grantPermission() {
   if (!grantDbs.value.length || !grantPerms.value.length || !selectedUser.value) return
-  actionError.value = ''
+  actionResult.value = null
   try {
     const tasks: Promise<unknown>[] = []
     for (const db of grantDbs.value) {
@@ -176,10 +191,12 @@ async function grantPermission() {
     grantDbs.value = []
     grantPerms.value = []
     await selectUser(selectedUser.value)
+    actionResult.value = makeActionResult('ok', '权限已授予')
     success('权限已授予')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '授权失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '授权失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -188,10 +205,12 @@ async function revokeGrant(g: DatabaseGrant) {
   try {
     await apiDelete(`/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(g.database)}/${encodeURIComponent(g.permission)}`)
     await selectUser(selectedUser.value)
+    actionResult.value = makeActionResult('ok', '权限已撤销')
     success('权限已撤销')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '撤销失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '撤销失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -219,11 +238,24 @@ function openSetPassword(name: string) {
       </div>
     </div>
 
-    <p v-if="loadError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-200">{{ loadError }}</p>
-    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
+    <ActionResultBanner
+      v-if="loadError"
+      kind="error"
+      :message="loadError"
+      @dismiss="loadError = ''"
+    />
+    <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 
     <div v-if="!isAdmin" class="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60 p-4 text-sm text-slate-600 dark:text-slate-300">
       普通用户仅可修改自己的密码。用户列表与授权管理需管理员权限。
+    </div>
+
+    <div v-else-if="!users.length" class="mts-card">
+      <EmptyState title="暂无用户" description="创建用户后可在此管理角色、密码与数据库授权。">
+        <template #action>
+          <button type="button" class="mts-btn-primary" @click="showCreate = true">新建用户</button>
+        </template>
+      </EmptyState>
     </div>
 
     <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">

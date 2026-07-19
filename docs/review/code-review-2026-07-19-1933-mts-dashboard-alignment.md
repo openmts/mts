@@ -369,3 +369,7 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 ## P9 状态（2026-07-19）
 - ActionResultBanner：已完成
 - Operations/Downsample 空状态与结果条：已完成
+
+
+## P10 状态（2026-07-19）
+- Storage/Users/Config/Overview/Databases 结果条与空状态对齐
