@@ -16,6 +16,9 @@ import (
 
 const streamingCompactionSeriesBatchSize = 256
 
+// maxCompactionSeriesSamples 限制单次写入 compact 输出的样本窗口，降低峰值 RSS。
+const maxCompactionSeriesSamples = 65536
+
 const maxCachedCompactionIndexRows = 65536
 
 var ErrCompactionDiskSpaceExceeded = errors.New("compaction disk space exceeded")
@@ -674,8 +677,10 @@ func (o *compactionOutput) addSeries(columns []model.ColumnData) error {
 		return nil
 	}
 	for _, group := range splitLargeSeriesColumns(columns, o.outputOpts.maxOutputPartBytes) {
-		if err := o.addSeriesGroup(group); err != nil {
-			return err
+		for _, window := range splitSeriesSampleWindows(group, maxCompactionSeriesSamples) {
+			if err := o.addSeriesGroup(window); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -761,6 +766,48 @@ func (o *compactionOutput) abort() error {
 	o.parts = nil
 	o.metas = nil
 	return err
+}
+
+func splitSeriesSampleWindows(columns []model.ColumnData, maxSamples int) [][]model.ColumnData {
+	if maxSamples <= 0 || len(columns) == 0 {
+		return [][]model.ColumnData{columns}
+	}
+	count := 0
+	for _, column := range columns {
+		if len(column.Samples) > count {
+			count = len(column.Samples)
+		}
+	}
+	if count <= maxSamples {
+		return [][]model.ColumnData{columns}
+	}
+	windows := make([][]model.ColumnData, 0, (count+maxSamples-1)/maxSamples)
+	for start := 0; start < count; start += maxSamples {
+		end := start + maxSamples
+		if end > count {
+			end = count
+		}
+		window := make([]model.ColumnData, 0, len(columns))
+		for _, column := range columns {
+			if start >= len(column.Samples) {
+				continue
+			}
+			columnEnd := end
+			if columnEnd > len(column.Samples) {
+				columnEnd = len(column.Samples)
+			}
+			part := column
+			part.Samples = column.Samples[start:columnEnd]
+			if len(part.Samples) == 0 {
+				continue
+			}
+			window = append(window, part)
+		}
+		if len(window) > 0 {
+			windows = append(windows, window)
+		}
+	}
+	return windows
 }
 
 func estimateColumnsBytes(columns []model.ColumnData) int64 {

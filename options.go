@@ -35,7 +35,9 @@ type Options struct {
 	Compaction             CompactionOptions
 	Compression            CompressionOptions
 	StorageMemory          StorageMemoryOptions
-	Cardinality            CardinalityOptions
+	// QueryPageCache 控制 SSTable 查询页解码缓存；Limit=0 默认 256，-1 关闭。
+	QueryPageCache QueryPageCacheOptions
+	Cardinality    CardinalityOptions
 	// MaxConcurrentDownsample 限制后台降采样策略的全局并发数，<=0 使用默认值 2。
 	MaxConcurrentDownsample int
 	// MaxConcurrentCompaction 限制跨 shard 并发 compaction 数；<=0 时归一化为 min(GOMAXPROCS,4)。
@@ -80,6 +82,14 @@ type StorageMemoryOptions struct {
 	FlushBytesLimit       int64
 	CompactionBytesLimit  int64
 	CompressionBytesLimit int64
+}
+
+// QueryPageCacheOptions 控制查询侧 value page 解码缓存。
+// Limit: 0=默认(256)，-1=关闭，>0=条目上限。
+// MaxSamples: 单页超过该样本数不缓存；0=默认 512。
+type QueryPageCacheOptions struct {
+	Limit      int
+	MaxSamples int
 }
 
 // WALOptions 控制 WAL 写入策略。

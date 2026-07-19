@@ -9,10 +9,11 @@ import (
 // pageDecodeCache 缓存压缩 value page 的查询窗口解码结果，加速热查询重复扫同一页。
 // key 绑定 block 位置与查询时间窗，避免跨查询误命中。
 type pageDecodeCache struct {
-	mu    sync.Mutex
-	items map[pageDecodeKey][]model.VersionedSample
-	order []pageDecodeKey
-	limit int
+	mu         sync.Mutex
+	items      map[pageDecodeKey][]model.VersionedSample
+	order      []pageDecodeKey
+	limit      int
+	maxSamples int
 }
 
 type pageDecodeKey struct {
@@ -22,19 +23,78 @@ type pageDecodeKey struct {
 	end    int64
 }
 
-const defaultPageDecodeCacheLimit = 256
+type pageDecodeCacheConfig struct {
+	limit      int
+	maxSamples int
+}
 
-// pageDecodeCacheMaxSamples 超过该样本数的解码结果不缓存，避免 compact/全表扫灌爆堆。
-const pageDecodeCacheMaxSamples = 512
+const (
+	defaultPageDecodeCacheLimit      = 256
+	defaultPageDecodeCacheMaxSamples = 512
+)
+
+var (
+	pageCacheConfigMu sync.RWMutex
+	pageCacheConfig   = pageDecodeCacheConfig{
+		limit:      defaultPageDecodeCacheLimit,
+		maxSamples: defaultPageDecodeCacheMaxSamples,
+	}
+)
+
+// ConfigurePageDecodeCache 设置全局 page 解码缓存参数。
+// limit<=-1 关闭缓存；limit==0 使用默认 256；maxSamples<=0 使用默认 512。
+func ConfigurePageDecodeCache(limit int, maxSamples int) {
+	pageCacheConfigMu.Lock()
+	defer pageCacheConfigMu.Unlock()
+	if limit < 0 {
+		pageCacheConfig.limit = 0
+	} else if limit == 0 {
+		pageCacheConfig.limit = defaultPageDecodeCacheLimit
+	} else {
+		pageCacheConfig.limit = limit
+	}
+	if maxSamples <= 0 {
+		pageCacheConfig.maxSamples = defaultPageDecodeCacheMaxSamples
+	} else {
+		pageCacheConfig.maxSamples = maxSamples
+	}
+}
+
+func currentPageDecodeCacheConfig() pageDecodeCacheConfig {
+	pageCacheConfigMu.RLock()
+	cfg := pageCacheConfig
+	pageCacheConfigMu.RUnlock()
+	return cfg
+}
+
+func newPageCacheIfEnabled(enable bool) *pageDecodeCache {
+	if !enable {
+		return nil
+	}
+	return newPageDecodeCache(0)
+}
 
 func newPageDecodeCache(limit int) *pageDecodeCache {
+
+	cfg := currentPageDecodeCacheConfig()
+	if limit < 0 {
+		return nil
+	}
+	if limit == 0 {
+		limit = cfg.limit
+	}
 	if limit <= 0 {
-		limit = defaultPageDecodeCacheLimit
+		return nil
+	}
+	maxSamples := cfg.maxSamples
+	if maxSamples <= 0 {
+		maxSamples = defaultPageDecodeCacheMaxSamples
 	}
 	return &pageDecodeCache{
-		items: make(map[pageDecodeKey][]model.VersionedSample, limit),
-		order: make([]pageDecodeKey, 0, limit),
-		limit: limit,
+		items:      make(map[pageDecodeKey][]model.VersionedSample, limit),
+		order:      make([]pageDecodeKey, 0, limit),
+		limit:      limit,
+		maxSamples: maxSamples,
 	}
 }
 
@@ -52,7 +112,7 @@ func (c *pageDecodeCache) get(key pageDecodeKey) ([]model.VersionedSample, bool)
 }
 
 func (c *pageDecodeCache) put(key pageDecodeKey, samples []model.VersionedSample) {
-	if c == nil || len(samples) == 0 || len(samples) > pageDecodeCacheMaxSamples {
+	if c == nil || len(samples) == 0 || len(samples) > c.maxSamples {
 		return
 	}
 	stored := cloneVersionedSamples(samples)

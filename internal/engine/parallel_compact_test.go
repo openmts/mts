@@ -71,8 +71,8 @@ func TestCompactRunsAcrossShardsWithWorkerLimit(t *testing.T) {
 
 func TestDefaultParallelCompactionLimitBounded(t *testing.T) {
 	limit := defaultParallelCompactionLimit()
-	if limit < 1 || limit > 4 {
-		t.Fatalf("defaultParallelCompactionLimit() = %d, want in [1,4]", limit)
+	if limit < 1 || limit > 2 {
+		t.Fatalf("defaultParallelCompactionLimit() = %d, want in [1,2]", limit)
 	}
 }
 

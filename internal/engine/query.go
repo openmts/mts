@@ -255,6 +255,8 @@ func (e *Engine) QueryRowIterator(ctx context.Context, query model.Query) (*rowI
 	if err != nil {
 		return nil, err
 	}
+	// 行查询仍下推 FieldIDs（含过滤所需字段），只解码必要列。
+	// OutputFields 不在列层应用：后置谓词可能依赖额外字段，最终在行层投影。
 	columnPlan := plan
 	columnPlan.Query.Limit = 0
 	columnPlan.Query.Offset = 0

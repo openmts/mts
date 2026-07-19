@@ -333,12 +333,14 @@ func catalogDir(root string) string {
 }
 
 func defaultParallelCompactionLimit() int {
+	// 默认最多 2 路并行：在 RSS 与 compact 吞吐之间折中。
+	// 需要更高吞吐可显式提高 MaxConcurrentCompaction。
 	limit := runtime.GOMAXPROCS(0)
 	if limit < 1 {
 		return defaultMaxConcurrentCompaction
 	}
-	if limit > 4 {
-		return 4
+	if limit > 2 {
+		return 2
 	}
 	return limit
 }

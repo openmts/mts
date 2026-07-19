@@ -13,14 +13,15 @@ import (
 )
 
 func OpenPart(path string) (*Part, error) {
-	return openPart(path, true)
+	return openPart(path, true, true)
 }
 
 func OpenPartTrusted(path string) (*Part, error) {
-	return openPart(path, false)
+	// compact/flush 热路径：关闭 page 解码缓存，避免全量 series 扫描灌满缓存抬升 RSS。
+	return openPart(path, false, false)
 }
 
-func openPart(path string, validateDeep bool) (*Part, error) {
+func openPart(path string, validateDeep bool, enablePageCache bool) (*Part, error) {
 	meta, err := loadPartMetadata(path)
 	if err != nil {
 		return nil, err
@@ -60,7 +61,7 @@ func openPart(path string, validateDeep bool) (*Part, error) {
 		seriesRows:     seriesRows,
 		files:          files,
 		componentSizes: componentSizes,
-		pageCache:      newPageDecodeCache(defaultPageDecodeCacheLimit),
+		pageCache:      newPageCacheIfEnabled(enablePageCache),
 	}
 	if err := validateOpenedPart(part, validateDeep); err != nil {
 		closeErr := files.close()

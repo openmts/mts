@@ -96,6 +96,10 @@ type report struct {
 	QueryLatencyNanos                 int64                `json:"query_latency_nanos"`
 	ColdQueryLatency                  int64                `json:"cold_query_latency_nanos"`
 	HotQueryLatency                   int64                `json:"hot_query_latency_nanos"`
+	ProjectedColdQueryLatency         int64                `json:"projected_cold_query_latency_nanos"`
+	ProjectedHotQueryLatency          int64                `json:"projected_hot_query_latency_nanos"`
+	PageCacheLimit                    int                  `json:"page_cache_limit"`
+	MaxConcurrentCompaction           int                  `json:"max_concurrent_compaction"`
 	BacklogDrainNanos                 int64                `json:"backlog_drain_nanos"`
 	CompactionResult                  mts.CompactionResult `json:"compaction_result"`
 	CompactionStats                   mts.CompactionStats  `json:"compaction_stats"`
@@ -103,30 +107,34 @@ type report struct {
 }
 
 type config struct {
-	profile              string
-	mode                 string
-	ingestPath           string
-	points               int
-	batchSize            int
-	memTableMaxSamples   int
-	compressionAlgorithm string
-	valuePageSamples     int
-	omitWriteSeq         bool
-	zstdLevel            string
-	durability           string
-	queryStart           int64
-	queryEnd             int64
-	queryLimit           int
-	verify               bool
-	shardDuration        time.Duration
-	timestampStep        time.Duration
-	dataDir              string
-	outPath              string
-	baseline             string
-	maxRegressionPercent float64
-	maxRSSBytes          int64
-	maxSSTableCount      int
-	maxCompactionBacklog int
+	profile                 string
+	mode                    string
+	ingestPath              string
+	points                  int
+	batchSize               int
+	memTableMaxSamples      int
+	compressionAlgorithm    string
+	valuePageSamples        int
+	omitWriteSeq            bool
+	zstdLevel               string
+	durability              string
+	queryStart              int64
+	queryEnd                int64
+	queryLimit              int
+	verify                  bool
+	shardDuration           time.Duration
+	timestampStep           time.Duration
+	dataDir                 string
+	outPath                 string
+	baseline                string
+	maxRegressionPercent    float64
+	maxRSSBytes             int64
+	maxSSTableCount         int
+	maxCompactionBacklog    int
+	pageCacheLimit          int
+	pageCacheMaxSamples     int
+	maxConcurrentCompaction int
+	projectedQuery          bool
 }
 
 func main() {
@@ -231,6 +239,10 @@ func run(args []string) (err error) {
 		QueryLatencyNanos:                 workload.queryLatency.Nanoseconds(),
 		ColdQueryLatency:                  workload.coldQueryLatency.Nanoseconds(),
 		HotQueryLatency:                   workload.hotQueryLatency.Nanoseconds(),
+		ProjectedColdQueryLatency:         workload.projectedColdQueryLatency.Nanoseconds(),
+		ProjectedHotQueryLatency:          workload.projectedHotQueryLatency.Nanoseconds(),
+		PageCacheLimit:                    cfg.pageCacheLimit,
+		MaxConcurrentCompaction:           cfg.maxConcurrentCompaction,
 		BacklogDrainNanos:                 workload.backlogDrain.Nanoseconds(),
 		CompactionResult:                  workload.compactionResult,
 		CompactionStats:                   workload.compactionStats,
@@ -274,6 +286,26 @@ func parseConfig(args []string) (config, error) {
 		"omit-write-seq",
 		false,
 		"omit per-sample writeSeq in SSTable value pages (decode as 0)",
+	)
+	pageCacheLimit := flags.Int(
+		"page-cache-limit",
+		0,
+		"query page decode cache entries; 0=default 256, -1=disable",
+	)
+	pageCacheMaxSamples := flags.Int(
+		"page-cache-max-samples",
+		0,
+		"skip caching decoded pages larger than this; 0=default 512",
+	)
+	maxConcurrentCompaction := flags.Int(
+		"max-concurrent-compaction",
+		0,
+		"cross-shard compaction concurrency; 0=engine default (serial)",
+	)
+	projectedQuery := flags.Bool(
+		"projected-query",
+		true,
+		"also measure single-field projected cold/hot query latency",
 	)
 	zstdLevel := flags.String(
 		"zstd-level",
@@ -336,30 +368,34 @@ func parseConfig(args []string) (config, error) {
 		return config{}, fmt.Errorf("unsupported mode %q", *mode)
 	}
 	return config{
-		profile:              *profile,
-		mode:                 *mode,
-		ingestPath:           *ingestPath,
-		points:               *points,
-		batchSize:            *batchSize,
-		memTableMaxSamples:   *memTableMaxSamples,
-		compressionAlgorithm: *compressionAlgorithm,
-		valuePageSamples:     *valuePageSamples,
-		omitWriteSeq:         *omitWriteSeq,
-		zstdLevel:            *zstdLevel,
-		durability:           *durability,
-		queryStart:           *queryStart,
-		queryEnd:             *queryEnd,
-		queryLimit:           *queryLimit,
-		verify:               *verify,
-		shardDuration:        *shardDuration,
-		timestampStep:        *timestampStep,
-		dataDir:              *dataDir,
-		outPath:              *outPath,
-		baseline:             *baseline,
-		maxRegressionPercent: *maxRegression,
-		maxRSSBytes:          *maxRSSBytes,
-		maxSSTableCount:      *maxSSTables,
-		maxCompactionBacklog: *maxBacklog,
+		profile:                 *profile,
+		mode:                    *mode,
+		ingestPath:              *ingestPath,
+		points:                  *points,
+		batchSize:               *batchSize,
+		memTableMaxSamples:      *memTableMaxSamples,
+		compressionAlgorithm:    *compressionAlgorithm,
+		valuePageSamples:        *valuePageSamples,
+		omitWriteSeq:            *omitWriteSeq,
+		pageCacheLimit:          *pageCacheLimit,
+		pageCacheMaxSamples:     *pageCacheMaxSamples,
+		maxConcurrentCompaction: *maxConcurrentCompaction,
+		projectedQuery:          *projectedQuery,
+		zstdLevel:               *zstdLevel,
+		durability:              *durability,
+		queryStart:              *queryStart,
+		queryEnd:                *queryEnd,
+		queryLimit:              *queryLimit,
+		verify:                  *verify,
+		shardDuration:           *shardDuration,
+		timestampStep:           *timestampStep,
+		dataDir:                 *dataDir,
+		outPath:                 *outPath,
+		baseline:                *baseline,
+		maxRegressionPercent:    *maxRegression,
+		maxRSSBytes:             *maxRSSBytes,
+		maxSSTableCount:         *maxSSTables,
+		maxCompactionBacklog:    *maxBacklog,
 	}, nil
 }
 
@@ -493,6 +529,8 @@ type workloadResult struct {
 	queryLatency                      time.Duration
 	coldQueryLatency                  time.Duration
 	hotQueryLatency                   time.Duration
+	projectedColdQueryLatency         time.Duration
+	projectedHotQueryLatency          time.Duration
 	writeDuration                     time.Duration
 	compactionDuration                time.Duration
 	backlogDrain                      time.Duration
@@ -636,6 +674,18 @@ func queryOpenEngine(ctx context.Context, eng *mts.Engine, cfg config, result *w
 	result.hotQueryRSSPeakBytes = hotRSS
 	result.coldQueryRSSCurrentBytes = coldCurrent
 	result.hotQueryRSSCurrentBytes = hotCurrent
+	if cfg.projectedQuery {
+		_, projCold, err := timedQueryLimitedRowsProjected(ctx, eng, query, []string{"f0"}, false)
+		if err != nil {
+			return fmt.Errorf("projected query rows cold: %w", err)
+		}
+		_, projHot, err := timedQueryLimitedRowsProjected(ctx, eng, query, []string{"f0"}, false)
+		if err != nil {
+			return fmt.Errorf("projected query rows hot: %w", err)
+		}
+		result.projectedColdQueryLatency = projCold
+		result.projectedHotQueryLatency = projHot
+	}
 	return nil
 }
 
@@ -676,12 +726,17 @@ func openScaleEngine(ctx context.Context, dir string, cfg config) (*mts.Engine, 
 	}
 	durability := durabilityOptions(cfg.durability)
 	return mts.Open(ctx, mts.Options{
-		Path:               dir,
-		ShardDuration:      shardDuration(cfg),
-		MemTableMaxSamples: memTableMaxSamples,
-		WAL:                mts.WALOptions{Sync: durability.walSync},
-		FlushSync:          durability.flushSync,
-		Compression:        scaleCompressionOptions(cfg.compressionAlgorithm, cfg.valuePageSamples, cfg.omitWriteSeq, cfg.zstdLevel),
+		Path:                    dir,
+		ShardDuration:           shardDuration(cfg),
+		MemTableMaxSamples:      memTableMaxSamples,
+		WAL:                     mts.WALOptions{Sync: durability.walSync},
+		FlushSync:               durability.flushSync,
+		Compression:             scaleCompressionOptions(cfg.compressionAlgorithm, cfg.valuePageSamples, cfg.omitWriteSeq, cfg.zstdLevel),
+		MaxConcurrentCompaction: cfg.maxConcurrentCompaction,
+		QueryPageCache: mts.QueryPageCacheOptions{
+			Limit:      cfg.pageCacheLimit,
+			MaxSamples: cfg.pageCacheMaxSamples,
+		},
 	})
 }
 
@@ -835,6 +890,45 @@ func scaleQuerySpec(cfg config) querySpec {
 		endIndex:      endIndex,
 		timestampStep: step,
 	}
+}
+
+func timedQueryLimitedRowsProjected(
+	ctx context.Context,
+	eng *mts.Engine,
+	query querySpec,
+	fields []string,
+	verify bool,
+) (int, time.Duration, error) {
+	started := time.Now()
+	iter, err := eng.QueryRowIterator(ctx, mts.Query{
+		Measurement: "scale",
+		StartTime:   query.start,
+		EndTime:     query.end,
+		Limit:       query.limit,
+		Fields:      fields,
+	})
+	if err != nil {
+		return 0, time.Since(started), err
+	}
+	rows := 0
+	for iter.Next() {
+		if verify {
+			row := iter.Row()
+			if len(fields) > 0 && len(row.Fields) != len(fields) {
+				return rows, time.Since(started), errors.Join(
+					fmt.Errorf("projected fields=%d want %d", len(row.Fields), len(fields)),
+					iter.Close(),
+				)
+			}
+		} else {
+			_ = iter.Row()
+		}
+		rows++
+	}
+	if err := errors.Join(iter.Err(), iter.Close()); err != nil {
+		return rows, time.Since(started), err
+	}
+	return rows, time.Since(started), nil
 }
 
 func timedQueryLimitedRows(

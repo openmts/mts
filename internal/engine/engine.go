@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/openmts/mts/internal/model"
+	"github.com/openmts/mts/internal/sstable"
 	"github.com/openmts/mts/internal/storagefs"
 )
 
@@ -60,6 +61,7 @@ type Deps struct {
 
 func OpenWithDeps(_ context.Context, opts model.Options, deps Deps) (*Engine, error) {
 	opts = normalizeOptions(opts)
+	sstable.ConfigurePageDecodeCache(opts.QueryPageCache.Limit, opts.QueryPageCache.MaxSamples)
 	deps = normalizeDeps(deps, opts.Cardinality)
 	if opts.Path == "" {
 		return nil, fmt.Errorf("engine path is empty")
