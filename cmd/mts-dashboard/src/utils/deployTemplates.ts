@@ -148,6 +148,52 @@ RandomizedDelaySec=3m
 WantedBy=timers.target
 `,
   },
+  {
+    id: 'rsync-offsite',
+    title: { zh: '异地 rsync 拷贝样例', en: 'Off-host rsync copy sample' },
+    description: {
+      zh: '跨主机/跨盘同步 data-snapshot；需预先配置 SSH 密钥或受限账号。',
+      en: 'Cross-host/disk sync for data-snapshot; preconfigure SSH keys or restricted accounts.',
+    },
+    filename: 'mts-backup-rsync-offsite.sh.sample',
+    language: 'shell',
+    body: `#!/usr/bin/env bash
+set -euo pipefail
+# 将最近一次本地快照同步到异地；路径与主机名请替换。
+SRC_ROOT="\${MTS_BACKUP_DIR:-/var/lib/mts/backups}"
+REMOTE="\${MTS_BACKUP_REMOTE:?set MTS_BACKUP_REMOTE e.g. backup@host:/var/backups/mts}"
+LATEST="$(ls -1dt "$SRC_ROOT"/data-snapshot-* 2>/dev/null | head -n1 || true)"
+[[ -n "$LATEST" ]] || { echo "no data-snapshot under $SRC_ROOT" >&2; exit 1; }
+BASE="$(basename "$LATEST")"
+rsync -a --delete --partial --info=stats2 "$LATEST/" "\${REMOTE%/}/$BASE/"
+echo "offsite ok: $BASE -> $REMOTE"
+`,
+  },
+  {
+    id: 'backup-alert-hook',
+    title: { zh: '备份失败告警钩子样例', en: 'Backup failure alert hook sample' },
+    description: {
+      zh: '供 systemd ExecStopPost 或 cron 包装脚本调用；需替换 webhook/邮件通道。',
+      en: 'For systemd ExecStopPost or cron wrappers; replace webhook/mail channel for your env.',
+    },
+    filename: 'mts-backup-alert.sh.sample',
+    language: 'shell',
+    body: `#!/usr/bin/env bash
+# systemd 在 oneshot 失败时传入 SERVICE_RESULT / EXIT_STATUS 等环境变量。
+set -euo pipefail
+STATUS="\${SERVICE_RESULT:-\${1:-unknown}}"
+CODE="\${EXIT_STATUS:-\${2:-n/a}}"
+HOST="$(hostname -f 2>/dev/null || hostname)"
+MSG="[mts-backup] host=$HOST result=$STATUS exit=$CODE time=$(date -Is)"
+# 示例 1：写入本地告警日志（由日志采集接入告警）
+echo "$MSG" >>/var/log/mts-backup-alert.log
+# 示例 2：Webhook（取消注释并替换）
+# curl -fsS -X POST -H 'Content-Type: application/json' \
+#   -d "{\"text\":$(python3 -c 'import json,os; print(json.dumps(os.environ.get("MSG","")))' MSG="$MSG")}" \
+#   "\${MTS_BACKUP_ALERT_WEBHOOK:?set webhook}"
+exit 0
+`,
+  },
 ]
 
 export function deployTemplateById(id: string, templates = DEPLOY_TEMPLATES): DeployTemplate | undefined {

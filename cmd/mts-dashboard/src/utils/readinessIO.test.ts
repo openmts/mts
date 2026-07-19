@@ -54,8 +54,20 @@ test('parseReadinessImport rejects bad payloads', () => {
 })
 
 test('applyReadinessImport merge and replace', () => {
-  const cur = { production: { a: true }, edgeHttps: { e1: true }, backupSchedule: {}, deployKit: { reviewed: true } }
-  const inc = { production: { b: true }, edgeHttps: {}, backupSchedule: { s1: true }, deployKit: { downloaded: true } }
+  const cur = {
+    production: { a: true },
+    edgeHttps: { e1: true },
+    backupSchedule: {},
+    deployKit: { reviewed: true },
+    signoffNotes: { edgeHttps: 'old' },
+  }
+  const inc = {
+    production: { b: true },
+    edgeHttps: {},
+    backupSchedule: { s1: true },
+    deployKit: { downloaded: true },
+    signoffNotes: { backupOffsite: 'remote ok' },
+  }
   const merged = applyReadinessImport(cur, inc, { merge: true })
   assert.equal(merged.production.a, true)
   assert.equal(merged.production.b, true)
@@ -63,12 +75,16 @@ test('applyReadinessImport merge and replace', () => {
   assert.equal(merged.backupSchedule.s1, true)
   assert.equal(merged.deployKit.reviewed, true)
   assert.equal(merged.deployKit.downloaded, true)
+  assert.equal(merged.signoffNotes?.edgeHttps, 'old')
+  assert.equal(merged.signoffNotes?.backupOffsite, 'remote ok')
   const replaced = applyReadinessImport(cur, inc, { merge: false })
   assert.equal(replaced.production.a, undefined)
   assert.equal(replaced.production.b, true)
   assert.deepEqual(replaced.edgeHttps, {})
   assert.equal(replaced.deployKit.downloaded, true)
   assert.equal(replaced.deployKit.reviewed, undefined)
+  assert.equal(replaced.signoffNotes?.backupOffsite, 'remote ok')
+  assert.equal(replaced.signoffNotes?.edgeHttps, undefined)
 })
 
 test('empty state export roundtrip parse', () => {
@@ -87,4 +103,15 @@ test('deployKit export roundtrip', () => {
   const p = parseReadinessImport(payload)
   assert.equal(p.ok, true)
   if (p.ok) assert.equal(p.state.deployKit.copied, true)
+})
+
+test('export includes signoffNotes', () => {
+  const payload = buildReadinessExport({
+    production: {},
+    edgeHttps: {},
+    backupSchedule: {},
+    deployKit: {},
+    signoffNotes: { backupAlert: 'pagerduty' },
+  })
+  assert.equal(payload.state.signoffNotes?.backupAlert, 'pagerduty')
 })

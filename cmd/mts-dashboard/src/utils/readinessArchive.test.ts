@@ -121,3 +121,38 @@ test('archiveFilenames uses iso-like stamp', () => {
   assert.match(names.json, /mts-readiness-archive-2026-07-20T12-34-56\.json/)
   assert.match(names.md, /\.md$/)
 })
+
+test('archive includes signoff notes without claiming acceptance', () => {
+  const a = buildReadinessArchive({
+    locale: 'zh',
+    operator: 'ops',
+    now: '2026-07-20T13:00:00.000Z',
+    state: {
+      production: {},
+      edgeHttps: {},
+      backupSchedule: {},
+      deployKit: {},
+      signoffNotes: {
+        edgeHttps: 'openssl leaf expires 2027-01-01',
+        backupOffsite: 'rsync to backup@host keep=7',
+        backupAlert: 'webhook #ops-alerts',
+      },
+    },
+    score: {
+      checklist: 0,
+      edgeHttps: 0,
+      backupSchedule: 0,
+      doctor: 40,
+      total: 10,
+      reasons: ['doctor_unavailable'],
+    },
+    doctor: { loaded: false },
+  })
+  assert.equal(a.signoff_notes.edgeHttps, 'openssl leaf expires 2027-01-01')
+  assert.equal(a.signoff_notes.backupOffsite, 'rsync to backup@host keep=7')
+  const md = formatReadinessArchiveMarkdown(a)
+  assert.match(md, /部署侧签核证据备注/)
+  assert.match(md, /openssl leaf expires/)
+  assert.match(md, /webhook #ops-alerts/)
+  assert.match(md, /不代表生产人工验收已完成/)
+})

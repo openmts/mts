@@ -45,3 +45,14 @@ test('buildDeployKitSummary localizes titles and marks manual signoff', () => {
   assert.equal(en.items.find((x) => x.id === 'nginx-https')?.title, 'Nginx HTTPS + HSTS sample')
   assert.match(en.note, /does not complete/i)
 })
+
+test('deploy kit includes offsite rsync and alert hook samples', () => {
+  const zh = buildDeployKitSummary('zh')
+  assert.ok(zh.count >= 7)
+  assert.ok(zh.items.some((x) => x.id === 'rsync-offsite'))
+  assert.ok(zh.items.some((x) => x.id === 'backup-alert-hook'))
+  const md = formatDeployKitMarkdown('zh')
+  assert.match(md, /rsync/)
+  assert.match(md, /mts-backup-alert/)
+  assert.match(md, /不代表/)
+})

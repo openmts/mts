@@ -38,8 +38,8 @@ export const BACKUP_SCHEDULE_STEPS: BackupScheduleStep[] = [
     severity: 'required',
     title: { zh: '异地/跨主机拷贝', en: 'Remote / cross-host copy' },
     detail: {
-      zh: '将 data-snapshot 目录同步到另一磁盘、主机或对象存储，避免与源盘同损。',
-      en: 'Sync the data-snapshot directory to another disk, host, or object store to avoid shared-fate failure.',
+      zh: '将 data-snapshot 目录同步到另一磁盘、主机或对象存储，避免与源盘同损；可参考部署材料包 rsync-offsite 样例。',
+      en: 'Sync the data-snapshot directory to another disk, host, or object store to avoid shared-fate failure; see deploy kit rsync-offsite sample.',
     },
     example: 'rsync -a --delete /var/lib/mts/backups/data-snapshot-XXX/ backup-host:/backups/mts/$(date +%F)/',
   },
@@ -78,9 +78,10 @@ export const BACKUP_SCHEDULE_STEPS: BackupScheduleStep[] = [
     severity: 'recommended',
     title: { zh: '失败告警', en: 'Failure alerting' },
     detail: {
-      zh: '备份脚本非 0 退出、restore-drill fatal、磁盘水位接入监控告警。',
-      en: 'Wire non-zero backup script exits, restore-drill fatals and disk watermarks into monitoring alerts.',
+      zh: '备份脚本非 0 退出、restore-drill fatal、磁盘水位接入监控告警；可参考部署材料包 mts-backup-alert.sh.sample。',
+      en: 'Wire non-zero backup script exits, restore-drill fatals and disk watermarks into monitoring alerts; see deploy kit mts-backup-alert.sh.sample.',
     },
+    example: 'ExecStopPost=/opt/mts/scripts/mts-backup-alert.sh  # or wrap cron and page on non-zero exit',
   },
 ]
 

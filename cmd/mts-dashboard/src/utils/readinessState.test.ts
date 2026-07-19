@@ -4,8 +4,10 @@ import {
   completedIds,
   emptyReadinessState,
   loadReadinessState,
+  READINESS_STORAGE_KEY,
   saveReadinessState,
   setReadinessFlag,
+  setSignoffNote,
 } from './readinessState.ts'
 
 function memStorage(seed: Record<string, string> = {}) {
@@ -65,4 +67,29 @@ test('loadReadinessState tolerates bad json and legacy without deployKit', () =>
   const st = loadReadinessState(legacy)
   assert.equal(st.production['https-edge'], true)
   assert.deepEqual(st.deployKit, {})
+})
+
+test('signoff notes persist and trim', () => {
+  const s = memStorage()
+  setSignoffNote('edgeHttps', '  cert ok by alice 2026-07-20  ', s)
+  setSignoffNote('backupOffsite', 'rsync to backup-host keep=7', s)
+  const st = loadReadinessState(s)
+  assert.equal(st.signoffNotes?.edgeHttps, 'cert ok by alice 2026-07-20')
+  assert.equal(st.signoffNotes?.backupOffsite, 'rsync to backup-host keep=7')
+  setSignoffNote('edgeHttps', '   ', s)
+  assert.equal(loadReadinessState(s).signoffNotes?.edgeHttps, undefined)
+})
+
+test('legacy state without signoffNotes loads empty notes', () => {
+  const legacy = memStorage({
+    [READINESS_STORAGE_KEY]: JSON.stringify({
+      production: {},
+      edgeHttps: {},
+      backupSchedule: {},
+      deployKit: { reviewed: true },
+    }),
+  })
+  const st = loadReadinessState(legacy)
+  assert.deepEqual(st.signoffNotes, {})
+  assert.equal(st.deployKit.reviewed, true)
 })

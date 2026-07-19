@@ -4,6 +4,7 @@ import { downloadJSON, downloadText } from './download.ts'
 import {
   emptyReadinessState,
   loadReadinessState,
+  normalizeSignoffNotes,
   saveReadinessState,
   type ReadinessState,
 } from './readinessState.ts'
@@ -30,6 +31,7 @@ export function buildReadinessExport(
       edgeHttps: { ...state.edgeHttps },
       backupSchedule: { ...state.backupSchedule },
       deployKit: { ...(state.deployKit ?? {}) },
+      signoffNotes: normalizeSignoffNotes(state.signoffNotes),
       updatedAt: state.updatedAt,
     },
   }
@@ -73,6 +75,7 @@ function normalizeState(o: Record<string, unknown>): ReadinessState {
     edgeHttps: boolMap(o.edgeHttps),
     backupSchedule: boolMap(o.backupSchedule),
     deployKit: boolMap(o.deployKit),
+    signoffNotes: normalizeSignoffNotes(o.signoffNotes),
     updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : undefined,
   }
 }
@@ -98,6 +101,7 @@ export function applyReadinessImport(
       edgeHttps: { ...incoming.edgeHttps },
       backupSchedule: { ...incoming.backupSchedule },
       deployKit: { ...(incoming.deployKit ?? {}) },
+      signoffNotes: normalizeSignoffNotes(incoming.signoffNotes),
       updatedAt: incoming.updatedAt,
     }
   }
@@ -106,6 +110,10 @@ export function applyReadinessImport(
     edgeHttps: { ...current.edgeHttps, ...incoming.edgeHttps },
     backupSchedule: { ...current.backupSchedule, ...incoming.backupSchedule },
     deployKit: { ...(current.deployKit ?? {}), ...(incoming.deployKit ?? {}) },
+    signoffNotes: {
+      ...normalizeSignoffNotes(current.signoffNotes),
+      ...normalizeSignoffNotes(incoming.signoffNotes),
+    },
     updatedAt: incoming.updatedAt ?? current.updatedAt,
   }
 }

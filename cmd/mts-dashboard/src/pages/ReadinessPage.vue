@@ -28,7 +28,9 @@ import {
   completedIds,
   loadReadinessState,
   setReadinessFlag,
+  setSignoffNote,
   type ReadinessState,
+  type SignoffNotes,
 } from '@/utils/readinessState'
 import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import {
@@ -142,6 +144,10 @@ function toggle(
   checked: boolean,
 ) {
   state.value = setReadinessFlag(section, id, checked)
+}
+
+function saveSignoff(field: keyof SignoffNotes, value: string) {
+  state.value = setSignoffNote(field, value)
 }
 
 async function loadServerVersion() {
@@ -505,6 +511,49 @@ onMounted(() => {
           <p class="mb-2 text-xs mts-muted">{{ t('readinessBackupScriptHint') }}</p>
           <pre class="overflow-x-auto rounded bg-slate-950 p-3 text-[11px] text-emerald-300">{{ backupScriptHint }}</pre>
         </div>
+      </div>
+    </div>
+
+    <div class="mts-panel" data-testid="readiness-signoff-notes">
+      <div class="mb-2">
+        <h2 class="text-sm font-semibold">{{ t('readinessSignoffTitle') }}</h2>
+        <p class="mt-1 text-xs mts-muted">{{ t('readinessSignoffHint') }}</p>
+        <p class="mt-1 text-[11px] text-amber-700 dark:text-amber-200">{{ t('readinessSignoffManualNote') }}</p>
+      </div>
+      <div class="space-y-3">
+        <label class="block text-xs text-slate-700 dark:text-slate-200">
+          <span class="mb-1 block font-medium">{{ t('readinessSignoffEdge') }}</span>
+          <textarea
+            data-testid="signoff-edge-https"
+            class="mts-input min-h-[4.5rem] w-full text-xs"
+            :value="state.signoffNotes?.edgeHttps ?? ''"
+            :placeholder="t('readinessSignoffEdgePh')"
+            maxlength="2000"
+            @change="saveSignoff('edgeHttps', ($event.target as HTMLTextAreaElement).value)"
+          />
+        </label>
+        <label class="block text-xs text-slate-700 dark:text-slate-200">
+          <span class="mb-1 block font-medium">{{ t('readinessSignoffBackup') }}</span>
+          <textarea
+            data-testid="signoff-backup-offsite"
+            class="mts-input min-h-[4.5rem] w-full text-xs"
+            :value="state.signoffNotes?.backupOffsite ?? ''"
+            :placeholder="t('readinessSignoffBackupPh')"
+            maxlength="2000"
+            @change="saveSignoff('backupOffsite', ($event.target as HTMLTextAreaElement).value)"
+          />
+        </label>
+        <label class="block text-xs text-slate-700 dark:text-slate-200">
+          <span class="mb-1 block font-medium">{{ t('readinessSignoffAlert') }}</span>
+          <textarea
+            data-testid="signoff-backup-alert"
+            class="mts-input min-h-[4.5rem] w-full text-xs"
+            :value="state.signoffNotes?.backupAlert ?? ''"
+            :placeholder="t('readinessSignoffAlertPh')"
+            maxlength="2000"
+            @change="saveSignoff('backupAlert', ($event.target as HTMLTextAreaElement).value)"
+          />
+        </label>
       </div>
     </div>
 
