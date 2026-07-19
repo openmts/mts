@@ -513,3 +513,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 降采样 run-range/repair/dry-run 统一区间对话框
 - statuses 明细；downsampleRange 纯函数与契约测试
 - 状态：已实现；仍不宣称可商用完成
+
+## P35（2026-07-20）
+- 路由文档标题（pageTitle + useDocumentTitle）
+- 降采样对话框 focus trap
+- 脏表单离开确认 i18n
+- 状态：已实现；仍不宣称可商用完成

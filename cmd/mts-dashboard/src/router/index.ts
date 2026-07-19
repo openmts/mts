@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { setRouteLoading } from '@/composables/useGlobalLoading'
 import { allowNavigationWhenDirty, anyRouteDirty } from '@/utils/routeDirty'
+import { messages, type Locale } from '@/i18n/messages'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -52,9 +53,14 @@ router.beforeEach((to, from) => {
   setRouteLoading(true)
   // 脏表单离开确认（查询/写入等页注册 checker）
   if (from.matched.length && to.fullPath !== from.fullPath && anyRouteDirty()) {
+    let loc: Locale = 'zh'
+    try {
+      const v = localStorage.getItem('mts_locale')
+      if (v === 'zh' || v === 'en') loc = v
+    } catch { /* ignore */ }
     const leave = allowNavigationWhenDirty(
       true,
-      '有未保存的表单更改，确定离开当前页面？',
+      messages[loc].unsavedLeaveConfirm,
     )
     if (!leave) {
       setRouteLoading(false)

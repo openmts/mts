@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -8,6 +8,7 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
@@ -52,7 +53,6 @@ const rangeStartUnix = ref(0)
 const rangeEndUnix = ref(0)
 const rangeAdvanceWatermark = ref(false)
 const rangeLoading = ref(false)
-
 const showCreate = ref(false)
 const intervalHuman = ref('1m')
 const deleteOpen = ref(false)
@@ -63,6 +63,54 @@ const newPolicy = ref<DownsamplePolicy>({
   target_database: '', target_measurement: '',
   interval: 60_000_000_000, functions: [{ function: 'mean', field: 'value', as: 'mean_value' }],
   group_by_tags: [], enabled: true,
+})
+
+const rangePanelRef = ref<HTMLElement | null>(null)
+const createPanelRef = ref<HTMLElement | null>(null)
+let rangeTrap: FocusTrapHandle | null = null
+let createTrap: FocusTrapHandle | null = null
+
+function releaseRangeTrap() {
+  rangeTrap?.release()
+  rangeTrap = null
+}
+function releaseCreateTrap() {
+  createTrap?.release()
+  createTrap = null
+}
+
+watch(rangeOpen, async (open) => {
+  releaseRangeTrap()
+  if (!open) {
+    if (!showCreate.value) document.body.style.overflow = ''
+    return
+  }
+  document.body.style.overflow = 'hidden'
+  await nextTick()
+  if (rangePanelRef.value) {
+    rangeTrap = createFocusTrap(rangePanelRef.value)
+    rangeTrap.focusFirst()
+  }
+})
+
+watch(showCreate, async (open) => {
+  releaseCreateTrap()
+  if (!open) {
+    if (!rangeOpen.value) document.body.style.overflow = ''
+    return
+  }
+  document.body.style.overflow = 'hidden'
+  await nextTick()
+  if (createPanelRef.value) {
+    createTrap = createFocusTrap(createPanelRef.value)
+    createTrap.focusFirst()
+  }
+})
+
+onBeforeUnmount(() => {
+  releaseRangeTrap()
+  releaseCreateTrap()
+  document.body.style.overflow = ''
 })
 
 onMounted(loadData)
@@ -569,7 +617,7 @@ async function confirmRange() {
       @click.self="showCreate = false"
       @keydown.esc="showCreate = false"
     >
-      <div class="max-h-[80vh] w-[480px] overflow-auto rounded-xl bg-white p-6 shadow-lg dark:bg-slate-900" role="dialog" aria-modal="true">
+      <div ref="createPanelRef" class="max-h-[80vh] w-[480px] overflow-auto rounded-xl bg-white p-6 shadow-lg dark:bg-slate-900" role="dialog" aria-modal="true" data-testid="downsample-create-dialog">
         <h3 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('downsampleCreate') }}</h3>
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -651,7 +699,7 @@ async function confirmRange() {
       @click.self="!rangeLoading && (rangeOpen = false)"
       @keydown.esc="!rangeLoading && (rangeOpen = false)"
     >
-      <div class="w-[440px] rounded-xl bg-white p-6 shadow-lg dark:bg-slate-900" role="dialog" aria-modal="true">
+      <div ref="rangePanelRef" class="w-[440px] rounded-xl bg-white p-6 shadow-lg dark:bg-slate-900" role="dialog" aria-modal="true">
         <h3 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ rangeTitle }}</h3>
         <p class="mb-1 text-xs mts-muted">{{ rangeHint }}</p>
         <p class="mb-3 text-[11px] mts-muted">{{ rangeName }} · {{ t('downsampleRepairRangeHint') }}</p>

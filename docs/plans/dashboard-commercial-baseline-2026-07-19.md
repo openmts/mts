@@ -29,6 +29,7 @@
 - Overview 就绪评分 + e2e 加深（P32）
 - 降采样 repair + 文案 i18n（P33）
 - 降采样 run-range/状态明细/区间校验（P34）
+- 文档标题与对话框 a11y（P35）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -136,4 +137,11 @@
 ## P34 状态（2026-07-20）
 - 统一区间对话框：repair / run-range / dry-run + advance_watermark
 - statuses 明细表；区间校验纯函数与契约测试
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份
+
+
+## P35 状态（2026-07-20）
+- document.title 随路由/语言更新
+- 降采样创建/区间对话框焦点陷阱
+- 脏离开确认 i18n
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份

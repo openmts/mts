@@ -287,6 +287,8 @@ export const messages = {
     downsampleDryRunTitle: 'Dry-run 估算',
     downsampleDryRunMsg: '估算窗口与写入量，不实际写入。',
     downsampleAdvanceWatermark: '推进水位（advance_watermark）',
+    forceChangePassword: '修改默认密码',
+    notFound: '页面不存在',
     unsavedLeaveConfirm: '有未保存的表单更改，确定离开当前页面？',
   },
   en: {
@@ -575,6 +577,8 @@ export const messages = {
     downsampleDryRunTitle: 'Dry-run estimate',
     downsampleDryRunMsg: 'Estimate windows and write volume without writing.',
     downsampleAdvanceWatermark: 'Advance watermark',
+    forceChangePassword: 'Change default password',
+    notFound: 'Not found',
     unsavedLeaveConfirm: 'You have unsaved form changes. Leave this page?',
   },
 } as const
