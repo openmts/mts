@@ -8,6 +8,12 @@ import {
   type QueryHistoryForm,
   type QueryHistoryRecord,
 } from '@/utils/queryHistory'
+import {
+  buildHistoryExport,
+  mergeImportedHistory,
+  parseHistoryImport,
+  type HistoryExportPayload,
+} from '@/utils/queryHistoryIO'
 
 const KEY = 'mts_query_history'
 const MAX = 30
@@ -88,6 +94,26 @@ export function useQueryHistory() {
     return historyItemTitle(item)
   }
 
+  function exportPayload(): HistoryExportPayload {
+    return buildHistoryExport(items.value)
+  }
+
+  function importPayload(
+    raw: unknown,
+    opts?: { merge?: boolean },
+  ): { ok: true; count: number } | { ok: false; error: string } {
+    const parsed = parseHistoryImport(raw)
+    if (!parsed.ok) return parsed
+    const merge = opts?.merge !== false
+    const next = mergeImportedHistory(items.value, parsed.items as QueryHistoryRecord[], {
+      merge,
+      max: MAX,
+    }) as QueryHistoryItem[]
+    items.value = next
+    persist()
+    return { ok: true, count: parsed.items.length }
+  }
+
   return {
     items: sortedItems,
     push,
@@ -96,5 +122,7 @@ export function useQueryHistory() {
     rename,
     togglePin,
     titleOf,
+    exportPayload,
+    importPayload,
   }
 }

@@ -8,12 +8,14 @@ import { useI18n } from '@/composables/useI18n'
 import { formatEpoch, nowUnixMsString } from '@/utils/time'
 import { formatFieldsMap } from '@/utils/fieldValue'
 import { rowsToCSV, downloadText } from '@/utils/csv'
+import { loadQueryPrefs, saveQueryPrefs } from '@/utils/queryPrefs'
+import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
 import QueryChart from '@/components/QueryChart.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star, Pencil, X } from 'lucide-vue-next'
+import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star, Pencil, X, Upload } from 'lucide-vue-next'
 
 const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
@@ -33,12 +35,15 @@ const deleteOpen = ref(false)
 const deleteConfirmText = ref('')
 const deleteLoading = ref(false)
 const deleteResult = ref('')
-const showHistory = ref(false)
-const showChart = ref(true)
-const showRawFields = ref(false)
+const PREFS_KEY = 'mts_query_prefs'
+const initialPrefs = loadQueryPrefs(typeof localStorage !== 'undefined' ? localStorage : null, PREFS_KEY)
+const showHistory = ref(initialPrefs.showHistory)
+const showChart = ref(initialPrefs.showChart)
+const showRawFields = ref(initialPrefs.showRawFields)
 const renameDraft = ref('')
 const renamingId = ref<string | null>(null)
 const clearHistoryOpen = ref(false)
+const historyFileInput = ref<HTMLInputElement | null>(null)
 
 const modeOptions = [
   { value: 'rows' as const, label: '行式' },
@@ -48,14 +53,53 @@ const modeOptions = [
   { value: 'stream-column' as const, label: '流式列' },
 ]
 
+function persistPrefs() {
+  saveQueryPrefs(typeof localStorage !== 'undefined' ? localStorage : null, PREFS_KEY, {
+    showChart: showChart.value,
+    showRawFields: showRawFields.value,
+    showHistory: showHistory.value,
+  })
+}
+
+function onQueryKeydown(e: KeyboardEvent) {
+  // 对话框打开时交给 ConfirmDialog；输入框内仅允许 Ctrl/Cmd+Enter 与 Escape
+  if (deleteOpen.value || clearHistoryOpen.value) return
+  const action = matchQueryShortcut(e)
+  if (!action) return
+  if (isEditableTarget(e.target) && action !== 'run' && action !== 'cancel') return
+  if (action === 'run') {
+    e.preventDefault()
+    if (!loading.value) void runQuery()
+    return
+  }
+  if (action === 'cancel') {
+    e.preventDefault()
+    if (loading.value) cancelQuery()
+    else if (showHistory.value) showHistory.value = false
+    return
+  }
+  if (action === 'copy') {
+    e.preventDefault()
+    void copyResults()
+    return
+  }
+  if (action === 'toggle-history') {
+    e.preventDefault()
+    showHistory.value = !showHistory.value
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', onQueryKeydown)
   try { await loadDatabases() }
   catch (e) { actionError.value = e instanceof Error ? e.message : '加载数据库失败' }
 })
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onQueryKeydown)
   cancelQuery()
   if (copyTimer) clearTimeout(copyTimer)
 })
+watch([showChart, showRawFields, showHistory], () => { persistPrefs() })
 watch(() => queryForm.value.database, async (db) => {
   try { await loadDbChildren(db) }
   catch (e) { actionError.value = e instanceof Error ? e.message : '加载 measurement 失败' }
@@ -137,6 +181,36 @@ function confirmClearHistory() {
   history.clear({ keepPinned: true })
   clearHistoryOpen.value = false
   success('已清空未收藏历史')
+}
+
+function exportHistory() {
+  const payload = history.exportPayload()
+  downloadText(`mts-query-history-${Date.now()}.json`, JSON.stringify(payload, null, 2), 'application/json')
+  success(`已导出 ${payload.items.length} 条历史`)
+}
+
+function triggerImportHistory() {
+  historyFileInput.value?.click()
+}
+
+async function onHistoryFileChange(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const text = await file.text()
+    const raw = JSON.parse(text) as unknown
+    const res = history.importPayload(raw, { merge: true })
+    if (!res.ok) {
+      notifyError(res.error)
+      return
+    }
+    success(`已合并导入 ${res.count} 条历史`)
+    showHistory.value = true
+  } catch (e) {
+    notifyError(e instanceof Error ? e.message : '导入历史失败')
+  }
 }
 
 async function copyResults() {
@@ -224,7 +298,7 @@ const columnRows = computed(() => {
         >{{ m.label }}</button>
       </div>
       <div class="flex gap-2">
-        <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showHistory = !showHistory"><History class="h-3.5 w-3.5" />历史</button>
+        <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showHistory = !showHistory" title="Ctrl/⌘+H"><History class="h-3.5 w-3.5" />历史</button>
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showChart = !showChart"><BarChart3 class="h-3.5 w-3.5" />图</button>
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showRawFields = !showRawFields">{{ showRawFields ? '标量字段' : '原始字段' }}</button>
         <button class="mts-btn" :disabled="authzChecking" @click="checkAuthz('read')">权限预检</button>
@@ -237,15 +311,33 @@ const columnRows = computed(() => {
     <div v-if="showHistory" class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
         <span>{{ t('queryHistory') }}</span>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            @click="exportHistory"
+          ><Download class="h-3 w-3" />导出</button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            @click="triggerImportHistory"
+          ><Upload class="h-3 w-3" />导入</button>
           <button
             type="button"
             class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
             :disabled="!historyPreview.length"
             @click="clearHistoryOpen = true"
           >{{ t('clearHistory') }}</button>
+          <input
+            ref="historyFileInput"
+            type="file"
+            accept="application/json,.json"
+            class="hidden"
+            @change="onHistoryFileChange"
+          />
         </div>
       </div>
+      <p class="mb-2 text-[11px] text-slate-400 dark:text-slate-500">快捷键：Ctrl/⌘+Enter 查询 · Esc 取消 · Ctrl/⌘+H 历史 · Ctrl/⌘+Shift+C 复制</p>
       <ul class="max-h-64 space-y-1 overflow-auto sm:max-h-80">
         <li
           v-for="h in historyPreview"
