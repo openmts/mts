@@ -3,7 +3,11 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
+// 支持子路径部署：构建时设置 VITE_BASE=/mts/ 等
+const base = process.env.VITE_BASE || '/'
+
 export default defineConfig({
+  base,
   plugins: [vue(), tailwindcss()],
   resolve: {
     alias: {

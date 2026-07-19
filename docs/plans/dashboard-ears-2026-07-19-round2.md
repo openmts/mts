@@ -96,14 +96,14 @@
 
 ## P3（本轮默认可不做）
 
-- [ ] EARS-R2-P3-01 查询可视化
-- [ ] EARS-R2-P3-02 TypedBatch UI
-- [ ] EARS-R2-P3-03 查询历史
-- [ ] EARS-R2-P3-04 暗色主题
-- [ ] EARS-R2-P3-05 i18n
-- [ ] EARS-R2-P3-06 子路径 base
-- [ ] EARS-R2-P3-07 审计增强
-- [ ] EARS-R2-P3-08 快照列表管理
+- [x] EARS-R2-P3-01 查询可视化
+- [x] EARS-R2-P3-02 TypedBatch UI
+- [x] EARS-R2-P3-03 查询历史
+- [x] EARS-R2-P3-04 暗色主题
+- [x] EARS-R2-P3-05 i18n
+- [x] EARS-R2-P3-06 子路径 base
+- [x] EARS-R2-P3-07 审计增强
+- [x] EARS-R2-P3-08 快照列表管理
 
 ---
 
@@ -115,4 +115,15 @@
 - ConfirmDialog 替换所有业务 confirm/prompt；流式预览语义；LP diagnostics；成功 notify；retention 不传不安全 now；downsample 人类 interval
 - 删除 `apiPostText`；UsersPage 拆分 `UserGrantPanel`（≤300）；`npm test` + typecheck/build 门禁
 - 验证：`npm run test`、`npm run build`、`make test`、`make e2e`、`make lint` 均通过
+
+- 2026-07-19 P3 闭环：
+  - P3-01 查询 SVG 时序图 + 字段选择（QueryChart）
+  - P3-02 Write 页 TypedBatch 构造 UI → `/api/v1/data/write/typed`
+  - P3-03 localStorage 查询历史（恢复表单/模式）
+  - P3-04 暗色主题（html.dark + TopBar 切换，localStorage）
+  - P3-05 轻量 i18n zh/en（导航/顶栏/关键文案）
+  - P3-06 子路径 base：`VITE_BASE` + `createWebHistory(BASE_URL)` + API_BASE
+  - P3-07 全局审计 `/api/v1/admin/audit` 过滤/导出；时间/用户/action
+  - P3-08 快照列表/删除 API + Storage 页管理
+- 验证：npm test/build + make test/e2e/lint 通过
 

@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue'
 import { apiPost } from '@/api/client'
 import { useQueryWorkbench } from '@/composables/useQueryWorkbench'
+import { useQueryHistory } from '@/composables/useQueryHistory'
 import { useNotify } from '@/composables/useNotify'
+import { useI18n } from '@/composables/useI18n'
 import { formatEpoch, nowUnixMsString } from '@/utils/time'
+import QueryChart from '@/components/QueryChart.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import {
-  Search, Database, Hash, Clock, Filter, Layers, Zap, BarChart3, Timer, Square, Copy, Check, Trash2,
+  Search, Database, Hash, Clock, Filter, Layers, Zap, BarChart3, Timer, Square, Copy, Check, Trash2, History,
 } from 'lucide-vue-next'
 
 const {
@@ -13,7 +17,9 @@ const {
   rows, queryStats, rawOutput, streamMeta, actionError, loading,
   loadDatabases, loadDbChildren, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
+const history = useQueryHistory()
 const { success, error: notifyError } = useNotify()
+const { t } = useI18n()
 
 const copyState = ref<'idle' | 'ok' | 'fail'>('idle')
 let copyTimer: ReturnType<typeof setTimeout> | null = null
@@ -21,6 +27,8 @@ const deleteOpen = ref(false)
 const deleteConfirmText = ref('')
 const deleteLoading = ref(false)
 const deleteResult = ref('')
+const showHistory = ref(false)
+const showChart = ref(true)
 
 const modeOptions = [
   { value: 'rows' as const, label: '行式查询', desc: '按行返回数据' },
@@ -31,44 +39,51 @@ const modeOptions = [
 ]
 
 onMounted(async () => {
-  try {
-    await loadDatabases()
-  } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '加载数据库失败'
-  }
+  try { await loadDatabases() }
+  catch (e) { actionError.value = e instanceof Error ? e.message : '加载数据库失败' }
 })
-
 onBeforeUnmount(() => {
   cancelQuery()
   if (copyTimer) clearTimeout(copyTimer)
 })
-
 watch(() => queryForm.value.database, async (db) => {
-  try {
-    await loadDbChildren(db)
-  } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '加载 measurement 失败'
-  }
+  try { await loadDbChildren(db) }
+  catch (e) { actionError.value = e instanceof Error ? e.message : '加载 measurement 失败' }
 })
 
 function formatTimestamp(v: number): string {
-  // 查询默认 precision=ms；若数值极大按 ns 展示
   if (Math.abs(v) >= 1e15) return formatEpoch(v, 'ns')
   return formatEpoch(v, 'ms')
 }
-
 function fillNowMs(which: 'start' | 'end') {
   const s = nowUnixMsString()
   if (which === 'start') queryForm.value.start_time = s
   else queryForm.value.end_time = s
 }
 
+async function runQuery() {
+  await executeQuery()
+  if (!actionError.value) {
+    history.push({
+      mode: queryMode.value,
+      form: { ...queryForm.value },
+    })
+  } else {
+    notifyError(actionError.value)
+  }
+}
+
+function applyHistory(id: string) {
+  const item = history.items.value.find((x) => x.id === id)
+  if (!item) return
+  queryMode.value = item.mode
+  queryForm.value = { ...item.form }
+  showHistory.value = false
+}
+
 async function copyResults() {
   const text = resultTextForCopy()
-  if (!text) {
-    actionError.value = '暂无可复制内容'
-    return
-  }
+  if (!text) { actionError.value = '暂无可复制内容'; return }
   try {
     if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text)
     else {
@@ -78,229 +93,205 @@ async function copyResults() {
       area.style.left = '-9999px'
       document.body.appendChild(area)
       area.select()
-      const ok = document.execCommand('copy')
+      document.execCommand('copy')
       document.body.removeChild(area)
-      if (!ok) throw new Error('copy failed')
     }
     copyState.value = 'ok'
-    success('结果已复制')
-  } catch (_) {
+    success(streamMeta.value.previewOnly ? t.value('copyPreview') : t.value('copy'))
+  } catch {
     copyState.value = 'fail'
   }
   if (copyTimer) clearTimeout(copyTimer)
-  copyTimer = setTimeout(() => { copyState.value = 'idle' }, 2000)
+  copyTimer = setTimeout(() => { copyState.value = 'idle' }, 1500)
 }
 
-function openDelete() {
-  deleteResult.value = ''
-  deleteConfirmText.value = ''
-  deleteOpen.value = true
-}
-
-async function executeDelete() {
-  actionError.value = ''
-  deleteResult.value = ''
-  if (!queryForm.value.database || !queryForm.value.measurement) {
-    actionError.value = '删除需要数据库和 measurement'
-    return
-  }
-  if (!queryForm.value.start_time || !queryForm.value.end_time) {
-    actionError.value = '删除需要 start_time 与 end_time（毫秒整数）'
-    return
-  }
-  const expected = `删除 ${queryForm.value.database}/${queryForm.value.measurement}`
-  if (deleteConfirmText.value.trim() !== expected) {
-    actionError.value = `请输入确认文案：${expected}`
-    return
-  }
+async function doRangeDelete() {
+  if (deleteConfirmText.value !== 'DELETE') return
   deleteLoading.value = true
+  deleteResult.value = ''
   try {
     const query = buildQuery()
-    const request = {
-      database: query.database,
-      retention_policy: query.retention_policy || 'autogen',
-      measurement: query.measurement,
-      start_time: query.start_time,
-      end_time: query.end_time,
-      precision: 'ms',
+    const body = {
+      request: {
+        database: query.database,
+        retention_policy: query.retention_policy,
+        measurement: query.measurement,
+        start_time: query.start_time,
+        end_time: query.end_time,
+      },
     }
-    await apiPost('/api/v1/data/delete', { request })
-    deleteResult.value = '删除请求已提交（tombstone）'
+    await apiPost('/api/v1/data/delete', body)
+    deleteResult.value = '范围删除已提交'
+    success(deleteResult.value)
     deleteOpen.value = false
-    success('删除请求已提交')
+    deleteConfirmText.value = ''
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '删除失败'
-    notifyError(actionError.value)
+    deleteResult.value = e instanceof Error ? e.message : '删除失败'
+    notifyError(deleteResult.value)
   } finally {
     deleteLoading.value = false
   }
 }
+
+const historyPreview = computed(() => history.items.value.slice(0, 12))
 </script>
 
 <template>
-  <div class="space-y-6">
-    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{{ actionError }}</p>
-    <p v-if="deleteResult" class="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">{{ deleteResult }}</p>
-
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div class="border-b border-slate-100 bg-slate-50/50 px-6 py-4">
-        <h3 class="text-sm font-semibold text-slate-800">查询条件</h3>
-        <p class="mt-1 text-xs text-slate-500">时间字段使用毫秒 Unix 时间（precision=ms），避免纳秒 Number 精度丢失。</p>
+  <div class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-for="m in modeOptions"
+          :key="m.value"
+          class="rounded-lg border px-3 py-1.5 text-xs"
+          :class="queryMode === m.value ? 'border-slate-800 bg-slate-800 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'"
+          @click="queryMode = m.value"
+        >{{ m.label }}</button>
       </div>
-      <div class="p-6">
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div class="sm:col-span-2">
-            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500"><Database class="h-3 w-3" />数据库 & Measurement</label>
-            <div class="flex gap-2">
-              <select v-model="queryForm.database" class="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                <option v-if="!databases.length" value="" disabled>无数据</option>
-                <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
-              </select>
-              <select v-model="queryForm.measurement" :disabled="!queryForm.database || measurementsLoading" class="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:bg-slate-50">
-                <option v-if="measurementsLoading" value="" disabled>加载中...</option>
-                <option v-else-if="!measurements.length" value="" disabled>无数据</option>
-                <option v-for="m in measurements" :key="m" :value="m">{{ m }}</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500"><Clock class="h-3 w-3" />保留策略</label>
-            <select v-model="queryForm.retention_policy" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-              <option value="autogen">autogen</option>
-              <option v-for="rp in retentionPolicies" :key="rp" :value="rp">{{ rp }}</option>
-            </select>
-          </div>
-          <div>
-            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500"><Hash class="h-3 w-3" />Limit</label>
-            <input v-model="queryForm.limit" type="text" inputmode="numeric" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500"><Timer class="h-3 w-3" />Start (ms)</label>
-            <div class="flex gap-1">
-              <input v-model="queryForm.start_time" type="text" inputmode="numeric" placeholder="可选" class="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm" />
-              <button type="button" class="rounded-lg border border-slate-200 px-2 text-xs" @click="fillNowMs('start')">now</button>
-            </div>
-          </div>
-          <div>
-            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500"><Timer class="h-3 w-3" />End (ms)</label>
-            <div class="flex gap-1">
-              <input v-model="queryForm.end_time" type="text" inputmode="numeric" placeholder="可选" class="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm" />
-              <button type="button" class="rounded-lg border border-slate-200 px-2 text-xs" @click="fillNowMs('end')">now</button>
-            </div>
-          </div>
-          <div class="sm:col-span-2">
-            <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500"><Filter class="h-3 w-3" />Fields</label>
-            <input v-model="queryForm.fields" type="text" placeholder="value,cpu" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          </div>
-        </div>
-
-        <div class="mt-5">
-          <label class="mb-2 block text-xs font-medium text-slate-500">查询模式</label>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="opt in modeOptions"
-              :key="opt.value"
-              type="button"
-              class="rounded-lg border px-3 py-1.5 text-xs transition"
-              :class="queryMode === opt.value ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'"
-              @click="queryMode = opt.value"
-            >
-              <span class="font-medium">{{ opt.label }}</span>
-              <span class="ml-1 opacity-70">{{ opt.desc }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="mt-6 flex flex-wrap items-center gap-3">
-          <button :disabled="loading" class="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" @click="executeQuery">
-            <Search class="h-4 w-4" />{{ loading ? '查询中...' : '执行查询' }}
-          </button>
-          <button :disabled="!loading" class="flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2 text-sm font-medium text-amber-700 disabled:opacity-50" @click="cancelQuery">
-            <Square class="h-4 w-4" />取消查询
-          </button>
-          <button :disabled="!rows.length && !rawOutput" class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50" @click="copyResults">
-            <Check v-if="copyState === 'ok'" class="h-4 w-4 text-green-600" />
-            <Copy v-else class="h-4 w-4" />
-            {{ copyState === 'ok' ? '已复制' : copyState === 'fail' ? '复制失败' : '复制结果' }}
-          </button>
-          <button class="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600" @click="openDelete">
-            <Trash2 class="h-4 w-4" />范围删除...
-          </button>
-        </div>
+      <div class="flex gap-2">
+        <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900" @click="showHistory = !showHistory">
+          <History class="h-3.5 w-3.5" /> {{ t('queryHistory') }}
+        </button>
+        <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900" @click="showChart = !showChart">
+          <BarChart3 class="h-3.5 w-3.5" /> {{ t('chart') }}
+        </button>
       </div>
     </div>
 
-    <!-- 删除确认 -->
-    <div v-if="deleteOpen" class="rounded-2xl border border-red-200 bg-red-50/60 p-6 shadow-sm">
-      <h3 class="text-sm font-semibold text-red-800">危险操作：按时间范围删除</h3>
-      <p class="mt-2 text-xs text-red-700">
-        将删除
-        <strong>{{ queryForm.database || '—' }}</strong> /
-        <strong>{{ queryForm.measurement || '—' }}</strong>
-        在 [{{ queryForm.start_time || '—' }}, {{ queryForm.end_time || '—' }}] (ms) 范围数据（tombstone）。
-      </p>
-      <p class="mt-2 text-xs text-slate-600">请输入确认文案：
-        <code class="rounded bg-white px-1">删除 {{ queryForm.database }}/{{ queryForm.measurement }}</code>
-      </p>
-      <input v-model="deleteConfirmText" class="mt-2 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm" placeholder="确认文案" />
-      <div class="mt-3 flex gap-2">
-        <button :disabled="deleteLoading" class="rounded-lg bg-red-700 px-4 py-2 text-sm text-white disabled:opacity-50" @click="executeDelete">{{ deleteLoading ? '提交中...' : '确认删除' }}</button>
-        <button class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm" @click="deleteOpen = false">取消</button>
+    <div v-if="showHistory" class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+      <div class="mb-2 flex items-center justify-between">
+        <h3 class="text-sm font-semibold">{{ t('queryHistory') }}</h3>
+        <button class="text-xs text-slate-500 hover:text-red-600" @click="history.clear()">{{ t('clearHistory') }}</button>
+      </div>
+      <div v-if="!historyPreview.length" class="text-xs text-slate-400">暂无历史</div>
+      <div v-else class="space-y-1">
+        <button
+          v-for="h in historyPreview"
+          :key="h.id"
+          class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+          @click="applyHistory(h.id)"
+        >
+          <span class="truncate">{{ h.form.database }}/{{ h.form.measurement || '*' }} · {{ h.mode }}</span>
+          <span class="text-slate-400">{{ new Date(h.at).toLocaleString() }}</span>
+        </button>
       </div>
     </div>
 
-    <div v-if="queryStats" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div class="border-b border-slate-100 bg-slate-50/50 px-6 py-3">
-        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-800"><BarChart3 class="h-4 w-4 text-slate-400" />查询统计</h3>
-      </div>
-      <div class="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-5">
-        <div class="bg-white p-4"><p class="text-[11px] uppercase text-slate-400">扫描 Shards</p><p class="mt-1 text-lg font-semibold">{{ queryStats.shards_scanned }}</p></div>
-        <div class="bg-white p-4"><p class="text-[11px] uppercase text-slate-400">跳过 Shards</p><p class="mt-1 text-lg font-semibold">{{ queryStats.shards_skipped }}</p></div>
-        <div class="bg-white p-4"><p class="text-[11px] uppercase text-slate-400">读取样本</p><p class="mt-1 text-lg font-semibold text-blue-600">{{ queryStats.samples_read }}</p></div>
-        <div class="bg-white p-4"><p class="text-[11px] uppercase text-slate-400">返回样本</p><p class="mt-1 text-lg font-semibold text-green-600">{{ queryStats.samples_returned }}</p></div>
-        <div class="bg-white p-4"><p class="text-[11px] uppercase text-slate-400">耗时</p><p class="mt-1 text-lg font-semibold text-amber-600">{{ (queryStats.duration_nanos / 1e6).toFixed(1) }}<span class="text-sm text-slate-400">ms</span></p></div>
-      </div>
+    <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-3">
+      <label class="text-xs text-slate-500">Database
+        <select v-model="queryForm.database" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
+          <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
+        </select>
+      </label>
+      <label class="text-xs text-slate-500">Measurement
+        <select v-model="queryForm.measurement" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :disabled="measurementsLoading">
+          <option value="">(all)</option>
+          <option v-for="m in measurements" :key="m" :value="m">{{ m }}</option>
+        </select>
+      </label>
+      <label class="text-xs text-slate-500">RP
+        <select v-model="queryForm.retention_policy" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
+          <option v-for="rp in (retentionPolicies.length ? retentionPolicies : ['autogen'])" :key="rp" :value="rp">{{ rp }}</option>
+        </select>
+      </label>
+      <label class="text-xs text-slate-500">Start (ms)
+        <div class="mt-1 flex gap-1">
+          <input v-model="queryForm.start_time" class="w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+          <button class="rounded border px-2 text-xs" @click="fillNowMs('start')">now</button>
+        </div>
+      </label>
+      <label class="text-xs text-slate-500">End (ms)
+        <div class="mt-1 flex gap-1">
+          <input v-model="queryForm.end_time" class="w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+          <button class="rounded border px-2 text-xs" @click="fillNowMs('end')">now</button>
+        </div>
+      </label>
+      <label class="text-xs text-slate-500">Fields / Limit
+        <div class="mt-1 flex gap-1">
+          <input v-model="queryForm.fields" placeholder="f1,f2" class="w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+          <input v-model="queryForm.limit" class="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+        </div>
+      </label>
     </div>
 
-    <div v-if="rows.length" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-3">
-        <h3 class="flex items-center gap-2 text-sm font-semibold"><Layers class="h-4 w-4 text-slate-400" />查询结果</h3>
-        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-500">{{ rows.length }} 行</span>
+    <div class="flex flex-wrap gap-2">
+      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900" :disabled="loading" @click="runQuery">
+        <Search class="h-4 w-4" /> {{ loading ? t('loading') : t('query') }}
+      </button>
+      <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700" :disabled="!loading" @click="cancelQuery">
+        <Square class="h-4 w-4" /> 取消
+      </button>
+      <button class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 dark:border-red-900" @click="deleteOpen = true">
+        <Trash2 class="h-4 w-4" /> 范围删除
+      </button>
+      <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700" @click="copyResults">
+        <component :is="copyState === 'ok' ? Check : Copy" class="h-4 w-4" />
+        {{ streamMeta.previewOnly ? t('copyPreview') : t('copy') }}
+      </button>
+    </div>
+
+    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{{ actionError }}</p>
+    <p v-if="deleteResult" class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-900">{{ deleteResult }}</p>
+
+    <div v-if="queryStats" class="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">扫描 Shards</p><p class="text-lg font-semibold">{{ queryStats.shards_scanned }}</p></div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">跳过 Shards</p><p class="text-lg font-semibold">{{ queryStats.shards_skipped }}</p></div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">读取样本</p><p class="text-lg font-semibold text-blue-600">{{ queryStats.samples_read }}</p></div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">返回样本</p><p class="text-lg font-semibold text-green-600">{{ queryStats.samples_returned }}</p></div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">耗时</p><p class="text-lg font-semibold text-amber-600">{{ (queryStats.duration_nanos / 1e6).toFixed(1) }}ms</p></div>
+    </div>
+
+    <QueryChart v-if="showChart && rows.length" :rows="rows" />
+
+    <div v-if="rows.length" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 dark:border-slate-800">
+        <h3 class="text-sm font-semibold">结果</h3>
+        <span class="text-xs text-slate-500">{{ rows.length }} 行</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b border-slate-100 bg-slate-50/30 text-left">
-              <th class="px-6 py-2.5 text-[11px] font-semibold uppercase text-slate-500">时间</th>
-              <th class="px-6 py-2.5 text-[11px] font-semibold uppercase text-slate-500">Measurement</th>
-              <th class="px-6 py-2.5 text-[11px] font-semibold uppercase text-slate-500">Tags</th>
-              <th class="px-6 py-2.5 text-[11px] font-semibold uppercase text-slate-500">Fields</th>
+            <tr class="border-b border-slate-100 bg-slate-50/30 text-left dark:border-slate-800 dark:bg-slate-950/40">
+              <th class="px-4 py-2 text-[11px] uppercase text-slate-500">时间</th>
+              <th class="px-4 py-2 text-[11px] uppercase text-slate-500">Measurement</th>
+              <th class="px-4 py-2 text-[11px] uppercase text-slate-500">Tags</th>
+              <th class="px-4 py-2 text-[11px] uppercase text-slate-500">Fields</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-50">
-            <tr v-for="(row, idx) in rows" :key="idx" class="hover:bg-slate-50/50">
-              <td class="px-6 py-3 font-mono text-xs text-slate-600">{{ formatTimestamp(row.timestamp) }}</td>
-              <td class="px-6 py-3"><span class="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">{{ row.measurement }}</span></td>
-              <td class="px-6 py-3 font-mono text-xs text-slate-500">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : '—' }}</td>
-              <td class="px-6 py-3 font-mono text-xs text-slate-600">{{ JSON.stringify(row.fields) }}</td>
+          <tbody>
+            <tr v-for="(row, idx) in rows" :key="idx" class="border-b border-slate-50 dark:border-slate-800">
+              <td class="px-4 py-2 font-mono text-xs">{{ formatTimestamp(row.timestamp) }}</td>
+              <td class="px-4 py-2 text-xs">{{ row.measurement }}</td>
+              <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : '—' }}</td>
+              <td class="px-4 py-2 font-mono text-xs">{{ JSON.stringify(row.fields) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <div v-if="rawOutput" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/50 px-6 py-3">
-        <h3 class="flex items-center gap-2 text-sm font-semibold"><Zap class="h-4 w-4 text-slate-400" />原始输出 / EXPLAIN / 流式结果</h3>
+    <div v-if="rawOutput" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2 dark:border-slate-800">
+        <h3 class="text-sm font-semibold">原始输出 / EXPLAIN / 流式结果</h3>
         <div class="flex flex-wrap gap-2 text-xs text-slate-500">
-          <span v-if="streamMeta.lines" class="rounded-full bg-slate-100 px-2.5 py-0.5">{{ streamMeta.lines }} 行</span>
-          <span v-if="streamMeta.records" class="rounded-full bg-blue-50 px-2.5 py-0.5 text-blue-700">{{ streamMeta.records }} 记录</span>
-          <span v-if="streamMeta.errors" class="rounded-full bg-red-50 px-2.5 py-0.5 text-red-600">{{ streamMeta.errors }} 错误</span>
-          <span v-if="streamMeta.previewOnly" class="rounded-full bg-amber-50 px-2.5 py-0.5 text-amber-700">仅预览前 {{ streamMeta.previewLimit }} 行</span>
-          <button class="rounded-lg border border-slate-200 bg-white px-2.5 py-1" @click="copyResults">{{ streamMeta.previewOnly ? '复制预览' : '复制' }}</button>
+          <span v-if="streamMeta.lines" class="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{{ streamMeta.lines }} 行</span>
+          <span v-if="streamMeta.records" class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">{{ streamMeta.records }} 记录</span>
+          <span v-if="streamMeta.errors" class="rounded-full bg-red-50 px-2 py-0.5 text-red-600">{{ streamMeta.errors }} 错误</span>
+          <span v-if="streamMeta.previewOnly" class="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">仅预览前 {{ streamMeta.previewLimit }} 行</span>
         </div>
       </div>
-      <pre class="max-h-96 overflow-auto bg-slate-950 p-6 font-mono text-xs leading-relaxed text-emerald-400">{{ rawOutput }}</pre>
+      <pre class="max-h-96 overflow-auto bg-slate-950 p-4 font-mono text-xs text-emerald-400">{{ rawOutput }}</pre>
     </div>
+
+    <ConfirmDialog
+      v-model:open="deleteOpen"
+      title="范围删除"
+      message="将按当前查询条件删除数据，不可恢复。请输入 DELETE 确认。"
+      require-text="DELETE"
+      confirm-label="删除"
+      danger
+      :loading="deleteLoading"
+      @confirm="doRangeDelete"
+    />
   </div>
 </template>

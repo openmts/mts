@@ -188,7 +188,7 @@
 | 上轮 P1（除 03 残留） | P1 | fixed |
 | DASH-P1-01 ~ 04 | P1 | fixed |
 | DASH-P2-01 ~ 10 | P2 | fixed |
-| DASH-P3-01 ~ 08 | P3 | deferred |
+| DASH-P3-01 ~ 08 | P3 | fixed |
 
 
 
@@ -199,3 +199,10 @@
 - 全部 DASH-P1-01~04、DASH-P2-01~10 已实现并验证
 - P3 仍 deferred（图表 / TypedBatch UI / 历史 / 暗色 / i18n / base path / 审计增强 / 快照管理）
 - 验证：`npm run test` + `npm run build` + `make test` + `make e2e` + `make lint`
+
+
+## 8. P3 实现闭环（2026-07-19）
+
+- 查询可视化、TypedBatch UI、查询历史、暗色主题、i18n、子路径 base、审计增强、快照列表管理均已落地
+- 新增管理 API：`GET /api/v1/admin/audit`、`GET|DELETE /api/v1/admin/storage/snapshots`
+- 验证：`npm run test` / `npm run build` / `make test` / `make e2e` / `make lint`

@@ -2,6 +2,9 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	mts "github.com/openmts/mts"
@@ -430,5 +433,79 @@ func configSchema() []configFieldSchema {
 		{Name: "engine.storage_memory.hard_bytes_limit", Description: "存储硬内存字节上限"},
 		{Name: "engine.cardinality.max_series", Description: "series 高基数硬限制"},
 		{Name: "shutdown_timeout", Description: "优雅关闭超时"},
+	}
+}
+
+func (r *serverRuntime) handleListAudit(writer http.ResponseWriter, request *http.Request) {
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
+		return
+	}
+	q := request.URL.Query()
+	req := auditListRequest{
+		UserName: q.Get("user_name"),
+		Action:   q.Get("action"),
+	}
+	if v := q.Get("since_unix"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			req.SinceUnix = n
+		}
+	}
+	if v := q.Get("until_unix"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			req.UntilUnix = n
+		}
+	}
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			req.Limit = n
+		}
+	}
+	events := r.audit.listFiltered(req)
+	writeHTTPJSON(writer, http.StatusOK, auditListResponse{Events: events, Total: len(events)})
+}
+
+func (r *serverRuntime) handleListStorageSnapshots(writer http.ResponseWriter, request *http.Request) {
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
+		return
+	}
+	resp, err := r.listStorageSnapshots()
+	if err != nil {
+		writeAPIError(writer, newAPIError(errorCodeInternal, err.Error(), err))
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, resp)
+}
+
+func (r *serverRuntime) handleDeleteStorageSnapshot(writer http.ResponseWriter, request *http.Request) {
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodDelete) {
+		return
+	}
+	name := strings.TrimSpace(request.URL.Query().Get("name"))
+	if name == "" {
+		// allow path suffix style via X or body? keep query for simplicity
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, "name is required", nil))
+		return
+	}
+	if err := r.deleteStorageSnapshot(name); err != nil {
+		if os.IsNotExist(err) {
+			writeAPIError(writer, newAPIError(errorCodeNotFound, err.Error(), err))
+			return
+		}
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+		return
+	}
+	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "delete_storage_snapshot", Detail: name})
+	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+}
+
+func (r *serverRuntime) handleStorageSnapshots(writer http.ResponseWriter, request *http.Request) {
+	switch request.Method {
+	case http.MethodGet:
+		r.handleListStorageSnapshots(writer, request)
+	case http.MethodDelete:
+		r.handleDeleteStorageSnapshot(writer, request)
+	default:
+		writer.Header().Set("Allow", "GET, DELETE")
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, "method not allowed", nil))
 	}
 }

@@ -54,6 +54,9 @@ func TestOperationRegistryCoversAllGRPCMethods(t *testing.T) {
 		grpcMethodAdminHealth:              {},
 		grpcMethodStorageValidate:          {},
 		grpcMethodStorageSnapshot:          {},
+		grpcMethodListStorageSnapshots:     {},
+		grpcMethodDeleteStorageSnapshot:    {},
+		grpcMethodListAudit:                {},
 		grpcMethodStorageExport:            {},
 		grpcMethodCreateDownsamplePolicy:   {},
 		grpcMethodListDownsamplePolicies:   {},
@@ -128,6 +131,8 @@ func TestOperationRegistryMountsCoreHTTPPaths(t *testing.T) {
 		routeAdminConfigReload,
 		routeAdminStorageValidate,
 		routeAdminStorageSnapshot,
+		routeAdminStorageSnapshots,
+		routeAdminAudit,
 		routeAdminStorageExport,
 	}
 	seen := make(map[string]bool)

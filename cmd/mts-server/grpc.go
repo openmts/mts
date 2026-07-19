@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -723,4 +724,28 @@ func invokeGRPC(ctx context.Context, conn *grpc.ClientConn, method string, in an
 
 func grpcFullMethod(method string) string {
 	return "/" + grpcServiceName + "/" + method
+}
+
+func grpcListAudit(r *serverRuntime, _ context.Context, req any) (any, error) {
+	request, _ := req.(*auditListRequest)
+	if request == nil {
+		request = &auditListRequest{}
+	}
+	events := r.audit.listFiltered(*request)
+	return auditListResponse{Events: events, Total: len(events)}, nil
+}
+
+func grpcListStorageSnapshots(r *serverRuntime, _ context.Context, _ any) (any, error) {
+	return r.listStorageSnapshots()
+}
+
+func grpcDeleteStorageSnapshot(r *serverRuntime, _ context.Context, req any) (any, error) {
+	request, _ := req.(*storageSnapshotDeleteRequest)
+	if request == nil || strings.TrimSpace(request.Name) == "" {
+		return nil, grpcError(fmt.Errorf("name is required"))
+	}
+	if err := r.deleteStorageSnapshot(request.Name); err != nil {
+		return nil, grpcError(err)
+	}
+	return okResponse{OK: true}, nil
 }

@@ -363,3 +363,7 @@ func unixNanosOrNow(value int64) time.Time {
 	}
 	return time.Unix(0, value)
 }
+
+type storageSnapshotDeleteRequest struct {
+	Name string `json:"name"`
+}

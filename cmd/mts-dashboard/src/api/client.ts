@@ -1,4 +1,4 @@
-const API_BASE = ''
+const API_BASE = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
 const TOKEN_KEY = 'mts_bearer_token'
 const USER_KEY = 'mts_user_name'
 const ROLE_KEY = 'mts_user_role'

@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { apiPost } from '@/api/client'
 import { listDatabases, listRetentionPolicies } from '@/api/meta'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
-import { Send, Plus, Trash2, Database, Clock, ToggleLeft, ToggleRight, Table2, FileText, BarChart3 } from 'lucide-vue-next'
-import { fieldTypes, buildFormPoints, parseLineProtocolDetailed, parsePrometheusText, type FormRow } from '@/composables/usePointParsers'
+import { useI18n } from '@/composables/useI18n'
+import { Send, Plus, Trash2 } from 'lucide-vue-next'
+import {
+  fieldTypes, buildFormPoints, parseLineProtocolDetailed, parsePrometheusText, type FormRow,
+} from '@/composables/usePointParsers'
 
-type WriteMode = 'form' | 'line' | 'prometheus'
+type WriteMode = 'form' | 'line' | 'prometheus' | 'typed'
 
 const databases = ref<string[]>([])
 const retentionPolicies = ref<string[]>([])
@@ -22,32 +25,25 @@ const result = ref<{ ok: boolean; message: string } | null>(null)
 const loading = ref(false)
 const actionError = ref('')
 const { success, error: notifyError } = useNotify()
+const { t } = useI18n()
 
-const lineProtocolExample = `cpu,host=server01 usage=75.5,temperature=42 ${Date.now()}
-cpu,host=server02 usage=60.0,temperature=38 ${Date.now()}
-mem,host=server01 used=8589934592i ${Date.now()}
-`
-
-const prometheusExample = `cpu_usage{host="server01",mode="idle"} 75.5 ${Date.now()}
-cpu_usage{host="server02",mode="idle"} 60.0 ${Date.now()}
-mem_used{host="server01"} 8589934592 ${Date.now()}
-`
+// TypedBatch builder
+const typedMeasurement = ref('cpu')
+const typedTagKey = ref('host')
+const typedTagValues = ref('server01\nserver02')
+const typedFieldName = ref('usage')
+const typedFieldType = ref<'float' | 'int'>('float')
+const typedFieldValues = ref('0.7\n0.8')
+const typedTimestamps = ref('')
 
 function createEmptyRow(): FormRow {
   return {
-    measurement: '',
-    tags: [{ key: '', value: '' }],
-    fields: [{ key: 'value', value: '', type: 'float' }],
+    measurement: 'cpu',
+    tags: [{ key: 'host', value: 'server01' }],
+    fields: [{ key: 'usage', value: '0.75', type: 'float' }],
     timestamp: nowUnixMsString(),
   }
 }
-
-function addTag(row: FormRow) { row.tags.push({ key: '', value: '' }) }
-function removeTag(row: FormRow, idx: number) { if (row.tags.length > 1) row.tags.splice(idx, 1) }
-function addField(row: FormRow) { row.fields.push({ key: '', value: '', type: 'float' }) }
-function removeField(row: FormRow, idx: number) { if (row.fields.length > 1) row.fields.splice(idx, 1) }
-function addRow() { formRows.value.push(createEmptyRow()) }
-function removeRow(idx: number) { if (formRows.value.length > 1) formRows.value.splice(idx, 1) }
 
 onMounted(async () => {
   try {
@@ -63,251 +59,204 @@ watch(selectedDb, async (db) => {
   retentionPolicy.value = 'autogen'
   if (!db) return
   try {
-    const policies = await listRetentionPolicies(db)
-    retentionPolicies.value = policies.map((p) => p.name)
-  } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '加载保留策略失败'
-  }
+    const rps = await listRetentionPolicies(db)
+    retentionPolicies.value = rps.map((p) => p.name)
+    if (retentionPolicies.value.length) retentionPolicy.value = retentionPolicies.value[0]
+  } catch { /* ignore */ }
 })
 
-async function doWrite() {
+function buildTypedBatch(): Record<string, unknown> {
+  const tags = typedTagValues.value.split('\n').map((s) => s.trim()).filter(Boolean)
+  const vals = typedFieldValues.value.split('\n').map((s) => s.trim()).filter(Boolean)
+  if (!typedMeasurement.value.trim()) throw new Error('measurement 不能为空')
+  if (!vals.length) throw new Error('字段值不能为空')
+  if (tags.length && tags.length !== vals.length) throw new Error('tag 值行数需与字段值行数一致（或留空 tag）')
+  let ts = typedTimestamps.value.split('\n').map((s) => s.trim()).filter(Boolean).map(Number)
+  if (!ts.length) {
+    const now = Date.now()
+    ts = vals.map((_, i) => now + i)
+  }
+  if (ts.length !== vals.length) throw new Error('时间戳行数需与字段值一致')
+  if (ts.some((n) => !Number.isSafeInteger(n))) throw new Error('时间戳必须是安全整数（ms）')
+  const fieldCol: Record<string, unknown> = {
+    name: typedFieldName.value.trim() || 'value',
+    type: typedFieldType.value === 'int' ? 2 : 1,
+  }
+  if (typedFieldType.value === 'int') {
+    fieldCol.int64_values = vals.map((v) => {
+      if (!/^-?\d+$/.test(v)) throw new Error(`非法整数: ${v}`)
+      const n = Number(v)
+      if (!Number.isSafeInteger(n)) throw new Error(`整数越界: ${v}`)
+      return n
+    })
+  } else {
+    fieldCol.float64_values = vals.map((v) => {
+      const n = Number(v)
+      if (!Number.isFinite(n)) throw new Error(`非法浮点: ${v}`)
+      return n
+    })
+  }
+  const batch: Record<string, unknown> = {
+    database: selectedDb.value,
+    retention_policy: retentionPolicy.value,
+    measurement: typedMeasurement.value.trim(),
+    precision: 'ms',
+    timestamps: ts,
+    fields: [fieldCol],
+  }
+  if (tags.length && typedTagKey.value.trim()) {
+    batch.tags = [{ name: typedTagKey.value.trim(), values: tags }]
+  }
+  return batch
+}
+
+async function submit() {
+  loading.value = true
   actionError.value = ''
   result.value = null
-  loading.value = true
   try {
-    const options: Record<string, unknown> = { sync: syncWrite.value }
-    let points: Record<string, unknown>[]
+    if (writeMode.value === 'typed') {
+      const batch = buildTypedBatch()
+      await apiPost('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } })
+      result.value = { ok: true, message: `TypedBatch 写入成功（${(batch.timestamps as number[]).length} 点）` }
+      success(result.value.message)
+      return
+    }
+    let points: Record<string, unknown>[] = []
     if (writeMode.value === 'form') {
       points = buildFormPoints(formRows.value)
-    } else if (writeMode.value === 'prometheus') {
-      points = parsePrometheusText(lineInput.value)
-    } else {
+    } else if (writeMode.value === 'line') {
       const parsed = parseLineProtocolDetailed(lineInput.value)
       if (parsed.errors.length) {
         const summary = parsed.errors.slice(0, 5).join('；') + (parsed.errors.length > 5 ? ` 等共 ${parsed.errors.length} 处` : '')
-        if (!parsed.points.length) {
-          throw new Error(summary)
-        }
+        if (!parsed.points.length) throw new Error(summary)
         notifyError(`Line Protocol 部分行无效：${summary}`)
       }
       points = parsed.points
+    } else {
+      points = parsePrometheusText(lineInput.value)
     }
-    if (!selectedDb.value) {
-      actionError.value = '请选择目标数据库'
-      loading.value = false
-      return
-    }
-    if (!points.length) {
-      actionError.value = '未能解析任何有效数据'
-      loading.value = false
-      return
-    }
-    for (const pt of points) {
-      const rec = pt as Record<string, unknown>
-      rec.database = selectedDb.value
-      rec.retention_policy = retentionPolicy.value
-      if (!rec.precision) rec.precision = 'ms'
+    if (!points.length) throw new Error('没有可写入的点')
+    for (const p of points) {
+      p.database = selectedDb.value
+      p.retention_policy = retentionPolicy.value
     }
     const writePath = usePointsTyped.value ? '/api/v1/data/write/points-typed' : '/api/v1/data/write'
-    await apiPost(writePath, { points, options })
-    result.value = { ok: true, message: `写入成功 (${points.length} 条)` }
+    await apiPost(writePath, { points, options: { sync: syncWrite.value } })
+    result.value = { ok: true, message: `写入成功（${points.length} 点，${writePath}）` }
     success(result.value.message)
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '写入失败'
     notifyError(actionError.value)
+    result.value = { ok: false, message: actionError.value }
   } finally {
     loading.value = false
   }
 }
 
-function setNow(row: FormRow) { row.timestamp = nowUnixMsString() }
+function addRow() { formRows.value.push(createEmptyRow()) }
+function removeRow(i: number) { formRows.value.splice(i, 1) }
+const modeLabel = computed(() => ({
+  form: t.value('formWrite'),
+  line: t.value('lineProtocol'),
+  prometheus: t.value('prometheus'),
+  typed: t.value('typedBatch'),
+}[writeMode.value]))
 </script>
 
 <template>
-  <div class="space-y-6">
-    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{{ actionError }}</p>
-
-    <!-- 目标配置 -->
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div class="border-b border-slate-100 bg-slate-50/50 px-6 py-4">
-        <h3 class="text-sm font-semibold text-slate-800">目标配置</h3>
-      </div>
-      <div class="grid grid-cols-1 gap-4 p-6 sm:grid-cols-4">
-        <div>
-          <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-            <Database class="h-3 w-3" />目标数据库
-          </label>
-          <select v-model="selectedDb" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100">
-            <option v-if="!databases.length" value="" disabled>无数据</option>
-            <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
-          </select>
-        </div>
-        <div>
-          <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-            <Clock class="h-3 w-3" />保留策略
-          </label>
-          <select v-model="retentionPolicy" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100">
-            <option v-for="rp in retentionPolicies" :key="rp" :value="rp">{{ rp }}</option>
-            <option v-if="!retentionPolicies.length" value="autogen">autogen (默认)</option>
-          </select>
-        </div>
-        <div class="flex items-end pb-1">
-          <label class="flex cursor-pointer select-none items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition hover:border-slate-300">
-            <div class="flex flex-col">
-              <span class="text-sm font-medium text-slate-700">Sync 写入</span>
-              <span class="text-xs text-slate-400">WAL 同步落盘</span>
-            </div>
-            <div class="relative ml-auto">
-              <input type="checkbox" v-model="syncWrite" class="sr-only" />
-              <component :is="syncWrite ? ToggleRight : ToggleLeft" :class="syncWrite ? 'text-slate-800' : 'text-slate-300'" class="h-6 w-6 transition" />
-            </div>
-          </label>
-        </div>
-      </div>
+  <div class="space-y-4">
+    <div class="flex flex-wrap gap-2">
+      <button v-for="m in (['form','line','prometheus','typed'] as const)" :key="m"
+        class="rounded-lg border px-3 py-1.5 text-xs"
+        :class="writeMode===m ? 'border-slate-800 bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'"
+        @click="writeMode=m">{{ ({form:t('formWrite'), line:t('lineProtocol'), prometheus:t('prometheus'), typed:t('typedBatch')})[m] }}</button>
     </div>
 
-    <!-- 数据格式 -->
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/50 px-6 py-3">
-        <div class="flex items-center gap-1 rounded-lg bg-slate-100 p-0.5">
-          <button
-            v-for="opt in ([
-              { v: 'form' as const, label: '表单', icon: Table2 },
-              { v: 'line' as const, label: '行协议', icon: FileText },
-              { v: 'prometheus' as const, label: 'Prometheus', icon: BarChart3 },
-            ])"
-            :key="opt.v"
-            :class="[
-              'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition',
-              writeMode === opt.v
-                ? 'bg-white text-slate-800 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700',
-            ]"
-            @click="writeMode = opt.v"
-          >
-            <component :is="opt.icon" class="h-3.5 w-3.5" />
-            {{ opt.label }}
-          </button>
-        </div>
-        <button
-          v-if="writeMode !== 'form'"
-          class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 shadow-sm hover:bg-slate-50"
-          @click="lineInput = writeMode === 'prometheus' ? prometheusExample : lineProtocolExample"
-        >
-          填充示例
-        </button>
-      </div>
-
-      <!-- 表单模式 -->
-      <div v-if="writeMode === 'form'" class="space-y-4 p-6">
-        <div
-          v-for="(row, ri) in formRows"
-          :key="ri"
-          class="group rounded-xl border border-slate-200 bg-slate-50/30 p-5"
-        >
-          <div class="mb-4 flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">数据行 #{{ ri + 1 }}</span>
-            <button
-              v-if="formRows.length > 1"
-              class="rounded-lg p-1 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
-              @click="removeRow(ri)"
-            >
-              <Trash2 class="h-4 w-4" />
-            </button>
-          </div>
-
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label class="mb-1.5 block text-xs font-medium text-slate-500">Measurement</label>
-              <input v-model="row.measurement" placeholder="例如 cpu" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm transition placeholder:text-slate-300 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
-            </div>
-            <div>
-              <label class="mb-1.5 block text-xs font-medium text-slate-500">Timestamp (纳秒)</label>
-              <div class="flex gap-2">
-                <input v-model="row.timestamp" type="number" class="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
-                <button class="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-700" @click="setNow(row)">now</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div>
-              <label class="mb-2 block text-xs font-medium text-slate-500">Tags</label>
-              <div class="space-y-2">
-                <div v-for="(tag, ti) in row.tags" :key="ti" class="flex items-center gap-2">
-                  <input v-model="tag.key" placeholder="key" class="w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition placeholder:text-slate-300 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
-                  <span class="text-sm font-medium text-slate-300">=</span>
-                  <input v-model="tag.value" placeholder="value" class="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition placeholder:text-slate-300 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
-                  <button v-if="row.tags.length > 1" class="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100" @click="removeTag(row, ti)"><Trash2 class="h-3.5 w-3.5" /></button>
-                </div>
-              </div>
-              <button class="mt-2 text-xs font-medium text-slate-400 transition hover:text-slate-600" @click="addTag(row)"><Plus class="inline h-3 w-3" /> 添加 Tag</button>
-            </div>
-            <div>
-              <label class="mb-2 block text-xs font-medium text-slate-500">Fields</label>
-              <div class="space-y-2">
-                <div v-for="(field, fi) in row.fields" :key="fi" class="flex items-center gap-2">
-                  <input v-model="field.key" placeholder="key" class="w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition placeholder:text-slate-300 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
-                  <select v-model="field.type" class="w-20 rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100">
-                    <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">{{ ft.label }}</option>
-                  </select>
-                  <input v-model="field.value" placeholder="值" class="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition placeholder:text-slate-300 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
-                  <button v-if="row.fields.length > 1" class="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100" @click="removeField(row, fi)"><Trash2 class="h-3.5 w-3.5" /></button>
-                </div>
-              </div>
-              <button class="mt-2 text-xs font-medium text-slate-400 transition hover:text-slate-600" @click="addField(row)"><Plus class="inline h-3 w-3" /> 添加 Field</button>
-            </div>
-          </div>
-        </div>
-
-        <button class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-4 text-sm font-medium text-slate-400 transition hover:border-slate-300 hover:text-slate-600" @click="addRow">
-          <Plus class="h-4 w-4" />添加数据行
-        </button>
-        <p class="text-center text-xs text-slate-400">表单自动转换为 Points 格式，注入上方选择的数据库和保留策略。</p>
-      </div>
-
-      <!-- 文本协议模式 -->
-      <div v-else class="p-6">
-        <p class="mb-3 text-xs text-slate-400">
-          <template v-if="writeMode === 'line'">
-            每行一条数据，格式：<code class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">measurement,tag=value field=value [timestamp]</code>
-          </template>
-          <template v-else>
-            每行一条数据，格式：<code class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">metric{label="value"} value [timestamp_ms]</code>
-          </template>
-        </p>
-        <textarea
-          v-model="lineInput"
-          :placeholder="writeMode === 'line' ? 'cpu,host=server01 usage=75.5 1234567890000000000' : 'cpu_usage{host=server01} 75.5 1234567890'"
-          class="h-64 w-full resize-y rounded-xl border border-slate-200 bg-slate-950 p-5 font-mono text-sm leading-relaxed text-emerald-400 shadow-sm transition placeholder:text-slate-600 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100"
-          spellcheck="false"
-        />
-      </div>
+    <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-4">
+      <label class="text-xs text-slate-500">Database
+        <select v-model="selectedDb" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
+          <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
+        </select>
+      </label>
+      <label class="text-xs text-slate-500">RP
+        <select v-model="retentionPolicy" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
+          <option v-for="rp in (retentionPolicies.length?retentionPolicies:['autogen'])" :key="rp" :value="rp">{{ rp }}</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-2 text-xs text-slate-600 md:mt-6">
+        <input v-model="syncWrite" type="checkbox" /> Sync
+      </label>
+      <label v-if="writeMode!=='typed'" class="flex items-center gap-2 text-xs text-slate-600 md:mt-6">
+        <input v-model="usePointsTyped" type="checkbox" /> points-typed 路径
+      </label>
     </div>
 
-    <!-- 底部操作栏 -->
-    <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
-      <div class="flex flex-wrap items-center gap-4">
-        <div v-if="result" :class="result.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'" class="rounded-xl border px-4 py-2 text-sm font-medium">
-          {{ result.message }}
+    <div v-if="writeMode==='form'" class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+      <div v-for="(row, idx) in formRows" :key="idx" class="rounded border border-slate-100 p-3 dark:border-slate-800">
+        <div class="mb-2 flex justify-between text-xs font-medium">Row {{ idx+1 }}
+          <button class="text-red-500" @click="removeRow(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
         </div>
-        <label class="inline-flex items-center gap-2 text-xs text-slate-600">
-          <input v-model="usePointsTyped" type="checkbox" class="rounded border-slate-300" />
-          同构点转列式写入 (points-typed，推荐)
-        </label>
-        <label class="inline-flex items-center gap-2 text-xs text-slate-600">
-          <input v-model="syncWrite" type="checkbox" class="rounded border-slate-300" />
-          同步写入
-        </label>
+        <div class="grid gap-2 md:grid-cols-3">
+          <input v-model="row.measurement" placeholder="measurement" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
+          <input v-model="row.timestamp" placeholder="timestamp ms" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
+          <div class="text-[11px] text-slate-400">tags/fields 在下方</div>
+        </div>
+        <div class="mt-2 grid gap-2 md:grid-cols-2">
+          <div>
+            <p class="mb-1 text-[11px] text-slate-500">Tags</p>
+            <div v-for="(tg, ti) in row.tags" :key="ti" class="mb-1 flex gap-1">
+              <input v-model="tg.key" class="w-1/2 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="key" />
+              <input v-model="tg.value" class="w-1/2 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="value" />
+            </div>
+            <button class="text-[11px] text-slate-500" @click="row.tags.push({key:'',value:''})">+ tag</button>
+          </div>
+          <div>
+            <p class="mb-1 text-[11px] text-slate-500">Fields</p>
+            <div v-for="(fd, fi) in row.fields" :key="fi" class="mb-1 flex gap-1">
+              <input v-model="fd.key" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="key" />
+              <input v-model="fd.value" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="value" />
+              <select v-model="fd.type" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800">
+                <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">{{ ft.label }}</option>
+              </select>
+            </div>
+            <button class="text-[11px] text-slate-500" @click="row.fields.push({key:'',value:'',type:'float'})">+ field</button>
+          </div>
+        </div>
       </div>
-      <button
-        :disabled="loading"
-        class="flex items-center gap-2 rounded-xl bg-slate-800 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-40"
-        @click="doWrite"
-      >
-        <Send class="h-4 w-4" />
-        {{ loading ? '写入中...' : '执行写入' }}
-      </button>
+      <button class="inline-flex items-center gap-1 text-xs text-slate-600" @click="addRow"><Plus class="h-3 w-3" /> 添加行</button>
     </div>
+
+    <div v-else-if="writeMode==='typed'" class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-2">
+      <p class="md:col-span-2 text-xs text-slate-500">直接构造 TypedBatch 调用 <code>/api/v1/data/write/typed</code>（推荐高性能路径）</p>
+      <label class="text-xs">Measurement<input v-model="typedMeasurement" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" /></label>
+      <label class="text-xs">Tag key<input v-model="typedTagKey" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" /></label>
+      <label class="text-xs">Tag values（每行一个）
+        <textarea v-model="typedTagValues" rows="4" class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" />
+      </label>
+      <label class="text-xs">Field values（每行一个）
+        <textarea v-model="typedFieldValues" rows="4" class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" />
+      </label>
+      <label class="text-xs">Field name<input v-model="typedFieldName" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" /></label>
+      <label class="text-xs">Field type
+        <select v-model="typedFieldType" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
+          <option value="float">float</option>
+          <option value="int">int</option>
+        </select>
+      </label>
+      <label class="text-xs md:col-span-2">Timestamps ms（可选，每行一个；空则自动生成）
+        <textarea v-model="typedTimestamps" rows="3" class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" />
+      </label>
+    </div>
+
+    <div v-else class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+      <textarea v-model="lineInput" rows="10" class="w-full rounded border border-slate-300 px-3 py-2 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="modeLabel" />
+    </div>
+
+    <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900" :disabled="loading" @click="submit">
+      <Send class="h-4 w-4" /> {{ loading ? t('loading') : '写入' }}
+    </button>
+    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
+    <p v-if="result?.ok" class="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">{{ result.message }}</p>
   </div>
 </template>

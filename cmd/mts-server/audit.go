@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,20 @@ type auditLog struct {
 
 type userAuditResponse struct {
 	Events []auditEvent `json:"events"`
+}
+
+type auditListRequest struct {
+	UserName string `json:"user_name,omitempty"`
+	Action   string `json:"action,omitempty"`
+	// SinceUnix / UntilUnix 为 Unix 秒；0 表示不限制
+	SinceUnix int64 `json:"since_unix,omitempty"`
+	UntilUnix int64 `json:"until_unix,omitempty"`
+	Limit     int   `json:"limit,omitempty"`
+}
+
+type auditListResponse struct {
+	Events []auditEvent `json:"events"`
+	Total  int          `json:"total"`
 }
 
 func newAuditLog(limit int) *auditLog {
@@ -102,17 +117,43 @@ func (l *auditLog) persistEvent(event auditEvent) error {
 }
 
 func (l *auditLog) list(userName string) []auditEvent {
+	return l.listFiltered(auditListRequest{UserName: userName})
+}
+
+func (l *auditLog) listFiltered(req auditListRequest) []auditEvent {
 	if l == nil {
 		return nil
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	userName := strings.TrimSpace(req.UserName)
+	action := strings.TrimSpace(req.Action)
+	var since, until time.Time
+	if req.SinceUnix > 0 {
+		since = time.Unix(req.SinceUnix, 0).UTC()
+	}
+	if req.UntilUnix > 0 {
+		until = time.Unix(req.UntilUnix, 0).UTC()
+	}
 	out := make([]auditEvent, 0, len(l.events))
 	for _, event := range l.events {
-		if event.UserName == userName {
-			out = append(out, event)
+		if userName != "" && event.UserName != userName {
+			continue
 		}
+		if action != "" && !strings.Contains(event.Action, action) {
+			continue
+		}
+		if !since.IsZero() && event.Time.Before(since) {
+			continue
+		}
+		if !until.IsZero() && event.Time.After(until) {
+			continue
+		}
+		out = append(out, event)
 	}
-	sort.SliceStable(out, func(i int, j int) bool { return out[i].Time.Before(out[j].Time) })
+	sort.SliceStable(out, func(i int, j int) bool { return out[i].Time.After(out[j].Time) })
+	if req.Limit > 0 && len(out) > req.Limit {
+		out = append([]auditEvent(nil), out[:req.Limit]...)
+	}
 	return out
 }

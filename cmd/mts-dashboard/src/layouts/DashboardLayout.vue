@@ -4,21 +4,14 @@ import SidebarNav from '@/components/SidebarNav.vue'
 import TopBar from '@/components/TopBar.vue'
 
 const sidebarOpen = ref(false)
-
-function toggleSidebar() {
-  sidebarOpen.value = !sidebarOpen.value
-}
-
-function closeSidebar() {
-  sidebarOpen.value = false
-}
-
+function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value }
+function closeSidebar() { sidebarOpen.value = false }
 provide('toggleSidebar', toggleSidebar)
 provide('closeSidebar', closeSidebar)
 </script>
 
 <template>
-  <div class="flex h-screen bg-slate-50">
+  <div class="flex h-screen bg-slate-50 dark:bg-slate-950">
     <SidebarNav :visible="sidebarOpen" @close="closeSidebar" />
     <div class="flex flex-1 flex-col overflow-hidden">
       <TopBar @toggle-sidebar="toggleSidebar" />
