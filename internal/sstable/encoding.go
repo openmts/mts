@@ -414,13 +414,12 @@ func fillIndexedStringValues(
 }
 
 func matchingTimestampCount(timestamps []int64, query Query) int {
-	count := 0
-	for _, timestamp := range timestamps {
-		if timestamp >= query.Start && timestamp <= query.End {
-			count++
-		}
+	if len(timestamps) == 0 || query.End < query.Start {
+		return 0
 	}
-	return count
+	// 行时间戳块按时间有序，二分窗口。
+	lo, hi := sortedTimestampWindow(timestamps, query)
+	return hi - lo
 }
 
 func fillAlignedSampleValues(

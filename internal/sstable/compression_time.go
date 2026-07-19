@@ -204,23 +204,50 @@ func decodeCodecTimestamps(codecID byte, payload []byte, count int) ([]int64, er
 }
 
 func decodeConstStepTimestamps(payload []byte, count int) ([]int64, error) {
+	base, step, err := parseConstStepTimestampParams(payload, count)
+	if err != nil {
+		return nil, err
+	}
+	if count == 0 {
+		return nil, nil
+	}
+	return materializeConstStepTimestamps(base, step, 0, count), nil
+}
+
+func parseConstStepTimestampParams(payload []byte, count int) (base, step int64, err error) {
 	reader := newBlockReader(payload)
 	if count == 0 {
-		return nil, reader.done("const-step timestamps")
+		return 0, 0, reader.done("const-step timestamps")
 	}
-	base, err := reader.fixedInt64("const-step base")
+	base, err = reader.fixedInt64("const-step base")
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
-	step, err := reader.varint("const-step step")
+	step, err = reader.varint("const-step step")
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
-	timestamps := make([]int64, count)
-	for index := range timestamps {
-		timestamps[index] = base + int64(index)*step
+	if err := reader.done("const-step timestamps"); err != nil {
+		return 0, 0, err
 	}
-	return timestamps, reader.done("const-step timestamps")
+	return base, step, nil
+}
+
+// decodeConstStepTimestampsWindow 仅物化查询窗口内时间戳，并返回全局下标起点。
+func decodeConstStepTimestampsWindow(
+	payload []byte,
+	count int,
+	query Query,
+) (timestamps []int64, start int, err error) {
+	base, step, err := parseConstStepTimestampParams(payload, count)
+	if err != nil {
+		return nil, 0, err
+	}
+	if count == 0 {
+		return nil, 0, nil
+	}
+	start, end := constStepWindow(base, step, count, query)
+	return materializeConstStepTimestamps(base, step, start, end), start, nil
 }
 
 func decodePlainTimestamps(payload []byte, count int) ([]int64, error) {

@@ -391,6 +391,75 @@ func (p *Part) readTimeBlock(ref blockRef) (timeBlock, error) {
 	return timeBlockFromTimestamps(timestamps), nil
 }
 
+func (p *Part) readValueColumnLazyTime(
+	seriesID uint64,
+	ref columnRef,
+	timeRef blockRef,
+	rowTimestamps *[]int64,
+	timeLoaded *bool,
+	query Query,
+) (model.ColumnData, bool, error) {
+	if p.stats != nil {
+		p.stats.ValueBlocksRead++
+	}
+	recordValueBlockRead(query)
+	payload, err := p.readBlockPayload(valuesFile, ref.ValueRef)
+	if err != nil {
+		return model.ColumnData{}, false, err
+	}
+	data := payload.Bytes()
+	if len(data) > 0 && data[0] == valueEncodingPageIndex {
+		if err := p.ensureRowTimestamps(timeRef, rowTimestamps, timeLoaded, query); err != nil {
+			payload.Release()
+			return model.ColumnData{}, false, err
+		}
+		column, err := p.readValuePagesFromIndexPayload(seriesID, data, *rowTimestamps, query)
+		payload.Release()
+		if err != nil {
+			return model.ColumnData{}, false, fmt.Errorf("decode value page index: %w", err)
+		}
+		return column, *timeLoaded, nil
+	}
+	// 压缩 value page 自带 timestamps，无需加载行级 time block。
+	if len(data) > 0 && data[0] == valueEncodingPageCompressed {
+		block, err := unmarshalCompressedValueBlock(data, query)
+		payload.Release()
+		if err != nil {
+			return model.ColumnData{}, false, fmt.Errorf("decode value block: %w", err)
+		}
+		return columnFromBlock(seriesID, block), *timeLoaded, nil
+	}
+	if err := p.ensureRowTimestamps(timeRef, rowTimestamps, timeLoaded, query); err != nil {
+		payload.Release()
+		return model.ColumnData{}, false, err
+	}
+	block, err := unmarshalValueBlockWithTimestamps(data, *rowTimestamps, query)
+	payload.Release()
+	if err != nil {
+		return model.ColumnData{}, false, fmt.Errorf("decode value block: %w", err)
+	}
+	return columnFromBlock(seriesID, block), *timeLoaded, nil
+}
+
+func (p *Part) ensureRowTimestamps(
+	timeRef blockRef,
+	rowTimestamps *[]int64,
+	timeLoaded *bool,
+	query Query,
+) error {
+	if *timeLoaded {
+		return nil
+	}
+	recordTimeBlockRead(query)
+	timeBlock, err := p.readTimeBlock(timeRef)
+	if err != nil {
+		return err
+	}
+	*rowTimestamps = timeBlock.Timestamps
+	*timeLoaded = true
+	return nil
+}
+
 func (p *Part) readValueColumn(
 	seriesID uint64,
 	ref columnRef,

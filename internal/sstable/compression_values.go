@@ -192,6 +192,14 @@ func readCompressedSamples(
 		values.codecID == compressionPlain {
 		return readPlainCompressedSamples(fieldType, count, times.payload, writeSeqs.payload, values.payload, query)
 	}
+	// const-step + omitted writeSeq + 可随机访问的值编码：只解码查询窗口。
+	if times.codecID == compressionConstStep {
+		if samples, ok, err := readConstStepWindowSamples(fieldType, count, times, writeSeqs, values, query); err != nil {
+			return nil, err
+		} else if ok {
+			return samples, nil
+		}
+	}
 	timestamps, err := decodeCodecTimestamps(times.codecID, times.payload, count)
 	if err != nil {
 		return nil, err
@@ -206,6 +214,77 @@ func readCompressedSamples(
 		return nil, err
 	}
 	return samples, payloadReader.done("values")
+}
+
+func readConstStepWindowSamples(
+	fieldType model.FieldType,
+	count int,
+	times codecPayload,
+	writeSeqs codecPayload,
+	values codecPayload,
+	query Query,
+) ([]model.VersionedSample, bool, error) {
+	timestamps, start, err := decodeConstStepTimestampsWindow(times.payload, count, query)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(timestamps) == 0 {
+		return []model.VersionedSample{}, true, nil
+	}
+	// 仅 omitted writeSeq 可跳过全量解码；其它 writeSeq 编码仍走通用路径。
+	if writeSeqs.codecID != compressionOmitted {
+		return nil, false, nil
+	}
+	// 值侧：const-step/RLE/delta 支持按全局下标切片；Gorilla 依赖前缀状态，回退。
+	switch fieldType {
+	case model.FieldFloat64:
+		if values.codecID != compressionConstStep && values.codecID != compressionDelta && values.codecID != compressionRLE {
+			return nil, false, nil
+		}
+	case model.FieldInt64:
+		if values.codecID != compressionDelta && values.codecID != compressionRLE {
+			return nil, false, nil
+		}
+	default:
+		return nil, false, nil
+	}
+	windowSeqs := make([]uint64, len(timestamps)) // omitted => 0
+	// 为窗口解码构造“窗口对齐”的 timestamps，但值解码需要全局 index 语义。
+	// 各 *SampleValues 用 enumerate index 对齐 timestamps/writeSeqs；因此传入窗口切片即可，
+	// 但 const-step/float-int 的 index 必须是全局下标。这里单独走 window-aware 解码。
+	samples, err := readWindowedCodecValues(fieldType, values, count, start, timestamps, windowSeqs, query)
+	if err != nil {
+		return nil, false, err
+	}
+	return samples, true, nil
+}
+
+func readWindowedCodecValues(
+	fieldType model.FieldType,
+	values codecPayload,
+	fullCount int,
+	start int,
+	timestamps []int64,
+	writeSeqs []uint64,
+	query Query,
+) ([]model.VersionedSample, error) {
+	reader := newBlockReader(values.payload)
+	var (
+		samples []model.VersionedSample
+		err     error
+	)
+	switch fieldType {
+	case model.FieldFloat64:
+		samples, err = readWindowedFloatValues(reader, values.codecID, fullCount, start, timestamps, writeSeqs, query)
+	case model.FieldInt64:
+		samples, err = readWindowedIntValues(reader, values.codecID, fullCount, start, timestamps, writeSeqs, query)
+	default:
+		return nil, fmt.Errorf("unsupported windowed field type %d", fieldType)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return samples, reader.done("values")
 }
 
 func readCodecPayloadSamples(

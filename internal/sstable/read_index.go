@@ -228,20 +228,20 @@ func (p *Part) loadIndexRows() ([]indexRow, error) {
 }
 
 func (p *Part) queryRow(row indexRow, query Query) ([]model.ColumnData, error) {
-	recordTimeBlockRead(query)
-	timeBlock, err := p.readTimeBlock(row.TimeRef)
-	if err != nil {
-		return nil, err
-	}
 	columns := make([]model.ColumnData, 0, len(row.Columns))
+	var (
+		rowTimestamps []int64
+		timeLoaded    bool
+	)
 	for _, ref := range row.Columns {
 		if !containsField(query.FieldIDs, ref.FieldID) {
 			continue
 		}
-		column, err := p.readValueColumn(row.SeriesID, ref, timeBlock.Timestamps, query)
+		column, loaded, err := p.readValueColumnLazyTime(row.SeriesID, ref, row.TimeRef, &rowTimestamps, &timeLoaded, query)
 		if err != nil {
 			return nil, err
 		}
+		_ = loaded
 		if len(column.Samples) > 0 {
 			recordSamplesRead(query, len(column.Samples))
 			columns = append(columns, column)

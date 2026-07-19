@@ -195,14 +195,13 @@ func defaultLevelCompression(level int, global model.CompressionOptions) model.C
 	return out
 }
 
-// coldTierValuePageSamples 抬高 L1+ 页大小，摊薄 page 头与通用压缩帧开销。
-const defaultColdTierValuePageSamples = 16384
+// coldTierValuePageSamples 为 L1+ 选择页大小。
+// 未配置时使用查询更友好的 4096（原 16384 对窄窗点查 over-read 过重）；
+// 显式配置（含 scale -value-page-samples）原样尊重，便于体积/查询权衡。
+const defaultColdTierValuePageSamples = 4096
 
 func coldTierValuePageSamples(configured int) int {
 	if configured <= 0 {
-		return defaultColdTierValuePageSamples
-	}
-	if configured < defaultColdTierValuePageSamples {
 		return defaultColdTierValuePageSamples
 	}
 	return configured
