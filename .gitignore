@@ -29,3 +29,4 @@ block.out
 mutex.out
 *.coverprofile
 coverage.out
+cmd/mts-server/data/

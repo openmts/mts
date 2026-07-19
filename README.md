@@ -241,6 +241,7 @@ curl http://127.0.0.1:8086/metrics
 ```bash
 make dashboard           # 构建前端并生成嵌入产物
 go build ./cmd/mts-server  # 编译含 Dashboard 的二进制
+# 子路径部署示例：VITE_BASE=/mts/ make dashboard
 ```
 
 ## 结构化日志
