@@ -1,5 +1,6 @@
 /** 就绪中心状态导入/导出（versioned JSON，便于交接与审计） */
 
+import { downloadJSON, downloadText } from './download.ts'
 import {
   emptyReadinessState,
   loadReadinessState,
@@ -104,28 +105,6 @@ export function applyReadinessImport(
   }
 }
 
-export function downloadJSON(filename: string, payload: unknown): void {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-  triggerDownload(filename, blob)
-}
-
-export function downloadText(filename: string, text: string, mime = 'text/plain'): void {
-  const blob = new Blob([text], { type: mime })
-  triggerDownload(filename, blob)
-}
-
-function triggerDownload(filename: string, blob: Blob): void {
-  if (typeof document === 'undefined') return
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
 
 export function persistImportedReadiness(
   incoming: ReadinessState,
@@ -142,3 +121,5 @@ export function persistImportedReadiness(
 export function emptyExport(): ReadinessExportPayload {
   return buildReadinessExport(emptyReadinessState())
 }
+
+export { downloadJSON, downloadText }

@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { apiGet, apiPost } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
+import { useI18n } from '@/composables/useI18n'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -9,7 +10,17 @@ import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
-import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle } from 'lucide-vue-next'
+import {
+  appendOpsAction,
+  buildOpsActionExport,
+  clearOpsActionLog,
+  loadOpsActionLog,
+  saveOpsActionLog,
+  type OpsActionEntry,
+  type OpsActionKind,
+} from '@/utils/opsActionLog'
+import { downloadJSON, stampFilename } from '@/utils/download'
+import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser } from 'lucide-vue-next'
 import type { CompactionStats, MaintenanceStats } from '@/api/types'
 
 interface CompactionStatsResponse { stats: CompactionStats }
@@ -17,7 +28,8 @@ interface MaintenanceStatsResponse { stats: MaintenanceStats }
 interface MaintenanceErrorsResponse { errors: string[] }
 
 const { isAdmin } = useAuth()
-const { success, error: notifyError } = useNotify()
+const { t } = useI18n()
+const { success, error: notifyError, warn, info } = useNotify()
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
 const loading = ref(false)
@@ -26,6 +38,7 @@ const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceErrors = ref<string[]>([])
 const confirmKind = ref<'flush' | 'compact' | 'retention' | null>(null)
 const confirmLoading = ref(false)
+const actionLog = ref<OpsActionEntry[]>(loadOpsActionLog())
 
 const confirmTitle = {
   flush: '执行 Flush',
@@ -38,6 +51,20 @@ const confirmMessage = {
   compact: '确定触发压缩？可能占用较多 CPU/IO。',
   retention: '确定按当前保留策略清理过期数据？此操作不可恢复。',
 } as const
+
+function persistLog() {
+  saveOpsActionLog(actionLog.value)
+}
+
+function recordAction(kind: OpsActionKind, status: 'ok' | 'error', message: string) {
+  actionLog.value = appendOpsAction(actionLog.value, {
+    kind,
+    status,
+    message,
+    at: Date.now(),
+  })
+  persistLog()
+}
 
 async function loadStats() {
   if (!isAdmin.value) return
@@ -70,31 +97,56 @@ function openConfirm(kind: 'flush' | 'compact' | 'retention') {
 
 async function runConfirmed() {
   if (!confirmKind.value) return
+  const kind = confirmKind.value
   confirmLoading.value = true
   actionResult.value = null
   try {
     let msg = ''
-    if (confirmKind.value === 'flush') {
+    if (kind === 'flush') {
       await apiPost('/api/v1/admin/flush', {})
       msg = 'Flush 已完成'
-    } else if (confirmKind.value === 'compact') {
+    } else if (kind === 'compact') {
       await apiPost('/api/v1/admin/compact', {})
       msg = 'Compact 已触发'
     } else {
-      // 不传 now：由服务端使用当前时间，避免前端不安全 ns 乘法
       await apiPost('/api/v1/admin/retention/apply', {})
       msg = '保留策略已应用'
     }
     actionResult.value = makeActionResult('ok', msg)
     success(msg)
+    recordAction(kind, 'ok', msg)
     confirmKind.value = null
     await loadStats()
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
+    recordAction(kind, 'error', msg)
   } finally {
     confirmLoading.value = false
+  }
+}
+
+function exportActionLog() {
+  if (!actionLog.value.length) {
+    warn(t.value('opsLogExportEmpty'))
+    return
+  }
+  downloadJSON(stampFilename('mts-ops-actions', 'json'), buildOpsActionExport(actionLog.value))
+  success(t.value('opsLogExportOk'))
+}
+
+function clearLog() {
+  actionLog.value = []
+  clearOpsActionLog()
+  info(t.value('opsLogCleared'))
+}
+
+function formatAt(at: number): string {
+  try {
+    return new Date(at).toLocaleString()
+  } catch {
+    return String(at)
   }
 }
 
@@ -106,11 +158,11 @@ onMounted(() => { void loadStats() })
   <div v-else class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">运维</h1>
-        <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Flush / Compact / 保留策略</p>
+        <h1 class="mts-title">{{ t('opsTitle') }}</h1>
+        <p class="text-xs mts-muted">{{ t('opsDesc') }}</p>
       </div>
-      <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5 text-xs" :disabled="loading" @click="loadStats">
-        <RefreshCw class="h-3.5 w-3.5" /> 刷新
+      <button type="button" class="mts-btn" :disabled="loading" data-testid="ops-refresh" @click="loadStats">
+        <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
       </button>
     </div>
 
@@ -127,42 +179,41 @@ onMounted(() => { void loadStats() })
 
     <div class="mts-panel">
       <div class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-        <AlertTriangle class="h-4 w-4" /> 维护错误 ({{ maintenanceErrors.length }})
+        <AlertTriangle class="h-4 w-4" /> {{ t('maintenanceErrors') }} ({{ maintenanceErrors.length }})
       </div>
       <EmptyState
         v-if="!maintenanceErrors.length"
         compact
-        title="暂无维护错误"
-        description="系统维护路径运行正常时此处为空。"
+        :title="t('noMaintenanceErrors')"
+        :description="t('opsNoMaintErrorsDesc')"
       />
-      <ul v-else class="max-h-40 space-y-1 overflow-auto text-xs text-red-700 dark:text-red-200">
+      <ul v-else class="max-h-40 space-y-1 overflow-auto text-xs text-red-700 dark:text-red-200" data-testid="ops-maint-errors">
         <li v-for="(e, i) in maintenanceErrors" :key="i" class="rounded bg-red-50 px-2 py-1 dark:bg-red-950/40">{{ e }}</li>
       </ul>
     </div>
 
-
     <div class="grid gap-4 sm:grid-cols-3">
-      <button class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-5 text-left hover:border-slate-300 dark:border-slate-600 dark:hover:border-slate-500" @click="openConfirm('flush')">
-        <DatabaseBackup class="mb-2 h-5 w-5 text-slate-500 dark:text-slate-400 dark:text-slate-500" />
+      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-flush" @click="openConfirm('flush')">
+        <DatabaseBackup class="mb-2 h-5 w-5 mts-muted" />
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">Flush</p>
-        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">将 memtable 刷到持久层</p>
+        <p class="mt-1 text-xs mts-muted">{{ t('opsFlushHint') }}</p>
       </button>
-      <button class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-5 text-left hover:border-slate-300 dark:border-slate-600 dark:hover:border-slate-500" @click="openConfirm('compact')">
-        <Layers class="mb-2 h-5 w-5 text-slate-500 dark:text-slate-400 dark:text-slate-500" />
+      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-compact" @click="openConfirm('compact')">
+        <Layers class="mb-2 h-5 w-5 mts-muted" />
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">Compact</p>
-        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">触发后台压缩合并</p>
+        <p class="mt-1 text-xs mts-muted">{{ t('opsCompactHint') }}</p>
       </button>
-      <button class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-5 text-left hover:border-slate-300 dark:border-slate-600 dark:hover:border-slate-500" @click="openConfirm('retention')">
-        <Timer class="mb-2 h-5 w-5 text-slate-500 dark:text-slate-400 dark:text-slate-500" />
+      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-retention" @click="openConfirm('retention')">
+        <Timer class="mb-2 h-5 w-5 mts-muted" />
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">Apply Retention</p>
-        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">按策略清理过期数据（服务端 now）</p>
+        <p class="mt-1 text-xs mts-muted">{{ t('opsRetentionHint') }}</p>
       </button>
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
-      <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-5">
-        <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">维护统计</h2>
-        <EmptyState v-if="!maintenanceStats" compact title="暂无维护统计" description="刷新后仍为空可能是接口暂不可用。" />
+      <div class="mts-card p-5">
+        <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceStats') }}</h2>
+        <EmptyState v-if="!maintenanceStats" compact :title="t('opsNoMaintStats')" :description="t('opsStatsEmptyHint')" />
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
           <div>compact active: <b>{{ maintenanceStats.compaction_active }}</b></div>
           <div>compact backlog: <b>{{ maintenanceStats.compaction_backlog }}</b></div>
@@ -172,9 +223,9 @@ onMounted(() => { void loadStats() })
           <div>errors: <b>{{ maintenanceStats.maintenance_error_count }}</b></div>
         </dl>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-5">
-        <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">压缩统计</h2>
-        <EmptyState v-if="!compactionStats" compact title="暂无压缩统计" description="刷新后仍为空可能是接口暂不可用。" />
+      <div class="mts-card p-5">
+        <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('compactionStats') }}</h2>
+        <EmptyState v-if="!compactionStats" compact :title="t('opsNoCompactStats')" :description="t('opsStatsEmptyHint')" />
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
           <div>total: <b>{{ compactionStats.total }}</b></div>
           <div>success: <b>{{ compactionStats.success }}</b></div>
@@ -184,6 +235,47 @@ onMounted(() => { void loadStats() })
         </dl>
         <p v-if="compactionStats?.last_error" class="mt-2 text-xs text-red-600 dark:text-red-300">{{ compactionStats.last_error }}</p>
       </div>
+    </div>
+
+    <div class="mts-card p-4" data-testid="ops-action-log">
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-sm font-semibold">{{ t('opsActionLog') }}</h2>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="mts-btn" data-testid="ops-export-log" @click="exportActionLog">
+            <Download class="h-3.5 w-3.5" />
+            {{ t('opsExportLog') }}
+          </button>
+          <button type="button" class="mts-btn" data-testid="ops-clear-log" :disabled="!actionLog.length" @click="clearLog">
+            <Eraser class="h-3.5 w-3.5" />
+            {{ t('opsClearLog') }}
+          </button>
+        </div>
+      </div>
+      <p class="mb-2 text-xs mts-muted">{{ t('opsActionLogHint') }}</p>
+      <EmptyState
+        v-if="!actionLog.length"
+        compact
+        :title="t('opsLogEmpty')"
+        :description="t('opsLogEmptyDesc')"
+      />
+      <ul v-else class="max-h-56 space-y-1 overflow-auto text-xs">
+        <li
+          v-for="item in actionLog"
+          :key="item.id"
+          class="flex flex-wrap items-start justify-between gap-2 rounded border border-slate-100 px-2 py-1.5 dark:border-slate-800"
+        >
+          <div class="min-w-0">
+            <span
+              class="mr-2 rounded px-1.5 py-0.5 font-medium"
+              :class="item.status === 'ok'
+                ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+                : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200'"
+            >{{ item.kind }} · {{ item.status }}</span>
+            <span class="text-slate-700 dark:text-slate-200">{{ item.message }}</span>
+          </div>
+          <span class="shrink-0 mts-muted">{{ formatAt(item.at) }}</span>
+        </li>
+      </ul>
     </div>
 
     <ConfirmDialog

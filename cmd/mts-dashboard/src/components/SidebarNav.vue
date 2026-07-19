@@ -65,14 +65,16 @@ function go(to: string) {
           <X class="h-4 w-4" />
         </button>
       </div>
-      <nav class="flex-1 space-y-0.5 overflow-auto p-2">
+      <nav class="flex-1 space-y-0.5 overflow-auto p-2" :aria-label="t('appName')">
         <button
           v-for="item in navItems"
           :key="item.to"
+          type="button"
           class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm"
           :class="isActive(item.to)
             ? 'bg-slate-900 text-white dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900'
             : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-800'"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
           @click="go(item.to)"
         >
           <component :is="item.icon" class="h-4 w-4 shrink-0" />

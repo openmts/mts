@@ -87,4 +87,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('command-item-audit').click()
   await expect(page).toHaveURL(/\/audit/)
   await expect(page.getByTestId('audit-quick-ranges')).toBeVisible()
+
+  // 12) 跳过链接 + 运维操作历史导出入口
+  await page.goto('/operations')
+  await expect(page.getByTestId('ops-action-log')).toBeVisible()
+  await expect(page.getByTestId('ops-export-log')).toBeVisible()
+  await page.locator('[data-testid="skip-to-main"]').evaluate((el: HTMLElement) => el.focus())
+  await expect(page.getByTestId('skip-to-main')).toBeFocused()
 })
+
