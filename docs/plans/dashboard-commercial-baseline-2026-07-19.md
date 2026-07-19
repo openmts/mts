@@ -33,6 +33,7 @@
 - 快捷键帮助与最近访问（P36）
 - 查询/写入/配置/存储 i18n 收口（P37）
 - 用户/数据库/运维 i18n 收口（P38）
+- Metrics/Access/404 i18n 与 e2e 加深（P39）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -164,4 +165,10 @@
 
 ## P38 状态（2026-07-20）
 - Users/Databases/Operations 用户可见文案 i18n
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份
+
+
+## P39 状态（2026-07-20）
+- Metrics / AccessMatrix / AccessGrants / ApiSpec / NotFound i18n
+- 权限等级标签随语言切换；Playwright 覆盖矩阵/授权/指标/404
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份

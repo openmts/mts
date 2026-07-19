@@ -5,6 +5,8 @@ import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { useI18n } from '@/composables/useI18n'
+import { formatMessage } from '@/utils/formatMessage'
 import { RefreshCw, Search } from 'lucide-vue-next'
 
 interface APIEndpoint {
@@ -25,6 +27,7 @@ interface APISpecResponse {
 
 const { isAdmin } = useAuth()
 const { error: notifyError } = useNotify()
+const { t } = useI18n()
 const loading = ref(false)
 const loadError = ref('')
 const version = ref('')
@@ -81,9 +84,9 @@ const totalEndpoints = computed(() =>
     <div class="flex flex-wrap items-center justify-between gap-2">
       <div>
         <h1 class="mts-title">API Spec</h1>
-        <p class="text-xs mts-muted">服务端 operation registry 暴露的 HTTP 契约（version {{ version || '—' }}，共 {{ totalEndpoints }} 端点）</p>
+        <p class="text-xs mts-muted">{{ formatMessage(t('apiSpecDesc'), { version: version || '—', count: totalEndpoints }) }}</p>
       </div>
-      <button class="mts-btn" :disabled="loading" @click="load"><RefreshCw class="h-3.5 w-3.5" /> 刷新</button>
+      <button class="mts-btn" :disabled="loading" @click="load"><RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}</button>
     </div>
 
     <p v-if="loadError" class="mts-alert-error">{{ loadError }}</p>
@@ -91,11 +94,11 @@ const totalEndpoints = computed(() =>
     <div class="grid gap-3 md:grid-cols-3">
       <label class="text-xs mts-muted md:col-span-1">Namespace
         <select v-model="nsFilter" class="mts-input mt-1">
-          <option value="">全部</option>
+          <option value="">{{ t('apiSpecAll') }}</option>
           <option v-for="ns in namespaces" :key="ns.name" :value="ns.name">{{ ns.name }}</option>
         </select>
       </label>
-      <label class="text-xs mts-muted md:col-span-2">搜索
+      <label class="text-xs mts-muted md:col-span-2">{{ t('apiSpecSearch') }}
         <div class="relative mt-1">
           <Search class="pointer-events-none absolute left-2 top-2.5 h-3.5 w-3.5 text-slate-400" />
           <input v-model="q" class="mts-input pl-8" placeholder="method / path / description" />

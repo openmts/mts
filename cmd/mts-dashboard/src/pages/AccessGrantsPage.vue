@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
+import { useI18n } from '@/composables/useI18n'
+import { formatMessage } from '@/utils/formatMessage'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -24,6 +26,7 @@ interface UsersResponse { users: User[] }
 interface PermissionsResponse { grants: Array<{ database: string; permission: string }> }
 
 const { isAdmin } = useAuth()
+const { t } = useI18n()
 const loading = ref(false)
 const loadError = ref('')
 const rows = ref<GrantRow[]>([])
@@ -57,7 +60,7 @@ async function load() {
     const usersList = list.users ?? []
     const bundles: UserGrantBundle[] = []
     const errs: string[] = []
-    // 并发拉取，但限制并发数避免压垮 POC 单机
+    // 并发拉取，限制并发数避免压垮 POC 单机
     const concurrency = 4
     let idx = 0
     async function worker() {
@@ -101,15 +104,14 @@ onMounted(() => { void load() })
       <div>
         <h1 class="mts-title flex items-center gap-2">
           <ShieldCheck class="h-5 w-5" />
-          实时授权总览
+          {{ t('accessGrantsTitle') }}
         </h1>
         <p class="text-xs mts-muted">
-          拉取全部用户的库级 grants（/users/.../database-permissions），用于上线前权限复核。
+          {{ t('accessGrantsDesc') }}
         </p>
       </div>
       <button class="mts-btn" :disabled="loading" @click="load">
-        <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" />
-        刷新
+        <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" /> {{ t('refresh') }}
       </button>
     </div>
 
@@ -117,64 +119,64 @@ onMounted(() => { void load() })
     <ActionResultBanner
       v-else-if="partialErrors.length"
       kind="warn"
-      :message="`部分用户授权拉取失败：${partialErrors.slice(0, 3).join('；')}${partialErrors.length > 3 ? '…' : ''}`"
+      :message="formatMessage(t('accessGrantsPartialFail'), { summary: partialErrors.slice(0, 3).join('; ') + (partialErrors.length > 3 ? '…' : '') })"
       :dismissible="false"
     />
 
     <div class="grid gap-3 sm:grid-cols-3">
       <div class="mts-card p-3">
-        <p class="text-xs mts-muted">用户（过滤后）</p>
+        <p class="text-xs mts-muted">{{ t('accessGrantsUsersFiltered') }}</p>
         <p class="text-xl font-semibold text-slate-800 dark:text-slate-100">{{ coverage.users }}</p>
       </div>
       <div class="mts-card p-3">
-        <p class="text-xs mts-muted">数据库</p>
+        <p class="text-xs mts-muted">{{ t('accessGrantsDatabases') }}</p>
         <p class="text-xl font-semibold text-slate-800 dark:text-slate-100">{{ coverage.databases }}</p>
       </div>
       <div class="mts-card p-3">
-        <p class="text-xs mts-muted">授权条数</p>
+        <p class="text-xs mts-muted">{{ t('accessGrantsCount') }}</p>
         <p class="text-xl font-semibold text-slate-800 dark:text-slate-100">{{ coverage.grants }}</p>
       </div>
     </div>
 
     <div class="flex flex-wrap items-end gap-2">
-      <label class="text-xs mts-muted">用户
+      <label class="text-xs mts-muted">{{ t('accessGrantsUser') }}
         <select v-model="userFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm">
-          <option value="">全部</option>
+          <option value="">{{ t('accessGrantsAll') }}</option>
           <option v-for="u in users" :key="u" :value="u">{{ u }}</option>
         </select>
       </label>
-      <label class="text-xs mts-muted">数据库
+      <label class="text-xs mts-muted">{{ t('accessGrantsDatabase') }}
         <select v-model="dbFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm">
-          <option value="">全部</option>
+          <option value="">{{ t('accessGrantsAll') }}</option>
           <option v-for="d in databases" :key="d" :value="d">{{ d }}</option>
         </select>
       </label>
-      <label class="text-xs mts-muted">权限
+      <label class="text-xs mts-muted">{{ t('accessGrantsPermission') }}
         <select v-model="permFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm">
-          <option value="">全部</option>
+          <option value="">{{ t('accessGrantsAll') }}</option>
           <option v-for="p in permissions" :key="p" :value="p">{{ p }}</option>
         </select>
       </label>
-      <label class="text-xs mts-muted grow">搜索
+      <label class="text-xs mts-muted grow">{{ t('accessGrantsSearch') }}
         <input v-model="q" class="mts-input mt-1 text-sm" placeholder="user / db / permission" />
       </label>
     </div>
 
     <div v-if="!loading && !filtered.length" class="mts-card">
       <EmptyState
-        title="暂无授权记录"
-        description="可在用户页为非 admin 账号授予库级 read/write，或调整过滤条件。"
+        :title="t('accessGrantsEmpty')"
+        :description="t('accessGrantsEmptyDesc')"
       />
     </div>
     <div v-else class="mts-card overflow-auto">
       <table class="min-w-full text-left text-sm">
         <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
           <tr>
-            <th class="px-3 py-2 font-medium">用户</th>
-            <th class="px-3 py-2 font-medium">角色</th>
-            <th class="px-3 py-2 font-medium">状态</th>
-            <th class="px-3 py-2 font-medium">数据库</th>
-            <th class="px-3 py-2 font-medium">权限</th>
+            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColUser') }}</th>
+            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColRole') }}</th>
+            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColStatus') }}</th>
+            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColDatabase') }}</th>
+            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColPermission') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -192,7 +194,7 @@ onMounted(() => { void load() })
                   ? 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-100'
                   : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100'"
               >
-                {{ row.disabled ? '禁用' : '启用' }}
+                {{ row.disabled ? t('accessGrantsDisabled') : t('accessGrantsEnabled') }}
               </span>
             </td>
             <td class="px-3 py-2 font-mono text-xs">{{ row.database }}</td>

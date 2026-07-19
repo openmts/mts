@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { apiGetText } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
+import { useI18n } from '@/composables/useI18n'
+import { formatMessage } from '@/utils/formatMessage'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -16,6 +18,7 @@ import {
 import { Activity, RefreshCw } from 'lucide-vue-next'
 
 const { isAdmin } = useAuth()
+const { t } = useI18n()
 const loading = ref(false)
 const loadError = ref('')
 const raw = ref('')
@@ -59,16 +62,15 @@ onMounted(() => { void load() })
       <div>
         <h1 class="mts-title flex items-center gap-2">
           <Activity class="h-5 w-5" />
-          指标浏览
+          {{ t('metricsTitle') }}
         </h1>
         <p class="text-xs mts-muted">
-          读取后端 Prometheus 文本接口 <code class="font-mono">/metrics</code>（页面路由为 /observability/metrics，避免与监控抓取路径冲突）。
-          <span v-if="lastRefreshed">刷新于 {{ lastRefreshed }}</span>
+          {{ t('metricsDesc') }}
+          <span v-if="lastRefreshed">{{ formatMessage(t('metricsRefreshedAt'), { time: lastRefreshed }) }}</span>
         </p>
       </div>
       <button class="mts-btn" :disabled="loading" @click="load">
-        <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" />
-        刷新
+        <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" /> {{ t('refresh') }}
       </button>
     </div>
 
@@ -76,19 +78,19 @@ onMounted(() => { void load() })
 
     <div class="grid gap-3 sm:grid-cols-2">
       <div class="mts-card p-3">
-        <p class="text-xs mts-muted">指标族</p>
+        <p class="text-xs mts-muted">{{ t('metricsFamilies') }}</p>
         <p class="text-xl font-semibold text-slate-800 dark:text-slate-100">{{ summary.families }}</p>
       </div>
       <div class="mts-card p-3">
-        <p class="text-xs mts-muted">样本点</p>
+        <p class="text-xs mts-muted">{{ t('metricsSamples') }}</p>
         <p class="text-xl font-semibold text-slate-800 dark:text-slate-100">{{ summary.samples }}</p>
       </div>
     </div>
 
-    <input v-model="q" class="mts-input max-w-xl text-sm" placeholder="过滤指标名 / 标签 / help" />
+    <input v-model="q" class="mts-input max-w-xl text-sm" :placeholder="t('metricsFilterPlaceholder')" />
 
     <div v-if="!loading && !filtered.length" class="mts-card">
-      <EmptyState title="暂无指标" description="确认服务已暴露 /metrics，或调整过滤条件。" />
+      <EmptyState :title="t('metricsEmpty')" :description="t('metricsEmptyDesc')" />
     </div>
     <div v-else class="space-y-2">
       <div
@@ -136,7 +138,7 @@ onMounted(() => { void load() })
     </div>
 
     <details class="mts-card p-3 text-xs">
-      <summary class="cursor-pointer text-slate-600 dark:text-slate-300">原始文本（截断前 8KB 预览）</summary>
+      <summary class="cursor-pointer text-slate-600 dark:text-slate-300">{{ t('metricsRawPreview') }}</summary>
       <pre class="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] text-slate-500 dark:text-slate-400">{{ raw.slice(0, 8192) }}{{ raw.length > 8192 ? '\n…' : '' }}</pre>
     </details>
   </div>

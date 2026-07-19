@@ -121,5 +121,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-readiness-total')).toBeVisible()
   await page.getByTestId('overview-go-readiness').click()
   await expect(page).toHaveURL(/ops\/readiness/)
+
+  // 16) 权限矩阵 / 实时授权 / 指标 / 404
+  await page.goto('/access')
+  await expect(page.getByRole('main').getByText(/权限能力矩阵|Capability matrix/)).toBeVisible()
+  await page.goto('/access/grants')
+  await expect(page.getByRole('main').getByText(/实时授权|Live grants/)).toBeVisible()
+  await page.goto('/observability/metrics')
+  await expect(page.getByRole('main').getByText(/指标浏览|Metrics explorer/)).toBeVisible()
+  await page.goto('/this-route-should-404')
+  await expect(page.getByText(/页面不存在|Page not found|404/)).toBeVisible()
 })
 

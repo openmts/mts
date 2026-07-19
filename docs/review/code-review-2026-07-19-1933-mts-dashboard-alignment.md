@@ -533,3 +533,8 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 ## P38（2026-07-20）
 - Users/Databases/Operations i18n 收口
 - 状态：已实现；仍不宣称可商用完成
+
+## P39（2026-07-20）
+- Metrics/Access/ApiSpec/NotFound i18n
+- 矩阵 level 标签 locale 切换；e2e 加深
+- 状态：已实现；仍不宣称可商用完成（矩阵 capability 行双语可后续）

@@ -11,8 +11,11 @@ import {
   type RoleName,
 } from '@/utils/rbacMatrix'
 import { Shield } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
+import { formatMessage } from '@/utils/formatMessage'
 
 const { currentRole } = useAuth()
+const { t, locale } = useI18n()
 const roleFilter = ref<'all' | RoleName>('all')
 const areaFilter = ref('')
 const areas = matrixAreas()
@@ -44,7 +47,7 @@ function levelClass(level: AccessLevel): string {
 }
 
 function levelLabel(level: AccessLevel): string {
-  return ACCESS_LEVEL_LABEL[level].zh
+  return ACCESS_LEVEL_LABEL[level][locale.value === 'en' ? 'en' : 'zh']
 }
 </script>
 
@@ -54,10 +57,10 @@ function levelLabel(level: AccessLevel): string {
       <div>
         <h1 class="mts-title flex items-center gap-2">
           <Shield class="h-5 w-5" />
-          权限能力矩阵
+          {{ t('accessMatrixTitle') }}
         </h1>
         <p class="text-xs mts-muted">
-          对照控制台页面与后端角色语义。当前会话角色：
+          {{ t('accessMatrixDesc') }}
           <span class="font-medium text-slate-800 dark:text-slate-100">{{ displayRole }}</span>
         </p>
       </div>
@@ -65,29 +68,29 @@ function levelLabel(level: AccessLevel): string {
 
     <div class="grid gap-3 sm:grid-cols-2">
       <div class="mts-card p-3">
-        <p class="text-xs font-medium text-slate-700 dark:text-slate-200">admin 分布</p>
+        <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ t('accessMatrixAdminDist') }}</p>
         <p class="mt-1 text-xs mts-muted">
-          全部 {{ adminCounts.full }} · 自身 {{ adminCounts.self }} · 库级 {{ adminCounts.data_scoped }} · 无 {{ adminCounts.none }}
+          {{ formatMessage(t('accessMatrixDistLine'), { full: adminCounts.full, self: adminCounts.self, data: adminCounts.data_scoped, none: adminCounts.none }) }}
         </p>
       </div>
       <div class="mts-card p-3">
-        <p class="text-xs font-medium text-slate-700 dark:text-slate-200">user 分布</p>
+        <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ t('accessMatrixUserDist') }}</p>
         <p class="mt-1 text-xs mts-muted">
-          全部 {{ userCounts.full }} · 自身 {{ userCounts.self }} · 库级 {{ userCounts.data_scoped }} · 无 {{ userCounts.none }}
+          {{ formatMessage(t('accessMatrixDistLine'), { full: userCounts.full, self: userCounts.self, data: userCounts.data_scoped, none: userCounts.none }) }}
         </p>
       </div>
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <label class="text-xs mts-muted">角色过滤</label>
+      <label class="text-xs mts-muted">{{ t('accessMatrixRoleFilter') }}</label>
       <select v-model="roleFilter" class="mts-input w-auto text-sm">
-        <option value="all">全部能力行</option>
-        <option value="admin">仅 admin 可用</option>
-        <option value="user">仅 user 可用</option>
+        <option value="all">{{ t('accessMatrixAllRows') }}</option>
+        <option value="admin">{{ t('accessMatrixAdminOnly') }}</option>
+        <option value="user">{{ t('accessMatrixUserOnly') }}</option>
       </select>
-      <label class="text-xs mts-muted ml-2">区域</label>
+      <label class="text-xs mts-muted ml-2">{{ t('accessMatrixArea') }}</label>
       <select v-model="areaFilter" class="mts-input w-auto text-sm">
-        <option value="">全部区域</option>
+        <option value="">{{ t('accessMatrixAllAreas') }}</option>
         <option v-for="a in areas" :key="a" :value="a">{{ a }}</option>
       </select>
     </div>
@@ -96,12 +99,12 @@ function levelLabel(level: AccessLevel): string {
       <table class="min-w-full text-left text-sm">
         <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
           <tr>
-            <th class="px-3 py-2 font-medium">区域</th>
-            <th class="px-3 py-2 font-medium">能力</th>
+            <th class="px-3 py-2 font-medium">{{ t('accessMatrixColArea') }}</th>
+            <th class="px-3 py-2 font-medium">{{ t('accessMatrixColCapability') }}</th>
             <th class="px-3 py-2 font-medium">admin</th>
             <th class="px-3 py-2 font-medium">user</th>
-            <th class="px-3 py-2 font-medium">路由</th>
-            <th class="px-3 py-2 font-medium">备注</th>
+            <th class="px-3 py-2 font-medium">{{ t('accessMatrixColRoute') }}</th>
+            <th class="px-3 py-2 font-medium">{{ t('accessMatrixColNote') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -126,20 +129,14 @@ function levelLabel(level: AccessLevel): string {
             <td class="px-3 py-2 text-xs mts-muted">{{ row.notes || '—' }}</td>
           </tr>
           <tr v-if="!rows.length">
-            <td colspan="6" class="px-3 py-8 text-center text-sm mts-muted">无匹配能力</td>
+            <td colspan="6" class="px-3 py-8 text-center text-sm mts-muted">{{ t('accessMatrixEmpty') }}</td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <p class="text-xs mts-muted">
-      说明：本矩阵为产品语义对照表，最终以服务端鉴权为准。库级授权通过
-      <code class="font-mono">/api/v1/users/.../database-permissions</code>
-      与
-      <code class="font-mono">/api/v1/authz/database/check</code>
-      落实。管理员可打开
-      <RouterLink class="underline" to="/access/grants">实时授权总览</RouterLink>
-      复核当前 grants。
+      {{ t('accessMatrixFootnote') }} <RouterLink class="underline" to="/access/grants">{{ t('accessMatrixLiveGrantsLink') }}</RouterLink>。
     </p>
   </div>
 </template>
