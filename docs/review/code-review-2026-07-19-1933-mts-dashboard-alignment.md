@@ -358,3 +358,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - ErrorBoundary：已完成
 - EmptyState：查询空结果/历史空列表
 - 结果列可见性记忆：已完成
+
+
+## P8 状态（2026-07-19）
+- 表单脏状态：Query/Write
+- 查询耗时水线：已完成
+- Write/Audit EmptyState：已完成

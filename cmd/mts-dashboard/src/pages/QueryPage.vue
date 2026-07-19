@@ -10,6 +10,8 @@ import { formatFieldsMap } from '@/utils/fieldValue'
 import { rowsToCSV, downloadText } from '@/utils/csv'
 import { loadQueryPrefs, saveQueryPrefs } from '@/utils/queryPrefs'
 import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
+import { isDirty, snapshotForm } from '@/utils/formDirty'
+import { latencyFromNanos } from '@/utils/queryLatency'
 import {
   RESULT_COLUMN_KEYS,
   RESULT_COLUMN_LABELS,
@@ -59,6 +61,12 @@ const historyFileInput = ref<HTMLInputElement | null>(null)
 const columnKeys = RESULT_COLUMN_KEYS
 const columnLabels = RESULT_COLUMN_LABELS
 const resultGridClass = computed(() => gridColClass(resultColumns.value))
+const formBaseline = ref(snapshotForm({ mode: queryMode.value, form: queryForm.value }))
+const formDirty = computed(() => isDirty(formBaseline.value, { mode: queryMode.value, form: queryForm.value }))
+const latency = computed(() => {
+  if (!queryStats.value) return null
+  return latencyFromNanos(Number(queryStats.value.duration_nanos || 0))
+})
 
 const modeOptions = [
   { value: 'rows' as const, label: '行式' },
@@ -111,11 +119,15 @@ function onQueryKeydown(e: KeyboardEvent) {
 
 onMounted(async () => {
   window.addEventListener('keydown', onQueryKeydown)
+  window.addEventListener('beforeunload', onBeforeUnload)
   try { await loadDatabases() }
   catch (e) { actionError.value = e instanceof Error ? e.message : '加载数据库失败' }
+  // 初始 meta 加载可能改 database/measurement，完成后记为 clean
+  markFormClean()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onQueryKeydown)
+  window.removeEventListener('beforeunload', onBeforeUnload)
   cancelQuery()
   if (copyTimer) clearTimeout(copyTimer)
 })
@@ -166,9 +178,20 @@ async function runQuery() {
   await executeQuery()
   if (!actionError.value) {
     history.push({ mode: queryMode.value, form: { ...queryForm.value } })
+    formBaseline.value = snapshotForm({ mode: queryMode.value, form: queryForm.value })
   } else {
     notifyError(actionError.value)
   }
+}
+
+function markFormClean() {
+  formBaseline.value = snapshotForm({ mode: queryMode.value, form: queryForm.value })
+}
+
+function onBeforeUnload(e: BeforeUnloadEvent) {
+  if (!formDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
 }
 
 function applyHistory(id: string) {
@@ -177,6 +200,7 @@ function applyHistory(id: string) {
   queryMode.value = item.mode
   queryForm.value = { ...queryForm.value, ...item.form }
   showHistory.value = false
+  markFormClean()
 }
 
 function startRename(id: string) {
@@ -310,13 +334,18 @@ const columnRows = computed(() => {
 <template>
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <button
           v-for="m in modeOptions" :key="m.value"
           class="rounded-lg border px-3 py-1.5 text-xs"
           :class="queryMode === m.value ? 'border-slate-800 bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'"
           @click="queryMode = m.value"
         >{{ m.label }}</button>
+        <span
+          v-if="formDirty"
+          class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+          title="条件已修改，尚未用当前条件重新查询"
+        >未查询变更</span>
       </div>
       <div class="flex gap-2">
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showHistory = !showHistory" title="Ctrl/⌘+H"><History class="h-3.5 w-3.5" />历史</button>
@@ -483,12 +512,23 @@ const columnRows = computed(() => {
     <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
     <p v-if="deleteResult" class="mts-alert-ok">{{ deleteResult }}</p>
 
-    <div v-if="queryStats" class="grid grid-cols-2 gap-2 sm:grid-cols-5">
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">扫描</p><p class="text-lg font-semibold">{{ queryStats.shards_scanned }}</p></div>
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">跳过</p><p class="text-lg font-semibold">{{ queryStats.shards_skipped }}</p></div>
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">读取</p><p class="text-lg font-semibold text-blue-600">{{ queryStats.samples_read }}</p></div>
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">返回</p><p class="text-lg font-semibold text-green-600">{{ queryStats.samples_returned }}</p></div>
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">耗时</p><p class="text-lg font-semibold text-amber-600">{{ (queryStats.duration_nanos / 1e6).toFixed(1) }}ms</p></div>
+    <div v-if="queryStats" class="space-y-2">
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">扫描</p><p class="text-lg font-semibold">{{ queryStats.shards_scanned }}</p></div>
+        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">跳过</p><p class="text-lg font-semibold">{{ queryStats.shards_skipped }}</p></div>
+        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">读取</p><p class="text-lg font-semibold text-blue-600">{{ queryStats.samples_read }}</p></div>
+        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">返回</p><p class="text-lg font-semibold text-green-600">{{ queryStats.samples_returned }}</p></div>
+        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">耗时</p><p class="text-lg font-semibold text-amber-600">{{ (queryStats.duration_nanos / 1e6).toFixed(1) }}ms</p></div>
+      </div>
+      <div v-if="latency" class="mts-card px-3 py-2">
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span class="text-slate-600 dark:text-slate-300">耗时水线 · <span class="font-medium">{{ latency.label }}</span></span>
+          <span class="font-mono text-slate-500 dark:text-slate-400">{{ latency.durationMs.toFixed(1) }} ms · ≤50 快 / ≤200 正常 / ≤1000 偏慢</span>
+        </div>
+        <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+          <div class="h-full rounded-full transition-all" :class="latency.toneClass" :style="{ width: latency.barPercent + '%' }" />
+        </div>
+      </div>
     </div>
 
     <QueryChart v-if="showChart && rows.length" :rows="rows" />

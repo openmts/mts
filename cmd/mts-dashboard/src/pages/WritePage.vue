@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { apiPost } from '@/api/client'
 import { listDatabasesDetailed, listRetentionPolicies } from '@/api/meta'
 import { checkDatabasePermission } from '@/api/authz'
@@ -8,6 +8,8 @@ import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { Send, Plus, Trash2 } from 'lucide-vue-next'
+import EmptyState from '@/components/EmptyState.vue'
+import { isDirty, snapshotForm } from '@/utils/formDirty'
 import {
   fieldTypes, buildFormPoints, parseLineProtocolDetailed, parsePrometheusText, type FormRow,
 } from '@/composables/usePointParsers'
@@ -40,6 +42,30 @@ type TypedFieldCol = { name: string; type: 'float' | 'int' | 'string' | 'bool'; 
 const typedTagCols = ref<TypedTagCol[]>([{ name: 'host', values: 'server01\nserver02' }])
 const typedFieldCols = ref<TypedFieldCol[]>([{ name: 'usage', type: 'float', values: '0.7\n0.8' }])
 
+function writeSnapshot() {
+  return {
+    selectedDb: selectedDb.value,
+    retentionPolicy: retentionPolicy.value,
+    writeMode: writeMode.value,
+    lineInput: lineInput.value,
+    formRows: formRows.value,
+    typedMeasurement: typedMeasurement.value,
+    typedTimestamps: typedTimestamps.value,
+    typedTagCols: typedTagCols.value,
+    typedFieldCols: typedFieldCols.value,
+  }
+}
+const writeBaseline = ref(snapshotForm(writeSnapshot()))
+const formDirty = computed(() => isDirty(writeBaseline.value, writeSnapshot()))
+function markWriteClean() {
+  writeBaseline.value = snapshotForm(writeSnapshot())
+}
+function onBeforeUnload(e: BeforeUnloadEvent) {
+  if (!formDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
 function createEmptyRow(): FormRow {
   return {
     measurement: 'cpu',
@@ -50,12 +76,17 @@ function createEmptyRow(): FormRow {
 }
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', onBeforeUnload)
   const result = await listDatabasesDetailed()
   databases.value = result.names
   metaHint.value = result.error || (result.source === 'manual' ? '可手动输入 database' : '')
   if (databases.value.length && !selectedDb.value) {
     selectedDb.value = databases.value[0]
   }
+  markWriteClean()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
 })
 
 watch(selectedDb, async (db) => {
@@ -67,6 +98,8 @@ watch(selectedDb, async (db) => {
     retentionPolicies.value = rps.map((p) => p.name)
     if (retentionPolicies.value.length) retentionPolicy.value = retentionPolicies.value[0]
   } catch { /* ignore */ }
+  // 自动填充 RP 不应算用户脏编辑
+  markWriteClean()
 })
 
 function buildTypedBatch(): Record<string, unknown> {
@@ -173,6 +206,7 @@ async function submit() {
       await apiPost('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } })
       result.value = { ok: true, message: `TypedBatch 写入成功（${(batch.timestamps as number[]).length} 点）` }
       success(result.value.message)
+      markWriteClean()
       return
     }
     let points: Record<string, unknown>[] = []
@@ -198,6 +232,7 @@ async function submit() {
     await apiPost(writePath, { points, options: { sync: syncWrite.value } })
     result.value = { ok: true, message: `写入成功（${points.length} 点，${writePath}）` }
     success(result.value.message)
+    markWriteClean()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '写入失败'
     notifyError(actionError.value)
@@ -323,10 +358,23 @@ const modeLabel = computed(() => ({
       <textarea v-model="lineInput" rows="10" class="w-full rounded border border-slate-300 dark:border-slate-600 px-3 py-2 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="modeLabel" />
     </div>
 
-    <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" :disabled="loading" @click="submit">
-      <Send class="h-4 w-4" /> {{ loading ? t('loading') : '写入' }}
-    </button>
-    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
-    <p v-if="result?.ok" class="rounded-xl border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40 p-3 text-sm text-green-700 dark:text-green-200">{{ result.message }}</p>
+    <div class="flex flex-wrap items-center gap-2">
+      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" :disabled="loading" @click="submit">
+        <Send class="h-4 w-4" /> {{ loading ? t('loading') : '写入' }}
+      </button>
+      <span
+        v-if="formDirty"
+        class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+      >未提交变更</span>
+    </div>
+    <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
+    <p v-if="result?.ok" class="mts-alert-ok">{{ result.message }}</p>
+    <div v-else-if="!loading && !actionError && !result" class="mts-card">
+      <EmptyState
+        compact
+        title="等待写入"
+        description="选择写入模式并填写数据后点击写入。推荐 TypedBatch 列式写入以获得更高吞吐。"
+      />
+    </div>
   </div>
 </template>

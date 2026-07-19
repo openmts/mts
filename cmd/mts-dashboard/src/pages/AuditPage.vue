@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -163,9 +164,22 @@ const filteredCount = computed(() => auditEvents.value.length)
         <span class="inline-flex items-center gap-1"><ScrollText class="h-3.5 w-3.5" /> 审计事件</span>
         <span>{{ filteredCount }} 条</span>
       </div>
-      <div v-if="!auditEvents.length" class="p-6 text-center text-sm text-slate-400 dark:text-slate-500">
-        <template v-if="loading">{{ t('loading') }}</template>
-        <template v-else>暂无审计记录</template>
+      <div v-if="!auditEvents.length">
+        <EmptyState
+          v-if="loading"
+          compact
+          :title="t('loading')"
+          description="正在拉取审计事件…"
+        />
+        <EmptyState
+          v-else
+          title="暂无审计记录"
+          description="可调整用户/时间筛选后重试；审计同时来自内存环与 _internal.audit_log。"
+        >
+          <template #action>
+            <button type="button" class="mts-btn-primary" :disabled="loading" @click="loadAudit">刷新</button>
+          </template>
+        </EmptyState>
       </div>
       <table v-else class="w-full text-sm">
         <thead>
