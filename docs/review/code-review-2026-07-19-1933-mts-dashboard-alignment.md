@@ -333,3 +333,10 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 | P3-06 审计持久化读回 | 已修复 | 合并 `_internal.audit_log` |
 
 验证：dashboard test/build、make test/e2e/lint 通过（2026-07-19 第三轮）。
+
+### P4 体验增强（2026-07-19）
+| ID | 状态 | 备注 |
+|----|------|------|
+| P4-01 权限预检 | 已修复 | authz 自检 + Query/Write 按钮 |
+| P4-02 配置 Schema | 已修复 | ConfigPage 可过滤浏览 |
+| P4-03 虚拟滚动 | 已修复 | VirtualTable 行结果 |

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	mts "github.com/openmts/mts"
 )
@@ -204,13 +205,28 @@ func (r *serverRuntime) handleAuthzDatabaseCheck(writer http.ResponseWriter, req
 	if !requireHTTPMethod(writer, request, http.MethodPost) {
 		return
 	}
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
-		return
-	}
 	var req authzDatabaseCheckRequest
 	if err := decodeHTTPJSON(request, &req); err != nil {
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+		return
+	}
+	// admin 可检查任意用户；普通登录用户仅可自检。
+	if err := r.requireHTTPAdmin(request); err != nil {
+		self, authErr := r.authenticateHTTPDataUser(request.Context(), request)
+		if authErr != nil || strings.TrimSpace(self) == "" {
+			writeAPIError(writer, err)
+			return
+		}
+		req.UserName = strings.TrimSpace(req.UserName)
+		if req.UserName == "" {
+			req.UserName = self
+		} else if req.UserName != self {
+			writeAPIError(writer, mts.ErrPermissionDenied)
+			return
+		}
+	}
+	if strings.TrimSpace(req.UserName) == "" {
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, "user_name is required", nil))
 		return
 	}
 	err := r.engine.CheckUserDatabasePermission(

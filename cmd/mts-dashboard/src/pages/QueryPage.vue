@@ -9,6 +9,9 @@ import { formatEpoch, nowUnixMsString } from '@/utils/time'
 import { formatFieldsMap } from '@/utils/fieldValue'
 import { rowsToCSV, downloadText } from '@/utils/csv'
 import QueryChart from '@/components/QueryChart.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
+import { checkDatabasePermission } from '@/api/authz'
+import { useAuth } from '@/composables/useAuth'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download } from 'lucide-vue-next'
 
@@ -20,6 +23,9 @@ const {
 const history = useQueryHistory()
 const { success, error: notifyError } = useNotify()
 const { t } = useI18n()
+const { currentUser, isAdmin } = useAuth()
+const authzHint = ref('')
+const authzChecking = ref(false)
 
 const copyState = ref<'idle' | 'ok' | 'fail'>('idle')
 let copyTimer: ReturnType<typeof setTimeout> | null = null
@@ -60,6 +66,32 @@ function fillNowMs(which: 'start' | 'end') {
   const s = nowUnixMsString()
   if (which === 'start') queryForm.value.start_time = s
   else queryForm.value.end_time = s
+}
+
+async function checkAuthz(perm: 'read' | 'write' = 'read') {
+  authzHint.value = ''
+  if (!queryForm.value.database.trim()) {
+    authzHint.value = '请先填写 database'
+    return
+  }
+  authzChecking.value = true
+  try {
+    const allowed = await checkDatabasePermission({
+      database: queryForm.value.database.trim(),
+      permission: perm,
+      user_name: isAdmin.value ? undefined : currentUser.value || undefined,
+    })
+    authzHint.value = allowed
+      ? `权限预检通过：${currentUser.value || 'current'} 对 ${queryForm.value.database} 具备 ${perm}`
+      : `权限预检拒绝：${currentUser.value || 'current'} 对 ${queryForm.value.database} 无 ${perm}`
+    if (allowed) success(authzHint.value)
+    else notifyError(authzHint.value)
+  } catch (e) {
+    authzHint.value = e instanceof Error ? e.message : '权限预检失败'
+    notifyError(authzHint.value)
+  } finally {
+    authzChecking.value = false
+  }
 }
 
 async function runQuery() {
@@ -167,9 +199,11 @@ const columnRows = computed(() => {
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showHistory = !showHistory"><History class="h-3.5 w-3.5" />历史</button>
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showChart = !showChart"><BarChart3 class="h-3.5 w-3.5" />图</button>
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showRawFields = !showRawFields">{{ showRawFields ? '标量字段' : '原始字段' }}</button>
+        <button class="mts-btn" :disabled="authzChecking" @click="checkAuthz('read')">权限预检</button>
       </div>
     </div>
 
+    <p v-if="authzHint" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{{ authzHint }}</p>
     <p v-if="metaHint" class="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">{{ metaHint }}（来源: {{ metaSource }}）</p>
 
     <div v-if="showHistory" class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
@@ -275,23 +309,24 @@ const columnRows = computed(() => {
     <QueryChart v-if="showChart && rows.length" :rows="rows" />
 
     <div v-if="rows.length" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800"><span class="font-semibold">行结果</span><span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ rows.length }} 行</span></div>
+      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800">
+        <span class="font-semibold">行结果</span>
+        <span class="text-xs text-slate-500 dark:text-slate-400">{{ rows.length }} 行（虚拟滚动）</span>
+      </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b text-left text-[11px] uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:border-slate-800">
-              <th class="px-4 py-2">时间</th><th class="px-4 py-2">Measurement</th><th class="px-4 py-2">Tags</th><th class="px-4 py-2">Fields</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, idx) in rows" :key="idx" class="border-b dark:border-slate-800">
-              <td class="px-4 py-2 font-mono text-xs">{{ formatTimestamp(row.timestamp) }}</td>
-              <td class="px-4 py-2 text-xs">{{ row.measurement }}</td>
-              <td class="px-4 py-2 font-mono text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : '—' }}</td>
-              <td class="px-4 py-2 font-mono text-xs">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="grid min-w-[720px] grid-cols-4 border-b px-4 py-2 text-left text-[11px] uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          <span>时间</span><span>Measurement</span><span>Tags</span><span>Fields</span>
+        </div>
+        <VirtualTable :items="rows" :row-height="40" :height="400">
+          <template #default="{ item: row }">
+            <div class="grid min-w-[720px] grid-cols-4 items-center border-b px-4 text-xs dark:border-slate-800">
+              <span class="font-mono">{{ formatTimestamp(row.timestamp) }}</span>
+              <span>{{ row.measurement }}</span>
+              <span class="truncate font-mono text-slate-500 dark:text-slate-400">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : '—' }}</span>
+              <span class="truncate font-mono">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any) }}</span>
+            </div>
+          </template>
+        </VirtualTable>
       </div>
     </div>
 

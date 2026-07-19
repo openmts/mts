@@ -2,6 +2,8 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { apiPost } from '@/api/client'
 import { listDatabasesDetailed, listRetentionPolicies } from '@/api/meta'
+import { checkDatabasePermission } from '@/api/authz'
+import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
@@ -27,6 +29,8 @@ const actionError = ref('')
 const metaHint = ref('')
 const { success, error: notifyError } = useNotify()
 const { t } = useI18n()
+const { currentUser, isAdmin } = useAuth()
+const authzHint = ref('')
 
 // TypedBatch builder（多 tag 列 + 多 field 列）
 const typedMeasurement = ref('cpu')
@@ -133,6 +137,30 @@ function buildTypedBatch(): Record<string, unknown> {
   }
   if (tagCols.length) batch.tags = tagCols
   return batch
+}
+
+async function checkWriteAuthz() {
+  authzHint.value = ''
+  if (!selectedDb.value.trim()) {
+    authzHint.value = '请先填写 database'
+    notifyError(authzHint.value)
+    return
+  }
+  try {
+    const allowed = await checkDatabasePermission({
+      database: selectedDb.value.trim(),
+      permission: 'write',
+      user_name: isAdmin.value ? undefined : currentUser.value || undefined,
+    })
+    authzHint.value = allowed
+      ? `写权限预检通过：${selectedDb.value}`
+      : `写权限预检拒绝：${selectedDb.value}`
+    if (allowed) success(authzHint.value)
+    else notifyError(authzHint.value)
+  } catch (e) {
+    authzHint.value = e instanceof Error ? e.message : '权限预检失败'
+    notifyError(authzHint.value)
+  }
 }
 
 async function submit() {

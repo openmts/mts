@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -104,4 +105,30 @@ func TestHTTPAPISpecHasNamespaces(t *testing.T) {
 	if len(spec.Namespaces) == 0 {
 		t.Fatalf("api-spec namespaces empty: %#v", spec)
 	}
+}
+
+func TestHTTPAuthzSelfCheckAllowsCurrentUser(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	seedUserWithPassword(t, runtime, mts.User{Name: "authz-self", Role: mts.UserRoleUser}, "secret")
+	if err := runtime.engine.GrantDatabasePermission(context.Background(), "authz-self", "default", mts.DatabasePermissionRead); err != nil {
+		t.Fatalf("grant error = %v", err)
+	}
+	token := loginHTTPUser(t, server.URL, "authz-self", "secret")
+	headers := map[string]string{"Authorization": "Bearer " + token}
+
+	var allowed authzDatabaseCheckResponse
+	postJSONWithHeaders(t, server.URL+"/api/v1/authz/database/check", authzDatabaseCheckRequest{
+		Database: "default", Permission: mts.DatabasePermissionRead,
+	}, headers, http.StatusOK, &allowed)
+	if !allowed.Allowed {
+		t.Fatal("self read check allowed=false")
+	}
+
+	// 禁止检查他人
+	postJSONWithHeaders(t, server.URL+"/api/v1/authz/database/check", authzDatabaseCheckRequest{
+		UserName: "admin", Database: "default", Permission: mts.DatabasePermissionRead,
+	}, headers, http.StatusForbidden, &errorResponse{})
 }
