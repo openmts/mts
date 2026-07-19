@@ -10,12 +10,21 @@ import { formatFieldsMap } from '@/utils/fieldValue'
 import { rowsToCSV, downloadText } from '@/utils/csv'
 import { loadQueryPrefs, saveQueryPrefs } from '@/utils/queryPrefs'
 import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
+import {
+  RESULT_COLUMN_KEYS,
+  RESULT_COLUMN_LABELS,
+  gridColClass,
+  toggleResultColumn,
+  type ResultColumnKey,
+  type ResultColumnVisibility,
+} from '@/utils/resultColumns'
 import QueryChart from '@/components/QueryChart.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star, Pencil, X, Upload } from 'lucide-vue-next'
+import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star, Pencil, X, Upload, Columns3 } from 'lucide-vue-next'
 
 const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
@@ -40,10 +49,16 @@ const initialPrefs = loadQueryPrefs(typeof localStorage !== 'undefined' ? localS
 const showHistory = ref(initialPrefs.showHistory)
 const showChart = ref(initialPrefs.showChart)
 const showRawFields = ref(initialPrefs.showRawFields)
+const resultColumns = ref<ResultColumnVisibility>({ ...initialPrefs.resultColumns })
+const showColumnPicker = ref(false)
+const queryAttempted = ref(false)
 const renameDraft = ref('')
 const renamingId = ref<string | null>(null)
 const clearHistoryOpen = ref(false)
 const historyFileInput = ref<HTMLInputElement | null>(null)
+const columnKeys = RESULT_COLUMN_KEYS
+const columnLabels = RESULT_COLUMN_LABELS
+const resultGridClass = computed(() => gridColClass(resultColumns.value))
 
 const modeOptions = [
   { value: 'rows' as const, label: '行式' },
@@ -58,7 +73,12 @@ function persistPrefs() {
     showChart: showChart.value,
     showRawFields: showRawFields.value,
     showHistory: showHistory.value,
+    resultColumns: { ...resultColumns.value },
   })
+}
+
+function onToggleColumn(key: ResultColumnKey) {
+  resultColumns.value = toggleResultColumn(resultColumns.value, key)
 }
 
 function onQueryKeydown(e: KeyboardEvent) {
@@ -99,7 +119,7 @@ onBeforeUnmount(() => {
   cancelQuery()
   if (copyTimer) clearTimeout(copyTimer)
 })
-watch([showChart, showRawFields, showHistory], () => { persistPrefs() })
+watch([showChart, showRawFields, showHistory, resultColumns], () => { persistPrefs() }, { deep: true })
 watch(() => queryForm.value.database, async (db) => {
   try { await loadDbChildren(db) }
   catch (e) { actionError.value = e instanceof Error ? e.message : '加载 measurement 失败' }
@@ -142,6 +162,7 @@ async function checkAuthz(perm: 'read' | 'write' = 'read') {
 }
 
 async function runQuery() {
+  queryAttempted.value = true
   await executeQuery()
   if (!actionError.value) {
     history.push({ mode: queryMode.value, form: { ...queryForm.value } })
@@ -383,7 +404,7 @@ const columnRows = computed(() => {
           </div>
         </li>
       </ul>
-      <p v-if="!historyPreview.length" class="text-xs text-slate-400 dark:text-slate-500">暂无历史</p>
+      <EmptyState v-if="!historyPreview.length" compact title="暂无历史" description="成功查询后会自动记录，可收藏常用条件。" />
     </div>
 
     <div class="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
@@ -459,8 +480,8 @@ const columnRows = computed(() => {
         </button>
     </div>
 
-    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
-    <p v-if="deleteResult" class="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60 p-3 text-sm">{{ deleteResult }}</p>
+    <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
+    <p v-if="deleteResult" class="mts-alert-ok">{{ deleteResult }}</p>
 
     <div v-if="queryStats" class="grid grid-cols-2 gap-2 sm:grid-cols-5">
       <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">扫描</p><p class="text-lg font-semibold">{{ queryStats.shards_scanned }}</p></div>
@@ -472,22 +493,70 @@ const columnRows = computed(() => {
 
     <QueryChart v-if="showChart && rows.length" :rows="rows" />
 
+    <div
+      v-if="queryAttempted && !loading && !actionError && !rows.length && !columnRows.length && !rawOutput"
+      class="mts-card"
+    >
+      <EmptyState
+        title="无匹配结果"
+        description="当前条件下未返回行/列数据。可放宽时间范围、检查 measurement/tags，或切换查询模式后重试。"
+      />
+    </div>
+
     <div v-if="rows.length" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-sm dark:border-slate-800">
         <span class="font-semibold">行结果</span>
-        <span class="text-xs text-slate-500 dark:text-slate-400">{{ rows.length }} 行（虚拟滚动）</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-slate-500 dark:text-slate-400">{{ rows.length }} 行（虚拟滚动）</span>
+          <div class="relative">
+            <button
+              type="button"
+              class="mts-btn"
+              title="列可见性"
+              @click="showColumnPicker = !showColumnPicker"
+            >
+              <Columns3 class="h-3.5 w-3.5" /> 列
+            </button>
+            <div
+              v-if="showColumnPicker"
+              class="absolute right-0 z-20 mt-1 w-44 rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+            >
+              <label
+                v-for="k in columnKeys"
+                :key="k"
+                class="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <input
+                  type="checkbox"
+                  :checked="resultColumns[k]"
+                  @change="onToggleColumn(k)"
+                />
+                <span>{{ columnLabels[k] }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="overflow-x-auto">
-        <div class="grid min-w-[720px] grid-cols-4 border-b px-4 py-2 text-left text-[11px] uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400">
-          <span>时间</span><span>Measurement</span><span>Tags</span><span>Fields</span>
+        <div
+          class="grid min-w-[480px] border-b px-4 py-2 text-left text-[11px] uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400"
+          :class="resultGridClass"
+        >
+          <span v-if="resultColumns.time">时间</span>
+          <span v-if="resultColumns.measurement">Measurement</span>
+          <span v-if="resultColumns.tags">Tags</span>
+          <span v-if="resultColumns.fields">Fields</span>
         </div>
         <VirtualTable :items="rows" :row-height="40" :height="400">
           <template #default="{ item: row }">
-            <div class="grid min-w-[720px] grid-cols-4 items-center border-b px-4 text-xs dark:border-slate-800">
-              <span class="font-mono">{{ formatTimestamp(row.timestamp) }}</span>
-              <span>{{ row.measurement }}</span>
-              <span class="truncate font-mono text-slate-500 dark:text-slate-400">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : '—' }}</span>
-              <span class="truncate font-mono">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any) }}</span>
+            <div
+              class="grid min-w-[480px] items-center border-b px-4 text-xs dark:border-slate-800"
+              :class="resultGridClass"
+            >
+              <span v-if="resultColumns.time" class="font-mono">{{ formatTimestamp(row.timestamp) }}</span>
+              <span v-if="resultColumns.measurement">{{ row.measurement }}</span>
+              <span v-if="resultColumns.tags" class="truncate font-mono text-slate-500 dark:text-slate-400">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : '—' }}</span>
+              <span v-if="resultColumns.fields" class="truncate font-mono">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any) }}</span>
             </div>
           </template>
         </VirtualTable>

@@ -4,7 +4,7 @@ import {
   mergeHistoryCap,
   normalizeHistoryItems,
   type QueryHistoryRecord,
-} from './queryHistory'
+} from './queryHistory.ts'
 
 export const HISTORY_EXPORT_VERSION = 1 as const
 

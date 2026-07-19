@@ -12,6 +12,7 @@
     "jsxImportSource": "vue",
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "isolatedModules": true,
     "baseUrl": ".",
