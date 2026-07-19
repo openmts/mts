@@ -44,8 +44,8 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'backup-snapshot',
     severity: 'recommended',
     title: '备份与快照演练',
-    detail: '验证 storage snapshot/export 与恢复流程。',
-    automated: false,
+    detail: 'Storage 页备份演练清单 + snapshot/export；旁路恢复仍需主机侧验证。',
+    automated: true,
   },
   {
     id: 'smoke-login-query-write',

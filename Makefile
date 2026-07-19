@@ -79,6 +79,19 @@ fmt: ## 格式化 Go 代码
 dashboard: ## 构建前端 Dashboard 并嵌入
 	cd cmd/mts-dashboard && npm ci && npm run build
 
+.PHONY: dashboard-test
+dashboard-test: ## 运行 Dashboard 单元测试
+	cd cmd/mts-dashboard && npm test
+
+.PHONY: dashboard-test-e2e
+dashboard-test-e2e: dashboard ## 构建嵌入前端并运行 Playwright 商业冒烟
+	cd cmd/mts-dashboard && npm run test:e2e
+
+.PHONY: dashboard-test-e2e-install
+dashboard-test-e2e-install: ## 安装 Playwright Chromium（首次）
+	cd cmd/mts-dashboard && npm run test:e2e:install
+
+
 .PHONY: lint
 lint: ## 运行 golangci-lint
 	$(LINT_TIMEOUT_PREFIX) golangci-lint run ./...

@@ -412,3 +412,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - Playwright 浏览器商业冒烟：`npm run test:e2e` 通过
 - 指标页路由修正为 `/observability/metrics`（避免与 Prometheus `/metrics` 冲突）
 - **仍不宣称可商用目标完成**：边缘 HTTPS/HSTS 部署落地、CI 浏览器安装约定
+
+
+## P18 状态（2026-07-20）
+- Storage 备份演练清单：已完成
+- Makefile dashboard-test / dashboard-test-e2e：已完成
+- **仍不宣称可商用目标完成**：边缘 HTTPS/HSTS 部署落地、完整旁路恢复自动化

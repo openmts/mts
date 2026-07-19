@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -9,7 +9,9 @@ import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
-import { CheckCircle, Camera, Download, Trash2, RefreshCw } from 'lucide-vue-next'
+import { formatBytes } from '@/utils/formatBytes'
+import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
+import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList } from 'lucide-vue-next'
 
 interface ValidateResponse { ok: boolean; data_dir: string; health: Record<string, unknown> }
 interface SnapshotResponse { ok: boolean; path: string }
@@ -31,6 +33,16 @@ const listLoading = ref(false)
 const deleteOpen = ref(false)
 const deleteName = ref('')
 const deleteLoading = ref(false)
+const drillDone = ref<Record<string, boolean>>({
+  validate: false,
+  snapshot: false,
+  'export-config': false,
+})
+const drillSteps = BACKUP_DRILL_STEPS
+const drillStats = computed(() => drillProgress(Object.entries(drillDone.value).filter(([, v]) => v).map(([k]) => k)))
+function toggleHostDrill(id: string, checked: boolean) {
+  drillDone.value = { ...drillDone.value, [id]: checked }
+}
 
 async function loadSnapshots() {
   listLoading.value = true
@@ -51,6 +63,7 @@ async function doValidate() {
   actionResult.value = null
   try {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/storage/validate')
+    drillDone.value = { ...drillDone.value, validate: true }
     const msg = validateResult.value.ok ? '验证通过' : '验证完成（存在问题）'
     actionResult.value = makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg)
     success(msg)
@@ -66,6 +79,7 @@ async function doSnapshot() {
   actionResult.value = null
   try {
     snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot')
+    drillDone.value = { ...drillDone.value, snapshot: true }
     const msg = `${t.value('createSnapshot')}：${snapshotResult.value.path || 'ok'}`
     actionResult.value = makeActionResult('ok', msg)
     success(t.value('createSnapshot'))
@@ -83,6 +97,7 @@ async function doExport() {
   try {
     const data = await apiGet<ExportResponse>('/api/v1/admin/storage/export')
     exportData.value = data.export
+    drillDone.value = { ...drillDone.value, 'export-config': true }
     actionResult.value = makeActionResult('ok', '配置已导出，可下载 JSON')
     success('配置已导出')
   } catch (e) {
@@ -130,11 +145,6 @@ async function confirmDelete() {
   }
 }
 
-function formatBytes(n: number): string {
-  if (n >= 1 << 20) return (n / (1 << 20)).toFixed(1) + ' MB'
-  if (n >= 1 << 10) return (n / (1 << 10)).toFixed(1) + ' KB'
-  return n + ' B'
-}
 </script>
 
 <template>
@@ -151,6 +161,53 @@ function formatBytes(n: number): string {
     </div>
 
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
+
+    <div class="mts-card p-4">
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <ClipboardList class="h-4 w-4" />
+          备份演练清单
+        </h2>
+        <span class="text-xs mts-muted">
+          进度 {{ drillStats.completed }}/{{ drillStats.total }}
+          · 必做 {{ drillStats.requiredCompleted }}/{{ drillStats.requiredTotal }}
+        </span>
+      </div>
+      <p class="mb-3 text-xs mts-muted">
+        控制台可完成校验/快照/导出；异地拷贝与旁路恢复需按
+        <code class="font-mono">docs/ops/dashboard-production-runbook.md</code> 在主机侧执行。
+      </p>
+      <ol class="space-y-2">
+        <li
+          v-for="step in drillSteps"
+          :key="step.id"
+          class="flex items-start gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-800"
+        >
+          <input
+            v-if="step.inDashboard"
+            type="checkbox"
+            class="mt-1"
+            :checked="!!drillDone[step.id]"
+            disabled
+          />
+          <input
+            v-else
+            type="checkbox"
+            class="mt-1"
+            :checked="!!drillDone[step.id]"
+            @change="toggleHostDrill(step.id, ($event.target as HTMLInputElement).checked)"
+          />
+          <div class="min-w-0">
+            <p class="font-medium text-slate-800 dark:text-slate-100">
+              {{ step.title }}
+              <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? '必做' : '推荐' }}</span>
+              <span v-if="step.inDashboard" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">Dashboard</span>
+            </p>
+            <p class="text-xs mts-muted">{{ step.detail }}</p>
+          </div>
+        </li>
+      </ol>
+    </div>
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div class="mts-panel">

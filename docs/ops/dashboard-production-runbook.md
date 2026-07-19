@@ -41,6 +41,7 @@ go test ./cmd/mts-server -run TestCommercialDashboardSmoke -count=1
 cd cmd/mts-dashboard && npm run test && npm run build
 # 首次需要：npm run test:e2e:install
 cd cmd/mts-dashboard && npm run test:e2e
+# 或：make dashboard-test-e2e-install && make dashboard-test-e2e
 make test && make e2e && make lint
 ```
 
@@ -104,3 +105,11 @@ server {
 - P13 冒烟：`cmd/mts-server/dashboard_commercial_smoke_test.go`
 - 生产清单数据：`cmd/mts-dashboard/src/utils/productionChecklist.ts`
 - 权限矩阵数据：`cmd/mts-dashboard/src/utils/rbacMatrix.ts`
+
+
+## 9. 备份演练（最短路径）
+
+1. Dashboard → 存储：执行验证 → 创建快照 → 导出配置。
+2. 将快照目录拷贝到旁路介质。
+3. 使用旁路 `data_dir` 启动临时 mts-server，查询关键 measurement 做抽样比对。
+4. 在存储页备份演练清单勾选主机侧步骤，保留演练记录。
