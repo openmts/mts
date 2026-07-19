@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -120,12 +121,123 @@ func (l *auditLog) list(userName string) []auditEvent {
 	return l.listFiltered(auditListRequest{UserName: userName})
 }
 
+func (l *auditLog) loadPersisted(req auditListRequest) []auditEvent {
+	if l == nil || l.engine == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	limit := req.Limit
+	if limit <= 0 {
+		limit = l.limit
+		if limit <= 0 {
+			limit = 256
+		}
+	}
+	// 多取一些，便于再过滤后仍够 limit
+	queryLimit := limit * 4
+	if queryLimit < 64 {
+		queryLimit = 64
+	}
+	if queryLimit > 2000 {
+		queryLimit = 2000
+	}
+	q := mts.Query{
+		Database:    "_internal",
+		Measurement: "audit_log",
+		Precision:   mts.PrecisionNanosecond,
+		Limit:       queryLimit,
+		Order:       mts.QueryOrder{By: mts.QueryOrderByTime, Direction: mts.QuerySortDesc},
+	}
+	if req.UserName != "" {
+		q.Tags = map[string]string{"user_name": req.UserName}
+	}
+	if req.SinceUnix > 0 {
+		q.StartTime = req.SinceUnix * int64(time.Second)
+	}
+	if req.UntilUnix > 0 {
+		q.EndTime = req.UntilUnix * int64(time.Second)
+	}
+	rows, err := l.engine.QueryRows(ctx, q)
+	if err != nil {
+		return nil
+	}
+	out := make([]auditEvent, 0, len(rows))
+	for _, row := range rows {
+		ev := auditEvent{
+			Time:     time.Unix(0, row.Timestamp).UTC(),
+			UserName: row.Tags["user_name"],
+		}
+		if v, ok := row.Fields["action"]; ok {
+			ev.Action = fieldString(v)
+		}
+		if v, ok := row.Fields["detail"]; ok {
+			ev.Detail = fieldString(v)
+		}
+		if v, ok := row.Fields["database"]; ok {
+			ev.Database = fieldString(v)
+		}
+		if req.Action != "" && !strings.Contains(ev.Action, req.Action) {
+			continue
+		}
+		out = append(out, ev)
+	}
+	return out
+}
+
+func fieldString(v mts.FieldValue) string {
+	switch v.Type {
+	case mts.FieldString:
+		return v.String
+	case mts.FieldInt64:
+		return fmt.Sprintf("%d", v.Int64)
+	case mts.FieldFloat64:
+		return fmt.Sprintf("%g", v.Float64)
+	case mts.FieldBool:
+		if v.Bool {
+			return "true"
+		}
+		return "false"
+	default:
+		return ""
+	}
+}
+
+func mergeAuditEvents(memory, persisted []auditEvent, limit int) []auditEvent {
+	// 以 time+user+action+detail 去重，优先 memory 最新视图
+	type key struct {
+		t int64
+		u string
+		a string
+		d string
+	}
+	seen := make(map[key]struct{}, len(memory)+len(persisted))
+	out := make([]auditEvent, 0, len(memory)+len(persisted))
+	add := func(ev auditEvent) {
+		k := key{t: ev.Time.UnixNano(), u: ev.UserName, a: ev.Action, d: ev.Detail}
+		if _, ok := seen[k]; ok {
+			return
+		}
+		seen[k] = struct{}{}
+		out = append(out, ev)
+	}
+	for _, ev := range memory {
+		add(ev)
+	}
+	for _, ev := range persisted {
+		add(ev)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Time.After(out[j].Time) })
+	if limit > 0 && len(out) > limit {
+		out = append([]auditEvent(nil), out[:limit]...)
+	}
+	return out
+}
+
 func (l *auditLog) listFiltered(req auditListRequest) []auditEvent {
 	if l == nil {
 		return nil
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
 	userName := strings.TrimSpace(req.UserName)
 	action := strings.TrimSpace(req.Action)
 	var since, until time.Time
@@ -135,7 +247,8 @@ func (l *auditLog) listFiltered(req auditListRequest) []auditEvent {
 	if req.UntilUnix > 0 {
 		until = time.Unix(req.UntilUnix, 0).UTC()
 	}
-	out := make([]auditEvent, 0, len(l.events))
+	l.mu.Lock()
+	memory := make([]auditEvent, 0, len(l.events))
 	for _, event := range l.events {
 		if userName != "" && event.UserName != userName {
 			continue
@@ -149,11 +262,14 @@ func (l *auditLog) listFiltered(req auditListRequest) []auditEvent {
 		if !until.IsZero() && event.Time.After(until) {
 			continue
 		}
-		out = append(out, event)
+		memory = append(memory, event)
 	}
-	sort.SliceStable(out, func(i int, j int) bool { return out[i].Time.After(out[j].Time) })
-	if req.Limit > 0 && len(out) > req.Limit {
-		out = append([]auditEvent(nil), out[:req.Limit]...)
+	l.mu.Unlock()
+
+	persisted := l.loadPersisted(req)
+	limit := req.Limit
+	if limit <= 0 {
+		limit = l.limit
 	}
-	return out
+	return mergeAuditEvents(memory, persisted, limit)
 }

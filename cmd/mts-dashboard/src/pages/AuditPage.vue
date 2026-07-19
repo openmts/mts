@@ -95,7 +95,31 @@ function exportJSON() {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
-  success('审计日志已导出')
+  success('审计日志已导出 JSON')
+}
+
+function exportCSV() {
+  if (!auditEvents.value.length) return
+  const header = ['time', 'user_name', 'action', 'database', 'detail']
+  const lines = [header.join(',')]
+  for (const e of auditEvents.value) {
+    const cols = [e.time, e.user_name, e.action, e.database || '', e.detail || ''].map((v) => {
+      const s = String(v ?? '')
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    })
+    lines.push(cols.join(','))
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `mts-audit-${Date.now()}.csv`
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+  success('审计日志已导出 CSV')
 }
 
 const filteredCount = computed(() => auditEvents.value.length)
@@ -105,6 +129,7 @@ const filteredCount = computed(() => auditEvents.value.length)
   <PermissionDenied v-if="!isAdmin" />
   <div v-else class="space-y-6">
     <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ loadError }}</p>
+    <p class="mts-alert-warn">审计同时写入内存环与 <code>_internal.audit_log</code>；列表会合并持久化读回，重启后仍可查询。</p>
 
     <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-5">
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('user') }}
@@ -129,6 +154,7 @@ const filteredCount = computed(() => auditEvents.value.length)
         <button class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700" :disabled="!auditEvents.length" @click="exportJSON">
           <span class="inline-flex items-center gap-1"><Download class="h-3.5 w-3.5" />{{ t('export') }}</span>
         </button>
+        <button class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700" :disabled="!auditEvents.length" @click="exportCSV">CSV</button>
       </div>
     </div>
 

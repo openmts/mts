@@ -22,6 +22,7 @@ const router = createRouter({
         { path: 'downsample', name: 'Downsample', component: () => import('@/pages/DownsamplePage.vue'), meta: { admin: true } },
         { path: 'query', name: 'Query', component: () => import('@/pages/QueryPage.vue') },
         { path: 'audit', name: 'Audit', component: () => import('@/pages/AuditPage.vue'), meta: { admin: true } },
+        { path: 'api-spec', name: 'ApiSpec', component: () => import('@/pages/ApiSpecPage.vue'), meta: { admin: true } },
         { path: 'storage', name: 'Storage', component: () => import('@/pages/StoragePage.vue'), meta: { admin: true } },
         { path: 'write', name: 'Write', component: () => import('@/pages/WritePage.vue') },
         { path: ':pathMatch(.*)*', name: 'NotFound', component: () => import('@/pages/NotFoundPage.vue') },

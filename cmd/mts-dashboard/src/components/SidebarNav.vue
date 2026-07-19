@@ -5,7 +5,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import {
   LayoutDashboard, Database, Users, Settings, Wrench,
-  ArrowDownUp, Search, ScrollText, HardDrive, Send, X,
+  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen,
 } from 'lucide-vue-next'
 
 defineProps<{ visible: boolean }>()
@@ -25,6 +25,7 @@ const allNavItems = computed(() => [
   { to: '/operations', label: t.value('operations'), icon: Wrench, adminOnly: true },
   { to: '/downsample', label: t.value('downsample'), icon: ArrowDownUp, adminOnly: true },
   { to: '/audit', label: t.value('audit'), icon: ScrollText, adminOnly: true },
+  { to: '/api-spec', label: t.value('apiSpec'), icon: BookOpen, adminOnly: true },
   { to: '/storage', label: t.value('storage'), icon: HardDrive, adminOnly: true },
 ])
 

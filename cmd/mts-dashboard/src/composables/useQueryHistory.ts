@@ -19,6 +19,9 @@ export interface QueryHistoryItem {
     order?: 'asc' | 'desc' | ''
     offset?: string
     limit: string
+    aggregates?: string
+    window?: string
+    group_tags?: string
   }
 }
 

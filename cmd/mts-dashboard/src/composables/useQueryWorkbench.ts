@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { apiPost, apiPostNDJSONStream, APIClientError } from '@/api/client'
 import { listDatabasesDetailed, listMeasurements, listRetentionPolicies } from '@/api/meta'
 import { parseTimeInt } from '@/utils/time'
+import { parseHumanDurationToNs } from '@/utils/duration'
 import type { QueryResultRow, QueryStatsData } from '@/api/types'
 
 export type { QueryResultRow, QueryStatsData }
@@ -26,6 +27,12 @@ export function useQueryWorkbench() {
     order: 'asc' as 'asc' | 'desc' | '',
     offset: '',
     limit: '100',
+    // 聚合：func:field 逗号分隔，如 mean:usage,max:usage
+    aggregates: '',
+    // 窗口：人类可读 duration，如 1m/5m；序列化为纳秒
+    window: '',
+    // group by tags：逗号分隔
+    group_tags: '',
   })
   const queryMode = ref<QueryMode>('rows')
   const rows = ref<QueryResultRow[]>([])
@@ -73,6 +80,21 @@ export function useQueryWorkbench() {
     } finally {
       measurementsLoading.value = false
     }
+  }
+
+  function parseAggregates(text: string): { function: string; field: string }[] {
+    const out: { function: string; field: string }[] = []
+    for (const part of text.split(',')) {
+      const s = part.trim()
+      if (!s) continue
+      const colon = s.indexOf(':')
+      if (colon <= 0) throw new Error(`聚合格式无效: ${s}（需要 func:field，如 mean:usage）`)
+      const fn = s.slice(0, colon).trim().toLowerCase()
+      const field = s.slice(colon + 1).trim()
+      if (!fn || !field) throw new Error(`聚合格式无效: ${s}`)
+      out.push({ function: fn, field })
+    }
+    return out
   }
 
   function parseTags(text: string): Record<string, string> {
@@ -129,6 +151,22 @@ export function useQueryWorkbench() {
       const lim = parseTimeInt(queryForm.value.limit)
       if (lim === null || lim <= 0) throw new Error('limit 必须是正整数')
       query.limit = lim
+    }
+    if (queryForm.value.aggregates.trim()) {
+      query.aggregates = parseAggregates(queryForm.value.aggregates)
+    }
+    if (queryForm.value.window.trim()) {
+      const ns = parseHumanDurationToNs(queryForm.value.window)
+      query.window = ns
+      const groupTags = queryForm.value.group_tags
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      query.group = { tags: groupTags, window: ns }
+    } else if (queryForm.value.group_tags.trim()) {
+      query.group = {
+        tags: queryForm.value.group_tags.split(',').map((s) => s.trim()).filter(Boolean),
+      }
     }
     return query
   }

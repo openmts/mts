@@ -1,41 +1,79 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { QueryResultRow } from '@/composables/useQueryWorkbench'
-import { buildPolyline, extractNumericFieldNames, extractSeries } from '@/utils/chart'
+import type { QueryResultRow } from '@/api/types'
+import { extractNumericFieldNames, extractMultiSeries, polylineInBounds, boundsOfSeries } from '@/utils/chart'
 import { useI18n } from '@/composables/useI18n'
 
 const props = defineProps<{ rows: QueryResultRow[] }>()
 const { t } = useI18n()
-const field = ref('')
+
+const fieldNames = computed(() => extractNumericFieldNames(props.rows))
+const selectedField = ref('')
+const maxSeries = ref(6)
+
+watch(fieldNames, (names) => {
+  if (!names.includes(selectedField.value)) selectedField.value = names[0] || ''
+}, { immediate: true })
+
+const series = computed(() => {
+  if (!selectedField.value) return []
+  return extractMultiSeries(props.rows, selectedField.value, maxSeries.value)
+})
+
+const bounds = computed(() => boundsOfSeries(series.value))
 const width = 640
 const height = 220
 
-const fields = computed(() => extractNumericFieldNames(props.rows))
-watch(fields, (fs) => {
-  if (!fs.includes(field.value)) field.value = fs[0] || ''
-}, { immediate: true })
-
-const series = computed(() => (field.value ? extractSeries(props.rows, field.value) : []))
-const poly = computed(() => buildPolyline(series.value, width, height))
+const paths = computed(() => {
+  const b = bounds.value
+  if (!b) return [] as { d: string; color: string; key: string }[]
+  return series.value.map((s) => ({
+    key: s.key,
+    color: s.color,
+    d: polylineInBounds(s.points, b, width, height),
+  }))
+})
 </script>
 
 <template>
-  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+  <div class="mts-panel">
     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
       <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('chart') }}</h3>
-      <label class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
-        {{ t('field') }}
-        <select v-model="field" class="rounded border border-slate-300 dark:border-slate-600 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-          <option v-for="f in fields" :key="f" :value="f">{{ f }}</option>
-        </select>
-      </label>
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <label class="mts-muted">{{ t('field') }}
+          <select v-model="selectedField" class="ml-1 rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800">
+            <option v-for="f in fieldNames" :key="f" :value="f">{{ f }}</option>
+          </select>
+        </label>
+        <label class="mts-muted">max series
+          <select v-model.number="maxSeries" class="ml-1 rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800">
+            <option :value="3">3</option>
+            <option :value="6">6</option>
+            <option :value="10">10</option>
+          </select>
+        </label>
+      </div>
     </div>
-    <div v-if="!fields.length" class="py-8 text-center text-sm text-slate-400 dark:text-slate-500">{{ t('noChartData') }}</div>
-    <svg v-else :viewBox="`0 0 ${width} ${height}`" class="h-56 w-full">
-      <rect x="0" y="0" :width="width" :height="height" class="fill-slate-50 dark:fill-slate-950" />
-      <path :d="poly.path" fill="none" stroke="#2563eb" stroke-width="2" />
-      <text x="8" y="16" class="fill-slate-400 text-[10px]">{{ poly.maxY.toFixed(2) }}</text>
-      <text x="8" :y="height - 8" class="fill-slate-400 text-[10px]">{{ poly.minY.toFixed(2) }}</text>
-    </svg>
+    <p v-if="!fieldNames.length" class="text-sm mts-muted">{{ t('noChartData') }}</p>
+    <template v-else>
+      <svg :viewBox="`0 0 ${width} ${height}`" class="h-56 w-full rounded bg-slate-50 dark:bg-slate-950/50">
+        <path
+          v-for="p in paths"
+          :key="p.key"
+          :d="p.d"
+          fill="none"
+          :stroke="p.color"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <div class="mt-2 flex flex-wrap gap-3 text-[11px]">
+        <span v-for="s in series" :key="s.key" class="inline-flex items-center gap-1">
+          <span class="inline-block h-2 w-2 rounded-full" :style="{ background: s.color }" />
+          <span class="font-mono text-slate-600 dark:text-slate-300">{{ s.label }} ({{ s.points.length }})</span>
+        </span>
+      </div>
+    </template>
   </div>
 </template>

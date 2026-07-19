@@ -28,14 +28,13 @@ const metaHint = ref('')
 const { success, error: notifyError } = useNotify()
 const { t } = useI18n()
 
-// TypedBatch builder
+// TypedBatch builder（多 tag 列 + 多 field 列）
 const typedMeasurement = ref('cpu')
-const typedTagKey = ref('host')
-const typedTagValues = ref('server01\nserver02')
-const typedFieldName = ref('usage')
-const typedFieldType = ref<'float' | 'int'>('float')
-const typedFieldValues = ref('0.7\n0.8')
 const typedTimestamps = ref('')
+type TypedTagCol = { name: string; values: string }
+type TypedFieldCol = { name: string; type: 'float' | 'int' | 'string' | 'bool'; values: string }
+const typedTagCols = ref<TypedTagCol[]>([{ name: 'host', values: 'server01\nserver02' }])
+const typedFieldCols = ref<TypedFieldCol[]>([{ name: 'usage', type: 'float', values: '0.7\n0.8' }])
 
 function createEmptyRow(): FormRow {
   return {
@@ -67,35 +66,62 @@ watch(selectedDb, async (db) => {
 })
 
 function buildTypedBatch(): Record<string, unknown> {
-  const tags = typedTagValues.value.split('\n').map((s) => s.trim()).filter(Boolean)
-  const vals = typedFieldValues.value.split('\n').map((s) => s.trim()).filter(Boolean)
   if (!typedMeasurement.value.trim()) throw new Error('measurement 不能为空')
-  if (!vals.length) throw new Error('字段值不能为空')
-  if (tags.length && tags.length !== vals.length) throw new Error('tag 值行数需与字段值行数一致（或留空 tag）')
+  const fieldColsBuilt: Record<string, unknown>[] = []
+  let n = 0
+  for (const col of typedFieldCols.value) {
+    const name = col.name.trim()
+    if (!name) throw new Error('field name 不能为空')
+    const vals = col.values.split('\n').map((s) => s.trim()).filter(Boolean)
+    if (!vals.length) throw new Error(`字段 ${name} 值不能为空`)
+    if (!n) n = vals.length
+    else if (vals.length !== n) throw new Error(`字段 ${name} 行数 ${vals.length} 与主列 ${n} 不一致`)
+    const fieldCol: Record<string, unknown> = { name }
+    if (col.type === 'int') {
+      fieldCol.type = 2
+      fieldCol.int64_values = vals.map((v) => {
+        if (!/^-?\d+$/.test(v)) throw new Error(`非法整数: ${v}`)
+        const num = Number(v)
+        if (!Number.isSafeInteger(num)) throw new Error(`整数越界: ${v}`)
+        return num
+      })
+    } else if (col.type === 'float') {
+      fieldCol.type = 1
+      fieldCol.float64_values = vals.map((v) => {
+        const num = Number(v)
+        if (!Number.isFinite(num)) throw new Error(`非法浮点: ${v}`)
+        return num
+      })
+    } else if (col.type === 'bool') {
+      fieldCol.type = 4
+      fieldCol.bool_values = vals.map((v) => {
+        const s = v.toLowerCase()
+        if (s === 'true' || s === '1') return true
+        if (s === 'false' || s === '0') return false
+        throw new Error(`非法 bool: ${v}`)
+      })
+    } else {
+      fieldCol.type = 3
+      fieldCol.string_values = vals
+    }
+    fieldColsBuilt.push(fieldCol)
+  }
+  if (!n) throw new Error('至少需要一个字段列')
   let ts = typedTimestamps.value.split('\n').map((s) => s.trim()).filter(Boolean).map(Number)
   if (!ts.length) {
     const now = Date.now()
-    ts = vals.map((_, i) => now + i)
+    ts = Array.from({ length: n }, (_, i) => now + i)
   }
-  if (ts.length !== vals.length) throw new Error('时间戳行数需与字段值一致')
-  if (ts.some((n) => !Number.isSafeInteger(n))) throw new Error('时间戳必须是安全整数（ms）')
-  const fieldCol: Record<string, unknown> = {
-    name: typedFieldName.value.trim() || 'value',
-    type: typedFieldType.value === 'int' ? 2 : 1,
-  }
-  if (typedFieldType.value === 'int') {
-    fieldCol.int64_values = vals.map((v) => {
-      if (!/^-?\d+$/.test(v)) throw new Error(`非法整数: ${v}`)
-      const n = Number(v)
-      if (!Number.isSafeInteger(n)) throw new Error(`整数越界: ${v}`)
-      return n
-    })
-  } else {
-    fieldCol.float64_values = vals.map((v) => {
-      const n = Number(v)
-      if (!Number.isFinite(n)) throw new Error(`非法浮点: ${v}`)
-      return n
-    })
+  if (ts.length !== n) throw new Error('时间戳行数需与字段值一致')
+  if (ts.some((x) => !Number.isSafeInteger(x))) throw new Error('时间戳必须是安全整数（ms）')
+  const tagCols: { name: string; values: string[] }[] = []
+  for (const col of typedTagCols.value) {
+    const name = col.name.trim()
+    if (!name) continue
+    const values = col.values.split('\n').map((s) => s.trim()).filter(Boolean)
+    if (!values.length) continue
+    if (values.length !== n) throw new Error(`tag ${name} 行数需为 ${n}`)
+    tagCols.push({ name, values })
   }
   const batch: Record<string, unknown> = {
     database: selectedDb.value,
@@ -103,11 +129,9 @@ function buildTypedBatch(): Record<string, unknown> {
     measurement: typedMeasurement.value.trim(),
     precision: 'ms',
     timestamps: ts,
-    fields: [fieldCol],
+    fields: fieldColsBuilt,
   }
-  if (tags.length && typedTagKey.value.trim()) {
-    batch.tags = [{ name: typedTagKey.value.trim(), values: tags }]
-  }
+  if (tagCols.length) batch.tags = tagCols
   return batch
 }
 
@@ -155,6 +179,10 @@ async function submit() {
   }
 }
 
+function addTypedTagCol() { typedTagCols.value.push({ name: '', values: '' }) }
+function removeTypedTagCol(i: number) { typedTagCols.value.splice(i, 1) }
+function addTypedFieldCol() { typedFieldCols.value.push({ name: '', type: 'float', values: '' }) }
+function removeTypedFieldCol(i: number) { typedFieldCols.value.splice(i, 1) }
 function addRow() { formRows.value.push(createEmptyRow()) }
 function removeRow(i: number) { formRows.value.splice(i, 1) }
 const modeLabel = computed(() => ({
@@ -227,26 +255,40 @@ const modeLabel = computed(() => ({
       <button class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300" @click="addRow"><Plus class="h-3 w-3" /> 添加行</button>
     </div>
 
-    <div v-else-if="writeMode==='typed'" class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-2">
-      <p class="md:col-span-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">直接构造 TypedBatch 调用 <code>/api/v1/data/write/typed</code>（推荐高性能路径）</p>
-      <label class="text-xs">Measurement<input v-model="typedMeasurement" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" /></label>
-      <label class="text-xs">Tag key<input v-model="typedTagKey" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" /></label>
-      <label class="text-xs">Tag values（每行一个）
-        <textarea v-model="typedTagValues" rows="4" class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" />
-      </label>
-      <label class="text-xs">Field values（每行一个）
-        <textarea v-model="typedFieldValues" rows="4" class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" />
-      </label>
-      <label class="text-xs">Field name<input v-model="typedFieldName" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" /></label>
-      <label class="text-xs">Field type
-        <select v-model="typedFieldType" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
-          <option value="float">float</option>
-          <option value="int">int</option>
-        </select>
-      </label>
-      <label class="text-xs md:col-span-2">Timestamps ms（可选，每行一个；空则自动生成）
-        <textarea v-model="typedTimestamps" rows="3" class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" />
-      </label>
+    <div v-else-if="writeMode==='typed'" class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+      <p class="text-xs text-slate-500 dark:text-slate-400">直接构造 TypedBatch 调用 <code>/api/v1/data/write/typed</code>（推荐高性能路径；支持多 tag/多 field 列）</p>
+      <div class="grid gap-3 md:grid-cols-2">
+        <label class="text-xs">Measurement<input v-model="typedMeasurement" class="mts-input mt-1" /></label>
+        <label class="text-xs">Timestamps ms（可选，每行一个；空则自动生成）
+          <textarea v-model="typedTimestamps" rows="3" class="mts-input mt-1 font-mono text-xs" />
+        </label>
+      </div>
+      <div>
+        <div class="mb-2 flex items-center justify-between text-xs font-medium">Tag 列
+          <button type="button" class="text-slate-500" @click="addTypedTagCol">+ tag 列</button>
+        </div>
+        <div v-for="(col, i) in typedTagCols" :key="'t'+i" class="mb-2 grid gap-2 rounded border border-slate-100 p-2 dark:border-slate-800 md:grid-cols-3">
+          <input v-model="col.name" class="mts-input text-xs" placeholder="tag name" />
+          <textarea v-model="col.values" rows="3" class="mts-input font-mono text-xs md:col-span-2" placeholder="每行一个 value" />
+          <button type="button" class="text-xs text-red-500 md:col-span-3" @click="removeTypedTagCol(i)">删除 tag 列</button>
+        </div>
+      </div>
+      <div>
+        <div class="mb-2 flex items-center justify-between text-xs font-medium">Field 列
+          <button type="button" class="text-slate-500" @click="addTypedFieldCol">+ field 列</button>
+        </div>
+        <div v-for="(col, i) in typedFieldCols" :key="'f'+i" class="mb-2 grid gap-2 rounded border border-slate-100 p-2 dark:border-slate-800 md:grid-cols-4">
+          <input v-model="col.name" class="mts-input text-xs" placeholder="field name" />
+          <select v-model="col.type" class="mts-input text-xs">
+            <option value="float">float</option>
+            <option value="int">int</option>
+            <option value="string">string</option>
+            <option value="bool">bool</option>
+          </select>
+          <textarea v-model="col.values" rows="3" class="mts-input font-mono text-xs md:col-span-2" placeholder="每行一个 value" />
+          <button type="button" class="text-xs text-red-500 md:col-span-4" :disabled="typedFieldCols.length<=1" @click="removeTypedFieldCol(i)">删除 field 列</button>
+        </div>
+      </div>
     </div>
 
     <div v-else class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">

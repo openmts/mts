@@ -16,6 +16,7 @@ export const messages = {
     downsample: '降采样',
     query: '查询',
     audit: '审计',
+    apiSpec: 'API Spec',
     storage: '存储',
     write: '写入',
     refresh: '刷新',
@@ -95,6 +96,9 @@ export const messages = {
     cancelQuery: '取消',
     partialAdminStats: '部分管理统计不可用',
     nonAdminOverview: '当前账号为非管理员，仅展示基础健康信息。',
+    exportCSV: '导出 CSV',
+    aggregates: '聚合',
+    window: '窗口',
   },
   en: {
     appName: 'MTS Dashboard',
@@ -111,6 +115,7 @@ export const messages = {
     downsample: 'Downsample',
     query: 'Query',
     audit: 'Audit',
+    apiSpec: 'API Spec',
     storage: 'Storage',
     write: 'Write',
     refresh: 'Refresh',
@@ -190,6 +195,9 @@ export const messages = {
     cancelQuery: 'Cancel',
     partialAdminStats: 'Some admin stats unavailable',
     nonAdminOverview: 'Non-admin account: only basic health is shown.',
+    exportCSV: 'Export CSV',
+    aggregates: 'Aggregates',
+    window: 'Window',
   },
 } as const
 

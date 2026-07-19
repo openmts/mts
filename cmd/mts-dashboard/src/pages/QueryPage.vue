@@ -7,9 +7,10 @@ import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { formatEpoch, nowUnixMsString } from '@/utils/time'
 import { formatFieldsMap } from '@/utils/fieldValue'
+import { rowsToCSV, downloadText } from '@/utils/csv'
 import QueryChart from '@/components/QueryChart.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { Search, Square, Copy, Check, Trash2, History, BarChart3 } from 'lucide-vue-next'
+import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download } from 'lucide-vue-next'
 
 const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
@@ -129,6 +130,16 @@ async function doRangeDelete() {
   }
 }
 
+function exportCSV() {
+  if (!rows.value.length) {
+    actionError.value = '无可导出的行结果'
+    notifyError(actionError.value)
+    return
+  }
+  downloadText(`mts-query-${Date.now()}.csv`, rowsToCSV(rows.value))
+  success('CSV 已导出')
+}
+
 const historyPreview = computed(() => history.items.value.slice(0, 12))
 const columnRows = computed(() => {
   // columns: [{field_name, timestamps, values, tags, measurement}]
@@ -217,7 +228,17 @@ const columnRows = computed(() => {
           <option value="desc">time desc</option>
         </select>
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Offset / Limit
+      
+      <label class="text-xs mts-muted">聚合 func:field
+        <input v-model="queryForm.aggregates" class="mts-input mt-1 font-mono text-xs" placeholder="mean:usage,max:usage" />
+      </label>
+      <label class="text-xs mts-muted">窗口 window
+        <input v-model="queryForm.window" class="mts-input mt-1 font-mono text-xs" placeholder="1m" />
+      </label>
+      <label class="text-xs mts-muted">Group tags
+        <input v-model="queryForm.group_tags" class="mts-input mt-1 font-mono text-xs" placeholder="host,region" />
+      </label>
+<label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Offset / Limit
         <div class="mt-1 flex gap-1">
           <input v-model="queryForm.offset" placeholder="offset" class="w-1/2 rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
           <input v-model="queryForm.limit" placeholder="limit" class="w-1/2 rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
@@ -235,6 +256,9 @@ const columnRows = computed(() => {
         <component :is="copyState === 'ok' ? Check : Copy" class="h-4 w-4" />
         {{ streamMeta.previewOnly ? t('copyPreview') : t('copy') }}
       </button>
+        <button class="mts-btn" :disabled="!rows.length" @click="exportCSV">
+          <Download class="h-3.5 w-3.5" /> CSV
+        </button>
     </div>
 
     <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>

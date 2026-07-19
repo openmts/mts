@@ -25,6 +25,7 @@ const pageTitle = computed(() => {
     Downsample: t.value('downsample'),
     Query: t.value('query'),
     Audit: t.value('audit'),
+    ApiSpec: t.value('apiSpec'),
     Storage: t.value('storage'),
     Write: t.value('write'),
     NotFound: '404',

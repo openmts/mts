@@ -1,7 +1,7 @@
 # Dashboard 对齐修复 EARS 清单（2026-07-19）
 
 - **来源**: `docs/review/code-review-2026-07-19-1933-mts-dashboard-alignment.md`
-- **说明**: P0/P1 与 P2-01~08 已闭环
+- **说明**: P0/P1/P2/P3 已闭环
 
 ## P0
 - [x] EARS-FE-P0-01 删除契约对齐（DeleteRequest json tag 或前端字段）
@@ -24,24 +24,22 @@
 - [x] EARS-FE-P2-08 list databases 返回 databases 字段
 
 ## P3
-- [ ] EARS-FE-P3-01 聚合窗口查询 UI
-- [ ] EARS-FE-P3-02 结果导出 CSV
-- [ ] EARS-FE-P3-03 TypedBatch 多列编辑器
-- [ ] EARS-FE-P3-04 图表多 series
-- [ ] EARS-FE-P3-05 API Spec 浏览器
-- [ ] EARS-FE-P3-06 审计查持久化
+- [x] EARS-FE-P3-01 聚合窗口查询 UI
+- [x] EARS-FE-P3-02 结果导出 CSV
+- [x] EARS-FE-P3-03 TypedBatch 多列编辑器
+- [x] EARS-FE-P3-04 图表多 series
+- [x] EARS-FE-P3-05 API Spec 浏览器
+- [x] EARS-FE-P3-06 审计查持久化
 
 ## 实现备注
 
-### 2026-07-19 第二轮（P2 闭环）
-- 暗色：页面/组件补 dark 类 + `mts-*` 通用表面样式。
-- i18n：扩展登录/概览/运维/查询关键文案；Login/Notify 接入字典。
-- 子路径：`http.dashboard_base` + `dashboardHandler(base)`；前端 API 不再拼接 `VITE_BASE`（用 `VITE_API_BASE` 可选覆盖）。
-- 共享类型：`src/api/types.ts`。
-- 降采样：run / reset / dry-run 入口与结果展示。
-- 运维/概览：maintenance errors + health checks。
-- 前端契约测：`dashboardAlign.contract.test.ts`；服务端 enable/disable action 契约。
+### 2026-07-19 第三轮（P3 闭环）
+- 查询：aggregates / window / group_tags 接入 `buildQuery`；行结果 CSV 导出。
+- TypedBatch：多 tag 列 + 多 field 列（float/int/string/bool）。
+- 图表：按 tag 组合拆分多 series，可配置 max series。
+- API Spec：admin 页面浏览 `/api/v1/admin/api-spec`。
+- 审计：内存环与 `_internal.audit_log` 合并读回；页面提示 + CSV 导出。
 
 ### 验证
-- dashboard: `npm run test` + `npm run build` + `VITE_BASE=/mts/ npm run build:base`
+- dashboard: `npm run test` + `npm run build`
 - `make test` / `make e2e` / `make lint` 通过

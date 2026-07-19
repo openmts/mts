@@ -325,7 +325,11 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 | P2-06 maintenance/health | 已修复 | Overview/Operations |
 | P2-07 前端契约测试 | 已修复 | dashboardAlign.contract.test.ts |
 | P2-08 databases 字段 | 已修复 | measurementsResponse 双字段 |
+| P3-01 聚合窗口 UI | 已修复 | aggregates/window/group_tags |
+| P3-02 CSV 导出 | 已修复 | rowsToCSV + Query/Audit 导出 |
+| P3-03 TypedBatch 多列 | 已修复 | 多 tag/field 列编辑器 |
+| P3-04 多 series 图 | 已修复 | extractMultiSeries + QueryChart |
+| P3-05 API Spec 浏览器 | 已修复 | ApiSpecPage |
+| P3-06 审计持久化读回 | 已修复 | 合并 `_internal.audit_log` |
 
-P3 未纳入本轮。
-
-验证：dashboard test/build、make test/e2e/lint 通过（2026-07-19 第二轮）。
+验证：dashboard test/build、make test/e2e/lint 通过（2026-07-19 第三轮）。
