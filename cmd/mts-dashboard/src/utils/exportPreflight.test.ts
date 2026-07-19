@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildExportPreflight } from './exportPreflight.ts'
+import { buildExportPreflight, preflightItemTarget } from './exportPreflight.ts'
 
 test('buildExportPreflight reports gaps and completeness', () => {
   const gaps = buildExportPreflight({
@@ -59,4 +59,29 @@ test('doctor warns and tls info', () => {
   assert.ok(r.items.some((i) => i.id === 'doctor-ok' && i.level === 'warn'))
   assert.ok(r.items.some((i) => i.id === 'doctor-warn' && /2/.test(i.message)))
   assert.ok(r.items.some((i) => i.id === 'tls' && i.level === 'info'))
+})
+
+test('preflightItemTarget maps anchors', () => {
+  assert.equal(preflightItemTarget('checklist')?.target, '#production-checklist')
+  assert.equal(preflightItemTarget('signoff')?.target, '#signoff-notes')
+  assert.equal(preflightItemTarget('deployKit')?.target, '#deploy-kit')
+  assert.equal(preflightItemTarget('doctor-warn')?.target, '#doctor-panel')
+  assert.equal(preflightItemTarget('footer'), null)
+})
+
+test('buildExportPreflight attaches jump targets', () => {
+  const r = buildExportPreflight({
+    locale: 'zh',
+    requiredChecklistRatio: 0,
+    edgeHttpsRequiredRatio: 0,
+    backupScheduleRequiredRatio: 0,
+    doctorLoaded: false,
+    signoffNotes: {},
+    deployKitReviewed: false,
+  })
+  const signoff = r.items.find((i) => i.id === 'signoff')
+  assert.equal(signoff?.target, '#signoff-notes')
+  assert.equal(signoff?.actionKey, 'preflightJumpLocal')
+  const footer = r.items.find((i) => i.id === 'footer')
+  assert.equal(footer?.target, undefined)
 })

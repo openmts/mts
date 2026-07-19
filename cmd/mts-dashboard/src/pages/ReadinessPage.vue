@@ -362,6 +362,22 @@ function scrollToCurrentHash() {
   scheduleScrollToHash(window.location.hash || route.hash)
 }
 
+function jumpPreflight(target?: string) {
+  if (!target) return
+  if (target.startsWith('/')) {
+    void router.push(target)
+    return
+  }
+  const hash = target.startsWith('#') ? target : `#${target}`
+  if (typeof window !== 'undefined') {
+    if (window.location.hash === hash) {
+      scheduleScrollToHash(hash)
+    } else {
+      window.location.hash = hash
+    }
+  }
+}
+
 onMounted(() => {
   if (isAdmin.value) {
     void loadDoctor()
@@ -469,7 +485,16 @@ watch(
                 ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100'
                 : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
           >{{ item.level }}</span>
-          <span class="text-slate-700 dark:text-slate-200">{{ item.message }}</span>
+          <span class="min-w-0 flex-1 text-slate-700 dark:text-slate-200">{{ item.message }}</span>
+          <button
+            v-if="item.target"
+            type="button"
+            class="mts-btn shrink-0 !px-2 !py-0.5 text-[11px]"
+            :data-testid="`preflight-jump-${item.id}`"
+            @click="jumpPreflight(item.target)"
+          >
+            {{ t(item.actionKey === 'preflightJumpStorage' ? 'preflightJumpStorage' : 'preflightJumpLocal') }}
+          </button>
         </li>
       </ul>
     </div>
@@ -682,7 +707,7 @@ watch(
       </div>
     </div>
 
-    <div class="mts-panel">
+    <div id="doctor-panel" class="mts-panel scroll-mt-20" data-testid="readiness-doctor-panel">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="flex items-center gap-2 text-sm font-semibold">
           <ShieldCheck class="h-4 w-4" />
@@ -714,7 +739,7 @@ watch(
       <p v-if="doctorOKs.length" class="mt-2 text-[11px] mts-muted">ok checks: {{ doctorOKs.length }}</p>
     </div>
 
-    <div class="mts-card p-4">
+    <div id="production-checklist" class="mts-card p-4 scroll-mt-20" data-testid="readiness-production-checklist">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">{{ t('readinessProductionChecklist') }}</h2>
         <span class="text-xs mts-muted">{{ productionDone.length }}/{{ PRODUCTION_CHECKLIST.length }}</span>
@@ -744,7 +769,7 @@ watch(
       </ol>
     </div>
 
-    <div class="mts-card p-4">
+    <div id="edge-https-checklist" class="mts-card p-4 scroll-mt-20" data-testid="readiness-edge-https-checklist">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">{{ t('readinessEdgeHttps') }}</h2>
         <span class="text-xs mts-muted">
@@ -775,7 +800,7 @@ watch(
       </ol>
     </div>
 
-    <div class="mts-card p-4">
+    <div id="backup-schedule-checklist" class="mts-card p-4 scroll-mt-20" data-testid="readiness-backup-schedule-checklist">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">{{ t('readinessBackupSchedule') }}</h2>
         <span class="text-xs mts-muted">

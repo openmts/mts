@@ -15,6 +15,10 @@ export interface ExportPreflightItem {
   level: PreflightLevel
   /** 已本地化消息 */
   message: string
+  /** 页内或跨页跳转目标（hash 或 path#hash）；无则不可跳转 */
+  target?: string
+  /** 跳转按钮文案 key（页面侧 i18n） */
+  actionKey?: 'preflightJumpLocal' | 'preflightJumpStorage'
 }
 
 export interface ExportPreflightInput {
@@ -87,6 +91,39 @@ function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
 }
 
+
+/** 预检项 -> 锚点/路径映射（纯函数） */
+export function preflightItemTarget(id: string): { target: string; actionKey: 'preflightJumpLocal' | 'preflightJumpStorage' } | null {
+  switch (id) {
+    case 'checklist':
+      return { target: '#production-checklist', actionKey: 'preflightJumpLocal' }
+    case 'edgeHttps':
+      return { target: '#edge-https-checklist', actionKey: 'preflightJumpLocal' }
+    case 'backupSchedule':
+      return { target: '#backup-schedule-checklist', actionKey: 'preflightJumpLocal' }
+    case 'doctor':
+    case 'doctor-ok':
+    case 'doctor-warn':
+    case 'tls':
+      return { target: '#doctor-panel', actionKey: 'preflightJumpLocal' }
+    case 'signoff':
+      return { target: '#signoff-notes', actionKey: 'preflightJumpLocal' }
+    case 'deployKit':
+      return { target: '#deploy-kit', actionKey: 'preflightJumpLocal' }
+    // 边缘 HTTPS 细项也可去 Storage 验收区（同页已有清单时优先本地）
+    case 'edge-storage':
+      return { target: '/storage#edge-https', actionKey: 'preflightJumpStorage' }
+    default:
+      return null
+  }
+}
+
+function withTarget(item: ExportPreflightItem): ExportPreflightItem {
+  const mapped = preflightItemTarget(item.id)
+  if (!mapped) return item
+  return { ...item, target: mapped.target, actionKey: mapped.actionKey }
+}
+
 export function buildExportPreflight(input: ExportPreflightInput): ExportPreflightResult {
   const locale: LocaleCode = input.locale === 'en' ? 'en' : 'zh'
   const t = copy[locale]
@@ -152,11 +189,12 @@ export function buildExportPreflight(input: ExportPreflightInput): ExportPreflig
 
   items.push({ id: 'footer', level: 'info', message: t.footer })
 
+  const enriched = items.map(withTarget)
   return {
-    items,
-    warnCount: items.filter((i) => i.level === 'warn').length,
-    infoCount: items.filter((i) => i.level === 'info').length,
-    okCount: items.filter((i) => i.level === 'ok').length,
+    items: enriched,
+    warnCount: enriched.filter((i) => i.level === 'warn').length,
+    infoCount: enriched.filter((i) => i.level === 'info').length,
+    okCount: enriched.filter((i) => i.level === 'ok').length,
     readyToExport: true,
   }
 }
