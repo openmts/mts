@@ -617,6 +617,11 @@ export const messages = {
     readinessSignoffBackupPh: '例如：rsync 目标主机、最近一次成功时间、保留份数、runbook 链接…',
     readinessSignoffAlert: '备份失败告警证据',
     readinessSignoffAlertPh: '例如：告警通道（邮件/IM/webhook）、最近一次演练触发记录…',
+    readinessSignoffComplete: '三项签核备注已填写（仍不等于生产验收完成）',
+    readinessSignoffMissing: '签核备注未齐（{filled}/{total}）：缺 {missing}；导出前将确认，可继续。',
+    readinessExportCancelled: '已取消导出',
+    readinessArchiveOkWithGaps: '演练归档已下载（签核备注未齐，不代表验收完成）',
+    readinessAcceptancePackOkWithGaps: '验收材料包已下载（签核备注未齐，不代表验收完成）',
     unsavedLeaveConfirm: '有未保存的表单更改，确定离开当前页面？',
   },
   en: {
@@ -1235,6 +1240,11 @@ export const messages = {
     readinessSignoffBackupPh: 'e.g. rsync target host, last success time, retention count, runbook link…',
     readinessSignoffAlert: 'Backup failure alerting evidence',
     readinessSignoffAlertPh: 'e.g. alert channel (mail/IM/webhook), last drill trigger record…',
+    readinessSignoffComplete: 'All three sign-off notes filled (still not production acceptance)',
+    readinessSignoffMissing: 'Sign-off notes incomplete ({filled}/{total}): missing {missing}; export will confirm and may continue.',
+    readinessExportCancelled: 'Export cancelled',
+    readinessArchiveOkWithGaps: 'Drill archive downloaded (sign-off notes incomplete; not acceptance)',
+    readinessAcceptancePackOkWithGaps: 'Acceptance pack downloaded (sign-off notes incomplete; not acceptance)',
     unsavedLeaveConfirm: 'You have unsaved form changes. Leave this page?',
   },
 } as const

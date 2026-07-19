@@ -76,6 +76,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('deploy-kit-hint-reviewed')).toBeVisible()
   await expect(page.getByTestId('readiness-deploy-kit-download')).toBeVisible()
   await expect(page.getByTestId('readiness-signoff-notes')).toBeVisible()
+  await expect(page.getByTestId('signoff-completeness')).toBeVisible()
   await expect(page.getByTestId('signoff-edge-https')).toBeVisible()
   await expect(page.getByTestId('signoff-backup-offsite')).toBeVisible()
   await expect(page.getByTestId('deploy-tpl-rsync-offsite')).toBeVisible()

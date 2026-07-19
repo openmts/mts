@@ -32,6 +32,12 @@ import {
   type ReadinessState,
   type SignoffNotes,
 } from '@/utils/readinessState'
+import {
+  assessSignoffCompleteness,
+  composeSignoffArchiveNote,
+  confirmExportWithMissingSignoff,
+  signoffFieldLabel,
+} from '@/utils/signoffExport'
 import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import {
   buildReadinessExport,
@@ -105,6 +111,10 @@ const requiredDoneCount = computed(
 )
 const edgeStats = computed(() => edgeHttpsProgress(edgeDone.value))
 const scheduleStats = computed(() => backupScheduleProgress(scheduleDone.value))
+const signoffCompleteness = computed(() => assessSignoffCompleteness(state.value.signoffNotes))
+const signoffMissingLabels = computed(() =>
+  signoffCompleteness.value.missing.map((f) => signoffFieldLabel(f, uiLocale.value)),
+)
 
 const doctorWarns = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'warn'))
 const doctorOKs = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'ok'))
@@ -216,9 +226,22 @@ function doctorArchiveSummary() {
   }
 }
 
+function buildArchiveNote(): string {
+  return composeSignoffArchiveNote(state.value.signoffNotes, { locale: uiLocale.value })
+}
+
+function confirmMissingSignoffExport(): boolean {
+  return confirmExportWithMissingSignoff(signoffCompleteness.value, uiLocale.value)
+}
+
 function downloadArchive() {
+  if (!confirmMissingSignoffExport()) {
+    flash('info', t.value('readinessExportCancelled'))
+    return
+  }
   const archive = buildReadinessArchive({
     operator: currentUser.value || 'admin',
+    note: buildArchiveNote(),
     state: state.value,
     score: scoreBreakdown.value,
     doctor: doctorArchiveSummary(),
@@ -227,12 +250,21 @@ function downloadArchive() {
   const names = archiveFilenames()
   downloadJSON(names.json, archive)
   downloadText(names.md, formatReadinessArchiveMarkdown(archive), 'text/markdown')
-  flash('ok', t.value('readinessArchiveOk'))
+  if (!signoffCompleteness.value.complete) {
+    flash('info', t.value('readinessArchiveOkWithGaps'))
+  } else {
+    flash('ok', t.value('readinessArchiveOk'))
+  }
 }
 
 function downloadAcceptancePack() {
+  if (!confirmMissingSignoffExport()) {
+    flash('info', t.value('readinessExportCancelled'))
+    return
+  }
   const archive = buildReadinessArchive({
     operator: currentUser.value || 'admin',
+    note: buildArchiveNote(),
     state: state.value,
     score: scoreBreakdown.value,
     doctor: doctorArchiveSummary(),
@@ -244,12 +276,17 @@ function downloadAcceptancePack() {
     server: serverVersion.value,
     opsActions: loadOpsActionLog(),
     operator: currentUser.value || 'admin',
+    note: buildArchiveNote(),
     locale: uiLocale.value,
   })
   const names = acceptancePackFilenames()
   downloadJSON(names.json, pack)
   downloadText(names.md, formatAcceptancePackMarkdown(pack), 'text/markdown')
-  flash('ok', t.value('readinessAcceptancePackOk'))
+  if (!signoffCompleteness.value.complete) {
+    flash('info', t.value('readinessAcceptancePackOkWithGaps'))
+  } else {
+    flash('ok', t.value('readinessAcceptancePackOk'))
+  }
 }
 
 const quickActions = [
@@ -519,6 +556,21 @@ onMounted(() => {
         <h2 class="text-sm font-semibold">{{ t('readinessSignoffTitle') }}</h2>
         <p class="mt-1 text-xs mts-muted">{{ t('readinessSignoffHint') }}</p>
         <p class="mt-1 text-[11px] text-amber-700 dark:text-amber-200">{{ t('readinessSignoffManualNote') }}</p>
+        <p
+          class="mt-2 text-xs"
+          data-testid="signoff-completeness"
+          :class="signoffCompleteness.complete ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-200'"
+        >
+          {{
+            signoffCompleteness.complete
+              ? t('readinessSignoffComplete')
+              : formatMessage(t('readinessSignoffMissing'), {
+                  missing: signoffMissingLabels.join(uiLocale === 'en' ? ', ' : '、'),
+                  filled: String(signoffCompleteness.filledCount),
+                  total: String(signoffCompleteness.total),
+                })
+          }}
+        </p>
       </div>
       <div class="space-y-3">
         <label class="block text-xs text-slate-700 dark:text-slate-200">
