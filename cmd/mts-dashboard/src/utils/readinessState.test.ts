@@ -21,11 +21,15 @@ function memStorage(seed: Record<string, string> = {}) {
 test('load empty and save roundtrip', () => {
   const s = memStorage()
   assert.deepEqual(loadReadinessState(s), emptyReadinessState())
-  const saved = saveReadinessState({ production: { a: true }, edgeHttps: {}, backupSchedule: { b: true } }, s)
+  const saved = saveReadinessState(
+    { production: { a: true }, edgeHttps: {}, backupSchedule: { b: true }, deployKit: { reviewed: true } },
+    s,
+  )
   assert.ok(saved.updatedAt)
   const loaded = loadReadinessState(s)
   assert.equal(loaded.production.a, true)
   assert.equal(loaded.backupSchedule.b, true)
+  assert.equal(loaded.deployKit.reviewed, true)
 })
 
 test('setReadinessFlag toggles and completedIds', () => {
@@ -39,7 +43,26 @@ test('setReadinessFlag toggles and completedIds', () => {
   assert.deepEqual(completedIds(st.edgeHttps), ['hsts-header'])
 })
 
-test('loadReadinessState tolerates bad json', () => {
+test('deployKit local hints are independent of score sections', () => {
+  const s = memStorage()
+  setReadinessFlag('deployKit', 'reviewed', true, s)
+  setReadinessFlag('deployKit', 'downloaded', true, s)
+  const st = loadReadinessState(s)
+  assert.deepEqual(completedIds(st.deployKit).sort(), ['downloaded', 'reviewed'])
+  assert.deepEqual(completedIds(st.production), [])
+})
+
+test('loadReadinessState tolerates bad json and legacy without deployKit', () => {
   const s = memStorage({ 'mts.dashboard.readiness.v1': '{bad' })
   assert.deepEqual(loadReadinessState(s), emptyReadinessState())
+  const legacy = memStorage({
+    'mts.dashboard.readiness.v1': JSON.stringify({
+      production: { 'https-edge': true },
+      edgeHttps: {},
+      backupSchedule: {},
+    }),
+  })
+  const st = loadReadinessState(legacy)
+  assert.equal(st.production['https-edge'], true)
+  assert.deepEqual(st.deployKit, {})
 })

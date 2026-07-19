@@ -29,6 +29,7 @@ export function buildReadinessExport(
       production: { ...state.production },
       edgeHttps: { ...state.edgeHttps },
       backupSchedule: { ...state.backupSchedule },
+      deployKit: { ...(state.deployKit ?? {}) },
       updatedAt: state.updatedAt,
     },
   }
@@ -61,7 +62,8 @@ function isStateShape(o: Record<string, unknown>): boolean {
   return (
     (o.production != null && typeof o.production === 'object') ||
     (o.edgeHttps != null && typeof o.edgeHttps === 'object') ||
-    (o.backupSchedule != null && typeof o.backupSchedule === 'object')
+    (o.backupSchedule != null && typeof o.backupSchedule === 'object') ||
+    (o.deployKit != null && typeof o.deployKit === 'object')
   ) && o.state == null
 }
 
@@ -70,6 +72,7 @@ function normalizeState(o: Record<string, unknown>): ReadinessState {
     production: boolMap(o.production),
     edgeHttps: boolMap(o.edgeHttps),
     backupSchedule: boolMap(o.backupSchedule),
+    deployKit: boolMap(o.deployKit),
     updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : undefined,
   }
 }
@@ -94,6 +97,7 @@ export function applyReadinessImport(
       production: { ...incoming.production },
       edgeHttps: { ...incoming.edgeHttps },
       backupSchedule: { ...incoming.backupSchedule },
+      deployKit: { ...(incoming.deployKit ?? {}) },
       updatedAt: incoming.updatedAt,
     }
   }
@@ -101,6 +105,7 @@ export function applyReadinessImport(
     production: { ...current.production, ...incoming.production },
     edgeHttps: { ...current.edgeHttps, ...incoming.edgeHttps },
     backupSchedule: { ...current.backupSchedule, ...incoming.backupSchedule },
+    deployKit: { ...(current.deployKit ?? {}), ...(incoming.deployKit ?? {}) },
     updatedAt: incoming.updatedAt ?? current.updatedAt,
   }
 }

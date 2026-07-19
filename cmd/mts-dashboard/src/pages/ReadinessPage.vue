@@ -137,7 +137,7 @@ function flash(kind: 'ok' | 'error' | 'info', message: string) {
 }
 
 function toggle(
-  section: 'production' | 'edgeHttps' | 'backupSchedule',
+  section: 'production' | 'edgeHttps' | 'backupSchedule' | 'deployKit',
   id: string,
   checked: boolean,
 ) {
@@ -261,15 +261,26 @@ const backupScriptHint = deployTemplates.find((x) => x.id === 'backup-env')?.bod
 export MTS_ADMIN_TOKEN='***'
 ./scripts/mts-backup.sh`
 
+function markDeployKitHint(id: 'reviewed' | 'downloaded' | 'copied') {
+  state.value = setReadinessFlag('deployKit', id, true)
+}
+
 async function copyDeployBody(body: string) {
   const r = await copyText(body)
-  if (r.ok) success(t.value('readinessCopied'))
-  else notifyError(t.value('readinessCopyFailed'))
+  if (r.ok) {
+    markDeployKitHint('copied')
+    markDeployKitHint('reviewed')
+    success(t.value('readinessCopied'))
+  } else {
+    notifyError(t.value('readinessCopyFailed'))
+  }
 }
 
 function downloadDeployKit() {
   const md = formatDeployKitMarkdown(uiLocale.value)
   downloadText(deployKitFilename(), md, 'text/markdown')
+  markDeployKitHint('downloaded')
+  markDeployKitHint('reviewed')
   success(t.value('readinessDeployKitDownloaded'))
   flash('ok', t.value('readinessDeployKitDownloaded'))
 }
@@ -427,6 +438,37 @@ onMounted(() => {
             </p>
             <p class="text-xs mts-muted">{{ t('readinessDeployKitHint') }}</p>
             <p class="mt-1 text-[11px] text-amber-700 dark:text-amber-200">{{ t('readinessDeployManualNote') }}</p>
+            <div class="mt-3 space-y-1.5 rounded-lg border border-dashed border-slate-300 p-2 dark:border-slate-600" data-testid="deploy-kit-local-hints">
+              <p class="text-[11px] font-medium text-slate-700 dark:text-slate-200">{{ t('readinessDeployKitLocalHints') }}</p>
+              <p class="text-[11px] mts-muted">{{ t('readinessDeployKitHintsNote') }}</p>
+              <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  data-testid="deploy-kit-hint-reviewed"
+                  :checked="!!state.deployKit?.reviewed"
+                  @change="toggle('deployKit', 'reviewed', ($event.target as HTMLInputElement).checked)"
+                />
+                {{ t('readinessDeployKitReviewed') }}
+              </label>
+              <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  data-testid="deploy-kit-hint-downloaded"
+                  :checked="!!state.deployKit?.downloaded"
+                  @change="toggle('deployKit', 'downloaded', ($event.target as HTMLInputElement).checked)"
+                />
+                {{ t('readinessDeployKitDownloadedLocal') }}
+              </label>
+              <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  data-testid="deploy-kit-hint-copied"
+                  :checked="!!state.deployKit?.copied"
+                  @change="toggle('deployKit', 'copied', ($event.target as HTMLInputElement).checked)"
+                />
+                {{ t('readinessDeployKitCopied') }}
+              </label>
+            </div>
           </div>
           <button
             type="button"

@@ -15,6 +15,7 @@ test('buildReadinessArchive includes score and checklist', () => {
       production: { 'https-edge': true },
       edgeHttps: { 'tls-terminate': true },
       backupSchedule: { 'cron-schedule': true },
+      deployKit: {},
       updatedAt: '2026-07-20T11:00:00.000Z',
     },
     score: {
@@ -40,6 +41,10 @@ test('buildReadinessArchive includes score and checklist', () => {
   assert.deepEqual(a.checklist.production, ['https-edge'])
   assert.deepEqual(a.checklist.edgeHttps, ['tls-terminate'])
   assert.ok(a.catalog.production.some((x) => x.id === 'https-edge' && x.done && /边缘|HTTPS/.test(x.title)))
+  assert.ok(a.deploy_kit.count >= 5)
+  assert.equal(a.deploy_kit.manual_signoff_required, true)
+  assert.ok(a.deploy_kit.items.some((x) => x.id === 'nginx-https'))
+  assert.deepEqual(a.deploy_kit_local_hints, [])
   const md = formatReadinessArchiveMarkdown(a)
   assert.match(md, /alice/)
   assert.match(md, /82%/)
@@ -57,6 +62,7 @@ test('buildReadinessArchive english catalog titles', () => {
       production: { 'https-edge': true },
       edgeHttps: { 'tls-terminate': true },
       backupSchedule: {},
+      deployKit: {},
       updatedAt: '2026-07-20T11:00:00.000Z',
     },
     score: {
@@ -77,6 +83,37 @@ test('buildReadinessArchive english catalog titles', () => {
   assert.match(md, /commercial readiness drill archive/i)
   assert.match(md, /Edge HTTPS \/ TLS/)
   assert.match(md, /does not prove production human acceptance/i)
+  assert.match(md, /Deployment kit index/i)
+  assert.match(md, /nginx-https/)
+})
+
+test('archive includes deploy kit local hints without scoring claim', () => {
+  const a = buildReadinessArchive({
+    locale: 'zh',
+    operator: 'ops',
+    now: '2026-07-20T12:00:00.000Z',
+    state: {
+      production: {},
+      edgeHttps: {},
+      backupSchedule: {},
+      deployKit: { reviewed: true, downloaded: true },
+      updatedAt: '2026-07-20T11:00:00.000Z',
+    },
+    score: {
+      checklist: 0,
+      edgeHttps: 0,
+      backupSchedule: 0,
+      doctor: 40,
+      total: 10,
+      reasons: ['doctor_unavailable'],
+    },
+    doctor: { loaded: false },
+  })
+  assert.deepEqual(a.deploy_kit_local_hints, ['downloaded', 'reviewed'])
+  const md = formatReadinessArchiveMarkdown(a)
+  assert.match(md, /本地提醒勾选/)
+  assert.match(md, /downloaded, reviewed|reviewed, downloaded|downloaded/)
+  assert.match(md, /人工签核仍为部署侧必做/)
 })
 
 test('archiveFilenames uses iso-like stamp', () => {

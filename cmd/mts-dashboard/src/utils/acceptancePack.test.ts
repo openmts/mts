@@ -18,6 +18,7 @@ function sampleArchive(locale: 'zh' | 'en' = 'zh') {
       production: { 'https-edge': true },
       edgeHttps: { 'tls-terminate': true },
       backupSchedule: { 'cron-schedule': true },
+      deployKit: {},
       updatedAt: '2026-07-20T11:00:00.000Z',
     },
     score: {

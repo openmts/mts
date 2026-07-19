@@ -603,6 +603,11 @@ export const messages = {
     overviewDeployKit: '部署材料包',
     overviewDeployKitHint: '证书/cron/systemd 样例在就绪中心；复制下载不代表验收完成。',
     overviewGoDeployKit: '打开部署材料包',
+    readinessDeployKitLocalHints: '本地提醒（不计入评分）',
+    readinessDeployKitReviewed: '已查阅部署材料包',
+    readinessDeployKitDownloadedLocal: '已下载材料包 Markdown',
+    readinessDeployKitCopied: '已复制至少一个样例',
+    readinessDeployKitHintsNote: '仅浏览器本地提醒，不代表目标环境证书/cron/备份已验收。',
     unsavedLeaveConfirm: '有未保存的表单更改，确定离开当前页面？',
   },
   en: {
@@ -1207,6 +1212,11 @@ export const messages = {
     overviewDeployKit: 'Deployment kit',
     overviewDeployKitHint: 'Cert/cron/systemd samples live in readiness; copy/download does not complete acceptance.',
     overviewGoDeployKit: 'Open deployment kit',
+    readinessDeployKitLocalHints: 'Local reminders (not scored)',
+    readinessDeployKitReviewed: 'Reviewed deployment kit',
+    readinessDeployKitDownloadedLocal: 'Downloaded kit Markdown',
+    readinessDeployKitCopied: 'Copied at least one sample',
+    readinessDeployKitHintsNote: 'Browser-local reminders only; does not mean target cert/cron/backup acceptance is done.',
     unsavedLeaveConfirm: 'You have unsaved form changes. Leave this page?',
   },
 } as const

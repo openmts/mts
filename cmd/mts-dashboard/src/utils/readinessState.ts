@@ -2,15 +2,25 @@
 
 export const READINESS_STORAGE_KEY = 'mts.dashboard.readiness.v1'
 
+/** 部署材料包本地提醒勾选（不计入就绪评分） */
+export type DeployKitHintId = 'reviewed' | 'downloaded' | 'copied'
+
 export interface ReadinessState {
   production: Record<string, boolean>
   edgeHttps: Record<string, boolean>
   backupSchedule: Record<string, boolean>
+  /** 部署材料包本地提醒：查阅/下载/复制；人工签核仍为部署侧 */
+  deployKit: Record<string, boolean>
   updatedAt?: string
 }
 
+export type ReadinessFlagSection = keyof Pick<
+  ReadinessState,
+  'production' | 'edgeHttps' | 'backupSchedule' | 'deployKit'
+>
+
 export function emptyReadinessState(): ReadinessState {
-  return { production: {}, edgeHttps: {}, backupSchedule: {} }
+  return { production: {}, edgeHttps: {}, backupSchedule: {}, deployKit: {} }
 }
 
 export function loadReadinessState(
@@ -26,6 +36,7 @@ export function loadReadinessState(
       production: { ...(parsed.production ?? {}) },
       edgeHttps: { ...(parsed.edgeHttps ?? {}) },
       backupSchedule: { ...(parsed.backupSchedule ?? {}) },
+      deployKit: { ...(parsed.deployKit ?? {}) },
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : undefined,
     }
   } catch {
@@ -42,6 +53,7 @@ export function saveReadinessState(
     production: { ...state.production },
     edgeHttps: { ...state.edgeHttps },
     backupSchedule: { ...state.backupSchedule },
+    deployKit: { ...(state.deployKit ?? {}) },
     updatedAt: new Date().toISOString(),
   }
   if (!storage) return next
@@ -54,7 +66,7 @@ export function saveReadinessState(
 }
 
 export function setReadinessFlag(
-  section: keyof Pick<ReadinessState, 'production' | 'edgeHttps' | 'backupSchedule'>,
+  section: ReadinessFlagSection,
   id: string,
   checked: boolean,
   storage: Pick<Storage, 'getItem' | 'setItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null,
