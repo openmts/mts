@@ -498,3 +498,8 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 验收导出包：`acceptancePack.ts` + 就绪中心「导出验收包」
 - 降采样：`filterDownsamplePolicies` + 筛选栏/空态/批量 enable|disable
 - 状态：已实现；仍不宣称可商用完成（部署侧边缘证书/cron/异地备份）
+
+## P32（2026-07-20）
+- Overview 本地就绪评分卡片 + 跳转就绪中心
+- Playwright 商业冒烟加深：验收包、降采样筛选、Overview 评分
+- 状态：已实现；仍不宣称可商用完成

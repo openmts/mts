@@ -9,6 +9,11 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
 import { clientBuildInfo } from '@/utils/buildInfo'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
+import { completedIds, loadReadinessState } from '@/utils/readinessState'
+import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
+import { requiredChecklist } from '@/utils/productionChecklist'
+import { edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
+import { backupScheduleProgress } from '@/utils/backupSchedule'
 import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3 } from 'lucide-vue-next'
 
 interface HealthResponse extends HealthSnapshot {}
@@ -50,6 +55,41 @@ const nowMs = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
 const serverVersion = ref<{ version: string; commit: string; built_at: string } | null>(null)
 const clientInfo = clientBuildInfo()
+const readinessTick = ref(0)
+
+const localReadiness = computed(() => {
+  readinessTick.value // depend for refresh after load
+  return loadReadinessState()
+})
+
+const localReadinessScore = computed(() => {
+  const state = localReadiness.value
+  const requiredItems = requiredChecklist()
+  const requiredDone = requiredItems.filter((i) => !!state.production[i.id]).length
+  const requiredRatio = requiredItems.length === 0 ? 1 : requiredDone / requiredItems.length
+  const edgeDone = completedIds(state.edgeHttps)
+  const edgeStats = edgeHttpsProgress(edgeDone)
+  const edgeRatio =
+    edgeStats.requiredTotal === 0 ? 1 : edgeStats.requiredDone / edgeStats.requiredTotal
+  const scheduleDone = completedIds(state.backupSchedule)
+  const scheduleStats = backupScheduleProgress(scheduleDone)
+  const scheduleRatio =
+    scheduleStats.requiredTotal === 0 ? 1 : scheduleStats.requiredDone / scheduleStats.requiredTotal
+  const doctorWarnCount = doctorChecks.value.filter((c) => c.level === 'warn').length
+  const doctorLoaded = showAdminPanels.value && doctorTLS.value != null
+  const doctorOk = doctorLoaded ? doctorWarnCount === 0 : undefined
+  return computeReadinessScore({
+    requiredChecklistRatio: requiredRatio,
+    edgeHttpsRequiredRatio: edgeRatio,
+    backupScheduleRequiredRatio: scheduleRatio,
+    doctorLoaded,
+    doctorOk,
+    doctorWarnCount,
+    httpTlsEnabled: doctorTLS.value,
+  })
+})
+
+const localReadinessLevel = computed(() => readinessLevel(localReadinessScore.value.total))
 
 const sessionSummary = computed(() => {
   const exp = parseExpiresAt(getTokenExpiresAt())
@@ -143,6 +183,7 @@ async function loadOverview() {
       serverVersion.value = null
     }
     lastRefreshed.value = new Date().toLocaleTimeString()
+    readinessTick.value += 1
   } catch (e) {
     loadError.value = formatCaughtError(e)
   } finally {
@@ -248,6 +289,31 @@ const showAdminPanels = computed(() => isAdmin.value)
           {{ t('about') }}
         </button>
       </div>
+    </div>
+
+    <div
+      v-if="showAdminPanels"
+      class="mts-card flex flex-wrap items-center justify-between gap-3 p-4"
+      data-testid="overview-readiness-score"
+    >
+      <div class="min-w-0">
+        <p class="text-xs mts-muted">{{ t('readinessScore') }}</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums" data-testid="overview-readiness-total">
+          {{ localReadinessScore.total }}%
+          <span class="ml-2 text-xs font-medium mts-muted">{{ localReadinessLevel }}</span>
+        </p>
+        <p class="mt-1 text-[11px] mts-muted">
+          {{ t('readinessScoreBreakdown') }}:
+          {{ t('readinessRequiredChecklist') }} {{ localReadinessScore.checklist }}% ·
+          {{ t('readinessEdgeHttps') }} {{ localReadinessScore.edgeHttps }}% ·
+          {{ t('readinessBackupSchedule') }} {{ localReadinessScore.backupSchedule }}% ·
+          Doctor {{ localReadinessScore.doctor }}%
+        </p>
+      </div>
+      <button type="button" class="mts-btn-primary" data-testid="overview-go-readiness" @click="goReadiness">
+        <ClipboardCheck class="h-3.5 w-3.5" />
+        {{ t('readiness') }}
+      </button>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

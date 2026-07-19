@@ -69,6 +69,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.locator('[data-testid^="readiness-prod-"]').first()).toBeChecked()
   await expect(page.getByTestId('readiness-export')).toBeVisible()
   await expect(page.getByTestId('readiness-archive')).toBeVisible()
+  await expect(page.getByTestId('readiness-acceptance-pack')).toBeVisible()
 
   // 9) About 页
   await page.goto('/about')
@@ -100,5 +101,18 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('users-filter')).toBeVisible()
   await page.goto('/databases')
   await expect(page.getByTestId('databases-filter')).toBeVisible()
+
+  // 14) 降采样筛选/批量入口
+  await page.goto('/downsample')
+  await expect(page.getByTestId('downsample-filter-bar')).toBeVisible()
+  await expect(page.getByTestId('downsample-filter')).toBeVisible()
+  await expect(page.getByTestId('downsample-batch-enable')).toBeVisible()
+
+  // 15) Overview 就绪评分入口
+  await page.goto('/')
+  await expect(page.getByTestId('overview-readiness-score')).toBeVisible()
+  await expect(page.getByTestId('overview-readiness-total')).toBeVisible()
+  await page.getByTestId('overview-go-readiness').click()
+  await expect(page).toHaveURL(/ops\/readiness/)
 })
 
