@@ -8,6 +8,8 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/listFilter'
+import { useI18n } from '@/composables/useI18n'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { parseHumanDurationToNs, formatNsDuration } from '@/utils/duration'
 import { Plus, Trash2, Play, Pause, RefreshCw, PlayCircle, RotateCcw, FlaskConical } from 'lucide-vue-next'
@@ -17,11 +19,18 @@ interface PoliciesResponse { policies: DownsamplePolicy[] }
 interface StatusesResponse { statuses: DownsampleStatus[] }
 
 const { isAdmin } = useAuth()
+const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
 const policies = ref<DownsamplePolicy[]>([])
 const statuses = ref<DownsampleStatus[]>([])
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
+const policyFilter = ref('')
+const enabledFilter = ref<DownsampleEnabledFilter>('')
+const selectedNames = ref<string[]>([])
+const batchOpen = ref(false)
+const batchMode = ref<'enable' | 'disable'>('enable')
+const batchLoading = ref(false)
 const showCreate = ref(false)
 const intervalHuman = ref('1m')
 const deleteOpen = ref(false)
@@ -47,6 +56,84 @@ async function loadData() {
     statuses.value = statData.statuses ?? []
   } catch (e) {
     loadError.value = formatCaughtError(e)
+  }
+}
+
+const filteredPolicies = computed(() =>
+  filterDownsamplePolicies(policies.value, policyFilter.value, enabledFilter.value),
+)
+
+const selectedSet = computed(() => new Set(selectedNames.value))
+
+const allFilteredSelected = computed(
+  () =>
+    filteredPolicies.value.length > 0 &&
+    filteredPolicies.value.every((p) => selectedSet.value.has(p.name)),
+)
+
+function toggleSelect(name: string, checked: boolean) {
+  const set = new Set(selectedNames.value)
+  if (checked) set.add(name)
+  else set.delete(name)
+  selectedNames.value = [...set]
+}
+
+function toggleSelectAllFiltered(checked: boolean) {
+  if (!checked) {
+    const filtered = new Set(filteredPolicies.value.map((p) => p.name))
+    selectedNames.value = selectedNames.value.filter((n) => !filtered.has(n))
+    return
+  }
+  const set = new Set(selectedNames.value)
+  for (const p of filteredPolicies.value) set.add(p.name)
+  selectedNames.value = [...set]
+}
+
+function clearSelection() {
+  selectedNames.value = []
+}
+
+function openBatch(mode: 'enable' | 'disable') {
+  if (!selectedNames.value.length) return
+  batchMode.value = mode
+  batchOpen.value = true
+}
+
+async function confirmBatch() {
+  const names = [...selectedNames.value]
+  if (!names.length) {
+    batchOpen.value = false
+    return
+  }
+  batchLoading.value = true
+  actionResult.value = null
+  let ok = 0
+  const errors: string[] = []
+  const action = batchMode.value === 'enable' ? 'enable' : 'disable'
+  try {
+    for (const name of names) {
+      try {
+        await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/${action}`)
+        ok += 1
+      } catch (e) {
+        errors.push(`${name}: ${formatCaughtError(e)}`)
+      }
+    }
+    await loadData()
+    selectedNames.value = []
+    batchOpen.value = false
+    if (errors.length === 0) {
+      const msg = batchMode.value === 'enable' ? `已启用 ${ok} 条策略` : `已禁用 ${ok} 条策略`
+      actionResult.value = makeActionResult('ok', msg)
+      success(msg)
+    } else {
+      const msg = `完成 ${ok}/${names.length}；失败：${errors.slice(0, 3).join('; ')}`
+      actionResult.value = makeActionResult(ok > 0 ? 'info' : 'error', msg)
+      if (ok === 0) notifyError(msg)
+      else success(msg)
+    }
+  } finally {
+    batchLoading.value = false
   }
 }
 
@@ -222,10 +309,38 @@ function formatDuration(ns: number) {
       @dismiss="actionResult = null"
     />
 
+    <div class="flex flex-wrap items-end gap-3" data-testid="downsample-filter-bar">
+      <label class="text-xs mts-muted">{{ t('filter') }}
+        <input
+          v-model="policyFilter"
+          type="search"
+          class="mts-input mt-1 min-w-[14rem]"
+          data-testid="downsample-filter"
+          :placeholder="t('downsampleFilterPlaceholder')"
+        />
+      </label>
+      <label class="text-xs mts-muted">{{ t('downsampleStatusFilter') }}
+        <select v-model="enabledFilter" class="mts-input mt-1" data-testid="downsample-enabled-filter">
+          <option value="">{{ t('downsampleEnabledAll') }}</option>
+          <option value="enabled">{{ t('downsampleEnabledOnly') }}</option>
+          <option value="disabled">{{ t('downsampleDisabledOnly') }}</option>
+        </select>
+      </label>
+      <span class="text-xs mts-muted" data-testid="downsample-filter-count">{{ filteredPolicies.length }} / {{ policies.length }}</span>
+      <span v-if="selectedNames.length" class="text-xs mts-muted" data-testid="downsample-selected-count">{{ t('downsampleSelectedCount') }} {{ selectedNames.length }}</span>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="downsample-select-all" :disabled="!filteredPolicies.length" @click="toggleSelectAllFiltered(true)">{{ t('downsampleSelectAll') }}</button>
+        <button type="button" class="mts-btn" data-testid="downsample-clear-select" :disabled="!selectedNames.length" @click="clearSelection">{{ t('downsampleClearSelect') }}</button>
+        <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
+        <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
+      </div>
+    </div>
+
     <div v-if="!policies.length" class="mts-card">
       <EmptyState
-        title="暂无降采样策略"
-        description="创建策略后可在此执行 run / dry-run / reset，并查看各策略状态。"
+        data-testid="downsample-empty"
+        :title="t('downsampleEmpty')"
+        :description="t('downsampleEmptyDesc')"
       >
         <template #action>
           <button type="button" class="mts-btn-primary" @click="showCreate = true">创建策略</button>
@@ -233,10 +348,26 @@ function formatDuration(ns: number) {
       </EmptyState>
     </div>
 
+    <div v-else-if="!filteredPolicies.length" class="mts-card">
+      <EmptyState
+        data-testid="downsample-empty-filter"
+        :title="t('downsampleFilterEmpty')"
+        :description="t('downsampleFilterEmptyDesc')"
+      />
+    </div>
+
     <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
+            <th class="px-4 py-2.5 w-10">
+              <input
+                type="checkbox"
+                data-testid="downsample-select-all-box"
+                :checked="allFilteredSelected"
+                @change="toggleSelectAllFiltered(($event.target as HTMLInputElement).checked)"
+              />
+            </th>
             <th class="px-4 py-2.5">名称</th>
             <th class="px-4 py-2.5">路径</th>
             <th class="px-4 py-2.5">间隔</th>
@@ -246,7 +377,15 @@ function formatDuration(ns: number) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="policy in policies" :key="policy.name" class="border-b border-slate-50">
+          <tr v-for="policy in filteredPolicies" :key="policy.name" class="border-b border-slate-50">
+            <td class="px-4 py-3">
+              <input
+                type="checkbox"
+                :data-testid="`downsample-select-${policy.name}`"
+                :checked="selectedSet.has(policy.name)"
+                @change="toggleSelect(policy.name, ($event.target as HTMLInputElement).checked)"
+              />
+            </td>
             <td class="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{{ policy.name }}</td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ policy.source_database }}/{{ policy.source_measurement }} → {{ policy.target_database }}/{{ policy.target_measurement }}</td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ formatDuration(policy.interval) }}</td>
@@ -314,6 +453,15 @@ function formatDuration(ns: number) {
       danger
       :loading="deleteLoading"
       @confirm="confirmDelete"
+    />
+    <ConfirmDialog
+      v-model:open="batchOpen"
+      :title="batchMode === 'enable' ? t('downsampleBatchEnableTitle') : t('downsampleBatchDisableTitle')"
+      :message="(batchMode === 'enable' ? t('downsampleBatchEnableMsg') : t('downsampleBatchDisableMsg')) + ` (${selectedNames.length})`"
+      :confirm-label="batchMode === 'enable' ? t('downsampleBatchEnable') : t('downsampleBatchDisable')"
+      :danger="batchMode === 'disable'"
+      :loading="batchLoading"
+      @confirm="confirmBatch"
     />
   </div>
 </template>

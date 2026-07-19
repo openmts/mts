@@ -34,6 +34,13 @@ import {
   formatReadinessArchiveMarkdown,
 } from '@/utils/readinessArchive'
 import {
+  acceptancePackFilenames,
+  buildAcceptancePack,
+  formatAcceptancePackMarkdown,
+} from '@/utils/acceptancePack'
+import { clientBuildInfo } from '@/utils/buildInfo'
+import { loadOpsActionLog } from '@/utils/opsActionLog'
+import {
   ClipboardCheck,
   Download,
   ExternalLink,
@@ -42,6 +49,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Upload,
+  Package,
 } from 'lucide-vue-next'
 
 interface DoctorCheck { level: string; code: string; message: string }
@@ -50,6 +58,12 @@ interface DoctorResponse {
   http_tls_enabled?: boolean
   checks?: DoctorCheck[]
   lines?: string[]
+}
+
+interface VersionResponse {
+  version: string
+  commit: string
+  built_at: string
 }
 
 const { isAdmin, currentUser } = useAuth()
@@ -64,6 +78,7 @@ const actionMsg = ref('')
 const actionKind = ref<'ok' | 'error' | 'info'>('info')
 const importMerge = ref(true)
 const fileInput = ref<HTMLInputElement | null>(null)
+const serverVersion = ref<VersionResponse | null>(null)
 
 const productionDone = computed(() => completedIds(state.value.production))
 const edgeDone = computed(() => completedIds(state.value.edgeHttps))
@@ -117,6 +132,14 @@ function toggle(
   state.value = setReadinessFlag(section, id, checked)
 }
 
+async function loadServerVersion() {
+  try {
+    serverVersion.value = await apiGet<VersionResponse>('/api/v1/admin/version')
+  } catch {
+    serverVersion.value = null
+  }
+}
+
 async function loadDoctor() {
   loadingDoctor.value = true
   doctorError.value = ''
@@ -164,24 +187,48 @@ async function onImportFile(ev: Event) {
   }
 }
 
+function doctorArchiveSummary() {
+  return {
+    loaded: doctor.value != null && !doctorError.value,
+    ok: doctor.value?.ok,
+    http_tls_enabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
+    warn_count: doctorWarns.value.length,
+    checks: doctor.value?.checks,
+    error: doctorError.value || undefined,
+  }
+}
+
 function downloadArchive() {
   const archive = buildReadinessArchive({
     operator: currentUser.value || 'admin',
     state: state.value,
     score: scoreBreakdown.value,
-    doctor: {
-      loaded: doctor.value != null && !doctorError.value,
-      ok: doctor.value?.ok,
-      http_tls_enabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
-      warn_count: doctorWarns.value.length,
-      checks: doctor.value?.checks,
-      error: doctorError.value || undefined,
-    },
+    doctor: doctorArchiveSummary(),
   })
   const names = archiveFilenames()
   downloadJSON(names.json, archive)
   downloadText(names.md, formatReadinessArchiveMarkdown(archive), 'text/markdown')
   flash('ok', t.value('readinessArchiveOk'))
+}
+
+function downloadAcceptancePack() {
+  const archive = buildReadinessArchive({
+    operator: currentUser.value || 'admin',
+    state: state.value,
+    score: scoreBreakdown.value,
+    doctor: doctorArchiveSummary(),
+  })
+  const pack = buildAcceptancePack({
+    archive,
+    client: clientBuildInfo(),
+    server: serverVersion.value,
+    opsActions: loadOpsActionLog(),
+    operator: currentUser.value || 'admin',
+  })
+  const names = acceptancePackFilenames()
+  downloadJSON(names.json, pack)
+  downloadText(names.md, formatAcceptancePackMarkdown(pack), 'text/markdown')
+  flash('ok', t.value('readinessAcceptancePackOk'))
 }
 
 const quickActions = [
@@ -197,7 +244,10 @@ export MTS_BACKUP_REMOTE='backup@host:/var/backups/mts'
 ./scripts/mts-backup.sh`
 
 onMounted(() => {
-  if (isAdmin.value) void loadDoctor()
+  if (isAdmin.value) {
+    void loadDoctor()
+    void loadServerVersion()
+  }
 })
 </script>
 
@@ -227,6 +277,10 @@ onMounted(() => {
         <button type="button" class="mts-btn" data-testid="readiness-archive" @click="downloadArchive">
           <FileCode2 class="h-3.5 w-3.5" />
           {{ t('readinessArchive') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="readiness-acceptance-pack" @click="downloadAcceptancePack">
+          <Package class="h-3.5 w-3.5" />
+          {{ t('readinessAcceptancePack') }}
         </button>
         <button class="mts-btn" :disabled="loadingDoctor" @click="loadDoctor">
           <RefreshCw class="h-3.5 w-3.5" :class="loadingDoctor ? 'animate-spin' : ''" />

@@ -30,3 +30,27 @@ export function filterUsers<T extends { name: string; display_name?: string; rol
 export function filterByName<T extends { name: string }>(items: T[], query: string): T[] {
   return filterByTextFields(items, query, (x) => [x.name])
 }
+
+export type DownsampleEnabledFilter = '' | 'enabled' | 'disabled'
+
+export function filterDownsamplePolicies<
+  T extends {
+    name: string
+    source_database?: string
+    source_measurement?: string
+    target_database?: string
+    target_measurement?: string
+    enabled?: boolean
+  },
+>(items: T[], query: string, enabled: DownsampleEnabledFilter = ''): T[] {
+  let list = filterByTextFields(items, query, (p) => [
+    p.name,
+    p.source_database,
+    p.source_measurement,
+    p.target_database,
+    p.target_measurement,
+  ])
+  if (enabled === 'enabled') list = list.filter((p) => !!p.enabled)
+  if (enabled === 'disabled') list = list.filter((p) => !p.enabled)
+  return list
+}
