@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	mts "github.com/openmts/mts"
 )
@@ -79,4 +80,40 @@ func TestHTTPListDatabasesReturnsDatabasesField(t *testing.T) {
 	if len(meas) == 0 {
 		t.Fatalf("measurements compat field missing/empty: %#v", payload)
 	}
+}
+
+func TestHTTPDownsampleEnableDisableActions(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	policy := mts.DownsamplePolicy{
+		Name:              "align-ds",
+		SourceDatabase:    "default",
+		SourceRetention:   "autogen",
+		SourceMeasurement: "cpu",
+		TargetDatabase:    "default",
+		TargetRetention:   "autogen",
+		TargetMeasurement: "cpu_1m",
+		Interval:          time.Minute,
+		RefreshInterval:   time.Minute,
+		Lookback:          time.Minute,
+		BatchSize:         100,
+		Functions:         []mts.DownsampleFunction{{Function: mts.AggregateAvg, Field: "usage", As: "mean_usage"}},
+		Enabled:           true,
+	}
+	postJSON(t, server.URL+"/api/v1/admin/downsample/policies", policy, http.StatusOK, &okResponse{})
+
+	// pause/resume 风格名应失败；enable/disable 成功
+	resp, err := http.Post(server.URL+"/api/v1/admin/downsample/policies/align-ds/pause", "application/json", bytes.NewReader([]byte("{}")))
+	if err != nil {
+		t.Fatalf("pause post error = %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		t.Fatalf("pause should not be accepted")
+	}
+
+	postJSON(t, server.URL+"/api/v1/admin/downsample/policies/align-ds/disable", emptyRequest{}, http.StatusOK, &okResponse{})
+	postJSON(t, server.URL+"/api/v1/admin/downsample/policies/align-ds/enable", emptyRequest{}, http.StatusOK, &okResponse{})
 }

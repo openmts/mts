@@ -73,7 +73,7 @@ func TestGRPCLogoutBranches(t *testing.T) {
 }
 
 func TestHTTPDashboardRoutes(t *testing.T) {
-	handler := dashboardHandler()
+	handler := dashboardHandler("/")
 	for _, tt := range []struct {
 		name       string
 		path       string
@@ -132,6 +132,29 @@ func TestHTTPAdminDatabaseAndMetadataBranches(t *testing.T) {
 		http.StatusOK,
 		&retentionPoliciesResponse{},
 	)
+}
+
+func TestHTTPDashboardSubpathRoutes(t *testing.T) {
+	handler := dashboardHandler("/mts/")
+	for _, tt := range []struct {
+		name       string
+		path       string
+		wantStatus int
+	}{
+		{name: "base root", path: "/mts/", wantStatus: http.StatusOK},
+		{name: "spa under base", path: "/mts/users", wantStatus: http.StatusOK},
+		{name: "outside base", path: "/other", wantStatus: http.StatusNotFound},
+		{name: "asset under base", path: "/mts" + firstDashboardAssetPath(t, ".css"), wantStatus: http.StatusOK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			resp := httptest.NewRecorder()
+			handler.ServeHTTP(resp, req)
+			if resp.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d body=%s", resp.Code, tt.wantStatus, resp.Body.String())
+			}
+		})
+	}
 }
 
 func firstDashboardAssetPath(t *testing.T, suffix string) string {

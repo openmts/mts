@@ -71,18 +71,18 @@ onBeforeUnmount(() => {
     @click.self="emit('update:showCreate', false)"
   >
     <div class="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-      <h3 class="mb-3 text-sm font-semibold text-slate-800">新建用户</h3>
+      <h3 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">新建用户</h3>
       <div class="space-y-2">
-        <input :value="newUser.name" @input="emit('update:newUser', { ...newUser, name: ($event.target as HTMLInputElement).value })" placeholder="用户名" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
-        <input :value="newUser.display_name" @input="emit('update:newUser', { ...newUser, display_name: ($event.target as HTMLInputElement).value })" placeholder="显示名 (可选)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
-        <select :value="newUser.role" @change="emit('update:newUser', { ...newUser, role: ($event.target as HTMLSelectElement).value })" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none">
+        <input :value="newUser.name" @input="emit('update:newUser', { ...newUser, name: ($event.target as HTMLInputElement).value })" placeholder="用户名" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+        <input :value="newUser.display_name" @input="emit('update:newUser', { ...newUser, display_name: ($event.target as HTMLInputElement).value })" placeholder="显示名 (可选)" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+        <select :value="newUser.role" @change="emit('update:newUser', { ...newUser, role: ($event.target as HTMLSelectElement).value })" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none">
           <option value="user">普通用户</option>
           <option value="admin">管理员</option>
         </select>
-        <input :value="newUser.password" @input="emit('update:newUser', { ...newUser, password: ($event.target as HTMLInputElement).value })" type="password" placeholder="密码 (可选)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+        <input :value="newUser.password" @input="emit('update:newUser', { ...newUser, password: ($event.target as HTMLInputElement).value })" type="password" placeholder="密码 (可选)" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
       </div>
       <div class="mt-4 flex justify-end gap-2">
-        <button class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" @click="emit('update:showCreate', false)">取消</button>
+        <button class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-sm" @click="emit('update:showCreate', false)">取消</button>
         <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('create-user')">创建</button>
       </div>
     </div>
@@ -97,10 +97,10 @@ onBeforeUnmount(() => {
     @click.self="emit('update:showSetPassword', false)"
   >
     <div class="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-      <h3 class="mb-3 text-sm font-semibold text-slate-800">设置密码 · {{ setPasswordUser }}</h3>
-      <input :value="setPasswordValue" @input="emit('update:setPasswordValue', ($event.target as HTMLInputElement).value)" type="password" placeholder="输入新密码" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="emit('set-password')" />
+      <h3 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">设置密码 · {{ setPasswordUser }}</h3>
+      <input :value="setPasswordValue" @input="emit('update:setPasswordValue', ($event.target as HTMLInputElement).value)" type="password" placeholder="输入新密码" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="emit('set-password')" />
       <div class="mt-4 flex justify-end gap-2">
-        <button class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" @click="emit('update:showSetPassword', false)">取消</button>
+        <button class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-sm" @click="emit('update:showSetPassword', false)">取消</button>
         <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('set-password')">设置</button>
       </div>
     </div>
@@ -115,13 +115,13 @@ onBeforeUnmount(() => {
     @click.self="emit('update:showChangeSelfPassword', false)"
   >
     <div class="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-      <h3 class="mb-3 text-sm font-semibold text-slate-800">修改我的密码</h3>
+      <h3 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">修改我的密码</h3>
       <div class="space-y-2">
-        <input :value="selfOldPassword" @input="emit('update:selfOldPassword', ($event.target as HTMLInputElement).value)" type="password" placeholder="当前密码" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
-        <input :value="selfNewPassword" @input="emit('update:selfNewPassword', ($event.target as HTMLInputElement).value)" type="password" placeholder="新密码" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="emit('change-password')" />
+        <input :value="selfOldPassword" @input="emit('update:selfOldPassword', ($event.target as HTMLInputElement).value)" type="password" placeholder="当前密码" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+        <input :value="selfNewPassword" @input="emit('update:selfNewPassword', ($event.target as HTMLInputElement).value)" type="password" placeholder="新密码" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="emit('change-password')" />
       </div>
       <div class="mt-4 flex justify-end gap-2">
-        <button class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" @click="emit('update:showChangeSelfPassword', false)">取消</button>
+        <button class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-sm" @click="emit('update:showChangeSelfPassword', false)">取消</button>
         <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('change-password')">确认修改</button>
       </div>
     </div>

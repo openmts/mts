@@ -2,26 +2,9 @@ import { ref } from 'vue'
 import { apiPost, apiPostNDJSONStream, APIClientError } from '@/api/client'
 import { listDatabasesDetailed, listMeasurements, listRetentionPolicies } from '@/api/meta'
 import { parseTimeInt } from '@/utils/time'
+import type { QueryResultRow, QueryStatsData } from '@/api/types'
 
-export interface QueryResultRow {
-  series_id: number
-  measurement: string
-  tags: Record<string, string>
-  timestamp: number
-  fields: Record<string, unknown>
-}
-
-export interface QueryStatsData {
-  candidate_shards: number
-  shards_scanned: number
-  shards_skipped: number
-  parts_scanned: number
-  parts_skipped: number
-  samples_read: number
-  samples_returned: number
-  duration_nanos: number
-  errors: number
-}
+export type { QueryResultRow, QueryStatsData }
 
 export type QueryMode = 'rows' | 'columns' | 'explain' | 'stream-row' | 'stream-column'
 

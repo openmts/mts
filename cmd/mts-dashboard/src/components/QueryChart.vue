@@ -23,14 +23,14 @@ const poly = computed(() => buildPolyline(series.value, width, height))
   <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
       <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('chart') }}</h3>
-      <label class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+      <label class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
         {{ t('field') }}
-        <select v-model="field" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+        <select v-model="field" class="rounded border border-slate-300 dark:border-slate-600 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
           <option v-for="f in fields" :key="f" :value="f">{{ f }}</option>
         </select>
       </label>
     </div>
-    <div v-if="!fields.length" class="py-8 text-center text-sm text-slate-400">{{ t('noChartData') }}</div>
+    <div v-if="!fields.length" class="py-8 text-center text-sm text-slate-400 dark:text-slate-500">{{ t('noChartData') }}</div>
     <svg v-else :viewBox="`0 0 ${width} ${height}`" class="h-56 w-full">
       <rect x="0" y="0" :width="width" :height="height" class="fill-slate-50 dark:fill-slate-950" />
       <path :d="poly.path" fill="none" stroke="#2563eb" stroke-width="2" />

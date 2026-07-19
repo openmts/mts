@@ -202,68 +202,68 @@ function fieldTypeName(t: number): string {
 <template>
   <PermissionDenied v-if="!isAdmin" />
   <div v-else class="space-y-4">
-    <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ loadError }}</p>
-    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
+    <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ loadError }}</p>
+    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
     <div class="flex gap-2">
-      <input v-model="newDbName" type="text" placeholder="新数据库名称" class="w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="createDatabase" />
+      <input v-model="newDbName" type="text" placeholder="新数据库名称" class="w-64 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="createDatabase" />
       <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="createDatabase">
         <Plus class="h-4 w-4" /> 创建数据库
       </button>
     </div>
     <div class="space-y-2">
-      <div v-for="db in databases" :key="db.name" class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+      <div v-for="db in databases" :key="db.name" class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
           <button class="flex items-center gap-2 text-left" @click="toggleExpand(db)">
-            <component :is="db.expanded ? ChevronDown : ChevronRight" class="h-4 w-4 text-slate-400" />
-            <span class="text-sm font-medium text-slate-800">{{ db.name }}</span>
-            <span v-if="db.loading" class="text-xs text-slate-400">加载中…</span>
+            <component :is="db.expanded ? ChevronDown : ChevronRight" class="h-4 w-4 text-slate-400 dark:text-slate-500" />
+            <span class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ db.name }}</span>
+            <span v-if="db.loading" class="text-xs text-slate-400 dark:text-slate-500">加载中…</span>
           </button>
-          <button class="rounded p-1 text-slate-400 hover:text-red-600" title="删除数据库" @click="requestDeleteDatabase(db.name)">
+          <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:text-red-300" title="删除数据库" @click="requestDeleteDatabase(db.name)">
             <Trash2 class="h-4 w-4" />
           </button>
         </div>
         <div v-if="db.expanded && db.loaded" class="border-t border-slate-100">
           <div class="px-6 py-3">
-            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Measurements</p>
-            <div v-if="!db.measurements.length" class="text-xs text-slate-400">暂无 measurement</div>
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">Measurements</p>
+            <div v-if="!db.measurements.length" class="text-xs text-slate-400 dark:text-slate-500">暂无 measurement</div>
             <div v-for="meas in db.measurements" :key="meas.name" class="mb-2 rounded border border-slate-100">
-              <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" @click="toggleMeasurement(meas, db.name)">
-                <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 text-slate-400" />
-                <Table2 class="h-3.5 w-3.5 text-slate-400" />
+              <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" @click="toggleMeasurement(meas, db.name)">
+                <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                <Table2 class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                 {{ meas.name }}
               </button>
-              <div v-if="meas.expanded" class="border-t border-slate-50 px-4 py-2 text-xs text-slate-600">
-                <div v-if="meas.loading" class="text-slate-400">加载中…</div>
+              <div v-if="meas.expanded" class="border-t border-slate-50 px-4 py-2 text-xs text-slate-600 dark:text-slate-300">
+                <div v-if="meas.loading" class="text-slate-400 dark:text-slate-500">加载中…</div>
                 <template v-else>
-                  <p class="mb-1 font-medium text-slate-500">Fields</p>
+                  <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Fields</p>
                   <div class="mb-2 flex flex-wrap gap-1">
-                    <span v-for="f in meas.fields" :key="f.name" class="rounded bg-slate-100 px-2 py-0.5">{{ f.name }}:{{ fieldTypeName(f.type) }}</span>
-                    <span v-if="!meas.fields.length" class="text-slate-400">无</span>
+                    <span v-for="f in meas.fields" :key="f.name" class="rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5">{{ f.name }}:{{ fieldTypeName(f.type) }}</span>
+                    <span v-if="!meas.fields.length" class="text-slate-400 dark:text-slate-500">无</span>
                   </div>
-                  <p class="mb-1 font-medium text-slate-500">Series</p>
+                  <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Series</p>
                   <div class="space-y-1">
                     <div v-for="s in meas.series" :key="s.id" class="flex items-center gap-1">
-                      <Tag class="h-3 w-3 text-slate-400" />
+                      <Tag class="h-3 w-3 text-slate-400 dark:text-slate-500" />
                       <span class="font-mono">{{ s.tags && Object.keys(s.tags).length ? JSON.stringify(s.tags) : '{}' }}</span>
                     </div>
-                    <span v-if="!meas.series.length" class="text-slate-400">无</span>
+                    <span v-if="!meas.series.length" class="text-slate-400 dark:text-slate-500">无</span>
                   </div>
                 </template>
               </div>
             </div>
           </div>
-          <div class="border-t border-slate-200 px-6 py-3">
-            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">保留策略</p>
+          <div class="border-t border-slate-200 dark:border-slate-700 px-6 py-3">
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">保留策略</p>
             <div v-if="db.retentionPolicies.length" class="mb-3 space-y-1">
-              <div v-for="rp in db.retentionPolicies" :key="rp.name" class="flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-1.5">
-                <Clock class="h-3.5 w-3.5 text-slate-400" />
-                <span class="text-sm font-medium text-slate-700">{{ rp.name }}</span>
-                <span class="text-xs text-slate-500">{{ formatDuration(rp.duration) }}</span>
+              <div v-for="rp in db.retentionPolicies" :key="rp.name" class="flex items-center gap-2 rounded border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5">
+                <Clock class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ rp.name }}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ formatDuration(rp.duration) }}</span>
               </div>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <input v-model="db.newRpName" type="text" placeholder="策略名称" class="w-28 rounded border border-slate-300 px-2 py-1 text-xs" />
-              <input v-model="db.newRpDuration" type="text" placeholder="时长 (24h/7d)" class="w-24 rounded border border-slate-300 px-2 py-1 text-xs" />
+              <input v-model="db.newRpName" type="text" placeholder="策略名称" class="w-28 rounded border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs" />
+              <input v-model="db.newRpDuration" type="text" placeholder="时长 (24h/7d)" class="w-24 rounded border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs" />
               <button class="inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" @click="createRetentionPolicy(db)">
                 <Plus class="h-3.5 w-3.5" />添加
               </button>

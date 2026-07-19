@@ -120,31 +120,31 @@ function formatBytes(n: number): string {
 <template>
   <PermissionDenied v-if="!isAdmin" />
   <div v-else class="space-y-6">
-    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
+    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-        <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">存储验证</h3></div>
-        <button :disabled="loading === 'validate'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900" @click="doValidate">{{ loading === 'validate' ? t('loading') : '执行验证' }}</button>
+        <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500 dark:text-slate-400 dark:text-slate-500" /><h3 class="text-sm font-semibold">存储验证</h3></div>
+        <button :disabled="loading === 'validate'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" @click="doValidate">{{ loading === 'validate' ? t('loading') : '执行验证' }}</button>
       </div>
       <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-        <div class="mb-3 flex items-center gap-2"><Camera class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('createSnapshot') }}</h3></div>
-        <button :disabled="loading === 'snapshot'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
+        <div class="mb-3 flex items-center gap-2"><Camera class="h-5 w-5 text-slate-500 dark:text-slate-400 dark:text-slate-500" /><h3 class="text-sm font-semibold">{{ t('createSnapshot') }}</h3></div>
+        <button :disabled="loading === 'snapshot'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
       </div>
       <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-        <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">配置导出</h3></div>
-        <button :disabled="loading === 'export'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
+        <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500 dark:text-slate-400 dark:text-slate-500" /><h3 class="text-sm font-semibold">配置导出</h3></div>
+        <button :disabled="loading === 'export'" class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
       </div>
     </div>
 
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
       <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 dark:border-slate-800">
         <h3 class="text-sm font-semibold">{{ t('snapshots') }}</h3>
-        <button class="inline-flex items-center gap-1 text-xs text-slate-500" @click="loadSnapshots"><RefreshCw class="h-3.5 w-3.5" />{{ t('refresh') }}</button>
+        <button class="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="loadSnapshots"><RefreshCw class="h-3.5 w-3.5" />{{ t('refresh') }}</button>
       </div>
-      <div v-if="!snapshots.length" class="p-6 text-center text-sm text-slate-400">暂无快照</div>
+      <div v-if="!snapshots.length" class="p-6 text-center text-sm text-slate-400 dark:text-slate-500">暂无快照</div>
       <table v-else class="w-full text-sm">
         <thead>
-          <tr class="border-b border-slate-100 text-left text-xs text-slate-500 dark:border-slate-800">
+          <tr class="border-b border-slate-100 text-left text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:border-slate-800">
             <th class="px-4 py-2">名称</th>
             <th class="px-4 py-2">大小</th>
             <th class="px-4 py-2">时间</th>
@@ -155,9 +155,9 @@ function formatBytes(n: number): string {
           <tr v-for="s in snapshots" :key="s.name" class="border-b border-slate-50 dark:border-slate-800">
             <td class="px-4 py-2 font-mono text-xs">{{ s.name }}</td>
             <td class="px-4 py-2 text-xs">{{ formatBytes(s.size_bytes) }}</td>
-            <td class="px-4 py-2 text-xs text-slate-500">{{ s.mod_time }}</td>
+            <td class="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ s.mod_time }}</td>
             <td class="px-4 py-2">
-              <button class="rounded p-1 text-slate-400 hover:text-red-600" :title="t('delete')" @click="requestDelete(s.name)"><Trash2 class="h-4 w-4" /></button>
+              <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:text-red-300" :title="t('delete')" @click="requestDelete(s.name)"><Trash2 class="h-4 w-4" /></button>
             </td>
           </tr>
         </tbody>
@@ -166,13 +166,13 @@ function formatBytes(n: number): string {
 
     <div v-if="validateResult" class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
       <h3 class="mb-3 text-sm font-semibold">验证结果</h3>
-      <p class="text-xs text-slate-500">数据目录: {{ validateResult.data_dir }}</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">数据目录: {{ validateResult.data_dir }}</p>
       <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-slate-900 p-3 text-xs text-green-400">{{ JSON.stringify(validateResult.health, null, 2) }}</pre>
     </div>
     <div v-if="snapshotResult" class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
       <h3 class="mb-2 text-sm font-semibold">最近创建</h3>
-      <p class="text-sm" :class="snapshotResult.ok ? 'text-green-700' : 'text-red-700'">{{ snapshotResult.ok ? '成功' : '失败' }}</p>
-      <p v-if="snapshotResult.path" class="mt-1 text-xs text-slate-500">{{ snapshotResult.path }}</p>
+      <p class="text-sm" :class="snapshotResult.ok ? 'text-green-700 dark:text-green-200' : 'text-red-700 dark:text-red-200'">{{ snapshotResult.ok ? '成功' : '失败' }}</p>
+      <p v-if="snapshotResult.path" class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ snapshotResult.path }}</p>
     </div>
     <div v-if="exportData" class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
       <div class="mb-2 flex items-center justify-between gap-2">

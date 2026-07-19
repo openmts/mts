@@ -316,9 +316,16 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 | P1-01 非 admin 元数据降级 | 已修复 | listDatabasesDetailed + Write/Query 手填 |
 | P1-02 tags/order/offset | 已修复 | useQueryWorkbench buildQuery |
 | P1-03 FieldValue 展示 | 已修复 | utils/fieldValue.ts |
-| P1-04 列结果表 | 已修复 | QueryPage 列摘要表（图沿用既有） |
+| P1-04 列结果表 | 已修复 | QueryPage 列摘要表 |
+| P2-01 暗色全站 | 已修复 | 页面/组件 dark + mts-* 样式 |
+| P2-02 i18n 关键路径 | 已修复 | messages 扩展 + Login/Overview |
+| P2-03 子路径嵌入 | 已修复 | `http.dashboard_base` + SPA handler |
+| P2-04 共享 API 类型 | 已修复 | `src/api/types.ts` |
+| P2-05 downsample 高级动作 | 已修复 | run/reset/dry-run |
+| P2-06 maintenance/health | 已修复 | Overview/Operations |
+| P2-07 前端契约测试 | 已修复 | dashboardAlign.contract.test.ts |
 | P2-08 databases 字段 | 已修复 | measurementsResponse 双字段 |
 
-未纳入本轮：P2-01~07（除 P2-08）、全部 P3。
+P3 未纳入本轮。
 
-验证：dashboard test/build、make test/e2e/lint 通过（2026-07-19）。
+验证：dashboard test/build、make test/e2e/lint 通过（2026-07-19 第二轮）。

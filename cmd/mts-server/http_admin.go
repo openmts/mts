@@ -412,6 +412,7 @@ func configSchema() []configFieldSchema {
 		{Name: "data_dir", Description: "MTS 本地数据目录"},
 		{Name: "http.enabled", Description: "是否启用 HTTP API"},
 		{Name: "http.addr", Description: "HTTP 监听地址"},
+		{Name: "http.dashboard_base", Description: "Dashboard 静态资源与 SPA 子路径，默认 /；例如 /mts/"},
 		{Name: "grpc.enabled", Description: "是否启用 gRPC API"},
 		{Name: "grpc.addr", Description: "gRPC 监听地址"},
 		{Name: "auth.admin_token", Description: "管理面和用户面 admin token，空值表示开发兼容模式"},

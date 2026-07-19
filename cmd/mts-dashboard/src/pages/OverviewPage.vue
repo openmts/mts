@@ -2,42 +2,31 @@
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
-import { Activity, Cpu, HardDrive, Server, RefreshCw, Wrench } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
+import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
+import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle } from 'lucide-vue-next'
 
-interface HealthResponse { healthy: boolean; ready: boolean; reasons: string[] | null }
+interface HealthResponse extends HealthSnapshot {}
 interface StorageMemorySnapshot {
-  current_bytes: number
-  peak_bytes?: number
-  memtable_bytes: number
-  wal_bytes: number
-  query_bytes: number
-  compaction_bytes: number
-  rejected_writes?: number
-  runtime_rss_bytes?: number
-  runtime_heap_alloc_bytes?: number
+  heap_alloc_bytes?: number
+  heap_inuse_bytes?: number
+  sys_bytes?: number
+  num_gc?: number
+  [key: string]: unknown
 }
 interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
-interface CompactionStats { active: number; backlog: number; total: number; success: number; failure: number; last_error: string }
 interface CompactionStatsResponse { stats: CompactionStats }
-interface MaintenanceStats {
-  compaction_active: number
-  compaction_backlog: number
-  compaction_skipped: number
-  compaction_failure: number
-  compaction_last_skip?: string
-  downsample_active: number
-  downsample_inflight: number
-  downsample_skipped: number
-  downsample_failure: number
-  downsample_max_concurrent: number
-  maintenance_error_count: number
-}
 interface MaintenanceStatsResponse { stats: MaintenanceStats }
+interface MaintenanceErrorsResponse { errors: string[] }
+interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks'] }
 
 const { isAdmin } = useAuth()
+const { t } = useI18n()
 const healthy = ref<boolean | null>(null)
 const ready = ref<boolean | null>(null)
 const healthReasons = ref<string[]>([])
+const healthChecks = ref<{ name: string; status: string; reason?: string }[]>([])
+const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
@@ -55,47 +44,69 @@ function formatBytes(bytes: number): string {
   return bytes + ' B'
 }
 
+function applyHealth(h: HealthSnapshot) {
+  healthy.value = h.healthy
+  ready.value = h.ready
+  healthReasons.value = h.reasons ?? []
+  healthChecks.value = h.checks ?? []
+}
+
 async function loadOverview() {
   loading.value = true
   loadError.value = ''
   adminPartialError.value = ''
   try {
     const healthData = await apiGet<HealthResponse>('/healthz')
-    healthy.value = healthData.healthy
-    ready.value = healthData.ready
-    healthReasons.value = healthData.reasons ?? []
+    applyHealth(healthData)
 
     if (isAdmin.value) {
       const results = await Promise.allSettled([
         apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory'),
         apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction'),
         apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance'),
+        apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors'),
+        apiGet<AdminHealthResponse | HealthSnapshot>('/api/v1/admin/health'),
       ])
       const errs: string[] = []
       if (results[0].status === 'fulfilled') memorySnapshot.value = results[0].value.snapshot
       else {
         memorySnapshot.value = null
-        errs.push(results[0].reason instanceof Error ? results[0].reason.message : '内存统计失败')
+        errs.push(results[0].reason instanceof Error ? results[0].reason.message : 'memory')
       }
       if (results[1].status === 'fulfilled') compactionStats.value = results[1].value.stats
       else {
         compactionStats.value = null
-        errs.push(results[1].reason instanceof Error ? results[1].reason.message : '压缩统计失败')
+        errs.push(results[1].reason instanceof Error ? results[1].reason.message : 'compaction')
       }
       if (results[2].status === 'fulfilled') maintenanceStats.value = results[2].value.stats ?? null
       else {
         maintenanceStats.value = null
-        errs.push(results[2].reason instanceof Error ? results[2].reason.message : '维护统计失败')
+        errs.push(results[2].reason instanceof Error ? results[2].reason.message : 'maintenance')
+      }
+      if (results[3].status === 'fulfilled') maintenanceErrors.value = results[3].value.errors ?? []
+      else {
+        maintenanceErrors.value = []
+        errs.push(results[3].reason instanceof Error ? results[3].reason.message : 'errors')
+      }
+      if (results[4].status === 'fulfilled') {
+        const raw = results[4].value as AdminHealthResponse
+        const h = (raw.health ?? raw) as HealthSnapshot
+        if (h && typeof h.healthy === 'boolean') {
+          // admin health 更完整时覆盖 checks
+          if (h.checks?.length) healthChecks.value = h.checks
+          if (h.reasons?.length) healthReasons.value = h.reasons
+        }
       }
       if (errs.length) adminPartialError.value = errs.join('；')
     } else {
       memorySnapshot.value = null
       compactionStats.value = null
       maintenanceStats.value = null
+      maintenanceErrors.value = []
     }
     lastRefreshed.value = new Date().toLocaleTimeString()
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载失败'
+    loadError.value = e instanceof Error ? e.message : 'load failed'
   } finally {
     loading.value = false
   }
@@ -124,102 +135,132 @@ const showAdminPanels = computed(() => isAdmin.value)
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="text-lg font-semibold text-slate-800">概览</h1>
-        <p class="text-xs text-slate-500">服务健康与运行快照</p>
+        <h1 class="mts-title">{{ t('overviewTitle') }}</h1>
+        <p class="text-xs mts-muted">{{ t('overviewDesc') }}</p>
       </div>
       <div class="flex items-center gap-2">
-        <span v-if="lastRefreshed" class="text-xs text-slate-400">刷新于 {{ lastRefreshed }}</span>
-        <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50" @click="toggleAutoRefresh">
+        <span v-if="lastRefreshed" class="text-xs mts-muted">{{ t('refreshedAt') }} {{ lastRefreshed }}</span>
+        <button class="mts-btn" @click="toggleAutoRefresh">
           <RefreshCw class="h-3.5 w-3.5" :class="autoRefresh ? 'animate-spin' : ''" />
-          {{ autoRefresh ? '自动刷新中' : '自动刷新' }}
+          {{ autoRefresh ? t('autoRefreshing') : t('autoRefresh') }}
         </button>
-        <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700" :disabled="loading" @click="loadOverview">
-          <RefreshCw class="h-3.5 w-3.5" /> 刷新
+        <button class="mts-btn-primary" :disabled="loading" @click="loadOverview">
+          <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
         </button>
       </div>
     </div>
 
-    <p v-if="loadError" class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{{ loadError }}</p>
-    <p v-else-if="adminPartialError" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">部分管理统计不可用：{{ adminPartialError }}</p>
+    <p v-if="loadError" class="mts-alert-error">{{ loadError }}</p>
+    <p v-else-if="adminPartialError" class="mts-alert-warn">{{ t('partialAdminStats') }}：{{ adminPartialError }}</p>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="mb-2 flex items-center gap-2 text-slate-500"><Activity class="h-4 w-4" /><span class="text-xs">健康</span></div>
-        <p class="text-2xl font-semibold" :class="healthy ? 'text-green-600' : healthy === false ? 'text-red-600' : 'text-slate-400'">
+      <div class="mts-card p-5">
+        <div class="mb-2 flex items-center gap-2 mts-muted"><Activity class="h-4 w-4" /><span class="text-xs">{{ t('healthy') }}</span></div>
+        <p class="text-2xl font-semibold" :class="healthy ? 'text-green-600' : healthy === false ? 'text-red-600' : 'mts-muted'">
           {{ healthy === null ? '—' : healthy ? 'Healthy' : 'Unhealthy' }}
         </p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="mb-2 flex items-center gap-2 text-slate-500"><Server class="h-4 w-4" /><span class="text-xs">就绪</span></div>
-        <p class="text-2xl font-semibold" :class="ready ? 'text-green-600' : ready === false ? 'text-red-600' : 'text-slate-400'">
+      <div class="mts-card p-5">
+        <div class="mb-2 flex items-center gap-2 mts-muted"><Activity class="h-4 w-4" /><span class="text-xs">{{ t('ready') }}</span></div>
+        <p class="text-2xl font-semibold" :class="ready ? 'text-green-600' : ready === false ? 'text-amber-600' : 'mts-muted'">
           {{ ready === null ? '—' : ready ? 'Ready' : 'Not Ready' }}
         </p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5 sm:col-span-2">
-        <div class="mb-2 flex items-center gap-2 text-slate-500"><HardDrive class="h-4 w-4" /><span class="text-xs">原因</span></div>
-        <p v-if="!healthReasons.length" class="text-sm text-slate-400">无</p>
-        <ul v-else class="list-disc pl-5 text-sm text-slate-600">
+      <div class="mts-card p-5 sm:col-span-2">
+        <div class="mb-2 flex items-center gap-2 mts-muted"><AlertTriangle class="h-4 w-4" /><span class="text-xs">{{ t('reasons') }}</span></div>
+        <p v-if="!healthReasons.length" class="text-sm mts-muted">—</p>
+        <ul v-else class="list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-200">
           <li v-for="(r, i) in healthReasons" :key="i">{{ r }}</li>
         </ul>
       </div>
     </div>
 
-    <div v-if="!showAdminPanels" class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-      当前为普通用户：仅展示健康检查。内存/压缩/维护统计需管理员权限。
+    <div v-if="healthChecks.length" class="mts-panel">
+      <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('healthChecks') }}</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
+              <th class="px-2 py-2">Name</th>
+              <th class="px-2 py-2">Status</th>
+              <th class="px-2 py-2">Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(c, i) in healthChecks" :key="i" class="border-b border-slate-100 dark:border-slate-800">
+              <td class="px-2 py-2 font-mono text-xs">{{ c.name }}</td>
+              <td class="px-2 py-2 text-xs" :class="c.status === 'ok' || c.status === 'passed' ? 'text-green-600' : 'text-red-600'">{{ c.status }}</td>
+              <td class="px-2 py-2 text-xs mts-muted">{{ c.reason || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <template v-else>
-      <div class="rounded-xl border border-slate-200 bg-white p-6">
+    <div v-if="!showAdminPanels" class="mts-card bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
+      {{ t('nonAdminOverview') }}
+    </div>
+
+    <template v-if="showAdminPanels">
+      <div class="mts-panel">
+        <div class="mb-3 flex items-center gap-2">
+          <AlertTriangle class="h-4 w-4 text-slate-500" />
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceErrors') }}</h2>
+          <span class="text-xs mts-muted">({{ maintenanceErrors.length }})</span>
+        </div>
+        <p v-if="!maintenanceErrors.length" class="text-sm mts-muted">{{ t('noMaintenanceErrors') }}</p>
+        <ul v-else class="max-h-48 space-y-1 overflow-auto text-xs text-red-700 dark:text-red-200">
+          <li v-for="(e, i) in maintenanceErrors" :key="i" class="rounded bg-red-50 px-2 py-1 dark:bg-red-950/40">{{ e }}</li>
+        </ul>
+      </div>
+
+      <div class="mts-panel">
         <div class="mb-4 flex items-center gap-2">
           <Cpu class="h-4 w-4 text-slate-500" />
-          <h2 class="text-sm font-semibold text-slate-800">存储内存</h2>
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('memoryStats') }}</h2>
         </div>
-        <div v-if="!memorySnapshot" class="text-sm text-slate-400">暂无内存统计</div>
-        <div v-else class="grid grid-cols-2 gap-3 text-xs text-slate-600 sm:grid-cols-3 lg:grid-cols-4">
-          <div class="rounded bg-slate-50 px-3 py-2">current: <span class="font-semibold text-slate-800">{{ formatBytes(memorySnapshot.current_bytes) }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">peak: <span class="font-semibold text-slate-800">{{ formatBytes(memorySnapshot.peak_bytes ?? 0) }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">memtable: <span class="font-semibold text-slate-800">{{ formatBytes(memorySnapshot.memtable_bytes) }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">wal: <span class="font-semibold text-slate-800">{{ formatBytes(memorySnapshot.wal_bytes) }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">query: <span class="font-semibold text-slate-800">{{ formatBytes(memorySnapshot.query_bytes) }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">compaction: <span class="font-semibold text-slate-800">{{ formatBytes(memorySnapshot.compaction_bytes) }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">rss: <span class="font-semibold text-slate-800">{{ formatBytes(memorySnapshot.runtime_rss_bytes ?? 0) }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">heap: <span class="font-semibold text-slate-800">{{ formatBytes(memorySnapshot.runtime_heap_alloc_bytes ?? 0) }}</span></div>
+        <div v-if="!memorySnapshot" class="text-sm mts-muted">—</div>
+        <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50" v-for="(v, k) in memorySnapshot" :key="String(k)">
+            <span class="mts-muted">{{ k }}</span>
+            <p class="font-semibold text-slate-800 dark:text-slate-100">{{ typeof v === 'number' && String(k).includes('bytes') ? formatBytes(v) : v }}</p>
+          </div>
         </div>
       </div>
 
-      <div class="rounded-xl border border-slate-200 bg-white p-6">
+      <div class="mts-panel">
         <div class="mb-4 flex items-center gap-2">
-          <HardDrive class="h-4 w-4 text-slate-500" />
-          <h2 class="text-sm font-semibold text-slate-800">压缩统计</h2>
+          <Layers class="h-4 w-4 text-slate-500" />
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('compactionStats') }}</h2>
         </div>
-        <div v-if="!compactionStats" class="text-sm text-slate-400">暂无压缩统计</div>
+        <div v-if="!compactionStats" class="text-sm mts-muted">—</div>
         <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          <div><span class="text-xs text-slate-500">总计</span><p class="text-sm font-medium">{{ compactionStats.total }}</p></div>
-          <div><span class="text-xs text-slate-500">成功</span><p class="text-sm font-medium text-green-600">{{ compactionStats.success }}</p></div>
-          <div><span class="text-xs text-slate-500">失败</span><p class="text-sm font-medium text-red-600">{{ compactionStats.failure }}</p></div>
-          <div><span class="text-xs text-slate-500">积压</span><p class="text-sm font-medium text-yellow-600">{{ compactionStats.backlog }}</p></div>
-          <div><span class="text-xs text-slate-500">活跃</span><p class="text-sm font-medium text-blue-600">{{ compactionStats.active }}</p></div>
+          <div><span class="text-xs mts-muted">total</span><p class="text-sm font-medium">{{ compactionStats.total }}</p></div>
+          <div><span class="text-xs mts-muted">success</span><p class="text-sm font-medium text-green-600">{{ compactionStats.success }}</p></div>
+          <div><span class="text-xs mts-muted">failure</span><p class="text-sm font-medium text-red-600">{{ compactionStats.failure }}</p></div>
+          <div><span class="text-xs mts-muted">backlog</span><p class="text-sm font-medium text-yellow-600">{{ compactionStats.backlog }}</p></div>
+          <div><span class="text-xs mts-muted">active</span><p class="text-sm font-medium text-blue-600">{{ compactionStats.active }}</p></div>
         </div>
-        <p v-if="compactionStats?.last_error" class="mt-3 text-xs text-red-600">最近错误：{{ compactionStats.last_error }}</p>
+        <p v-if="compactionStats?.last_error" class="mt-3 text-xs text-red-600 dark:text-red-300">{{ compactionStats.last_error }}</p>
       </div>
 
-      <div class="rounded-xl border border-slate-200 bg-white p-6">
+      <div class="mts-panel">
         <div class="mb-4 flex items-center gap-2">
           <Wrench class="h-4 w-4 text-slate-500" />
-          <h2 class="text-sm font-semibold text-slate-800">维护统计</h2>
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceStats') }}</h2>
         </div>
-        <div v-if="!maintenanceStats" class="text-sm text-slate-400">暂无维护统计</div>
-        <div v-else class="grid grid-cols-2 gap-3 text-xs text-slate-600 sm:grid-cols-3 lg:grid-cols-4">
-          <div class="rounded bg-slate-50 px-3 py-2">compact active: <span class="font-semibold text-slate-800">{{ maintenanceStats.compaction_active }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">compact backlog: <span class="font-semibold text-slate-800">{{ maintenanceStats.compaction_backlog }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">compact skipped: <span class="font-semibold text-slate-800">{{ maintenanceStats.compaction_skipped }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">compact failure: <span class="font-semibold text-slate-800">{{ maintenanceStats.compaction_failure }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">downsample active: <span class="font-semibold text-slate-800">{{ maintenanceStats.downsample_active }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">downsample inflight: <span class="font-semibold text-slate-800">{{ maintenanceStats.downsample_inflight }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">downsample failure: <span class="font-semibold text-slate-800">{{ maintenanceStats.downsample_failure }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2">errors: <span class="font-semibold text-slate-800">{{ maintenanceStats.maintenance_error_count }}</span></div>
+        <div v-if="!maintenanceStats" class="text-sm mts-muted">—</div>
+        <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-4">
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact active: <span class="font-semibold">{{ maintenanceStats.compaction_active }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact backlog: <span class="font-semibold">{{ maintenanceStats.compaction_backlog }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact skipped: <span class="font-semibold">{{ maintenanceStats.compaction_skipped }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact failure: <span class="font-semibold">{{ maintenanceStats.compaction_failure }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">downsample active: <span class="font-semibold">{{ maintenanceStats.downsample_active }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">downsample inflight: <span class="font-semibold">{{ maintenanceStats.downsample_inflight }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">downsample failure: <span class="font-semibold">{{ maintenanceStats.downsample_failure }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">errors: <span class="font-semibold">{{ maintenanceStats.maintenance_error_count }}</span></div>
         </div>
-        <p v-if="maintenanceStats?.compaction_last_skip" class="mt-3 text-xs text-amber-700">最近 compact 跳过：{{ maintenanceStats.compaction_last_skip }}</p>
+        <p v-if="maintenanceStats?.compaction_last_skip" class="mt-3 text-xs text-amber-700 dark:text-amber-200">{{ maintenanceStats.compaction_last_skip }}</p>
       </div>
     </template>
   </div>

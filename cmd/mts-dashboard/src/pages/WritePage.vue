@@ -175,22 +175,22 @@ const modeLabel = computed(() => ({
     </div>
 
     <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-4">
-      <label class="text-xs text-slate-500">Database
-        <input v-model="selectedDb" list="write-db-list" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="database" />
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Database
+        <input v-model="selectedDb" list="write-db-list" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="database" />
         <datalist id="write-db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
       </label>
-      <label class="text-xs text-slate-500">RP
-        <input v-model="retentionPolicy" list="write-rp-list" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="autogen" />
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">RP
+        <input v-model="retentionPolicy" list="write-rp-list" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="autogen" />
         <datalist id="write-rp-list"><option v-for="rp in (retentionPolicies.length?retentionPolicies:['autogen'])" :key="rp" :value="rp" /></datalist>
       </label>
-      <label class="flex items-center gap-2 text-xs text-slate-600 md:mt-6">
+      <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 md:mt-6">
         <input v-model="syncWrite" type="checkbox" /> Sync
       </label>
-      <label v-if="writeMode!=='typed'" class="flex items-center gap-2 text-xs text-slate-600 md:mt-6">
+      <label v-if="writeMode!=='typed'" class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 md:mt-6">
         <input v-model="usePointsTyped" type="checkbox" /> points-typed 路径
       </label>
     </div>
-    <p v-if="metaHint" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{{ metaHint }}</p>
+    <p v-if="metaHint" class="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{{ metaHint }}</p>
 
     <div v-if="writeMode==='form'" class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div v-for="(row, idx) in formRows" :key="idx" class="rounded border border-slate-100 p-3 dark:border-slate-800">
@@ -200,19 +200,19 @@ const modeLabel = computed(() => ({
         <div class="grid gap-2 md:grid-cols-3">
           <input v-model="row.measurement" placeholder="measurement" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
           <input v-model="row.timestamp" placeholder="timestamp ms" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
-          <div class="text-[11px] text-slate-400">tags/fields 在下方</div>
+          <div class="text-[11px] text-slate-400 dark:text-slate-500">tags/fields 在下方</div>
         </div>
         <div class="mt-2 grid gap-2 md:grid-cols-2">
           <div>
-            <p class="mb-1 text-[11px] text-slate-500">Tags</p>
+            <p class="mb-1 text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">Tags</p>
             <div v-for="(tg, ti) in row.tags" :key="ti" class="mb-1 flex gap-1">
               <input v-model="tg.key" class="w-1/2 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="key" />
               <input v-model="tg.value" class="w-1/2 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="value" />
             </div>
-            <button class="text-[11px] text-slate-500" @click="row.tags.push({key:'',value:''})">+ tag</button>
+            <button class="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="row.tags.push({key:'',value:''})">+ tag</button>
           </div>
           <div>
-            <p class="mb-1 text-[11px] text-slate-500">Fields</p>
+            <p class="mb-1 text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">Fields</p>
             <div v-for="(fd, fi) in row.fields" :key="fi" class="mb-1 flex gap-1">
               <input v-model="fd.key" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="key" />
               <input v-model="fd.value" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="value" />
@@ -220,15 +220,15 @@ const modeLabel = computed(() => ({
                 <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">{{ ft.label }}</option>
               </select>
             </div>
-            <button class="text-[11px] text-slate-500" @click="row.fields.push({key:'',value:'',type:'float'})">+ field</button>
+            <button class="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="row.fields.push({key:'',value:'',type:'float'})">+ field</button>
           </div>
         </div>
       </div>
-      <button class="inline-flex items-center gap-1 text-xs text-slate-600" @click="addRow"><Plus class="h-3 w-3" /> 添加行</button>
+      <button class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300" @click="addRow"><Plus class="h-3 w-3" /> 添加行</button>
     </div>
 
     <div v-else-if="writeMode==='typed'" class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-2">
-      <p class="md:col-span-2 text-xs text-slate-500">直接构造 TypedBatch 调用 <code>/api/v1/data/write/typed</code>（推荐高性能路径）</p>
+      <p class="md:col-span-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">直接构造 TypedBatch 调用 <code>/api/v1/data/write/typed</code>（推荐高性能路径）</p>
       <label class="text-xs">Measurement<input v-model="typedMeasurement" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" /></label>
       <label class="text-xs">Tag key<input v-model="typedTagKey" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" /></label>
       <label class="text-xs">Tag values（每行一个）
@@ -250,13 +250,13 @@ const modeLabel = computed(() => ({
     </div>
 
     <div v-else class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <textarea v-model="lineInput" rows="10" class="w-full rounded border border-slate-300 px-3 py-2 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="modeLabel" />
+      <textarea v-model="lineInput" rows="10" class="w-full rounded border border-slate-300 dark:border-slate-600 px-3 py-2 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="modeLabel" />
     </div>
 
-    <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900" :disabled="loading" @click="submit">
+    <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" :disabled="loading" @click="submit">
       <Send class="h-4 w-4" /> {{ loading ? t('loading') : '写入' }}
     </button>
-    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
-    <p v-if="result?.ok" class="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">{{ result.message }}</p>
+    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
+    <p v-if="result?.ok" class="rounded-xl border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40 p-3 text-sm text-green-700 dark:text-green-200">{{ result.message }}</p>
   </div>
 </template>

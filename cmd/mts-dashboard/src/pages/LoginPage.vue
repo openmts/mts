@@ -2,11 +2,13 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import { useI18n } from '@/composables/useI18n'
 import { sanitizeRedirect } from '@/router'
 import { Server } from 'lucide-vue-next'
 
 const router = useRouter()
 const { login } = useAuth()
+const { t } = useI18n()
 
 const username = ref('admin')
 const password = ref('')
@@ -15,7 +17,7 @@ const error = ref('')
 
 async function handleLogin() {
   if (!username.value.trim() || !password.value) {
-    error.value = '请输入用户名和密码'
+    error.value = t.value('loginNeedCredentials')
     return
   }
   error.value = ''
@@ -35,52 +37,52 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-slate-100">
-    <div class="w-full max-w-sm rounded-xl bg-white p-8 shadow-sm">
+  <div class="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
+    <div class="w-full max-w-sm rounded-xl bg-white p-8 shadow-sm dark:bg-slate-900 dark:border dark:border-slate-700">
       <div class="mb-6 flex flex-col items-center gap-2">
-        <Server class="h-10 w-10 text-slate-700" />
-        <h1 class="text-xl font-semibold text-slate-800">MTS Dashboard</h1>
-        <p class="text-sm text-slate-500">时序数据库管理平台</p>
+        <Server class="h-10 w-10 text-slate-700 dark:text-slate-200" />
+        <h1 class="text-xl font-semibold text-slate-800 dark:text-slate-100">{{ t('loginTitle') }}</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{{ t('loginSubtitle') }}</p>
       </div>
 
       <form class="space-y-4" @submit.prevent="handleLogin">
         <div>
-          <label class="mb-1 block text-sm font-medium text-slate-700" for="username">用户名</label>
+          <label class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200" for="username">{{ t('username') }}</label>
           <input
             id="username"
             v-model="username"
             type="text"
             autocomplete="username"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-            placeholder="请输入用户名"
+            class="mts-input"
+            :placeholder="t('loginUsernamePlaceholder')"
           />
         </div>
         <div>
-          <label class="mb-1 block text-sm font-medium text-slate-700" for="password">密码</label>
+          <label class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200" for="password">{{ t('password') }}</label>
           <input
             id="password"
             v-model="password"
             type="password"
             autocomplete="current-password"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-            placeholder="请输入密码"
+            class="mts-input"
+            :placeholder="t('loginPasswordPlaceholder')"
           />
         </div>
 
-        <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+        <p v-if="error" class="text-sm text-red-600 dark:text-red-300">{{ error }}</p>
 
         <button
           type="submit"
           :disabled="loading"
-          class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
         >
-          {{ loading ? '登录中...' : '登录' }}
+          {{ loading ? t('loggingIn') : t('login') }}
         </button>
       </form>
 
-      <div class="mt-5 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500">
-        <p class="font-medium text-slate-600">默认账号策略</p>
-        <p class="mt-1">服务启动且密码认证开启时会预置 <code class="rounded bg-white px-1">admin / admin</code>。首次登录后请尽快修改密码。</p>
+      <div class="mt-5 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
+        <p class="font-medium text-slate-600 dark:text-slate-300">{{ t('loginDefaultPolicy') }}</p>
+        <p class="mt-1">{{ t('loginDefaultHint') }}</p>
       </div>
     </div>
   </div>

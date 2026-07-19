@@ -33,6 +33,7 @@ type config struct {
 type httpConfig struct {
 	Enabled           bool         `yaml:"enabled"              json:"enabled"`
 	Addr              string       `yaml:"addr"                 json:"addr"`
+	DashboardBase     string       `yaml:"dashboard_base"       json:"dashboard_base"`
 	TLS               tlsConfig    `yaml:"tls"                  json:"tls"`
 	ReadTimeout       durationText `yaml:"read_timeout"         json:"read_timeout"`
 	ReadHeaderTimeout durationText `yaml:"read_header_timeout"  json:"read_header_timeout"`
@@ -169,6 +170,7 @@ func defaultConfig() config {
 		HTTP: httpConfig{
 			Enabled:           true,
 			Addr:              "127.0.0.1:8086",
+			DashboardBase:     "/",
 			ReadHeaderTimeout: durationText(5 * time.Second),
 			ReadTimeout:       durationText(30 * time.Second),
 			WriteTimeout:      durationText(30 * time.Second),
@@ -238,6 +240,7 @@ func loadConfig(path string) (config, error) {
 	if err := cfg.validate(); err != nil {
 		return config{}, err
 	}
+	cfg.HTTP.DashboardBase = normalizeDashboardBase(cfg.HTTP.DashboardBase)
 	cfg.ConfigPath = path
 	return cfg, nil
 }
@@ -265,6 +268,7 @@ func (cfg config) validate() error {
 	if err := validateTLSConfig("http", cfg.HTTP.TLS); err != nil {
 		return err
 	}
+	cfg.HTTP.DashboardBase = normalizeDashboardBase(cfg.HTTP.DashboardBase)
 	if err := validateTLSConfig("grpc", cfg.GRPC.TLS); err != nil {
 		return err
 	}

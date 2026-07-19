@@ -79,21 +79,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     @click.self="close"
   >
     <div ref="panelRef" class="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-      <h3 class="text-sm font-semibold text-slate-800">{{ title }}</h3>
-      <p class="mt-2 text-sm text-slate-600 whitespace-pre-wrap">{{ message }}</p>
+      <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ title }}</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{{ message }}</p>
       <div v-if="requireText" class="mt-3">
-        <label class="mb-1 block text-xs text-slate-500">请输入 <span class="font-mono text-slate-700">{{ requireText }}</span> 确认</label>
+        <label class="mb-1 block text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">请输入 <span class="font-mono text-slate-700 dark:text-slate-200">{{ requireText }}</span> 确认</label>
         <input
           ref="inputRef"
           v-model="input"
-          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
           @keyup.enter="onConfirm"
         />
       </div>
       <div class="mt-4 flex justify-end gap-2">
         <button
           type="button"
-          class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+          class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           :disabled="loading"
           @click="close"
         >{{ cancelLabel }}</button>

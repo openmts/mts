@@ -15,7 +15,19 @@ func (r *serverRuntime) httpHandler() http.Handler {
 	// 固定路径与资源前缀统一由 operation registry 挂载，避免 HTTP/gRPC 漂移。
 	r.mountRegistryHTTP(mux)
 	r.mountPprof(mux)
-	mux.HandleFunc(routeRoot, dashboardHandler().ServeHTTP)
+	base := "/"
+	if r != nil {
+		base = r.currentConfig().HTTP.DashboardBase
+	}
+	dash := dashboardHandler(base)
+	if base != "/" {
+		// 子路径部署：仅挂载 base 与去尾斜杠前缀
+		trimmed := strings.TrimSuffix(normalizeDashboardBase(base), "/")
+		mux.Handle(trimmed+"/", dash)
+		mux.HandleFunc(trimmed, dash.ServeHTTP)
+	} else {
+		mux.HandleFunc(routeRoot, dash.ServeHTTP)
+	}
 	return r.wrapHTTP(mux)
 }
 

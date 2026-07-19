@@ -91,25 +91,25 @@ function statusLabel(httpStatus: number): string {
 <template>
   <PermissionDenied v-if="!isAdmin" />
   <div v-else class="space-y-6">
-    <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ loadError }}</p>
-    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
+    <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ loadError }}</p>
+    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
 
-    <div class="rounded-xl border border-slate-200 bg-white p-6">
-      <h2 class="mb-2 text-sm font-semibold text-slate-800">服务级 Token（可选）</h2>
-      <p class="mb-4 text-xs text-slate-500">当服务启用 admin_token / data_tokens 时，可在此配置。保存在 sessionStorage（会话级）。用户登出不会自动清除；可在本页手动清空，关闭标签页后失效。</p>
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-6">
+      <h2 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">服务级 Token（可选）</h2>
+      <p class="mb-4 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">当服务启用 admin_token / data_tokens 时，可在此配置。保存在 sessionStorage（会话级）。用户登出不会自动清除；可在本页手动清空，关闭标签页后失效。</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="mb-1 block text-xs text-slate-500">X-MTS-Admin-Token</label>
-          <input v-model="adminTokenInput" type="password" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="可选" />
+          <label class="mb-1 block text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">X-MTS-Admin-Token</label>
+          <input v-model="adminTokenInput" type="password" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm" placeholder="可选" />
         </div>
         <div>
-          <label class="mb-1 block text-xs text-slate-500">X-MTS-Data-Token</label>
-          <input v-model="dataTokenInput" type="password" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="可选" />
+          <label class="mb-1 block text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">X-MTS-Data-Token</label>
+          <input v-model="dataTokenInput" type="password" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm" placeholder="可选" />
         </div>
       </div>
       <div class="mt-3 flex gap-2">
         <button class="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-white" @click="saveServiceTokens">保存</button>
-        <button class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs" @click="clearServiceTokens">清除</button>
+        <button class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs" @click="clearServiceTokens">清除</button>
       </div>
     </div>
 
@@ -121,35 +121,35 @@ function statusLabel(httpStatus: number): string {
         <RefreshCw class="h-4 w-4" />热重载
       </button>
     </div>
-    <div v-if="validateResult" :class="validateResult.ok ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'" class="rounded-lg border p-3">
-      <p v-if="validateResult.ok" class="text-sm text-green-700">配置验证通过</p>
-      <p v-else class="text-sm text-red-700">配置验证失败: {{ validateResult.error }}</p>
+    <div v-if="validateResult" :class="validateResult.ok ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40' : 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40'" class="rounded-lg border p-3">
+      <p v-if="validateResult.ok" class="text-sm text-green-700 dark:text-green-200">配置验证通过</p>
+      <p v-else class="text-sm text-red-700 dark:text-red-200">配置验证失败: {{ validateResult.error }}</p>
     </div>
-    <div v-if="reloadResult" class="rounded-lg border border-green-200 bg-green-50 p-3">
-      <p class="text-sm text-green-700">配置已重载<span v-if="reloadResult.fields?.length">，变更字段: {{ reloadResult.fields.join(', ') }}</span></p>
+    <div v-if="reloadResult" class="rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40 p-3">
+      <p class="text-sm text-green-700 dark:text-green-200">配置已重载<span v-if="reloadResult.fields?.length">，变更字段: {{ reloadResult.fields.join(', ') }}</span></p>
     </div>
-    <div v-if="config" class="rounded-xl border border-slate-200 bg-white p-6">
-      <h2 class="mb-4 text-sm font-semibold text-slate-800">有效配置</h2>
+    <div v-if="config" class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-6">
+      <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">有效配置</h2>
       <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400">{{ JSON.stringify(config, null, 2) }}</pre>
     </div>
-    <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
-      <h2 class="mb-4 text-sm font-semibold text-slate-800">错误码契约</h2>
-      <div v-if="!errorCodes.length" class="text-sm text-slate-400">暂无数据</div>
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-4 sm:p-6">
+      <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">错误码契约</h2>
+      <div v-if="!errorCodes.length" class="text-sm text-slate-400 dark:text-slate-500">暂无数据</div>
       <table v-else class="w-full text-sm">
         <thead>
-          <tr class="border-b border-slate-200 text-left">
-            <th class="pb-2 text-xs font-medium text-slate-500">Code</th>
-            <th class="pb-2 text-xs font-medium text-slate-500">HTTP</th>
-            <th class="pb-2 text-xs font-medium text-slate-500">gRPC</th>
-            <th class="pb-2 text-xs font-medium text-slate-500">说明</th>
+          <tr class="border-b border-slate-200 dark:border-slate-700 text-left">
+            <th class="pb-2 text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Code</th>
+            <th class="pb-2 text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">HTTP</th>
+            <th class="pb-2 text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">gRPC</th>
+            <th class="pb-2 text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">说明</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="ec in errorCodes" :key="ec.code" class="border-b border-slate-100 last:border-b-0">
-            <td class="py-2 font-mono text-xs text-slate-700">{{ ec.code }}</td>
-            <td class="py-2"><span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{{ ec.http_status }} {{ statusLabel(ec.http_status) }}</span></td>
-            <td class="py-2 font-mono text-xs text-slate-600">{{ ec.grpc_code }}</td>
-            <td class="py-2 text-xs text-slate-600">{{ ec.description }}</td>
+            <td class="py-2 font-mono text-xs text-slate-700 dark:text-slate-200">{{ ec.code }}</td>
+            <td class="py-2"><span class="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs text-slate-600 dark:text-slate-300">{{ ec.http_status }} {{ statusLabel(ec.http_status) }}</span></td>
+            <td class="py-2 font-mono text-xs text-slate-600 dark:text-slate-300">{{ ec.grpc_code }}</td>
+            <td class="py-2 text-xs text-slate-600 dark:text-slate-300">{{ ec.description }}</td>
           </tr>
         </tbody>
       </table>

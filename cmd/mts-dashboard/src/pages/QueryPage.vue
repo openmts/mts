@@ -159,12 +159,12 @@ const columnRows = computed(() => {
       </div>
     </div>
 
-    <p v-if="metaHint" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">{{ metaHint }}（来源: {{ metaSource }}）</p>
+    <p v-if="metaHint" class="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">{{ metaHint }}（来源: {{ metaSource }}）</p>
 
     <div v-if="showHistory" class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
       <div class="mb-2 flex justify-between text-sm font-semibold">
         <span>查询历史</span>
-        <button class="text-xs text-slate-500" @click="history.clear()">清空</button>
+        <button class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="history.clear()">清空</button>
       </div>
       <button
         v-for="h in historyPreview" :key="h.id"
@@ -172,52 +172,52 @@ const columnRows = computed(() => {
         @click="applyHistory(h.id)"
       >
         <span class="truncate">{{ h.form.database }}/{{ h.form.measurement || '*' }} · {{ h.mode }}</span>
-        <span class="text-slate-400">{{ new Date(h.at).toLocaleString() }}</span>
+        <span class="text-slate-400 dark:text-slate-500">{{ new Date(h.at).toLocaleString() }}</span>
       </button>
-      <p v-if="!historyPreview.length" class="text-xs text-slate-400">暂无历史</p>
+      <p v-if="!historyPreview.length" class="text-xs text-slate-400 dark:text-slate-500">暂无历史</p>
     </div>
 
     <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-3">
-      <label class="text-xs text-slate-500">Database
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Database
         <input v-model="queryForm.database" list="db-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="手动输入或选择" />
         <datalist id="db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
       </label>
-      <label class="text-xs text-slate-500">Measurement
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Measurement
         <input v-model="queryForm.measurement" list="meas-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :disabled="measurementsLoading" />
         <datalist id="meas-list"><option v-for="m in measurements" :key="m" :value="m" /></datalist>
       </label>
-      <label class="text-xs text-slate-500">RP
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">RP
         <input v-model="queryForm.retention_policy" list="rp-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
         <datalist id="rp-list">
           <option v-for="rp in (retentionPolicies.length ? retentionPolicies : ['autogen'])" :key="rp" :value="rp" />
         </datalist>
       </label>
-      <label class="text-xs text-slate-500">Start (ms)
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Start (ms)
         <div class="mt-1 flex gap-1">
           <input v-model="queryForm.start_time" class="w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
           <button class="rounded border px-2 text-xs" @click="fillNowMs('start')">now</button>
         </div>
       </label>
-      <label class="text-xs text-slate-500">End (ms)
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">End (ms)
         <div class="mt-1 flex gap-1">
           <input v-model="queryForm.end_time" class="w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
           <button class="rounded border px-2 text-xs" @click="fillNowMs('end')">now</button>
         </div>
       </label>
-      <label class="text-xs text-slate-500">Fields
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Fields
         <input v-model="queryForm.fields" placeholder="f1,f2" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
       </label>
-      <label class="text-xs text-slate-500">Tags (key=value,...)
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Tags (key=value,...)
         <input v-model="queryForm.tags" placeholder="host=s1,region=cn" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
       </label>
-      <label class="text-xs text-slate-500">Order
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Order
         <select v-model="queryForm.order" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
           <option value="">默认</option>
           <option value="asc">time asc</option>
           <option value="desc">time desc</option>
         </select>
       </label>
-      <label class="text-xs text-slate-500">Offset / Limit
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Offset / Limit
         <div class="mt-1 flex gap-1">
           <input v-model="queryForm.offset" placeholder="offset" class="w-1/2 rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
           <input v-model="queryForm.limit" placeholder="limit" class="w-1/2 rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
@@ -226,36 +226,36 @@ const columnRows = computed(() => {
     </div>
 
     <div class="flex flex-wrap gap-2">
-      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900" :disabled="loading" @click="runQuery">
+      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" :disabled="loading" @click="runQuery">
         <Search class="h-4 w-4" /> {{ loading ? t('loading') : t('query') }}
       </button>
       <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700" :disabled="!loading" @click="cancelQuery"><Square class="h-4 w-4" />取消</button>
-      <button class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700" @click="deleteOpen = true"><Trash2 class="h-4 w-4" />范围删除</button>
+      <button class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 dark:text-red-200" @click="deleteOpen = true"><Trash2 class="h-4 w-4" />范围删除</button>
       <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700" @click="copyResults">
         <component :is="copyState === 'ok' ? Check : Copy" class="h-4 w-4" />
         {{ streamMeta.previewOnly ? t('copyPreview') : t('copy') }}
       </button>
     </div>
 
-    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
-    <p v-if="deleteResult" class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">{{ deleteResult }}</p>
+    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
+    <p v-if="deleteResult" class="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60 p-3 text-sm">{{ deleteResult }}</p>
 
     <div v-if="queryStats" class="grid grid-cols-2 gap-2 sm:grid-cols-5">
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">扫描</p><p class="text-lg font-semibold">{{ queryStats.shards_scanned }}</p></div>
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">跳过</p><p class="text-lg font-semibold">{{ queryStats.shards_skipped }}</p></div>
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">读取</p><p class="text-lg font-semibold text-blue-600">{{ queryStats.samples_read }}</p></div>
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">返回</p><p class="text-lg font-semibold text-green-600">{{ queryStats.samples_returned }}</p></div>
-      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400">耗时</p><p class="text-lg font-semibold text-amber-600">{{ (queryStats.duration_nanos / 1e6).toFixed(1) }}ms</p></div>
+      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">扫描</p><p class="text-lg font-semibold">{{ queryStats.shards_scanned }}</p></div>
+      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">跳过</p><p class="text-lg font-semibold">{{ queryStats.shards_skipped }}</p></div>
+      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">读取</p><p class="text-lg font-semibold text-blue-600">{{ queryStats.samples_read }}</p></div>
+      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">返回</p><p class="text-lg font-semibold text-green-600">{{ queryStats.samples_returned }}</p></div>
+      <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">耗时</p><p class="text-lg font-semibold text-amber-600">{{ (queryStats.duration_nanos / 1e6).toFixed(1) }}ms</p></div>
     </div>
 
     <QueryChart v-if="showChart && rows.length" :rows="rows" />
 
     <div v-if="rows.length" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800"><span class="font-semibold">行结果</span><span class="text-xs text-slate-500">{{ rows.length }} 行</span></div>
+      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800"><span class="font-semibold">行结果</span><span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ rows.length }} 行</span></div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b text-left text-[11px] uppercase text-slate-500 dark:border-slate-800">
+            <tr class="border-b text-left text-[11px] uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:border-slate-800">
               <th class="px-4 py-2">时间</th><th class="px-4 py-2">Measurement</th><th class="px-4 py-2">Tags</th><th class="px-4 py-2">Fields</th>
             </tr>
           </thead>
@@ -263,7 +263,7 @@ const columnRows = computed(() => {
             <tr v-for="(row, idx) in rows" :key="idx" class="border-b dark:border-slate-800">
               <td class="px-4 py-2 font-mono text-xs">{{ formatTimestamp(row.timestamp) }}</td>
               <td class="px-4 py-2 text-xs">{{ row.measurement }}</td>
-              <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : '—' }}</td>
+              <td class="px-4 py-2 font-mono text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : '—' }}</td>
               <td class="px-4 py-2 font-mono text-xs">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any) }}</td>
             </tr>
           </tbody>
@@ -272,10 +272,10 @@ const columnRows = computed(() => {
     </div>
 
     <div v-if="columnRows.length" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800"><span class="font-semibold">列结果摘要</span><span class="text-xs text-slate-500">{{ columnRows.length }} series</span></div>
+      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800"><span class="font-semibold">列结果摘要</span><span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ columnRows.length }} series</span></div>
       <table class="w-full text-sm">
         <thead>
-          <tr class="border-b text-left text-[11px] uppercase text-slate-500 dark:border-slate-800">
+          <tr class="border-b text-left text-[11px] uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:border-slate-800">
             <th class="px-4 py-2">Measurement</th><th class="px-4 py-2">Field</th><th class="px-4 py-2">Tags</th><th class="px-4 py-2">Points</th>
           </tr>
         </thead>
@@ -283,7 +283,7 @@ const columnRows = computed(() => {
           <tr v-for="(c, i) in columnRows" :key="i" class="border-b dark:border-slate-800">
             <td class="px-4 py-2 text-xs">{{ c.measurement }}</td>
             <td class="px-4 py-2 text-xs">{{ c.field }}</td>
-            <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ c.tags }}</td>
+            <td class="px-4 py-2 font-mono text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ c.tags }}</td>
             <td class="px-4 py-2 text-xs">{{ c.points }}</td>
           </tr>
         </tbody>
@@ -293,9 +293,9 @@ const columnRows = computed(() => {
     <div v-if="rawOutput" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-sm dark:border-slate-800">
         <span class="font-semibold">原始输出 / EXPLAIN / 流式</span>
-        <div class="flex gap-2 text-xs text-slate-500">
+        <div class="flex gap-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
           <span v-if="streamMeta.lines">{{ streamMeta.lines }} 行</span>
-          <span v-if="streamMeta.previewOnly" class="text-amber-700">仅预览前 {{ streamMeta.previewLimit }}</span>
+          <span v-if="streamMeta.previewOnly" class="text-amber-700 dark:text-amber-200">仅预览前 {{ streamMeta.previewLimit }}</span>
         </div>
       </div>
       <pre class="max-h-96 overflow-auto bg-slate-950 p-4 font-mono text-xs text-emerald-400">{{ rawOutput }}</pre>
