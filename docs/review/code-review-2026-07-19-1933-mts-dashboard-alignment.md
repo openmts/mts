@@ -389,3 +389,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - NotFound / PermissionDenied EmptyState 收口：已完成
 - 文档：`docs/plans/dashboard-ux-p13-2026-07-19.md`
 - **仍不宣称可商用目标完成**：Playwright UI e2e、生产 HTTPS/HSTS/runbook、RBAC 矩阵可视化
+
+
+## P14 状态（2026-07-19）
+- 生产 Runbook：`docs/ops/dashboard-production-runbook.md`
+- RBAC 能力矩阵页 `/access` + `rbacMatrix.ts`：已完成
+- **仍不宣称可商用目标完成**：Playwright UI e2e、服务端强制改密、实时 grants 可视化

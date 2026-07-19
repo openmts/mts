@@ -8,6 +8,7 @@
 - 安全响应头默认集 + 前端契约（P12）
 - 服务侧可商用冒烟 + 生产清单纯数据（P13）
 - 404 / 权限拒绝 EmptyState 收口（P13）
+- 生产 Runbook + 权限能力矩阵可视化（P14）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -18,7 +19,7 @@
 | 健康与指标接入 | required | 部分（healthz/readyz 冒烟） |
 | 备份与快照演练 | recommended | 否 |
 | 登录-查询-写入-运维冒烟 | required | 是（服务侧 smoke） |
-| 权限矩阵复核 | recommended | 否 |
+| 权限矩阵复核 | recommended | 部分（矩阵页+单测；实时 grants 仍人工） |
 
 ## 建议上线前再确认
 1. 反向代理 HTTPS、HSTS（由边缘层配置）
@@ -37,3 +38,7 @@
 
 ## 服务侧自动化入口
 - `go test ./cmd/mts-server -run TestCommercialDashboardSmoke -count=1`
+
+## 文档入口
+- 生产 Runbook：`docs/ops/dashboard-production-runbook.md`
+- 权限矩阵页：Dashboard `/access`

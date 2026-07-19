@@ -55,6 +55,20 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
   },
   {
+    id: 'production-runbook',
+    severity: 'recommended',
+    title: '生产 Runbook',
+    detail: 'docs/ops/dashboard-production-runbook.md 覆盖拓扑、清单、代理与应急。',
+    automated: false,
+  },
+  {
+    id: 'rbac-matrix-ui',
+    severity: 'recommended',
+    title: '权限矩阵可视化',
+    detail: 'Dashboard /access 展示 admin/user 能力对照；实时 grants 仍需人工复核。',
+    automated: true,
+  },
+  {
     id: 'rbac-review',
     severity: 'recommended',
     title: '权限矩阵复核',
