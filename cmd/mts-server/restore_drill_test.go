@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -149,5 +150,63 @@ func TestAdminDoctorHTTP(t *testing.T) {
 		if c.Code == "auth_hardening" {
 			t.Fatalf("unexpected auth_hardening check: %#v", c)
 		}
+	}
+}
+
+func TestHTTPStorageDataSnapshotAndRestoreDrill(t *testing.T) {
+	runtime := openTestRuntimeWithAdminToken(t)
+	runtime.config.Backup.Dir = filepath.Join(t.TempDir(), "backups")
+	server := httptest.NewServer(runtime.httpHandler())
+	t.Cleanup(server.Close)
+	headers := map[string]string{"Authorization": "Bearer test-admin-token"}
+
+	// 写入一点数据，确保 data_dir 非空
+	point := mts.Point{
+		Measurement: "cpu",
+		Tags:        map[string]string{"host": "p21"},
+		Timestamp:   1_700_000_100_000_000_000,
+		Fields:      map[string]mts.FieldValue{"usage": mts.Float64Value(0.5)},
+	}
+	if err := runtime.engine.Write(context.Background(), []mts.Point{point}, mts.WriteOptions{}); err != nil {
+		t.Fatalf("Write error = %v", err)
+	}
+
+	var snap storageDataSnapshotResponse
+	postJSONWithHeaders(t, server.URL+routeAdminStorageDataSnapshot, map[string]any{"flush": true}, headers, http.StatusOK, &snap)
+	if !snap.OK || snap.Path == "" || snap.Files <= 0 {
+		t.Fatalf("data snapshot = %#v", snap)
+	}
+	if _, err := os.Stat(snap.Path); err != nil {
+		t.Fatalf("snapshot path missing: %v", err)
+	}
+
+	var listed storageDataSnapshotsResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStorageDataSnapshots, headers, http.StatusOK, &listed)
+	if len(listed.Snapshots) < 1 {
+		t.Fatalf("data snapshots empty: %#v", listed)
+	}
+
+	var drill storageRestoreDrillResponse
+	postJSONWithHeaders(t, server.URL+routeAdminStorageRestoreDrill, map[string]any{"source_path": snap.Path}, headers, http.StatusOK, &drill)
+	if !drill.OK || drill.Target == "" || drill.CheckFatals != 0 {
+		t.Fatalf("restore drill = %#v", drill)
+	}
+	if filepath.Clean(drill.Target) == filepath.Clean(runtime.config.DataDir) {
+		t.Fatal("restore target must not be live data_dir")
+	}
+	if _, err := os.Stat(drill.Target); err != nil {
+		t.Fatalf("restore target missing: %v", err)
+	}
+
+	// 未授权应 401
+	postJSON(t, server.URL+routeAdminStorageDataSnapshot, emptyRequest{}, http.StatusUnauthorized, &errorResponse{})
+	postJSON(t, server.URL+routeAdminStorageRestoreDrill, emptyRequest{}, http.StatusUnauthorized, &errorResponse{})
+}
+
+func TestStorageRestoreDrillRejectsOutsideBackup(t *testing.T) {
+	runtime := openTestRuntimeWithAdminToken(t)
+	runtime.config.Backup.Dir = filepath.Join(t.TempDir(), "backups")
+	if _, err := runtime.storageRestoreDrill(context.Background(), runtime.config.DataDir); err == nil {
+		t.Fatal("expected error for source outside backup")
 	}
 }

@@ -15,6 +15,7 @@
 - 备份演练引导 + Make/CI 入口（P18）
 - 旁路恢复自动化 + TLS/HSTS doctor（P19）
 - Admin doctor API + Overview 展示 + 边缘 HTTPS 验收清单（P20）
+- data_dir 快照/旁路恢复 API + Storage 编排（P21）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -23,7 +24,7 @@
 | 安全响应头 | required | 是（服务侧测试） |
 | 修改默认 admin 密码 | required | 是（must_change 门禁+单测） |
 | 健康与指标接入 | required | 是（冒烟 + Dashboard /observability/metrics 浏览） |
-| 备份与快照演练 | recommended | 是（清单 + data_dir restore drill 自动化） |
+| 备份与快照演练 | recommended | 是（清单 + data-snapshot/restore-drill API + 自动化） |
 | 登录-查询-写入-运维冒烟 | required | 是（服务侧 smoke + Playwright UI） |
 | 权限矩阵复核 | recommended | 是（矩阵页 + /access/grants 实时汇总） |
 
@@ -47,6 +48,7 @@
 - `cd cmd/mts-dashboard && npm run test:e2e`
 - `go test ./cmd/mts-server -run TestDataDirSidePathRestoreDrill -count=1`
 - `go test ./cmd/mts-server -run TestAdminDoctorHTTP -count=1`
+- `go test ./cmd/mts-server -run TestHTTPStorageDataSnapshotAndRestoreDrill -count=1`
 
 ## 文档入口
 - 生产 Runbook：`docs/ops/dashboard-production-runbook.md`

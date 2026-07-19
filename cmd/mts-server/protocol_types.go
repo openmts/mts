@@ -283,6 +283,45 @@ type storageSnapshotResponse struct {
 	Path string `json:"path"`
 }
 
+type storageDataSnapshotRequest struct {
+	Flush *bool `json:"flush,omitempty"`
+}
+
+type storageDataSnapshotResponse struct {
+	OK     bool   `json:"ok"`
+	Path   string `json:"path"`
+	Source string `json:"source"`
+	Files  int    `json:"files"`
+	Bytes  int64  `json:"bytes"`
+}
+
+type storageRestoreDrillRequest struct {
+	SourcePath string `json:"source_path,omitempty"`
+}
+
+type storageRestoreDrillResponse struct {
+	OK          bool   `json:"ok"`
+	Source      string `json:"source"`
+	Target      string `json:"target"`
+	Files       int    `json:"files"`
+	Bytes       int64  `json:"bytes"`
+	CheckIssues int    `json:"check_issues"`
+	CheckFatals int    `json:"check_fatals"`
+	CheckRoot   string `json:"check_root"`
+}
+
+type storageDataSnapshotInfo struct {
+	Name      string    `json:"name"`
+	Kind      string    `json:"kind"`
+	Path      string    `json:"path"`
+	SizeBytes int64     `json:"size_bytes"`
+	ModTime   time.Time `json:"mod_time"`
+}
+
+type storageDataSnapshotsResponse struct {
+	Snapshots []storageDataSnapshotInfo `json:"snapshots"`
+}
+
 type storageExportResponse struct {
 	Export storageExport `json:"export"`
 }

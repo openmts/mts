@@ -44,7 +44,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'backup-snapshot',
     severity: 'recommended',
     title: '备份与快照演练',
-    detail: 'Storage 演练清单 + TestDataDirSidePathRestoreDrill 数据目录旁路恢复；主机异地拷贝仍人工。',
+    detail: 'Storage 演练清单 + data-snapshot/restore-drill API + TestDataDirSidePathRestoreDrill；异地拷贝仍人工。',
     automated: true,
   },
   {
@@ -52,6 +52,13 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     severity: 'required',
     title: '核心冒烟：登录-查询-写入-运维',
     detail: 'TestCommercialDashboardSmoke + Playwright commercial-smoke 覆盖登录/改密/写/查/运维。',
+    automated: true,
+  },
+  {
+    id: 'data-restore-ui',
+    severity: 'recommended',
+    title: 'data_dir 旁路恢复编排',
+    detail: 'Storage 页 data-snapshot + restore-drill；目标仅限 backups 下旁路目录。',
     automated: true,
   },
   {

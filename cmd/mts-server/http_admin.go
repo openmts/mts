@@ -72,6 +72,62 @@ func (r *serverRuntime) handleStorageValidate(writer http.ResponseWriter, reques
 	writeHTTPJSON(writer, http.StatusOK, r.storageValidate())
 }
 
+func (r *serverRuntime) handleStorageDataSnapshot(writer http.ResponseWriter, request *http.Request) {
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
+		return
+	}
+	var req storageDataSnapshotRequest
+	if err := decodeOptionalHTTPJSON(request, &req); err != nil {
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+		return
+	}
+	flush := true
+	if req.Flush != nil {
+		flush = *req.Flush
+	}
+	resp, err := r.storageDataSnapshot(request.Context(), flush)
+	if err != nil {
+		writeAPIError(writer, newAPIError(errorCodeInternal, err.Error(), err))
+		return
+	}
+	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "storage_data_snapshot", Detail: resp.Path})
+	writeHTTPJSON(writer, http.StatusOK, resp)
+}
+
+func (r *serverRuntime) handleStorageRestoreDrill(writer http.ResponseWriter, request *http.Request) {
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
+		return
+	}
+	var req storageRestoreDrillRequest
+	if err := decodeOptionalHTTPJSON(request, &req); err != nil {
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+		return
+	}
+	resp, err := r.storageRestoreDrill(request.Context(), req.SourcePath)
+	if err != nil {
+		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+		return
+	}
+	r.audit.record(auditEvent{
+		UserName: r.auditUser(request),
+		Action:   "storage_restore_drill",
+		Detail:   resp.Source + " -> " + resp.Target,
+	})
+	writeHTTPJSON(writer, http.StatusOK, resp)
+}
+
+func (r *serverRuntime) handleListStorageDataSnapshots(writer http.ResponseWriter, request *http.Request) {
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
+		return
+	}
+	resp, err := r.listDataSnapshots()
+	if err != nil {
+		writeAPIError(writer, newAPIError(errorCodeInternal, err.Error(), err))
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, resp)
+}
+
 func (r *serverRuntime) handleStorageSnapshot(writer http.ResponseWriter, request *http.Request) {
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
 		return

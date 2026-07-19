@@ -65,6 +65,17 @@ func decodeHTTPJSON(request *http.Request, value any) error {
 	return httpjson.DecodeStrict(request, value)
 }
 
+// decodeOptionalHTTPJSON 允许空 body（使用零值）。
+func decodeOptionalHTTPJSON(request *http.Request, value any) error {
+	if request.Body == nil {
+		return nil
+	}
+	if request.ContentLength == 0 {
+		return nil
+	}
+	return decodeHTTPJSON(request, value)
+}
+
 func writeHTTPJSON(writer http.ResponseWriter, status int, value any) {
 	httpjson.Write(writer, status, value)
 }

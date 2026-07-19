@@ -126,5 +126,5 @@ server {
 
 1. Dashboard → 存储：执行验证 → 创建快照 → 导出配置。
 2. 将快照目录拷贝到旁路介质。
-3. 使用 `storagecheck.Snapshot/Restore` 做 data_dir 旁路拷贝（自动化覆盖：`TestDataDirSidePathRestoreDrill`），或在旁路 data_dir 启动临时 mts-server 做查询比对。
+3. Dashboard 存储页执行「创建 data_dir 快照」→「执行旁路恢复演练」（`POST /api/v1/admin/storage/data-snapshot` + `restore-drill`），或 CLI/测试 `TestDataDirSidePathRestoreDrill`；也可旁路 data_dir 启动临时 mts-server 做查询比对。
 4. 在存储页备份演练清单勾选主机侧步骤，保留演练记录。

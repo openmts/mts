@@ -9,7 +9,7 @@ import {
 
 test('backup drill has core required steps', () => {
   const ids = BACKUP_DRILL_STEPS.map((s) => s.id)
-  for (const need of ['validate', 'snapshot', 'copy-offbox', 'restore-side']) {
+  for (const need of ['validate', 'snapshot', 'data-snapshot', 'copy-offbox', 'restore-side']) {
     assert.ok(ids.includes(need), need)
   }
   assert.ok(requiredDrillSteps().length >= 3)

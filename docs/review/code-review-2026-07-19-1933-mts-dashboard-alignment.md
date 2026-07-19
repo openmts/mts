@@ -430,3 +430,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - `GET /api/v1/admin/doctor` 结构化检查 + Overview 展示
 - 边缘 HTTPS/HSTS 人工验收清单（Storage + edgeHttpsAcceptance）
 - **仍不宣称可商用目标完成**：生产边缘证书人工验收执行、跨主机备份编排、UI 一键旁路恢复
+
+
+## P21 状态（2026-07-20）
+- `POST /api/v1/admin/storage/data-snapshot` / `restore-drill` / `GET data-snapshots`
+- Storage 页一键旁路恢复编排 + 演练清单联动
+- **仍不宣称可商用目标完成**：生产边缘证书人工验收、跨主机定时备份编排
