@@ -508,3 +508,8 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 降采样 repair 区间修复 UI（确认对话框 + start/end unix）
 - 降采样页文案 i18n 收口
 - 状态：已实现；仍不宣称可商用完成
+
+## P34（2026-07-20）
+- 降采样 run-range/repair/dry-run 统一区间对话框
+- statuses 明细；downsampleRange 纯函数与契约测试
+- 状态：已实现；仍不宣称可商用完成

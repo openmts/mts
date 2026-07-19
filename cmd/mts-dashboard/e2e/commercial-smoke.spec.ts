@@ -102,11 +102,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/databases')
   await expect(page.getByTestId('databases-filter')).toBeVisible()
 
-  // 14) 降采样筛选/批量入口
+  // 14) 降采样筛选/批量/状态/区间操作入口
   await page.goto('/downsample')
   await expect(page.getByTestId('downsample-filter-bar')).toBeVisible()
   await expect(page.getByTestId('downsample-filter')).toBeVisible()
   await expect(page.getByTestId('downsample-batch-enable')).toBeVisible()
+  await expect(page.getByTestId('downsample-status-panel')).toBeVisible()
 
   // 15) Overview 就绪评分入口
   await page.goto('/')

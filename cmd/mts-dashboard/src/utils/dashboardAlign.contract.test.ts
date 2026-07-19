@@ -66,3 +66,15 @@ test('list databases payload prefers databases field', () => {
   const names = [...(payload.databases ?? payload.measurements ?? [])].sort()
   assert.deepEqual(names, ['a', 'b'])
 })
+
+test('downsample range body uses start_unix/end_unix and advance_watermark', async () => {
+  const { buildDownsampleRangeBody, rangeActionPath } = await import('./downsampleRange.ts')
+  const body = buildDownsampleRangeBody({ startUnix: 10, endUnix: 20, advanceWatermark: true })
+  const raw = JSON.stringify(body)
+  assert.match(raw, /"start_unix":10/)
+  assert.match(raw, /"end_unix":20/)
+  assert.match(raw, /"advance_watermark":true/)
+  assert.equal(rangeActionPath('p', 'run-range').endsWith('/run-range'), true)
+  assert.equal(rangeActionPath('p', 'repair').endsWith('/repair'), true)
+  assert.equal(rangeActionPath('p', 'dry-run').endsWith('/dry-run'), true)
+})
