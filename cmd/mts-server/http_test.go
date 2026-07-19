@@ -580,6 +580,13 @@ func TestHTTPAdminAuth(t *testing.T) {
 	}
 }
 
+func clearTestMustChangePassword(t *testing.T, runtime *serverRuntime) {
+	t.Helper()
+	if err := runtime.clearMustChangePassword(context.Background(), defaultSystemAdminName); err != nil {
+		t.Fatalf("clearTestMustChangePassword error = %v", err)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()
@@ -596,6 +603,7 @@ func openTestRuntime(t *testing.T) *serverRuntime {
 			t.Fatalf("shutdown runtime error = %v", err)
 		}
 	})
+	clearTestMustChangePassword(t, runtime)
 	return runtime
 }
 
@@ -616,6 +624,7 @@ func openTestRuntimeWithAdminToken(t *testing.T) *serverRuntime {
 			t.Fatalf("shutdown runtime error = %v", err)
 		}
 	})
+	clearTestMustChangePassword(t, runtime)
 	return runtime
 }
 
@@ -636,6 +645,7 @@ func openTestRuntimeRequireUser(t *testing.T) *serverRuntime {
 			t.Fatalf("shutdown runtime error = %v", err)
 		}
 	})
+	clearTestMustChangePassword(t, runtime)
 	return runtime
 }
 

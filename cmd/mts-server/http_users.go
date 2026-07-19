@@ -141,6 +141,10 @@ func (r *serverRuntime) handleUserPassword(writer http.ResponseWriter, request *
 		writeAPIError(writer, err)
 		return
 	}
+	if err := r.clearMustChangePassword(request.Context(), userName); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
 	r.audit.record(auditEvent{UserName: userName, Action: "set_password"})
 	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 }

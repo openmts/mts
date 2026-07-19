@@ -283,7 +283,11 @@ func grpcLogin(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err != nil {
 		return nil, newAPIError(errorCodeUnauthenticated, "invalid credentials", err)
 	}
-	return authTokenResponse{Token: token}, nil
+	mustChange := false
+	if user, ok, getErr := r.engine.GetUser(ctx, request.UserName); getErr == nil && ok {
+		mustChange = userMustChangePassword(user)
+	}
+	return authTokenResponse{Token: token, MustChangePassword: mustChange}, nil
 }
 
 func grpcLogout(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -316,6 +320,9 @@ func grpcChangePassword(r *serverRuntime, ctx context.Context, req any) (any, er
 	if err := r.engine.ChangePassword(ctx, request.UserName, request.OldPassword, request.NewPassword); err != nil {
 		return nil, newAPIError(errorCodeUnauthenticated, "invalid credentials", err)
 	}
+	if err := r.clearMustChangePassword(ctx, principal.UserName); err != nil {
+		return nil, err
+	}
 	return okResponse{OK: true}, nil
 }
 
@@ -324,7 +331,13 @@ func grpcSetUserPassword(r *serverRuntime, ctx context.Context, req any) (any, e
 		return nil, err
 	}
 	request := req.(*setUserPasswordRequest)
-	return okResponse{OK: true}, r.engine.SetPassword(ctx, request.UserName, request.Password)
+	if err := r.engine.SetPassword(ctx, request.UserName, request.Password); err != nil {
+		return nil, err
+	}
+	if err := r.clearMustChangePassword(ctx, request.UserName); err != nil {
+		return nil, err
+	}
+	return okResponse{OK: true}, nil
 }
 
 func grpcCreateUser(r *serverRuntime, ctx context.Context, req any) (any, error) {

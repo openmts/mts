@@ -119,7 +119,8 @@ type loginRequest struct {
 }
 
 type authTokenResponse struct {
-	Token mts.AuthToken `json:"token"`
+	Token              mts.AuthToken `json:"token"`
+	MustChangePassword bool          `json:"must_change_password,omitempty"`
 }
 
 type logoutRequest struct {

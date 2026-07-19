@@ -8,3 +8,8 @@ test('loginReasonMessage zh/en', () => {
   assert.equal(loginReasonMessage('', 'zh'), '')
   assert.equal(loginReasonMessage(undefined, 'zh'), '')
 })
+
+test('loginReasonMessage password_changed', () => {
+  assert.ok(loginReasonMessage('password_changed', 'zh').includes('新密码'))
+  assert.ok(loginReasonMessage('password_changed', 'en').toLowerCase().includes('password'))
+})

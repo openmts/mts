@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,16 @@ import (
 // SPA 可达 + 安全头 + 登录 + 写/查 API + 管理库列表。
 func TestCommercialDashboardSmoke(t *testing.T) {
 	runtime := openTestRuntime(t)
+	// 显式验证强制改密闭环（openTestRuntime 默认清掉该标记以免干扰其它单测）。
+	ctx := context.Background()
+	user, ok, err := runtime.engine.GetUser(ctx, "admin")
+	if err != nil || !ok {
+		t.Fatalf("GetUser(admin) ok=%v err=%v", ok, err)
+	}
+	user.Metadata = withMustChangePassword(user.Metadata, true)
+	if err := runtime.engine.UpdateUser(ctx, user); err != nil {
+		t.Fatalf("UpdateUser must_change error = %v", err)
+	}
 	server := httptest.NewServer(runtime.httpHandler())
 	t.Cleanup(server.Close)
 
@@ -54,8 +65,22 @@ func TestCommercialDashboardSmoke(t *testing.T) {
 		}
 	}
 
-	// 3) login with bootstrapped admin
-	token := loginHTTPUser(t, server.URL, "admin", "admin")
+	// 3) login with bootstrapped admin，并完成强制改密
+	var login authTokenResponse
+	postJSONWithHeaders(t, server.URL+"/api/v1/auth/login", loginRequest{
+		UserName: "admin",
+		Password: "admin",
+	}, nil, http.StatusOK, &login)
+	if !login.MustChangePassword {
+		t.Fatal("bootstrap admin should require password change")
+	}
+	authBoot := map[string]string{"Authorization": "Bearer " + login.Token.Token}
+	postJSONWithHeaders(t, server.URL+"/api/v1/auth/password", changePasswordRequest{
+		UserName:    "admin",
+		OldPassword: "admin",
+		NewPassword: "admin-commercial",
+	}, authBoot, http.StatusOK, &okResponse{})
+	token := loginHTTPUser(t, server.URL, "admin", "admin-commercial")
 	auth := map[string]string{"Authorization": "Bearer " + token}
 
 	// 4) write + query (sync)

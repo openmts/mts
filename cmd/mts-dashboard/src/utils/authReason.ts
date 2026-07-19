@@ -10,6 +10,8 @@ export function loginReasonMessage(reason: unknown, locale: 'zh' | 'en' = 'zh'):
         return 'Signed out in another tab. Please sign in again.'
       case 'auth':
         return 'Authentication required.'
+      case 'password_changed':
+        return 'Password updated. Please sign in with the new password.'
       default:
         return ''
     }
@@ -21,6 +23,8 @@ export function loginReasonMessage(reason: unknown, locale: 'zh' | 'en' = 'zh'):
       return '会话已在其他标签页退出，请重新登录。'
     case 'auth':
       return '请先登录后继续访问。'
+    case 'password_changed':
+      return '密码已更新，请使用新密码重新登录。'
     default:
       return ''
   }

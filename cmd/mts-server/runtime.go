@@ -98,7 +98,12 @@ func bootstrapDefaultAdmin(ctx context.Context, cfg config, engine *mts.Engine) 
 		return err
 	}
 	if !ok {
-		if err := engine.CreateUser(ctx, mts.User{Name: defaultSystemAdminName, Role: mts.UserRoleAdmin}); err != nil {
+		user := mts.User{
+			Name:     defaultSystemAdminName,
+			Role:     mts.UserRoleAdmin,
+			Metadata: withMustChangePassword(nil, true),
+		}
+		if err := engine.CreateUser(ctx, user); err != nil {
 			return err
 		}
 		return engine.SetPassword(ctx, defaultSystemAdminName, defaultSystemAdminPassword)

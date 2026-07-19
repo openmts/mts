@@ -8,7 +8,7 @@ import { loginReasonMessage } from '@/utils/authReason'
 import { Server } from 'lucide-vue-next'
 
 const router = useRouter()
-const { login } = useAuth()
+const { login, mustChangePassword } = useAuth()
 const { t, locale } = useI18n()
 
 const username = ref('admin')
@@ -31,6 +31,10 @@ async function handleLogin() {
     if (err) {
       error.value = err
     } else {
+      if (mustChangePassword.value) {
+        await router.push({ name: 'ForceChangePassword' })
+        return
+      }
       const redirect = sanitizeRedirect(router.currentRoute.value.query.redirect) || '/'
       await router.push(redirect)
     }

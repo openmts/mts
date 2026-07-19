@@ -395,3 +395,8 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 生产 Runbook：`docs/ops/dashboard-production-runbook.md`
 - RBAC 能力矩阵页 `/access` + `rbacMatrix.ts`：已完成
 - **仍不宣称可商用目标完成**：Playwright UI e2e、服务端强制改密、实时 grants 可视化
+
+
+## P15 状态（2026-07-19）
+- 强制改密：`must_change_password` metadata + API 门禁 + 前端强制改密页
+- **仍不宣称可商用目标完成**：Playwright UI e2e、实时 grants 拉取可视化

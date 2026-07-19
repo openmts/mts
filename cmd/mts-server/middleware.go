@@ -59,6 +59,15 @@ func (r *serverRuntime) wrapHTTP(handler http.Handler) http.Handler {
 			return
 		}
 		defer releaseHTTP(httpSem)
+		// 默认 bootstrap 密码强制改密：对已认证用户拦截业务 API。
+		if strings.HasPrefix(request.URL.Path, "/api/") {
+			if userName, authErr := r.authenticateDataUser(httpCredentialSource{request: request}); authErr == nil {
+				if gateErr := r.enforcePasswordChangeGate(request.Context(), userName, request.URL.Path); gateErr != nil {
+					writeAPIError(writer, gateErr)
+					return
+				}
+			}
+		}
 		start := time.Now()
 		recorder := &statusRecorder{ResponseWriter: writer, status: http.StatusOK}
 		handler.ServeHTTP(recorder, request)

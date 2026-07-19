@@ -3,6 +3,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 const TOKEN_KEY = 'mts_bearer_token'
 const USER_KEY = 'mts_user_name'
 const ROLE_KEY = 'mts_user_role'
+const MUST_CHANGE_KEY = 'mts_must_change_password'
 const EXPIRES_KEY = 'mts_token_expires_at'
 const ADMIN_TOKEN_KEY = 'mts_admin_token'
 const DATA_TOKEN_KEY = 'mts_data_token'
@@ -38,6 +39,12 @@ function storageSet(key: string, value: string) {
   try {
     if (value) localStorage.setItem(key, value)
     else localStorage.removeItem(key)
+  } catch { /* 非关键 */ }
+}
+
+function storageRemove(key: string) {
+  try {
+    localStorage.removeItem(key)
   } catch { /* 非关键 */ }
 }
 
@@ -109,6 +116,15 @@ export function setCurrentUserRole(role: string) {
   storageSet(ROLE_KEY, role)
 }
 
+export function setMustChangePassword(required: boolean) {
+  if (required) storageSet(MUST_CHANGE_KEY, '1')
+  else storageRemove(MUST_CHANGE_KEY)
+}
+
+export function getMustChangePassword(): boolean {
+  return storageGet(MUST_CHANGE_KEY) === '1'
+}
+
 export function getCurrentUserRole(): string {
   return currentUserRole
 }
@@ -140,6 +156,7 @@ export function clearAuth() {
   storageSet(USER_KEY, '')
   storageSet(ROLE_KEY, '')
   storageSet(EXPIRES_KEY, '')
+  storageRemove(MUST_CHANGE_KEY)
 }
 
 export function resetAuthRedirect() {
@@ -378,12 +395,21 @@ export interface LoginResponse {
     role?: string
     expires_at: string
   }
+  must_change_password?: boolean
 }
 
 export async function apiLogin(userName: string, password: string): Promise<LoginResponse> {
   return apiPost<LoginResponse>('/api/v1/auth/login', {
     user_name: userName,
     password,
+  })
+}
+
+export async function apiChangePassword(userName: string, oldPassword: string, newPassword: string): Promise<void> {
+  await apiPost('/api/v1/auth/password', {
+    user_name: userName,
+    old_password: oldPassword,
+    new_password: newPassword,
   })
 }
 

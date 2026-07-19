@@ -30,8 +30,8 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'change-default-admin',
     severity: 'required',
     title: '修改默认 admin 密码',
-    detail: '生产环境禁止长期使用 bootstrap 默认密码 admin/admin。',
-    automated: false,
+    detail: 'bootstrap 默认密码登录后 must_change_password 拦截业务 API，直至改密完成。',
+    automated: true,
   },
   {
     id: 'health-ready-metrics',

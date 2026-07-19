@@ -12,6 +12,12 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/force-change-password',
+      name: 'ForceChangePassword',
+      component: () => import('@/pages/ForceChangePasswordPage.vue'),
+      meta: { public: true, forceChange: true },
+    },
+    {
       path: '/',
       component: () => import('@/layouts/DashboardLayout.vue'),
       children: [
@@ -38,16 +44,31 @@ export { sanitizeRedirect } from '@/utils/redirect'
 
 router.beforeEach((to) => {
   setRouteLoading(true)
-  const { ensureSession, isAuthenticated, isAdmin } = useAuth()
+  const { ensureSession, isAuthenticated, isAdmin, mustChangePassword } = useAuth()
   const ok = ensureSession()
 
   if (to.name === 'Login') {
-    if (ok && isAuthenticated.value) return { name: 'Overview' }
+    if (ok && isAuthenticated.value) {
+      if (mustChangePassword.value) return { name: 'ForceChangePassword' }
+      return { name: 'Overview' }
+    }
+    return true
+  }
+
+  if (to.name === 'ForceChangePassword') {
+    if (!ok || !isAuthenticated.value) {
+      return { name: 'Login', query: { reason: 'auth' } }
+    }
+    if (!mustChangePassword.value) return { name: 'Overview' }
     return true
   }
 
   if (!ok || !isAuthenticated.value) {
     return { name: 'Login', query: { redirect: to.fullPath, reason: 'auth' } }
+  }
+
+  if (mustChangePassword.value) {
+    return { name: 'ForceChangePassword' }
   }
 
   if (to.meta.admin && !isAdmin.value) {

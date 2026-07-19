@@ -45,7 +45,7 @@ make test && make e2e && make lint
 ## 3. 首次登录与账号
 
 1. 服务启动且密码认证开启时，会 bootstrap 默认管理员 `admin`（默认密码 `admin`，以配置为准）。
-2. 首次登录后立即修改密码：Dashboard 用户页，或 `POST /api/v1/auth/password`。
+2. 首次登录若仍为 bootstrap 默认密码，服务端返回 `must_change_password=true` 并拦截业务 API；Dashboard 强制改密页引导完成后需重新登录。
 3. 为业务账号创建 `user` 角色，并按库授予 `read` / `write`。
 4. 在「权限矩阵」页对照 admin/user 能力，用非 admin 账号验证查询/写入降级路径。
 

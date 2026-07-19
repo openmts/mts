@@ -37,8 +37,12 @@ func (r *serverRuntime) handleLogin(writer http.ResponseWriter, request *http.Re
 		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "invalid credentials", err))
 		return
 	}
+	mustChange := false
+	if user, ok, getErr := r.engine.GetUser(request.Context(), req.UserName); getErr == nil && ok {
+		mustChange = userMustChangePassword(user)
+	}
 	r.audit.record(auditEvent{UserName: req.UserName, Action: "login"})
-	writeHTTPJSON(writer, http.StatusOK, authTokenResponse{Token: token})
+	writeHTTPJSON(writer, http.StatusOK, authTokenResponse{Token: token, MustChangePassword: mustChange})
 }
 
 func (r *serverRuntime) handleLogout(writer http.ResponseWriter, request *http.Request) {
@@ -101,6 +105,10 @@ func (r *serverRuntime) handleChangePassword(writer http.ResponseWriter, request
 		req.NewPassword,
 	); err != nil {
 		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "invalid credentials", err))
+		return
+	}
+	if err := r.clearMustChangePassword(request.Context(), principal.UserName); err != nil {
+		writeAPIError(writer, err)
 		return
 	}
 	r.audit.record(auditEvent{UserName: principal.UserName, Action: "change_password"})
