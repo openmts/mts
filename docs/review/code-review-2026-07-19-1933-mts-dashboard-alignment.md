@@ -450,3 +450,11 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - `make backup-script-check` 语法与 dry-run 自检
 - 就绪中心快捷动作跳转 Storage 锚点 + 脚本提示
 - **仍不宣称可商用目标完成**：真实边缘证书验收执行、目标环境 cron/systemd 安装与演练归档
+
+
+## P24 状态（2026-07-20）
+- 就绪评分纳入 doctor warn / TLS / 加载失败（`readinessScore.ts`）
+- Overview 管理员入口跳转 `/ops/readiness`
+- CI `scripts/ci_gate.sh` 纳入 `mts-backup-selfcheck`
+- 备份文档补充 login 取 Token 示例
+- **仍不宣称可商用目标完成**：真实边缘证书验收执行、目标环境 cron/systemd 安装与演练归档

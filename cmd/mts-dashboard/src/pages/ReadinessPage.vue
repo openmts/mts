@@ -19,6 +19,7 @@ import {
   setReadinessFlag,
   type ReadinessState,
 } from '@/utils/readinessState'
+import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import { ClipboardCheck, ExternalLink, RefreshCw, ShieldCheck, HardDrive, FileCode2 } from 'lucide-vue-next'
 
 interface DoctorCheck { level: string; code: string; message: string }
@@ -53,16 +54,29 @@ const scheduleStats = computed(() => backupScheduleProgress(scheduleDone.value))
 const doctorWarns = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'warn'))
 const doctorOKs = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'ok'))
 
-const readinessScore = computed(() => {
-  const parts = [
-    requiredItems.value.length === 0 ? 1 : requiredDoneCount.value / requiredItems.value.length,
-    edgeStats.value.requiredTotal === 0 ? 1 : edgeStats.value.requiredDone / edgeStats.value.requiredTotal,
+const scoreBreakdown = computed(() => {
+  const requiredRatio =
+    requiredItems.value.length === 0 ? 1 : requiredDoneCount.value / requiredItems.value.length
+  const edgeRatio =
+    edgeStats.value.requiredTotal === 0
+      ? 1
+      : edgeStats.value.requiredDone / edgeStats.value.requiredTotal
+  const scheduleRatio =
     scheduleStats.value.requiredTotal === 0
       ? 1
-      : scheduleStats.value.requiredDone / scheduleStats.value.requiredTotal,
-  ]
-  return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 100)
+      : scheduleStats.value.requiredDone / scheduleStats.value.requiredTotal
+  return computeReadinessScore({
+    requiredChecklistRatio: requiredRatio,
+    edgeHttpsRequiredRatio: edgeRatio,
+    backupScheduleRequiredRatio: scheduleRatio,
+    doctorLoaded: doctor.value != null && !doctorError.value,
+    doctorOk: doctor.value?.ok,
+    doctorWarnCount: doctorWarns.value.length,
+    httpTlsEnabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
+  })
 })
+const readinessScore = computed(() => scoreBreakdown.value.total)
+const scoreLevel = computed(() => readinessLevel(readinessScore.value))
 
 function toggle(
   section: 'production' | 'edgeHttps' | 'backupSchedule',
@@ -142,8 +156,18 @@ onMounted(() => {
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="mts-card p-4">
         <p class="text-xs mts-muted">{{ t('readinessScore') }}</p>
-        <p class="mt-1 text-3xl font-semibold" :class="readinessScore >= 80 ? 'text-green-600' : readinessScore >= 50 ? 'text-amber-600' : 'text-red-600'">
+        <p class="mt-1 text-3xl font-semibold" :class="scoreLevel === 'good' ? 'text-green-600' : scoreLevel === 'warn' ? 'text-amber-600' : 'text-red-600'">
           {{ readinessScore }}%
+        </p>
+        <p class="mt-2 text-[11px] mts-muted">
+          {{ t('readinessScoreBreakdown') }}:
+          {{ t('readinessRequiredChecklist') }} {{ scoreBreakdown.checklist }}% ·
+          {{ t('readinessEdgeHttps') }} {{ scoreBreakdown.edgeHttps }}% ·
+          {{ t('readinessBackupSchedule') }} {{ scoreBreakdown.backupSchedule }}% ·
+          Doctor {{ scoreBreakdown.doctor }}%
+        </p>
+        <p v-if="scoreBreakdown.reasons.length" class="mt-1 text-[11px] text-amber-700 dark:text-amber-200">
+          {{ t('readinessScoreReasons') }}: {{ scoreBreakdown.reasons.join(', ') }}
         </p>
       </div>
       <div class="mts-card p-4">

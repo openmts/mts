@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
-import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck } from 'lucide-vue-next'
+import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck } from 'lucide-vue-next'
 
 interface HealthResponse extends HealthSnapshot {}
 interface StorageMemorySnapshot {
@@ -24,6 +25,7 @@ interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[] }
 
 const { isAdmin } = useAuth()
+const router = useRouter()
 const { t } = useI18n()
 const healthy = ref<boolean | null>(null)
 const ready = ref<boolean | null>(null)
@@ -139,6 +141,10 @@ function toggleAutoRefresh() {
   }
 }
 
+function goReadiness() {
+  void router.push('/ops/readiness')
+}
+
 onMounted(() => { void loadOverview() })
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer)
@@ -159,6 +165,15 @@ const showAdminPanels = computed(() => isAdmin.value)
         <button class="mts-btn" @click="toggleAutoRefresh">
           <RefreshCw class="h-3.5 w-3.5" :class="autoRefresh ? 'animate-spin' : ''" />
           {{ autoRefresh ? t('autoRefreshing') : t('autoRefresh') }}
+        </button>
+        <button
+          v-if="showAdminPanels"
+          type="button"
+          class="mts-btn"
+          @click="goReadiness"
+        >
+          <ClipboardCheck class="h-3.5 w-3.5" />
+          {{ t('readiness') }}
         </button>
         <button class="mts-btn-primary" :disabled="loading" @click="loadOverview">
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}

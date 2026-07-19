@@ -65,7 +65,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'readiness-center',
     severity: 'recommended',
     title: '可商用就绪中心',
-    detail: 'Dashboard /ops/readiness 聚合清单、HTTPS 验收、备份编排与 doctor。',
+    detail: 'Dashboard /ops/readiness 聚合清单、HTTPS 验收、备份编排与 doctor；评分含 doctor warn/TLS。',
     automated: true,
   },
   {

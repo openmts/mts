@@ -9,6 +9,20 @@
 ## 脚本
 仓库入口：`scripts/mts-backup.sh`
 
+### 获取管理员 Token（示例）
+```bash
+# 用户登录获取 bearer token（若启用密码认证）
+TOKEN="$(curl -sS -X POST "$MTS_BASE_URL/api/v1/auth/login" \
+  -H 'Content-Type: application/json' \
+  -d '{"user_name":"admin","password":"***","ttl_seconds":3600}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",{}).get("token",""))')"
+export MTS_ADMIN_TOKEN="$TOKEN"
+
+# 或直接使用配置中的 admin_token：
+# export MTS_ADMIN_TOKEN='static-admin-token'
+```
+
+
 ```bash
 export MTS_BASE_URL='https://mts.example.com'
 export MTS_ADMIN_TOKEN='***'

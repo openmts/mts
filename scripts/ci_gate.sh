@@ -24,6 +24,9 @@ timeout 600s "${go_cmd[@]}" test ./... -count=1 -timeout 10m
 echo "== lint =="
 timeout 720s golangci-lint run ./...
 
+echo "== backup script selfcheck =="
+timeout 60s bash scripts/mts-backup-selfcheck.sh
+
 echo "== race (core storage) =="
 timeout 900s "${go_cmd[@]}" test -race -count=1 -timeout 15m \
   ./internal/engine ./internal/memtable ./internal/sstable ./internal/wal ./internal/catalog ./internal/runtime

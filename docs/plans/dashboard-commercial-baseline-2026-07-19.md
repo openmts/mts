@@ -18,6 +18,7 @@
 - data_dir 快照/旁路恢复 API + Storage 编排（P21）
 - 可商用就绪中心 + 备份编排指引 + 清单持久化（P22）
 - 备份编排脚本 + 就绪快捷动作 + 脚本自检（P23）
+- 就绪评分含 doctor + Overview 入口 + CI 备份自检（P24）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
