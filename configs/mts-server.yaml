@@ -94,6 +94,15 @@ engine:
   # flush_sync 为 true 时刷写路径更偏向持久化安全，代价是写入延迟可能升高。
   flush_sync: false
 
+  # max_concurrent_compaction 跨 shard 并行 compact 上限；0 使用引擎默认。
+  max_concurrent_compaction: 0
+  # max_concurrent_downsample 后台降采样并发上限；0 使用引擎默认。
+  max_concurrent_downsample: 0
+  # memtable_disorder_flush_ratio 乱序占比阈值；0 关闭。
+  memtable_disorder_flush_ratio: 0
+  # memtable_disorder_flush_min_samples 乱序降载最小样本数；0 使用引擎默认。
+  memtable_disorder_flush_min_samples: 0
+
   compression:
     # enabled 控制 SSTable 数据页压缩。
     enabled: true
@@ -101,6 +110,12 @@ engine:
     algorithm: snappy
     # min_page_values 控制达到多少值后才压缩数据页，用于避免小页压缩收益过低。
     min_page_values: 128
+    # value_page_samples 控制 values 页样本数；更大通常提高压缩率。
+    value_page_samples: 0
+    # omit_write_seq 省略 per-sample writeSeq（POC 推荐 true 以提高压缩率）。
+    omit_write_seq: false
+    # zstd_level: fastest|default|better|best（algorithm=zstd 时生效）。
+    zstd_level: default
 
   compaction:
     # enabled 控制后台/手动 compaction 能力。
@@ -111,6 +126,50 @@ engine:
     level0_part_limit: 4
     # max_cascade_steps 控制一次 compaction 级联推进的最大步数。
     max_cascade_steps: 8
+    # max_concurrent 覆盖跨 shard 并行 compact 配额；0 回退 max_concurrent_compaction/默认。
+    max_concurrent: 0
+
+  wal:
+    # sync 控制 WAL 同步落盘策略。
+    sync: false
+    segment_bytes: 0
+    batch_records: 0
+    batch_bytes: 0
+    batch_interval: 0s
+
+  query_page_cache:
+    # limit: 0=默认(256)，-1=关闭。
+    limit: 0
+    # max_samples: 单页超过该样本数不缓存；0=默认。
+    max_samples: 0
+
+  query_block_cache:
+    # limit: 0=默认(512)，-1=关闭。
+    limit: 0
+    # max_bytes: 0=默认 64MiB。
+    max_bytes: 0
+
+  query_protection:
+    # 未显式设置 budget/limit 时的默认保护；0 表示不注入该项。
+    default_max_samples: 0
+    default_limit: 0
+
+  cardinality:
+    # 高基数硬限制；0 表示不限制。
+    max_series: 0
+    max_fields: 0
+    max_tag_values_per_key: 0
+
+  storage_memory:
+    # 存储层内存预算；0 表示不限制。
+    soft_sample_limit: 0
+    hard_sample_limit: 0
+    soft_bytes_limit: 0
+    hard_bytes_limit: 0
+    query_bytes_limit: 0
+    flush_bytes_limit: 0
+    compaction_bytes_limit: 0
+    compression_bytes_limit: 0
 
 # shutdown_timeout 控制收到 SIGINT/SIGTERM 后等待 HTTP/gRPC/Engine 优雅关闭的最长时间。
 shutdown_timeout: 15s

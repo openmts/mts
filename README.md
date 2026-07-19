@@ -226,6 +226,8 @@ curl -X POST http://127.0.0.1:8086/api/v1/data/query/explain -d @query.json
 curl -X POST http://127.0.0.1:8086/api/v1/data/delete -d @delete.json
 curl -X POST http://127.0.0.1:8086/api/v1/admin/flush
 curl http://127.0.0.1:8086/api/v1/admin/stats/maintenance
+# gRPC 管理面补充：ListDatabases / AdminHealth；DropDownsamplePolicy 支持 cleanup options
+# engine 配置可透出 query_*_cache、compression.omit_write_seq/value_page_samples、storage_memory 等
 curl -X POST http://127.0.0.1:8086/api/v1/admin/compact
 curl http://127.0.0.1:8086/api/v1/admin/api-spec
 curl -X POST http://127.0.0.1:8086/api/v1/admin/storage/validate

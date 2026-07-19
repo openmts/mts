@@ -385,6 +385,15 @@ func operationCatalog() []operation {
 			GRPCFn:      grpcCreateDatabase,
 		},
 		{
+			Name:        "list_databases",
+			Namespace:   "admin",
+			Description: "list databases",
+			Auth:        authAdmin,
+			GRPCMethod:  grpcMethodListDatabases,
+			GRPCRequest: &emptyRequest{},
+			GRPCFn:      grpcListDatabases,
+		},
+		{
 			Name:        "drop_database",
 			Namespace:   "admin",
 			Description: "drop database",
@@ -586,6 +595,9 @@ func operationCatalog() []operation {
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminHealth},
 			HTTPHandler: (*serverRuntime).handleAdminHealth,
+			GRPCMethod:  grpcMethodAdminHealth,
+			GRPCRequest: &emptyRequest{},
+			GRPCFn:      grpcAdminHealth,
 		},
 		{
 			Name:        "storage_validate",
@@ -695,10 +707,10 @@ func operationCatalog() []operation {
 		{
 			Name:        "drop_downsample_policy",
 			Namespace:   "admin",
-			Description: "drop downsample policy",
+			Description: "drop downsample policy with optional target cleanup",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodDropDownsamplePolicy,
-			GRPCRequest: &downsamplePolicyRequest{},
+			GRPCRequest: &grpcDownsampleDropRequest{},
 			GRPCFn:      grpcDropDownsamplePolicy,
 		},
 		{

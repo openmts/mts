@@ -406,6 +406,14 @@ func grpcCreateDatabase(r *serverRuntime, ctx context.Context, req any) (any, er
 	return okResponse{OK: true}, r.engine.CreateDatabase(ctx, req.(*databaseRequest).Name)
 }
 
+func grpcListDatabases(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	databases, err := r.engine.ListDatabases(ctx)
+	return databasesResponse{Databases: databases}, err
+}
+
 func grpcDropDatabase(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
@@ -523,6 +531,13 @@ func grpcMaintenanceStats(r *serverRuntime, ctx context.Context, _ any) (any, er
 	return maintenanceStatsResponse{Stats: r.maintenanceStats()}, nil
 }
 
+func grpcAdminHealth(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return adminHealthResponse{Health: r.health()}, nil
+}
+
 func grpcStorageMemory(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
@@ -591,7 +606,15 @@ func grpcDropDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (a
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.engine.DropDownsamplePolicy(ctx, req.(*downsamplePolicyRequest).Name)
+	switch request := req.(type) {
+	case *grpcDownsampleDropRequest:
+		return okResponse{OK: true}, r.engine.DropDownsamplePolicyWithOptions(ctx, request.Name, request.Options)
+	case *downsamplePolicyRequest:
+		// 兼容仅传 name 的旧请求。
+		return okResponse{OK: true}, r.engine.DropDownsamplePolicy(ctx, request.Name)
+	default:
+		return nil, newAPIError(errorCodeBadRequest, "invalid drop downsample request", nil)
+	}
 }
 
 func grpcResetDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {

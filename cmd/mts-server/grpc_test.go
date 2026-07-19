@@ -442,6 +442,46 @@ func TestGRPCServiceMarker(t *testing.T) {
 	service.mtsServer()
 }
 
+func TestGRPCListDatabasesAdminHealthAndDropDownsampleOptions(t *testing.T) {
+	runtime := openTestRuntime(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+	ctx := context.Background()
+	if err := invokeGRPC(ctx, conn, "CreateDatabase", &databaseRequest{Name: "metrics"}, &okResponse{}); err != nil {
+		t.Fatalf("CreateDatabase error = %v", err)
+	}
+	var dbs databasesResponse
+	if err := invokeGRPC(ctx, conn, "ListDatabases", &emptyRequest{}, &dbs); err != nil {
+		t.Fatalf("ListDatabases error = %v", err)
+	}
+	if len(dbs.Databases) == 0 {
+		t.Fatalf("databases = %#v, want non-empty", dbs.Databases)
+	}
+	var health adminHealthResponse
+	if err := invokeGRPC(ctx, conn, "AdminHealth", &emptyRequest{}, &health); err != nil {
+		t.Fatalf("AdminHealth error = %v", err)
+	}
+	if !health.Health.Ready && !health.Health.Healthy {
+		// open runtime should be healthy/ready in tests; accept either flag true.
+		t.Fatalf("health = %#v, want healthy runtime", health.Health)
+	}
+	policy := testDownsamplePolicy()
+	policy.Name = "drop_opts_policy"
+	if err := invokeGRPC(ctx, conn, "CreateDownsamplePolicy", &policy, &okResponse{}); err != nil {
+		t.Fatalf("CreateDownsamplePolicy error = %v", err)
+	}
+	if err := invokeGRPC(ctx, conn, "DropDownsamplePolicy", &grpcDownsampleDropRequest{
+		Name:    policy.Name,
+		Options: mts.DownsampleDropOptions{CleanupTarget: false},
+	}, &okResponse{}); err != nil {
+		t.Fatalf("DropDownsamplePolicy(options) error = %v", err)
+	}
+}
+
 func TestGRPCQueryStreamRowAndColumn(t *testing.T) {
 	runtime := openTestRuntime(t)
 	conn := openBufconnClient(t, runtime)

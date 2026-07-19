@@ -420,6 +420,15 @@ func configSchema() []configFieldSchema {
 		{Name: "engine.shard_duration", Description: "shard 时间窗口"},
 		{Name: "engine.retention", Description: "默认保留时间"},
 		{Name: "engine.memtable_max_samples", Description: "MemTable 样本阈值"},
+		{Name: "engine.max_concurrent_compaction", Description: "跨 shard 并行 compact 上限"},
+		{Name: "engine.max_concurrent_downsample", Description: "后台降采样并发上限"},
+		{Name: "engine.compression.value_page_samples", Description: "values 页样本数"},
+		{Name: "engine.compression.omit_write_seq", Description: "省略 per-sample writeSeq"},
+		{Name: "engine.compression.zstd_level", Description: "zstd 强度 fastest|default|better|best"},
+		{Name: "engine.query_page_cache.limit", Description: "查询 page 解码缓存条目上限，-1 关闭"},
+		{Name: "engine.query_block_cache.limit", Description: "查询 block payload 缓存条目上限，-1 关闭"},
+		{Name: "engine.storage_memory.hard_bytes_limit", Description: "存储硬内存字节上限"},
+		{Name: "engine.cardinality.max_series", Description: "series 高基数硬限制"},
 		{Name: "shutdown_timeout", Description: "优雅关闭超时"},
 	}
 }

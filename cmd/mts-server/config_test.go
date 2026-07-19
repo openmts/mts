@@ -109,3 +109,71 @@ func writeTestConfig(t *testing.T, body string) string {
 	}
 	return path
 }
+
+func TestEngineOptionsMapsAdvancedFields(t *testing.T) {
+	path := writeTestConfig(t, `data_dir: `+filepath.ToSlash(t.TempDir())+`
+engine:
+  max_concurrent_compaction: 3
+  max_concurrent_downsample: 2
+  memtable_disorder_flush_ratio: 0.3
+  memtable_disorder_flush_min_samples: 2048
+  compression:
+    enabled: true
+    algorithm: zstd
+    min_page_values: 64
+    value_page_samples: 4096
+    omit_write_seq: true
+    zstd_level: better
+  compaction:
+    enabled: true
+    max_concurrent: 2
+  wal:
+    sync: true
+    segment_bytes: 1048576
+    batch_records: 100
+    batch_bytes: 65536
+    batch_interval: 5ms
+  query_page_cache:
+    limit: 128
+    max_samples: 256
+  query_block_cache:
+    limit: 64
+    max_bytes: 1048576
+  query_protection:
+    default_max_samples: 1000
+    default_limit: 500
+  cardinality:
+    max_series: 10000
+    max_fields: 32
+    max_tag_values_per_key: 1000
+  storage_memory:
+    soft_sample_limit: 1000
+    hard_sample_limit: 2000
+    soft_bytes_limit: 1048576
+    hard_bytes_limit: 2097152
+    query_bytes_limit: 1024
+    flush_bytes_limit: 2048
+    compaction_bytes_limit: 4096
+    compression_bytes_limit: 8192
+`)
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+	opts := cfg.engineOptions()
+	if opts.MaxConcurrentCompaction != 3 || opts.MaxConcurrentDownsample != 2 {
+		t.Fatalf("concurrent opts = %#v", opts)
+	}
+	if !opts.Compression.OmitWriteSeq || opts.Compression.ValuePageSamples != 4096 || opts.Compression.ZstdLevel != "better" {
+		t.Fatalf("compression opts = %#v", opts.Compression)
+	}
+	if opts.QueryPageCache.Limit != 128 || opts.QueryBlockCache.MaxBytes != 1048576 {
+		t.Fatalf("cache opts page=%#v block=%#v", opts.QueryPageCache, opts.QueryBlockCache)
+	}
+	if opts.Cardinality.MaxSeries != 10000 || opts.StorageMemory.HardBytesLimit != 2097152 {
+		t.Fatalf("limits opts card=%#v mem=%#v", opts.Cardinality, opts.StorageMemory)
+	}
+	if !opts.WAL.Sync || opts.WAL.BatchRecords != 100 {
+		t.Fatalf("wal opts = %#v", opts.WAL)
+	}
+}

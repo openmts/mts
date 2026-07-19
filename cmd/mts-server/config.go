@@ -102,17 +102,63 @@ type engineConfig struct {
 	Retention              durationText `yaml:"retention"                 json:"retention"`
 	MemTableMaxSamples     int          `yaml:"memtable_max_samples"      json:"memtable_max_samples"`
 	FlushSync              bool         `yaml:"flush_sync"                json:"flush_sync"`
-	Compression            struct {
-		Enabled       bool   `yaml:"enabled"          json:"enabled"`
-		Algorithm     string `yaml:"algorithm"        json:"algorithm"`
-		MinPageValues int    `yaml:"min_page_values"  json:"min_page_values"`
+	// MaxConcurrentCompaction 跨 shard 并行 compact 上限；<=0 使用引擎默认。
+	MaxConcurrentCompaction int `yaml:"max_concurrent_compaction" json:"max_concurrent_compaction"`
+	// MaxConcurrentDownsample 后台降采样并发上限；<=0 使用引擎默认。
+	MaxConcurrentDownsample int `yaml:"max_concurrent_downsample" json:"max_concurrent_downsample"`
+	// MemTableDisorderFlushRatio 乱序样本占比阈值；<=0 关闭。
+	MemTableDisorderFlushRatio float64 `yaml:"memtable_disorder_flush_ratio" json:"memtable_disorder_flush_ratio"`
+	// MemTableDisorderFlushMinSamples 乱序降载最小样本数；<=0 使用引擎默认。
+	MemTableDisorderFlushMinSamples int `yaml:"memtable_disorder_flush_min_samples" json:"memtable_disorder_flush_min_samples"`
+	Compression                     struct {
+		Enabled          bool   `yaml:"enabled"             json:"enabled"`
+		Algorithm        string `yaml:"algorithm"           json:"algorithm"`
+		MinPageValues    int    `yaml:"min_page_values"     json:"min_page_values"`
+		ValuePageSamples int    `yaml:"value_page_samples"  json:"value_page_samples"`
+		OmitWriteSeq     bool   `yaml:"omit_write_seq"      json:"omit_write_seq"`
+		ZstdLevel        string `yaml:"zstd_level"          json:"zstd_level"`
 	} `yaml:"compression" json:"compression"`
 	Compaction struct {
 		Enabled            bool         `yaml:"enabled"             json:"enabled"`
 		BackgroundInterval durationText `yaml:"background_interval" json:"background_interval"`
 		Level0PartLimit    int          `yaml:"level0_part_limit"   json:"level0_part_limit"`
 		MaxCascadeSteps    int          `yaml:"max_cascade_steps"   json:"max_cascade_steps"`
+		MaxConcurrent      int          `yaml:"max_concurrent"      json:"max_concurrent"`
 	} `yaml:"compaction" json:"compaction"`
+	WAL struct {
+		Sync          bool         `yaml:"sync"           json:"sync"`
+		SegmentBytes  int64        `yaml:"segment_bytes"  json:"segment_bytes"`
+		BatchRecords  int          `yaml:"batch_records"  json:"batch_records"`
+		BatchBytes    int64        `yaml:"batch_bytes"    json:"batch_bytes"`
+		BatchInterval durationText `yaml:"batch_interval" json:"batch_interval"`
+	} `yaml:"wal" json:"wal"`
+	QueryPageCache struct {
+		Limit      int `yaml:"limit"       json:"limit"`
+		MaxSamples int `yaml:"max_samples" json:"max_samples"`
+	} `yaml:"query_page_cache" json:"query_page_cache"`
+	QueryBlockCache struct {
+		Limit    int   `yaml:"limit"     json:"limit"`
+		MaxBytes int64 `yaml:"max_bytes" json:"max_bytes"`
+	} `yaml:"query_block_cache" json:"query_block_cache"`
+	QueryProtection struct {
+		DefaultMaxSamples int `yaml:"default_max_samples" json:"default_max_samples"`
+		DefaultLimit      int `yaml:"default_limit"       json:"default_limit"`
+	} `yaml:"query_protection" json:"query_protection"`
+	Cardinality struct {
+		MaxSeries          int `yaml:"max_series"             json:"max_series"`
+		MaxFields          int `yaml:"max_fields"             json:"max_fields"`
+		MaxTagValuesPerKey int `yaml:"max_tag_values_per_key" json:"max_tag_values_per_key"`
+	} `yaml:"cardinality" json:"cardinality"`
+	StorageMemory struct {
+		SoftSampleLimit       int   `yaml:"soft_sample_limit"       json:"soft_sample_limit"`
+		HardSampleLimit       int   `yaml:"hard_sample_limit"       json:"hard_sample_limit"`
+		SoftBytesLimit        int64 `yaml:"soft_bytes_limit"        json:"soft_bytes_limit"`
+		HardBytesLimit        int64 `yaml:"hard_bytes_limit"        json:"hard_bytes_limit"`
+		QueryBytesLimit       int64 `yaml:"query_bytes_limit"       json:"query_bytes_limit"`
+		FlushBytesLimit       int64 `yaml:"flush_bytes_limit"       json:"flush_bytes_limit"`
+		CompactionBytesLimit  int64 `yaml:"compaction_bytes_limit"  json:"compaction_bytes_limit"`
+		CompressionBytesLimit int64 `yaml:"compression_bytes_limit" json:"compression_bytes_limit"`
+	} `yaml:"storage_memory" json:"storage_memory"`
 }
 
 type durationText time.Duration
@@ -166,6 +212,7 @@ func defaultConfig() config {
 				BackgroundInterval durationText `yaml:"background_interval" json:"background_interval"`
 				Level0PartLimit    int          `yaml:"level0_part_limit"   json:"level0_part_limit"`
 				MaxCascadeSteps    int          `yaml:"max_cascade_steps"   json:"max_cascade_steps"`
+				MaxConcurrent      int          `yaml:"max_concurrent"      json:"max_concurrent"`
 			}{
 				Enabled:         true,
 				Level0PartLimit: 4,
@@ -265,13 +312,43 @@ func (cfg config) engineOptions() mts.Options {
 	opts.Retention = time.Duration(cfg.Engine.Retention)
 	opts.MemTableMaxSamples = cfg.Engine.MemTableMaxSamples
 	opts.FlushSync = cfg.Engine.FlushSync
+	opts.MaxConcurrentCompaction = cfg.Engine.MaxConcurrentCompaction
+	opts.MaxConcurrentDownsample = cfg.Engine.MaxConcurrentDownsample
+	opts.MemTableDisorderFlushRatio = cfg.Engine.MemTableDisorderFlushRatio
+	opts.MemTableDisorderFlushMinSamples = cfg.Engine.MemTableDisorderFlushMinSamples
 	opts.Compression.Enabled = cfg.Engine.Compression.Enabled
 	opts.Compression.Algorithm = cfg.Engine.Compression.Algorithm
 	opts.Compression.MinPageValues = cfg.Engine.Compression.MinPageValues
+	opts.Compression.ValuePageSamples = cfg.Engine.Compression.ValuePageSamples
+	opts.Compression.OmitWriteSeq = cfg.Engine.Compression.OmitWriteSeq
+	opts.Compression.ZstdLevel = cfg.Engine.Compression.ZstdLevel
 	opts.Compaction.Enabled = cfg.Engine.Compaction.Enabled
 	opts.Compaction.BackgroundInterval = time.Duration(cfg.Engine.Compaction.BackgroundInterval)
 	opts.Compaction.Level0PartLimit = cfg.Engine.Compaction.Level0PartLimit
 	opts.Compaction.MaxCascadeSteps = cfg.Engine.Compaction.MaxCascadeSteps
+	opts.Compaction.MaxConcurrent = cfg.Engine.Compaction.MaxConcurrent
+	opts.WAL.Sync = cfg.Engine.WAL.Sync
+	opts.WAL.SegmentBytes = cfg.Engine.WAL.SegmentBytes
+	opts.WAL.BatchRecords = cfg.Engine.WAL.BatchRecords
+	opts.WAL.BatchBytes = cfg.Engine.WAL.BatchBytes
+	opts.WAL.BatchInterval = time.Duration(cfg.Engine.WAL.BatchInterval)
+	opts.QueryPageCache.Limit = cfg.Engine.QueryPageCache.Limit
+	opts.QueryPageCache.MaxSamples = cfg.Engine.QueryPageCache.MaxSamples
+	opts.QueryBlockCache.Limit = cfg.Engine.QueryBlockCache.Limit
+	opts.QueryBlockCache.MaxBytes = cfg.Engine.QueryBlockCache.MaxBytes
+	opts.QueryProtection.DefaultMaxSamples = cfg.Engine.QueryProtection.DefaultMaxSamples
+	opts.QueryProtection.DefaultLimit = cfg.Engine.QueryProtection.DefaultLimit
+	opts.Cardinality.MaxSeries = cfg.Engine.Cardinality.MaxSeries
+	opts.Cardinality.MaxFields = cfg.Engine.Cardinality.MaxFields
+	opts.Cardinality.MaxTagValuesPerKey = cfg.Engine.Cardinality.MaxTagValuesPerKey
+	opts.StorageMemory.SoftSampleLimit = cfg.Engine.StorageMemory.SoftSampleLimit
+	opts.StorageMemory.HardSampleLimit = cfg.Engine.StorageMemory.HardSampleLimit
+	opts.StorageMemory.SoftBytesLimit = cfg.Engine.StorageMemory.SoftBytesLimit
+	opts.StorageMemory.HardBytesLimit = cfg.Engine.StorageMemory.HardBytesLimit
+	opts.StorageMemory.QueryBytesLimit = cfg.Engine.StorageMemory.QueryBytesLimit
+	opts.StorageMemory.FlushBytesLimit = cfg.Engine.StorageMemory.FlushBytesLimit
+	opts.StorageMemory.CompactionBytesLimit = cfg.Engine.StorageMemory.CompactionBytesLimit
+	opts.StorageMemory.CompressionBytesLimit = cfg.Engine.StorageMemory.CompressionBytesLimit
 	opts.User.Endpoint = cfg.User.Endpoint
 	opts.User.PasswordAuthDisabled = cfg.User.PasswordAuthDisabled
 	return opts

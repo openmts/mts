@@ -159,6 +159,10 @@ type databaseRequest struct {
 	Name string `json:"name"`
 }
 
+type databasesResponse struct {
+	Databases []string `json:"databases"`
+}
+
 type retentionPolicyRequest struct {
 	Policy mts.RetentionPolicy `json:"policy"`
 }
@@ -265,6 +269,10 @@ type storageValidateResponse struct {
 	Health  mts.HealthSnapshot `json:"health"`
 }
 
+type adminHealthResponse struct {
+	Health mts.HealthSnapshot `json:"health"`
+}
+
 type storageSnapshotResponse struct {
 	OK   bool   `json:"ok"`
 	Path string `json:"path"`
@@ -308,6 +316,11 @@ type grpcDownsampleResetRequest struct {
 }
 
 type downsampleDropRequest struct {
+	Options mts.DownsampleDropOptions `json:"options"`
+}
+
+type grpcDownsampleDropRequest struct {
+	Name    string                    `json:"name"`
 	Options mts.DownsampleDropOptions `json:"options"`
 }
 
