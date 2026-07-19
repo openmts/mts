@@ -13,7 +13,7 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download } from 'lucide-vue-next'
+import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star, Pencil, X } from 'lucide-vue-next'
 
 const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
@@ -36,6 +36,9 @@ const deleteResult = ref('')
 const showHistory = ref(false)
 const showChart = ref(true)
 const showRawFields = ref(false)
+const renameDraft = ref('')
+const renamingId = ref<string | null>(null)
+const clearHistoryOpen = ref(false)
 
 const modeOptions = [
   { value: 'rows' as const, label: '行式' },
@@ -111,6 +114,31 @@ function applyHistory(id: string) {
   showHistory.value = false
 }
 
+function startRename(id: string) {
+  const item = history.items.value.find((x) => x.id === id)
+  if (!item) return
+  renamingId.value = id
+  renameDraft.value = item.name || history.titleOf(item)
+}
+
+function commitRename() {
+  if (!renamingId.value) return
+  history.rename(renamingId.value, renameDraft.value)
+  renamingId.value = null
+  renameDraft.value = ''
+}
+
+function cancelRename() {
+  renamingId.value = null
+  renameDraft.value = ''
+}
+
+function confirmClearHistory() {
+  history.clear({ keepPinned: true })
+  clearHistoryOpen.value = false
+  success('已清空未收藏历史')
+}
+
 async function copyResults() {
   const text = resultTextForCopy()
   if (!text) { actionError.value = '暂无可复制内容'; return }
@@ -172,7 +200,7 @@ function exportCSV() {
   success('CSV 已导出')
 }
 
-const historyPreview = computed(() => history.items.value.slice(0, 12))
+const historyPreview = computed(() => history.items.value.slice(0, 20))
 const columnRows = computed(() => {
   // columns: [{field_name, timestamps, values, tags, measurement}]
   return (columnSeries.value as Array<Record<string, unknown>>).map((c) => ({
@@ -207,22 +235,66 @@ const columnRows = computed(() => {
     <p v-if="metaHint" class="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">{{ metaHint }}（来源: {{ metaSource }}）</p>
 
     <div v-if="showHistory" class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-      <div class="mb-2 flex justify-between text-sm font-semibold">
-        <span>查询历史</span>
-        <button class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="history.clear()">清空</button>
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
+        <span>{{ t('queryHistory') }}</span>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            :disabled="!historyPreview.length"
+            @click="clearHistoryOpen = true"
+          >{{ t('clearHistory') }}</button>
+        </div>
       </div>
-      <button
-        v-for="h in historyPreview" :key="h.id"
-        class="flex w-full justify-between rounded px-2 py-1 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
-        @click="applyHistory(h.id)"
-      >
-        <span class="truncate">{{ h.form.database }}/{{ h.form.measurement || '*' }} · {{ h.mode }}</span>
-        <span class="text-slate-400 dark:text-slate-500">{{ new Date(h.at).toLocaleString() }}</span>
-      </button>
+      <ul class="max-h-64 space-y-1 overflow-auto sm:max-h-80">
+        <li
+          v-for="h in historyPreview"
+          :key="h.id"
+          class="rounded-lg border border-transparent px-2 py-1.5 hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+        >
+          <div v-if="renamingId === h.id" class="flex flex-wrap items-center gap-1">
+            <input
+              v-model="renameDraft"
+              class="min-w-0 flex-1 rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800"
+              @keyup.enter="commitRename"
+              @keyup.escape="cancelRename"
+            />
+            <button type="button" class="rounded border px-2 py-1 text-xs dark:border-slate-600" @click="commitRename">保存</button>
+            <button type="button" class="rounded border px-2 py-1 text-xs dark:border-slate-600" @click="cancelRename">取消</button>
+          </div>
+          <div v-else class="flex items-start gap-2">
+            <button
+              type="button"
+              class="mt-0.5 shrink-0 rounded p-0.5"
+              :class="h.pinned ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400 dark:text-slate-600'"
+              :title="h.pinned ? '取消收藏' : '收藏'"
+              @click.stop="history.togglePin(h.id)"
+            >
+              <Star class="h-3.5 w-3.5" :fill="h.pinned ? 'currentColor' : 'none'" />
+            </button>
+            <button type="button" class="min-w-0 flex-1 text-left" @click="applyHistory(h.id)">
+              <div class="truncate text-xs font-medium text-slate-800 dark:text-slate-100">{{ history.titleOf(h) }}</div>
+              <div class="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-slate-400 dark:text-slate-500">
+                <span>{{ h.mode }}</span>
+                <span class="truncate">{{ h.form.database }}/{{ h.form.measurement || '*' }}</span>
+                <span>{{ new Date(h.at).toLocaleString() }}</span>
+              </div>
+            </button>
+            <div class="flex shrink-0 gap-0.5">
+              <button type="button" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700" title="重命名" @click.stop="startRename(h.id)">
+                <Pencil class="h-3.5 w-3.5" />
+              </button>
+              <button type="button" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-700" title="删除" @click.stop="history.remove(h.id)">
+                <X class="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </li>
+      </ul>
       <p v-if="!historyPreview.length" class="text-xs text-slate-400 dark:text-slate-500">暂无历史</p>
     </div>
 
-    <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-3">
+    <div class="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Database
         <input v-model="queryForm.database" list="db-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="手动输入或选择" />
         <datalist id="db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
@@ -369,6 +441,14 @@ const columnRows = computed(() => {
       danger
       :loading="deleteLoading"
       @confirm="doRangeDelete"
+    />
+    <ConfirmDialog
+      v-model:open="clearHistoryOpen"
+      title="清空查询历史"
+      message="将清空未收藏的历史记录；已收藏条目会保留。"
+      confirm-label="清空"
+      danger
+      @confirm="confirmClearHistory"
     />
   </div>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -29,12 +30,19 @@ const input = ref('')
 const panelRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLInputElement | null>(null)
 const primaryRef = ref<HTMLButtonElement | null>(null)
+const titleId = `confirm-title-${Math.random().toString(36).slice(2, 8)}`
+let trap: FocusTrapHandle | null = null
 
 const canConfirm = computed(() => {
   if (props.loading) return false
   if (!props.requireText) return true
   return input.value === props.requireText
 })
+
+function releaseTrap() {
+  trap?.release()
+  trap = null
+}
 
 function close() {
   if (props.loading) return
@@ -57,43 +65,62 @@ function onKey(e: KeyboardEvent) {
 }
 
 watch(() => props.open, async (open) => {
+  window.removeEventListener('keydown', onKey)
   if (!open) {
     input.value = ''
+    releaseTrap()
+    document.body.style.overflow = ''
     return
   }
+  document.body.style.overflow = 'hidden'
+  window.addEventListener('keydown', onKey)
   await nextTick()
-  if (props.requireText) inputRef.value?.focus()
-  else primaryRef.value?.focus()
-})
+  if (panelRef.value) {
+    releaseTrap()
+    trap = createFocusTrap(panelRef.value)
+    if (props.requireText) inputRef.value?.focus()
+    else primaryRef.value?.focus()
+  }
+}, { immediate: true })
 
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  releaseTrap()
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
   <div
     v-if="open"
-    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
-    role="dialog"
-    aria-modal="true"
+    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-3 sm:p-4"
+    role="presentation"
     @click.self="close"
   >
-    <div ref="panelRef" class="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-      <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ title }}</h3>
-      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{{ message }}</p>
+    <div
+      ref="panelRef"
+      class="w-full max-w-md rounded-xl bg-white p-4 shadow-xl dark:bg-slate-900 sm:p-5"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="titleId"
+    >
+      <h3 :id="titleId" class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ title }}</h3>
+      <p class="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{{ message }}</p>
       <div v-if="requireText" class="mt-3">
-        <label class="mb-1 block text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">请输入 <span class="font-mono text-slate-700 dark:text-slate-200">{{ requireText }}</span> 确认</label>
+        <label class="mb-1 block text-xs text-slate-500 dark:text-slate-400">
+          请输入 <span class="font-mono text-slate-700 dark:text-slate-200">{{ requireText }}</span> 确认
+        </label>
         <input
           ref="inputRef"
           v-model="input"
-          class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800"
           @keyup.enter="onConfirm"
         />
       </div>
-      <div class="mt-4 flex justify-end gap-2">
+      <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button
           type="button"
-          class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+          class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           :disabled="loading"
           @click="close"
         >{{ cancelLabel }}</button>

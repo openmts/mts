@@ -40,7 +40,7 @@ async function onLogout() {
 </script>
 
 <template>
-  <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-900 sm:px-6">
+  <header class="flex h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-900 sm:px-6">
     <div class="flex items-center gap-3">
       <button
         class="rounded p-1 text-slate-500 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:bg-slate-800 hover:text-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 lg:hidden"
@@ -48,7 +48,7 @@ async function onLogout() {
       >
         <Menu class="h-5 w-5" />
       </button>
-      <h1 class="text-lg font-medium text-slate-800 dark:text-slate-100">{{ pageTitle }}</h1>
+      <h1 class="max-w-[40vw] truncate text-base font-medium text-slate-800 dark:text-slate-100 sm:max-w-none sm:text-lg">{{ pageTitle }}</h1>
     </div>
     <div class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
       <button class="rounded p-1.5 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800" :title="t('lang')" @click="toggleLocale">

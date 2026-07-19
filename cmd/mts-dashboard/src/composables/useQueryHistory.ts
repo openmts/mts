@@ -1,36 +1,28 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { QueryMode } from '@/composables/useQueryWorkbench'
+import {
+  historyItemTitle,
+  mergeHistoryCap,
+  normalizeHistoryItems,
+  sortHistoryItems,
+  type QueryHistoryForm,
+  type QueryHistoryRecord,
+} from '@/utils/queryHistory'
 
 const KEY = 'mts_query_history'
 const MAX = 30
 
-export interface QueryHistoryItem {
-  id: string
-  at: number
+export type { QueryHistoryForm }
+export interface QueryHistoryItem extends QueryHistoryRecord {
   mode: QueryMode
-  form: {
-    database: string
-    retention_policy: string
-    measurement: string
-    start_time: string
-    end_time: string
-    fields: string
-    tags?: string
-    order?: 'asc' | 'desc' | ''
-    offset?: string
-    limit: string
-    aggregates?: string
-    window?: string
-    group_tags?: string
-  }
 }
 
 function load(): QueryHistoryItem[] {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return []
-    const arr = JSON.parse(raw) as QueryHistoryItem[]
-    return Array.isArray(arr) ? arr : []
+    const arr = normalizeHistoryItems(JSON.parse(raw)) as QueryHistoryItem[]
+    return sortHistoryItems(arr)
   } catch {
     return []
   }
@@ -39,26 +31,70 @@ function load(): QueryHistoryItem[] {
 const items = ref<QueryHistoryItem[]>(load())
 
 function persist() {
-  try { localStorage.setItem(KEY, JSON.stringify(items.value)) } catch { /* ignore */ }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(items.value))
+  } catch {
+    /* ignore quota / private mode */
+  }
 }
 
 export function useQueryHistory() {
-  function push(item: Omit<QueryHistoryItem, 'id' | 'at'>) {
+  const sortedItems = computed(() => sortHistoryItems(items.value))
+
+  function push(
+    item: Omit<QueryHistoryItem, 'id' | 'at'> & { name?: string; pinned?: boolean },
+  ) {
     const next: QueryHistoryItem = {
       ...item,
+      name: item.name?.trim() || undefined,
+      pinned: Boolean(item.pinned),
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       at: Date.now(),
     }
-    items.value = [next, ...items.value].slice(0, MAX)
+    items.value = mergeHistoryCap([next, ...items.value], MAX)
     persist()
   }
-  function clear() {
-    items.value = []
+
+  function clear(opts?: { keepPinned?: boolean }) {
+    if (opts?.keepPinned) {
+      items.value = items.value.filter((x) => x.pinned)
+    } else {
+      items.value = []
+    }
     persist()
   }
+
   function remove(id: string) {
     items.value = items.value.filter((x) => x.id !== id)
     persist()
   }
-  return { items, push, clear, remove }
+
+  function rename(id: string, name: string) {
+    const n = name.trim()
+    items.value = items.value.map((x) =>
+      x.id === id ? { ...x, name: n || undefined } : x,
+    )
+    persist()
+  }
+
+  function togglePin(id: string) {
+    items.value = sortHistoryItems(
+      items.value.map((x) => (x.id === id ? { ...x, pinned: !x.pinned } : x)),
+    )
+    persist()
+  }
+
+  function titleOf(item: QueryHistoryItem): string {
+    return historyItemTitle(item)
+  }
+
+  return {
+    items: sortedItems,
+    push,
+    clear,
+    remove,
+    rename,
+    togglePin,
+    titleOf,
+  }
 }

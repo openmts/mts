@@ -340,3 +340,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 | P4-01 权限预检 | 已修复 | authz 自检 + Query/Write 按钮 |
 | P4-02 配置 Schema | 已修复 | ConfigPage 可过滤浏览 |
 | P4-03 虚拟滚动 | 已修复 | VirtualTable 行结果 |
+
+
+## P5 状态（2026-07-19）
+- 查询历史命名/收藏：已完成
+- Focus trap：已完成（ConfirmDialog / UserModals）
+- 响应式加固：已完成（Query 表单栅格 + TopBar）

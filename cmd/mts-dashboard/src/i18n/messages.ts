@@ -99,6 +99,11 @@ export const messages = {
     exportCSV: '导出 CSV',
     aggregates: '聚合',
     window: '窗口',
+    pinHistory: '收藏',
+    unpinHistory: '取消收藏',
+    renameHistory: '重命名',
+    removeHistory: '删除条目',
+    save: '保存',
   },
   en: {
     appName: 'MTS Dashboard',
@@ -198,6 +203,11 @@ export const messages = {
     exportCSV: 'Export CSV',
     aggregates: 'Aggregates',
     window: 'Window',
+    pinHistory: 'Pin',
+    unpinHistory: 'Unpin',
+    renameHistory: 'Rename',
+    removeHistory: 'Remove',
+    save: 'Save',
   },
 } as const
 
