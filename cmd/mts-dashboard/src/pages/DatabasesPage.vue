@@ -13,6 +13,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { formatMessage } from '@/utils/formatMessage'
 import { filterByName } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
 interface FieldSchema { measurement: string; name: string; type: number }
@@ -133,8 +134,8 @@ async function createDatabase() {
       newRpDuration: '',
     })
     newDbName.value = ''
-    actionResult.value = makeActionResult('ok', '数据库已创建')
-    success('数据库已创建')
+    actionResult.value = makeActionResult('ok', t.value('databasesCreated'))
+    success(t.value('databasesCreated'))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -154,7 +155,7 @@ async function confirmDeleteDatabase() {
     await apiDelete(`/api/v1/admin/databases/${encodeURIComponent(name)}`)
     databases.value = databases.value.filter((d) => d.name !== name)
     confirmOpen.value = false
-    success(`数据库 ${name} 已删除`)
+    success(formatMessage(t.value('databasesDeleted'), { name }))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -172,7 +173,7 @@ async function createRetentionPolicy(db: DatabaseEntry) {
   try {
     durationNs = parseDuration(dur)
   } catch {
-    const msg = '无效的 duration 格式 (如 24h, 7d, 30m)'
+    const msg = t.value('databasesInvalidDuration')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -185,8 +186,8 @@ async function createRetentionPolicy(db: DatabaseEntry) {
     db.retentionPolicies.push({ name, duration: durationNs })
     db.newRpName = ''
     db.newRpDuration = ''
-    actionResult.value = makeActionResult('ok', '保留策略已创建')
-    success('保留策略已创建')
+    actionResult.value = makeActionResult('ok', t.value('databasesRpCreated'))
+    success(t.value('databasesRpCreated'))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -222,12 +223,12 @@ function fieldTypeName(t: number): string {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('databases') }}</h1>
-        <p class="text-xs mts-muted">管理数据库、measurement 元数据与保留策略</p>
+        <p class="text-xs mts-muted">{{ t('databasesDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <input v-model="newDbName" type="text" placeholder="新数据库名称" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="createDatabase" />
+        <input v-model="newDbName" type="text" :placeholder="t('databasesCreatePlaceholder')" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="createDatabase" />
         <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="createDatabase">
-          <Plus class="h-4 w-4" /> 创建数据库
+          <Plus class="h-4 w-4" /> {{ t('databasesCreate') }}
         </button>
       </div>
     </div>
@@ -252,7 +253,7 @@ function fieldTypeName(t: number): string {
         :description="databases.length ? t('databasesFilterEmptyDesc') : t('databasesEmptyDesc')"
       >
         <template v-if="!databases.length" #action>
-          <button type="button" class="mts-btn-primary" @click="createDatabase">创建数据库</button>
+          <button type="button" class="mts-btn-primary" @click="createDatabase">{{ t('databasesCreate') }}</button>
         </template>
       </EmptyState>
     </div>
@@ -263,16 +264,16 @@ function fieldTypeName(t: number): string {
           <button class="flex items-center gap-2 text-left" @click="toggleExpand(db)">
             <component :is="db.expanded ? ChevronDown : ChevronRight" class="h-4 w-4 text-slate-400 dark:text-slate-500" />
             <span class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ db.name }}</span>
-            <span v-if="db.loading" class="text-xs text-slate-400 dark:text-slate-500">加载中…</span>
+            <span v-if="db.loading" class="text-xs text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</span>
           </button>
-          <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:text-red-300" title="删除数据库" @click="requestDeleteDatabase(db.name)">
+          <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:text-red-300" :title="t('databasesDeleteDbBtnTitle')" @click="requestDeleteDatabase(db.name)">
             <Trash2 class="h-4 w-4" />
           </button>
         </div>
         <div v-if="db.expanded && db.loaded" class="border-t border-slate-100">
           <div class="px-6 py-3">
             <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">Measurements</p>
-            <EmptyState v-if="!db.measurements.length" compact title="暂无 measurement" description="写入数据后将自动出现。" />
+            <EmptyState v-if="!db.measurements.length" compact :title="t('databasesNoMeasurement')" :description="t('databasesNoMeasurementDesc')" />
             <div v-for="meas in db.measurements" :key="meas.name" class="mb-2 rounded border border-slate-100">
               <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" @click="toggleMeasurement(meas, db.name)">
                 <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
@@ -280,12 +281,12 @@ function fieldTypeName(t: number): string {
                 {{ meas.name }}
               </button>
               <div v-if="meas.expanded" class="border-t border-slate-50 px-4 py-2 text-xs text-slate-600 dark:text-slate-300">
-                <div v-if="meas.loading" class="text-slate-400 dark:text-slate-500">加载中…</div>
+                <div v-if="meas.loading" class="text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</div>
                 <template v-else>
                   <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Fields</p>
                   <div class="mb-2 flex flex-wrap gap-1">
                     <span v-for="f in meas.fields" :key="f.name" class="rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5">{{ f.name }}:{{ fieldTypeName(f.type) }}</span>
-                    <span v-if="!meas.fields.length" class="text-slate-400 dark:text-slate-500">无</span>
+                    <span v-if="!meas.fields.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
                   </div>
                   <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Series</p>
                   <div class="space-y-1">
@@ -293,14 +294,14 @@ function fieldTypeName(t: number): string {
                       <Tag class="h-3 w-3 text-slate-400 dark:text-slate-500" />
                       <span class="font-mono">{{ s.tags && Object.keys(s.tags).length ? JSON.stringify(s.tags) : '{}' }}</span>
                     </div>
-                    <span v-if="!meas.series.length" class="text-slate-400 dark:text-slate-500">无</span>
+                    <span v-if="!meas.series.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
                   </div>
                 </template>
               </div>
             </div>
           </div>
           <div class="border-t border-slate-200 dark:border-slate-700 px-6 py-3">
-            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">保留策略</p>
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('databasesRetention') }}</p>
             <div v-if="db.retentionPolicies.length" class="mb-3 space-y-1">
               <div v-for="rp in db.retentionPolicies" :key="rp.name" class="flex items-center gap-2 rounded border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5">
                 <Clock class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
@@ -309,10 +310,10 @@ function fieldTypeName(t: number): string {
               </div>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <input v-model="db.newRpName" type="text" placeholder="策略名称" class="w-28 rounded border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs" />
-              <input v-model="db.newRpDuration" type="text" placeholder="时长 (24h/7d)" class="w-24 rounded border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs" />
+              <input v-model="db.newRpName" type="text" :placeholder="t('databasesRpNamePlaceholder')" class="w-28 rounded border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs" />
+              <input v-model="db.newRpDuration" type="text" :placeholder="t('databasesRpDurationPlaceholder')" class="w-24 rounded border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs" />
               <button class="inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" @click="createRetentionPolicy(db)">
-                <Plus class="h-3.5 w-3.5" />添加
+                <Plus class="h-3.5 w-3.5" /> {{ t('databasesAdd') }}
               </button>
             </div>
           </div>
@@ -321,10 +322,10 @@ function fieldTypeName(t: number): string {
     </div>
     <ConfirmDialog
       v-model:open="confirmOpen"
-      title="删除数据库"
-      message="此操作不可恢复。请输入数据库名称确认删除。"
+      :title="t('databasesDeleteDbBtnTitle')"
+      :message="t('databasesDeleteDbMsg')"
       :require-text="confirmDbName"
-      confirm-label="删除"
+      :confirm-label="t('delete')"
       danger
       :loading="confirmLoading"
       @confirm="confirmDeleteDatabase"

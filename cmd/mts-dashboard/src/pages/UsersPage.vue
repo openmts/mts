@@ -12,6 +12,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { formatMessage } from '@/utils/formatMessage'
 import { filterUsers } from '@/utils/listFilter'
 
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
@@ -76,8 +77,8 @@ async function createUser() {
     showCreate.value = false
     newUser.value = { name: '', display_name: '', role: 'user', password: '' }
     await loadUsers()
-    actionResult.value = makeActionResult('ok', '用户已创建')
-    success('用户已创建')
+    actionResult.value = makeActionResult('ok', t.value('usersCreated'))
+    success(t.value('usersCreated'))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -92,8 +93,8 @@ async function doSetPassword() {
     await apiPut(`/api/v1/users/${encodeURIComponent(setPasswordUser.value)}/password`, { password: setPasswordValue.value })
     showSetPassword.value = false
     setPasswordValue.value = ''
-    actionResult.value = makeActionResult('ok', '密码已设置')
-    success('密码已设置')
+    actionResult.value = makeActionResult('ok', t.value('usersPasswordSet'))
+    success(t.value('usersPasswordSet'))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -113,8 +114,8 @@ async function doChangeSelfPassword() {
     showChangeSelfPassword.value = false
     selfOldPassword.value = ''
     selfNewPassword.value = ''
-    actionResult.value = makeActionResult('ok', '密码已修改')
-    success('密码已修改')
+    actionResult.value = makeActionResult('ok', t.value('usersPasswordChanged'))
+    success(t.value('usersPasswordChanged'))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -136,7 +137,7 @@ async function confirmDelete() {
     await loadUsers()
     if (selectedUser.value?.name === name) selectedUser.value = null
     deleteOpen.value = false
-    const okMsg = `用户 ${name} 已删除`
+    const okMsg = formatMessage(t.value('usersDeleted'), { name })
     actionResult.value = makeActionResult('ok', okMsg)
     success(okMsg)
   } catch (e) {
@@ -152,7 +153,7 @@ async function toggleDisable(user: User) {
   try {
     await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled })
     await loadUsers()
-    const okMsg = user.disabled ? '用户已启用' : '用户已禁用'
+    const okMsg = user.disabled ? t.value('usersEnabled') : t.value('usersDisabled')
     actionResult.value = makeActionResult('ok', okMsg)
     success(okMsg)
   } catch (e) {
@@ -198,8 +199,8 @@ async function grantPermission() {
     grantDbs.value = []
     grantPerms.value = []
     await selectUser(selectedUser.value)
-    actionResult.value = makeActionResult('ok', '权限已授予')
-    success('权限已授予')
+    actionResult.value = makeActionResult('ok', t.value('usersGrantOk'))
+    success(t.value('usersGrantOk'))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -212,8 +213,8 @@ async function revokeGrant(g: DatabaseGrant) {
   try {
     await apiDelete(`/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(g.database)}/${encodeURIComponent(g.permission)}`)
     await selectUser(selectedUser.value)
-    actionResult.value = makeActionResult('ok', '权限已撤销')
-    success('权限已撤销')
+    actionResult.value = makeActionResult('ok', t.value('usersRevokeOk'))
+    success(t.value('usersRevokeOk'))
   } catch (e) {
     const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
@@ -232,15 +233,15 @@ function openSetPassword(name: string) {
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">用户</h1>
-        <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">账号、角色与库权限</p>
+        <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('usersTitle') }}</h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('usersDesc') }}</p>
       </div>
       <div class="flex gap-2">
         <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="showChangeSelfPassword = true">
-          <Lock class="h-3.5 w-3.5" /> 修改我的密码
+          <Lock class="h-3.5 w-3.5" /> {{ t('usersChangeMyPassword') }}
         </button>
         <button v-if="isAdmin" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700" @click="showCreate = true">
-          <Plus class="h-3.5 w-3.5" /> 新建用户
+          <Plus class="h-3.5 w-3.5" /> {{ t('usersCreate') }}
         </button>
       </div>
     </div>
@@ -254,7 +255,7 @@ function openSetPassword(name: string) {
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 
     <div v-if="!isAdmin" class="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60 p-4 text-sm text-slate-600 dark:text-slate-300">
-      普通用户仅可修改自己的密码。用户列表与授权管理需管理员权限。
+      {{ t('usersNonAdminHint') }}
     </div>
 
     <template v-else>
@@ -285,7 +286,7 @@ function openSetPassword(name: string) {
         :description="users.length ? t('usersFilterEmptyDesc') : t('usersEmptyDesc')"
       >
         <template v-if="!users.length" #action>
-          <button type="button" class="mts-btn-primary" @click="showCreate = true">新建用户</button>
+          <button type="button" class="mts-btn-primary" @click="showCreate = true">{{ t('usersCreate') }}</button>
         </template>
       </EmptyState>
     </div>
@@ -294,10 +295,10 @@ function openSetPassword(name: string) {
     <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
-            <th class="px-4 py-2.5">用户</th>
-            <th class="px-4 py-2.5">角色</th>
-            <th class="px-4 py-2.5">状态</th>
-            <th class="px-4 py-2.5">操作</th>
+            <th class="px-4 py-2.5">{{ t('usersColUser') }}</th>
+            <th class="px-4 py-2.5">{{ t('usersColRole') }}</th>
+            <th class="px-4 py-2.5">{{ t('usersColStatus') }}</th>
+            <th class="px-4 py-2.5">{{ t('action') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -308,12 +309,12 @@ function openSetPassword(name: string) {
             </td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ u.role || 'user' }}</td>
             <td class="px-4 py-3">
-              <span :class="u.disabled ? 'bg-red-50 text-red-700 dark:text-red-200' : 'bg-green-50 text-green-700 dark:text-green-200'" class="rounded px-2 py-0.5 text-xs">{{ u.disabled ? '禁用' : '正常' }}</span>
+              <span :class="u.disabled ? 'bg-red-50 text-red-700 dark:text-red-200' : 'bg-green-50 text-green-700 dark:text-green-200'" class="rounded px-2 py-0.5 text-xs">{{ u.disabled ? t('usersStatusDisabled') : t('usersStatusActive') }}</span>
             </td>
             <td class="px-4 py-3">
               <div class="flex items-center gap-1">
-                <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-200" title="设置密码" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
-                <button class="rounded px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:bg-slate-800" @click="toggleDisable(u)">{{ u.disabled ? '启用' : '禁用' }}</button>
+                <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-200" :title="t('usersSetPassword')" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
+                <button class="rounded px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:bg-slate-800" @click="toggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
                 <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:text-red-300" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
               </div>
             </td>
@@ -354,9 +355,9 @@ function openSetPassword(name: string) {
 
     <ConfirmDialog
       v-model:open="deleteOpen"
-      title="删除用户"
-      :message="`确定删除用户 ${deleteName}？此操作不可恢复。`"
-      confirm-label="删除"
+      :title="t('usersDeleteTitle')"
+      :message="formatMessage(t('usersDeleteMsg'), { name: deleteName })"
+      :confirm-label="t('delete')"
       danger
       :loading="deleteLoading"
       @confirm="confirmDelete"

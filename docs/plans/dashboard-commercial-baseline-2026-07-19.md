@@ -32,6 +32,7 @@
 - 文档标题与对话框 a11y（P35）
 - 快捷键帮助与最近访问（P36）
 - 查询/写入/配置/存储 i18n 收口（P37）
+- 用户/数据库/运维 i18n 收口（P38）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -158,4 +159,9 @@
 
 ## P37 状态（2026-07-20）
 - Query/Write/Config/Storage 用户可见文案 i18n + formatMessage
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份
+
+
+## P38 状态（2026-07-20）
+- Users/Databases/Operations 用户可见文案 i18n
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd、跨主机备份

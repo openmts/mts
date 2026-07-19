@@ -529,3 +529,7 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 核心业务页 i18n 收口（Query/Write/Config/Storage）
 - formatMessage 占位符
 - 状态：已实现；仍不宣称可商用完成
+
+## P38（2026-07-20）
+- Users/Databases/Operations i18n 收口
+- 状态：已实现；仍不宣称可商用完成

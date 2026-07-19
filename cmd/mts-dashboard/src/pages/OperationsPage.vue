@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { apiGet, apiPost } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -40,17 +40,17 @@ const confirmKind = ref<'flush' | 'compact' | 'retention' | null>(null)
 const confirmLoading = ref(false)
 const actionLog = ref<OpsActionEntry[]>(loadOpsActionLog())
 
-const confirmTitle = {
-  flush: '执行 Flush',
-  compact: '执行 Compact',
-  retention: '应用保留策略',
-} as const
+const confirmTitle = computed(() => ({
+  flush: t.value('opsConfirmFlush'),
+  compact: t.value('opsConfirmCompact'),
+  retention: t.value('opsConfirmRetention'),
+}))
 
-const confirmMessage = {
-  flush: '确定将内存数据刷盘？可能短时影响写入吞吐。',
-  compact: '确定触发压缩？可能占用较多 CPU/IO。',
-  retention: '确定按当前保留策略清理过期数据？此操作不可恢复。',
-} as const
+const confirmMessage = computed(() => ({
+  flush: t.value('opsMsgFlush'),
+  compact: t.value('opsMsgCompact'),
+  retention: t.value('opsMsgRetention'),
+}))
 
 function persistLog() {
   saveOpsActionLog(actionLog.value)
@@ -104,13 +104,13 @@ async function runConfirmed() {
     let msg = ''
     if (kind === 'flush') {
       await apiPost('/api/v1/admin/flush', {})
-      msg = 'Flush 已完成'
+      msg = t.value('opsFlushDone')
     } else if (kind === 'compact') {
       await apiPost('/api/v1/admin/compact', {})
-      msg = 'Compact 已触发'
+      msg = t.value('opsCompactDone')
     } else {
       await apiPost('/api/v1/admin/retention/apply', {})
-      msg = '保留策略已应用'
+      msg = t.value('opsRetentionDone')
     }
     actionResult.value = makeActionResult('ok', msg)
     success(msg)
@@ -282,7 +282,7 @@ onMounted(() => { void loadStats() })
       :open="!!confirmKind"
       :title="confirmKind ? confirmTitle[confirmKind] : ''"
       :message="confirmKind ? confirmMessage[confirmKind] : ''"
-      confirm-label="执行"
+      :confirm-label="t('opsExecute')"
       danger
       :loading="confirmLoading"
       @update:open="(v) => { if (!v) confirmKind = null }"
