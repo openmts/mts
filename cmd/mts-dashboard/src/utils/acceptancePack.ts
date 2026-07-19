@@ -8,6 +8,11 @@ import {
   buildDeployKitSummary,
   type DeployKitSummary,
 } from './deployTemplates.ts'
+import {
+  assessSignoffCompleteness,
+  signoffFieldLabel,
+  type SignoffNoteField,
+} from './signoffExport.ts'
 
 export const ACCEPTANCE_PACK_KIND = 'mts.acceptance.pack' as const
 export const ACCEPTANCE_PACK_VERSION = 1 as const
@@ -46,6 +51,16 @@ export interface AcceptancePackPayload {
   ops_actions: OpsActionEntry[]
   /** 部署材料包索引（不含样例全文，避免验收包过大） */
   deploy_kit: DeployKitSummary
+  /** 签核备注完整性（来自归档 state.signoffNotes；不计入评分） */
+  signoff_completeness: {
+    filled: SignoffNoteField[]
+    missing: SignoffNoteField[]
+    complete: boolean
+    filled_count: number
+    total: number
+    filled_labels: string[]
+    missing_labels: string[]
+  }
 }
 
 const copy = {
@@ -75,6 +90,12 @@ const copy = {
     deployKitManual: '人工签核',
     deployKitRequired: '必做',
     deployKitDocs: '相关文档',
+    signoff: '## 签核备注完整性',
+    signoffFilled: '已填写',
+    signoffMissing: '未填写',
+    signoffComplete: '已齐',
+    signoffIncomplete: '未齐',
+    signoffNotScored: '不计入就绪评分，不代表验收完成',
   },
   en: {
     disclaimer:
@@ -102,6 +123,12 @@ const copy = {
     deployKitManual: 'Manual sign-off',
     deployKitRequired: 'required',
     deployKitDocs: 'Related docs',
+    signoff: '## Sign-off note completeness',
+    signoffFilled: 'Filled',
+    signoffMissing: 'Missing',
+    signoffComplete: 'complete',
+    signoffIncomplete: 'incomplete',
+    signoffNotScored: 'Not scored; does not complete acceptance',
   },
 } as const
 
@@ -122,6 +149,7 @@ export function buildAcceptancePack(input: AcceptancePackInput): AcceptancePackP
       }
     : null
   const deploy_kit = input.deployKit ?? buildDeployKitSummary(locale)
+  const sc = assessSignoffCompleteness(input.archive.signoff_notes ?? input.archive.state?.signoffNotes)
   return {
     version: ACCEPTANCE_PACK_VERSION,
     kind: ACCEPTANCE_PACK_KIND,
@@ -140,6 +168,15 @@ export function buildAcceptancePack(input: AcceptancePackInput): AcceptancePackP
       note: deploy_kit.note,
       items: deploy_kit.items.map((x) => ({ ...x })),
       docs: [...deploy_kit.docs],
+    },
+    signoff_completeness: {
+      filled: [...sc.filled],
+      missing: [...sc.missing],
+      complete: sc.complete,
+      filled_count: sc.filledCount,
+      total: sc.total,
+      filled_labels: sc.filled.map((f) => signoffFieldLabel(f, locale)),
+      missing_labels: sc.missing.map((f) => signoffFieldLabel(f, locale)),
     },
   }
 }
@@ -199,6 +236,17 @@ export function formatAcceptancePackMarkdown(pack: AcceptancePackPayload): strin
   if (pack.deploy_kit.docs.length) {
     lines.push(`- ${t.deployKitDocs}${sep}${pack.deploy_kit.docs.join(', ')}`)
   }
+  lines.push('', t.signoff, '')
+  lines.push(
+    `- ${pack.signoff_completeness.complete ? t.signoffComplete : t.signoffIncomplete}${sep}${pack.signoff_completeness.filled_count}/${pack.signoff_completeness.total}`,
+  )
+  lines.push(
+    `- ${t.signoffFilled}${sep}${pack.signoff_completeness.filled_labels.join(locale === 'en' ? ', ' : '、') || '—'}`,
+  )
+  lines.push(
+    `- ${t.signoffMissing}${sep}${pack.signoff_completeness.missing_labels.join(locale === 'en' ? ', ' : '、') || '—'}`,
+  )
+  lines.push(`- ${t.signoffNotScored}`)
   lines.push('', t.ops, '')
   if (!pack.ops_actions.length) {
     lines.push(`- ${t.empty}`)

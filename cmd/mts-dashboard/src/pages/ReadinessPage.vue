@@ -551,7 +551,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="mts-panel" data-testid="readiness-signoff-notes">
+    <div id="signoff-notes" class="mts-panel scroll-mt-20" data-testid="readiness-signoff-notes">
       <div class="mb-2">
         <h2 class="text-sm font-semibold">{{ t('readinessSignoffTitle') }}</h2>
         <p class="mt-1 text-xs mts-muted">{{ t('readinessSignoffHint') }}</p>

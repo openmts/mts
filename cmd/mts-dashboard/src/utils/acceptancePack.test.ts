@@ -77,6 +77,34 @@ test('buildAcceptancePack aggregates archive client server ops', () => {
   assert.equal(pack.deploy_kit.manual_signoff_required, true)
   assert.ok(pack.deploy_kit.items.some((x) => x.id === 'nginx-https'))
   assert.match(md, /部署材料包索引|nginx-https/)
+  assert.equal(pack.signoff_completeness.complete, false)
+  assert.equal(pack.signoff_completeness.filled_count, 0)
+  assert.match(md, /签核备注完整性/)
+  assert.match(md, /不计入就绪评分/)
+})
+
+test('acceptance pack signoff completeness reflects archive notes', () => {
+  const archive = sampleArchive('zh')
+  archive.state.signoffNotes = {
+    edgeHttps: 'cert ok',
+    backupOffsite: 'rsync ok',
+    backupAlert: 'webhook',
+  }
+  archive.signoff_notes = {
+    edgeHttps: 'cert ok',
+    backupOffsite: 'rsync ok',
+    backupAlert: 'webhook',
+  }
+  const pack = buildAcceptancePack({
+    archive,
+    client: { name: 'mts-dashboard', version: '1.0.0', mode: 'test', base: '/', apiBase: '' },
+    locale: 'zh',
+  })
+  assert.equal(pack.signoff_completeness.complete, true)
+  assert.equal(pack.signoff_completeness.filled_count, 3)
+  const md = formatAcceptancePackMarkdown(pack)
+  assert.match(md, /已齐/)
+  assert.match(md, /边缘证书/)
 })
 
 test('buildAcceptancePack allows missing server', () => {

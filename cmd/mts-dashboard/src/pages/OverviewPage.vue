@@ -14,6 +14,12 @@ import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import { requiredChecklist } from '@/utils/productionChecklist'
 import { edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
 import { backupScheduleProgress } from '@/utils/backupSchedule'
+import {
+  assessSignoffCompleteness,
+  signoffFieldLabel,
+} from '@/utils/signoffExport'
+import { formatMessage } from '@/utils/formatMessage'
+import type { LocaleCode } from '@/utils/localizedText'
 import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3, FileCode2 } from 'lucide-vue-next'
 
 interface HealthResponse extends HealthSnapshot {}
@@ -34,7 +40,8 @@ interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: Doc
 
 const { isAdmin, getTokenExpiresAt } = useAuth()
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const healthy = ref<boolean | null>(null)
 const ready = ref<boolean | null>(null)
 const healthReasons = ref<string[]>([])
@@ -90,6 +97,15 @@ const localReadinessScore = computed(() => {
 })
 
 const localReadinessLevel = computed(() => readinessLevel(localReadinessScore.value.total))
+
+const signoffCompleteness = computed(() => assessSignoffCompleteness(localReadiness.value.signoffNotes))
+const signoffMissingLabels = computed(() =>
+  signoffCompleteness.value.missing.map((f) => signoffFieldLabel(f, uiLocale.value)),
+)
+
+function goSignoffNotes() {
+  router.push({ path: '/ops/readiness', hash: '#signoff-notes' })
+}
 
 const sessionSummary = computed(() => {
   const exp = parseExpiresAt(getTokenExpiresAt())
@@ -325,7 +341,27 @@ const showAdminPanels = computed(() => isAdmin.value)
           <FileCode2 class="h-3.5 w-3.5" />
           {{ t('overviewGoDeployKit') }}
         </button>
+        <button type="button" class="mts-btn" data-testid="overview-go-signoff" :title="t('overviewSignoffHint')" @click="goSignoffNotes">
+          <ClipboardCheck class="h-3.5 w-3.5" />
+          {{ t('overviewGoSignoff') }}
+        </button>
       </div>
+      <p
+        class="basis-full text-[11px]"
+        data-testid="overview-signoff-completeness"
+        :class="signoffCompleteness.complete ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-200'"
+      >
+        {{
+          signoffCompleteness.complete
+            ? t('readinessSignoffComplete')
+            : formatMessage(t('readinessSignoffMissing'), {
+                missing: signoffMissingLabels.join(uiLocale === 'en' ? ', ' : '、'),
+                filled: String(signoffCompleteness.filledCount),
+                total: String(signoffCompleteness.total),
+              })
+        }}
+        <span class="mts-muted"> · {{ t('overviewSignoffHint') }}</span>
+      </p>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
