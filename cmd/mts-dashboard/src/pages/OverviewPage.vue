@@ -19,6 +19,7 @@ import {
   signoffFieldLabel,
 } from '@/utils/signoffExport'
 import { buildExportPreflight } from '@/utils/exportPreflight'
+import { buildOpsNextSteps } from '@/utils/opsNextSteps'
 import { formatMessage } from '@/utils/formatMessage'
 import type { LocaleCode } from '@/utils/localizedText'
 import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3, FileCode2 } from 'lucide-vue-next'
@@ -132,6 +133,30 @@ const overviewPreflight = computed(() => {
     deployKitReviewed: !!state.deployKit?.reviewed,
   })
 })
+
+const overviewNextSteps = computed(() =>
+  buildOpsNextSteps({
+    locale: uiLocale.value,
+    preflight: overviewPreflight.value,
+    signoffNotes: localReadiness.value.signoffNotes,
+    limit: 4,
+  }),
+)
+
+function readinessLevelLabel(level: string): string {
+  if (level === 'good') return t.value('readinessLevelGood')
+  if (level === 'warn') return t.value('readinessLevelWarn')
+  return t.value('readinessLevelBad')
+}
+
+function jumpNextStep(target?: string) {
+  if (!target) return
+  if (target.startsWith('/')) {
+    void router.push(target)
+    return
+  }
+  void router.push({ path: '/ops/readiness', hash: target.startsWith('#') ? target : `#${target}` })
+}
 
 function goSignoffNotes() {
   router.push({ path: '/ops/readiness', hash: '#signoff-notes' })
@@ -336,7 +361,7 @@ const showAdminPanels = computed(() => isAdmin.value)
         </div>
         <div v-if="showAdminPanels" class="flex items-center gap-2">
           <span class="mts-muted">{{ t('aboutServer') }}</span>
-          <span class="font-mono text-xs">{{ serverVersion?.version || '—' }}</span>
+          <span class="font-mono text-xs">{{ serverVersion?.version || t('emptyValue') }}</span>
           <span v-if="serverVersion?.commit" class="font-mono text-[11px] mts-muted">{{ serverVersion.commit.slice(0, 8) }}</span>
         </div>
         <button type="button" class="mts-btn ml-auto" data-testid="overview-about" @click="router.push('/about')">
@@ -355,14 +380,14 @@ const showAdminPanels = computed(() => isAdmin.value)
         <p class="text-xs mts-muted">{{ t('readinessScore') }}</p>
         <p class="mt-1 text-2xl font-semibold tabular-nums" data-testid="overview-readiness-total">
           {{ localReadinessScore.total }}%
-          <span class="ml-2 text-xs font-medium mts-muted">{{ localReadinessLevel }}</span>
+          <span class="ml-2 text-xs font-medium mts-muted">{{ readinessLevelLabel(localReadinessLevel) }}</span>
         </p>
         <p class="mt-1 text-[11px] mts-muted">
           {{ t('readinessScoreBreakdown') }}:
           {{ t('readinessRequiredChecklist') }} {{ localReadinessScore.checklist }}% ·
           {{ t('readinessEdgeHttps') }} {{ localReadinessScore.edgeHttps }}% ·
           {{ t('readinessBackupSchedule') }} {{ localReadinessScore.backupSchedule }}% ·
-          Doctor {{ localReadinessScore.doctor }}%
+          {{ t('readinessScoreDoctor') }} {{ localReadinessScore.doctor }}%
         </p>
         <p class="mt-1 text-[11px] mts-muted">{{ t('overviewDeployKitHint') }}</p>
       </div>
@@ -413,24 +438,53 @@ const showAdminPanels = computed(() => isAdmin.value)
         </button>
         <span class="mts-muted">{{ t('overviewPreflightHint') }}</span>
       </div>
+      <div
+        v-if="showAdminPanels"
+        class="basis-full rounded-lg border border-dashed border-slate-300 p-3 dark:border-slate-600"
+        data-testid="overview-next-steps"
+      >
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ t('readinessNextSteps') }}</p>
+          <p class="text-[11px] mts-muted">{{ t('readinessNextStepsHint') }}</p>
+        </div>
+        <ul class="space-y-1.5">
+          <li
+            v-for="step in overviewNextSteps"
+            :key="step.id"
+            class="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-200"
+            :data-testid="`overview-next-step-${step.id}`"
+          >
+            <span class="min-w-0 flex-1">{{ step.message }}</span>
+            <button
+              v-if="step.target"
+              type="button"
+              class="mts-btn shrink-0 !px-2 !py-0.5 text-[11px]"
+              :data-testid="`overview-next-jump-${step.id}`"
+              @click="jumpNextStep(step.target)"
+            >
+              {{ t(step.actionKey === 'preflightJumpStorage' ? 'preflightJumpStorage' : 'preflightJumpLocal') }}
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <div class="mts-card p-5">
         <div class="mb-2 flex items-center gap-2 mts-muted"><Activity class="h-4 w-4" /><span class="text-xs">{{ t('healthy') }}</span></div>
         <p class="text-2xl font-semibold" :class="healthy ? 'text-green-600' : healthy === false ? 'text-red-600' : 'mts-muted'">
-          {{ healthy === null ? '—' : healthy ? 'Healthy' : 'Unhealthy' }}
+          {{ healthy === null ? t('emptyValue') : healthy ? t('healthy') : t('unhealthy') }}
         </p>
       </div>
       <div class="mts-card p-5">
         <div class="mb-2 flex items-center gap-2 mts-muted"><Activity class="h-4 w-4" /><span class="text-xs">{{ t('ready') }}</span></div>
         <p class="text-2xl font-semibold" :class="ready ? 'text-green-600' : ready === false ? 'text-amber-600' : 'mts-muted'">
-          {{ ready === null ? '—' : ready ? 'Ready' : 'Not Ready' }}
+          {{ ready === null ? t('emptyValue') : ready ? t('ready') : t('notReady') }}
         </p>
       </div>
       <div class="mts-card p-5 sm:col-span-2">
         <div class="mb-2 flex items-center gap-2 mts-muted"><AlertTriangle class="h-4 w-4" /><span class="text-xs">{{ t('reasons') }}</span></div>
-        <p v-if="!healthReasons.length" class="text-sm mts-muted">—</p>
+        <p v-if="!healthReasons.length" class="text-sm mts-muted">{{ t('emptyValue') }}</p>
         <ul v-else class="list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-200">
           <li v-for="(r, i) in healthReasons" :key="i">{{ r }}</li>
         </ul>
@@ -443,16 +497,16 @@ const showAdminPanels = computed(() => isAdmin.value)
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">Name</th>
-              <th class="px-2 py-2">Status</th>
-              <th class="px-2 py-2">Reason</th>
+              <th class="px-2 py-2">{{ t('healthCheckColName') }}</th>
+              <th class="px-2 py-2">{{ t('healthCheckColStatus') }}</th>
+              <th class="px-2 py-2">{{ t('healthCheckColReason') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(c, i) in healthChecks" :key="i" class="border-b border-slate-100 dark:border-slate-800">
               <td class="px-2 py-2 font-mono text-xs">{{ c.name }}</td>
               <td class="px-2 py-2 text-xs" :class="c.status === 'ok' || c.status === 'passed' ? 'text-green-600' : 'text-red-600'">{{ c.status }}</td>
-              <td class="px-2 py-2 text-xs mts-muted">{{ c.reason || '—' }}</td>
+              <td class="px-2 py-2 text-xs mts-muted">{{ c.reason || t('emptyValue') }}</td>
             </tr>
           </tbody>
         </table>
@@ -470,7 +524,7 @@ const showAdminPanels = computed(() => isAdmin.value)
         <span class="text-xs mts-muted">
           HTTP TLS:
           <span :class="doctorTLS ? 'text-green-600' : 'text-amber-600'">
-            {{ doctorTLS === null ? '—' : doctorTLS ? t('enabled') : t('disabled') }}
+            {{ doctorTLS === null ? t('emptyValue') : doctorTLS ? t('enabled') : t('disabled') }}
           </span>
         </span>
       </div>
@@ -479,9 +533,9 @@ const showAdminPanels = computed(() => isAdmin.value)
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">Level</th>
-              <th class="px-2 py-2">Code</th>
-              <th class="px-2 py-2">Message</th>
+              <th class="px-2 py-2">{{ t('readinessDoctorColLevel') }}</th>
+              <th class="px-2 py-2">{{ t('readinessDoctorColCode') }}</th>
+              <th class="px-2 py-2">{{ t('readinessDoctorColMessage') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -517,7 +571,7 @@ const showAdminPanels = computed(() => isAdmin.value)
           <Cpu class="h-4 w-4 text-slate-500" />
           <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('memoryStats') }}</h2>
         </div>
-        <div v-if="!memorySnapshot" class="text-sm mts-muted">—</div>
+        <div v-if="!memorySnapshot" class="text-sm mts-muted">{{ t('emptyValue') }}</div>
         <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
           <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50" v-for="(v, k) in memorySnapshot" :key="String(k)">
             <span class="mts-muted">{{ k }}</span>
@@ -531,7 +585,7 @@ const showAdminPanels = computed(() => isAdmin.value)
           <Layers class="h-4 w-4 text-slate-500" />
           <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('compactionStats') }}</h2>
         </div>
-        <div v-if="!compactionStats" class="text-sm mts-muted">—</div>
+        <div v-if="!compactionStats" class="text-sm mts-muted">{{ t('emptyValue') }}</div>
         <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           <div><span class="text-xs mts-muted">total</span><p class="text-sm font-medium">{{ compactionStats.total }}</p></div>
           <div><span class="text-xs mts-muted">success</span><p class="text-sm font-medium text-green-600">{{ compactionStats.success }}</p></div>
@@ -547,7 +601,7 @@ const showAdminPanels = computed(() => isAdmin.value)
           <Wrench class="h-4 w-4 text-slate-500" />
           <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceStats') }}</h2>
         </div>
-        <div v-if="!maintenanceStats" class="text-sm mts-muted">—</div>
+        <div v-if="!maintenanceStats" class="text-sm mts-muted">{{ t('emptyValue') }}</div>
         <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-4">
           <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact active: <span class="font-semibold">{{ maintenanceStats.compaction_active }}</span></div>
           <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact backlog: <span class="font-semibold">{{ maintenanceStats.compaction_backlog }}</span></div>

@@ -9,6 +9,7 @@ import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { scheduleScrollToHash } from '@/utils/hashScroll'
 import { buildExportPreflight, formatExportPreflightText } from '@/utils/exportPreflight'
+import { buildOpsNextSteps } from '@/utils/opsNextSteps'
 import { copyText } from '@/utils/clipboard'
 import {
   DEPLOY_TEMPLATES,
@@ -170,6 +171,21 @@ const exportPreflight = computed(() => {
     deployKitReviewed: !!state.value.deployKit?.reviewed,
   })
 })
+const readinessNextSteps = computed(() =>
+  buildOpsNextSteps({
+    locale: uiLocale.value,
+    preflight: exportPreflight.value,
+    signoffNotes: state.value.signoffNotes,
+    limit: 4,
+  }),
+)
+
+function readinessLevelLabel(level: string): string {
+  if (level === 'good') return t.value('readinessLevelGood')
+  if (level === 'warn') return t.value('readinessLevelWarn')
+  return t.value('readinessLevelBad')
+}
+
 
 function flash(kind: 'ok' | 'error' | 'info', message: string) {
   actionKind.value = kind
@@ -278,10 +294,17 @@ function downloadArchive() {
   const names = archiveFilenames()
   downloadJSON(names.json, archive)
   downloadText(names.md, formatReadinessArchiveMarkdown(archive), 'text/markdown')
+  const preflightToast = formatMessage(t.value('readinessExportPreflightToast'), {
+    warn: exportPreflight.value.warnCount,
+    info: exportPreflight.value.infoCount,
+    ok: exportPreflight.value.okCount,
+  })
   if (!signoffCompleteness.value.complete) {
-    flash('info', t.value('readinessArchiveOkWithGaps'))
+    flash('info', `${t.value('readinessArchiveOkWithGaps')} · ${preflightToast}`)
+    success(`${t.value('readinessArchiveOkWithGaps')} · ${preflightToast}`)
   } else {
-    flash('ok', t.value('readinessArchiveOk'))
+    flash('ok', `${t.value('readinessArchiveOk')} · ${preflightToast}`)
+    success(`${t.value('readinessArchiveOk')} · ${preflightToast}`)
   }
 }
 
@@ -310,10 +333,17 @@ function downloadAcceptancePack() {
   const names = acceptancePackFilenames()
   downloadJSON(names.json, pack)
   downloadText(names.md, formatAcceptancePackMarkdown(pack), 'text/markdown')
+  const preflightToast = formatMessage(t.value('readinessExportPreflightToast'), {
+    warn: exportPreflight.value.warnCount,
+    info: exportPreflight.value.infoCount,
+    ok: exportPreflight.value.okCount,
+  })
   if (!signoffCompleteness.value.complete) {
-    flash('info', t.value('readinessAcceptancePackOkWithGaps'))
+    flash('info', `${t.value('readinessAcceptancePackOkWithGaps')} · ${preflightToast}`)
+    success(`${t.value('readinessAcceptancePackOkWithGaps')} · ${preflightToast}`)
   } else {
-    flash('ok', t.value('readinessAcceptancePackOk'))
+    flash('ok', `${t.value('readinessAcceptancePackOk')} · ${preflightToast}`)
+    success(`${t.value('readinessAcceptancePackOk')} · ${preflightToast}`)
   }
 }
 
@@ -521,6 +551,35 @@ watch(
       </ul>
     </div>
 
+    <div
+      class="mts-card p-4"
+      data-testid="readiness-next-steps"
+    >
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-sm font-semibold">{{ t('readinessNextSteps') }}</h2>
+        <span class="text-xs mts-muted">{{ t('readinessNextStepsHint') }}</span>
+      </div>
+      <ul class="space-y-1.5">
+        <li
+          v-for="step in readinessNextSteps"
+          :key="step.id"
+          class="flex items-start gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs dark:border-slate-800"
+          :data-testid="`next-step-${step.id}`"
+        >
+          <span class="min-w-0 flex-1 text-slate-700 dark:text-slate-200">{{ step.message }}</span>
+          <button
+            v-if="step.target"
+            type="button"
+            class="mts-btn shrink-0 !px-2 !py-0.5 text-[11px]"
+            :data-testid="`next-jump-${step.id}`"
+            @click="jumpPreflight(step.target)"
+          >
+            {{ t(step.actionKey === 'preflightJumpStorage' ? 'preflightJumpStorage' : 'preflightJumpLocal') }}
+          </button>
+        </li>
+      </ul>
+    </div>
+
     <ActionResultBanner
       v-if="doctorError"
       kind="error"
@@ -544,13 +603,14 @@ watch(
           data-testid="readiness-score"
         >
           {{ readinessScore }}%
+          <span class="ml-2 text-xs font-medium mts-muted" data-testid="readiness-score-level">{{ readinessLevelLabel(scoreLevel) }}</span>
         </p>
         <p class="mt-2 text-[11px] mts-muted">
           {{ t('readinessScoreBreakdown') }}:
           {{ t('readinessRequiredChecklist') }} {{ scoreBreakdown.checklist }}% ·
           {{ t('readinessEdgeHttps') }} {{ scoreBreakdown.edgeHttps }}% ·
           {{ t('readinessBackupSchedule') }} {{ scoreBreakdown.backupSchedule }}% ·
-          Doctor {{ scoreBreakdown.doctor }}%
+          {{ t('readinessScoreDoctor') }} {{ scoreBreakdown.doctor }}%
         </p>
         <p v-if="scoreBreakdown.reasons.length" class="mt-1 text-[11px] text-amber-700 dark:text-amber-200">
           {{ t('readinessScoreReasons') }}: {{ scoreBreakdown.reasons.join(', ') }}
@@ -737,9 +797,9 @@ watch(
         </h2>
         <span class="text-xs mts-muted" data-testid="readiness-doctor-summary">
           {{ formatMessage(t('readinessDoctorSummary'), {
-            ok: doctor?.ok == null ? '—' : String(doctor.ok),
+            ok: doctor?.ok == null ? t('emptyValue') : String(doctor.ok),
             warn: String(doctorWarns.length),
-            tls: doctor?.http_tls_enabled == null ? '—' : String(doctor.http_tls_enabled),
+            tls: doctor?.http_tls_enabled == null ? t('emptyValue') : String(doctor.http_tls_enabled),
           }) }}
         </span>
       </div>
@@ -761,7 +821,7 @@ watch(
           </tbody>
         </table>
       </div>
-      <p v-else class="text-xs mts-muted">{{ loadingDoctor ? t('loading') : '—' }}</p>
+      <p v-else class="text-xs mts-muted">{{ loadingDoctor ? t('loading') : t('emptyValue') }}</p>
       <p v-if="doctorOKs.length" class="mt-2 text-[11px] mts-muted">
         {{ formatMessage(t('readinessDoctorOkChecks'), { count: doctorOKs.length }) }}
       </p>
