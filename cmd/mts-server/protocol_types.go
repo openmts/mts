@@ -66,10 +66,27 @@ type queryStatsResponse struct {
 }
 
 type streamRecord struct {
-	Type  string          `json:"type"`
-	Row   *mts.Row        `json:"row,omitempty"`
-	Error *errorResponse  `json:"error,omitempty"`
-	Stats *mts.QueryStats `json:"stats,omitempty"`
+	Type   string            `json:"type"`
+	Row    *mts.Row          `json:"row,omitempty"`
+	Column *mts.ColumnSeries `json:"column,omitempty"`
+	Error  *errorResponse    `json:"error,omitempty"`
+	Stats  *mts.QueryStats   `json:"stats,omitempty"`
+}
+
+// queryStreamRequest 控制 NDJSON 流式查询形态。
+// Format: "row"（默认）或 "column"；兼容 Mode 字段。
+type queryStreamRequest struct {
+	Query  mts.Query `json:"query"`
+	Format string    `json:"format,omitempty"`
+	Mode   string    `json:"mode,omitempty"`
+}
+
+type deleteRequest struct {
+	Request mts.DeleteRequest `json:"request"`
+}
+
+type maintenanceStatsResponse struct {
+	Stats mts.MaintenanceStats `json:"stats"`
 }
 
 type userResponse struct {

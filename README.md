@@ -217,10 +217,14 @@ HTTP 默认监听 `127.0.0.1:8086`，gRPC 默认监听 `127.0.0.1:9096`。HTTP A
 curl http://127.0.0.1:8086/healthz
 curl -X POST http://127.0.0.1:8086/api/v1/data/write -d @points.json
 curl -X POST http://127.0.0.1:8086/api/v1/data/write/typed -d @typed-batch.json
+curl -X POST http://127.0.0.1:8086/api/v1/data/write/points-typed -d @points.json
 curl -X POST http://127.0.0.1:8086/api/v1/data/query/rows -d @query.json
 curl -X POST http://127.0.0.1:8086/api/v1/data/query/columns -d @query.json
+curl -X POST http://127.0.0.1:8086/api/v1/data/query/stream -d '{"query":{...},"format":"column"}'
 curl -X POST http://127.0.0.1:8086/api/v1/data/query/explain -d @query.json
+curl -X POST http://127.0.0.1:8086/api/v1/data/delete -d @delete.json
 curl -X POST http://127.0.0.1:8086/api/v1/admin/flush
+curl http://127.0.0.1:8086/api/v1/admin/stats/maintenance
 curl -X POST http://127.0.0.1:8086/api/v1/admin/compact
 curl http://127.0.0.1:8086/api/v1/admin/api-spec
 curl -X POST http://127.0.0.1:8086/api/v1/admin/storage/validate

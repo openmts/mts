@@ -483,6 +483,41 @@ func TestHTTPP0P1DataMetadataUsersAdminAndDownsample(t *testing.T) {
 		t.Fatalf("stream status/body = %d %s, want row stream", streamResp.StatusCode, streamBody)
 	}
 
+	columnStreamResp, err := postJSONRawWithHeaders(server.URL+"/api/v1/data/query/stream", queryStreamRequest{
+		Query:  testQuery(),
+		Format: "column",
+	}, dataHeaders)
+	if err != nil {
+		t.Fatalf("column stream error = %v", err)
+	}
+	columnStreamBody, closeColumnStream := readResponseBody(t, columnStreamResp)
+	defer closeColumnStream()
+	if columnStreamResp.StatusCode != http.StatusOK || !strings.Contains(columnStreamBody, `"type":"column"`) {
+		t.Fatalf("column stream status/body = %d %s, want column stream", columnStreamResp.StatusCode, columnStreamBody)
+	}
+
+	postJSONWithHeaders(t, server.URL+"/api/v1/data/write/points-typed", writeRequest{
+		Points: []mts.Point{{
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			Timestamp:   3,
+			Fields:      map[string]mts.FieldValue{"usage": mts.Float64Value(1.1)},
+		}},
+		Options: mts.WriteOptions{Sync: true},
+	}, dataHeaders, http.StatusOK, &writeResponse{})
+
+	postJSONWithHeaders(t, server.URL+"/api/v1/data/delete", deleteRequest{
+		Request: mts.DeleteRequest{
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": "a"},
+			StartTime:   3,
+			EndTime:     3,
+		},
+	}, dataHeaders, http.StatusOK, &okResponse{})
+
+	var maintenanceStatsResp maintenanceStatsResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/stats/maintenance", adminHeaders, http.StatusOK, &maintenanceStatsResp)
+
 	var statsResp queryStatsResponse
 	getJSONWithHeaders(t, server.URL+"/api/v1/data/query/stats", dataHeaders, http.StatusOK, &statsResp)
 	if statsResp.Stats.SamplesReturned == 0 {

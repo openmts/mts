@@ -191,6 +191,13 @@ func (r *serverRuntime) handleCompactionStats(writer http.ResponseWriter, reques
 	writeHTTPJSON(writer, http.StatusOK, compactionStatsResponse{Stats: r.compactionStats()})
 }
 
+func (r *serverRuntime) handleMaintenanceStats(writer http.ResponseWriter, request *http.Request) {
+	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, maintenanceStatsResponse{Stats: r.maintenanceStats()})
+}
+
 func (r *serverRuntime) handleAdminHealth(writer http.ResponseWriter, request *http.Request) {
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return

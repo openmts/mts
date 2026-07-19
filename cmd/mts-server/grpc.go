@@ -221,6 +221,28 @@ func grpcWriteTypedBatch(r *serverRuntime, ctx context.Context, req any) (any, e
 	return writeResponse{OK: true}, r.writeTypedBatch(ctx, *request)
 }
 
+func grpcWritePointsAsTypedBatch(r *serverRuntime, ctx context.Context, req any) (any, error) {
+	request := req.(*writeRequest)
+	for _, db := range writeRequestDatabases(*request) {
+		dbName := db
+		if dbName == "__default__" {
+			dbName = ""
+		}
+		if err := r.authorizeGRPCDatabase(ctx, dbName, mts.DatabasePermissionWrite); err != nil {
+			return nil, err
+		}
+	}
+	return writeResponse{OK: true}, r.writePointsAsTyped(ctx, *request)
+}
+
+func grpcDelete(r *serverRuntime, ctx context.Context, req any) (any, error) {
+	request := req.(*deleteRequest)
+	if err := r.authorizeGRPCDatabase(ctx, request.Request.Database, mts.DatabasePermissionWrite); err != nil {
+		return nil, err
+	}
+	return okResponse{OK: true}, r.deleteData(ctx, request.Request)
+}
+
 func grpcQueryColumns(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	request := req.(*queryRequest)
 	if err := r.authorizeGRPCDatabase(ctx, request.Query.Database, mts.DatabasePermissionRead); err != nil {
@@ -491,6 +513,13 @@ func grpcMaintenanceErrors(r *serverRuntime, ctx context.Context, _ any) (any, e
 		return nil, err
 	}
 	return maintenanceErrorsResponse{Errors: r.maintenanceErrors(ctx)}, nil
+}
+
+func grpcMaintenanceStats(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	if err := r.requireGRPCAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return maintenanceStatsResponse{Stats: r.maintenanceStats()}, nil
 }
 
 func grpcStorageMemory(r *serverRuntime, ctx context.Context, _ any) (any, error) {

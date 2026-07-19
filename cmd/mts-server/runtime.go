@@ -237,6 +237,23 @@ func (r *serverRuntime) writeTypedBatch(ctx context.Context, req typedWriteReque
 	return r.engine.WriteTypedBatch(ctx, req.Batch, req.Options)
 }
 
+func (r *serverRuntime) writePointsAsTyped(ctx context.Context, req writeRequest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if max := r.currentConfig().Limits.MaxWritePoints; max > 0 && len(req.Points) > max {
+		return newAPIError(errorCodeBadRequest, "too many points in write request", nil)
+	}
+	return r.engine.WritePointsAsTypedBatch(ctx, req.Points, req.Options)
+}
+
+func (r *serverRuntime) deleteData(ctx context.Context, req mts.DeleteRequest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return r.engine.Delete(ctx, req)
+}
+
 func (r *serverRuntime) queryRows(ctx context.Context, req queryRowsRequest) ([]mts.Row, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -321,6 +338,10 @@ func (r *serverRuntime) storageMemory() mts.StorageMemorySnapshot {
 
 func (r *serverRuntime) compactionStats() mts.CompactionStats {
 	return r.engine.CompactionStatsSnapshot()
+}
+
+func (r *serverRuntime) maintenanceStats() mts.MaintenanceStats {
+	return r.engine.MaintenanceStatsSnapshot()
 }
 
 func (r *serverRuntime) health() mts.HealthSnapshot {
