@@ -16,8 +16,8 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'https-edge',
     severity: 'required',
     title: '边缘 HTTPS / TLS',
-    detail: '由反向代理或负载均衡终止 TLS；mts-server 也可启用 HTTP TLS。',
-    automated: false,
+    detail: '边缘终止 TLS/HSTS，或启用 mts-server HTTP TLS（启用后自动发 HSTS）；doctor 会检查并提示。',
+    automated: true,
   },
   {
     id: 'security-headers',
@@ -44,7 +44,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     id: 'backup-snapshot',
     severity: 'recommended',
     title: '备份与快照演练',
-    detail: 'Storage 页备份演练清单 + snapshot/export；旁路恢复仍需主机侧验证。',
+    detail: 'Storage 演练清单 + TestDataDirSidePathRestoreDrill 数据目录旁路恢复；主机异地拷贝仍人工。',
     automated: true,
   },
   {

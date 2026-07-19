@@ -48,7 +48,7 @@ export const BACKUP_DRILL_STEPS: BackupDrillStep[] = [
     id: 'restore-side',
     severity: 'required',
     title: '旁路恢复验证',
-    detail: '使用快照在旁路 data_dir 启动 mts-server，执行查询对比关键序列。',
+    detail: 'data_dir 快照后旁路 restore，并用查询比对关键序列（自动化：TestDataDirSidePathRestoreDrill）。',
     inDashboard: false,
   },
   {

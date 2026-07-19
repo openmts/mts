@@ -9,7 +9,7 @@ import (
 
 func TestApplySecurityHeaders(t *testing.T) {
 	h := make(http.Header)
-	applySecurityHeaders(h)
+	applySecurityHeaders(h, false)
 	checks := map[string]string{
 		"X-Content-Type-Options":     "nosniff",
 		"X-Frame-Options":            "DENY",
@@ -22,11 +22,20 @@ func TestApplySecurityHeaders(t *testing.T) {
 			t.Fatalf("%s = %q, want %q", k, got, want)
 		}
 	}
+	if got := h.Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("HSTS without TLS = %q, want empty", got)
+	}
 	csp := h.Get("Content-Security-Policy")
 	for _, part := range []string{"default-src 'self'", "frame-ancestors 'none'", "object-src 'none'", "script-src 'self'"} {
 		if !strings.Contains(csp, part) {
 			t.Fatalf("CSP missing %q: %q", part, csp)
 		}
+	}
+
+	h2 := make(http.Header)
+	applySecurityHeaders(h2, true)
+	if got := h2.Get("Strict-Transport-Security"); !strings.Contains(got, "max-age=31536000") {
+		t.Fatalf("HSTS with TLS = %q", got)
 	}
 }
 
@@ -57,5 +66,9 @@ func TestHTTPSecurityHeadersOnHealthz(t *testing.T) {
 	}
 	if got := resp.Header.Get("X-Request-ID"); got == "" {
 		t.Fatal("missing X-Request-ID")
+	}
+	// 明文测试服务器不应默认启用 HSTS
+	if got := resp.Header.Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("unexpected HSTS on plain HTTP = %q", got)
 	}
 }

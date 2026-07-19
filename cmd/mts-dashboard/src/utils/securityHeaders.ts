@@ -29,6 +29,14 @@ export function cspLooksCommercial(csp: string | null | undefined): boolean {
   return EXPECTED_CSP_PARTS.every((p) => csp.includes(p))
 }
 
+/** 仅当服务端启用 HTTP TLS 时才会写入；边缘 HTTPS 由代理配置。 */
+export const EXPECTED_HSTS = 'max-age=31536000; includeSubDomains'
+
+export function hstsLooksCommercial(hsts: string | null | undefined, tlsEnabled: boolean): boolean {
+  if (!tlsEnabled) return !hsts
+  return !!hsts && hsts.includes('max-age=31536000')
+}
+
 /** 可商用后台冒烟路径（逻辑清单，供文档/契约测试） */
 export const COMMERCIAL_SMOKE_PATHS = [
   { id: 'login', path: '/login', requiresAuth: false },

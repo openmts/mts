@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   COMMERCIAL_SMOKE_PATHS,
   cspLooksCommercial,
+  hstsLooksCommercial,
   missingSecurityHeaders,
 } from './securityHeaders.ts'
 
@@ -35,4 +36,11 @@ test('commercial smoke paths cover core surfaces', () => {
   }
   assert.ok(COMMERCIAL_SMOKE_PATHS.some((p) => p.admin))
   assert.ok(COMMERCIAL_SMOKE_PATHS.some((p) => !p.requiresAuth))
+})
+
+test('hstsLooksCommercial only when tls enabled', () => {
+  assert.equal(hstsLooksCommercial('', false), true)
+  assert.equal(hstsLooksCommercial('max-age=1', false), false)
+  assert.equal(hstsLooksCommercial('max-age=31536000; includeSubDomains', true), true)
+  assert.equal(hstsLooksCommercial('', true), false)
 })

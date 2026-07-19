@@ -23,6 +23,9 @@
 
 ## 2. 上线前检查清单
 
+建议先跑：`mts-server doctor --config /path/to/mts-server.yaml`（会检查 data/backup 目录、TLS 与生产鉴权提示）。
+
+
 | 项 | 必须 | 做法 |
 |---|---|---|
 | 边缘 HTTPS / TLS | 是 | 反向代理证书；可选 mts-server 自带 TLS |
@@ -111,5 +114,5 @@ server {
 
 1. Dashboard → 存储：执行验证 → 创建快照 → 导出配置。
 2. 将快照目录拷贝到旁路介质。
-3. 使用旁路 `data_dir` 启动临时 mts-server，查询关键 measurement 做抽样比对。
+3. 使用 `storagecheck.Snapshot/Restore` 做 data_dir 旁路拷贝（自动化覆盖：`TestDataDirSidePathRestoreDrill`），或在旁路 data_dir 启动临时 mts-server 做查询比对。
 4. 在存储页备份演练清单勾选主机侧步骤，保留演练记录。

@@ -418,3 +418,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - Storage 备份演练清单：已完成
 - Makefile dashboard-test / dashboard-test-e2e：已完成
 - **仍不宣称可商用目标完成**：边缘 HTTPS/HSTS 部署落地、完整旁路恢复自动化
+
+
+## P19 状态（2026-07-20）
+- data_dir 旁路恢复自动化：`TestDataDirSidePathRestoreDrill`
+- TLS 启用时 HSTS + doctor 边缘 HTTPS 提示
+- **仍不宣称可商用目标完成**：生产边缘证书/HSTS 人工验收、跨主机备份编排

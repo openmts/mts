@@ -22,7 +22,8 @@ type statusRecorder struct {
 }
 
 // applySecurityHeaders 设置可商用后台默认安全响应头（API + Dashboard 静态资源共用）。
-func applySecurityHeaders(header http.Header) {
+// enableHSTS 仅在确认 TLS 终止（本机 TLS 或受信边缘 HTTPS）时启用。
+func applySecurityHeaders(header http.Header, enableHSTS bool) {
 	if header == nil {
 		return
 	}
@@ -33,6 +34,9 @@ func applySecurityHeaders(header http.Header) {
 	header.Set("Cross-Origin-Opener-Policy", "same-origin")
 	// SPA 产物为同域静态资源；style 可能含构建期注入，保留 self。
 	header.Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'")
+	if enableHSTS {
+		header.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	}
 }
 
 func (r *serverRuntime) wrapHTTP(handler http.Handler) http.Handler {
@@ -43,7 +47,7 @@ func (r *serverRuntime) wrapHTTP(handler http.Handler) http.Handler {
 			requestID = r.nextRequestID()
 		}
 		writer.Header().Set(headerRequestID, requestID)
-		applySecurityHeaders(writer.Header())
+		applySecurityHeaders(writer.Header(), cfg.HTTP.TLS.Enabled)
 		ctx := context.WithValue(request.Context(), contextRequestID, requestID)
 		if timeout := time.Duration(cfg.Limits.RequestTimeout); timeout > 0 {
 			var cancel context.CancelFunc
