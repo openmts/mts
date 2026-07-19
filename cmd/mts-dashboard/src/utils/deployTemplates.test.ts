@@ -5,6 +5,7 @@ import {
   deployKitFilename,
   deployTemplateById,
   formatDeployKitMarkdown,
+  buildDeployKitSummary,
 } from './deployTemplates.ts'
 
 test('deploy templates cover cert and scheduler surfaces', () => {
@@ -32,4 +33,15 @@ test('formatDeployKitMarkdown is bilingual and includes sample bodies', () => {
   assert.match(en, /does \*\*not\*\* mark edge HTTPS/)
   assert.match(zh, /mts-backup.service/)
   assert.match(deployKitFilename(new Date('2026-07-20T12:34:56.000Z')), /mts-deploy-kit-2026-07-20T12-34-56\.md/)
+})
+
+
+test('buildDeployKitSummary localizes titles and marks manual signoff', () => {
+  const zh = buildDeployKitSummary('zh')
+  const en = buildDeployKitSummary('en')
+  assert.equal(zh.manual_signoff_required, true)
+  assert.ok(zh.count >= 5)
+  assert.ok(zh.items.some((x) => x.id === 'nginx-https' && /Nginx/.test(x.title)))
+  assert.equal(en.items.find((x) => x.id === 'nginx-https')?.title, 'Nginx HTTPS + HSTS sample')
+  assert.match(en.note, /does not complete/i)
 })

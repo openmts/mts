@@ -72,6 +72,10 @@ test('buildAcceptancePack aggregates archive client server ops', () => {
   assert.match(md, /flush/)
   assert.match(md, /82%/)
   assert.match(md, /边缘 HTTPS \/ TLS/)
+  assert.ok(pack.deploy_kit.count >= 5)
+  assert.equal(pack.deploy_kit.manual_signoff_required, true)
+  assert.ok(pack.deploy_kit.items.some((x) => x.id === 'nginx-https'))
+  assert.match(md, /部署材料包索引|nginx-https/)
 })
 
 test('buildAcceptancePack allows missing server', () => {
@@ -97,6 +101,9 @@ test('acceptance pack english includes localized catalog title', () => {
   assert.match(md, /commercial acceptance pack/i)
   assert.match(md, /Edge HTTPS \/ TLS/)
   assert.match(md, /catalog\.sample: https-edge — Edge HTTPS \/ TLS/)
+  assert.ok(pack.deploy_kit.items.some((x) => x.id === 'cron-backup' && /cron/i.test(x.title)))
+  assert.match(md, /Deployment kit index/i)
+  assert.match(md, /nginx-https/)
 })
 
 test('acceptancePackFilenames stamp', () => {

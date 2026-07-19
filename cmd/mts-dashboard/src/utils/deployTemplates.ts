@@ -207,3 +207,43 @@ export function deployKitFilename(at = new Date()): string {
   const stamp = at.toISOString().replace(/[:.]/g, '-').slice(0, 19)
   return `mts-deploy-kit-${stamp}.md`
 }
+
+export interface DeployKitSummaryItem {
+  id: string
+  title: string
+  filename: string
+  language: DeployTemplate['language']
+}
+
+export interface DeployKitSummary {
+  count: number
+  manual_signoff_required: true
+  note: string
+  items: DeployKitSummaryItem[]
+  docs: string[]
+}
+
+export function buildDeployKitSummary(
+  locale: LocaleCode = 'zh',
+  templates = DEPLOY_TEMPLATES,
+): DeployKitSummary {
+  const note =
+    locale === 'en'
+      ? 'Host-side samples only; copy/download does not complete edge HTTPS or off-host backup acceptance.'
+      : '仅主机侧样例；复制/下载不代表边缘 HTTPS 或异地备份验收完成。'
+  return {
+    count: templates.length,
+    manual_signoff_required: true,
+    note,
+    items: templates.map((tpl) => ({
+      id: tpl.id,
+      title: textForLocale(tpl.title, locale),
+      filename: tpl.filename,
+      language: tpl.language,
+    })),
+    docs: [
+      'docs/ops/dashboard-production-runbook.md',
+      'docs/ops/backup-orchestration.md',
+    ],
+  }
+}

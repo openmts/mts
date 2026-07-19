@@ -600,6 +600,9 @@ export const messages = {
     readinessCopied: '已复制到剪贴板',
     readinessCopyFailed: '复制失败，请手动选择文本',
     readinessDeployManualNote: '以下内容仅供主机侧安装与人工验收，需在目标环境真实执行并签核。',
+    overviewDeployKit: '部署材料包',
+    overviewDeployKitHint: '证书/cron/systemd 样例在就绪中心；复制下载不代表验收完成。',
+    overviewGoDeployKit: '打开部署材料包',
     unsavedLeaveConfirm: '有未保存的表单更改，确定离开当前页面？',
   },
   en: {
@@ -1201,6 +1204,9 @@ export const messages = {
     readinessCopied: 'Copied to clipboard',
     readinessCopyFailed: 'Copy failed; select text manually',
     readinessDeployManualNote: 'Samples for host-side install and manual acceptance; execute and sign off in the target environment.',
+    overviewDeployKit: 'Deployment kit',
+    overviewDeployKitHint: 'Cert/cron/systemd samples live in readiness; copy/download does not complete acceptance.',
+    overviewGoDeployKit: 'Open deployment kit',
     unsavedLeaveConfirm: 'You have unsaved form changes. Leave this page?',
   },
 } as const

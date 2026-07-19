@@ -4,6 +4,10 @@ import type { ReadinessArchivePayload } from './readinessArchive.ts'
 import type { OpsActionEntry } from './opsActionLog.ts'
 import type { ClientBuildInfo } from './buildInfo.ts'
 import type { LocaleCode } from './localizedText.ts'
+import {
+  buildDeployKitSummary,
+  type DeployKitSummary,
+} from './deployTemplates.ts'
 
 export const ACCEPTANCE_PACK_KIND = 'mts.acceptance.pack' as const
 export const ACCEPTANCE_PACK_VERSION = 1 as const
@@ -24,6 +28,8 @@ export interface AcceptancePackInput {
   now?: string
   /** 若省略则继承 archive.locale */
   locale?: LocaleCode
+  /** 可选覆盖；默认按 locale 生成部署材料包摘要 */
+  deployKit?: DeployKitSummary
 }
 
 export interface AcceptancePackPayload {
@@ -38,6 +44,8 @@ export interface AcceptancePackPayload {
   server: ServerVersionInfo | null
   readiness: ReadinessArchivePayload
   ops_actions: OpsActionEntry[]
+  /** 部署材料包索引（不含样例全文，避免验收包过大） */
+  deploy_kit: DeployKitSummary
 }
 
 const copy = {
@@ -62,6 +70,11 @@ const copy = {
     empty: '（空）',
     more: '共',
     items: '条',
+    deployKit: '## 部署材料包索引',
+    deployKitCount: '样例数',
+    deployKitManual: '人工签核',
+    deployKitRequired: '必做',
+    deployKitDocs: '相关文档',
   },
   en: {
     disclaimer:
@@ -84,6 +97,11 @@ const copy = {
     empty: '(empty)',
     more: 'total',
     items: 'entries',
+    deployKit: '## Deployment kit index',
+    deployKitCount: 'Samples',
+    deployKitManual: 'Manual sign-off',
+    deployKitRequired: 'required',
+    deployKitDocs: 'Related docs',
   },
 } as const
 
@@ -103,6 +121,7 @@ export function buildAcceptancePack(input: AcceptancePackInput): AcceptancePackP
         built_at: input.server.built_at ? String(input.server.built_at) : undefined,
       }
     : null
+  const deploy_kit = input.deployKit ?? buildDeployKitSummary(locale)
   return {
     version: ACCEPTANCE_PACK_VERSION,
     kind: ACCEPTANCE_PACK_KIND,
@@ -115,6 +134,13 @@ export function buildAcceptancePack(input: AcceptancePackInput): AcceptancePackP
     server,
     readiness: input.archive,
     ops_actions: (input.opsActions ?? []).map((x) => ({ ...x })),
+    deploy_kit: {
+      count: deploy_kit.count,
+      manual_signoff_required: true,
+      note: deploy_kit.note,
+      items: deploy_kit.items.map((x) => ({ ...x })),
+      docs: [...deploy_kit.docs],
+    },
   }
 }
 
@@ -147,7 +173,6 @@ export function formatAcceptancePackMarkdown(pack: AcceptancePackPayload): strin
   if (pack.readiness.score.reasons.length) {
     lines.push(`- ${t.reasons}${sep}${pack.readiness.score.reasons.join(', ')}`)
   }
-  // 本地化清单标题摘要（便于英文交接）
   const sample = pack.readiness.catalog?.production?.find((x) => x.id === 'https-edge')
   if (sample?.title) {
     lines.push(`- catalog.sample: ${sample.id} — ${sample.title}`)
@@ -161,6 +186,18 @@ export function formatAcceptancePackMarkdown(pack: AcceptancePackPayload): strin
     lines.push(`- ok: ${pack.readiness.doctor.ok === true ? 'yes' : 'no'}`)
     lines.push(`- http_tls_enabled: ${String(pack.readiness.doctor.http_tls_enabled)}`)
     lines.push(`- warn_count: ${pack.readiness.doctor.warn_count ?? 0}`)
+  }
+  lines.push('', t.deployKit, '')
+  lines.push(`- ${t.deployKitCount}${sep}${pack.deploy_kit.count}`)
+  lines.push(
+    `- ${t.deployKitManual}${sep}${pack.deploy_kit.manual_signoff_required ? t.deployKitRequired : 'optional'}`,
+  )
+  lines.push(`- ${t.note}${sep}${pack.deploy_kit.note}`)
+  for (const item of pack.deploy_kit.items) {
+    lines.push(`- ${item.id} — ${item.title} (\`${item.filename}\`)`)
+  }
+  if (pack.deploy_kit.docs.length) {
+    lines.push(`- ${t.deployKitDocs}${sep}${pack.deploy_kit.docs.join(', ')}`)
   }
   lines.push('', t.ops, '')
   if (!pack.ops_actions.length) {

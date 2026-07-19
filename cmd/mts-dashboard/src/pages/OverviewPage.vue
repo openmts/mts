@@ -14,7 +14,7 @@ import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import { requiredChecklist } from '@/utils/productionChecklist'
 import { edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
 import { backupScheduleProgress } from '@/utils/backupSchedule'
-import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3 } from 'lucide-vue-next'
+import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3, FileCode2 } from 'lucide-vue-next'
 
 interface HealthResponse extends HealthSnapshot {}
 interface StorageMemorySnapshot {
@@ -206,6 +206,11 @@ function goReadiness() {
   void router.push('/ops/readiness')
 }
 
+function goDeployKit() {
+  void router.push({ path: '/ops/readiness', hash: '#deploy-kit' })
+}
+
+
 onMounted(() => {
   void loadOverview()
   clockTimer = setInterval(() => { nowMs.value = Date.now() }, 15_000)
@@ -309,11 +314,18 @@ const showAdminPanels = computed(() => isAdmin.value)
           {{ t('readinessBackupSchedule') }} {{ localReadinessScore.backupSchedule }}% ·
           Doctor {{ localReadinessScore.doctor }}%
         </p>
+        <p class="mt-1 text-[11px] mts-muted">{{ t('overviewDeployKitHint') }}</p>
       </div>
-      <button type="button" class="mts-btn-primary" data-testid="overview-go-readiness" @click="goReadiness">
-        <ClipboardCheck class="h-3.5 w-3.5" />
-        {{ t('readiness') }}
-      </button>
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button" class="mts-btn-primary" data-testid="overview-go-readiness" @click="goReadiness">
+          <ClipboardCheck class="h-3.5 w-3.5" />
+          {{ t('readiness') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-go-deploy-kit" :title="t('overviewDeployKitHint')" @click="goDeployKit">
+          <FileCode2 class="h-3.5 w-3.5" />
+          {{ t('overviewGoDeployKit') }}
+        </button>
+      </div>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

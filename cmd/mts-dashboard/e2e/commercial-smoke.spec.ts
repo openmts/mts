@@ -131,6 +131,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByTestId('overview-readiness-score')).toBeVisible()
   await expect(page.getByTestId('overview-readiness-total')).toBeVisible()
+  await expect(page.getByTestId('overview-go-deploy-kit')).toBeVisible()
+  await page.getByTestId('overview-go-deploy-kit').click()
+  await expect(page).toHaveURL(/ops\/readiness/)
+  await expect(page.getByTestId('readiness-deploy-kit')).toBeVisible()
+  await page.goto('/')
   await page.getByTestId('overview-go-readiness').click()
   await expect(page).toHaveURL(/ops\/readiness/)
 

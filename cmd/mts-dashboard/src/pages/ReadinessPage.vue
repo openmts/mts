@@ -280,6 +280,11 @@ onMounted(() => {
     void loadDoctor()
     void loadServerVersion()
   }
+  if (typeof window !== 'undefined' && window.location.hash === '#deploy-kit') {
+    requestAnimationFrame(() => {
+      document.getElementById('deploy-kit')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 })
 </script>
 
@@ -413,7 +418,7 @@ onMounted(() => {
           {{ t(a.labelKey) }}
         </button>
       </div>
-      <div class="mt-4 space-y-3" data-testid="readiness-deploy-kit">
+      <div id="deploy-kit" class="mt-4 space-y-3 scroll-mt-20" data-testid="readiness-deploy-kit">
         <div class="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p class="mb-1 flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-200">
