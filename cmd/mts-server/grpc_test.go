@@ -215,7 +215,7 @@ func TestGRPCUserRoleControlsUserManagement(t *testing.T) {
 	}()
 	ctx := context.Background()
 	serviceAdminCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer test-admin-token"))
-	invokeOK(t, serviceAdminCtx, conn, "CreateUser", &mts.User{Name: "admin", Role: mts.UserRoleAdmin}, &okResponse{})
+	// openTestRuntime 已 bootstrap 默认 admin，这里只重置密码。
 	invokeOK(t, serviceAdminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "admin", Password: "admin-secret"}, &okResponse{})
 	invokeOK(t, serviceAdminCtx, conn, "CreateUser", &mts.User{Name: "alice"}, &okResponse{})
 	invokeOK(t, serviceAdminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "alice", Password: "alice-secret"}, &okResponse{})

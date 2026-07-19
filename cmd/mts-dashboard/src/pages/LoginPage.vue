@@ -2,12 +2,13 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import { sanitizeRedirect } from '@/router'
 import { Server } from 'lucide-vue-next'
 
 const router = useRouter()
 const { login } = useAuth()
 
-const username = ref('')
+const username = ref('admin')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
@@ -24,7 +25,7 @@ async function handleLogin() {
     if (err) {
       error.value = err
     } else {
-      const redirect = (router.currentRoute.value.query.redirect as string) || '/'
+      const redirect = sanitizeRedirect(router.currentRoute.value.query.redirect) || '/'
       await router.push(redirect)
     }
   } finally {
@@ -76,6 +77,11 @@ async function handleLogin() {
           {{ loading ? '登录中...' : '登录' }}
         </button>
       </form>
+
+      <div class="mt-5 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500">
+        <p class="font-medium text-slate-600">默认账号策略</p>
+        <p class="mt-1">服务启动且密码认证开启时会预置 <code class="rounded bg-white px-1">admin / admin</code>。首次登录后请尽快修改密码。</p>
+      </div>
     </div>
   </div>
 </template>

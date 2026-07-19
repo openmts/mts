@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { computed } from 'vue'
 import { Menu } from 'lucide-vue-next'
 
 const route = useRoute()
-const { currentUser, logout } = useAuth()
+const router = useRouter()
+const { currentUser, currentRole, logout, loggingOut } = useAuth()
 
 defineEmits<{ 'toggle-sidebar': [] }>()
 
@@ -20,12 +21,18 @@ const routeLabels: Record<string, string> = {
   Audit: '审计日志',
   Storage: '存储快照',
   Write: '写入管理',
+  NotFound: '未找到',
 }
 
 const pageTitle = computed(() => {
   const name = route.name as string | undefined
   return name ? (routeLabels[name] ?? name) : ''
 })
+
+async function onLogout() {
+  await logout()
+  await router.replace({ name: 'Login' })
+}
 </script>
 
 <template>
@@ -40,12 +47,13 @@ const pageTitle = computed(() => {
       <h1 class="text-lg font-medium text-slate-800">{{ pageTitle }}</h1>
     </div>
     <div class="flex items-center gap-3 text-sm text-slate-600">
-      <span class="hidden sm:inline">{{ currentUser }}</span>
+      <span class="hidden sm:inline">{{ currentUser }}<span v-if="currentRole" class="text-slate-400"> · {{ currentRole }}</span></span>
       <button
-        class="rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-        @click="logout"
+        class="rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+        :disabled="loggingOut"
+        @click="onLogout"
       >
-        退出
+        {{ loggingOut ? '退出中...' : '退出' }}
       </button>
     </div>
   </header>

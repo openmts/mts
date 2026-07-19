@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
+import PermissionDenied from '@/components/PermissionDenied.vue'
 import { ScrollText } from 'lucide-vue-next'
 
 interface User { name: string; display_name?: string }
@@ -9,15 +10,15 @@ interface UsersResponse { users: User[] }
 interface AuditEvent { time: string; user_name: string; action: string; detail: string }
 interface AuditResponse { events: AuditEvent[] }
 
-const { currentUser } = useAuth()
-
+const { currentUser, isAdmin } = useAuth()
 const users = ref<User[]>([])
 const selectedUser = ref('')
 const auditEvents = ref<AuditEvent[]>([])
-const loadError = ref('')
 const loading = ref(false)
+const loadError = ref('')
 
 onMounted(async () => {
+  if (!isAdmin.value) return
   try {
     const data = await apiGet<UsersResponse>('/api/v1/users')
     users.value = data.users ?? []
@@ -33,10 +34,12 @@ onMounted(async () => {
 async function loadAudit() {
   if (!selectedUser.value) return
   loading.value = true
+  loadError.value = ''
   try {
     const data = await apiGet<AuditResponse>(`/api/v1/users/${encodeURIComponent(selectedUser.value)}/audit`)
     auditEvents.value = data.events ?? []
   } catch (e) {
+    auditEvents.value = []
     loadError.value = e instanceof Error ? e.message : '加载审计日志失败'
   } finally {
     loading.value = false
@@ -45,7 +48,8 @@ async function loadAudit() {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <PermissionDenied v-if="!isAdmin" />
+  <div v-else class="space-y-6">
     <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ loadError }}</p>
 
     <div class="flex items-end gap-3">

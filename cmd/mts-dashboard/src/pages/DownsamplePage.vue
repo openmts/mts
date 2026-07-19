@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
+import { useAuth } from '@/composables/useAuth'
+import PermissionDenied from '@/components/PermissionDenied.vue'
 import { Plus, Trash2, Play, Pause, RefreshCw } from 'lucide-vue-next'
 
 interface DownsamplePolicy {
@@ -18,6 +20,7 @@ interface DownsampleStatus { policy_name: string; completed_until_unix: number; 
 interface PoliciesResponse { policies: DownsamplePolicy[] }
 interface StatusesResponse { statuses: DownsampleStatus[] }
 
+const { isAdmin } = useAuth()
 const policies = ref<DownsamplePolicy[]>([])
 const statuses = ref<DownsampleStatus[]>([])
 const loadError = ref('')
@@ -116,7 +119,8 @@ function getStatus(name: string): DownsampleStatus | undefined {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <PermissionDenied v-if="!isAdmin" />
+  <div v-else class="space-y-6">
     <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ loadError }}</p>
     <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
     <div class="flex gap-2">

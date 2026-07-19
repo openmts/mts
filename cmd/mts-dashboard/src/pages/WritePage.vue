@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { apiGet, apiPost } from '@/api/client'
+import { apiPost } from '@/api/client'
+import { listDatabases, listRetentionPolicies } from '@/api/meta'
+import { nowUnixMsString } from '@/utils/time'
+import { useNotify } from '@/composables/useNotify'
 import { Send, Plus, Trash2, Database, Clock, ToggleLeft, ToggleRight, Table2, FileText, BarChart3 } from 'lucide-vue-next'
 import { fieldTypes, buildFormPoints, parseLineProtocol, parsePrometheusText, type FormRow } from '@/composables/usePointParsers'
 
 type WriteMode = 'form' | 'line' | 'prometheus'
-
-interface DatabaseListResponse { measurements: string[] }
 
 const databases = ref<string[]>([])
 const retentionPolicies = ref<string[]>([])
@@ -20,10 +21,11 @@ const formRows = ref<FormRow[]>([createEmptyRow()])
 const result = ref<{ ok: boolean; message: string } | null>(null)
 const loading = ref(false)
 const actionError = ref('')
+const { success, error: notifyError } = useNotify()
 
-const lineProtocolExample = `cpu,host=server01 usage=75.5,temperature=42 ${Date.now() * 1e6}
-cpu,host=server02 usage=60.0,temperature=38 ${Date.now() * 1e6}
-mem,host=server01 used=8589934592 ${Date.now() * 1e6}
+const lineProtocolExample = `cpu,host=server01 usage=75.5,temperature=42 ${Date.now()}
+cpu,host=server02 usage=60.0,temperature=38 ${Date.now()}
+mem,host=server01 used=8589934592i ${Date.now()}
 `
 
 const prometheusExample = `cpu_usage{host="server01",mode="idle"} 75.5 ${Date.now()}
@@ -36,7 +38,7 @@ function createEmptyRow(): FormRow {
     measurement: '',
     tags: [{ key: '', value: '' }],
     fields: [{ key: 'value', value: '', type: 'float' }],
-    timestamp: String(Date.now() * 1e6),
+    timestamp: nowUnixMsString(),
   }
 }
 
@@ -49,10 +51,11 @@ function removeRow(idx: number) { if (formRows.value.length > 1) formRows.value.
 
 onMounted(async () => {
   try {
-    const data = await apiGet<DatabaseListResponse>('/api/v1/admin/databases')
-    databases.value = (data.measurements ?? []).sort()
+    databases.value = await listDatabases()
     if (databases.value.length) selectedDb.value = databases.value[0]
-  } catch (_) { /* 非关键 */ }
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : '加载数据库失败'
+  }
 })
 
 watch(selectedDb, async (db) => {
@@ -60,9 +63,11 @@ watch(selectedDb, async (db) => {
   retentionPolicy.value = 'autogen'
   if (!db) return
   try {
-    const data = await apiGet<{ policies: { name: string }[] }>(`/api/v1/admin/databases/${encodeURIComponent(db)}/retention-policies`)
-    retentionPolicies.value = (data.policies ?? []).map((p) => p.name)
-  } catch (_) { /* 非关键 */ }
+    const policies = await listRetentionPolicies(db)
+    retentionPolicies.value = policies.map((p) => p.name)
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : '加载保留策略失败'
+  }
 })
 
 async function doWrite() {
@@ -79,26 +84,35 @@ async function doWrite() {
     } else {
       points = parseLineProtocol(lineInput.value)
     }
+    if (!selectedDb.value) {
+      actionError.value = '请选择目标数据库'
+      loading.value = false
+      return
+    }
     if (!points.length) {
       actionError.value = '未能解析任何有效数据'
       loading.value = false
       return
     }
-    for (const p of points) {
-      (p as Record<string, unknown>).database = selectedDb.value
-      ;(p as Record<string, unknown>).retention_policy = retentionPolicy.value
+    for (const pt of points) {
+      const rec = pt as Record<string, unknown>
+      rec.database = selectedDb.value
+      rec.retention_policy = retentionPolicy.value
+      if (!rec.precision) rec.precision = 'ms'
     }
     const writePath = usePointsTyped.value ? '/api/v1/data/write/points-typed' : '/api/v1/data/write'
     await apiPost(writePath, { points, options })
     result.value = { ok: true, message: `写入成功 (${points.length} 条)` }
+    success(result.value.message)
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '写入失败'
+    notifyError(actionError.value)
   } finally {
     loading.value = false
   }
 }
 
-function setNow(row: FormRow) { row.timestamp = String(Date.now() * 1e6) }
+function setNow(row: FormRow) { row.timestamp = nowUnixMsString() }
 </script>
 
 <template>

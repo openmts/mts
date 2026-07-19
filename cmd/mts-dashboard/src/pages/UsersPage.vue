@@ -4,6 +4,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { Plus, Trash2, Shield, X, Key, Lock } from 'lucide-vue-next'
 import UserModals from '@/components/UserModals.vue'
+import { useNotify } from '@/composables/useNotify'
 
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
 interface UsersResponse { users: User[] }
@@ -13,7 +14,8 @@ interface DatabaseListResponse { measurements: string[] }
 
 const users = ref<User[]>([])
 const databases = ref<string[]>([])
-const { currentUser, isAuthenticated } = useAuth()
+const { currentUser, isAdmin } = useAuth()
+const { success, error: notifyError } = useNotify()
 const loadError = ref('')
 const actionError = ref('')
 const showCreate = ref(false)
@@ -30,10 +32,11 @@ const grantDbs = ref<string[]>([])
 const grantPerms = ref<string[]>([])
 
 onMounted(async () => {
+  if (!isAdmin.value) return
   await loadUsers()
   try {
-    const data = await apiGet<DatabaseListResponse>('/api/v1/admin/databases')
-    databases.value = data.measurements ?? []
+    const { listDatabases } = await import('@/api/meta')
+    databases.value = await listDatabases()
   } catch (_) {
     // 非关键路径
   }
@@ -90,8 +93,10 @@ async function doChangeSelfPassword() {
     showChangeSelfPassword.value = false
     selfOldPassword.value = ''
     selfNewPassword.value = ''
+    success('密码已修改')
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '修改密码失败'
+    notifyError(actionError.value)
   }
 }
 
@@ -156,6 +161,9 @@ async function grantPermission() {
   const failed = results.filter((r) => r.status === 'rejected')
   if (failed.length > 0) {
     actionError.value = `${failed.length} 项授权失败`
+    notifyError(actionError.value)
+  } else {
+    success('授权成功')
   }
   grantDbs.value = []
   grantPerms.value = []
@@ -164,10 +172,23 @@ async function grantPermission() {
 
 async function revokeAllPermissions(db: string, perms: string[]) {
   if (!selectedUser.value) return
-  for (const perm of perms) {
-    await apiDelete(`/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(db)}/${perm}`)
+  actionError.value = ''
+  try {
+    const results = await Promise.allSettled(perms.map((perm) =>
+      apiDelete(`/api/v1/users/${encodeURIComponent(selectedUser.value!.name)}/database-permissions/${encodeURIComponent(db)}/${perm}`),
+    ))
+    const failed = results.filter((r) => r.status === 'rejected').length
+    if (failed) {
+      actionError.value = `${failed} 项撤销失败`
+      notifyError(actionError.value)
+    } else {
+      success('权限已撤销')
+    }
+    await selectUser(selectedUser.value)
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : '撤销失败'
+    notifyError(actionError.value)
   }
-  await selectUser(selectedUser.value)
 }
 
 async function revokePermission(database: string, permission: string) {
@@ -202,7 +223,25 @@ const filteredUsers = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 lg:flex-row">
+  <div v-if="!isAdmin" class="mx-auto max-w-md space-y-4 rounded-xl border border-slate-200 bg-white p-6">
+    <h3 class="text-sm font-semibold text-slate-800">修改我的密码</h3>
+    <p class="text-xs text-slate-500">普通用户仅可修改自己的密码。数据库与管理操作请联系管理员授权。</p>
+    <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white" @click="showChangeSelfPassword = true">打开修改密码</button>
+    <UserModals
+      v-model:show-create="showCreate"
+      v-model:show-set-password="showSetPassword"
+      v-model:show-change-self-password="showChangeSelfPassword"
+      v-model:new-user="newUser"
+      v-model:set-password-value="setPasswordValue"
+      v-model:self-old-password="selfOldPassword"
+      v-model:self-new-password="selfNewPassword"
+      :set-password-user="setPasswordUser"
+      @create-user="createUser"
+      @set-password="doSetPassword"
+      @change-password="doChangeSelfPassword"
+    />
+  </div>
+  <div v-else class="flex flex-col gap-6 lg:flex-row">
     <div class="w-full shrink-0 lg:w-80">
       <p v-if="loadError" class="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{{ loadError }}</p>
       <p v-if="actionError" class="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{{ actionError }}</p>

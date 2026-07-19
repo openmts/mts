@@ -41,7 +41,8 @@ func openRuntime(ctx context.Context, cfg config) (*serverRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := bootstrapDefaultAdmin(ctx, cfg, engine); err != nil {
+	// bootstrap 不受 serve 父 context 取消影响（避免启动即 cancel 时无法预置管理员）。
+	if err := bootstrapDefaultAdmin(context.WithoutCancel(ctx), cfg, engine); err != nil {
 		_ = engine.Close(ctx)
 		return nil, err
 	}
@@ -87,7 +88,9 @@ const (
 )
 
 func bootstrapDefaultAdmin(ctx context.Context, cfg config, engine *mts.Engine) error {
-	if !cfg.Auth.RequireUser || cfg.User.PasswordAuthDisabled {
+	// Dashboard 强制登录；只要密码认证开启就预置默认管理员，便于 POC/演示首访可登录。
+	// require_user 仅控制数据面是否强制用户鉴权，不再作为 bootstrap 门槛。
+	if cfg.User.PasswordAuthDisabled {
 		return nil
 	}
 	user, ok, err := engine.GetUser(ctx, defaultSystemAdminName)

@@ -23,29 +23,69 @@ export const fieldTypes: FieldTypeOption[] = [
   { value: 'bool', label: 'Bool', goType: 4 },
 ]
 
-// 将表单行转换为服务端 Points 格式
+// 将表单行转换为服务端 Points 格式（毫秒 precision，拒绝 NaN）
 export function buildFormPoints(rows: FormRow[]): Record<string, unknown>[] {
-  return rows.map((row) => {
+  const points: Record<string, unknown>[] = []
+  rows.forEach((row, rowIdx) => {
     const tags: Record<string, string> = {}
-    for (const t of row.tags) { if (t.key.trim()) tags[t.key.trim()] = t.value }
+    for (const t of row.tags) {
+      if (t.key.trim()) tags[t.key.trim()] = t.value
+    }
     const fields: Record<string, Record<string, unknown>> = {}
     for (const f of row.fields) {
       if (!f.key.trim() || f.value === '') continue
       const ft = fieldTypes.find((t) => t.value === f.type)
+      if (!ft) throw new Error(`第 ${rowIdx + 1} 行字段类型无效: ${f.type}`)
+      const key = f.key.trim()
       switch (f.type) {
-        case 'int': fields[f.key.trim()] = { type: ft!.goType, int64: parseInt(f.value) }; break
-        case 'float': fields[f.key.trim()] = { type: ft!.goType, float64: parseFloat(f.value) }; break
-        case 'bool': fields[f.key.trim()] = { type: ft!.goType, bool: f.value === 'true' }; break
-        default: fields[f.key.trim()] = { type: ft!.goType, string: f.value }
+        case 'int': {
+          if (!/^-?\d+$/.test(f.value.trim())) {
+            throw new Error(`第 ${rowIdx + 1} 行字段 ${key} 不是合法整数`)
+          }
+          const intVal = Number(f.value)
+          if (!Number.isSafeInteger(intVal)) {
+            throw new Error(`第 ${rowIdx + 1} 行字段 ${key} 超出安全整数范围`)
+          }
+          fields[key] = { type: ft.goType, int64: intVal }
+          break
+        }
+        case 'float': {
+          const floatVal = Number(f.value)
+          if (!Number.isFinite(floatVal)) {
+            throw new Error(`第 ${rowIdx + 1} 行字段 ${key} 不是合法浮点数`)
+          }
+          fields[key] = { type: ft.goType, float64: floatVal }
+          break
+        }
+        case 'bool':
+          fields[key] = { type: ft.goType, bool: f.value === 'true' || f.value === '1' }
+          break
+        default:
+          fields[key] = { type: ft.goType, string: f.value }
       }
     }
-    return {
+    if (!Object.keys(fields).length) {
+      throw new Error(`第 ${rowIdx + 1} 行没有有效字段`)
+    }
+    let timestamp = Date.now()
+    if (row.timestamp.trim()) {
+      if (!/^-?\d+$/.test(row.timestamp.trim())) {
+        throw new Error(`第 ${rowIdx + 1} 行时间戳必须是整数（毫秒）`)
+      }
+      timestamp = Number(row.timestamp)
+      if (!Number.isSafeInteger(timestamp)) {
+        throw new Error(`第 ${rowIdx + 1} 行时间戳超出安全整数范围，请使用毫秒`)
+      }
+    }
+    points.push({
       measurement: row.measurement || 'data',
       tags,
       fields,
-      timestamp: parseInt(row.timestamp) || Date.now() * 1e6,
-    }
+      timestamp,
+      precision: 'ms',
+    })
   })
+  return points
 }
 
 interface ParsedLine {
@@ -132,11 +172,22 @@ export function parseLineProtocol(text: string): Record<string, unknown>[] {
         fields[key] = { type: 3, string: val }
       }
     }
+    if (!Object.keys(fields).length) continue
+    let ts = parts.timestamp ? Number(parts.timestamp) : Date.now()
+    let precision: 'ns' | 'ms' = 'ns'
+    if (!parts.timestamp) {
+      precision = 'ms'
+    } else if (!Number.isSafeInteger(ts)) {
+      throw new Error(`时间戳超出 JS 安全整数，请使用毫秒 precision: ${parts.timestamp}`)
+    } else if (Math.abs(ts) < 1e15) {
+      precision = 'ms'
+    }
     points.push({
       measurement: parts.measurement,
       tags,
       fields,
-      timestamp: parseInt(parts.timestamp ?? String(Date.now() * 1e6)),
+      timestamp: ts,
+      precision,
     })
   }
   return points
@@ -185,17 +236,19 @@ export function parsePrometheusText(text: string): Record<string, unknown>[] {
     }
 
     const fields: Record<string, Record<string, unknown>> = {}
-    fields.value = { type: 1, float64: parseFloat(valueStr) }
+    const fv = Number(valueStr)
+    if (!Number.isFinite(fv)) continue
+    fields.value = { type: 1, float64: fv }
 
-    const tsMs = timestampStr ? parseInt(timestampStr) : Date.now()
-    // Prometheus 时间戳通常是毫秒级，转为纳秒
-    const tsNs = timestampStr && tsMs < 1e15 ? tsMs * 1e6 : tsMs
+    const tsMs = timestampStr ? Number(timestampStr) : Date.now()
+    if (!Number.isFinite(Number(valueStr))) continue
 
     points.push({
       measurement: metricName,
       tags,
       fields,
-      timestamp: tsNs,
+      timestamp: Number.isFinite(tsMs) ? tsMs : Date.now(),
+      precision: 'ms',
     })
   }
   return points

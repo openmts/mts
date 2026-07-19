@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
+import { listDatabases, listMeasurements, listRetentionPolicies } from '@/api/meta'
 import {
   Plus, Trash2, ChevronDown, ChevronRight, Table2, Tag, Clock,
 } from 'lucide-vue-next'
@@ -39,8 +40,8 @@ const actionError = ref('')
 
 onMounted(async () => {
   try {
-    const data = await apiGet<MeasurementResponse>('/api/v1/admin/databases')
-    databases.value = (data.measurements ?? []).map((name) => ({
+    const names = await listDatabases()
+    databases.value = names.map((name) => ({
       name,
       expanded: false,
       loading: false,
@@ -55,30 +56,40 @@ onMounted(async () => {
   }
 })
 
-async function toggleExpand(db: DatabaseEntry) {
-  db.expanded = !db.expanded
-  if (db.expanded && !db.loaded) {
-    db.loading = true
+async function loadDatabaseDetails(db: DatabaseEntry) {
+  db.loading = true
+  actionError.value = ''
+  try {
+    const [meas, rps] = await Promise.all([
+      listMeasurements(db.name),
+      listRetentionPolicies(db.name),
+    ])
+    db.measurements = meas.map((m) => ({
+      name: m,
+      expanded: false,
+      loading: false,
+      fields: [],
+      series: [],
+    }))
+    db.retentionPolicies = rps.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
     db.loaded = true
-    try {
-      const [measData, rpData] = await Promise.all([
-        apiGet<MeasurementResponse>(`/api/v1/data/databases/${encodeURIComponent(db.name)}/measurements`),
-        apiGet<RetentionPoliciesResponse>(`/api/v1/admin/databases/${encodeURIComponent(db.name)}/retention-policies`),
-      ])
-      db.measurements = (measData.measurements ?? []).map((m) => ({
-        name: m,
-        expanded: false,
-        loading: false,
-        fields: [],
-        series: [],
-      }))
-      db.retentionPolicies = rpData.policies ?? []
-    } catch (e) {
-      actionError.value = e instanceof Error ? e.message : '加载详情失败'
-      db.loaded = false
-    } finally {
-      db.loading = false
-    }
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : '加载详情失败'
+    db.loaded = false
+    db.expanded = false
+  } finally {
+    db.loading = false
+  }
+}
+
+async function toggleExpand(db: DatabaseEntry) {
+  if (db.expanded) {
+    db.expanded = false
+    return
+  }
+  db.expanded = true
+  if (!db.loaded) {
+    await loadDatabaseDetails(db)
   }
 }
 

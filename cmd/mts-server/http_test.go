@@ -163,16 +163,23 @@ func TestRuntimeDoesNotResetExistingDefaultAdminPassword(t *testing.T) {
 func TestBootstrapDefaultAdminSkipsWhenUserAuthDisabled(t *testing.T) {
 	ctx := context.Background()
 	runtime := openTestRuntime(t)
+
+	// 密码认证开启时，即使 require_user=false 也应预置 admin，保证 Dashboard 可登录。
 	if err := bootstrapDefaultAdmin(ctx, runtime.currentConfig(), runtime.engine); err != nil {
-		t.Fatalf("bootstrapDefaultAdmin(disabled auth) error = %v", err)
+		t.Fatalf("bootstrapDefaultAdmin(password auth enabled) error = %v", err)
 	}
-	if _, ok, err := runtime.engine.GetUser(ctx, "admin"); err != nil || ok {
-		t.Fatalf("GetUser(admin) ok=%v err=%v, want missing", ok, err)
+	if _, err := runtime.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "admin"}, time.Minute); err != nil {
+		t.Fatalf("Authenticate(admin/admin) error = %v", err)
 	}
 
+	// 密码认证关闭时跳过 bootstrap。
 	cfg := runtime.currentConfig()
 	cfg.Auth.RequireUser = true
 	cfg.User.PasswordAuthDisabled = true
+	// 清理已有 admin，验证禁用密码认证时不会再创建/修复
+	if err := runtime.engine.DeleteUser(ctx, "admin"); err != nil {
+		t.Fatalf("DeleteUser(admin) error = %v", err)
+	}
 	if err := bootstrapDefaultAdmin(ctx, cfg, runtime.engine); err != nil {
 		t.Fatalf("bootstrapDefaultAdmin(disabled password auth) error = %v", err)
 	}
@@ -184,8 +191,9 @@ func TestBootstrapDefaultAdminSkipsWhenUserAuthDisabled(t *testing.T) {
 func TestBootstrapDefaultAdminPromotesExistingAdminUser(t *testing.T) {
 	ctx := context.Background()
 	runtime := openTestRuntime(t)
-	if err := runtime.engine.CreateUser(ctx, mts.User{Name: "admin", Role: mts.UserRoleUser, Disabled: true}); err != nil {
-		t.Fatalf("CreateUser(admin) error = %v", err)
+	// openTestRuntime 已 bootstrap 默认 admin；先降级为 disabled user 再验证提升逻辑。
+	if err := runtime.engine.UpdateUser(ctx, mts.User{Name: "admin", Role: mts.UserRoleUser, Disabled: true}); err != nil {
+		t.Fatalf("UpdateUser(admin demote) error = %v", err)
 	}
 	cfg := runtime.currentConfig()
 	cfg.Auth.RequireUser = true
@@ -199,8 +207,9 @@ func TestBootstrapDefaultAdminPromotesExistingAdminUser(t *testing.T) {
 	if admin.Role != mts.UserRoleAdmin || admin.Disabled {
 		t.Fatalf("admin = %#v, want enabled admin role", admin)
 	}
-	if _, err := runtime.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "admin"}, time.Minute); err != mts.ErrInvalidCredentials {
-		t.Fatalf("Authenticate(admin/default) error = %v, want ErrInvalidCredentials", err)
+	// 密码仍保留 bootstrap 初始值
+	if _, err := runtime.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "admin"}, time.Minute); err != nil {
+		t.Fatalf("Authenticate(admin/admin) error = %v", err)
 	}
 }
 
@@ -737,8 +746,14 @@ func loginHTTPUser(t *testing.T, baseURL string, userName string, password strin
 func seedUserWithPassword(t *testing.T, runtime *serverRuntime, user mts.User, password string) {
 	t.Helper()
 	ctx := context.Background()
-	if err := runtime.engine.CreateUser(ctx, user); err != nil {
-		t.Fatalf("CreateUser(seed %s) error = %v", user.Name, err)
+	if _, ok, err := runtime.engine.GetUser(ctx, user.Name); err != nil {
+		t.Fatalf("GetUser(seed %s) error = %v", user.Name, err)
+	} else if !ok {
+		if err := runtime.engine.CreateUser(ctx, user); err != nil {
+			t.Fatalf("CreateUser(seed %s) error = %v", user.Name, err)
+		}
+	} else if err := runtime.engine.UpdateUser(ctx, user); err != nil {
+		t.Fatalf("UpdateUser(seed %s) error = %v", user.Name, err)
 	}
 	if err := runtime.engine.SetPassword(ctx, user.Name, password); err != nil {
 		t.Fatalf("SetPassword(seed %s) error = %v", user.Name, err)
