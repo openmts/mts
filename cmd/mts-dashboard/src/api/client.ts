@@ -265,39 +265,6 @@ export function apiDelete<T>(path: string, init: RequestInit = {}): Promise<T> {
   return request<T>(path, { ...init, method: 'DELETE' })
 }
 
-export async function apiPostText(
-  path: string,
-  body?: unknown,
-  init: RequestInit = {},
-): Promise<{ status: number; text: string }> {
-  if (bearerToken && isTokenExpired()) {
-    triggerAuthFailed()
-    throw new APIClientError(401, 'unauthenticated', '登录已过期，请重新登录')
-  }
-  const headers = authHeaders(init.headers as Record<string, string> | undefined, 'POST')
-  let response: Response
-  try {
-    response = await fetch(`${API_BASE}${path}`, {
-      ...init,
-      method: 'POST',
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new APIClientError(499, 'canceled', '请求已取消')
-    }
-    throw err
-  }
-  const text = await response.text()
-  if (!response.ok) {
-    const err = await readAPIError(response, text)
-    handleAuthFailure(path, response.status, err.code)
-    throw new APIClientError(response.status, err.code, err.message)
-  }
-  return { status: response.status, text }
-}
-
 export type NDJSONHandler = (line: string, record: unknown | null, parseError: boolean) => void
 
 /** 真流式 NDJSON：按行回调，支持 AbortSignal */
@@ -397,6 +364,7 @@ export interface LoginResponse {
   token: {
     token: string
     user_name: string
+    role?: string
     expires_at: string
   }
 }

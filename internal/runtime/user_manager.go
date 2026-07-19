@@ -43,6 +43,7 @@ type Credentials struct {
 type AuthToken struct {
 	Token     string
 	UserName  string
+	Role      UserRole
 	ExpiresAt time.Time
 }
 
@@ -193,6 +194,7 @@ func (m *localUserManager) Authenticate(
 	return AuthToken{
 		Token:     token.Token,
 		UserName:  token.UserName,
+		Role:      UserRole(token.Role),
 		ExpiresAt: token.ExpiresAt,
 	}, nil
 }

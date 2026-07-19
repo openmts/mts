@@ -143,7 +143,7 @@ func (m *Manager) Authenticate(ctx context.Context, credentials Credentials, ttl
 	if err := m.replaceStateLocked(users, grants, passwords, tokens); err != nil {
 		return AuthToken{}, err
 	}
-	return AuthToken{Token: token, UserName: userName, ExpiresAt: expiresAt}, nil
+	return AuthToken{Token: token, UserName: userName, Role: user.Role, ExpiresAt: expiresAt}, nil
 }
 
 func (m *Manager) VerifyToken(ctx context.Context, token string) (Principal, error) {

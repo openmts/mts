@@ -63,6 +63,7 @@ type Credentials struct {
 type AuthToken struct {
 	Token     string
 	UserName  string
+	Role      Role
 	ExpiresAt time.Time
 }
 

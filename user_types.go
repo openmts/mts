@@ -46,6 +46,7 @@ type Credentials struct {
 type AuthToken struct {
 	Token     string    `json:"token"`
 	UserName  string    `json:"user_name"`
+	Role      UserRole  `json:"role,omitempty"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 

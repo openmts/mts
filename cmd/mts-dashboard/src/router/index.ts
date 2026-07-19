@@ -15,7 +15,7 @@ const router = createRouter({
       component: () => import('@/layouts/DashboardLayout.vue'),
       children: [
         { path: '', name: 'Overview', component: () => import('@/pages/OverviewPage.vue') },
-        { path: 'databases', name: 'Databases', component: () => import('@/pages/DatabasesPage.vue') },
+        { path: 'databases', name: 'Databases', component: () => import('@/pages/DatabasesPage.vue'), meta: { admin: true } },
         { path: 'users', name: 'Users', component: () => import('@/pages/UsersPage.vue') },
         { path: 'config', name: 'Config', component: () => import('@/pages/ConfigPage.vue'), meta: { admin: true } },
         { path: 'operations', name: 'Operations', component: () => import('@/pages/OperationsPage.vue'), meta: { admin: true } },
@@ -31,15 +31,7 @@ const router = createRouter({
   ],
 })
 
-/** 仅允许站内相对路径作为登录 redirect，防止开放重定向 */
-export function sanitizeRedirect(raw: unknown): string | null {
-  if (typeof raw !== 'string' || !raw) return null
-  if (!raw.startsWith('/')) return null
-  if (raw.startsWith('//')) return null
-  if (raw.includes('://')) return null
-  if (raw.startsWith('/login')) return null
-  return raw
-}
+export { sanitizeRedirect } from '@/utils/redirect'
 
 router.beforeEach((to) => {
   const { ensureSession, isAuthenticated, isAdmin } = useAuth()

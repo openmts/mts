@@ -291,12 +291,13 @@ async function executeDelete() {
 
     <div v-if="rawOutput" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/50 px-6 py-3">
-        <h3 class="flex items-center gap-2 text-sm font-semibold"><Zap class="h-4 w-4 text-slate-400" />原始输出 / EXPLAIN / 流式预览</h3>
+        <h3 class="flex items-center gap-2 text-sm font-semibold"><Zap class="h-4 w-4 text-slate-400" />原始输出 / EXPLAIN / 流式结果</h3>
         <div class="flex flex-wrap gap-2 text-xs text-slate-500">
           <span v-if="streamMeta.lines" class="rounded-full bg-slate-100 px-2.5 py-0.5">{{ streamMeta.lines }} 行</span>
           <span v-if="streamMeta.records" class="rounded-full bg-blue-50 px-2.5 py-0.5 text-blue-700">{{ streamMeta.records }} 记录</span>
           <span v-if="streamMeta.errors" class="rounded-full bg-red-50 px-2.5 py-0.5 text-red-600">{{ streamMeta.errors }} 错误</span>
-          <button class="rounded-lg border border-slate-200 bg-white px-2.5 py-1" @click="copyResults">复制</button>
+          <span v-if="streamMeta.previewOnly" class="rounded-full bg-amber-50 px-2.5 py-0.5 text-amber-700">仅预览前 {{ streamMeta.previewLimit }} 行</span>
+          <button class="rounded-lg border border-slate-200 bg-white px-2.5 py-1" @click="copyResults">{{ streamMeta.previewOnly ? '复制预览' : '复制' }}</button>
         </div>
       </div>
       <pre class="max-h-96 overflow-auto bg-slate-950 p-6 font-mono text-xs leading-relaxed text-emerald-400">{{ rawOutput }}</pre>

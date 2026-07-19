@@ -13,7 +13,6 @@ import {
   resetAuthRedirect,
   apiLogin,
   apiLogout,
-  apiGet,
 } from '@/api/client'
 
 const isAuthenticated = ref(!!getBearerToken() && !isTokenExpired())
@@ -30,27 +29,19 @@ export function useAuth() {
     isAuthenticated.value = !!getBearerToken() && !isTokenExpired()
   }
 
-  async function resolveRole(userName: string): Promise<string> {
-    try {
-      const data = await apiGet<{ users: { name: string; role?: string }[] }>('/api/v1/users')
-      const self = (data.users ?? []).find((u) => u.name === userName)
-      if (self?.role) return self.role
-      return 'admin'
-    } catch (_) {
-      return 'user'
-    }
-  }
-
   async function login(username: string, password: string): Promise<string | null> {
     try {
       const data = await apiLogin(username, password)
       if (!data.token?.token) {
         return '登录失败：服务端未返回有效 token'
       }
+      const role = (data.token.role || '').trim()
+      if (role !== 'admin' && role !== 'user') {
+        return '登录失败：服务端未返回可信角色'
+      }
       setBearerToken(data.token.token)
       setCurrentUser(data.token.user_name)
       setTokenExpiresAt(data.token.expires_at || '')
-      const role = await resolveRole(data.token.user_name)
       setCurrentUserRole(role)
       currentUser.value = data.token.user_name
       currentRole.value = role

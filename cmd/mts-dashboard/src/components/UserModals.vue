@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, watch } from 'vue'
-
-interface NewUser { name: string; display_name: string; password: string; role: string }
+import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 
 const props = defineProps<{
   showCreate: boolean
-  newUser: NewUser
+  newUser: { name: string; display_name: string; password: string; role: string }
   showSetPassword: boolean
   setPasswordUser: string
   setPasswordValue: string
@@ -16,8 +14,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:showCreate': [boolean]
-  'update:newUser': [NewUser]
+  'update:newUser': [typeof props.newUser]
   'update:showSetPassword': [boolean]
+  'update:setPasswordUser': [string]
   'update:setPasswordValue': [string]
   'update:showChangeSelfPassword': [boolean]
   'update:selfOldPassword': [string]
@@ -31,24 +30,46 @@ function anyOpen() {
   return props.showCreate || props.showSetPassword || props.showChangeSelfPassword
 }
 
-function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    if (props.showCreate) emit('update:showCreate', false)
-    if (props.showSetPassword) emit('update:showSetPassword', false)
-    if (props.showChangeSelfPassword) emit('update:showChangeSelfPassword', false)
-  }
+function closeAll() {
+  if (props.showCreate) emit('update:showCreate', false)
+  if (props.showSetPassword) emit('update:showSetPassword', false)
+  if (props.showChangeSelfPassword) emit('update:showChangeSelfPassword', false)
 }
 
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeAll()
+}
 
-watch(() => anyOpen(), (open) => {
+function focusFirst(sel: string) {
+  const el = document.querySelector(sel) as HTMLElement | null
+  el?.focus()
+}
+
+watch(() => anyOpen(), async (open) => {
   document.body.style.overflow = open ? 'hidden' : ''
+  if (!open) return
+  await nextTick()
+  if (props.showCreate) focusFirst('[data-modal="create-user"] input')
+  else if (props.showSetPassword) focusFirst('[data-modal="set-password"] input')
+  else if (props.showChangeSelfPassword) focusFirst('[data-modal="change-password"] input')
+})
+
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  document.body.style.overflow = ''
 })
 </script>
 
 <template>
-  <div v-if="showCreate" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+  <div
+    v-if="showCreate"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    role="dialog"
+    aria-modal="true"
+    data-modal="create-user"
+    @click.self="emit('update:showCreate', false)"
+  >
     <div class="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
       <h3 class="mb-3 text-sm font-semibold text-slate-800">新建用户</h3>
       <div class="space-y-2">
@@ -67,7 +88,14 @@ watch(() => anyOpen(), (open) => {
     </div>
   </div>
 
-  <div v-if="showSetPassword" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+  <div
+    v-if="showSetPassword"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    role="dialog"
+    aria-modal="true"
+    data-modal="set-password"
+    @click.self="emit('update:showSetPassword', false)"
+  >
     <div class="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
       <h3 class="mb-3 text-sm font-semibold text-slate-800">设置密码 · {{ setPasswordUser }}</h3>
       <input :value="setPasswordValue" @input="emit('update:setPasswordValue', ($event.target as HTMLInputElement).value)" type="password" placeholder="输入新密码" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="emit('set-password')" />
@@ -78,7 +106,14 @@ watch(() => anyOpen(), (open) => {
     </div>
   </div>
 
-  <div v-if="showChangeSelfPassword" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+  <div
+    v-if="showChangeSelfPassword"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    role="dialog"
+    aria-modal="true"
+    data-modal="change-password"
+    @click.self="emit('update:showChangeSelfPassword', false)"
+  >
     <div class="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
       <h3 class="mb-3 text-sm font-semibold text-slate-800">修改我的密码</h3>
       <div class="space-y-2">

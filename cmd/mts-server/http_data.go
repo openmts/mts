@@ -72,7 +72,7 @@ func (r *serverRuntime) handleQueryRows(writer http.ResponseWriter, request *htt
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, queryRowsResponse{Rows: rows})
+	writeHTTPJSON(writer, http.StatusOK, queryRowsResponse{Rows: rows, Stats: r.queryStats()})
 }
 
 func (r *serverRuntime) handleQueryColumns(writer http.ResponseWriter, request *http.Request) {
@@ -88,7 +88,7 @@ func (r *serverRuntime) handleQueryColumns(writer http.ResponseWriter, request *
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, queryColumnsResponse{Columns: columns})
+	writeHTTPJSON(writer, http.StatusOK, queryColumnsResponse{Columns: columns, Stats: r.queryStats()})
 }
 
 func (r *serverRuntime) handleQueryExplain(writer http.ResponseWriter, request *http.Request) {

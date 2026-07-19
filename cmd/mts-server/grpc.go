@@ -159,7 +159,7 @@ func grpcQueryRowsHandler(service any, ctx context.Context, decode func(any) err
 		if err != nil {
 			return nil, grpcError(err)
 		}
-		return queryRowsResponse{Rows: rows}, nil
+		return queryRowsResponse{Rows: rows, Stats: service.(*grpcService).runtime.queryStats()}, nil
 	}
 	return invokeGRPCUnary(ctx, &queryRowsRequest{}, decode, interceptor, grpcFullMethod(grpcMethodQueryRows), handler)
 }
@@ -250,7 +250,10 @@ func grpcQueryColumns(r *serverRuntime, ctx context.Context, req any) (any, erro
 		return nil, err
 	}
 	columns, err := r.queryColumns(ctx, *request)
-	return queryColumnsResponse{Columns: columns}, err
+	if err != nil {
+		return queryColumnsResponse{}, err
+	}
+	return queryColumnsResponse{Columns: columns, Stats: r.queryStats()}, nil
 }
 
 func grpcQueryWithExplain(r *serverRuntime, ctx context.Context, req any) (any, error) {

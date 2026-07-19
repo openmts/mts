@@ -43,7 +43,7 @@ export function useQueryWorkbench() {
   const rows = ref<QueryResultRow[]>([])
   const queryStats = ref<QueryStatsData | null>(null)
   const rawOutput = ref('')
-  const streamMeta = ref({ lines: 0, records: 0, errors: 0 })
+  const streamMeta = ref({ lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 })
   const actionError = ref('')
   const loading = ref(false)
   let queryAbort: AbortController | null = null
@@ -127,7 +127,7 @@ export function useQueryWorkbench() {
     rows.value = []
     queryStats.value = null
     rawOutput.value = ''
-    streamMeta.value = { lines: 0, records: 0, errors: 0 }
+    streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
     const { signal, seq } = beginRequest()
     try {
       const query = buildQuery()
@@ -200,8 +200,9 @@ export function useQueryWorkbench() {
           { signal },
         )
         if (seq !== requestSeq) return
-        streamMeta.value = { lines, records, errors }
-        rawOutput.value = preview.join('\n') + (lines > preview.length ? `\n… 共 ${lines} 行，仅预览前 ${preview.length} 行` : '')
+        const previewOnly = lines > preview.length
+        streamMeta.value = { lines, records, errors, previewOnly, previewLimit: 200 }
+        rawOutput.value = preview.join('\n') + (previewOnly ? `\n… 共 ${lines} 行，仅预览前 ${preview.length} 行（复制也仅含预览）` : '')
         if (endStats) queryStats.value = endStats
         if (streamError) actionError.value = streamError
       }

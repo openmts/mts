@@ -359,7 +359,7 @@ func (e *Engine) Authenticate(ctx context.Context, credentials Credentials, ttl 
 	if err != nil {
 		return AuthToken{}, err
 	}
-	return AuthToken{Token: token.Token, UserName: token.UserName, ExpiresAt: token.ExpiresAt}, nil
+	return AuthToken{Token: token.Token, UserName: token.UserName, Role: UserRole(token.Role), ExpiresAt: token.ExpiresAt}, nil
 }
 
 func (e *Engine) VerifyToken(ctx context.Context, token string) (Principal, error) {

@@ -1,19 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted } from 'vue'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { listDatabases, listMeasurements, listRetentionPolicies } from '@/api/meta'
 import {
   Plus, Trash2, ChevronDown, ChevronRight, Table2, Tag, Clock,
 } from 'lucide-vue-next'
-
-interface MeasurementResponse { measurements: string[] }
-interface RetentionPolicy { name: string; duration: number }
-interface RetentionPoliciesResponse { policies: RetentionPolicy[] }
+import { useAuth } from '@/composables/useAuth'
+import PermissionDenied from '@/components/PermissionDenied.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { useNotify } from '@/composables/useNotify'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
 interface Series { id: number; measurement: string; tags: Record<string, string> }
 interface SeriesResponse { series: Series[] }
-
 interface MeasurementEntry {
   name: string
   expanded: boolean
@@ -21,24 +20,27 @@ interface MeasurementEntry {
   fields: FieldSchema[]
   series: Series[]
 }
-
 interface DatabaseEntry {
   name: string
   expanded: boolean
   loading: boolean
   loaded: boolean
   measurements: MeasurementEntry[]
-  retentionPolicies: RetentionPolicy[]
+  retentionPolicies: { name: string; duration: number }[]
   newRpName: string
   newRpDuration: string
 }
-
+const { isAdmin } = useAuth()
+const { success, error: notifyError } = useNotify()
 const databases = ref<DatabaseEntry[]>([])
 const newDbName = ref('')
 const loadError = ref('')
 const actionError = ref('')
-
+const confirmOpen = ref(false)
+const confirmDbName = ref('')
+const confirmLoading = ref(false)
 onMounted(async () => {
+  if (!isAdmin.value) return
   try {
     const names = await listDatabases()
     databases.value = names.map((name) => ({
@@ -55,7 +57,6 @@ onMounted(async () => {
     loadError.value = e instanceof Error ? e.message : '加载失败'
   }
 })
-
 async function loadDatabaseDetails(db: DatabaseEntry) {
   db.loading = true
   actionError.value = ''
@@ -81,18 +82,14 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
     db.loading = false
   }
 }
-
 async function toggleExpand(db: DatabaseEntry) {
   if (db.expanded) {
     db.expanded = false
     return
   }
   db.expanded = true
-  if (!db.loaded) {
-    await loadDatabaseDetails(db)
-  }
+  if (!db.loaded) await loadDatabaseDetails(db)
 }
-
 async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
   meas.expanded = !meas.expanded
   if (meas.expanded && !meas.fields.length) {
@@ -111,7 +108,6 @@ async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
     }
   }
 }
-
 async function createDatabase() {
   if (!newDbName.value.trim()) return
   actionError.value = ''
@@ -128,23 +124,33 @@ async function createDatabase() {
       newRpDuration: '',
     })
     newDbName.value = ''
+    success('数据库已创建')
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '创建失败'
+    notifyError(actionError.value)
   }
 }
-
-async function deleteDatabase(name: string) {
-  const input = prompt(`请输入数据库名称 "${name}" 以确认删除：`)
-  if (input !== name) return
+function requestDeleteDatabase(name: string) {
+  confirmDbName.value = name
+  confirmOpen.value = true
+}
+async function confirmDeleteDatabase() {
+  const name = confirmDbName.value
+  if (!name) return
+  confirmLoading.value = true
   actionError.value = ''
   try {
     await apiDelete(`/api/v1/admin/databases/${encodeURIComponent(name)}`)
     databases.value = databases.value.filter((d) => d.name !== name)
+    confirmOpen.value = false
+    success(`数据库 ${name} 已删除`)
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '删除失败'
+    notifyError(actionError.value)
+  } finally {
+    confirmLoading.value = false
   }
 }
-
 async function createRetentionPolicy(db: DatabaseEntry) {
   const name = db.newRpName.trim()
   if (!name) return
@@ -155,6 +161,7 @@ async function createRetentionPolicy(db: DatabaseEntry) {
     durationNs = parseDuration(dur)
   } catch {
     actionError.value = '无效的 duration 格式 (如 24h, 7d, 30m)'
+    notifyError(actionError.value)
     return
   }
   actionError.value = ''
@@ -165,143 +172,115 @@ async function createRetentionPolicy(db: DatabaseEntry) {
     db.retentionPolicies.push({ name, duration: durationNs })
     db.newRpName = ''
     db.newRpDuration = ''
+    success('保留策略已创建')
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '创建保留策略失败'
+    notifyError(actionError.value)
   }
 }
-
 function parseDuration(s: string): number {
-  const match = s.match(/^(\d+)(h|m|s|d)$/)
-  if (!match) throw new Error('invalid')
-  const v = parseInt(match[1])
-  switch (match[2]) {
-    case 's': return v * 1e9
-    case 'm': return v * 60 * 1e9
-    case 'h': return v * 3600 * 1e9
-    case 'd': return v * 86400 * 1e9
-    default: throw new Error('invalid')
-  }
+  const m = s.trim().toLowerCase().match(/^(\d+)(ns|us|ms|s|m|h|d)$/)
+  if (!m) throw new Error('bad duration')
+  const n = Number(m[1])
+  const mul: Record<string, number> = { ns: 1, us: 1e3, ms: 1e6, s: 1e9, m: 60e9, h: 3600e9, d: 86400e9 }
+  const v = n * mul[m[2]]
+  if (!Number.isSafeInteger(v)) throw new Error('overflow')
+  return v
 }
-
 function formatDuration(ns: number): string {
-  if (ns >= 86400e9) return (ns / 86400e9).toFixed(0) + 'd'
-  if (ns >= 3600e9) return (ns / 3600e9).toFixed(0) + 'h'
-  if (ns >= 60e9) return (ns / 60e9).toFixed(0) + 'm'
-  return (ns / 1e9).toFixed(0) + 's'
+  if (!ns) return '0'
+  if (ns % 86400e9 === 0) return `${ns / 86400e9}d`
+  if (ns % 3600e9 === 0) return `${ns / 3600e9}h`
+  if (ns % 60e9 === 0) return `${ns / 60e9}m`
+  if (ns % 1e9 === 0) return `${ns / 1e9}s`
+  return `${ns}ns`
 }
-
-function fieldTypeLabel(t: number): string {
-  const types = ['', 'float', 'int', 'string', 'bool']
-  return types[t] ?? `type_${t}`
-}
-
-function seriesTagPairs(tags: Record<string, string> | null | undefined): string {
-  if (!tags) return ''
-  return Object.entries(tags).map(([k, v]) => `${k}=${v}`).join(', ')
+function fieldTypeName(t: number): string {
+  return ({ 1: 'float', 2: 'int', 3: 'string', 4: 'bool' } as Record<number, string>)[t] || String(t)
 }
 </script>
-
 <template>
-  <div>
-    <p v-if="loadError" class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ loadError }}</p>
-    <p v-if="actionError" class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
-
-    <div class="mb-4 flex gap-2">
-      <input v-model="newDbName" type="text" placeholder="新数据库名称" class="w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500" @keyup.enter="createDatabase" />
-      <button class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="createDatabase">
-        <Plus class="h-4 w-4 shrink-0" />创建
+  <PermissionDenied v-if="!isAdmin" />
+  <div v-else class="space-y-4">
+    <p v-if="loadError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ loadError }}</p>
+    <p v-if="actionError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</p>
+    <div class="flex gap-2">
+      <input v-model="newDbName" type="text" placeholder="新数据库名称" class="w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" @keyup.enter="createDatabase" />
+      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="createDatabase">
+        <Plus class="h-4 w-4" /> 创建数据库
       </button>
     </div>
-
-    <div class="rounded-xl border border-slate-200 bg-white">
-      <div v-if="!databases.length" class="p-6 text-center text-sm text-slate-400">暂无数据库</div>
-      <div v-for="db in databases" :key="db.name" class="border-b border-slate-100 last:border-b-0">
-        <!-- 数据库行 -->
-        <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 cursor-pointer" @click="toggleExpand(db)">
-          <div class="flex items-center gap-2">
+    <div class="space-y-2">
+      <div v-for="db in databases" :key="db.name" class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+          <button class="flex items-center gap-2 text-left" @click="toggleExpand(db)">
             <component :is="db.expanded ? ChevronDown : ChevronRight" class="h-4 w-4 text-slate-400" />
-            <Table2 class="h-4 w-4 text-slate-400" />
-            <span class="text-sm font-medium text-slate-700">{{ db.name }}</span>
-            <span v-if="db.measurements.length" class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">{{ db.measurements.length }} 个 measurement</span>
-          </div>
-          <button class="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" @click.stop="deleteDatabase(db.name)">
+            <span class="text-sm font-medium text-slate-800">{{ db.name }}</span>
+            <span v-if="db.loading" class="text-xs text-slate-400">加载中…</span>
+          </button>
+          <button class="rounded p-1 text-slate-400 hover:text-red-600" title="删除数据库" @click="requestDeleteDatabase(db.name)">
             <Trash2 class="h-4 w-4" />
           </button>
         </div>
-
-        <!-- 展开内容 -->
-        <div v-if="db.expanded" class="border-t border-slate-100 bg-slate-50">
-          <p v-if="db.loading" class="px-10 py-4 text-sm text-slate-400">加载中...</p>
-          <template v-else>
-            <!-- Measurements -->
-            <div class="px-6 py-3">
-              <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Measurements</p>
-              <div v-if="!db.measurements.length" class="text-xs text-slate-400">暂无（写入数据后自动创建）</div>
-              <div v-for="meas in db.measurements" :key="meas.name" class="mb-1 rounded-lg border border-slate-200 bg-white">
-                <div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50" @click="toggleMeasurement(meas, db.name)">
-                  <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 text-slate-400" />
-                  <Tag class="h-3.5 w-3.5 text-slate-400" />
-                  <span class="text-sm text-slate-700">{{ meas.name }}</span>
-                </div>
-                <div v-if="meas.expanded" class="border-t border-slate-100 px-4 py-2">
-                  <p v-if="meas.loading" class="text-xs text-slate-400">加载中...</p>
-                  <template v-else>
-                    <!-- Fields -->
-                    <div class="mb-3">
-                      <p class="mb-1 text-xs font-medium text-slate-500">Fields</p>
-                      <table v-if="meas.fields.length" class="w-full text-xs">
-                        <thead><tr class="text-left text-slate-400"><th class="pb-1 pr-3 font-normal">名称</th><th class="pb-1 font-normal">类型</th></tr></thead>
-                        <tbody>
-                          <tr v-for="f in meas.fields" :key="f.name" class="border-t border-slate-100">
-                            <td class="py-1 pr-3 font-mono text-slate-700">{{ f.name }}</td>
-                            <td class="py-1 text-slate-500">{{ fieldTypeLabel(f.type) }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                      <p v-else class="text-xs text-slate-400">暂无字段</p>
+        <div v-if="db.expanded && db.loaded" class="border-t border-slate-100">
+          <div class="px-6 py-3">
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Measurements</p>
+            <div v-if="!db.measurements.length" class="text-xs text-slate-400">暂无 measurement</div>
+            <div v-for="meas in db.measurements" :key="meas.name" class="mb-2 rounded border border-slate-100">
+              <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" @click="toggleMeasurement(meas, db.name)">
+                <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 text-slate-400" />
+                <Table2 class="h-3.5 w-3.5 text-slate-400" />
+                {{ meas.name }}
+              </button>
+              <div v-if="meas.expanded" class="border-t border-slate-50 px-4 py-2 text-xs text-slate-600">
+                <div v-if="meas.loading" class="text-slate-400">加载中…</div>
+                <template v-else>
+                  <p class="mb-1 font-medium text-slate-500">Fields</p>
+                  <div class="mb-2 flex flex-wrap gap-1">
+                    <span v-for="f in meas.fields" :key="f.name" class="rounded bg-slate-100 px-2 py-0.5">{{ f.name }}:{{ fieldTypeName(f.type) }}</span>
+                    <span v-if="!meas.fields.length" class="text-slate-400">无</span>
+                  </div>
+                  <p class="mb-1 font-medium text-slate-500">Series</p>
+                  <div class="space-y-1">
+                    <div v-for="s in meas.series" :key="s.id" class="flex items-center gap-1">
+                      <Tag class="h-3 w-3 text-slate-400" />
+                      <span class="font-mono">{{ s.tags && Object.keys(s.tags).length ? JSON.stringify(s.tags) : '{}' }}</span>
                     </div>
-                    <!-- Series -->
-                    <div>
-                      <p class="mb-1 text-xs font-medium text-slate-500">Series ({{ meas.series.length }})</p>
-                      <div v-if="meas.series.length" class="max-h-32 overflow-auto">
-                        <table class="w-full text-xs">
-                          <thead><tr class="text-left text-slate-400"><th class="pb-1 pr-3 font-normal">ID</th><th class="pb-1 font-normal">Tags</th></tr></thead>
-                          <tbody>
-                            <tr v-for="s in meas.series" :key="s.id" class="border-t border-slate-100">
-                              <td class="py-1 pr-3 font-mono text-slate-600">{{ s.id }}</td>
-                              <td class="py-1 text-slate-500">{{ seriesTagPairs(s.tags) || '-' }}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                      <p v-else class="text-xs text-slate-400">暂无 series</p>
-                    </div>
-                  </template>
-                </div>
+                    <span v-if="!meas.series.length" class="text-slate-400">无</span>
+                  </div>
+                </template>
               </div>
             </div>
-
-            <!-- 保留策略 -->
-            <div class="border-t border-slate-200 px-6 py-3">
-              <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">保留策略</p>
-              <div v-if="db.retentionPolicies.length" class="mb-3 space-y-1">
-                <div v-for="rp in db.retentionPolicies" :key="rp.name" class="flex items-center gap-2 rounded bg-white border border-slate-200 px-3 py-1.5">
-                  <Clock class="h-3.5 w-3.5 text-slate-400" />
-                  <span class="text-sm text-slate-700 font-medium">{{ rp.name }}</span>
-                  <span class="text-xs text-slate-500">{{ formatDuration(rp.duration) }}</span>
-                </div>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <input v-model="db.newRpName" type="text" placeholder="策略名称" class="w-28 rounded border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none" />
-                <input v-model="db.newRpDuration" type="text" placeholder="时长 (24h/7d)" class="w-24 rounded border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none" />
-                <button class="flex items-center gap-1 whitespace-nowrap rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white hover:bg-slate-700" @click="createRetentionPolicy(db)">
-                  <Plus class="h-3.5 w-3.5 shrink-0" />添加
-                </button>
+          </div>
+          <div class="border-t border-slate-200 px-6 py-3">
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">保留策略</p>
+            <div v-if="db.retentionPolicies.length" class="mb-3 space-y-1">
+              <div v-for="rp in db.retentionPolicies" :key="rp.name" class="flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-1.5">
+                <Clock class="h-3.5 w-3.5 text-slate-400" />
+                <span class="text-sm font-medium text-slate-700">{{ rp.name }}</span>
+                <span class="text-xs text-slate-500">{{ formatDuration(rp.duration) }}</span>
               </div>
             </div>
-          </template>
+            <div class="flex flex-wrap items-center gap-2">
+              <input v-model="db.newRpName" type="text" placeholder="策略名称" class="w-28 rounded border border-slate-300 px-2 py-1 text-xs" />
+              <input v-model="db.newRpDuration" type="text" placeholder="时长 (24h/7d)" class="w-24 rounded border border-slate-300 px-2 py-1 text-xs" />
+              <button class="inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" @click="createRetentionPolicy(db)">
+                <Plus class="h-3.5 w-3.5" />添加
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      v-model:open="confirmOpen"
+      title="删除数据库"
+      message="此操作不可恢复。请输入数据库名称确认删除。"
+      :require-text="confirmDbName"
+      confirm-label="删除"
+      danger
+      :loading="confirmLoading"
+      @confirm="confirmDeleteDatabase"
+    />
   </div>
 </template>

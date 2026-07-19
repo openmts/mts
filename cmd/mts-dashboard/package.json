@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -b --pretty false",
+    "test": "node --experimental-strip-types --test src/utils/duration.test.ts src/utils/sanitizeRedirect.test.ts"
   },
   "dependencies": {
     "vue": "^3.5.21",

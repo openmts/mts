@@ -130,55 +130,104 @@ export function parseLine(line: string): ParsedLine | null {
   return { measurement, tags, fields, timestamp }
 }
 
-// 解析 InfluxDB line protocol 文本为 Points
-export function parseLineProtocol(text: string): Record<string, unknown>[] {
+export interface LineProtocolDiagnostics {
+  points: Record<string, unknown>[]
+  errors: string[]
+  skippedLines: number
+}
+
+function parseFieldValue(val: string): Record<string, unknown> | null {
+  if (val.endsWith('i')) {
+    const raw = val.slice(0, -1)
+    if (!/^-?\d+$/.test(raw)) return null
+    const intVal = Number(raw)
+    if (!Number.isSafeInteger(intVal)) return null
+    return { type: 2, int64: intVal }
+  }
+  if (val === 'true' || val === 'false') {
+    return { type: 4, bool: val === 'true' }
+  }
+  if (val.startsWith('"') && val.endsWith('"')) {
+    return { type: 3, string: val.slice(1, -1) }
+  }
+  if (/^-?\d+\.\d+$/.test(val) || /^-?\d+e[+-]?\d+$/i.test(val)) {
+    const floatVal = Number(val)
+    if (!Number.isFinite(floatVal)) return null
+    return { type: 1, float64: floatVal }
+  }
+  if (/^-?\d+$/.test(val)) {
+    const intVal = Number(val)
+    if (!Number.isSafeInteger(intVal)) return null
+    return { type: 2, int64: intVal }
+  }
+  return { type: 3, string: val }
+}
+
+// 解析 InfluxDB line protocol 文本为 Points（带行级诊断）
+export function parseLineProtocolDetailed(text: string): LineProtocolDiagnostics {
   const points: Record<string, unknown>[] = []
-  for (const rawLine of text.split('\n')) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#')) continue
+  const errors: string[] = []
+  let skippedLines = 0
+  const lines = text.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const lineNo = i + 1
+    const line = lines[i].trim()
+    if (!line || line.startsWith('#')) {
+      skippedLines++
+      continue
+    }
     const parts = parseLine(line)
-    if (!parts) continue
+    if (!parts) {
+      errors.push(`第 ${lineNo} 行：格式非法`)
+      continue
+    }
     const tags: Record<string, string> = {}
     if (parts.tags) {
       for (const t of parts.tags.split(',')) {
-        const [k, v] = t.split('=')
-        if (k) tags[k] = v ?? ''
+        const eq = t.indexOf('=')
+        if (eq <= 0) {
+          errors.push(`第 ${lineNo} 行：标签无效 "${t}"`)
+          continue
+        }
+        tags[t.slice(0, eq)] = t.slice(eq + 1)
       }
     }
     const fields: Record<string, Record<string, unknown>> = {}
+    let fieldErrors = 0
     for (const f of parts.fields.split(',')) {
+      if (!f) continue
       const eqIdx = f.indexOf('=')
-      if (eqIdx < 0) continue
+      if (eqIdx < 0) {
+        errors.push(`第 ${lineNo} 行：字段缺少 "=" (${f})`)
+        fieldErrors++
+        continue
+      }
       const key = f.slice(0, eqIdx).trim()
       const val = f.slice(eqIdx + 1).trim()
-      if (!key) continue
-      if (val.endsWith('i')) {
-        const intVal = parseInt(val.slice(0, -1))
-        if (isNaN(intVal)) continue
-        fields[key] = { type: 2, int64: intVal }
-      } else if (val === 'true' || val === 'false') {
-        fields[key] = { type: 4, bool: val === 'true' }
-      } else if (val.startsWith('"') && val.endsWith('"')) {
-        fields[key] = { type: 3, string: val.slice(1, -1) }
-      } else if (/^-?\d+\.\d+$/.test(val) || /^-?\d+e[+-]?\d+$/i.test(val)) {
-        const floatVal = parseFloat(val)
-        if (isNaN(floatVal)) continue
-        fields[key] = { type: 1, float64: floatVal }
-      } else if (/^-?\d+$/.test(val)) {
-        const intVal = parseInt(val)
-        if (isNaN(intVal)) continue
-        fields[key] = { type: 2, int64: intVal }
-      } else {
-        fields[key] = { type: 3, string: val }
+      if (!key) {
+        errors.push(`第 ${lineNo} 行：字段名为空`)
+        fieldErrors++
+        continue
       }
+      const parsed = parseFieldValue(val)
+      if (!parsed) {
+        errors.push(`第 ${lineNo} 行：字段 ${key} 值非法 (${val})`)
+        fieldErrors++
+        continue
+      }
+      fields[key] = parsed
     }
-    if (!Object.keys(fields).length) continue
+    if (!Object.keys(fields).length) {
+      errors.push(`第 ${lineNo} 行：无有效字段`)
+      continue
+    }
     let ts = parts.timestamp ? Number(parts.timestamp) : Date.now()
     let precision: 'ns' | 'ms' = 'ns'
     if (!parts.timestamp) {
       precision = 'ms'
     } else if (!Number.isSafeInteger(ts)) {
-      throw new Error(`时间戳超出 JS 安全整数，请使用毫秒 precision: ${parts.timestamp}`)
+      errors.push(`第 ${lineNo} 行：时间戳超出 JS 安全整数 (${parts.timestamp})`)
+      continue
     } else if (Math.abs(ts) < 1e15) {
       precision = 'ms'
     }
@@ -189,9 +238,22 @@ export function parseLineProtocol(text: string): Record<string, unknown>[] {
       timestamp: ts,
       precision,
     })
+    if (fieldErrors > 0) {
+      // 部分字段失败已记录，点仍可写入
+    }
+  }
+  return { points, errors, skippedLines }
+}
+
+// 兼容旧接口：仅返回 points；坏行会抛出汇总错误
+export function parseLineProtocol(text: string): Record<string, unknown>[] {
+  const { points, errors } = parseLineProtocolDetailed(text)
+  if (!points.length && errors.length) {
+    throw new Error(errors.slice(0, 5).join('; ') + (errors.length > 5 ? ` 等共 ${errors.length} 处` : ''))
   }
   return points
 }
+
 
 // 解析 Prometheus exposition 文本为 Points
 export function parsePrometheusText(text: string): Record<string, unknown>[] {

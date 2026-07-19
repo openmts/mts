@@ -16,7 +16,7 @@ const { isAdmin } = useAuth()
 
 const allNavItems = [
   { to: '/', label: '仪表盘', icon: LayoutDashboard, adminOnly: false },
-  { to: '/databases', label: '数据库', icon: Database, adminOnly: false },
+  { to: '/databases', label: '数据库', icon: Database, adminOnly: true },
   { to: '/query', label: '查询', icon: Search, adminOnly: false },
   { to: '/write', label: '写入', icon: Send, adminOnly: false },
   { to: '/users', label: '用户', icon: Users, adminOnly: false },

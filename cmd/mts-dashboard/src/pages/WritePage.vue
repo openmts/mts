@@ -5,7 +5,7 @@ import { listDatabases, listRetentionPolicies } from '@/api/meta'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { Send, Plus, Trash2, Database, Clock, ToggleLeft, ToggleRight, Table2, FileText, BarChart3 } from 'lucide-vue-next'
-import { fieldTypes, buildFormPoints, parseLineProtocol, parsePrometheusText, type FormRow } from '@/composables/usePointParsers'
+import { fieldTypes, buildFormPoints, parseLineProtocolDetailed, parsePrometheusText, type FormRow } from '@/composables/usePointParsers'
 
 type WriteMode = 'form' | 'line' | 'prometheus'
 
@@ -82,7 +82,15 @@ async function doWrite() {
     } else if (writeMode.value === 'prometheus') {
       points = parsePrometheusText(lineInput.value)
     } else {
-      points = parseLineProtocol(lineInput.value)
+      const parsed = parseLineProtocolDetailed(lineInput.value)
+      if (parsed.errors.length) {
+        const summary = parsed.errors.slice(0, 5).join('；') + (parsed.errors.length > 5 ? ` 等共 ${parsed.errors.length} 处` : '')
+        if (!parsed.points.length) {
+          throw new Error(summary)
+        }
+        notifyError(`Line Protocol 部分行无效：${summary}`)
+      }
+      points = parsed.points
     }
     if (!selectedDb.value) {
       actionError.value = '请选择目标数据库'

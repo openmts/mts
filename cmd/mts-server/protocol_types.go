@@ -50,11 +50,13 @@ type queryRequest struct {
 type queryRowsRequest = queryRequest
 
 type queryRowsResponse struct {
-	Rows []mts.Row `json:"rows"`
+	Rows  []mts.Row      `json:"rows"`
+	Stats mts.QueryStats `json:"stats"`
 }
 
 type queryColumnsResponse struct {
 	Columns []mts.ColumnSeries `json:"columns"`
+	Stats   mts.QueryStats     `json:"stats"`
 }
 
 type queryExplainResponse struct {

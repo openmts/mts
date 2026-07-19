@@ -96,7 +96,7 @@ function statusLabel(httpStatus: number): string {
 
     <div class="rounded-xl border border-slate-200 bg-white p-6">
       <h2 class="mb-2 text-sm font-semibold text-slate-800">服务级 Token（可选）</h2>
-      <p class="mb-4 text-xs text-slate-500">当服务启用 admin_token / data_tokens 时，可在此配置。保存在 sessionStorage，关闭浏览器后失效。</p>
+      <p class="mb-4 text-xs text-slate-500">当服务启用 admin_token / data_tokens 时，可在此配置。保存在 sessionStorage（会话级）。用户登出不会自动清除；可在本页手动清空，关闭标签页后失效。</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="mb-1 block text-xs text-slate-500">X-MTS-Admin-Token</label>

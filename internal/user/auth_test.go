@@ -23,8 +23,8 @@ func TestManagerPasswordAuthenticationLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Authenticate() error = %v", err)
 	}
-	if token.Token == "" || token.UserName != "alice" || !token.ExpiresAt.After(time.Now()) {
-		t.Fatalf("token = %#v, want populated token", token)
+	if token.Token == "" || token.UserName != "alice" || token.Role != RoleUser || !token.ExpiresAt.After(time.Now()) {
+		t.Fatalf("token = %#v, want populated token with user role", token)
 	}
 	principal, err := manager.VerifyToken(ctx, token.Token)
 	if err != nil {

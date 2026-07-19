@@ -145,6 +145,9 @@ func assertEngineAuthentication(t *testing.T, ctx context.Context, eng *mts.Engi
 	if err != nil {
 		t.Fatalf("Authenticate() error = %v", err)
 	}
+	if token.Role != mts.UserRoleUser {
+		t.Fatalf("token.Role = %q, want user", token.Role)
+	}
 	principal, err := eng.VerifyToken(ctx, token.Token)
 	if err != nil {
 		t.Fatalf("VerifyToken() error = %v", err)

@@ -50,76 +50,76 @@
 - **建议（择一，POC 可直接改契约）**:
   1. 服务端 rows/columns 响应附带 `stats`（推荐）；或
   2. 前端对 rows/columns 显式请求 `/query/stats` **且** 用 requestId 绑定，避免竞态
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P1-02 角色推断不可靠
 - **位置**: `useAuth.resolveRole`
 - **现象**: 能 `GET /users` 且找不到自己 → 当成 `admin`；403/失败 → `user`
 - **影响**: 网络抖动或权限边界变化时菜单/页面权限错误
 - **建议**: 登录响应扩展 `role`；或 `GET /api/v1/users/me`；禁止“能 list 就当 admin”
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P1-03 非管理员概览页体验差
 - **位置**: `OverviewPage.vue`
 - **现象**: 并行拉 `storage-memory` / `compaction` / `maintenance`（管理面）；非 admin 403 导致整页 `loadError`，健康状态也可能被 Promise.all 拖死
 - **建议**: 非 admin 只拉 `/healthz`；admin 再拉统计；`allSettled` 降级展示
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P1-04 数据库管理页无角色门禁
 - **位置**: `DatabasesPage.vue` + Sidebar `adminOnly: false`
 - **现象**: 创建/删除库、RP 管理走 admin API；普通用户可进页面但操作失败；列表也走 admin databases
 - **建议**: 侧栏/路由按 admin 裁剪，或拆“浏览元数据（data）”与“管理库（admin）”
-- **状态**: open
+- **状态**: fixed
 
 ### P2 — 体验与稳健性
 
 #### DASH-P2-01 危险确认未统一
 - **位置**: Operations flush/compact/retention；Downsample 删除；Users 删除；Databases `prompt` 删库
-- **状态**: open（P2-12 残留）
+- **状态**: fixed（P2-12 残留）
 
 #### DASH-P2-02 流式结果“预览即全部复制”
 - **位置**: `useQueryWorkbench` stream 仅保留前 200 行到 `rawOutput`
 - **现象**: 复制按钮只复制预览，用户以为是全量
 - **建议**: 文案标明预览；或提供“下载完整流”（需落盘/二次请求）
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P2-03 运维保留策略时间戳
 - **位置**: `OperationsPage` `Date.now() * 1e6` 作为 `now_unix_nanos`
 - **现象**: 可能产生非精确 ns（虽通常可接受）
 - **建议**: 不传 now（服务端 now）或用安全整数字符串路径
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P2-04 Line protocol 校验弱于表单
 - **位置**: `usePointParsers.parseLineProtocol` 仍 `parseInt` + `isNaN continue`，静默丢字段
 - **建议**: 汇总非法行号；与表单一致的安全整数检查
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P2-05 通知/成功反馈覆盖不全
 - **位置**: 创建用户/设密/删策略等仍只有 actionError 红条
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P2-06 死代码与文件体量
 - `apiPostText` 无引用
 - `UsersPage.vue` ~414 行（超 300）
 - Databases/Write/Query ~305 临界
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P2-07 前端工程门禁缺失
 - 无 `vitest`/`playwright`；`package.json` 无 lint；CI 仅 `vue-tsc`+vite build
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P2-08 降采样表单 UX 粗糙
 - interval 默认 `60000000000`（ns）无单位解释；缺少 DB/measurement 下拉联动
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P2-09 Modal a11y 仍弱
 - Esc 有；无 focus trap / 初始焦点 / 遮罩点击关闭不完全统一
-- **状态**: open
+- **状态**: fixed
 
 #### DASH-P2-10 clearAuth 不清理服务级 Token
 - admin/data token 在 sessionStorage 跨登出保留
 - 可能期望（运维会话）也可能误用；需产品明确并在 UI 标注
-- **状态**: open（文档/产品决策）
+- **状态**: fixed（文档/产品决策）
 
 ### P3 — 增强（仍 deferred）
 
@@ -186,7 +186,16 @@
 |---|---|---|
 | 上轮 P0 | P0 | fixed |
 | 上轮 P1（除 03 残留） | P1 | fixed |
-| DASH-P1-01 ~ 04 | P1 | open |
-| DASH-P2-01 ~ 10 | P2 | open |
+| DASH-P1-01 ~ 04 | P1 | fixed |
+| DASH-P2-01 ~ 10 | P2 | fixed |
 | DASH-P3-01 ~ 08 | P3 | deferred |
 
+
+
+---
+
+## 7. R2 实现闭环（2026-07-19）
+
+- 全部 DASH-P1-01~04、DASH-P2-01~10 已实现并验证
+- P3 仍 deferred（图表 / TypedBatch UI / 历史 / 暗色 / i18n / base path / 审计增强 / 快照管理）
+- 验证：`npm run test` + `npm run build` + `make test` + `make e2e` + `make lint`
