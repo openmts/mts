@@ -62,6 +62,7 @@ type Deps struct {
 func OpenWithDeps(_ context.Context, opts model.Options, deps Deps) (*Engine, error) {
 	opts = normalizeOptions(opts)
 	sstable.ConfigurePageDecodeCache(opts.QueryPageCache.Limit, opts.QueryPageCache.MaxSamples)
+	sstable.ConfigureBlockPayloadCache(opts.QueryBlockCache.Limit, opts.QueryBlockCache.MaxBytes)
 	deps = normalizeDeps(deps, opts.Cardinality)
 	if opts.Path == "" {
 		return nil, fmt.Errorf("engine path is empty")

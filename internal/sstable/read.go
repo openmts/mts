@@ -62,6 +62,7 @@ func openPart(path string, validateDeep bool, enablePageCache bool) (*Part, erro
 		files:          files,
 		componentSizes: componentSizes,
 		pageCache:      newPageCacheIfEnabled(enablePageCache),
+		blockCache:     newBlockPayloadCacheIfEnabled(enablePageCache),
 	}
 	if err := validateOpenedPart(part, validateDeep); err != nil {
 		closeErr := files.close()
@@ -70,6 +71,9 @@ func openPart(path string, validateDeep bool, enablePageCache bool) (*Part, erro
 		}
 		return nil, err
 	}
+	// 打开期深校验会扫 timestamps/values，避免把校验读预热进查询缓存，
+	// 也避免“打开后原地破坏组件”测试被缓存命中掩盖。
+	part.blockCache.clear()
 	return part, nil
 }
 
@@ -636,23 +640,46 @@ func (p *Part) readBlock(name string, ref blockRef) ([]byte, error) {
 }
 
 func (p *Part) readBlockPayload(name string, ref blockRef) (blockPayload, error) {
+	// index 不进 block 缓存：便于校验/破坏性测试看到最新盘内容，且 index 通常由上层 reader 复用。
+	cacheable := name == timestampsFile || name == valuesFile
+	key := blockPayloadKey{name: name, offset: ref.Offset, size: ref.Size}
+	if cacheable {
+		if data, ok := p.blockCache.get(key); ok {
+			return blockPayload{data: data}, nil
+		}
+	}
 	if p.files == nil {
 		data, err := readLogicalComponentBlock(p.path, nil, name, ref)
 		if err != nil {
 			return blockPayload{}, err
 		}
+		if cacheable {
+			p.blockCache.put(key, data)
+		}
 		return blockPayload{data: data}, nil
 	}
+	var (
+		payload blockPayload
+		err     error
+	)
 	switch name {
 	case indexFile:
-		return readBlockPayloadFrom(p.files.index, ref)
+		payload, err = readBlockPayloadFrom(p.files.index, ref)
 	case timestampsFile:
-		return readBlockPayloadFrom(p.files.timestamps, ref)
+		payload, err = readBlockPayloadFrom(p.files.timestamps, ref)
 	case valuesFile:
-		return readBlockPayloadFrom(p.files.values, ref)
+		payload, err = readBlockPayloadFrom(p.files.values, ref)
 	default:
 		return blockPayload{}, fmt.Errorf("unsupported part block file %q", name)
 	}
+	if err != nil {
+		return blockPayload{}, err
+	}
+	// 拷贝后入缓存，调用方可继续 Release 原始 frame。
+	if cacheable {
+		p.blockCache.put(key, payload.Bytes())
+	}
+	return payload, nil
 }
 
 func (p *Part) resetReadStatsForTest() *readStats {

@@ -19,6 +19,10 @@ func toModelOptions(opts Options) model.Options {
 			Limit:      opts.QueryPageCache.Limit,
 			MaxSamples: opts.QueryPageCache.MaxSamples,
 		},
+		QueryBlockCache: model.QueryBlockCacheOptions{
+			Limit:    opts.QueryBlockCache.Limit,
+			MaxBytes: opts.QueryBlockCache.MaxBytes,
+		},
 		Cardinality:             toModelCardinalityOptions(opts.Cardinality),
 		MaxConcurrentDownsample: opts.MaxConcurrentDownsample,
 		MaxConcurrentCompaction: opts.MaxConcurrentCompaction,

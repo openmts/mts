@@ -62,6 +62,9 @@ func (e *Engine) Flush(ctx context.Context) error {
 //
 // 该方法会 materialize 完整结果，生产场景的大结果查询优先使用
 // QueryColumnIterator 并配置 Limit 或 QueryBudget。
+//
+// 性能提示：宽表扫描、聚合、导出等场景优先列式 API（QueryColumnIterator），
+// 避免 QueryRowIterator 的行拼装与 map 分配；再配合 Fields 投影只读必要字段。
 func (e *Engine) QueryColumns(ctx context.Context, query Query) ([]ColumnSeries, error) {
 	converted, factor, err := toModelQuery(query)
 	if err != nil {

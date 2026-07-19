@@ -149,18 +149,33 @@ func fromModelSeriesList(series []model.Series) []Series {
 }
 
 func fromModelColumnSeries(column model.ColumnSeries, factor int64) ColumnSeries {
+	// factor==1（纳秒）时 timestamps 可切片拷贝；tags 只读共享，避免列式导出再分配。
+	timestamps := column.Timestamps
+	if factor != 1 && factor > 0 {
+		timestamps = make([]int64, len(column.Timestamps))
+		for index, timestamp := range column.Timestamps {
+			timestamps[index] = timestampFromNanoseconds(timestamp, factor)
+		}
+	} else if factor == 1 {
+		if len(column.Timestamps) > 0 {
+			timestamps = append([]int64(nil), column.Timestamps...)
+		}
+	}
 	values := make([]FieldValue, len(column.Values))
 	for index, value := range column.Values {
-		values[index] = fromModelFieldValue(value)
-	}
-	timestamps := make([]int64, len(column.Timestamps))
-	for index, timestamp := range column.Timestamps {
-		timestamps[index] = timestampFromNanoseconds(timestamp, factor)
+		// FieldValue 布局兼容，按值拷贝字段。
+		values[index] = FieldValue{
+			Type:    FieldType(value.Type),
+			Float64: value.Float64,
+			Int64:   value.Int64,
+			String:  value.String,
+			Bool:    value.Bool,
+		}
 	}
 	return ColumnSeries{
 		SeriesID:    column.SeriesID,
 		Measurement: column.Measurement,
-		Tags:        cloneStringMap(column.Tags),
+		Tags:        column.Tags,
 		FieldID:     column.FieldID,
 		FieldName:   column.FieldName,
 		FieldType:   fromModelFieldType(column.FieldType),

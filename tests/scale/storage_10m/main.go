@@ -98,7 +98,13 @@ type report struct {
 	HotQueryLatency                   int64                `json:"hot_query_latency_nanos"`
 	ProjectedColdQueryLatency         int64                `json:"projected_cold_query_latency_nanos"`
 	ProjectedHotQueryLatency          int64                `json:"projected_hot_query_latency_nanos"`
+	ColumnColdQueryLatency            int64                `json:"column_cold_query_latency_nanos"`
+	ColumnHotQueryLatency             int64                `json:"column_hot_query_latency_nanos"`
+	ProjectedColumnColdQueryLatency   int64                `json:"projected_column_cold_query_latency_nanos"`
+	ProjectedColumnHotQueryLatency    int64                `json:"projected_column_hot_query_latency_nanos"`
 	PageCacheLimit                    int                  `json:"page_cache_limit"`
+	BlockCacheLimit                   int                  `json:"block_cache_limit"`
+	BlockCacheMaxBytes                int64                `json:"block_cache_max_bytes"`
 	MaxConcurrentCompaction           int                  `json:"max_concurrent_compaction"`
 	BacklogDrainNanos                 int64                `json:"backlog_drain_nanos"`
 	CompactionResult                  mts.CompactionResult `json:"compaction_result"`
@@ -133,8 +139,11 @@ type config struct {
 	maxCompactionBacklog    int
 	pageCacheLimit          int
 	pageCacheMaxSamples     int
+	blockCacheLimit         int
+	blockCacheMaxBytes      int64
 	maxConcurrentCompaction int
 	projectedQuery          bool
+	columnQuery             bool
 }
 
 func main() {
@@ -241,7 +250,13 @@ func run(args []string) (err error) {
 		HotQueryLatency:                   workload.hotQueryLatency.Nanoseconds(),
 		ProjectedColdQueryLatency:         workload.projectedColdQueryLatency.Nanoseconds(),
 		ProjectedHotQueryLatency:          workload.projectedHotQueryLatency.Nanoseconds(),
+		ColumnColdQueryLatency:            workload.columnColdQueryLatency.Nanoseconds(),
+		ColumnHotQueryLatency:             workload.columnHotQueryLatency.Nanoseconds(),
+		ProjectedColumnColdQueryLatency:   workload.projectedColumnColdQueryLatency.Nanoseconds(),
+		ProjectedColumnHotQueryLatency:    workload.projectedColumnHotQueryLatency.Nanoseconds(),
 		PageCacheLimit:                    cfg.pageCacheLimit,
+		BlockCacheLimit:                   cfg.blockCacheLimit,
+		BlockCacheMaxBytes:                cfg.blockCacheMaxBytes,
 		MaxConcurrentCompaction:           cfg.maxConcurrentCompaction,
 		BacklogDrainNanos:                 workload.backlogDrain.Nanoseconds(),
 		CompactionResult:                  workload.compactionResult,
@@ -297,6 +312,16 @@ func parseConfig(args []string) (config, error) {
 		0,
 		"skip caching decoded pages larger than this; 0=default 512",
 	)
+	blockCacheLimit := flags.Int(
+		"block-cache-limit",
+		0,
+		"query block payload cache entry limit; 0=default 512, -1=disable",
+	)
+	blockCacheMaxBytes := flags.Int64(
+		"block-cache-max-bytes",
+		0,
+		"query block payload cache max bytes; 0=default 64MiB",
+	)
 	maxConcurrentCompaction := flags.Int(
 		"max-concurrent-compaction",
 		0,
@@ -306,6 +331,11 @@ func parseConfig(args []string) (config, error) {
 		"projected-query",
 		true,
 		"also measure single-field projected cold/hot query latency",
+	)
+	columnQuery := flags.Bool(
+		"column-query",
+		true,
+		"also measure column cold/hot query latency via QueryColumnIterator",
 	)
 	zstdLevel := flags.String(
 		"zstd-level",
@@ -379,8 +409,11 @@ func parseConfig(args []string) (config, error) {
 		omitWriteSeq:            *omitWriteSeq,
 		pageCacheLimit:          *pageCacheLimit,
 		pageCacheMaxSamples:     *pageCacheMaxSamples,
+		blockCacheLimit:         *blockCacheLimit,
+		blockCacheMaxBytes:      *blockCacheMaxBytes,
 		maxConcurrentCompaction: *maxConcurrentCompaction,
 		projectedQuery:          *projectedQuery,
+		columnQuery:             *columnQuery,
 		zstdLevel:               *zstdLevel,
 		durability:              *durability,
 		queryStart:              *queryStart,
@@ -531,6 +564,10 @@ type workloadResult struct {
 	hotQueryLatency                   time.Duration
 	projectedColdQueryLatency         time.Duration
 	projectedHotQueryLatency          time.Duration
+	columnColdQueryLatency            time.Duration
+	columnHotQueryLatency             time.Duration
+	projectedColumnColdQueryLatency   time.Duration
+	projectedColumnHotQueryLatency    time.Duration
 	writeDuration                     time.Duration
 	compactionDuration                time.Duration
 	backlogDrain                      time.Duration
@@ -686,6 +723,30 @@ func queryOpenEngine(ctx context.Context, eng *mts.Engine, cfg config, result *w
 		result.projectedColdQueryLatency = projCold
 		result.projectedHotQueryLatency = projHot
 	}
+	if cfg.columnQuery {
+		_, colCold, err := timedQueryLimitedColumns(ctx, eng, query, nil, false)
+		if err != nil {
+			return fmt.Errorf("column query cold: %w", err)
+		}
+		_, colHot, err := timedQueryLimitedColumns(ctx, eng, query, nil, false)
+		if err != nil {
+			return fmt.Errorf("column query hot: %w", err)
+		}
+		result.columnColdQueryLatency = colCold
+		result.columnHotQueryLatency = colHot
+		if cfg.projectedQuery {
+			_, pcolCold, err := timedQueryLimitedColumns(ctx, eng, query, []string{"f0"}, false)
+			if err != nil {
+				return fmt.Errorf("projected column query cold: %w", err)
+			}
+			_, pcolHot, err := timedQueryLimitedColumns(ctx, eng, query, []string{"f0"}, false)
+			if err != nil {
+				return fmt.Errorf("projected column query hot: %w", err)
+			}
+			result.projectedColumnColdQueryLatency = pcolCold
+			result.projectedColumnHotQueryLatency = pcolHot
+		}
+	}
 	return nil
 }
 
@@ -736,6 +797,10 @@ func openScaleEngine(ctx context.Context, dir string, cfg config) (*mts.Engine, 
 		QueryPageCache: mts.QueryPageCacheOptions{
 			Limit:      cfg.pageCacheLimit,
 			MaxSamples: cfg.pageCacheMaxSamples,
+		},
+		QueryBlockCache: mts.QueryBlockCacheOptions{
+			Limit:    cfg.blockCacheLimit,
+			MaxBytes: cfg.blockCacheMaxBytes,
 		},
 	})
 }
@@ -890,6 +955,55 @@ func scaleQuerySpec(cfg config) querySpec {
 		endIndex:      endIndex,
 		timestampStep: step,
 	}
+}
+
+func timedQueryLimitedColumns(
+	ctx context.Context,
+	eng *mts.Engine,
+	query querySpec,
+	fields []string,
+	verify bool,
+) (int, time.Duration, error) {
+	started := time.Now()
+	iter, err := eng.QueryColumnIterator(ctx, mts.Query{
+		Measurement: "scale",
+		StartTime:   query.start,
+		EndTime:     query.end,
+		Limit:       query.limit,
+		Fields:      fields,
+	})
+	if err != nil {
+		return 0, time.Since(started), err
+	}
+	series := 0
+	samples := 0
+	for iter.Next() {
+		column := iter.Column()
+		series++
+		samples += len(column.Timestamps)
+		if verify {
+			if len(fields) > 0 && column.FieldName != fields[0] && !containsString(fields, column.FieldName) {
+				return series, time.Since(started), errors.Join(
+					fmt.Errorf("unexpected column field %q", column.FieldName),
+					iter.Close(),
+				)
+			}
+		}
+	}
+	if err := errors.Join(iter.Err(), iter.Close()); err != nil {
+		return series, time.Since(started), err
+	}
+	_ = samples
+	return series, time.Since(started), nil
+}
+
+func containsString(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }
 
 func timedQueryLimitedRowsProjected(

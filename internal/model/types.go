@@ -419,6 +419,7 @@ type Options struct {
 	Compression             CompressionOptions
 	StorageMemory           StorageMemoryOptions
 	QueryPageCache          QueryPageCacheOptions
+	QueryBlockCache         QueryBlockCacheOptions
 	Cardinality             CardinalityOptions
 	MaxConcurrentDownsample int
 	// MaxConcurrentCompaction 限制全局并发 compaction 任务数；<=0 使用默认值。
@@ -460,6 +461,13 @@ type StorageMemoryOptions struct {
 type QueryPageCacheOptions struct {
 	Limit      int
 	MaxSamples int
+}
+
+// QueryBlockCacheOptions 控制查询 block payload 缓存。
+// Limit: 0=默认，-1=关闭。MaxBytes: 0=默认 64MiB。
+type QueryBlockCacheOptions struct {
+	Limit    int
+	MaxBytes int64
 }
 
 type WALOptions struct {

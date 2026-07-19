@@ -130,6 +130,7 @@ type Part struct {
 	componentSizes map[string]int64
 	stats          *readStats
 	pageCache      *pageDecodeCache
+	blockCache     *blockPayloadCache
 }
 
 type partReadFiles struct {
