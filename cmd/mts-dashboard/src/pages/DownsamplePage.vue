@@ -4,7 +4,10 @@ import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
+import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { parseHumanDurationToNs, formatNsDuration } from '@/utils/duration'
 import { Plus, Trash2, Play, Pause, RefreshCw, PlayCircle, RotateCcw, FlaskConical } from 'lucide-vue-next'
 import type { DownsamplePolicy, DownsampleStatus, DownsampleRunResult, DownsampleDryRunResult } from '@/api/types'
@@ -17,7 +20,7 @@ const { success, error: notifyError } = useNotify()
 const policies = ref<DownsamplePolicy[]>([])
 const statuses = ref<DownsampleStatus[]>([])
 const loadError = ref('')
-const actionError = ref('')
+const actionResult = ref<ActionResult | null>(null)
 const showCreate = ref(false)
 const intervalHuman = ref('1m')
 const deleteOpen = ref(false)
@@ -55,17 +58,19 @@ const newPolicyTagsText = computed({
 
 async function createPolicy() {
   if (!newPolicy.value.name.trim()) return
-  actionError.value = ''
+  actionResult.value = null
   try {
     newPolicy.value.interval = parseHumanDurationToNs(intervalHuman.value)
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : 'interval 无效'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : 'interval 无效'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
     return
   }
   if (!newPolicy.value.source_database || !newPolicy.value.source_measurement) {
-    actionError.value = '请填写源库与 measurement'
-    notifyError(actionError.value)
+    const msg = '请填写源库与 measurement'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
     return
   }
   try {
@@ -79,10 +84,12 @@ async function createPolicy() {
     }
     intervalHuman.value = '1m'
     await loadData()
+    actionResult.value = makeActionResult('ok', '降采样策略已创建')
     success('降采样策略已创建')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '创建失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '创建失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -97,10 +104,12 @@ async function confirmDelete() {
     await apiDelete(`/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`)
     deleteOpen.value = false
     await loadData()
+    actionResult.value = makeActionResult('ok', '策略已删除')
     success('策略已删除')
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '删除失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '删除失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   } finally {
     deleteLoading.value = false
   }
@@ -111,10 +120,13 @@ async function togglePolicy(policy: DownsamplePolicy) {
   try {
     await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`)
     await loadData()
-    success(policy.enabled ? '策略已禁用' : '策略已启用')
+    const msg = policy.enabled ? '策略已禁用' : '策略已启用'
+    actionResult.value = makeActionResult('ok', msg)
+    success(msg)
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '操作失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '操作失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -132,18 +144,18 @@ function formatUnix(v: number) {
   return new Date(v > 1e12 ? v / 1e6 : v * 1000).toLocaleString()
 }
 
-const lastActionResult = ref<string>('')
-
 async function runPolicy(name: string) {
   try {
     const data = await apiPost<{ result: DownsampleRunResult }>(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/run`, {})
     const r = data.result
-    lastActionResult.value = `run ${name}: windows=${r?.windows_processed ?? 0} points=${r?.points_written ?? 0}`
+    const msg = `run ${name}: windows=${r?.windows_processed ?? 0} points=${r?.points_written ?? 0}`
+    actionResult.value = makeActionResult('ok', msg)
     await loadData()
-    success(lastActionResult.value)
+    success(msg)
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : 'run 失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : 'run 失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -153,10 +165,13 @@ async function resetPolicy(name: string) {
       reset: { allow_policy_replace: true },
     })
     await loadData()
-    success(`策略 ${name} 已重置`)
+    const msg = `策略 ${name} 已重置`
+    actionResult.value = makeActionResult('ok', msg)
+    success(msg)
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : 'reset 失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : 'reset 失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -167,11 +182,13 @@ async function dryRunPolicy(name: string) {
       {},
     )
     const r = data.result
-    lastActionResult.value = `dry-run ${name}: windows=${r?.windows ?? 0} points≈${r?.points_estimate ?? 0} samples≈${r?.samples_estimate ?? 0} complete=${r?.estimate_complete}`
-    success(lastActionResult.value)
+    const msg = `dry-run ${name}: windows=${r?.windows ?? 0} points≈${r?.points_estimate ?? 0} samples≈${r?.samples_estimate ?? 0} complete=${r?.estimate_complete}`
+    actionResult.value = makeActionResult('info', msg)
+    success(msg)
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : 'dry-run 失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : 'dry-run 失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   }
 }
 
@@ -193,11 +210,29 @@ function formatDuration(ns: number) {
         <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white" @click="showCreate = true"><Plus class="h-3.5 w-3.5" /> 创建策略</button>
       </div>
     </div>
-    <p v-if="loadError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-200">{{ loadError }}</p>
-    <p v-if="lastActionResult" class="mts-alert-ok">{{ lastActionResult }}</p>
-    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
+    <ActionResultBanner
+      v-if="loadError"
+      kind="error"
+      :message="loadError"
+      @dismiss="loadError = ''"
+    />
+    <ActionResultBanner
+      :result="actionResult"
+      @dismiss="actionResult = null"
+    />
 
-    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+    <div v-if="!policies.length" class="mts-card">
+      <EmptyState
+        title="暂无降采样策略"
+        description="创建策略后可在此执行 run / dry-run / reset，并查看各策略状态。"
+      >
+        <template #action>
+          <button type="button" class="mts-btn-primary" @click="showCreate = true">创建策略</button>
+        </template>
+      </EmptyState>
+    </div>
+
+    <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">

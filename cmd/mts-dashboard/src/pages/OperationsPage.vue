@@ -4,7 +4,10 @@ import { apiGet, apiPost } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
+import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle } from 'lucide-vue-next'
 import type { CompactionStats, MaintenanceStats } from '@/api/types'
 
@@ -15,7 +18,7 @@ interface MaintenanceErrorsResponse { errors: string[] }
 const { isAdmin } = useAuth()
 const { success, error: notifyError } = useNotify()
 const loadError = ref('')
-const actionError = ref('')
+const actionResult = ref<ActionResult | null>(null)
 const loading = ref(false)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
@@ -67,24 +70,28 @@ function openConfirm(kind: 'flush' | 'compact' | 'retention') {
 async function runConfirmed() {
   if (!confirmKind.value) return
   confirmLoading.value = true
-  actionError.value = ''
+  actionResult.value = null
   try {
+    let msg = ''
     if (confirmKind.value === 'flush') {
       await apiPost('/api/v1/admin/flush', {})
-      success('Flush 已完成')
+      msg = 'Flush 已完成'
     } else if (confirmKind.value === 'compact') {
       await apiPost('/api/v1/admin/compact', {})
-      success('Compact 已触发')
+      msg = 'Compact 已触发'
     } else {
       // 不传 now：由服务端使用当前时间，避免前端不安全 ns 乘法
       await apiPost('/api/v1/admin/retention/apply', {})
-      success('保留策略已应用')
+      msg = '保留策略已应用'
     }
+    actionResult.value = makeActionResult('ok', msg)
+    success(msg)
     confirmKind.value = null
     await loadStats()
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '操作失败'
-    notifyError(actionError.value)
+    const msg = e instanceof Error ? e.message : '操作失败'
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
   } finally {
     confirmLoading.value = false
   }
@@ -106,14 +113,27 @@ onMounted(() => { void loadStats() })
       </button>
     </div>
 
-    <p v-if="loadError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-200">{{ loadError }}</p>
-    <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-200">{{ actionError }}</p>
+    <ActionResultBanner
+      v-if="loadError"
+      kind="error"
+      :message="loadError"
+      @dismiss="loadError = ''"
+    />
+    <ActionResultBanner
+      :result="actionResult"
+      @dismiss="actionResult = null"
+    />
 
     <div class="mts-panel">
       <div class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
         <AlertTriangle class="h-4 w-4" /> 维护错误 ({{ maintenanceErrors.length }})
       </div>
-      <p v-if="!maintenanceErrors.length" class="text-sm mts-muted">暂无维护错误</p>
+      <EmptyState
+        v-if="!maintenanceErrors.length"
+        compact
+        title="暂无维护错误"
+        description="系统维护路径运行正常时此处为空。"
+      />
       <ul v-else class="max-h-40 space-y-1 overflow-auto text-xs text-red-700 dark:text-red-200">
         <li v-for="(e, i) in maintenanceErrors" :key="i" class="rounded bg-red-50 px-2 py-1 dark:bg-red-950/40">{{ e }}</li>
       </ul>
@@ -141,7 +161,7 @@ onMounted(() => { void loadStats() })
     <div class="grid gap-4 lg:grid-cols-2">
       <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-5">
         <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">维护统计</h2>
-        <div v-if="!maintenanceStats" class="text-sm text-slate-400 dark:text-slate-500">暂无数据</div>
+        <EmptyState v-if="!maintenanceStats" compact title="暂无维护统计" description="刷新后仍为空可能是接口暂不可用。" />
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
           <div>compact active: <b>{{ maintenanceStats.compaction_active }}</b></div>
           <div>compact backlog: <b>{{ maintenanceStats.compaction_backlog }}</b></div>
@@ -153,7 +173,7 @@ onMounted(() => { void loadStats() })
       </div>
       <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-5">
         <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">压缩统计</h2>
-        <div v-if="!compactionStats" class="text-sm text-slate-400 dark:text-slate-500">暂无数据</div>
+        <EmptyState v-if="!compactionStats" compact title="暂无压缩统计" description="刷新后仍为空可能是接口暂不可用。" />
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
           <div>total: <b>{{ compactionStats.total }}</b></div>
           <div>success: <b>{{ compactionStats.success }}</b></div>

@@ -46,3 +46,7 @@ body {
 .mts-alert-ok {
   @apply rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200;
 }
+
+.mts-alert-info {
+  @apply rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200;
+}

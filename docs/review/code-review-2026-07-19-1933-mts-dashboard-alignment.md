@@ -364,3 +364,8 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 表单脏状态：Query/Write
 - 查询耗时水线：已完成
 - Write/Audit EmptyState：已完成
+
+
+## P9 状态（2026-07-19）
+- ActionResultBanner：已完成
+- Operations/Downsample 空状态与结果条：已完成
