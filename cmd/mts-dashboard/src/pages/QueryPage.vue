@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { apiPost, apiGet, getBearerToken } from '@/api/client'
-import { Search, Database, Hash, Clock, Filter, Layers, Zap, BarChart3, Timer } from 'lucide-vue-next'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { apiPost, apiGet, apiPostText, APIClientError } from '@/api/client'
+import { Search, Database, Hash, Clock, Filter, Layers, Zap, BarChart3, Timer, Square, Copy, Check } from 'lucide-vue-next'
 
 interface QueryResultRow {
   series_id: number; measurement: string; tags: Record<string, string>
@@ -16,6 +16,13 @@ interface RowsResponse { rows: QueryResultRow[] }
 interface StatsResponse { stats: QueryStatsData }
 interface DatabaseListResponse { measurements: string[] }
 interface MeasurementListResponse { measurements: string[] }
+interface StreamRecord {
+  type?: string
+  row?: QueryResultRow
+  column?: unknown
+  stats?: QueryStatsData
+  error?: { code?: string; message?: string }
+}
 
 const databases = ref<string[]>([])
 const measurements = ref<string[]>([])
@@ -26,8 +33,12 @@ const queryMode = ref<'rows' | 'columns' | 'explain' | 'stream-row' | 'stream-co
 const rows = ref<QueryResultRow[]>([])
 const queryStats = ref<QueryStatsData | null>(null)
 const rawOutput = ref('')
+const streamMeta = ref({ lines: 0, records: 0, errors: 0 })
 const actionError = ref('')
 const loading = ref(false)
+const copyState = ref<'idle' | 'ok' | 'fail'>('idle')
+let queryAbort: AbortController | null = null
+let copyTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(async () => {
   try {
@@ -37,6 +48,11 @@ onMounted(async () => {
       queryForm.value.database = databases.value[0]
     }
   } catch (_) { /* 非关键 */ }
+})
+
+onBeforeUnmount(() => {
+  cancelQuery()
+  if (copyTimer) clearTimeout(copyTimer)
 })
 
 watch(() => queryForm.value.database, async (db) => {
@@ -60,56 +76,110 @@ watch(() => queryForm.value.database, async (db) => {
   finally { measurementsLoading.value = false }
 })
 
-async function executeQuery() {
-  actionError.value = ''
-  loading.value = true
-  rows.value = []
-  queryStats.value = null
-  rawOutput.value = ''
+function buildQuery(): Record<string, unknown> {
   const query: Record<string, unknown> = {}
   if (queryForm.value.database) query.database = queryForm.value.database
   if (queryForm.value.retention_policy) query.retention_policy = queryForm.value.retention_policy
   if (queryForm.value.measurement) query.measurement = queryForm.value.measurement
   if (queryForm.value.start_time) query.start_time = parseInt(queryForm.value.start_time)
   if (queryForm.value.end_time) query.end_time = parseInt(queryForm.value.end_time)
-  if (queryForm.value.fields) query.fields = queryForm.value.fields.split(',').map((s) => s.trim())
+  if (queryForm.value.fields) query.fields = queryForm.value.fields.split(',').map((s) => s.trim()).filter(Boolean)
   if (queryForm.value.limit) query.limit = parseInt(queryForm.value.limit)
+  return query
+}
+
+function cancelQuery() {
+  if (queryAbort) {
+    queryAbort.abort()
+    queryAbort = null
+  }
+}
+
+function beginRequest(): AbortSignal {
+  cancelQuery()
+  queryAbort = new AbortController()
+  return queryAbort.signal
+}
+
+function parseStreamText(text: string) {
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean)
+  let records = 0
+  let errors = 0
+  let endStats: QueryStatsData | null = null
+  let streamError = ''
+  for (const line of lines) {
+    try {
+      const rec = JSON.parse(line) as StreamRecord
+      const type = rec.type ?? ''
+      if (type === 'row' || type === 'column') {
+        records += 1
+      } else if (type === 'end' && rec.stats) {
+        endStats = rec.stats
+      } else if (type === 'error') {
+        errors += 1
+        streamError = rec.error?.message || streamError || '流式查询错误'
+      }
+    } catch (_) {
+      errors += 1
+    }
+  }
+  streamMeta.value = { lines: lines.length, records, errors }
+  if (endStats) {
+    queryStats.value = endStats
+  }
+  if (streamError) {
+    actionError.value = streamError
+  }
+}
+
+async function executeQuery() {
+  actionError.value = ''
+  loading.value = true
+  rows.value = []
+  queryStats.value = null
+  rawOutput.value = ''
+  streamMeta.value = { lines: 0, records: 0, errors: 0 }
+  copyState.value = 'idle'
+  const query = buildQuery()
+  const signal = beginRequest()
   try {
     if (queryMode.value === 'rows') {
-      const data = await apiPost<RowsResponse>('/api/v1/data/query/rows', { query })
+      const data = await apiPost<RowsResponse>('/api/v1/data/query/rows', { query }, { signal })
       rows.value = data.rows ?? []
     } else if (queryMode.value === 'explain') {
-      const data = await apiPost<{ result: { columns: QueryResultRow[]; explain: Record<string, unknown>; stats: QueryStatsData } }>('/api/v1/data/query/explain', { query })
+      const data = await apiPost<{ result: { columns: QueryResultRow[]; explain: Record<string, unknown>; stats: QueryStatsData } }>('/api/v1/data/query/explain', { query }, { signal })
       rows.value = (data.result?.columns as QueryResultRow[]) ?? []
       queryStats.value = data.result?.stats ?? null
+      if (data.result?.explain) {
+        rawOutput.value = JSON.stringify(data.result.explain, null, 2)
+      }
     } else if (queryMode.value === 'columns') {
-      const data = await apiPost<{ columns: unknown[] }>('/api/v1/data/query/columns', { query })
+      const data = await apiPost<{ columns: unknown[] }>('/api/v1/data/query/columns', { query }, { signal })
       rawOutput.value = JSON.stringify(data.columns, null, 2)
     } else if (queryMode.value === 'stream-row' || queryMode.value === 'stream-column') {
       const format = queryMode.value === 'stream-column' ? 'column' : 'row'
-      const token = getBearerToken()
-      const resp = await fetch('/api/v1/data/query/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ query, format }),
-      })
-      if (!resp.ok) {
-        let errMsg = `HTTP ${resp.status}`
-        try { errMsg = (await resp.json()).message || errMsg } catch (_) {}
-        actionError.value = errMsg
-        return
-      }
-      rawOutput.value = await resp.text()
+      const { text } = await apiPostText('/api/v1/data/query/stream', { query, format }, { signal })
+      rawOutput.value = text
+      parseStreamText(text)
     }
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '查询失败'
+    if (e instanceof APIClientError && e.code === 'canceled') {
+      actionError.value = '查询已取消'
+    } else {
+      actionError.value = e instanceof Error ? e.message : '查询失败'
+    }
   } finally {
     loading.value = false
+    queryAbort = null
   }
-  try {
-    const statsData = await apiGet<StatsResponse>('/api/v1/data/query/stats')
-    queryStats.value = statsData.stats
-  } catch (_) { /* 非关键 */ }
+  if (!loading.value && actionError.value !== '查询已取消') {
+    try {
+      const statsData = await apiGet<StatsResponse>('/api/v1/data/query/stats')
+      if (statsData.stats) {
+        queryStats.value = statsData.stats
+      }
+    } catch (_) { /* 非关键 */ }
+  }
 }
 
 function formatTimestamp(ns: number): string { return new Date(ns / 1e6).toISOString() }
@@ -154,6 +224,40 @@ async function executeDelete() {
     deleteLoading.value = false
   }
 }
+
+function resultTextForCopy(): string {
+  if (rawOutput.value) return rawOutput.value
+  if (rows.value.length) return JSON.stringify(rows.value, null, 2)
+  return ''
+}
+
+async function copyResults() {
+  const text = resultTextForCopy()
+  if (!text) {
+    actionError.value = '暂无可复制内容'
+    return
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const area = document.createElement('textarea')
+      area.value = text
+      area.style.position = 'fixed'
+      area.style.left = '-9999px'
+      document.body.appendChild(area)
+      area.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(area)
+      if (!ok) throw new Error('copy failed')
+    }
+    copyState.value = 'ok'
+  } catch (_) {
+    copyState.value = 'fail'
+  }
+  if (copyTimer) clearTimeout(copyTimer)
+  copyTimer = setTimeout(() => { copyState.value = 'idle' }, 2000)
+}
 </script>
 
 <template>
@@ -192,61 +296,69 @@ async function executeDelete() {
             <select v-model="queryForm.retention_policy" :disabled="!queryForm.database || measurementsLoading" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100 disabled:bg-slate-50 disabled:text-slate-400">
               <option v-if="!queryForm.database" value="autogen" disabled>请先选择数据库</option>
               <option v-else-if="measurementsLoading" value="autogen" disabled>加载中...</option>
+              <option value="autogen">autogen</option>
               <option v-for="rp in retentionPolicies" :key="rp" :value="rp">{{ rp }}</option>
-              <option v-if="!measurementsLoading && !retentionPolicies.length" value="autogen">autogen (默认)</option>
             </select>
           </div>
           <div>
             <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-              <Clock class="h-3 w-3" />开始时间 (ns)
+              <Hash class="h-3 w-3" />Limit
             </label>
-            <input v-model="queryForm.start_time" placeholder="0" type="number" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
+            <input v-model="queryForm.limit" type="number" min="1" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
           </div>
           <div>
             <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-              <Clock class="h-3 w-3" />结束时间 (ns)
+              <Timer class="h-3 w-3" />Start Time (ns)
             </label>
-            <input v-model="queryForm.end_time" placeholder="now" type="number" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
+            <input v-model="queryForm.start_time" type="text" placeholder="可选" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
           </div>
           <div>
             <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-              <Filter class="h-3 w-3" />字段过滤
+              <Timer class="h-3 w-3" />End Time (ns)
             </label>
-            <input v-model="queryForm.fields" placeholder="逗号分隔，如 value" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
+            <input v-model="queryForm.end_time" type="text" placeholder="可选" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
           </div>
-          <div>
+          <div class="sm:col-span-2">
             <label class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-              <Hash class="h-3 w-3" />返回行数
+              <Filter class="h-3 w-3" />Fields（逗号分隔）
             </label>
-            <input v-model="queryForm.limit" type="number" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
+            <input v-model="queryForm.fields" type="text" placeholder="例如 value,cpu" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100" />
           </div>
         </div>
-      </div>
-      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/30 px-6 py-3">
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            v-for="opt in modeOptions"
-            :key="opt.value"
-            :class="[
-              'rounded-lg px-3 py-1.5 text-xs font-medium transition',
-              queryMode === opt.value
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'bg-white text-slate-600 shadow-sm hover:bg-slate-100',
-            ]"
-            :title="opt.desc"
-            @click="queryMode = opt.value"
-          >
-            {{ opt.label }}
-          </button>
+
+        <div class="mt-5">
+          <label class="mb-2 block text-xs font-medium text-slate-500">查询模式</label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="opt in modeOptions"
+              :key="opt.value"
+              type="button"
+              class="rounded-lg border px-3 py-1.5 text-xs transition"
+              :class="queryMode === opt.value ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'"
+              @click="queryMode = opt.value"
+            >
+              <span class="font-medium">{{ opt.label }}</span>
+              <span class="ml-1 opacity-70">{{ opt.desc }}</span>
+            </button>
+          </div>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+
+        <div class="mt-6 flex flex-wrap items-center gap-3">
           <button
-            :disabled="loading || !queryForm.database || !queryForm.measurement"
-            class="flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-50"
+            :disabled="loading"
+            class="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-50"
             @click="executeQuery"
           >
             <Search class="h-4 w-4" />
             {{ loading ? '查询中...' : '执行查询' }}
+          </button>
+          <button
+            :disabled="!loading"
+            class="flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2 text-sm font-medium text-amber-700 shadow-sm transition hover:bg-amber-50 disabled:opacity-50"
+            @click="cancelQuery"
+          >
+            <Square class="h-4 w-4" />
+            取消查询
           </button>
           <button
             :disabled="deleteLoading || !queryForm.database || !queryForm.measurement"
@@ -254,6 +366,15 @@ async function executeDelete() {
             @click="executeDelete"
           >
             {{ deleteLoading ? '删除中...' : '按范围删除' }}
+          </button>
+          <button
+            :disabled="!rows.length && !rawOutput"
+            class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+            @click="copyResults"
+          >
+            <Check v-if="copyState === 'ok'" class="h-4 w-4 text-green-600" />
+            <Copy v-else class="h-4 w-4" />
+            {{ copyState === 'ok' ? '已复制' : copyState === 'fail' ? '复制失败' : '复制结果' }}
           </button>
         </div>
       </div>
@@ -325,14 +446,23 @@ async function executeDelete() {
       </div>
     </div>
 
-    <!-- 原始输出 -->
+    <!-- 原始输出 / 流式结果 -->
     <div v-if="rawOutput" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div class="border-b border-slate-100 bg-slate-50/50 px-6 py-3">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/50 px-6 py-3">
         <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-800">
           <Zap class="h-4 w-4 text-slate-400" />原始输出
         </h3>
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <span v-if="streamMeta.lines" class="rounded-full bg-slate-100 px-2.5 py-0.5">{{ streamMeta.lines }} 行 NDJSON</span>
+          <span v-if="streamMeta.records" class="rounded-full bg-blue-50 px-2.5 py-0.5 text-blue-700">{{ streamMeta.records }} 条记录</span>
+          <span v-if="streamMeta.errors" class="rounded-full bg-red-50 px-2.5 py-0.5 text-red-600">{{ streamMeta.errors }} 错误</span>
+          <button
+            class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            @click="copyResults"
+          >复制</button>
+        </div>
       </div>
-      <pre class="overflow-auto bg-slate-950 p-6 font-mono text-xs leading-relaxed text-emerald-400 max-h-96">{{ rawOutput }}</pre>
+      <pre class="max-h-96 overflow-auto bg-slate-950 p-6 font-mono text-xs leading-relaxed text-emerald-400">{{ rawOutput }}</pre>
     </div>
   </div>
 </template>
