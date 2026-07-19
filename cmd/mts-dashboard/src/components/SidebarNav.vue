@@ -5,7 +5,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import {
   LayoutDashboard, Database, Users, Settings, Wrench,
-  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info,
+  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound,
 } from 'lucide-vue-next'
 
 defineProps<{ visible: boolean }>()
@@ -32,6 +32,7 @@ const allNavItems = computed(() => [
   { to: '/storage', label: t.value('storage'), icon: HardDrive, adminOnly: true },
   { to: '/ops/readiness', label: t.value('readiness'), icon: ClipboardCheck, adminOnly: true },
   { to: '/about', label: t.value('about'), icon: Info, adminOnly: false },
+  { to: '/account', label: t.value('account'), icon: UserRound, adminOnly: false },
 ])
 
 const navItems = computed(() => allNavItems.value.filter((i) => !i.adminOnly || isAdmin.value))

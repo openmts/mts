@@ -73,4 +73,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/about')
   await expect(page.getByRole('main').getByText(/关于|About/i).first()).toBeVisible()
   await expect(page.getByRole('main').getByText(/mts-dashboard/i).first()).toBeVisible()
+
+  // 10) 账户页改密入口 + 会话徽章
+  await page.goto('/account')
+  await expect(page.getByTestId('account-password-form')).toBeVisible()
+  await expect(page.getByTestId('session-badge')).toBeVisible()
 })

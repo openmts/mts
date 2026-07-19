@@ -48,4 +48,5 @@ export const COMMERCIAL_SMOKE_PATHS = [
   { id: 'storage', path: '/storage', requiresAuth: true, admin: true },
   { id: 'readiness', path: '/ops/readiness', requiresAuth: true, admin: true },
   { id: 'about', path: '/about', requiresAuth: true, admin: false },
+  { id: 'account', path: '/account', requiresAuth: true, admin: false },
 ] as const

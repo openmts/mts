@@ -20,6 +20,7 @@
 - 备份编排脚本 + 就绪快捷动作 + 脚本自检（P23）
 - 就绪评分含 doctor + Overview 入口 + CI 备份自检（P24）
 - 就绪导出/导入/演练归档 + About 版本 + e2e 加深（P25）
+- 会话常显/预警/到期登出 + 账户改密（P26）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -49,6 +50,7 @@
 - `/storage`（admin）
 - `/ops/readiness`（admin）
 - `/about`
+- `/account`
 
 ## 服务侧自动化入口
 - `go test ./cmd/mts-server -run TestCommercialDashboardSmoke -count=1`
@@ -71,3 +73,10 @@
 - `GET /api/v1/admin/version` + About 页（服务端 version/commit/built_at）
 - Playwright：就绪勾选持久化、Storage data-snapshot、About
 - **仍不宣称可商用目标完成**：真实边缘证书验收执行、目标环境 cron/systemd 安装与演练归档
+
+
+## P26 状态（2026-07-20）
+- 顶栏会话剩余时间常显；warn/critical 一次性 toast；到期自动登出
+- `/account` 自愿改密（策略纯函数）+ 强制改密页复用策略
+- Playwright 覆盖账户表单与会话徽章
+- **仍不宣称可商用目标完成**：真实边缘证书验收、cron/systemd 与跨主机备份实装

@@ -465,3 +465,9 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - About + `GET /api/v1/admin/version`
 - Playwright 加深：勾选持久化、data-snapshot、About
 - 状态：已实现；**仍不宣称可商用目标完成**
+
+
+## P26 状态（2026-07-20）
+- 会话治理：常显徽章 + 预警 toast + 到期自动登出
+- 账户改密页 `/account`；强制改密共享 passwordPolicy
+- **仍不宣称可商用目标完成**
