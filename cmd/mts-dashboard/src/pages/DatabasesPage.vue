@@ -12,6 +12,7 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
@@ -59,7 +60,7 @@ onMounted(async () => {
       newRpDuration: '',
     }))
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载失败'
+    loadError.value = formatCaughtError(e)
   }
 })
 async function loadDatabaseDetails(db: DatabaseEntry) {
@@ -80,7 +81,7 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
     db.retentionPolicies = rps.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
     db.loaded = true
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '加载详情失败'; actionResult.value = makeActionResult('error', msg)
+    const msg = formatCaughtError(e); actionResult.value = makeActionResult('error', msg)
     db.loaded = false
     db.expanded = false
   } finally {
@@ -107,7 +108,7 @@ async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
       meas.fields = fieldsData.fields ?? []
       meas.series = seriesData.series ?? []
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '加载元数据失败'; actionResult.value = makeActionResult('error', msg)
+      const msg = formatCaughtError(e); actionResult.value = makeActionResult('error', msg)
     } finally {
       meas.loading = false
     }
@@ -132,7 +133,7 @@ async function createDatabase() {
     actionResult.value = makeActionResult('ok', '数据库已创建')
     success('数据库已创建')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '创建失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -152,7 +153,7 @@ async function confirmDeleteDatabase() {
     confirmOpen.value = false
     success(`数据库 ${name} 已删除`)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '删除失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally {
@@ -184,7 +185,7 @@ async function createRetentionPolicy(db: DatabaseEntry) {
     actionResult.value = makeActionResult('ok', '保留策略已创建')
     success('保留策略已创建')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '创建保留策略失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }

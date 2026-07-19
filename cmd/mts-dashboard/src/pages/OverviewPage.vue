@@ -2,11 +2,14 @@
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiGet } from '@/api/client'
+import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
-import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck } from 'lucide-vue-next'
+import { clientBuildInfo } from '@/utils/buildInfo'
+import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
+import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3 } from 'lucide-vue-next'
 
 interface HealthResponse extends HealthSnapshot {}
 interface StorageMemorySnapshot {
@@ -24,7 +27,7 @@ interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; read
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[] }
 
-const { isAdmin } = useAuth()
+const { isAdmin, getTokenExpiresAt } = useAuth()
 const router = useRouter()
 const { t } = useI18n()
 const healthy = ref<boolean | null>(null)
@@ -43,6 +46,15 @@ const loading = ref(false)
 const lastRefreshed = ref('')
 const autoRefresh = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+const serverVersion = ref<{ version: string; commit: string; built_at: string } | null>(null)
+const clientInfo = clientBuildInfo()
+
+const sessionSummary = computed(() => {
+  const exp = parseExpiresAt(getTokenExpiresAt())
+  return sessionExpiryView(exp, nowMs.value)
+})
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1 << 30) return (bytes / (1 << 30)).toFixed(1) + ' GB'
@@ -74,27 +86,28 @@ async function loadOverview() {
         apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors'),
         apiGet<AdminHealthResponse | HealthSnapshot>('/api/v1/admin/health'),
         apiGet<DoctorResponse>('/api/v1/admin/doctor'),
+        apiGet<{ version: string; commit: string; built_at: string }>('/api/v1/admin/version'),
       ])
       const errs: string[] = []
       if (results[0].status === 'fulfilled') memorySnapshot.value = results[0].value.snapshot
       else {
         memorySnapshot.value = null
-        errs.push(results[0].reason instanceof Error ? results[0].reason.message : 'memory')
+        errs.push(formatCaughtError(results[0].reason))
       }
       if (results[1].status === 'fulfilled') compactionStats.value = results[1].value.stats
       else {
         compactionStats.value = null
-        errs.push(results[1].reason instanceof Error ? results[1].reason.message : 'compaction')
+        errs.push(formatCaughtError(results[1].reason))
       }
       if (results[2].status === 'fulfilled') maintenanceStats.value = results[2].value.stats ?? null
       else {
         maintenanceStats.value = null
-        errs.push(results[2].reason instanceof Error ? results[2].reason.message : 'maintenance')
+        errs.push(formatCaughtError(results[2].reason))
       }
       if (results[3].status === 'fulfilled') maintenanceErrors.value = results[3].value.errors ?? []
       else {
         maintenanceErrors.value = []
-        errs.push(results[3].reason instanceof Error ? results[3].reason.message : 'errors')
+        errs.push(formatCaughtError(results[3].reason))
       }
       if (results[4].status === 'fulfilled') {
         const raw = results[4].value as AdminHealthResponse
@@ -111,7 +124,13 @@ async function loadOverview() {
       } else {
         doctorChecks.value = []
         doctorTLS.value = null
-        errs.push(results[5].reason instanceof Error ? results[5].reason.message : 'doctor')
+        errs.push(formatCaughtError(results[5].reason))
+      }
+      if (results[6].status === 'fulfilled') {
+        serverVersion.value = results[6].value
+      } else {
+        serverVersion.value = null
+        errs.push(formatCaughtError(results[6].reason))
       }
       if (errs.length) adminPartialError.value = errs.join('；')
     } else {
@@ -121,10 +140,11 @@ async function loadOverview() {
       maintenanceErrors.value = []
       doctorChecks.value = []
       doctorTLS.value = null
+      serverVersion.value = null
     }
     lastRefreshed.value = new Date().toLocaleTimeString()
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : 'load failed'
+    loadError.value = formatCaughtError(e)
   } finally {
     loading.value = false
   }
@@ -145,9 +165,13 @@ function goReadiness() {
   void router.push('/ops/readiness')
 }
 
-onMounted(() => { void loadOverview() })
+onMounted(() => {
+  void loadOverview()
+  clockTimer = setInterval(() => { nowMs.value = Date.now() }, 15_000)
+})
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer)
+  if (clockTimer) clearInterval(clockTimer)
 })
 
 const showAdminPanels = computed(() => isAdmin.value)
@@ -193,6 +217,38 @@ const showAdminPanels = computed(() => isAdmin.value)
       :message="`${t('partialAdminStats')}：${adminPartialError}`"
       :dismissible="false"
     />
+
+    <div class="mts-card p-4" data-testid="overview-summary">
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <div class="flex items-center gap-2">
+          <Clock3 class="h-4 w-4 mts-muted" />
+          <span class="mts-muted">{{ t('sessionExpiry') }}</span>
+          <span
+            class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+            :class="{
+              'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200': sessionSummary.urgency === 'ok',
+              'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200': sessionSummary.urgency === 'warn',
+              'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200': sessionSummary.urgency === 'critical' || sessionSummary.urgency === 'expired',
+              'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300': sessionSummary.urgency === 'unknown',
+            }"
+          >{{ sessionSummary.label || t('sessionUnknown') }}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <Info class="h-4 w-4 mts-muted" />
+          <span class="mts-muted">{{ t('aboutClient') }}</span>
+          <span class="font-mono text-xs">{{ clientInfo.name }} {{ clientInfo.version }}</span>
+        </div>
+        <div v-if="showAdminPanels" class="flex items-center gap-2">
+          <span class="mts-muted">{{ t('aboutServer') }}</span>
+          <span class="font-mono text-xs">{{ serverVersion?.version || '—' }}</span>
+          <span v-if="serverVersion?.commit" class="font-mono text-[11px] mts-muted">{{ serverVersion.commit.slice(0, 8) }}</span>
+        </div>
+        <button type="button" class="mts-btn ml-auto" data-testid="overview-about" @click="router.push('/about')">
+          <Info class="h-3.5 w-3.5" />
+          {{ t('about') }}
+        </button>
+      </div>
+    </div>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <div class="mts-card p-5">

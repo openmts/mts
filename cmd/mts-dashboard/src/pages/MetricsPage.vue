@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { apiGetText } from '@/api/client'
+import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -36,7 +37,7 @@ async function load() {
     families.value = parsePrometheusText(text)
     lastRefreshed.value = new Date().toLocaleTimeString()
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载 metrics 失败'
+    loadError.value = formatCaughtError(e)
     families.value = []
     raw.value = ''
   } finally {

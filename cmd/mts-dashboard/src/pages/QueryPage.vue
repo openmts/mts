@@ -4,6 +4,7 @@ import { apiPost } from '@/api/client'
 import { useQueryWorkbench } from '@/composables/useQueryWorkbench'
 import { useQueryHistory } from '@/composables/useQueryHistory'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
 import { formatEpoch, nowUnixMsString } from '@/utils/time'
 import { formatFieldsMap } from '@/utils/fieldValue'
@@ -121,7 +122,7 @@ onMounted(async () => {
   window.addEventListener('keydown', onQueryKeydown)
   window.addEventListener('beforeunload', onBeforeUnload)
   try { await loadDatabases() }
-  catch (e) { actionError.value = e instanceof Error ? e.message : '加载数据库失败' }
+  catch (e) { actionError.value = formatCaughtError(e) }
   // 初始 meta 加载可能改 database/measurement，完成后记为 clean
   markFormClean()
 })
@@ -134,7 +135,7 @@ onBeforeUnmount(() => {
 watch([showChart, showRawFields, showHistory, resultColumns], () => { persistPrefs() }, { deep: true })
 watch(() => queryForm.value.database, async (db) => {
   try { await loadDbChildren(db) }
-  catch (e) { actionError.value = e instanceof Error ? e.message : '加载 measurement 失败' }
+  catch (e) { actionError.value = formatCaughtError(e) }
 })
 
 function formatTimestamp(v: number): string {
@@ -166,7 +167,7 @@ async function checkAuthz(perm: 'read' | 'write' = 'read') {
     if (allowed) success(authzHint.value)
     else notifyError(authzHint.value)
   } catch (e) {
-    authzHint.value = e instanceof Error ? e.message : '权限预检失败'
+    authzHint.value = formatCaughtError(e)
     notifyError(authzHint.value)
   } finally {
     authzChecking.value = false
@@ -254,7 +255,7 @@ async function onHistoryFileChange(ev: Event) {
     success(`已合并导入 ${res.count} 条历史`)
     showHistory.value = true
   } catch (e) {
-    notifyError(e instanceof Error ? e.message : '导入历史失败')
+    notifyError(formatCaughtError(e))
   }
 }
 
@@ -302,7 +303,7 @@ async function doRangeDelete() {
     deleteOpen.value = false
     deleteConfirmText.value = ''
   } catch (e) {
-    deleteResult.value = e instanceof Error ? e.message : '删除失败'
+    deleteResult.value = formatCaughtError(e)
     notifyError(deleteResult.value)
   } finally {
     deleteLoading.value = false

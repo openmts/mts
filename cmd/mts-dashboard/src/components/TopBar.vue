@@ -19,7 +19,7 @@ const router = useRouter()
 const { currentUser, currentRole, logout, loggingOut, getTokenExpiresAt, ensureSession } = useAuth()
 const { theme, toggleTheme } = useTheme()
 const { t, locale, toggleLocale } = useI18n()
-const { info, error: notifyError } = useNotify()
+const { info, warn, error: notifyError } = useNotify()
 const nowMs = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
 const guardState = ref<SessionGuardState>(emptySessionGuardState())
@@ -105,7 +105,8 @@ function tickSession() {
       r.action.urgency === 'critical'
         ? `${t.value('sessionCriticalToast')} (${r.action.remainingLabel})`
         : `${t.value('sessionWarnToast')} (${r.action.remainingLabel})`
-    info(msg)
+    if (r.action.urgency === 'critical') warn(msg)
+    else info(msg)
   } else if (r.action.type === 'expire') {
     void handleExpire()
   }

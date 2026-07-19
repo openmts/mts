@@ -1,25 +1,32 @@
 <script setup lang="ts">
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
+import { notifyDisplayText } from '@/utils/notifyQueue'
 
 const { items, dismiss } = useNotify()
 const { t } = useI18n()
 </script>
 
 <template>
-  <div class="pointer-events-none fixed right-4 top-4 z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+  <div
+    class="pointer-events-none fixed right-4 top-4 z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+    data-testid="notify-host"
+    aria-live="polite"
+  >
     <div
       v-for="n in items"
       :key="n.id"
       class="pointer-events-auto rounded-lg border px-3 py-2 text-sm shadow-lg"
+      :data-testid="`notify-${n.kind}`"
       :class="{
         'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200': n.kind === 'success',
         'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200': n.kind === 'error',
+        'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100': n.kind === 'warn',
         'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200': n.kind === 'info',
       }"
     >
       <div class="flex items-start justify-between gap-2">
-        <p class="flex-1 break-words">{{ n.message }}</p>
+        <p class="flex-1 break-words">{{ notifyDisplayText(n) }}</p>
         <button class="text-xs opacity-60 hover:opacity-100" @click="dismiss(n.id)">{{ t('close') }}</button>
       </div>
     </div>

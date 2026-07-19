@@ -6,6 +6,7 @@ import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 import { ScrollText, Download, RefreshCw } from 'lucide-vue-next'
 
 interface User { name: string; display_name?: string }
@@ -37,7 +38,7 @@ onMounted(async () => {
     const data = await apiGet<UsersResponse>('/api/v1/users')
     users.value = data.users ?? []
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载用户失败'
+    loadError.value = formatCaughtError(e)
   }
   await loadAudit()
 })
@@ -76,7 +77,7 @@ async function loadAudit() {
         loadError.value = e2 instanceof Error ? e2.message : '加载审计日志失败'
       }
     } else {
-      loadError.value = e instanceof Error ? e.message : '加载审计日志失败'
+      loadError.value = formatCaughtError(e)
     }
     auditEvents.value = []
     notifyError(loadError.value)

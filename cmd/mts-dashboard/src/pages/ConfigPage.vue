@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { apiGet, apiPost, getAdminToken, setAdminToken, getDataToken, setDataToken } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -54,7 +55,7 @@ onMounted(async () => {
   try {
     await loadConfig()
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载失败'
+    loadError.value = formatCaughtError(e)
   }
 })
 
@@ -72,7 +73,7 @@ async function handleValidate() {
       notifyError(msg)
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '验证失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -87,7 +88,7 @@ async function handleReload() {
     await loadConfig()
     success('配置已热重载')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '重载失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }

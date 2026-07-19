@@ -6,6 +6,7 @@ import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
 import { Send, Plus, Trash2 } from 'lucide-vue-next'
 import EmptyState from '@/components/EmptyState.vue'
@@ -191,7 +192,7 @@ async function checkWriteAuthz() {
     if (allowed) success(authzHint.value)
     else notifyError(authzHint.value)
   } catch (e) {
-    authzHint.value = e instanceof Error ? e.message : '权限预检失败'
+    authzHint.value = formatCaughtError(e)
     notifyError(authzHint.value)
   }
 }
@@ -234,7 +235,7 @@ async function submit() {
     success(result.value.message)
     markWriteClean()
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '写入失败'
+    actionError.value = formatCaughtError(e)
     notifyError(actionError.value)
     result.value = { ok: false, message: actionError.value }
   } finally {

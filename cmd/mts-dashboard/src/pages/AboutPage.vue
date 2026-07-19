@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { apiGet } from '@/api/client'
+import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -31,7 +32,7 @@ async function loadVersion() {
     server.value = await apiGet<VersionResponse>('/api/v1/admin/version')
   } catch (e) {
     server.value = null
-    loadError.value = e instanceof Error ? e.message : 'version load failed'
+    loadError.value = formatCaughtError(e)
   } finally {
     loading.value = false
   }

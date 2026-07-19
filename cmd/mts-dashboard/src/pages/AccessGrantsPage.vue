@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { apiGet } from '@/api/client'
+import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -83,7 +84,7 @@ async function load() {
     rows.value = flattenUserGrants(bundles)
     partialErrors.value = errs
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载授权失败'
+    loadError.value = formatCaughtError(e)
     rows.value = []
   } finally {
     loading.value = false

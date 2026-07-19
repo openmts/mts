@@ -4,6 +4,7 @@ import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 import { RefreshCw, Search } from 'lucide-vue-next'
 
 interface APIEndpoint {
@@ -41,7 +42,7 @@ async function load() {
     namespaces.value = data.namespaces || []
     if (!nsFilter.value && namespaces.value.length) nsFilter.value = namespaces.value[0].name
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载 API Spec 失败'
+    loadError.value = formatCaughtError(e)
     notifyError(loadError.value)
   } finally {
     loading.value = false

@@ -26,6 +26,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await login(page, 'admin', NEW_PASSWORD)
   await expect(page).not.toHaveURL(/login|force-change/)
   await expect(page.getByText(/概览|健康|Healthy|Ready/i).first()).toBeVisible()
+  await expect(page.getByTestId('overview-summary')).toBeVisible()
 
   // 3) Line Protocol 写入
   await page.goto('/write')

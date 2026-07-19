@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { parseHumanDurationToNs, formatNsDuration } from '@/utils/duration'
 import { Plus, Trash2, Play, Pause, RefreshCw, PlayCircle, RotateCcw, FlaskConical } from 'lucide-vue-next'
@@ -45,7 +46,7 @@ async function loadData() {
     policies.value = polData.policies ?? []
     statuses.value = statData.statuses ?? []
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载失败'
+    loadError.value = formatCaughtError(e)
   }
 }
 
@@ -62,7 +63,7 @@ async function createPolicy() {
   try {
     newPolicy.value.interval = parseHumanDurationToNs(intervalHuman.value)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'interval 无效'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -87,7 +88,7 @@ async function createPolicy() {
     actionResult.value = makeActionResult('ok', '降采样策略已创建')
     success('降采样策略已创建')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '创建失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -107,7 +108,7 @@ async function confirmDelete() {
     actionResult.value = makeActionResult('ok', '策略已删除')
     success('策略已删除')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '删除失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally {
@@ -124,7 +125,7 @@ async function togglePolicy(policy: DownsamplePolicy) {
     actionResult.value = makeActionResult('ok', msg)
     success(msg)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '操作失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -153,7 +154,7 @@ async function runPolicy(name: string) {
     await loadData()
     success(msg)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'run 失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -169,7 +170,7 @@ async function resetPolicy(name: string) {
     actionResult.value = makeActionResult('ok', msg)
     success(msg)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'reset 失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -186,7 +187,7 @@ async function dryRunPolicy(name: string) {
     actionResult.value = makeActionResult('info', msg)
     success(msg)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'dry-run 失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }

@@ -10,6 +10,7 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
 interface UsersResponse { users: User[] }
@@ -52,7 +53,7 @@ async function loadUsers() {
     const data = await apiGet<UsersResponse>('/api/v1/users')
     users.value = data.users ?? []
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载失败'
+    loadError.value = formatCaughtError(e)
   }
 }
 
@@ -72,7 +73,7 @@ async function createUser() {
     actionResult.value = makeActionResult('ok', '用户已创建')
     success('用户已创建')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '创建失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -88,7 +89,7 @@ async function doSetPassword() {
     actionResult.value = makeActionResult('ok', '密码已设置')
     success('密码已设置')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '设置密码失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -109,7 +110,7 @@ async function doChangeSelfPassword() {
     actionResult.value = makeActionResult('ok', '密码已修改')
     success('密码已修改')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '修改密码失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -133,7 +134,7 @@ async function confirmDelete() {
     actionResult.value = makeActionResult('ok', okMsg)
     success(okMsg)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '删除失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally {
@@ -149,7 +150,7 @@ async function toggleDisable(user: User) {
     actionResult.value = makeActionResult('ok', okMsg)
     success(okMsg)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '操作失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -161,7 +162,7 @@ async function selectUser(user: User) {
     const data = await apiGet<PermissionsResponse>(`/api/v1/users/${encodeURIComponent(user.name)}/database-permissions`)
     userGrants.value = data.grants ?? []
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '加载权限失败'; actionResult.value = makeActionResult('error', msg)
+    const msg = formatCaughtError(e); actionResult.value = makeActionResult('error', msg)
   }
 }
 
@@ -194,7 +195,7 @@ async function grantPermission() {
     actionResult.value = makeActionResult('ok', '权限已授予')
     success('权限已授予')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '授权失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }
@@ -208,7 +209,7 @@ async function revokeGrant(g: DatabaseGrant) {
     actionResult.value = makeActionResult('ok', '权限已撤销')
     success('权限已撤销')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '撤销失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   }

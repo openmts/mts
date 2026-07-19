@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiGet } from '@/api/client'
+import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -123,7 +124,7 @@ async function loadDoctor() {
     doctor.value = await apiGet<DoctorResponse>('/api/v1/admin/doctor')
   } catch (e) {
     doctor.value = null
-    doctorError.value = e instanceof Error ? e.message : 'doctor load failed'
+    doctorError.value = formatCaughtError(e)
   } finally {
     loadingDoctor.value = false
   }

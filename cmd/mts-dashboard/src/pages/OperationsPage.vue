@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle } from 'lucide-vue-next'
 import type { CompactionStats, MaintenanceStats } from '@/api/types'
@@ -54,10 +55,10 @@ async function loadStats() {
     else maintenanceErrors.value = []
     const errs = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[]
     if (errs.length && results.every((r) => r.status === 'rejected')) {
-      loadError.value = errs[0].reason instanceof Error ? errs[0].reason.message : '加载失败'
+      loadError.value = formatCaughtError(errs[0].reason)
     }
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载失败'
+    loadError.value = formatCaughtError(e)
   } finally {
     loading.value = false
   }
@@ -89,7 +90,7 @@ async function runConfirmed() {
     confirmKind.value = null
     await loadStats()
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '操作失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally {

@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
+import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { formatBytes } from '@/utils/formatBytes'
@@ -110,7 +111,7 @@ async function doValidate() {
     actionResult.value = makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg)
     success(msg)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '验证失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally { loading.value = '' }
@@ -127,7 +128,7 @@ async function doSnapshot() {
     success(t.value('createSnapshot'))
     await loadSnapshots()
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '快照失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally { loading.value = '' }
@@ -144,7 +145,7 @@ async function doDataSnapshot() {
     success('data_dir 快照完成')
     await loadDataSnapshots()
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'data_dir 快照失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally { loading.value = '' }
@@ -168,7 +169,7 @@ async function doRestoreDrill() {
     else notifyError(msg)
     await loadDataSnapshots()
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '旁路恢复失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally { loading.value = '' }
@@ -184,7 +185,7 @@ async function doExport() {
     actionResult.value = makeActionResult('ok', '配置已导出，可下载 JSON')
     success('配置已导出')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '导出失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally { loading.value = '' }
@@ -220,7 +221,7 @@ async function confirmDelete() {
     success('快照已删除')
     await loadSnapshots()
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '删除失败'
+    const msg = formatCaughtError(e)
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
   } finally {
