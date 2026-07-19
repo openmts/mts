@@ -72,6 +72,7 @@ const (
 	grpcMethodQueryColumns             = "QueryColumns"
 	grpcMethodQueryWithExplain         = "QueryWithExplain"
 	grpcMethodQueryStats               = "QueryStats"
+	grpcMethodQueryStream              = "QueryStream"
 	grpcMethodDelete                   = "Delete"
 	grpcMethodLogin                    = "Login"
 	grpcMethodLogout                   = "Logout"

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -439,6 +440,84 @@ func TestGRPCQueryRowsHandlerBusinessError(t *testing.T) {
 func TestGRPCServiceMarker(t *testing.T) {
 	service := &grpcService{}
 	service.mtsServer()
+}
+
+func TestGRPCQueryStreamRowAndColumn(t *testing.T) {
+	runtime := openTestRuntime(t)
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+	ctx := context.Background()
+	batch := mts.TypedBatch{
+		Measurement: "cpu",
+		Tags:        []mts.TagColumn{{Name: "host", Values: []string{"stream-1", "stream-1"}}},
+		Timestamps:  []int64{1, 2},
+		Fields: []mts.TypedFieldColumn{{
+			Name:          "usage",
+			Type:          mts.FieldFloat64,
+			Float64Values: []float64{0.1, 0.2},
+		}},
+	}
+	if err := invokeGRPC(ctx, conn, "WriteTypedBatch", &typedWriteRequest{Batch: batch}, &writeResponse{}); err != nil {
+		t.Fatalf("WriteTypedBatch error = %v", err)
+	}
+	rowRecords, err := invokeGRPCQueryStream(ctx, conn, queryStreamRequest{Query: testQuery(), Format: "row"})
+	if err != nil {
+		t.Fatalf("QueryStream(row) error = %v", err)
+	}
+	if !streamRecordsContainType(rowRecords, streamTypeRow) || !streamRecordsContainType(rowRecords, streamTypeEnd) {
+		t.Fatalf("row stream = %#v, want row and end", rowRecords)
+	}
+	columnRecords, err := invokeGRPCQueryStream(ctx, conn, queryStreamRequest{Query: testQuery(), Format: "column"})
+	if err != nil {
+		t.Fatalf("QueryStream(column) error = %v", err)
+	}
+	if !streamRecordsContainType(columnRecords, streamTypeColumn) || !streamRecordsContainType(columnRecords, streamTypeEnd) {
+		t.Fatalf("column stream = %#v, want column and end", columnRecords)
+	}
+}
+
+func invokeGRPCQueryStream(ctx context.Context, conn *grpc.ClientConn, req queryStreamRequest) ([]streamRecord, error) {
+	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{
+		StreamName:    grpcMethodQueryStream,
+		ServerStreams: true,
+	}, grpcFullMethod(grpcMethodQueryStream))
+	if err != nil {
+		return nil, err
+	}
+	if err := stream.SendMsg(&req); err != nil {
+		return nil, err
+	}
+	if err := stream.CloseSend(); err != nil {
+		return nil, err
+	}
+	var out []streamRecord
+	for {
+		var rec streamRecord
+		err := stream.RecvMsg(&rec)
+		if err != nil {
+			if err == io.EOF {
+				return out, nil
+			}
+			return out, err
+		}
+		out = append(out, rec)
+		if rec.Type == streamTypeEnd || rec.Type == streamTypeError {
+			return out, nil
+		}
+	}
+}
+
+func streamRecordsContainType(records []streamRecord, want string) bool {
+	for _, rec := range records {
+		if rec.Type == want {
+			return true
+		}
+	}
+	return false
 }
 
 func openBufconnClient(t *testing.T, runtime *serverRuntime) *grpc.ClientConn {

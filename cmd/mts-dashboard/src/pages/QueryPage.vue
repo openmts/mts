@@ -22,7 +22,7 @@ const measurements = ref<string[]>([])
 const retentionPolicies = ref<string[]>([])
 const measurementsLoading = ref(false)
 const queryForm = ref({ database: '', retention_policy: 'autogen', measurement: '', start_time: '', end_time: '', fields: '', limit: '100' })
-const queryMode = ref<'rows' | 'columns' | 'explain' | 'stream'>('rows')
+const queryMode = ref<'rows' | 'columns' | 'explain' | 'stream-row' | 'stream-column'>('rows')
 const rows = ref<QueryResultRow[]>([])
 const queryStats = ref<QueryStatsData | null>(null)
 const rawOutput = ref('')
@@ -85,12 +85,13 @@ async function executeQuery() {
     } else if (queryMode.value === 'columns') {
       const data = await apiPost<{ columns: unknown[] }>('/api/v1/data/query/columns', { query })
       rawOutput.value = JSON.stringify(data.columns, null, 2)
-    } else if (queryMode.value === 'stream') {
+    } else if (queryMode.value === 'stream-row' || queryMode.value === 'stream-column') {
+      const format = queryMode.value === 'stream-column' ? 'column' : 'row'
       const token = getBearerToken()
       const resp = await fetch('/api/v1/data/query/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, format }),
       })
       if (!resp.ok) {
         let errMsg = `HTTP ${resp.status}`
@@ -117,13 +118,48 @@ const modeOptions = [
   { value: 'rows' as const, label: '行式查询', desc: '按行返回数据' },
   { value: 'columns' as const, label: '列式查询', desc: '按列返回数据' },
   { value: 'explain' as const, label: 'EXPLAIN', desc: '含执行计划' },
-  { value: 'stream' as const, label: '流式查询', desc: 'NDJSON 流' },
+  { value: 'stream-row' as const, label: '流式行', desc: 'NDJSON 行流' },
+  { value: 'stream-column' as const, label: '流式列', desc: 'NDJSON 列流（推荐宽表）' },
 ]
+
+const deleteResult = ref('')
+const deleteLoading = ref(false)
+
+async function executeDelete() {
+  actionError.value = ''
+  deleteResult.value = ''
+  if (!queryForm.value.database || !queryForm.value.measurement) {
+    actionError.value = '删除需要数据库和 measurement'
+    return
+  }
+  if (!queryForm.value.start_time || !queryForm.value.end_time) {
+    actionError.value = '删除需要 start_time 与 end_time'
+    return
+  }
+  if (!confirm('确认按当前时间范围删除匹配数据？该操作通过 tombstone 生效。')) return
+  deleteLoading.value = true
+  try {
+    const request: Record<string, unknown> = {
+      database: queryForm.value.database,
+      retention_policy: queryForm.value.retention_policy || 'autogen',
+      measurement: queryForm.value.measurement,
+      start_time: parseInt(queryForm.value.start_time),
+      end_time: parseInt(queryForm.value.end_time),
+    }
+    await apiPost('/api/v1/data/delete', { request })
+    deleteResult.value = '删除请求已提交'
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : '删除失败'
+  } finally {
+    deleteLoading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="space-y-6">
     <p v-if="actionError" class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{{ actionError }}</p>
+    <p v-if="deleteResult" class="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">{{ deleteResult }}</p>
 
     <!-- 查询条件 -->
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -203,14 +239,23 @@ const modeOptions = [
             {{ opt.label }}
           </button>
         </div>
-        <button
-          :disabled="loading || !queryForm.database || !queryForm.measurement"
-          class="flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-50"
-          @click="executeQuery"
-        >
-          <Search class="h-4 w-4" />
-          {{ loading ? '查询中...' : '执行查询' }}
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            :disabled="loading || !queryForm.database || !queryForm.measurement"
+            class="flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-50"
+            @click="executeQuery"
+          >
+            <Search class="h-4 w-4" />
+            {{ loading ? '查询中...' : '执行查询' }}
+          </button>
+          <button
+            :disabled="deleteLoading || !queryForm.database || !queryForm.measurement"
+            class="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50 disabled:opacity-50"
+            @click="executeDelete"
+          >
+            {{ deleteLoading ? '删除中...' : '按范围删除' }}
+          </button>
+        </div>
       </div>
     </div>
 

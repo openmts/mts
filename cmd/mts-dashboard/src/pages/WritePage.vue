@@ -13,6 +13,7 @@ const retentionPolicies = ref<string[]>([])
 const selectedDb = ref('')
 const retentionPolicy = ref('autogen')
 const syncWrite = ref(false)
+const usePointsTyped = ref(true)
 const writeMode = ref<WriteMode>('form')
 const lineInput = ref('')
 const formRows = ref<FormRow[]>([createEmptyRow()])
@@ -87,7 +88,8 @@ async function doWrite() {
       (p as Record<string, unknown>).database = selectedDb.value
       ;(p as Record<string, unknown>).retention_policy = retentionPolicy.value
     }
-    await apiPost('/api/v1/data/write', { points, options })
+    const writePath = usePointsTyped.value ? '/api/v1/data/write/points-typed' : '/api/v1/data/write'
+    await apiPost(writePath, { points, options })
     result.value = { ok: true, message: `写入成功 (${points.length} 条)` }
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '写入失败'
@@ -262,11 +264,20 @@ function setNow(row: FormRow) { row.timestamp = String(Date.now() * 1e6) }
     </div>
 
     <!-- 底部操作栏 -->
-    <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
-      <div v-if="result" :class="result.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'" class="rounded-xl border px-4 py-2 text-sm font-medium">
-        {{ result.message }}
+    <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
+      <div class="flex flex-wrap items-center gap-4">
+        <div v-if="result" :class="result.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'" class="rounded-xl border px-4 py-2 text-sm font-medium">
+          {{ result.message }}
+        </div>
+        <label class="inline-flex items-center gap-2 text-xs text-slate-600">
+          <input v-model="usePointsTyped" type="checkbox" class="rounded border-slate-300" />
+          同构点转列式写入 (points-typed，推荐)
+        </label>
+        <label class="inline-flex items-center gap-2 text-xs text-slate-600">
+          <input v-model="syncWrite" type="checkbox" class="rounded border-slate-300" />
+          同步写入
+        </label>
       </div>
-      <div v-else />
       <button
         :disabled="loading"
         class="flex items-center gap-2 rounded-xl bg-slate-800 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-40"

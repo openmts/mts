@@ -221,6 +221,7 @@ curl -X POST http://127.0.0.1:8086/api/v1/data/write/points-typed -d @points.jso
 curl -X POST http://127.0.0.1:8086/api/v1/data/query/rows -d @query.json
 curl -X POST http://127.0.0.1:8086/api/v1/data/query/columns -d @query.json
 curl -X POST http://127.0.0.1:8086/api/v1/data/query/stream -d '{"query":{...},"format":"column"}'
+# gRPC 服务端流：QueryStream（row/column），消息类型同 NDJSON streamRecord
 curl -X POST http://127.0.0.1:8086/api/v1/data/query/explain -d @query.json
 curl -X POST http://127.0.0.1:8086/api/v1/data/delete -d @delete.json
 curl -X POST http://127.0.0.1:8086/api/v1/admin/flush

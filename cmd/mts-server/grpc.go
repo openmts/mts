@@ -110,6 +110,7 @@ func grpcServiceDesc() *grpc.ServiceDesc {
 		ServiceName: grpcServiceName,
 		HandlerType: (*grpcServiceServer)(nil),
 		Methods:     grpcMethodsFromRegistry(),
+		Streams:     grpcStreamsFromRegistry(),
 	}
 }
 
