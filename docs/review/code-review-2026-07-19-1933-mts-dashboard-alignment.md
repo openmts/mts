@@ -443,3 +443,10 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - 勾选状态 localStorage 持久化，Storage 边缘 HTTPS 清单共用
 - Playwright 冒烟覆盖 storage/readiness
 - **仍不宣称可商用目标完成**：真实边缘证书验收执行、跨主机定时备份在生产环境的实际部署
+
+
+## P23 状态（2026-07-20）
+- `scripts/mts-backup.sh`：data-snapshot / rsync / restore-drill / 保留清理
+- `make backup-script-check` 语法与 dry-run 自检
+- 就绪中心快捷动作跳转 Storage 锚点 + 脚本提示
+- **仍不宣称可商用目标完成**：真实边缘证书验收执行、目标环境 cron/systemd 安装与演练归档

@@ -17,6 +17,7 @@
 - Admin doctor API + Overview 展示 + 边缘 HTTPS 验收清单（P20）
 - data_dir 快照/旁路恢复 API + Storage 编排（P21）
 - 可商用就绪中心 + 备份编排指引 + 清单持久化（P22）
+- 备份编排脚本 + 就绪快捷动作 + 脚本自检（P23）
 
 ## 自动化覆盖（见 `productionChecklist.ts`）
 | 项 | 严重度 | 自动化 |
@@ -52,6 +53,10 @@
 - `go test ./cmd/mts-server -run TestDataDirSidePathRestoreDrill -count=1`
 - `go test ./cmd/mts-server -run TestAdminDoctorHTTP -count=1`
 - `go test ./cmd/mts-server -run TestHTTPStorageDataSnapshotAndRestoreDrill -count=1`
+
+## 运维脚本入口
+- `scripts/mts-backup.sh` / `make backup-script-check`
+- 文档：`docs/ops/backup-orchestration.md`
 
 ## 文档入口
 - 生产 Runbook：`docs/ops/dashboard-production-runbook.md`

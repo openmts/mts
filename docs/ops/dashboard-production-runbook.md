@@ -128,6 +128,9 @@ server {
 
 ## 9. 备份演练（最短路径）
 
+主机侧推荐脚本：`scripts/mts-backup.sh`（说明见 `docs/ops/backup-orchestration.md`）。
+
+
 1. Dashboard → 存储：执行验证 → 创建快照 → 导出配置。
 2. 将快照目录拷贝到旁路介质。
 3. Dashboard 存储页执行「创建 data_dir 快照」→「执行旁路恢复演练」（`POST /api/v1/admin/storage/data-snapshot` + `restore-drill`），或 CLI/测试 `TestDataDirSidePathRestoreDrill`；也可旁路 data_dir 启动临时 mts-server 做查询比对。

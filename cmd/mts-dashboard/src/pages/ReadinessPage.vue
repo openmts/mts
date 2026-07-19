@@ -19,7 +19,7 @@ import {
   setReadinessFlag,
   type ReadinessState,
 } from '@/utils/readinessState'
-import { ClipboardCheck, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-vue-next'
+import { ClipboardCheck, ExternalLink, RefreshCw, ShieldCheck, HardDrive, FileCode2 } from 'lucide-vue-next'
 
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse {
@@ -89,6 +89,18 @@ function go(path: string) {
   void router.push(path)
 }
 
+const quickActions = [
+  { id: 'data-restore', labelKey: 'readinessGoDataRestore', path: '/storage#data-restore' },
+  { id: 'backup-drill', labelKey: 'readinessGoBackupDrill', path: '/storage#backup-drill' },
+  { id: 'edge-https', labelKey: 'readinessGoEdgeHttps', path: '/storage#edge-https' },
+] as const
+
+const backupScriptHint = `export MTS_BASE_URL='https://mts.example.com'
+export MTS_ADMIN_TOKEN='***'
+export MTS_BACKUP_REMOTE='backup@host:/var/backups/mts'
+./scripts/mts-backup.sh --dry-run
+./scripts/mts-backup.sh`
+
 onMounted(() => {
   if (isAdmin.value) void loadDoctor()
 })
@@ -148,6 +160,35 @@ onMounted(() => {
       <div class="mts-card p-4">
         <p class="text-xs mts-muted">{{ t('readinessBackupSchedule') }}</p>
         <p class="mt-1 text-lg font-semibold">{{ scheduleStats.requiredDone }}/{{ scheduleStats.requiredTotal }}</p>
+      </div>
+    </div>
+
+    <div class="mts-card p-4">
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <HardDrive class="h-4 w-4" />
+          {{ t('readinessQuickActions') }}
+        </h2>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-for="a in quickActions"
+          :key="a.id"
+          type="button"
+          class="mts-btn"
+          @click="go(a.path)"
+        >
+          <ExternalLink class="h-3.5 w-3.5" />
+          {{ t(a.labelKey) }}
+        </button>
+      </div>
+      <div class="mt-4">
+        <p class="mb-1 flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-200">
+          <FileCode2 class="h-3.5 w-3.5" />
+          {{ t('readinessBackupScript') }}
+        </p>
+        <p class="mb-2 text-xs mts-muted">{{ t('readinessBackupScriptHint') }}</p>
+        <pre class="overflow-x-auto rounded bg-slate-950 p-3 text-[11px] text-emerald-300">{{ backupScriptHint }}</pre>
       </div>
     </div>
 

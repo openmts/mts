@@ -245,7 +245,7 @@ async function confirmDelete() {
 
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 
-    <div class="mts-card p-4">
+    <div id="backup-drill" class="mts-card p-4 scroll-mt-20">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <ClipboardList class="h-4 w-4" />
@@ -293,7 +293,7 @@ async function confirmDelete() {
     </div>
 
 
-    <div class="mts-card p-4">
+    <div id="edge-https" class="mts-card p-4 scroll-mt-20">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           边缘 HTTPS / HSTS 验收
@@ -398,7 +398,7 @@ async function confirmDelete() {
     </div>
 
     
-    <div class="mts-panel">
+    <div id="data-restore" class="mts-panel scroll-mt-20">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">data_dir 旁路恢复编排</h3>
         <span class="text-xs mts-muted">真实存储拷贝（storagecheck）</span>

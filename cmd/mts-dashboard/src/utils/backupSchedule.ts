@@ -36,8 +36,8 @@ export const BACKUP_SCHEDULE_STEPS: BackupScheduleStep[] = [
     id: 'cron-schedule',
     severity: 'required',
     title: '定时调度',
-    detail: '用 cron/systemd timer 周期性触发 flush+快照+rsync；保留最近 N 份。',
-    example: '15 * * * * /opt/mts/bin/mts-backup.sh >>/var/log/mts-backup.log 2>&1',
+    detail: '用 cron/systemd timer 运行仓库 scripts/mts-backup.sh；保留最近 N 份。',
+    example: '15 * * * * /opt/mts/scripts/mts-backup.sh >>/var/log/mts-backup.log 2>&1',
   },
   {
     id: 'restore-drill-weekly',

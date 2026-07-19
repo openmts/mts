@@ -76,10 +76,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
   },
   {
+    id: 'backup-script',
+    severity: 'recommended',
+    title: '备份编排脚本',
+    detail: 'scripts/mts-backup.sh 支持 data-snapshot / rsync / restore-drill；make backup-script-check 自检。',
+    automated: true,
+  },
+  {
     id: 'backup-schedule',
     severity: 'recommended',
     title: '跨主机定时备份编排',
-    detail: '就绪中心 backupSchedule 指引 + 示例 cron/rsync；实际调度在部署侧。',
+    detail: 'scripts/mts-backup.sh + 就绪中心指引 + cron/systemd 样例；实际调度在部署侧。',
     automated: true,
   },
   {

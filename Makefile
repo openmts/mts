@@ -91,6 +91,10 @@ dashboard-test-e2e: dashboard ## 构建嵌入前端并运行 Playwright 商业�
 dashboard-test-e2e-install: ## 安装 Playwright Chromium（首次）
 	cd cmd/mts-dashboard && npm run test:e2e:install
 
+.PHONY: backup-script-check
+backup-script-check: ## 校验可商用备份编排脚本
+	bash scripts/mts-backup-selfcheck.sh
+
 
 .PHONY: lint
 lint: ## 运行 golangci-lint
