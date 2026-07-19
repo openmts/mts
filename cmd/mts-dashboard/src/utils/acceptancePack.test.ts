@@ -8,15 +8,16 @@ import {
 } from './acceptancePack.ts'
 import { buildReadinessArchive } from './readinessArchive.ts'
 
-function sampleArchive() {
+function sampleArchive(locale: 'zh' | 'en' = 'zh') {
   return buildReadinessArchive({
+    locale,
     operator: 'alice',
     note: 'drill',
     now: '2026-07-20T12:00:00.000Z',
     state: {
-      production: { tls: true },
+      production: { 'https-edge': true },
       edgeHttps: { 'tls-terminate': true },
-      backupSchedule: { cron: true },
+      backupSchedule: { 'cron-schedule': true },
       updatedAt: '2026-07-20T11:00:00.000Z',
     },
     score: {
@@ -39,7 +40,7 @@ function sampleArchive() {
 
 test('buildAcceptancePack aggregates archive client server ops', () => {
   const pack = buildAcceptancePack({
-    archive: sampleArchive(),
+    archive: sampleArchive('zh'),
     client: {
       name: 'mts-dashboard',
       version: '1.2.3',
@@ -57,6 +58,7 @@ test('buildAcceptancePack aggregates archive client server ops', () => {
   })
   assert.equal(pack.kind, ACCEPTANCE_PACK_KIND)
   assert.equal(pack.version, 1)
+  assert.equal(pack.locale, 'zh')
   assert.equal(pack.operator, 'bob')
   assert.equal(pack.client.version, '1.2.3')
   assert.equal(pack.server?.version, '0.9.0')
@@ -69,17 +71,32 @@ test('buildAcceptancePack aggregates archive client server ops', () => {
   assert.match(md, /0\.9\.0/)
   assert.match(md, /flush/)
   assert.match(md, /82%/)
+  assert.match(md, /边缘 HTTPS \/ TLS/)
 })
 
 test('buildAcceptancePack allows missing server', () => {
   const pack = buildAcceptancePack({
-    archive: sampleArchive(),
+    archive: sampleArchive('zh'),
     client: { name: 'mts-dashboard', version: '0.0.0', mode: 'dev', base: '/', apiBase: '' },
     now: '2026-07-20T13:00:00.000Z',
   })
   assert.equal(pack.server, null)
   assert.equal(pack.ops_actions.length, 0)
   assert.match(formatAcceptancePackMarkdown(pack), /服务端：未加载/)
+})
+
+test('acceptance pack english includes localized catalog title', () => {
+  const pack = buildAcceptancePack({
+    archive: sampleArchive('en'),
+    client: { name: 'mts-dashboard', version: '1.0.0', mode: 'prod', base: '/', apiBase: '' },
+    locale: 'en',
+  })
+  assert.equal(pack.locale, 'en')
+  assert.match(pack.disclaimer, /does not prove production human acceptance/i)
+  const md = formatAcceptancePackMarkdown(pack)
+  assert.match(md, /commercial acceptance pack/i)
+  assert.match(md, /Edge HTTPS \/ TLS/)
+  assert.match(md, /catalog\.sample: https-edge — Edge HTTPS \/ TLS/)
 })
 
 test('acceptancePackFilenames stamp', () => {

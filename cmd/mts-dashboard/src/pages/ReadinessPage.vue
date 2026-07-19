@@ -207,6 +207,7 @@ function downloadArchive() {
     state: state.value,
     score: scoreBreakdown.value,
     doctor: doctorArchiveSummary(),
+    locale: uiLocale.value,
   })
   const names = archiveFilenames()
   downloadJSON(names.json, archive)
@@ -220,6 +221,7 @@ function downloadAcceptancePack() {
     state: state.value,
     score: scoreBreakdown.value,
     doctor: doctorArchiveSummary(),
+    locale: uiLocale.value,
   })
   const pack = buildAcceptancePack({
     archive,
@@ -227,6 +229,7 @@ function downloadAcceptancePack() {
     server: serverVersion.value,
     opsActions: loadOpsActionLog(),
     operator: currentUser.value || 'admin',
+    locale: uiLocale.value,
   })
   const names = acceptancePackFilenames()
   downloadJSON(names.json, pack)
