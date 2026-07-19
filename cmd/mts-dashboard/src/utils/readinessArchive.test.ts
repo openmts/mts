@@ -156,3 +156,32 @@ test('archive includes signoff notes without claiming acceptance', () => {
   assert.match(md, /webhook #ops-alerts/)
   assert.match(md, /不代表生产人工验收已完成/)
 })
+
+test('archive includes export preflight summary', () => {
+  const a = buildReadinessArchive({
+    locale: 'zh',
+    operator: 'ops',
+    now: '2026-07-20T14:00:00.000Z',
+    state: {
+      production: {},
+      edgeHttps: {},
+      backupSchedule: {},
+      deployKit: { reviewed: true },
+      signoffNotes: { edgeHttps: 'only edge' },
+    },
+    score: {
+      checklist: 50,
+      edgeHttps: 100,
+      backupSchedule: 0,
+      doctor: 40,
+      total: 48,
+      reasons: ['checklist_incomplete', 'backup_schedule_incomplete', 'doctor_unavailable'],
+    },
+    doctor: { loaded: false },
+  })
+  assert.ok(a.export_preflight.warn_count >= 1)
+  assert.ok(a.export_preflight.items.some((i) => i.id === 'signoff'))
+  const md = formatReadinessArchiveMarkdown(a)
+  assert.match(md, /导出前预检/)
+  assert.match(md, /预检不阻止导出/)
+})

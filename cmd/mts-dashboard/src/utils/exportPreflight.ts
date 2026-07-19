@@ -198,3 +198,30 @@ export function buildExportPreflight(input: ExportPreflightInput): ExportPreflig
     readyToExport: true,
   }
 }
+
+/** 预检纯文本摘要，便于复制交接 */
+export function formatExportPreflightText(
+  result: ExportPreflightResult,
+  locale: LocaleCode = 'zh',
+): string {
+  const head =
+    locale === 'en'
+      ? [
+          'MTS export preflight',
+          `ok=${result.okCount} warn=${result.warnCount} info=${result.infoCount}`,
+          'Preflight does not block export or complete acceptance.',
+          '',
+        ]
+      : [
+          'MTS 导出前预检',
+          `ok=${result.okCount} warn=${result.warnCount} info=${result.infoCount}`,
+          '预检不阻止导出，不代表生产验收完成。',
+          '',
+        ]
+  const lines = [...head]
+  for (const item of result.items) {
+    const jump = item.target ? ` -> ${item.target}` : ''
+    lines.push(`[${item.level}] ${item.id}: ${item.message}${jump}`)
+  }
+  return lines.join('\n')
+}

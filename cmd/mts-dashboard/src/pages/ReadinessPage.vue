@@ -8,7 +8,7 @@ import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { scheduleScrollToHash } from '@/utils/hashScroll'
-import { buildExportPreflight } from '@/utils/exportPreflight'
+import { buildExportPreflight, formatExportPreflightText } from '@/utils/exportPreflight'
 import { copyText } from '@/utils/clipboard'
 import {
   DEPLOY_TEMPLATES,
@@ -378,6 +378,18 @@ function jumpPreflight(target?: string) {
   }
 }
 
+async function copyPreflightSummary() {
+  const text = formatExportPreflightText(exportPreflight.value, uiLocale.value)
+  const r = await copyText(text)
+  if (r.ok) {
+    success(t.value('readinessPreflightCopied'))
+    flash('ok', t.value('readinessPreflightCopied'))
+  } else {
+    notifyError(t.value('readinessPreflightCopyFailed'))
+    flash('error', t.value('readinessPreflightCopyFailed'))
+  }
+}
+
 onMounted(() => {
   if (isAdmin.value) {
     void loadDoctor()
@@ -465,9 +477,19 @@ watch(
     <div id="export-preflight" class="mts-card p-4 scroll-mt-20" data-testid="readiness-export-preflight">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">{{ t('readinessExportPreflight') }}</h2>
-        <span class="text-xs mts-muted" data-testid="readiness-preflight-summary">
-          ok={{ exportPreflight.okCount }} · warn={{ exportPreflight.warnCount }} · info={{ exportPreflight.infoCount }}
-        </span>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs mts-muted" data-testid="readiness-preflight-summary">
+            ok={{ exportPreflight.okCount }} · warn={{ exportPreflight.warnCount }} · info={{ exportPreflight.infoCount }}
+          </span>
+          <button
+            type="button"
+            class="mts-btn !px-2 !py-0.5 text-[11px]"
+            data-testid="readiness-copy-preflight"
+            @click="copyPreflightSummary"
+          >
+            {{ t('readinessCopyPreflight') }}
+          </button>
+        </div>
       </div>
       <p class="mb-2 text-xs mts-muted">{{ t('readinessExportPreflightHint') }}</p>
       <ul class="space-y-1.5">
@@ -711,19 +733,23 @@ watch(
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="flex items-center gap-2 text-sm font-semibold">
           <ShieldCheck class="h-4 w-4" />
-          Doctor
+          {{ t('readinessDoctorTitle') }}
         </h2>
-        <span class="text-xs mts-muted">
-          ok={{ doctor?.ok ?? '—' }} · warn={{ doctorWarns.length }} · tls={{ doctor?.http_tls_enabled ?? '—' }}
+        <span class="text-xs mts-muted" data-testid="readiness-doctor-summary">
+          {{ formatMessage(t('readinessDoctorSummary'), {
+            ok: doctor?.ok == null ? '—' : String(doctor.ok),
+            warn: String(doctorWarns.length),
+            tls: doctor?.http_tls_enabled == null ? '—' : String(doctor.http_tls_enabled),
+          }) }}
         </span>
       </div>
       <div v-if="doctor" class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">Level</th>
-              <th class="px-2 py-2">Code</th>
-              <th class="px-2 py-2">Message</th>
+              <th class="px-2 py-2">{{ t('readinessDoctorColLevel') }}</th>
+              <th class="px-2 py-2">{{ t('readinessDoctorColCode') }}</th>
+              <th class="px-2 py-2">{{ t('readinessDoctorColMessage') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -736,7 +762,9 @@ watch(
         </table>
       </div>
       <p v-else class="text-xs mts-muted">{{ loadingDoctor ? t('loading') : '—' }}</p>
-      <p v-if="doctorOKs.length" class="mt-2 text-[11px] mts-muted">ok checks: {{ doctorOKs.length }}</p>
+      <p v-if="doctorOKs.length" class="mt-2 text-[11px] mts-muted">
+        {{ formatMessage(t('readinessDoctorOkChecks'), { count: doctorOKs.length }) }}
+      </p>
     </div>
 
     <div id="production-checklist" class="mts-card p-4 scroll-mt-20" data-testid="readiness-production-checklist">

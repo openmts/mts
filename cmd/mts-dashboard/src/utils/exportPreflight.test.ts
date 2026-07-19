@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildExportPreflight, preflightItemTarget } from './exportPreflight.ts'
+import { buildExportPreflight, formatExportPreflightText, preflightItemTarget } from './exportPreflight.ts'
 
 test('buildExportPreflight reports gaps and completeness', () => {
   const gaps = buildExportPreflight({
@@ -84,4 +84,25 @@ test('buildExportPreflight attaches jump targets', () => {
   assert.equal(signoff?.actionKey, 'preflightJumpLocal')
   const footer = r.items.find((i) => i.id === 'footer')
   assert.equal(footer?.target, undefined)
+})
+
+test('formatExportPreflightText includes levels and disclaimer', () => {
+  const r = buildExportPreflight({
+    locale: 'zh',
+    requiredChecklistRatio: 0.5,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    signoffNotes: {},
+    deployKitReviewed: true,
+  })
+  const text = formatExportPreflightText(r, 'zh')
+  assert.match(text, /导出前预检/)
+  assert.match(text, /\[warn\]/)
+  assert.match(text, /不代表生产验收完成/)
+  const en = formatExportPreflightText(r, 'en')
+  assert.match(en, /export preflight/i)
 })

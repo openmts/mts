@@ -236,3 +236,7 @@
 ## P53 状态（2026-07-20）
 - 验收包 export_preflight + Overview 预检摘要入口
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+## P54 状态（2026-07-20）
+- 归档 export_preflight + 预检复制 + Doctor i18n
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

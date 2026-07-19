@@ -70,6 +70,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.locator('[data-testid^="readiness-prod-"]').first()).toBeChecked()
   await expect(page.getByTestId('readiness-export-preflight')).toBeVisible()
   await expect(page.getByTestId('readiness-preflight-summary')).toBeVisible()
+  await expect(page.getByTestId('readiness-copy-preflight')).toBeVisible()
+  await expect(page.getByTestId('readiness-doctor-panel')).toBeVisible()
   await expect(page.getByTestId('preflight-item-signoff')).toBeVisible()
   await expect(page.getByTestId('preflight-jump-signoff')).toBeVisible()
   await page.getByTestId('preflight-jump-signoff').click()
