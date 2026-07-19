@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -39,6 +40,7 @@ interface SnapshotsResponse { snapshots: SnapshotInfo[] }
 interface ExportData { generated_at: string; config: Record<string, unknown>; health: Record<string, unknown> }
 interface ExportResponse { export: ExportData }
 
+const route = useRoute()
 const { isAdmin } = useAuth()
 const { success, error: notifyError } = useNotify()
 const { t , locale } = useI18n()
@@ -98,15 +100,34 @@ async function loadDataSnapshots() {
   }
 }
 
+function scrollToCurrentHash() {
+  if (typeof window === 'undefined') return
+  scheduleScrollToHash(window.location.hash || route.hash)
+}
+
 onMounted(() => {
   if (isAdmin.value) {
     void loadSnapshots()
     void loadDataSnapshots()
   }
+  scrollToCurrentHash()
   if (typeof window !== 'undefined') {
-    scheduleScrollToHash(window.location.hash)
+    window.addEventListener('hashchange', scrollToCurrentHash)
   }
 })
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('hashchange', scrollToCurrentHash)
+  }
+})
+
+watch(
+  () => route.hash,
+  () => {
+    scrollToCurrentHash()
+  },
+)
 
 async function doValidate() {
   loading.value = 'validate'

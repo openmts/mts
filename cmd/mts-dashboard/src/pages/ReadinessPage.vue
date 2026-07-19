@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
@@ -8,6 +8,7 @@ import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { scheduleScrollToHash } from '@/utils/hashScroll'
+import { buildExportPreflight } from '@/utils/exportPreflight'
 import { copyText } from '@/utils/clipboard'
 import {
   DEPLOY_TEMPLATES,
@@ -89,6 +90,7 @@ const { isAdmin, currentUser } = useAuth()
 const { t, locale } = useI18n()
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const router = useRouter()
+const route = useRoute()
 const { success, error: notifyError } = useNotify()
 
 const state = ref<ReadinessState>(loadReadinessState())
@@ -143,6 +145,31 @@ const scoreBreakdown = computed(() => {
 })
 const readinessScore = computed(() => scoreBreakdown.value.total)
 const scoreLevel = computed(() => readinessLevel(readinessScore.value))
+
+const exportPreflight = computed(() => {
+  const requiredRatio =
+    requiredItems.value.length === 0 ? 1 : requiredDoneCount.value / requiredItems.value.length
+  const edgeRatio =
+    edgeStats.value.requiredTotal === 0
+      ? 1
+      : edgeStats.value.requiredDone / edgeStats.value.requiredTotal
+  const scheduleRatio =
+    scheduleStats.value.requiredTotal === 0
+      ? 1
+      : scheduleStats.value.requiredDone / scheduleStats.value.requiredTotal
+  return buildExportPreflight({
+    locale: uiLocale.value,
+    requiredChecklistRatio: requiredRatio,
+    edgeHttpsRequiredRatio: edgeRatio,
+    backupScheduleRequiredRatio: scheduleRatio,
+    doctorLoaded: doctor.value != null && !doctorError.value,
+    doctorOk: doctor.value?.ok,
+    doctorWarnCount: doctorWarns.value.length,
+    httpTlsEnabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
+    signoffNotes: state.value.signoffNotes,
+    deployKitReviewed: !!state.value.deployKit?.reviewed,
+  })
+})
 
 function flash(kind: 'ok' | 'error' | 'info', message: string) {
   actionKind.value = kind
@@ -330,15 +357,34 @@ function downloadDeployKit() {
 }
 
 
+function scrollToCurrentHash() {
+  if (typeof window === 'undefined') return
+  scheduleScrollToHash(window.location.hash || route.hash)
+}
+
 onMounted(() => {
   if (isAdmin.value) {
     void loadDoctor()
     void loadServerVersion()
   }
+  scrollToCurrentHash()
   if (typeof window !== 'undefined') {
-    scheduleScrollToHash(window.location.hash)
+    window.addEventListener('hashchange', scrollToCurrentHash)
   }
 })
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('hashchange', scrollToCurrentHash)
+  }
+})
+
+watch(
+  () => route.hash,
+  () => {
+    scrollToCurrentHash()
+  },
+)
 </script>
 
 <template>
@@ -398,6 +444,34 @@ onMounted(() => {
         {{ t('readinessImportMerge') }}
       </label>
       <span>{{ t('readinessArchiveHint') }}</span>
+    </div>
+
+    <div class="mts-card p-4" data-testid="readiness-export-preflight">
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-sm font-semibold">{{ t('readinessExportPreflight') }}</h2>
+        <span class="text-xs mts-muted" data-testid="readiness-preflight-summary">
+          ok={{ exportPreflight.okCount }} · warn={{ exportPreflight.warnCount }} · info={{ exportPreflight.infoCount }}
+        </span>
+      </div>
+      <p class="mb-2 text-xs mts-muted">{{ t('readinessExportPreflightHint') }}</p>
+      <ul class="space-y-1.5">
+        <li
+          v-for="item in exportPreflight.items"
+          :key="item.id"
+          class="flex items-start gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs dark:border-slate-800"
+          :data-testid="`preflight-item-${item.id}`"
+        >
+          <span
+            class="mt-0.5 inline-block min-w-[2.5rem] rounded px-1 py-0.5 text-center text-[10px] font-semibold uppercase"
+            :class="item.level === 'ok'
+              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
+              : item.level === 'warn'
+                ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100'
+                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+          >{{ item.level }}</span>
+          <span class="text-slate-700 dark:text-slate-200">{{ item.message }}</span>
+        </li>
+      </ul>
     </div>
 
     <ActionResultBanner
