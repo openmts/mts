@@ -115,6 +115,19 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page).toHaveURL(/\/audit/)
   await expect(page.getByTestId('audit-quick-ranges')).toBeVisible()
 
+  // 命令面板运维深链：签核备注 / 部署材料
+  await page.keyboard.press('Control+KeyK')
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('signoff')
+  await page.getByTestId('command-item-readiness-signoff').click()
+  await expect(page).toHaveURL(/ops\/readiness/)
+  await expect(page.getByTestId('readiness-signoff-notes')).toBeVisible()
+  await page.keyboard.press('Control+KeyK')
+  await page.getByTestId('command-palette-input').fill('deploy kit')
+  await page.getByTestId('command-item-readiness-deploy-kit').click()
+  await expect(page).toHaveURL(/ops\/readiness/)
+  await expect(page.getByTestId('readiness-deploy-kit')).toBeVisible()
+
   // 12) 跳过链接 + 运维操作历史导出入口
   await page.goto('/operations')
   await expect(page.getByTestId('ops-action-log')).toBeVisible()

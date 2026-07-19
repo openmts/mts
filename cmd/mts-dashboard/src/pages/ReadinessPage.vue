@@ -7,6 +7,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
+import { scheduleScrollToHash } from '@/utils/hashScroll'
 import { copyText } from '@/utils/clipboard'
 import {
   DEPLOY_TEMPLATES,
@@ -334,10 +335,8 @@ onMounted(() => {
     void loadDoctor()
     void loadServerVersion()
   }
-  if (typeof window !== 'undefined' && window.location.hash === '#deploy-kit') {
-    requestAnimationFrame(() => {
-      document.getElementById('deploy-kit')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
+  if (typeof window !== 'undefined') {
+    scheduleScrollToHash(window.location.hash)
   }
 })
 </script>

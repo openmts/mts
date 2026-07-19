@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
+import { scheduleScrollToHash } from '@/utils/hashScroll'
 import { useI18n } from '@/composables/useI18n'
 import { textForLocale, type LocaleCode } from '@/utils/localizedText'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
@@ -101,6 +102,9 @@ onMounted(() => {
   if (isAdmin.value) {
     void loadSnapshots()
     void loadDataSnapshots()
+  }
+  if (typeof window !== 'undefined') {
+    scheduleScrollToHash(window.location.hash)
   }
 })
 

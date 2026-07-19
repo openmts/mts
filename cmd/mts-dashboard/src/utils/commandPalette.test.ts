@@ -45,3 +45,22 @@ test('auditRangeToLocalInputs and filterAuditEvents', () => {
   assert.equal(filterAuditEvents(events, 'flush').length, 1)
   assert.equal(filterAuditEvents(events, '').length, 2)
 })
+
+test('command palette includes ops deep links for admin', () => {
+  const admin = visibleCommandItems(COMMAND_NAV_ITEMS, true)
+  for (const id of [
+    'storage-data-restore',
+    'storage-backup-drill',
+    'storage-edge-https',
+    'readiness-deploy-kit',
+    'readiness-signoff',
+  ]) {
+    assert.ok(admin.some((i) => i.id === id), id)
+  }
+  const resolve = (k: string) => k
+  assert.ok(filterCommandItems(admin, 'signoff', resolve).some((i) => i.id === 'readiness-signoff'))
+  assert.ok(filterCommandItems(admin, 'deploy kit', resolve).some((i) => i.id === 'readiness-deploy-kit'))
+  assert.ok(filterCommandItems(admin, '#data-restore', resolve).some((i) => i.id === 'storage-data-restore'))
+  const user = visibleCommandItems(COMMAND_NAV_ITEMS, false)
+  assert.ok(user.every((i) => !i.id.startsWith('readiness') && !i.id.startsWith('storage-')))
+})
