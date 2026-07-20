@@ -181,6 +181,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('databases-page')).toBeVisible()
   await expect(page.getByTestId('databases-export-json')).toBeVisible()
   await expect(page.getByTestId('databases-export-csv')).toBeVisible()
+  // 库列表虚拟滚动（空库时仍有列表容器与 hint；有数据时 virtual-list 可见）
+  const dbEmpty = page.getByTestId('databases-empty-filter')
+  const dbList = page.getByTestId('databases-virtual-list')
+  if (await dbList.count()) {
+    await expect(dbList).toBeVisible()
+    await expect(page.getByTestId('databases-virtual-hint')).toBeVisible()
+  } else {
+    await expect(dbEmpty).toBeVisible()
+  }
   await page.goto('/users')
   await expect(page.getByTestId('users-page')).toBeVisible()
   await expect(page.getByTestId('users-export-json')).toBeVisible()
@@ -606,6 +615,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('databases-filter')).toBeVisible()
   await expect(page.getByTestId('databases-selection-toolbar')).toBeVisible()
   await expect(page.getByTestId('databases-select-all')).toBeVisible()
+  if (await page.getByTestId('databases-virtual-list').count()) {
+    await expect(page.getByTestId('databases-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('databases-virtual-hint')).toBeVisible()
+  }
   await page.getByTestId('databases-select-all').click()
   await expect(page.getByTestId('databases-selected-count')).toBeVisible()
   await page.getByTestId('databases-clear-selection').click()

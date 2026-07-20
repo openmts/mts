@@ -11,6 +11,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
@@ -67,6 +68,9 @@ const filteredDatabases = computed(() => {
   return sortByAccessor(base, dbSort.value, { name: (d) => d.name })
 })
 const visibleDbIds = computed(() => filteredDatabases.value.map((d) => d.name))
+const DB_ROW_HEIGHT = 52
+const DB_LIST_HEIGHT = 416
+const activeDatabase = computed(() => databases.value.find((d) => d.expanded) ?? null)
 
 function cycleDbSort() {
   dbSort.value = cycleSortState(dbSort.value, 'name')
@@ -143,6 +147,9 @@ async function toggleExpand(db: DatabaseEntry) {
   if (db.expanded) {
     db.expanded = false
     return
+  }
+  for (const item of databases.value) {
+    if (item !== db) item.expanded = false
   }
   db.expanded = true
   if (!db.loaded) await loadDatabaseDetails(db)
@@ -367,75 +374,120 @@ function exportCSV() {
       </EmptyState>
     </div>
 
-    <div v-else class="space-y-2">
-<div v-for="db in filteredDatabases" :key="db.name" class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-        <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
-          <div class="flex min-w-0 items-center gap-2">
-            <input
-              type="checkbox"
-              class="h-3.5 w-3.5 shrink-0"
-              :data-testid="`databases-select-${db.name}`"
-              :checked="isSelected(db.name)"
-              :aria-label="t('listSelectCol') + ' ' + db.name"
-              @change="toggle(db.name, ($event.target as HTMLInputElement).checked)"
-              @click.stop
-            />
-          <button class="flex items-center gap-2 text-left" @click="toggleExpand(db)">
-            <component :is="db.expanded ? ChevronDown : ChevronRight" class="h-4 w-4 text-slate-400 dark:text-slate-500" />
-            <span class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ db.name }}</span>
-            <span v-if="db.loading" class="text-xs text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</span>
-          </button>
-          </div>
-          <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:text-red-300" :title="t('databasesDeleteDbBtnTitle')" @click="requestDeleteDatabase(db.name)">
-            <Trash2 class="h-4 w-4" />
+    <div v-else class="space-y-3" data-testid="databases-list-panel">
+      <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <VirtualTable
+          :items="filteredDatabases"
+          :row-height="DB_ROW_HEIGHT"
+          :height="DB_LIST_HEIGHT"
+          data-testid="databases-virtual-list"
+        >
+          <template #default="{ item: db }">
+            <div
+              class="flex h-full items-center justify-between border-b border-slate-100 px-4 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
+              :data-testid="`databases-row-${db.name}`"
+            >
+              <div class="flex min-w-0 items-center gap-2">
+                <input
+                  type="checkbox"
+                  class="h-3.5 w-3.5 shrink-0"
+                  :data-testid="`databases-select-${db.name}`"
+                  :checked="isSelected(db.name)"
+                  :aria-label="t('listSelectCol') + ' ' + db.name"
+                  @change="toggle(db.name, ($event.target as HTMLInputElement).checked)"
+                  @click.stop
+                />
+                <button type="button" class="flex min-w-0 items-center gap-2 text-left" :data-testid="`databases-expand-${db.name}`" @click="toggleExpand(db)">
+                  <component :is="db.expanded ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                  <span class="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{{ db.name }}</span>
+                  <span v-if="db.loading" class="text-xs text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</span>
+                  <span
+                    v-else-if="db.loaded"
+                    class="truncate text-[11px] mts-muted"
+                  >{{ db.measurements.length }} {{ t('databasesMeasurements') }} · {{ db.retentionPolicies.length }} {{ t('databasesRetention') }}</span>
+                </button>
+              </div>
+              <button
+                type="button"
+                class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300"
+                :title="t('databasesDeleteDbBtnTitle')"
+                :data-testid="`databases-delete-${db.name}`"
+                @click="requestDeleteDatabase(db.name)"
+              >
+                <Trash2 class="h-4 w-4" />
+              </button>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="databases-virtual-hint">
+          {{ t('databasesVirtualHint') }}
+        </p>
+      </div>
+
+      <div
+        v-if="activeDatabase && activeDatabase.expanded && activeDatabase.loaded"
+        class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+        data-testid="databases-detail-panel"
+      >
+        <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 dark:border-slate-800">
+          <p class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ activeDatabase.name }}</p>
+          <button type="button" class="mts-btn" data-testid="databases-detail-collapse" @click="activeDatabase.expanded = false">
+            {{ t('collapse') }}
           </button>
         </div>
-        <div v-if="db.expanded && db.loaded" class="border-t border-slate-100">
-          <div class="px-6 py-3">
-            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('databasesMeasurements') }}</p>
-            <EmptyState v-if="!db.measurements.length" compact :title="t('databasesNoMeasurement')" :description="t('databasesNoMeasurementDesc')" />
-            <div v-for="meas in db.measurements" :key="meas.name" class="mb-2 rounded border border-slate-100">
-              <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" @click="toggleMeasurement(meas, db.name)">
-                <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-                <Table2 class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-                {{ meas.name }}
-              </button>
-              <div v-if="meas.expanded" class="border-t border-slate-50 px-4 py-2 text-xs text-slate-600 dark:text-slate-300">
-                <div v-if="meas.loading" class="text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</div>
-                <template v-else>
-                  <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('databasesFields') }}</p>
-                  <div class="mb-2 flex flex-wrap gap-1">
-                    <span v-for="f in meas.fields" :key="f.name" class="rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5">{{ f.name }}:{{ fieldTypeName(f.type) }}</span>
-                    <span v-if="!meas.fields.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
+        <div class="px-6 py-3">
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t('databasesMeasurements') }}</p>
+          <EmptyState v-if="!activeDatabase.measurements.length" compact :title="t('databasesNoMeasurement')" :description="t('databasesNoMeasurementDesc')" />
+          <div v-for="meas in activeDatabase.measurements" :key="meas.name" class="mb-2 rounded border border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+              :data-testid="`databases-meas-${meas.name}`"
+              @click="toggleMeasurement(meas, activeDatabase.name)"
+            >
+              <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+              <Table2 class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+              {{ meas.name }}
+            </button>
+            <div v-if="meas.expanded" class="border-t border-slate-50 px-4 py-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-300">
+              <div v-if="meas.loading" class="text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</div>
+              <template v-else>
+                <p class="mb-1 font-medium text-slate-500 dark:text-slate-400">{{ t('databasesFields') }}</p>
+                <div class="mb-2 flex flex-wrap gap-1">
+                  <span v-for="f in meas.fields" :key="f.name" class="rounded bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{{ f.name }}:{{ fieldTypeName(f.type) }}</span>
+                  <span v-if="!meas.fields.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
+                </div>
+                <p class="mb-1 font-medium text-slate-500 dark:text-slate-400">{{ t('databasesSeries') }}</p>
+                <div class="space-y-1">
+                  <div v-for="s in meas.series" :key="s.id" class="flex items-center gap-1">
+                    <Tag class="h-3 w-3 text-slate-400 dark:text-slate-500" />
+                    <span class="font-mono">{{ s.tags && Object.keys(s.tags).length ? JSON.stringify(s.tags) : '{}' }}</span>
                   </div>
-                  <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('databasesSeries') }}</p>
-                  <div class="space-y-1">
-                    <div v-for="s in meas.series" :key="s.id" class="flex items-center gap-1">
-                      <Tag class="h-3 w-3 text-slate-400 dark:text-slate-500" />
-                      <span class="font-mono">{{ s.tags && Object.keys(s.tags).length ? JSON.stringify(s.tags) : '{}' }}</span>
-                    </div>
-                    <span v-if="!meas.series.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
-                  </div>
-                </template>
-              </div>
+                  <span v-if="!meas.series.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
+                </div>
+              </template>
             </div>
           </div>
-          <div class="border-t border-slate-200 dark:border-slate-700 px-6 py-3">
-            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('databasesRetention') }}</p>
-            <div v-if="db.retentionPolicies.length" class="mb-3 space-y-1">
-              <div v-for="rp in db.retentionPolicies" :key="rp.name" class="flex items-center gap-2 rounded border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5">
-                <Clock class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-                <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ rp.name }}</span>
-                <span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ formatDuration(rp.duration) }}</span>
-              </div>
+        </div>
+        <div class="border-t border-slate-200 px-6 py-3 dark:border-slate-700">
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t('databasesRetention') }}</p>
+          <div v-if="activeDatabase.retentionPolicies.length" class="mb-3 space-y-1">
+            <div
+              v-for="rp in activeDatabase.retentionPolicies"
+              :key="rp.name"
+              class="flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-1.5 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <Clock class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ rp.name }}</span>
+              <span class="text-xs text-slate-500 dark:text-slate-400">{{ formatDuration(rp.duration) }}</span>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <input v-model="db.newRpName" type="text" :placeholder="t('databasesRpNamePlaceholder')" class="w-28 rounded border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs" />
-              <input v-model="db.newRpDuration" type="text" :placeholder="t('databasesRpDurationPlaceholder')" class="w-24 rounded border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs" />
-              <button class="inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" @click="createRetentionPolicy(db)">
-                <Plus class="h-3.5 w-3.5" /> {{ t('databasesAdd') }}
-              </button>
-            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input v-model="activeDatabase.newRpName" type="text" :placeholder="t('databasesRpNamePlaceholder')" class="w-28 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-name" />
+            <input v-model="activeDatabase.newRpDuration" type="text" :placeholder="t('databasesRpDurationPlaceholder')" class="w-24 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-duration" />
+            <button type="button" class="inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" data-testid="databases-rp-add" @click="createRetentionPolicy(activeDatabase)">
+              <Plus class="h-3.5 w-3.5" /> {{ t('databasesAdd') }}
+            </button>
           </div>
         </div>
       </div>

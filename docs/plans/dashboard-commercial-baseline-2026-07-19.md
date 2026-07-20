@@ -661,3 +661,8 @@
 - 商业冒烟覆盖 access-matrix-virtual-list
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P125 状态（2026-07-20）
+- Databases 顶层库列表虚拟滚动；详情单展开面板
+- 选择/导出仍覆盖筛选全集；商业冒烟覆盖 databases-virtual-list
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
