@@ -64,3 +64,10 @@
 - [x] EARS-FE-P143-03 空态引导
 - [x] EARS-FE-P143-04 商业冒烟
 - [x] EARS-DOC-P143-05 基线记录
+
+## P144 — Account landing EmptyState
+- [x] EARS-FE-P144-01 列表+筛选
+- [x] EARS-FE-P144-02 无匹配 EmptyState
+- [x] EARS-FE-P144-03 列表选择保存
+- [x] EARS-FE-P144-04 商业冒烟
+- [x] EARS-DOC-P144-05 基线记录

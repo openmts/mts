@@ -7,6 +7,7 @@ import { parseExpiresAt, sessionExpiryView, formatRemaining } from '@/utils/sess
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { validateNewPassword } from '@/utils/passwordPolicy'
 import { KeyRound, UserRound, Download, Copy } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
@@ -14,12 +15,18 @@ import { buildAccountExport, formatAccountExportPretty } from '@/utils/accountEx
 import { buildClientPrefsExport, formatClientPrefsExportPretty } from '@/utils/clientPrefsExport'
 import { downloadJSON, stampFilename } from '@/utils/download'
 import { copyText } from '@/utils/clipboard'
+import { formatMessage } from '@/utils/formatMessage'
 import {
   LANDING_PATH_OPTIONS,
   isAdminOnlyLandingPath,
   loadLandingPath,
   saveLandingPath,
 } from '@/utils/landingPrefs'
+import {
+  buildLandingOptionViews,
+  filterLandingOptions,
+  groupLandingOptions,
+} from '@/utils/landingOptionsView'
 import type { MessageKey } from '@/i18n/messages'
 import { useDensity } from '@/composables/useDensity'
 import type { UiDensity } from '@/utils/densityPrefs'
@@ -70,9 +77,20 @@ function roleLabel(role?: string | null): string {
 const { success, error: notifyError } = useNotify()
 const storage = typeof localStorage !== 'undefined' ? localStorage : null
 const landingPath = ref(loadLandingPath(storage))
+const landingFilter = ref('')
 const landingOptions = computed(() =>
   LANDING_PATH_OPTIONS.filter((p) => isAdmin.value || !isAdminOnlyLandingPath(p)),
 )
+const landingViews = computed(() =>
+  buildLandingOptionViews(landingOptions.value, landingLabel, isAdminOnlyLandingPath),
+)
+const filteredLandingViews = computed(() => filterLandingOptions(landingViews.value, landingFilter.value))
+const groupedLanding = computed(() => groupLandingOptions(filteredLandingViews.value))
+function selectLanding(path: string) {
+  if (landingPath.value === path) return
+  landingPath.value = path
+  onLandingChange()
+}
 function landingLabel(path: string): string {
   // map path -> route name roughly via pageTitle keys
   const map: Record<string, MessageKey> = {
@@ -306,11 +324,24 @@ async function submit() {
     <div class="mts-card p-4" data-testid="account-landing">
       <h2 class="mb-1 text-sm font-semibold">{{ t('accountLandingTitle') }}</h2>
       <p class="mb-3 text-xs mts-muted">{{ t('accountLandingHint') }}</p>
-      <label class="mb-1 block text-sm font-medium" for="account-landing-select">{{ t('accountLandingLabel') }}</label>
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <label class="text-sm font-medium" for="account-landing-filter">{{ t('accountLandingLabel') }}</label>
+        <span class="text-[11px] mts-muted" data-testid="account-landing-count">
+          {{ formatMessage(t('accountLandingCount'), { shown: filteredLandingViews.length, total: landingViews.length }) }}
+        </span>
+      </div>
+      <input
+        id="account-landing-filter"
+        v-model="landingFilter"
+        class="mts-input mts-focus-ring mb-3"
+        data-testid="account-landing-filter"
+        :placeholder="t('accountLandingFilterPh')"
+      />
+      <!-- 保留原生 select 兼容与 a11y 降级 -->
       <select
         id="account-landing-select"
         v-model="landingPath"
-        class="mts-input mts-focus-ring"
+        class="mts-input mts-focus-ring mb-3"
         data-testid="account-landing-select"
         @change="onLandingChange"
       >
@@ -318,6 +349,58 @@ async function submit() {
           {{ landingLabel(p) }} ({{ p }})
         </option>
       </select>
+      <div v-if="filteredLandingViews.length" class="space-y-3" data-testid="account-landing-list">
+        <div v-if="groupedLanding.common.length">
+          <p class="mb-1 text-[11px] font-medium uppercase tracking-wide mts-muted">{{ t('accountLandingGroupCommon') }}</p>
+          <ul class="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100 dark:divide-slate-800 dark:border-slate-800">
+            <li v-for="it in groupedLanding.common" :key="it.path">
+              <button
+                type="button"
+                class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                :data-testid="`account-landing-item-${it.path.replaceAll('/', '_') || 'root'}`"
+                :aria-pressed="landingPath === it.path"
+                :class="landingPath === it.path ? 'bg-slate-50 dark:bg-slate-800/80' : ''"
+                @click="selectLanding(it.path)"
+              >
+                <span>
+                  <span class="font-medium text-slate-800 dark:text-slate-100">{{ it.label }}</span>
+                  <span class="ml-2 font-mono text-[11px] mts-muted">{{ it.path }}</span>
+                </span>
+                <span v-if="landingPath === it.path" class="text-[11px] text-emerald-600 dark:text-emerald-300" data-testid="account-landing-current">{{ t('accountLandingCurrent') }}</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+        <div v-if="groupedLanding.admin.length">
+          <p class="mb-1 text-[11px] font-medium uppercase tracking-wide mts-muted">{{ t('accountLandingGroupAdmin') }}</p>
+          <ul class="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100 dark:divide-slate-800 dark:border-slate-800">
+            <li v-for="it in groupedLanding.admin" :key="it.path">
+              <button
+                type="button"
+                class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                :data-testid="`account-landing-item-${it.path.replaceAll('/', '_') || 'root'}`"
+                :aria-pressed="landingPath === it.path"
+                :class="landingPath === it.path ? 'bg-slate-50 dark:bg-slate-800/80' : ''"
+                @click="selectLanding(it.path)"
+              >
+                <span>
+                  <span class="font-medium text-slate-800 dark:text-slate-100">{{ it.label }}</span>
+                  <span class="ml-2 font-mono text-[11px] mts-muted">{{ it.path }}</span>
+                  <span class="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">{{ t('accountLandingAdminBadge') }}</span>
+                </span>
+                <span v-if="landingPath === it.path" class="text-[11px] text-emerald-600 dark:text-emerald-300">{{ t('accountLandingCurrent') }}</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <EmptyState
+        v-else
+        compact
+        data-testid="account-landing-empty"
+        :title="t('accountLandingEmptyTitle')"
+        :description="t('accountLandingEmptyDesc')"
+      />
     </div>
 
     <div class="mts-card p-4" data-testid="account-density">

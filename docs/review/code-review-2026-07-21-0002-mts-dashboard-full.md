@@ -121,7 +121,7 @@ Dashboard 在 P124–P136 后已具备可商用后台的主体骨架：鉴权/�
 ### P3
 
 #### FE-FULL-P3-01 独立 query/stats 端点入口 — **已修复（P143）**
-#### FE-FULL-P3-02 Account 着陆选项等小列表 EmptyState 一致性
+#### FE-FULL-P3-02 Account 着陆选项等小列表 EmptyState 一致性 — **已修复（P144）**
 
 ---
 
@@ -168,4 +168,5 @@ timeout 180s env GOSUMDB=sum.golang.org go test -count=1 -timeout 120s ./...
 | FE-FULL-P2-02 Write 行上限 | **已修复**（P138 上限 50） |
 | FE-FULL-P2-03 VITE_BASE | **已对齐说明**（P141；代码本已支持 dashboard_base） |
 | FE-FULL-P3-01 query/stats | **已修复**（P143） |
+| FE-FULL-P3-02 Account landing | **已修复**（P144） |
 | 部署侧三项 | open 不计分 |
