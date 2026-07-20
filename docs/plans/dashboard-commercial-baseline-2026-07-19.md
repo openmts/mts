@@ -646,3 +646,8 @@
 - 商业冒烟覆盖 audit-table/header
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P122 状态（2026-07-20）
+- Users 列表虚拟滚动；选择/导出仍覆盖筛选全集
+- 商业冒烟覆盖 users-table/virtual-list
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

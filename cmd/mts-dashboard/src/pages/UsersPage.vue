@@ -10,6 +10,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
@@ -50,6 +51,8 @@ const filteredUsers = computed(() => {
   })
 })
 const visibleUserIds = computed(() => filteredUsers.value.map((u) => u.name))
+const USERS_ROW_HEIGHT = 52
+const USERS_LIST_HEIGHT = 448
 
 function cycleUserSort(key: UserSortKey) {
   userSort.value = cycleSortState(userSort.value, key)
@@ -445,68 +448,91 @@ async function confirmBatch() {
     </div>
 
     <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-    <div class="mts-table-wrap max-h-[28rem] overflow-auto" data-testid="users-table-wrap"><table class="w-full min-w-[40rem] text-sm">
-        <thead>
-          <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
-            <th class="sticky top-0 z-[1] w-10 bg-slate-50/95 px-3 py-2.5 backdrop-blur dark:bg-slate-900/95">
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5"
-                data-testid="users-select-all-checkbox"
-                :checked="allVisibleSelected"
-                :indeterminate.prop="someVisibleSelected"
-                :aria-label="t('listSelectAll')"
-                @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
-              />
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50/95 px-4 py-2.5 backdrop-blur dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-name" @click="cycleUserSort('name')">
-                {{ t('usersColUser') }} <span aria-hidden="true">{{ userSortIndicator('name') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50/95 px-4 py-2.5 backdrop-blur dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-role" @click="cycleUserSort('role')">
-                {{ t('usersColRole') }} <span aria-hidden="true">{{ userSortIndicator('role') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50/95 px-4 py-2.5 backdrop-blur dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-status" @click="cycleUserSort('status')">
-                {{ t('usersColStatus') }} <span aria-hidden="true">{{ userSortIndicator('status') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50/95 px-4 py-2.5 backdrop-blur dark:bg-slate-900/95">{{ t('action') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="u in filteredUsers" :key="u.name" class="border-b border-slate-50 hover:bg-slate-50 dark:hover:bg-slate-800/40">
-            <td class="px-3 py-3">
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5"
-                :data-testid="`users-select-${u.name}`"
-                :checked="isSelected(u.name)"
-                :aria-label="t('listSelectCol') + ' ' + u.name"
-                @change="toggle(u.name, ($event.target as HTMLInputElement).checked)"
-              />
-            </td>
-            <td class="px-4 py-3">
-              <button class="text-left font-medium text-slate-800 dark:text-slate-100 hover:underline" @click="selectUser(u)">{{ u.name }}</button>
-              <span v-if="u.display_name" class="ml-2 text-xs text-slate-400 dark:text-slate-500">{{ u.display_name }}</span>
-            </td>
-            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ roleLabel(u.role) }}</td>
-            <td class="px-4 py-3">
-              <span :class="u.disabled ? 'bg-red-50 text-red-700 dark:text-red-200' : 'bg-green-50 text-green-700 dark:text-green-200'" class="rounded px-2 py-0.5 text-xs">{{ u.disabled ? t('usersStatusDisabled') : t('usersStatusActive') }}</span>
-            </td>
-            <td class="px-4 py-3">
-              <div class="flex items-center gap-1">
-                <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-200" :title="t('usersSetPassword')" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
-                <button class="rounded px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:bg-slate-800" @click="toggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
-                <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:text-red-300" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
+        <div class="overflow-x-auto" data-testid="users-table-wrap">
+      <div
+        id="users-table"
+        class="min-w-[40rem] overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800"
+        data-testid="users-table"
+      >
+        <div
+          class="grid grid-cols-[2.5rem_minmax(10rem,1.4fr)_minmax(5rem,0.7fr)_minmax(5rem,0.7fr)_minmax(9rem,1fr)] border-b border-slate-100 bg-slate-50/95 text-left text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-400"
+          data-testid="users-table-header"
+        >
+          <div class="px-3 py-2.5">
+            <input
+              type="checkbox"
+              class="h-3.5 w-3.5"
+              data-testid="users-select-all-checkbox"
+              :checked="allVisibleSelected"
+              :indeterminate.prop="someVisibleSelected"
+              :aria-label="t('listSelectAll')"
+              @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
+            />
+          </div>
+          <div class="px-4 py-2.5">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-name" @click="cycleUserSort('name')">
+              {{ t('usersColUser') }} <span aria-hidden="true">{{ userSortIndicator('name') }}</span>
+            </button>
+          </div>
+          <div class="px-4 py-2.5">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-role" @click="cycleUserSort('role')">
+              {{ t('usersColRole') }} <span aria-hidden="true">{{ userSortIndicator('role') }}</span>
+            </button>
+          </div>
+          <div class="px-4 py-2.5">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-status" @click="cycleUserSort('status')">
+              {{ t('usersColStatus') }} <span aria-hidden="true">{{ userSortIndicator('status') }}</span>
+            </button>
+          </div>
+          <div class="px-4 py-2.5 uppercase">{{ t('action') }}</div>
+        </div>
+        <VirtualTable
+          :items="filteredUsers"
+          :row-height="USERS_ROW_HEIGHT"
+          :height="USERS_LIST_HEIGHT"
+          data-testid="users-virtual-list"
+        >
+          <template #default="{ item: u }">
+            <div
+              class="grid h-full grid-cols-[2.5rem_minmax(10rem,1.4fr)_minmax(5rem,0.7fr)_minmax(5rem,0.7fr)_minmax(9rem,1fr)] items-center border-b border-slate-50 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+              :data-testid="`users-row-${u.name}`"
+            >
+              <div class="px-3">
+                <input
+                  type="checkbox"
+                  class="h-3.5 w-3.5"
+                  :data-testid="`users-select-${u.name}`"
+                  :checked="isSelected(u.name)"
+                  :aria-label="t('listSelectCol') + ' ' + u.name"
+                  @change="toggle(u.name, ($event.target as HTMLInputElement).checked)"
+                />
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table></div>
+              <div class="min-w-0 px-4">
+                <button class="text-left font-medium text-slate-800 hover:underline dark:text-slate-100" @click="selectUser(u)">{{ u.name }}</button>
+                <span v-if="u.display_name" class="ml-2 text-xs text-slate-400 dark:text-slate-500">{{ u.display_name }}</span>
+              </div>
+              <div class="px-4 text-slate-600 dark:text-slate-300">{{ roleLabel(u.role) }}</div>
+              <div class="px-4">
+                <span
+                  :class="u.disabled ? 'bg-red-50 text-red-700 dark:text-red-200' : 'bg-green-50 text-green-700 dark:text-green-200'"
+                  class="rounded px-2 py-0.5 text-xs"
+                >{{ u.disabled ? t('usersStatusDisabled') : t('usersStatusActive') }}</span>
+              </div>
+              <div class="px-4">
+                <div class="flex items-center gap-1">
+                  <button class="rounded p-1 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200" :title="t('usersSetPassword')" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
+                  <button class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800" @click="toggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
+                  <button class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="users-virtual-hint">
+          {{ t('usersVirtualHint') }}
+        </p>
+      </div>
+    </div>
     </div>
 
     </template>
