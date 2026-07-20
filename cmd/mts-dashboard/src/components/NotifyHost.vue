@@ -12,12 +12,14 @@ const { t } = useI18n()
     class="pointer-events-none fixed right-4 top-4 z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
     data-testid="notify-host"
     aria-live="polite"
+    aria-relevant="additions text"
   >
     <div
       v-for="n in items"
       :key="n.id"
       class="pointer-events-auto rounded-lg border px-3 py-2 text-sm shadow-lg"
       :data-testid="`notify-${n.kind}`"
+      :role="n.kind === 'error' ? 'alert' : 'status'"
       :class="{
         'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200': n.kind === 'success',
         'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200': n.kind === 'error',
@@ -27,7 +29,14 @@ const { t } = useI18n()
     >
       <div class="flex items-start justify-between gap-2">
         <p class="flex-1 break-words">{{ notifyDisplayText(n) }}</p>
-        <button class="text-xs opacity-60 hover:opacity-100" @click="dismiss(n.id)">{{ t('close') }}</button>
+        <button
+          type="button"
+          class="mts-focus-ring shrink-0 rounded text-xs opacity-60 hover:opacity-100"
+          :aria-label="t('close')"
+          :title="t('close')"
+          data-testid="notify-dismiss"
+          @click="dismiss(n.id)"
+        >{{ t('close') }}</button>
       </div>
     </div>
   </div>

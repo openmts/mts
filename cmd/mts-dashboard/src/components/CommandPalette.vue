@@ -137,16 +137,21 @@ defineExpose({ openPalette, closePalette, open })
             ref="inputRef"
             v-model="query"
             type="search"
-            class="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm outline-none placeholder:text-slate-400"
+            class="mts-focus-ring min-w-0 flex-1 border-0 bg-transparent py-2 text-sm outline-none placeholder:text-slate-400"
             :placeholder="t('commandPalettePlaceholder')"
             data-testid="command-palette-input"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="command-palette-listbox"
+            :aria-expanded="open ? 'true' : 'false'"
+            :aria-activedescendant="items[activeIndex] ? `command-option-${items[activeIndex].id}` : undefined"
             autocomplete="off"
           />
           <kbd class="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[10px] mts-muted sm:inline dark:border-slate-700">
             Esc
           </kbd>
         </div>
-        <ul class="max-h-80 overflow-auto p-1" role="listbox">
+        <ul id="command-palette-listbox" class="max-h-80 overflow-auto p-1" role="listbox" data-testid="command-palette-listbox">
           <li v-if="!items.length" class="px-3 py-6 text-center text-sm mts-muted">
             {{ t('commandPaletteEmpty') }}
           </li>
@@ -159,6 +164,7 @@ defineExpose({ openPalette, closePalette, open })
             :class="idx === activeIndex
               ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
               : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'"
+            :id="`command-option-${item.id}`"
             :data-testid="`command-item-${item.id}`"
             @mouseenter="activeIndex = idx"
             @click="go(item)"

@@ -160,6 +160,8 @@ onBeforeUnmount(() => {
         :class="sessionBadgeClass"
         :title="t('sessionExpiry')"
         data-testid="session-badge"
+        role="status"
+        aria-live="polite"
       >{{ t('sessionLeft') }} {{ sessionView.label }}</span>
       <button type="button" class="mts-focus-ring rounded p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800" :title="t('lang')" :aria-label="t('lang')" data-testid="topbar-lang" @click="toggleLocale">
         <Languages class="h-4 w-4" />
@@ -180,13 +182,17 @@ onBeforeUnmount(() => {
         type="button"
         class="hidden max-w-[10rem] truncate rounded px-1.5 py-0.5 text-left hover:bg-slate-100 dark:hover:bg-slate-800 sm:inline"
         :title="t('account')"
+        :aria-label="t('account')"
         data-testid="topbar-account"
         @click="router.push({ name: 'Account' })"
       >
         {{ currentUser }}<span v-if="currentRole" class="text-slate-400 dark:text-slate-500"> · {{ roleLabel(currentRole) }}</span>
       </button>
       <button
-        class="rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        type="button"
+        class="mts-focus-ring rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        data-testid="topbar-logout"
+        :aria-label="loggingOut ? t('loggingOut') : t('logout')"
         :disabled="loggingOut"
         @click="onLogout"
       >

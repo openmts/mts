@@ -214,6 +214,22 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('overview-go-readiness').click()
   await expect(page).toHaveURL(/ops\/readiness/)
 
+
+  // 键盘可达：命令面板 + 快捷键帮助 + skip-link 聚焦主内容
+  await page.goto('/')
+  await page.keyboard.press('Control+k')
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await expect(page.getByTestId('command-palette-input')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  await page.getByTestId('topbar-shortcuts').click()
+  await expect(page.getByTestId('shortcuts-help')).toBeVisible()
+  await page.getByTestId('shortcuts-help-close').click()
+  await expect(page.getByTestId('shortcuts-help')).toHaveCount(0)
+  await page.getByTestId('skip-to-main').focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('#main-content')).toBeFocused()
+
   // About 字段标签
   await page.goto('/about')
   await expect(page.getByRole('main').getByText(/BASE_URL|API/).first()).toBeVisible()

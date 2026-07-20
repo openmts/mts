@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { useGlobalLoading } from '@/composables/useGlobalLoading'
+import { useI18n } from '@/composables/useI18n'
 
 const { busy } = useGlobalLoading()
+const { t } = useI18n()
 </script>
 
 <template>
   <div
     class="pointer-events-none fixed inset-x-0 top-0 z-[200] h-0.5 overflow-hidden"
-    aria-hidden="true"
+    data-testid="global-progress"
+    role="progressbar"
+    :aria-hidden="busy ? 'false' : 'true'"
+    :aria-busy="busy ? 'true' : 'false'"
+    :aria-valuetext="busy ? t('loading') : undefined"
+    :aria-label="t('loading')"
   >
     <div
       v-show="busy"

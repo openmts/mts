@@ -33,7 +33,9 @@ const input = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
 const primaryRef = ref<HTMLButtonElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
-const titleId = `confirm-title-${Math.random().toString(36).slice(2, 9)}`
+const uid = Math.random().toString(36).slice(2, 9)
+const titleId = `confirm-title-${uid}`
+const descId = `confirm-desc-${uid}`
 let trap: FocusTrapHandle | null = null
 
 const resolvedConfirm = computed(() => props.confirmLabel || t.value('confirm'))
@@ -104,6 +106,7 @@ onBeforeUnmount(() => {
     v-if="open"
     class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-3 sm:p-4"
     role="presentation"
+    data-testid="confirm-dialog-backdrop"
     @click.self="close"
   >
     <div
@@ -112,33 +115,41 @@ onBeforeUnmount(() => {
       role="dialog"
       aria-modal="true"
       :aria-labelledby="titleId"
+      :aria-describedby="descId"
+      data-testid="confirm-dialog"
     >
       <h3 :id="titleId" class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ title }}</h3>
-      <p class="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{{ message }}</p>
+      <p :id="descId" class="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{{ message }}</p>
       <div v-if="requireText" class="mt-3">
-        <label class="mb-1 block text-xs text-slate-500 dark:text-slate-400">
+        <label class="mb-1 block text-xs text-slate-500 dark:text-slate-400" :for="`confirm-require-${uid}`">
           {{ requireHint }}
         </label>
         <input
+          :id="`confirm-require-${uid}`"
           ref="inputRef"
           v-model="input"
-          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800"
+          class="mts-input mts-focus-ring w-full"
+          data-testid="confirm-dialog-input"
+          autocomplete="off"
           @keyup.enter="onConfirm"
         />
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button
           type="button"
-          class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          class="mts-btn mts-focus-ring"
+          data-testid="confirm-dialog-cancel"
           :disabled="loading"
           @click="close"
         >{{ resolvedCancel }}</button>
         <button
           ref="primaryRef"
           type="button"
-          class="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          :class="danger ? 'bg-red-600 hover:bg-red-500' : 'bg-slate-800 hover:bg-slate-700'"
+          class="mts-focus-ring rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          :class="danger ? 'bg-red-600 hover:bg-red-500' : 'bg-slate-800 hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white'"
+          data-testid="confirm-dialog-confirm"
           :disabled="!canConfirm"
+          :aria-busy="loading ? 'true' : undefined"
           @click="onConfirm"
         >{{ loading ? t('processing') : resolvedConfirm }}</button>
       </div>

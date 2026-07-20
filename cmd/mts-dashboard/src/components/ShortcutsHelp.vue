@@ -50,15 +50,22 @@ onBeforeUnmount(() => {
       class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900"
       role="dialog"
       aria-modal="true"
-      :aria-label="t('shortcutHelpTitle')"
+      aria-labelledby="shortcuts-help-title"
     >
       <div class="mb-3 flex items-center justify-between gap-2">
-        <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+        <h2 id="shortcuts-help-title" class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <Keyboard class="h-4 w-4" />
           {{ t('shortcutHelpTitle') }}
         </h2>
-        <button type="button" class="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" data-testid="shortcuts-help-close" @click="close">
-          <X class="h-4 w-4" />
+        <button
+          type="button"
+          class="mts-focus-ring rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          data-testid="shortcuts-help-close"
+          :aria-label="t('close')"
+          :title="t('close')"
+          @click="close"
+        >
+          <X class="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
       <p class="mb-3 text-xs mts-muted">{{ t('shortcutHelpDesc') }}</p>
