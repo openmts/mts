@@ -12,12 +12,16 @@ import {
   type LocaleCode,
   type RoleName,
 } from '@/utils/rbacMatrix'
-import { Shield } from 'lucide-vue-next'
+import { Download, Shield } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
+import { useNotify } from '@/composables/useNotify'
+import { buildAccessMatrixExport } from '@/utils/accessMatrixExport'
+import { downloadJSON, stampFilename } from '@/utils/download'
 
 const { currentRole } = useAuth()
 const { t, locale } = useI18n()
+const { success, warn } = useNotify()
 const roleFilter = ref<'all' | RoleName>('all')
 const areaFilter = ref('')
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
@@ -59,10 +63,22 @@ function roleLabel(role: string): string {
   if (role === 'user') return t.value('roleUser')
   return role
 }
+
+function exportMatrix() {
+  if (!rows.value.length) {
+    warn(t.value('accessExportEmpty'))
+    return
+  }
+  downloadJSON(
+    stampFilename('mts-access-matrix', 'json'),
+    buildAccessMatrixExport(rows.value, uiLocale.value),
+  )
+  success(t.value('accessMatrixExported'))
+}
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4" data-testid="access-matrix-page">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="mts-title flex items-center gap-2">
@@ -73,6 +89,17 @@ function roleLabel(role: string): string {
           {{ t('accessMatrixDesc') }}
           <span class="font-medium text-slate-800 dark:text-slate-100">{{ roleLabel(displayRole) }}</span>
         </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="mts-btn"
+          data-testid="access-matrix-export"
+          :disabled="!rows.length"
+          @click="exportMatrix"
+        >
+          <Download class="h-3.5 w-3.5" /> {{ t('accessMatrixExport') }}
+        </button>
       </div>
     </div>
 
@@ -93,13 +120,13 @@ function roleLabel(role: string): string {
 
     <div class="flex flex-wrap items-center gap-2">
       <label class="text-xs mts-muted">{{ t('accessMatrixRoleFilter') }}</label>
-      <select v-model="roleFilter" class="mts-input w-auto text-sm">
+      <select v-model="roleFilter" class="mts-input w-auto text-sm" data-testid="access-matrix-role-filter">
         <option value="all">{{ t('accessMatrixAllRows') }}</option>
         <option value="admin">{{ formatMessage(t('accessMatrixAdminOnly'), { role: t('roleAdmin') }) }}</option>
         <option value="user">{{ formatMessage(t('accessMatrixUserOnly'), { role: t('roleUser') }) }}</option>
       </select>
       <label class="text-xs mts-muted ml-2">{{ t('accessMatrixArea') }}</label>
-      <select v-model="areaFilter" class="mts-input w-auto text-sm">
+      <select v-model="areaFilter" class="mts-input w-auto text-sm" data-testid="access-matrix-area-filter">
         <option value="">{{ t('accessMatrixAllAreas') }}</option>
         <option v-for="a in areas" :key="a.key" :value="a.key">{{ a.label }}</option>
       </select>
@@ -123,30 +150,19 @@ function roleLabel(role: string): string {
             :key="row.id"
             class="border-b border-slate-100 dark:border-slate-800"
           >
-            <td class="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{{ textForLocale(row.area, uiLocale) }}</td>
+            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{{ textForLocale(row.area, uiLocale) }}</td>
             <td class="px-3 py-2 text-slate-800 dark:text-slate-100">{{ textForLocale(row.capability, uiLocale) }}</td>
             <td class="px-3 py-2">
-              <span class="inline-flex rounded-full px-2 py-0.5 text-xs" :class="levelClass(row.admin)">
-                {{ levelLabel(row.admin) }}
-              </span>
+              <span class="inline-flex rounded-full px-2 py-0.5 text-xs" :class="levelClass(row.admin)">{{ levelLabel(row.admin) }}</span>
             </td>
             <td class="px-3 py-2">
-              <span class="inline-flex rounded-full px-2 py-0.5 text-xs" :class="levelClass(row.user)">
-                {{ levelLabel(row.user) }}
-              </span>
+              <span class="inline-flex rounded-full px-2 py-0.5 text-xs" :class="levelClass(row.user)">{{ levelLabel(row.user) }}</span>
             </td>
-            <td class="px-3 py-2 font-mono text-xs text-slate-500 dark:text-slate-400">{{ row.route || t('emptyValue') }}</td>
-            <td class="px-3 py-2 text-xs mts-muted">{{ textForLocale(row.notes, uiLocale) || t('emptyValue') }}</td>
-          </tr>
-          <tr v-if="!rows.length">
-            <td colspan="6" class="px-3 py-8 text-center text-sm mts-muted">{{ t('accessMatrixEmpty') }}</td>
+            <td class="px-3 py-2 font-mono text-xs mts-muted">{{ row.route || t('emptyValue') }}</td>
+            <td class="px-3 py-2 text-xs mts-muted">{{ row.notes ? textForLocale(row.notes, uiLocale) : t('emptyValue') }}</td>
           </tr>
         </tbody>
       </table>
     </div>
-
-    <p class="text-xs mts-muted">
-      {{ t('accessMatrixFootnote') }} <RouterLink class="underline" to="/access/grants">{{ t('accessMatrixLiveGrantsLink') }}</RouterLink>。
-    </p>
   </div>
 </template>

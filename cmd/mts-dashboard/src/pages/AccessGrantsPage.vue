@@ -16,7 +16,10 @@ import {
   type GrantRow,
   type UserGrantBundle,
 } from '@/utils/grantsSummary'
-import { RefreshCw, ShieldCheck } from 'lucide-vue-next'
+import { RefreshCw, ShieldCheck, Download } from 'lucide-vue-next'
+import { useNotify } from '@/composables/useNotify'
+import { buildGrantsExport, grantsToCSV } from '@/utils/grantsExport'
+import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 
 interface User {
   name: string
@@ -28,6 +31,7 @@ interface PermissionsResponse { grants: Array<{ database: string; permission: st
 
 const { isAdmin } = useAuth()
 const { t, locale } = useI18n()
+const { success, warn } = useNotify()
 function roleLabel(role?: string): string {
   if (!role) return t.value('emptyValue')
   if (role === 'admin') return t.value('roleAdmin')
@@ -88,7 +92,7 @@ async function load() {
             grants: data.grants ?? [],
           })
         } catch (e) {
-          errs.push(`${u.name}: ${e instanceof Error ? e.message : 'load grants failed'}`)
+          errs.push(`${u.name}: ${formatCaughtError(e)}`)
           bundles.push({ user: u.name, role: u.role, disabled: u.disabled, grants: [] })
         }
       }
@@ -104,12 +108,30 @@ async function load() {
   }
 }
 
+function exportJSON() {
+  if (!filtered.value.length) {
+    warn(t.value('accessExportEmpty'))
+    return
+  }
+  downloadJSON(stampFilename('mts-access-grants', 'json'), buildGrantsExport(filtered.value))
+  success(t.value('accessExported'))
+}
+
+function exportCSV() {
+  if (!filtered.value.length) {
+    warn(t.value('accessExportEmpty'))
+    return
+  }
+  downloadText(stampFilename('mts-access-grants', 'csv'), grantsToCSV(filtered.value), 'text/csv;charset=utf-8')
+  success(t.value('accessExported'))
+}
+
 onMounted(() => { void load() })
 </script>
 
 <template>
   <PermissionDenied v-if="!isAdmin" />
-  <div v-else class="space-y-4">
+  <div v-else class="space-y-4" data-testid="access-grants-page">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="mts-title flex items-center gap-2">
@@ -120,9 +142,17 @@ onMounted(() => { void load() })
           {{ t('accessGrantsDesc') }}
         </p>
       </div>
-      <button class="mts-btn" :disabled="loading" @click="load">
-        <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" /> {{ t('refresh') }}
-      </button>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="access-grants-export-json" :disabled="!filtered.length" @click="exportJSON">
+          <Download class="h-3.5 w-3.5" /> {{ t('accessExportJSON') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="access-grants-export-csv" :disabled="!filtered.length" @click="exportCSV">
+          <Download class="h-3.5 w-3.5" /> {{ t('accessExportCSV') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="access-grants-refresh" :disabled="loading" :aria-busy="loading ? 'true' : undefined" @click="load">
+          <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" /> {{ t('refresh') }}
+        </button>
+      </div>
     </div>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />

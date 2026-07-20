@@ -81,11 +81,20 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')
+  await expect(page.getByTestId('access-matrix-page')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵|Capability matrix/ })).toBeVisible()
   // a11y 树中 th 可能暴露为 cell
   await expect(page.getByRole('main').getByText(/管理员|Admin/).first()).toBeVisible()
+  await expect(page.getByTestId('access-matrix-export')).toBeVisible()
   await page.goto('/access/grants')
+  await expect(page.getByTestId('access-grants-page')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
+  await expect(page.getByTestId('access-grants-export-json')).toBeVisible()
+  await expect(page.getByTestId('access-grants-export-csv')).toBeVisible()
+  await page.goto('/api-spec')
+  await expect(page.getByTestId('api-spec-page')).toBeVisible()
+  await expect(page.getByTestId('api-spec-export-json')).toBeVisible()
+  await expect(page.getByTestId('api-spec-export-md')).toBeVisible()
   await page.goto('/observability/metrics')
   await expect(page.getByTestId('metrics-page')).toBeVisible()
   await expect(page.getByTestId('metrics-filter')).toBeVisible()
@@ -286,6 +295,8 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // 16) 权限矩阵 / 实时授权 / 指标 / 404（含矩阵行双语）
   await page.goto('/access')
+  await expect(page.getByTestId('access-matrix-page')).toBeVisible()
+  await expect(page.getByTestId('access-matrix-export')).toBeEnabled()
   await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵|Capability matrix/ })).toBeVisible()
   // 使用 table cell，避免命中 select 中隐藏的 option
   await expect(page.getByRole('main').getByRole('cell', { name: '数据面' }).first()).toBeVisible()
@@ -301,7 +312,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await localeBtn.click()
   await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵/ })).toBeVisible()
   await page.goto('/access/grants')
+  await expect(page.getByTestId('access-grants-page')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
+  await expect(page.getByTestId('access-grants-export-json')).toBeVisible()
+  await page.goto('/api-spec')
+  await expect(page.getByTestId('api-spec-page')).toBeVisible()
+  await expect(page.getByTestId('api-spec-title')).toBeVisible()
+  await expect(page.getByTestId('api-spec-export-json')).toBeVisible()
   await page.goto('/observability/metrics')
   await expect(page.getByRole('main').getByRole('heading', { name: /指标浏览|Metrics explorer/ })).toBeVisible()
   await page.goto('/this-route-should-404')
