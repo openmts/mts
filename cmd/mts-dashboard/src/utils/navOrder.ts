@@ -127,6 +127,28 @@ export function moveNavPath(
   return next
 }
 
+/**
+ * 将 fromPath 移动到 toPath 的索引位置（同列表内，arrayMove 语义）。
+ * 用于拖拽放置：drop on target。
+ */
+export function moveNavPathTo(
+  order: readonly string[],
+  fromPath: string,
+  toPath: string,
+): string[] {
+  const list = order.map(normalizeNavPath).filter(Boolean)
+  const from = normalizeNavPath(fromPath)
+  const to = normalizeNavPath(toPath)
+  if (!from || !to || from === to) return list
+  const fromIdx = list.indexOf(from)
+  const toIdx = list.indexOf(to)
+  if (fromIdx < 0 || toIdx < 0) return list
+  const next = list.slice()
+  const [item] = next.splice(fromIdx, 1)
+  next.splice(toIdx, 0, item!)
+  return next
+}
+
 /** 基于当前可见 items 与已存 order，生成完整可排序 path 列表 */
 export function resolveSectionOrder(
   itemPaths: readonly string[],

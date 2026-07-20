@@ -5,6 +5,7 @@ import {
   applyNavOrder,
   loadNavOrderPrefs,
   moveNavPath,
+  moveNavPathTo,
   resolveSectionOrder,
   saveNavOrderMap,
   setSectionOrder,
@@ -51,6 +52,21 @@ export function useSidebarNavOrder<T extends { to: string }>(
     persistOrder(setSectionOrder(orderMap.value, sectionId, moved))
   }
 
+  function reorderTo(sectionId: string, fromPath: string, toPath: string) {
+    if (!canReorder.value) return
+    if (!fromPath || !toPath || fromPath === toPath) return
+    const group = groupNavItems(roleNavItems.value).find((g) => g.id === sectionId)
+    if (!group) return
+    const paths = new Set(group.items.map((x) => x.to))
+    if (!paths.has(fromPath) || !paths.has(toPath)) return
+    const current = resolveSectionOrder(
+      group.items.map((x) => x.to),
+      orderMap.value[sectionId],
+    )
+    const moved = moveNavPathTo(current, fromPath, toPath)
+    persistOrder(setSectionOrder(orderMap.value, sectionId, moved))
+  }
+
   function resetSectionOrder(sectionId: string) {
     persistOrder(setSectionOrder(orderMap.value, sectionId, []))
   }
@@ -90,6 +106,7 @@ export function useSidebarNavOrder<T extends { to: string }>(
     orderedRoleNavItems,
     orderedGroups,
     reorder,
+    reorderTo,
     resetSectionOrder,
     resetAllOrder,
     canMove,

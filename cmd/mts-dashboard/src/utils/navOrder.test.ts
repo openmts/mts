@@ -4,6 +4,7 @@ import {
   applyNavOrder,
   loadNavOrderPrefs,
   moveNavPath,
+  moveNavPathTo,
   parseNavOrderMap,
   resolveSectionOrder,
   saveNavOrderMap,
@@ -53,4 +54,12 @@ test('resolveSectionOrder and setSectionOrder', () => {
   assert.deepEqual(resolveSectionOrder(paths, ['/write']), ['/write', '/query', '/'])
   const map = setSectionOrder({}, 'workspace', ['/write', '/query'])
   assert.deepEqual(map.workspace, ['/write', '/query'])
+})
+
+test('moveNavPathTo drop on target', () => {
+  assert.deepEqual(moveNavPathTo(['/a', '/b', '/c'], '/a', '/c'), ['/b', '/c', '/a'])
+  assert.deepEqual(moveNavPathTo(['/a', '/b', '/c'], '/c', '/a'), ['/c', '/a', '/b'])
+  assert.deepEqual(moveNavPathTo(['/a', '/b', '/c'], '/b', '/b'), ['/a', '/b', '/c'])
+  assert.deepEqual(moveNavPathTo(['/a', '/b', '/c'], '/x', '/a'), ['/a', '/b', '/c'])
+  assert.deepEqual(moveNavPathTo(['/a', '/b', '/c'], '/a', '/b'), ['/b', '/a', '/c'])
 })

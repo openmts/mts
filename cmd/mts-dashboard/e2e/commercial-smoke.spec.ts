@@ -53,12 +53,30 @@ test('commercial browser smoke path', async ({ page }) => {
   // 组内排序控件（工作区至少 3 项）
   await expect(page.getByTestId('sidebar-order-up-query')).toBeVisible()
   await expect(page.getByTestId('sidebar-order-down-query')).toBeVisible()
+  await expect(page.getByTestId('sidebar-drag-query')).toBeVisible()
+  await expect(page.getByTestId('sidebar-drag-write')).toBeVisible()
   await page.getByTestId('sidebar-order-up-query').click()
+  // P107: 拖拽手柄可见；拖拽 write 到 home 行后顺序持久化
+  const navKeySmoke = 'mts.dashboard.nav-order.prefs.v1'
+  await page.getByTestId('sidebar-drag-write').dragTo(page.getByTestId('sidebar-nav-row-home'))
+  await expect.poll(async () => {
+    const raw = await page.evaluate((k) => localStorage.getItem(k), navKeySmoke)
+    if (!raw) return false
+    try {
+      const parsed = JSON.parse(raw) as { order?: { workspace?: string[] } }
+      const ws = parsed.order?.workspace || []
+      return ws.includes('/write') && ws.indexOf('/write') < ws.indexOf('/')
+    } catch {
+      return false
+    }
+  }).toBe(true)
   // 过滤时隐藏排序（避免与搜索结果冲突）
   await page.getByTestId('sidebar-filter').fill('query')
   await expect(page.getByTestId('sidebar-order-up-query')).toHaveCount(0)
+  await expect(page.getByTestId('sidebar-drag-query')).toHaveCount(0)
   await page.getByTestId('sidebar-filter-clear').click()
   await expect(page.getByTestId('sidebar-order-up-query')).toBeVisible()
+  await expect(page.getByTestId('sidebar-drag-query')).toBeVisible()
   await expect(page.getByTestId('overview-export-json')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)

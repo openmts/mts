@@ -6,9 +6,10 @@ import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import {
   LayoutDashboard, Database, Users, Settings, Wrench,
-  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound, PanelLeftClose, PanelLeftOpen, ChevronUp, ChevronDown, RotateCcw,
+  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound, PanelLeftClose, PanelLeftOpen, ChevronUp, ChevronDown, RotateCcw, GripVertical,
 } from 'lucide-vue-next'
 import { navPathTestSuffix, useSidebarNavOrder } from '@/composables/useSidebarNavOrder'
+import { useSidebarNavDrag } from '@/composables/useSidebarNavDrag'
 import { filterNavItems } from '@/utils/navFilter'
 
 const props = defineProps<{ visible: boolean; collapsed: boolean }>()
@@ -46,10 +47,33 @@ const {
   orderedRoleNavItems,
   orderedGroups,
   reorder,
+  reorderTo,
   resetSectionOrder,
   resetAllOrder,
   canMove,
 } = useSidebarNavOrder(roleNavItems, canReorder)
+
+const {
+  dragFrom,
+  dragOverPath,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
+} = useSidebarNavDrag(canReorder, reorderTo)
+
+function rowDragClass(sectionId: string, path: string): string {
+  const over =
+    dragOverPath.value === path &&
+    dragFrom.value &&
+    dragFrom.value.sectionId === sectionId &&
+    dragFrom.value.path !== path
+  const parts = ['flex items-stretch gap-0.5 rounded-lg']
+  if (over) parts.push('ring-1 ring-sky-400/70 dark:ring-sky-500/60')
+  if (dragFrom.value?.path === path) parts.push('opacity-60')
+  return parts.join(' ')
+}
 
 const filteredNavItems = computed(() => {
   const base = orderedRoleNavItems.value
@@ -223,9 +247,28 @@ defineExpose({ focusFilter, clearFilter })
           <div
             v-for="item in group.items"
             :key="item.to"
-            class="flex items-stretch gap-0.5"
+            :class="rowDragClass(group.id, item.to)"
             :data-testid="`sidebar-nav-row-${navPathTestSuffix(item.to)}`"
+            :data-section="group.id"
+            :data-path="item.to"
+            @dragover="onDragOver(group.id, item.to, $event)"
+            @dragleave="onDragLeave(item.to)"
+            @drop="onDrop(group.id, item.to, $event)"
           >
+            <button
+              v-if="canReorder && group.items.length > 1"
+              type="button"
+              class="mts-focus-ring mt-1 flex h-8 w-5 shrink-0 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing dark:hover:bg-slate-800"
+              draggable="true"
+              :data-testid="`sidebar-drag-${navPathTestSuffix(item.to)}`"
+              :aria-label="t('sidebarOrderDrag')"
+              :title="t('sidebarOrderDrag')"
+              @dragstart="onDragStart(group.id, item.to, $event)"
+              @dragend="onDragEnd"
+              @click.prevent
+            >
+              <GripVertical class="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
             <button
               type="button"
               class="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-2 text-left text-sm"
