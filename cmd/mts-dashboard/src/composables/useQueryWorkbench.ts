@@ -6,6 +6,7 @@ import { makeFormErrorT } from '@/utils/formErrors'
 import { buildQueryFromForm } from '@/utils/queryFormBuild'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
+import { formatMessage } from '@/utils/formatMessage'
 import type { QueryResultRow, QueryStatsData } from '@/api/types'
 
 export type { QueryResultRow, QueryStatsData }
@@ -201,7 +202,15 @@ export function useQueryWorkbench() {
         if (seq !== requestSeq) return
         const previewOnly = lines > preview.length
         streamMeta.value = { lines, records, errors, previewOnly, previewLimit: 200 }
-        rawOutput.value = preview.join('\n') + (previewOnly ? `\n… 共 ${lines} 行，仅预览前 ${preview.length} 行（复制也仅含预览）` : '')
+        rawOutput.value =
+          preview.join('\n') +
+          (previewOnly
+            ? '\n' +
+              formatMessage(tMsg.value('queryStreamPreviewFooter' as MessageKey), {
+                lines,
+                limit: preview.length,
+              })
+            : '')
         if (endStats) queryStats.value = endStats
         if (streamError) actionError.value = streamError
       }

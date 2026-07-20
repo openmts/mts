@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import { getTokenExpiresAt } from '@/api/client'
+import { parseExpiresAt, sessionExpiryView, formatRemaining } from '@/utils/sessionExpiry'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -11,6 +13,30 @@ import { KeyRound, UserRound } from 'lucide-vue-next'
 const router = useRouter()
 const { currentUser, currentRole, changePassword } = useAuth()
 const { t, locale } = useI18n()
+const nowMs = ref(Date.now())
+const expiresAt = computed(() => parseExpiresAt(getTokenExpiresAt()))
+const sessionView = computed(() =>
+  sessionExpiryView(
+    expiresAt.value,
+    nowMs.value,
+    10 * 60_000,
+    2 * 60_000,
+    locale.value === 'en' ? 'en' : 'zh',
+  ),
+)
+const remainingText = computed(() => {
+  if (expiresAt.value == null) return t.value('accountSessionNone')
+  if (sessionView.value.urgency === 'expired') return t.value('sessionExpiredLabel')
+  return formatRemaining(Math.max(0, sessionView.value.remainingMs))
+})
+const expiresAtText = computed(() => {
+  if (expiresAt.value == null) return t.value('emptyValue')
+  try {
+    return new Date(expiresAt.value).toLocaleString()
+  } catch {
+    return String(expiresAt.value)
+  }
+})
 function roleLabel(role?: string | null): string {
   if (!role) return t.value('emptyValue')
   if (role === 'admin') return t.value('roleAdmin')
@@ -72,6 +98,24 @@ async function submit() {
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('accountRole') }}</dt>
           <dd class="font-mono" data-testid="account-role">{{ roleLabel(currentRole) }}</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="mts-card p-4" data-testid="account-session">
+      <h2 class="mb-3 text-sm font-semibold">{{ t('accountSessionCard') }}</h2>
+      <dl class="space-y-2 text-sm">
+        <div class="flex justify-between gap-3">
+          <dt class="mts-muted">{{ t('accountSessionExpiresAt') }}</dt>
+          <dd class="font-mono" data-testid="account-session-expires">{{ expiresAtText }}</dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="mts-muted">{{ t('accountSessionRemaining') }}</dt>
+          <dd class="font-mono" data-testid="account-session-remaining">{{ remainingText }}</dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="mts-muted">{{ t('sessionExpiry') }}</dt>
+          <dd class="font-mono" data-testid="account-session-level">{{ sessionView.urgency }}</dd>
         </div>
       </dl>
     </div>

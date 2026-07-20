@@ -817,6 +817,14 @@ export const messages = {
     readinessDeployDrillRunbooks: 'Runbook',
     readinessDeployDrillTemplates: '材料包样例',
 
+    queryStreamPreviewFooter: '… 共 {lines} 行，仅预览前 {limit} 行（复制也仅含预览）',
+    databasesErrBadDuration: 'RP 时长格式无效（如 1h / 7d）',
+    databasesErrDurationOverflow: 'RP 时长超出安全整数范围',
+    accountSessionCard: '当前会话',
+    accountSessionExpiresAt: '过期时间',
+    accountSessionRemaining: '剩余时间',
+    accountSessionNone: '当前会话未返回过期时间',
+
     loginTTLLabel: '会话 TTL（可选）',
     loginTTLHint: '单位秒；留空使用服务端默认。',
     loginTTLPlaceholder: '例如 3600',
@@ -1661,6 +1669,14 @@ export const messages = {
     readinessDeployDrillEvidence: 'Evidence',
     readinessDeployDrillRunbooks: 'Runbooks',
     readinessDeployDrillTemplates: 'Kit samples',
+
+    queryStreamPreviewFooter: '… {lines} lines total; preview first {limit} only (copy is preview-only)',
+    databasesErrBadDuration: 'Invalid RP duration (e.g. 1h / 7d)',
+    databasesErrDurationOverflow: 'RP duration exceeds safe integer range',
+    accountSessionCard: 'Current session',
+    accountSessionExpiresAt: 'Expires at',
+    accountSessionRemaining: 'Time remaining',
+    accountSessionNone: 'No expiry returned for this session',
 
     loginTTLLabel: 'Session TTL (optional)',
     loginTTLHint: 'Seconds; leave empty for server default.',

@@ -359,3 +359,10 @@
 - 查询/表单写/Line Protocol 校验错误完整 i18n
 - 商业冒烟覆盖 login-ttl
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P74 状态（2026-07-20）
+- 流式查询预览 footer i18n；RP duration 纯函数与本地化错误
+- 账户页会话过期/剩余展示
+- 商业冒烟覆盖 account-session
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

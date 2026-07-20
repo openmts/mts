@@ -13,9 +13,11 @@ import EmptyState from '@/components/EmptyState.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
 import { formatMessage } from '@/utils/formatMessage'
 import { filterByName } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
+import type { MessageKey } from '@/i18n/messages'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
 interface Series { id: number; measurement: string; tags: Record<string, string> }
@@ -195,21 +197,14 @@ async function createRetentionPolicy(db: DatabaseEntry) {
   }
 }
 function parseDuration(s: string): number {
-  const m = s.trim().toLowerCase().match(/^(\d+)(ns|us|ms|s|m|h|d)$/)
-  if (!m) throw new Error('bad duration')
-  const n = Number(m[1])
-  const mul: Record<string, number> = { ns: 1, us: 1e3, ms: 1e6, s: 1e9, m: 60e9, h: 3600e9, d: 86400e9 }
-  const v = n * mul[m[2]]
-  if (!Number.isSafeInteger(v)) throw new Error('overflow')
-  return v
+  try {
+    return parseRPDurationToNs(s)
+  } catch (e) {
+    throw new Error(mapRPDurationError(e, (k) => t.value(k as MessageKey)))
+  }
 }
 function formatDuration(ns: number): string {
-  if (!ns) return '0'
-  if (ns % 86400e9 === 0) return `${ns / 86400e9}d`
-  if (ns % 3600e9 === 0) return `${ns / 3600e9}h`
-  if (ns % 60e9 === 0) return `${ns / 60e9}m`
-  if (ns % 1e9 === 0) return `${ns / 1e9}s`
-  return `${ns}ns`
+  return formatRPDuration(ns)
 }
 function fieldTypeName(type: number): string {
   switch (type) {
