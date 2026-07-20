@@ -11,6 +11,12 @@ import { KeyRound, UserRound } from 'lucide-vue-next'
 const router = useRouter()
 const { currentUser, currentRole, changePassword } = useAuth()
 const { t, locale } = useI18n()
+function roleLabel(role?: string | null): string {
+  if (!role) return t.value('emptyValue')
+  if (role === 'admin') return t.value('roleAdmin')
+  if (role === 'user') return t.value('roleUser')
+  return role
+}
 const { success } = useNotify()
 
 const oldPassword = ref('')
@@ -64,7 +70,7 @@ async function submit() {
         </div>
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('accountRole') }}</dt>
-          <dd class="font-mono">{{ currentRole || t('emptyValue') }}</dd>
+          <dd class="font-mono">{{ roleLabel(currentRole) }}</dd>
         </div>
       </dl>
     </div>

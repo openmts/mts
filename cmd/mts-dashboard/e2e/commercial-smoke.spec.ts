@@ -162,6 +162,8 @@ test('commercial browser smoke path', async ({ page }) => {
   // 13) 用户/数据库筛选入口
   await page.goto('/users')
   await expect(page.getByTestId('users-filter')).toBeVisible()
+  await expect(page.getByTestId('users-role-filter')).toBeVisible()
+  await expect(page.getByTestId('users-role-filter')).toContainText(/管理员|Admin|普通用户|User/)
   await page.goto('/databases')
   await expect(page.getByTestId('databases-filter')).toBeVisible()
 

@@ -27,6 +27,10 @@ const filteredUsers = computed(() => filterUsers(users.value, userFilter.value, 
 const databases = ref<string[]>([])
 const { currentUser, isAdmin } = useAuth()
 const { t } = useI18n()
+function roleLabel(role?: string): string {
+  if (role === 'admin') return t.value('roleAdmin')
+  return t.value('roleUser')
+}
 const { success, error: notifyError } = useNotify()
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
@@ -272,8 +276,8 @@ function openSetPassword(name: string) {
       <label class="text-xs mts-muted">{{ t('accountRole') }}
         <select v-model="roleFilter" class="mts-input mt-1" data-testid="users-role-filter">
           <option value="">{{ t('usersAllRoles') }}</option>
-          <option value="admin">admin</option>
-          <option value="user">user</option>
+          <option value="admin">{{ t('roleAdmin') }}</option>
+          <option value="user">{{ t('roleUser') }}</option>
         </select>
       </label>
       <span class="text-xs mts-muted" data-testid="users-filter-count">{{ filteredUsers.length }} / {{ users.length }}</span>
@@ -307,7 +311,7 @@ function openSetPassword(name: string) {
               <button class="text-left font-medium text-slate-800 dark:text-slate-100 hover:underline" @click="selectUser(u)">{{ u.name }}</button>
               <span v-if="u.display_name" class="ml-2 text-xs text-slate-400 dark:text-slate-500">{{ u.display_name }}</span>
             </td>
-            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ u.role || 'user' }}</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ roleLabel(u.role) }}</td>
             <td class="px-4 py-3">
               <span :class="u.disabled ? 'bg-red-50 text-red-700 dark:text-red-200' : 'bg-green-50 text-green-700 dark:text-green-200'" class="rounded px-2 py-0.5 text-xs">{{ u.disabled ? t('usersStatusDisabled') : t('usersStatusActive') }}</span>
             </td>

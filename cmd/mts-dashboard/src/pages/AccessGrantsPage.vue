@@ -27,6 +27,12 @@ interface PermissionsResponse { grants: Array<{ database: string; permission: st
 
 const { isAdmin } = useAuth()
 const { t } = useI18n()
+function roleLabel(role?: string): string {
+  if (!role) return t.value('emptyValue')
+  if (role === 'admin') return t.value('roleAdmin')
+  if (role === 'user') return t.value('roleUser')
+  return role
+}
 const loading = ref(false)
 const loadError = ref('')
 const rows = ref<GrantRow[]>([])
@@ -186,7 +192,7 @@ onMounted(() => { void load() })
             class="border-b border-slate-100 dark:border-slate-800"
           >
             <td class="px-3 py-2 font-medium text-slate-800 dark:text-slate-100">{{ row.user }}</td>
-            <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ row.role || t('emptyValue') }}</td>
+            <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ roleLabel(row.role) }}</td>
             <td class="px-3 py-2">
               <span
                 class="inline-flex rounded-full px-2 py-0.5 text-xs"
