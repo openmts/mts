@@ -609,3 +609,7 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 ## P56（2026-07-20）
 - Config/Storage/ApiSpec 表头与关键页 emptyValue 已本地化
 - 部署侧验收仍 open
+
+## P57（2026-07-20）
+- Query/Write/Downsample 用户可见表单文案已进一步本地化
+- 部署侧验收仍 open

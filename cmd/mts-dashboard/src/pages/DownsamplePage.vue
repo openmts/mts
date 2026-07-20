@@ -626,7 +626,7 @@ async function confirmRange() {
           </div>
           <div>
             <label class="mb-1 block text-xs mts-muted">{{ t('downsampleColInterval') }}</label>
-            <input v-model="intervalHuman" placeholder="1m / 5m / 1h / 1d" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
+            <input v-model="intervalHuman" :placeholder="t('downsamplePhInterval')" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
             <p class="mt-1 text-[11px] mts-muted">{{ t('downsampleIntervalHint') }}</p>
           </div>
           <div>
@@ -647,14 +647,14 @@ async function confirmRange() {
           </div>
         </div>
         <div class="mt-3">
-          <label class="mb-1 block text-xs mts-muted">Functions</label>
+          <label class="mb-1 block text-xs mts-muted">{{ t('downsampleFunctions') }}</label>
           <div class="space-y-1.5">
             <div v-for="(fn, idx) in newPolicy.functions" :key="idx" class="flex items-center gap-1.5">
               <select v-model="fn.function" class="rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600">
                 <option v-for="opt in ['mean','sum','min','max','first','last','count']" :key="opt" :value="opt">{{ opt }}</option>
               </select>
-              <input v-model="fn.field" placeholder="field" class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600" />
-              <input v-model="fn.as" placeholder="as" class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600" />
+              <input v-model="fn.field" :placeholder="t('downsamplePhField')" class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600" />
+              <input v-model="fn.as" :placeholder="t('downsamplePhAs')" class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600" />
               <button class="rounded p-0.5 text-slate-400 hover:text-red-600" @click="removePolicyFunction(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
             </div>
           </div>
@@ -664,7 +664,7 @@ async function confirmRange() {
         </div>
         <div class="mt-3">
           <label class="mb-1 block text-xs mts-muted">{{ t('downsampleGroupByTags') }}</label>
-          <input v-model="newPolicyTagsText" placeholder="host, region" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
+          <input v-model="newPolicyTagsText" :placeholder="t('downsamplePhGroupTags')" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
         </div>
         <div class="mt-4 flex justify-end gap-2">
           <button class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" @click="showCreate = false">{{ t('cancel') }}</button>

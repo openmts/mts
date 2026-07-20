@@ -453,59 +453,59 @@ const columnRows = computed(() => {
     </div>
 
     <div class="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Database
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('database') }}
         <input v-model="queryForm.database" list="db-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('queryPlaceholderManual')" />
         <datalist id="db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Measurement
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('measurement') }}
         <input v-model="queryForm.measurement" list="meas-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :disabled="measurementsLoading" />
         <datalist id="meas-list"><option v-for="m in measurements" :key="m" :value="m" /></datalist>
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">RP
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('retentionPolicy') }}
         <input v-model="queryForm.retention_policy" list="rp-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
         <datalist id="rp-list">
           <option v-for="rp in (retentionPolicies.length ? retentionPolicies : ['autogen'])" :key="rp" :value="rp" />
         </datalist>
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Start (ms)
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('queryStartMs') }}
         <div class="mt-1 flex gap-1">
           <input v-model="queryForm.start_time" class="w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
-          <button class="rounded border px-2 text-xs" @click="fillNowMs('start')">now</button>
+          <button class="rounded border px-2 text-xs" @click="fillNowMs('start')">{{ t('queryNow') }}</button>
         </div>
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">End (ms)
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('queryEndMs') }}
         <div class="mt-1 flex gap-1">
           <input v-model="queryForm.end_time" class="w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
-          <button class="rounded border px-2 text-xs" @click="fillNowMs('end')">now</button>
+          <button class="rounded border px-2 text-xs" @click="fillNowMs('end')">{{ t('queryNow') }}</button>
         </div>
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Fields
-        <input v-model="queryForm.fields" placeholder="f1,f2" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('fields') }}
+        <input v-model="queryForm.fields" :placeholder="t('queryPhFields')" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Tags (key=value,...)
-        <input v-model="queryForm.tags" placeholder="host=s1,region=cn" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('queryTagsExpr') }}
+        <input v-model="queryForm.tags" :placeholder="t('queryPhTags')" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Order
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('order') }}
         <select v-model="queryForm.order" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
           <option value="">{{ t('queryDefault') }}</option>
-          <option value="asc">time asc</option>
-          <option value="desc">time desc</option>
+          <option value="asc">{{ t('queryOrderAsc') }}</option>
+          <option value="desc">{{ t('queryOrderDesc') }}</option>
         </select>
       </label>
       
       <label class="text-xs mts-muted">{{ t('queryAggFunc') }}
-        <input v-model="queryForm.aggregates" class="mts-input mt-1 font-mono text-xs" placeholder="mean:usage,max:usage" />
+        <input v-model="queryForm.aggregates" class="mts-input mt-1 font-mono text-xs" :placeholder="t('queryPhAggregates')" />
       </label>
       <label class="text-xs mts-muted">{{ t('queryWindow') }}
-        <input v-model="queryForm.window" class="mts-input mt-1 font-mono text-xs" placeholder="1m" />
+        <input v-model="queryForm.window" class="mts-input mt-1 font-mono text-xs" :placeholder="t('queryPhWindow')" />
       </label>
-      <label class="text-xs mts-muted">Group tags
-        <input v-model="queryForm.group_tags" class="mts-input mt-1 font-mono text-xs" placeholder="host,region" />
+      <label class="text-xs mts-muted">{{ t('queryGroupTags') }}
+        <input v-model="queryForm.group_tags" class="mts-input mt-1 font-mono text-xs" :placeholder="t('queryPhGroupTags')" />
       </label>
-<label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Offset / Limit
+<label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('queryOffsetLimit') }}
         <div class="mt-1 flex gap-1">
-          <input v-model="queryForm.offset" placeholder="offset" class="w-1/2 rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
-          <input v-model="queryForm.limit" placeholder="limit" class="w-1/2 rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+          <input v-model="queryForm.offset" :placeholder="t('queryPhOffset')" class="w-1/2 rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+          <input v-model="queryForm.limit" :placeholder="t('queryPhLimit')" class="w-1/2 rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
         </div>
       </label>
     </div>
@@ -599,9 +599,9 @@ const columnRows = computed(() => {
           :class="resultGridClass"
         >
           <span v-if="resultColumns.time">{{ t('queryColTime') }}</span>
-          <span v-if="resultColumns.measurement">Measurement</span>
-          <span v-if="resultColumns.tags">Tags</span>
-          <span v-if="resultColumns.fields">Fields</span>
+          <span v-if="resultColumns.measurement">{{ t('queryColMeasurement') }}</span>
+          <span v-if="resultColumns.tags">{{ t('queryColTags') }}</span>
+          <span v-if="resultColumns.fields">{{ t('queryColFields') }}</span>
         </div>
         <VirtualTable :items="rows" :row-height="40" :height="400">
           <template #default="{ item: row }">
@@ -620,11 +620,11 @@ const columnRows = computed(() => {
     </div>
 
     <div v-if="columnRows.length" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800"><span class="font-semibold">{{ t('queryColumnSummary') }}</span><span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ columnRows.length }} series</span></div>
+      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800"><span class="font-semibold">{{ t('queryColumnSummary') }}</span><span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ formatMessage(t('querySeriesCount'), { count: columnRows.length }) }}</span></div>
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b text-left text-[11px] uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:border-slate-800">
-            <th class="px-4 py-2">Measurement</th><th class="px-4 py-2">Field</th><th class="px-4 py-2">Tags</th><th class="px-4 py-2">Points</th>
+            <th class="px-4 py-2">{{ t('queryColMeasurement') }}</th><th class="px-4 py-2">{{ t('field') }}</th><th class="px-4 py-2">{{ t('queryColTags') }}</th><th class="px-4 py-2">{{ t('queryColPoints') }}</th>
           </tr>
         </thead>
         <tbody>

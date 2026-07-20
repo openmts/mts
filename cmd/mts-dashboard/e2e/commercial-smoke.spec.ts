@@ -36,9 +36,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByRole('main').getByRole('button', { name: '写入', exact: true }).click()
   await expect(page.getByRole('main').getByText(/写入成功/).first()).toBeVisible({ timeout: 20_000 })
 
-  // 4) 查询页可达
+  // 4) 查询页可达 + 表单标签 i18n
   await page.goto('/query')
   await expect(page.getByRole('main').getByText(/查询|Query/i).first()).toBeVisible()
+  await expect(page.getByRole('main').getByText(/数据库|Database/).first()).toBeVisible()
+  await expect(page.getByRole('main').getByText(/开始时间|Start/).first()).toBeVisible()
 
   // 5) 运维 Flush（确认按钮文案为「执行」）
   await page.goto('/operations')

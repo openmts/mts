@@ -252,3 +252,8 @@
 - Config/Storage/ApiSpec 表头与端点摘要 i18n；Overview HTTP TLS 标签本地化
 - 关键管理页 emptyValue 统一；AccessGrants/ApiSpec 筛选 placeholder i18n
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P57 状态（2026-07-20）
+- Query/Write/Downsample 表单标签与 placeholder i18n；查询结果列头本地化
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

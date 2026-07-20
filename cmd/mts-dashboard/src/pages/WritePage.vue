@@ -278,16 +278,16 @@ const modeLabel = computed(() => ({
     </div>
 
     <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-4">
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Database
-        <input v-model="selectedDb" list="write-db-list" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="database" />
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('database') }}
+        <input v-model="selectedDb" list="write-db-list" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhDatabase')" />
         <datalist id="write-db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
       </label>
-      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">RP
-        <input v-model="retentionPolicy" list="write-rp-list" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" placeholder="autogen" />
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('retentionPolicy') }}
+        <input v-model="retentionPolicy" list="write-rp-list" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhAutogen')" />
         <datalist id="write-rp-list"><option v-for="rp in (retentionPolicies.length?retentionPolicies:['autogen'])" :key="rp" :value="rp" /></datalist>
       </label>
       <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 md:mt-6">
-        <input v-model="syncWrite" type="checkbox" /> Sync
+        <input v-model="syncWrite" type="checkbox" /> {{ t('writeSync') }}
       </label>
       <label v-if="writeMode!=='typed'" class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 md:mt-6">
         <input v-model="usePointsTyped" type="checkbox" /> {{ t('writePointsTypedPath') }}
@@ -297,33 +297,33 @@ const modeLabel = computed(() => ({
 
     <div v-if="writeMode==='form'" class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div v-for="(row, idx) in formRows" :key="idx" class="rounded border border-slate-100 p-3 dark:border-slate-800">
-        <div class="mb-2 flex justify-between text-xs font-medium">Row {{ idx+1 }}
+        <div class="mb-2 flex justify-between text-xs font-medium">{{ formatMessage(t('writeRowN'), { n: idx+1 }) }}
           <button class="text-red-500" @click="removeRow(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
         </div>
         <div class="grid gap-2 md:grid-cols-3">
-          <input v-model="row.measurement" placeholder="measurement" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
-          <input v-model="row.timestamp" placeholder="timestamp ms" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
+          <input v-model="row.measurement" :placeholder="t('writePhMeasurement')" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
+          <input v-model="row.timestamp" :placeholder="t('writePhTimestampMs')" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
           <div class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('writeFormTagsFieldsHint') }}</div>
         </div>
         <div class="mt-2 grid gap-2 md:grid-cols-2">
           <div>
-            <p class="mb-1 text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">Tags</p>
+            <p class="mb-1 text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('tags') }}</p>
             <div v-for="(tg, ti) in row.tags" :key="ti" class="mb-1 flex gap-1">
-              <input v-model="tg.key" class="w-1/2 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="key" />
-              <input v-model="tg.value" class="w-1/2 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="value" />
+              <input v-model="tg.key" class="w-1/2 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhKey')" />
+              <input v-model="tg.value" class="w-1/2 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhValue')" />
             </div>
-            <button class="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="row.tags.push({key:'',value:''})">+ tag</button>
+            <button class="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="row.tags.push({key:'',value:''})">{{ t('writeAddTag') }}</button>
           </div>
           <div>
-            <p class="mb-1 text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">Fields</p>
+            <p class="mb-1 text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('fields') }}</p>
             <div v-for="(fd, fi) in row.fields" :key="fi" class="mb-1 flex gap-1">
-              <input v-model="fd.key" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="key" />
-              <input v-model="fd.value" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" placeholder="value" />
+              <input v-model="fd.key" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhKey')" />
+              <input v-model="fd.value" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhValue')" />
               <select v-model="fd.type" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800">
                 <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">{{ ft.label }}</option>
               </select>
             </div>
-            <button class="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="row.fields.push({key:'',value:'',type:'float'})">+ field</button>
+            <button class="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="row.fields.push({key:'',value:'',type:'float'})">{{ t('writeAddField') }}</button>
           </div>
         </div>
       </div>
@@ -333,7 +333,7 @@ const modeLabel = computed(() => ({
     <div v-else-if="writeMode==='typed'" class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('writeTypedHint') }}</p>
       <div class="grid gap-3 md:grid-cols-2">
-        <label class="text-xs">Measurement<input v-model="typedMeasurement" class="mts-input mt-1" /></label>
+        <label class="text-xs">{{ t('measurement') }}<input v-model="typedMeasurement" class="mts-input mt-1" /></label>
         <label class="text-xs">{{ t('writeTimestampsMs') }}
           <textarea v-model="typedTimestamps" rows="3" class="mts-input mt-1 font-mono text-xs" />
         </label>
@@ -343,7 +343,7 @@ const modeLabel = computed(() => ({
           <button type="button" class="text-slate-500" @click="addTypedTagCol">{{ t('writeAddTagCol') }}</button>
         </div>
         <div v-for="(col, i) in typedTagCols" :key="'t'+i" class="mb-2 grid gap-2 rounded border border-slate-100 p-2 dark:border-slate-800 md:grid-cols-3">
-          <input v-model="col.name" class="mts-input text-xs" placeholder="tag name" />
+          <input v-model="col.name" class="mts-input text-xs" :placeholder="t('writePhTagName')" />
           <textarea v-model="col.values" rows="3" class="mts-input font-mono text-xs md:col-span-2" :placeholder="t('writePerLineValue')" />
           <button type="button" class="text-xs text-red-500 md:col-span-3" @click="removeTypedTagCol(i)">{{ t('writeRemoveTagCol') }}</button>
         </div>
@@ -353,7 +353,7 @@ const modeLabel = computed(() => ({
           <button type="button" class="text-slate-500" @click="addTypedFieldCol">{{ t('writeAddFieldCol') }}</button>
         </div>
         <div v-for="(col, i) in typedFieldCols" :key="'f'+i" class="mb-2 grid gap-2 rounded border border-slate-100 p-2 dark:border-slate-800 md:grid-cols-4">
-          <input v-model="col.name" class="mts-input text-xs" placeholder="field name" />
+          <input v-model="col.name" class="mts-input text-xs" :placeholder="t('writePhFieldName')" />
           <select v-model="col.type" class="mts-input text-xs">
             <option value="float">float</option>
             <option value="int">int</option>
