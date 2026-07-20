@@ -92,6 +92,8 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // 7) 存储与 data-snapshot 入口
   await page.goto('/storage')
+  await expect(page.getByTestId('storage-drill-source')).toBeVisible()
+  await expect(page.getByTestId('storage-drill-source-select')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /^(存储|Storage)$/ })).toBeVisible()
   await expect(page.getByTestId('storage-data-snapshot')).toBeVisible()
 

@@ -372,3 +372,9 @@
 - 写入默认 TypedBatch + 本机偏好记忆；审计 limit/total/持久化合并提示；登录 TTL 记忆
 - 商业冒烟覆盖 write-mode 与 audit-limit
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P76 状态（2026-07-20）
+- 存储页 data-snapshot 演练源选择/复制路径；配置导出统一下载工具
+- 商业冒烟覆盖 storage-drill-source
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

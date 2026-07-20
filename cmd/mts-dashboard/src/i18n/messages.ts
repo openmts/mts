@@ -817,6 +817,13 @@ export const messages = {
     readinessDeployDrillRunbooks: 'Runbook',
     readinessDeployDrillTemplates: '材料包样例',
 
+    storageSelectDataSnapshot: '选择 data-snapshot 作为演练源',
+    storageSelectDataSnapshotHint: '仅 data-snapshot-* 可作为旁路恢复源；restore-drill 结果不可再作为源',
+    storageNoDataSnapshot: '暂无 data-snapshot，请先创建',
+    storageCopyPath: '复制路径',
+    storagePathCopied: '路径已复制',
+    storageUseAsDrillSource: '用作演练源',
+
     writeModeRemembered: '写入模式与选项会保存在本机',
     writePreferTypedBadge: '推荐 · 列式高性能',
     auditLimit: '条数上限',
@@ -1675,6 +1682,13 @@ export const messages = {
     readinessDeployDrillEvidence: 'Evidence',
     readinessDeployDrillRunbooks: 'Runbooks',
     readinessDeployDrillTemplates: 'Kit samples',
+
+    storageSelectDataSnapshot: 'Select data-snapshot as drill source',
+    storageSelectDataSnapshotHint: 'Only data-snapshot-* can be restore-drill sources; restore-drill outputs cannot',
+    storageNoDataSnapshot: 'No data-snapshot yet; create one first',
+    storageCopyPath: 'Copy path',
+    storagePathCopied: 'Path copied',
+    storageUseAsDrillSource: 'Use as drill source',
 
     writeModeRemembered: 'Write mode and options are saved on this device',
     writePreferTypedBadge: 'Recommended · columnar high-performance',

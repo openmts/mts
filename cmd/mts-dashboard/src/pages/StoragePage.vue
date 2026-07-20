@@ -15,6 +15,12 @@ import { useI18n } from '@/composables/useI18n'
 import { textForLocale, type LocaleCode } from '@/utils/localizedText'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { formatBytes } from '@/utils/formatBytes'
+import { downloadJSON, stampFilename } from '@/utils/download'
+import { copyText } from '@/utils/clipboard'
+import {
+  defaultSelectedSnapshotPath,
+  selectableDataSnapshots,
+} from '@/utils/storageSnapshots'
 import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
 import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
 import { completedIds, loadReadinessState, setReadinessFlag } from '@/utils/readinessState'
@@ -50,6 +56,7 @@ const snapshotResult = ref<SnapshotResponse | null>(null)
 const dataSnapshotResult = ref<DataSnapshotResponse | null>(null)
 const restoreDrillResult = ref<RestoreDrillResponse | null>(null)
 const dataSnapshots = ref<DataSnapshotInfo[]>([])
+const selectedDataSnapshotPath = ref('')
 const snapshots = ref<SnapshotInfo[]>([])
 const exportData = ref<ExportData | null>(null)
 const actionResult = ref<ActionResult | null>(null)
@@ -95,8 +102,13 @@ async function loadDataSnapshots() {
   try {
     const data = await apiGet<DataSnapshotsResponse>('/api/v1/admin/storage/data-snapshots')
     dataSnapshots.value = data.snapshots ?? []
+    selectedDataSnapshotPath.value = defaultSelectedSnapshotPath(
+      dataSnapshots.value,
+      selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || null,
+    )
   } catch {
     dataSnapshots.value = []
+    selectedDataSnapshotPath.value = ''
   }
 }
 
@@ -167,6 +179,7 @@ async function doDataSnapshot() {
   actionResult.value = null
   try {
     dataSnapshotResult.value = await apiPost<DataSnapshotResponse>('/api/v1/admin/storage/data-snapshot', { flush: true })
+    if (dataSnapshotResult.value.path) selectedDataSnapshotPath.value = dataSnapshotResult.value.path
     drillDone.value = { ...drillDone.value, 'data-snapshot': true }
     const msg = formatMessage(t.value('storageDataSnapshotMsg'), { path: dataSnapshotResult.value.path || 'ok', files: dataSnapshotResult.value.files ?? 0 })
     actionResult.value = makeActionResult('ok', msg)
@@ -183,9 +196,8 @@ async function doRestoreDrill() {
   loading.value = 'restore-drill'
   actionResult.value = null
   try {
-    const body = dataSnapshotResult.value?.path
-      ? { source_path: dataSnapshotResult.value.path }
-      : {}
+    const source = selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || ''
+    const body = source ? { source_path: source } : {}
     restoreDrillResult.value = await apiPost<RestoreDrillResponse>('/api/v1/admin/storage/restore-drill', body)
     const ok = !!restoreDrillResult.value.ok && (restoreDrillResult.value.check_fatals ?? 0) === 0
     drillDone.value = { ...drillDone.value, 'restore-side': ok }
@@ -221,18 +233,24 @@ async function doExport() {
 
 function downloadExport() {
   if (!exportData.value) return
-  const blob = new Blob([JSON.stringify(exportData.value, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `mts-export-${Date.now()}.json`
-  a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  downloadJSON(stampFilename('mts-export', 'json'), exportData.value)
   actionResult.value = makeActionResult('ok', t.value('storageDownloadStarted'))
   success(t.value('storageDownloadToast'))
+}
+
+const drillSourceOptions = computed(() => selectableDataSnapshots(dataSnapshots.value))
+
+function useSnapshotAsDrillSource(path: string) {
+  if (!path) return
+  selectedDataSnapshotPath.value = path
+  success(t.value('storageUseAsDrillSource'))
+}
+
+async function copySnapshotPath(path: string) {
+  if (!path) return
+  const res = await copyText(path)
+  if (res.ok) success(t.value('storagePathCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 function requestDelete(name: string) {
@@ -434,6 +452,22 @@ async function confirmDelete() {
       <p class="mb-3 text-xs mts-muted">
         {{ t('storageDataDirRestoreDesc') }}
       </p>
+      <div class="mb-3 space-y-1" data-testid="storage-drill-source">
+        <label class="block text-xs font-medium text-slate-700 dark:text-slate-200" for="drill-source">{{ t('storageSelectDataSnapshot') }}</label>
+        <select
+          id="drill-source"
+          v-model="selectedDataSnapshotPath"
+          class="mts-input"
+          data-testid="storage-drill-source-select"
+          :disabled="!drillSourceOptions.length"
+        >
+          <option v-if="!drillSourceOptions.length" value="">{{ t('storageNoDataSnapshot') }}</option>
+          <option v-for="s in drillSourceOptions" :key="s.path || s.name" :value="s.path || s.name">
+            {{ s.name }} · {{ formatBytes(s.size_bytes || 0) }}
+          </option>
+        </select>
+        <p class="text-[11px] mts-muted">{{ t('storageSelectDataSnapshotHint') }}</p>
+      </div>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <button data-testid="storage-data-snapshot"
           type="button"
@@ -446,6 +480,7 @@ async function confirmDelete() {
         <button
           type="button"
           class="mts-btn justify-center py-2"
+          data-testid="storage-restore-drill"
           :disabled="loading === 'restore-drill'"
           @click="doRestoreDrill"
         >
@@ -462,14 +497,30 @@ async function confirmDelete() {
               <th class="px-2 py-2">{{ t('storageColName') }}</th>
               <th class="px-2 py-2">{{ t('storageColSize') }}</th>
               <th class="px-2 py-2">{{ t('storageColTime') }}</th>
+              <th class="px-2 py-2"></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="s in dataSnapshots" :key="s.path" class="border-b border-slate-100 dark:border-slate-800">
+            <tr v-for="s in dataSnapshots" :key="s.path" class="border-b border-slate-100 dark:border-slate-800" :data-testid="`storage-data-row-${s.name}`">
               <td class="px-2 py-2 text-xs">{{ s.kind }}</td>
               <td class="px-2 py-2 font-mono text-xs">{{ s.name }}</td>
               <td class="px-2 py-2 text-xs">{{ formatBytes(s.size_bytes || 0) }}</td>
               <td class="px-2 py-2 text-xs mts-muted">{{ s.mod_time }}</td>
+              <td class="px-2 py-2 text-right text-xs">
+                <button
+                  v-if="s.kind !== 'restore-drill'"
+                  type="button"
+                  class="mts-btn mr-1"
+                  :data-testid="`storage-use-source-${s.name}`"
+                  @click="useSnapshotAsDrillSource(s.path || s.name)"
+                >{{ t('storageUseAsDrillSource') }}</button>
+                <button
+                  type="button"
+                  class="mts-btn"
+                  :data-testid="`storage-copy-path-${s.name}`"
+                  @click="copySnapshotPath(s.path || s.name)"
+                >{{ t('storageCopyPath') }}</button>
+              </td>
             </tr>
           </tbody>
         </table>
