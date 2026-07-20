@@ -15,6 +15,8 @@ import {
   type AuditQuickRange,
 } from '@/utils/commandPalette'
 import { auditLimitOptions, buildAuditQueryString } from '@/utils/auditQuery'
+import { auditEventsToCSV } from '@/utils/auditExport'
+import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 import { ScrollText, Download, RefreshCw, Eraser } from 'lucide-vue-next'
 
 interface User { name: string; display_name?: string }
@@ -129,25 +131,12 @@ function clearFilters() {
   void loadAudit()
 }
 
-function downloadBlob(filename: string, blob: Blob) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
-
 function exportJSON() {
   if (!displayedEvents.value.length) {
     warn(t.value('auditExportEmpty'))
     return
   }
-  const blob = new Blob([JSON.stringify(displayedEvents.value, null, 2)], { type: 'application/json' })
-  downloadBlob(`mts-audit-${Date.now()}.json`, blob)
+  downloadJSON(stampFilename('mts-audit', 'json'), displayedEvents.value)
   success(t.value('auditExportJSONOk'))
 }
 
@@ -156,17 +145,7 @@ function exportCSV() {
     warn(t.value('auditExportEmpty'))
     return
   }
-  const header = ['time', 'user_name', 'action', 'database', 'detail']
-  const lines = [header.join(',')]
-  for (const e of displayedEvents.value) {
-    const cols = [e.time, e.user_name, e.action, e.database || '', e.detail || ''].map((v) => {
-      const s = String(v ?? '')
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-    })
-    lines.push(cols.join(','))
-  }
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  downloadBlob(`mts-audit-${Date.now()}.csv`, blob)
+  downloadText(stampFilename('mts-audit', 'csv'), auditEventsToCSV(displayedEvents.value), 'text/csv;charset=utf-8')
   success(t.value('auditExportCSVOk'))
 }
 </script>

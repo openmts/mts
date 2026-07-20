@@ -31,15 +31,4 @@ export function rowsToCSV(rows: QueryResultRow[]): string {
   return lines.join('\n')
 }
 
-export function downloadText(filename: string, text: string, mime = 'text/csv;charset=utf-8') {
-  const blob = new Blob([text], { type: mime })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
+export { downloadText, downloadJSON, stampFilename, triggerDownload } from './download.ts'

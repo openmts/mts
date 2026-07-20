@@ -9,7 +9,8 @@ import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
 import { formatEpoch, nowUnixMsString } from '@/utils/time'
 import { formatFieldsMap } from '@/utils/fieldValue'
-import { rowsToCSV, downloadText } from '@/utils/csv'
+import { rowsToCSV } from '@/utils/csv'
+import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 import { loadQueryPrefs, saveQueryPrefs } from '@/utils/queryPrefs'
 import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
@@ -250,7 +251,7 @@ function confirmClearHistory() {
 
 function exportHistory() {
   const payload = history.exportPayload()
-  downloadText(`mts-query-history-${Date.now()}.json`, JSON.stringify(payload, null, 2), 'application/json')
+  downloadJSON(stampFilename('mts-query-history', 'json'), payload)
   success(formatMessage(t.value('queryHistoryExported'), { count: payload.items.length }))
 }
 
@@ -335,7 +336,7 @@ function exportCSV() {
     notifyError(actionError.value)
     return
   }
-  downloadText(`mts-query-${Date.now()}.csv`, rowsToCSV(rows.value))
+  downloadText(stampFilename('mts-query', 'csv'), rowsToCSV(rows.value), 'text/csv;charset=utf-8')
   success(t.value('queryCsvExported'))
 }
 

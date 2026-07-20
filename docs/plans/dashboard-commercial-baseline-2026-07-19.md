@@ -378,3 +378,8 @@
 - 存储页 data-snapshot 演练源选择/复制路径；配置导出统一下载工具
 - 商业冒烟覆盖 storage-drill-source
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P77 状态（2026-07-20）
+- 审计/查询导出统一 download+stampFilename；审计 CSV 纯函数化
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
