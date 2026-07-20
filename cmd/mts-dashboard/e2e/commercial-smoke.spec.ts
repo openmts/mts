@@ -46,6 +46,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('sidebar-collapse-toggle')).toBeVisible()
   await expect(page.getByTestId('sidebar-section-workspace')).toBeVisible()
   await expect(page.getByTestId('sidebar-section-label-workspace')).toBeVisible()
+  // 组内排序控件（工作区至少 3 项）
+  await expect(page.getByTestId('sidebar-order-up-query')).toBeVisible()
+  await expect(page.getByTestId('sidebar-order-down-query')).toBeVisible()
+  await page.getByTestId('sidebar-order-up-query').click()
+  // 过滤时隐藏排序（避免与搜索结果冲突）
+  await page.getByTestId('sidebar-filter').fill('query')
+  await expect(page.getByTestId('sidebar-order-up-query')).toHaveCount(0)
+  await page.getByTestId('sidebar-filter-clear').click()
+  await expect(page.getByTestId('sidebar-order-up-query')).toBeVisible()
   await expect(page.getByTestId('overview-export-json')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)

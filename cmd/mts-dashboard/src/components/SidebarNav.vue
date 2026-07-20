@@ -6,10 +6,10 @@ import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import {
   LayoutDashboard, Database, Users, Settings, Wrench,
-  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound, PanelLeftClose, PanelLeftOpen,
+  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound, PanelLeftClose, PanelLeftOpen, ChevronUp, ChevronDown, RotateCcw,
 } from 'lucide-vue-next'
+import { navPathTestSuffix, useSidebarNavOrder } from '@/composables/useSidebarNavOrder'
 import { filterNavItems } from '@/utils/navFilter'
-import { groupNavItems } from '@/utils/navSections'
 
 const props = defineProps<{ visible: boolean; collapsed: boolean }>()
 const emit = defineEmits<{ close: []; 'toggle-collapse': [] }>()
@@ -40,13 +40,24 @@ const allNavItems = computed(() => [
 ])
 
 const roleNavItems = computed(() => allNavItems.value.filter((i) => !i.adminOnly || isAdmin.value))
+const canReorder = computed(() => !props.collapsed && !navFilter.value.trim())
+const {
+  orderMap,
+  orderedRoleNavItems,
+  orderedGroups,
+  reorder,
+  resetSectionOrder,
+  resetAllOrder,
+  canMove,
+} = useSidebarNavOrder(roleNavItems, canReorder)
 
 const filteredNavItems = computed(() => {
-  if (props.collapsed) return roleNavItems.value
-  return filterNavItems(roleNavItems.value, navFilter.value)
+  const base = orderedRoleNavItems.value
+  if (props.collapsed) return base
+  return filterNavItems(base, navFilter.value)
 })
 
-const navGroups = computed(() => groupNavItems(filteredNavItems.value))
+const navGroups = computed(() => orderedGroups(filteredNavItems.value))
 
 watch(
   () => props.collapsed,
@@ -61,9 +72,7 @@ function isActive(to: string) {
 }
 
 function navTestId(to: string): string {
-  if (to === '/') return 'sidebar-nav-home'
-  const slug = to.startsWith('/') ? to.slice(1) : to
-  return `sidebar-nav-${slug.split('/').join('-')}`
+  return `sidebar-nav-${navPathTestSuffix(to)}`
 }
 
 function go(to: string) {
@@ -163,6 +172,17 @@ defineExpose({ focusFilter, clearFilter })
             <X class="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
+        <button
+          v-if="Object.keys(orderMap).length"
+          type="button"
+          class="mts-btn mts-focus-ring mt-2 w-full justify-center text-[11px]"
+          data-testid="sidebar-order-reset-all"
+          :title="t('sidebarOrderResetAll')"
+          @click="resetAllOrder"
+        >
+          <RotateCcw class="h-3 w-3" aria-hidden="true" />
+          {{ t('sidebarOrderResetAll') }}
+        </button>
       </div>
       <nav class="flex-1 space-y-0.5 overflow-auto p-2" :aria-label="t('appName')" data-testid="sidebar-nav">
         <p
@@ -178,33 +198,81 @@ defineExpose({ focusFilter, clearFilter })
           class="space-y-0.5"
           :data-testid="`sidebar-section-${group.id}`"
         >
-          <p
+          <div
             v-if="!collapsed"
-            class="px-2 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
-            :data-testid="`sidebar-section-label-${group.id}`"
+            class="flex items-center justify-between gap-1 px-2 pb-0.5 pt-2"
           >
-            {{ t(group.labelKey as MessageKey) }}
-          </p>
-          <button
+            <p
+              class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+              :data-testid="`sidebar-section-label-${group.id}`"
+            >
+              {{ t(group.labelKey as MessageKey) }}
+            </p>
+            <button
+              v-if="canReorder && orderMap[group.id]?.length"
+              type="button"
+              class="mts-focus-ring rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+              :data-testid="`sidebar-order-reset-${group.id}`"
+              :aria-label="t('sidebarOrderResetSection')"
+              :title="t('sidebarOrderResetSection')"
+              @click="resetSectionOrder(group.id)"
+            >
+              <RotateCcw class="h-3 w-3" aria-hidden="true" />
+            </button>
+          </div>
+          <div
             v-for="item in group.items"
             :key="item.to"
-            type="button"
-            class="flex w-full items-center gap-2 rounded-lg py-2 text-left text-sm"
-            :class="[
-              isActive(item.to)
-                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
-              collapsed ? 'justify-center px-2' : 'px-3',
-            ]"
-            :aria-current="isActive(item.to) ? 'page' : undefined"
-            :title="item.label"
-            :aria-label="item.label"
-            :data-testid="navTestId(item.to)"
-            @click="go(item.to)"
+            class="flex items-stretch gap-0.5"
+            :data-testid="`sidebar-nav-row-${navPathTestSuffix(item.to)}`"
           >
-            <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span :class="collapsed ? 'sr-only' : ''">{{ item.label }}</span>
-          </button>
+            <button
+              type="button"
+              class="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-2 text-left text-sm"
+              :class="[
+                isActive(item.to)
+                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                collapsed ? 'justify-center px-2' : 'px-3',
+              ]"
+              :aria-current="isActive(item.to) ? 'page' : undefined"
+              :title="item.label"
+              :aria-label="item.label"
+              :data-testid="navTestId(item.to)"
+              @click="go(item.to)"
+            >
+              <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span :class="collapsed ? 'sr-only' : 'truncate'">{{ item.label }}</span>
+            </button>
+            <div
+              v-if="canReorder && group.items.length > 1"
+              class="flex flex-col justify-center gap-0.5"
+              data-testid="sidebar-order-controls"
+            >
+              <button
+                type="button"
+                class="mts-focus-ring rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 dark:hover:bg-slate-800"
+                :data-testid="`sidebar-order-up-${navPathTestSuffix(item.to)}`"
+                :aria-label="t('sidebarOrderUp')"
+                :title="t('sidebarOrderUp')"
+                :disabled="!canMove(group.id, item.to, 'up', navGroups)"
+                @click="reorder(group.id, item.to, 'up')"
+              >
+                <ChevronUp class="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                class="mts-focus-ring rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 dark:hover:bg-slate-800"
+                :data-testid="`sidebar-order-down-${navPathTestSuffix(item.to)}`"
+                :aria-label="t('sidebarOrderDown')"
+                :title="t('sidebarOrderDown')"
+                :disabled="!canMove(group.id, item.to, 'down', navGroups)"
+                @click="reorder(group.id, item.to, 'down')"
+              >
+                <ChevronDown class="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
         </div>
       </nav>
     </aside>
