@@ -26,3 +26,17 @@ export function withRedirectQuery(
   if (!r) return { ...base }
   return { ...base, redirect: r }
 }
+
+
+/** 构造登录页 location（query），自动 sanitize redirect */
+export function buildLoginLocation(opts: {
+  reason?: string
+  redirectRaw?: unknown
+}): { name: 'Login'; query: Record<string, string> } {
+  const query: Record<string, string> = {}
+  if (opts.reason) query.reason = opts.reason
+  return {
+    name: 'Login',
+    query: withRedirectQuery(query, opts.redirectRaw),
+  }
+}

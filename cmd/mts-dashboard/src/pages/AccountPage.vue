@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseAccountPrefill, accountFormToPrefill } from '@/utils/routePrefill'
+import { buildLoginLocation } from '@/utils/redirect'
 import { useAuth } from '@/composables/useAuth'
 import { getTokenExpiresAt } from '@/api/client'
 import { parseExpiresAt, sessionExpiryView, formatRemaining } from '@/utils/sessionExpiry'
@@ -46,7 +47,7 @@ import { loadNavOrderPrefs, saveNavOrderMap } from '@/utils/navOrder'
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
-const { currentUser, currentRole, changePassword, isAdmin } = useAuth()
+const { currentUser, currentRole, changePassword, isAdmin, logout } = useAuth()
 const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
 const expiresAt = computed(() => parseExpiresAt(getTokenExpiresAt()))
@@ -72,6 +73,12 @@ const expiresAtText = computed(() => {
     return String(expiresAt.value)
   }
 })
+
+async function reLoginPreserve() {
+  await logout()
+  await router.replace(buildLoginLocation({ reason: 'session', redirectRaw: '/account#account-session' }))
+}
+
 function roleLabel(role?: string | null): string {
   if (!role) return t.value('emptyValue')
   if (role === 'admin') return t.value('roleAdmin')
@@ -506,7 +513,7 @@ async function submit() {
       </button>
     </div>
 
-    <div class="mts-card p-4" data-testid="account-session">
+    <div id="account-session" class="mts-card scroll-mt-20 p-4" data-testid="account-session">
       <h2 class="mb-3 text-sm font-semibold">{{ t('accountSessionCard') }}</h2>
       <dl class="space-y-2 text-sm">
         <div class="flex justify-between gap-3">
@@ -522,6 +529,17 @@ async function submit() {
           <dd class="font-mono" data-testid="account-session-level">{{ sessionView.urgency }}</dd>
         </div>
       </dl>
+      <p class="mt-3 text-xs mts-muted" data-testid="account-session-hint">{{ t('accountSessionRenewHint') }}</p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="mts-btn-primary"
+          data-testid="account-session-relogin"
+          @click="reLoginPreserve"
+        >
+          {{ t('accountSessionRelogin') }}
+        </button>
+      </div>
     </div>
 
     <div class="mts-card p-4">

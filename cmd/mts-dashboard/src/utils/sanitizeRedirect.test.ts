@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { formatRedirectLabel, sanitizeRedirect, withRedirectQuery } from './redirect.ts'
+import { buildLoginLocation, formatRedirectLabel, sanitizeRedirect, withRedirectQuery } from './redirect.ts'
 
 test('sanitizeRedirect accepts internal paths', () => {
   assert.equal(sanitizeRedirect('/query'), '/query')
@@ -32,5 +32,16 @@ test('withRedirectQuery merges only safe redirect', () => {
   })
   assert.deepEqual(withRedirectQuery({ reason: 'auth' }, 'https://evil'), {
     reason: 'auth',
+  })
+})
+
+test('buildLoginLocation includes reason and safe redirect', () => {
+  assert.deepEqual(buildLoginLocation({ reason: 'session', redirectRaw: '/query?x=1' }), {
+    name: 'Login',
+    query: { reason: 'session', redirect: '/query?x=1' },
+  })
+  assert.deepEqual(buildLoginLocation({ reason: 'auth', redirectRaw: 'https://evil' }), {
+    name: 'Login',
+    query: { reason: 'auth' },
   })
 })

@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { validateNewPassword } from '@/utils/passwordPolicy'
-import { formatRedirectLabel, sanitizeRedirect, withRedirectQuery } from '@/utils/redirect'
+import { buildLoginLocation, formatRedirectLabel, sanitizeRedirect, withRedirectQuery } from '@/utils/redirect'
 import { KeyRound } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
 
@@ -51,7 +51,7 @@ async function submit() {
 
 async function doLogout() {
   await logout()
-  await router.replace({ name: 'Login' })
+  await router.replace(buildLoginLocation({ redirectRaw: route.query.redirect }))
 }
 </script>
 

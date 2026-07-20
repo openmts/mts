@@ -7,6 +7,7 @@ import { useNotify } from '@/composables/useNotify'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Menu, Moon, Sun, Languages, Search, Keyboard, Bell } from 'lucide-vue-next'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
+import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
 import {
   emptySessionGuardState,
@@ -95,10 +96,14 @@ async function handleExpire() {
   if (expireInFlight) return
   expireInFlight = true
   try {
+    const redirectRaw =
+      router.currentRoute.value.name === 'Login'
+        ? router.currentRoute.value.query.redirect
+        : router.currentRoute.value.fullPath
     notifyError(t.value('sessionExpired'))
     await logout()
     if (router.currentRoute.value.name !== 'Login') {
-      await router.replace({ name: 'Login', query: { reason: 'session' } })
+      await router.replace(buildLoginLocation({ reason: 'session', redirectRaw }))
     }
   } finally {
     expireInFlight = false
@@ -130,8 +135,16 @@ function tickSession() {
 }
 
 async function onLogout() {
+  const redirectRaw =
+    router.currentRoute.value.name === 'Login'
+      ? undefined
+      : router.currentRoute.value.fullPath
   await logout()
-  await router.replace({ name: 'Login' })
+  await router.replace(buildLoginLocation({ redirectRaw }))
+}
+
+function goAccountSession() {
+  void router.push({ path: '/account', hash: '#account-session' })
 }
 
 onMounted(() => {
@@ -191,15 +204,16 @@ onBeforeUnmount(() => {
         role="status"
         aria-live="polite"
       >{{ connectivityBadgeLabel }}</span>
-      <span
+      <button
         v-if="showSessionBadge && sessionView.label"
+        type="button"
         class="hidden rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline"
         :class="sessionBadgeClass"
-        :title="t('sessionExpiry')"
+        :title="t('sessionBadgeHint')"
+        :aria-label="`${t('sessionExpiry')}: ${sessionView.label}`"
         data-testid="session-badge"
-        role="status"
-        aria-live="polite"
-      >{{ t('sessionLeft') }} {{ sessionView.label }}</span>
+        @click="goAccountSession"
+      >{{ t('sessionLeft') }} {{ sessionView.label }}</button>
       <button
         type="button"
         class="mts-focus-ring rounded p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"

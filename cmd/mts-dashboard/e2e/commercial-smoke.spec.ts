@@ -113,13 +113,22 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('topbar-account')).toBeVisible()
   await expect(page.getByTestId('topbar-connectivity')).toBeVisible()
 
-  // account session card
+    // account session card + P191/P192 续期引导
   await page.goto('/account')
   await expect(page.getByTestId('account-page')).toBeVisible()
   await expect(page.getByTestId('account-share-link')).toBeVisible()
   await expect(page.getByTestId('account-session')).toBeVisible()
   await expect(page.getByTestId('account-session-remaining')).toBeVisible()
+  await expect(page.getByTestId('account-session-relogin')).toBeVisible()
+  await expect(page.getByTestId('account-session-hint')).toBeVisible()
+  // 顶栏会话徽章跳转账户会话区
   await page.goto('/')
+  await expect(page.getByTestId('session-badge')).toBeVisible()
+  await page.getByTestId('session-badge').click()
+  await expect(page).toHaveURL(/\/account/)
+  await expect(page.getByTestId('account-session')).toBeVisible()
+  await page.goto('/')
+
   await expect(page.getByTestId('skip-to-main')).toHaveCount(1)
   await expect(page).toHaveTitle(/仪表盘|概览|Overview/)
 
@@ -1092,6 +1101,19 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('not-found-go-query')).toBeVisible()
   await page.getByTestId('not-found-go-overview').click()
   await expect(page.getByTestId('overview-page')).toBeVisible()
+
+  // P191: 从业务页登出应携带 redirect
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible()
+  await page.getByTestId('topbar-logout').click()
+  await expect(page).toHaveURL(/login/)
+  await expect(page.getByTestId('login-redirect-hint')).toBeVisible()
+  await expect(page.getByTestId('login-redirect-path')).toContainText('/write')
+  await page.getByTestId('login-username').fill('admin')
+  await page.getByTestId('login-password').fill(NEW_PASSWORD)
+  await page.getByTestId('login-submit').click()
+  await expect(page).toHaveURL(/\/write(?:\?|$|#)/)
+  await expect(page).not.toHaveURL(/login/)
 
   // P189: 命令面板「复制当前筛选深链」
   await page.goto('/audit?range=1h')
