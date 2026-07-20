@@ -707,3 +707,8 @@
 - 商业冒烟覆盖 query-*-virtual-list（有结果时）
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P134 状态（2026-07-20）
+- Query 历史全量 VirtualTable + 筛选；上限 200
+- 商业冒烟覆盖 query-history-virtual-list（有历史时）
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

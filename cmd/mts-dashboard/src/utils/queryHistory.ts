@@ -86,3 +86,30 @@ export function normalizeHistoryItems(raw: unknown): QueryHistoryRecord[] {
   }
   return out
 }
+
+/** 按名称 / 模式 / 库表筛选历史（大小写不敏感） */
+export function filterQueryHistory<
+  T extends {
+    mode: string
+    name?: string
+    form: { database?: string; measurement?: string; fields?: string; tags?: string }
+  },
+>(items: T[], query: string): T[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return items
+  return items.filter((item) => {
+    const title = historyItemTitle(item).toLowerCase()
+    const hay = [
+      title,
+      item.mode,
+      item.name ?? '',
+      item.form.database ?? '',
+      item.form.measurement ?? '',
+      item.form.fields ?? '',
+      item.form.tags ?? '',
+    ]
+      .join(' ')
+      .toLowerCase()
+    return hay.includes(q)
+  })
+}

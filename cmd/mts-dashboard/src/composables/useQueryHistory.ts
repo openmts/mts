@@ -16,7 +16,9 @@ import {
 } from '@/utils/queryHistoryIO'
 
 const KEY = 'mts_query_history'
-const MAX = 30
+/** 查询历史上限（与通知/运维日志对齐） */
+export const QUERY_HISTORY_MAX = 200
+const MAX = QUERY_HISTORY_MAX
 
 export type { QueryHistoryForm }
 export interface QueryHistoryItem extends QueryHistoryRecord {

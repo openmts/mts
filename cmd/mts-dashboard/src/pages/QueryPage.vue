@@ -10,6 +10,7 @@ import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
 import { useQueryWorkbench } from '@/composables/useQueryWorkbench'
 import { useQueryHistory } from '@/composables/useQueryHistory'
+import { filterQueryHistory } from '@/utils/queryHistory'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
@@ -403,7 +404,11 @@ function exportCSV() {
   success(t.value('queryCsvExported'))
 }
 
-const historyPreview = computed(() => history.items.value.slice(0, 20))
+const HISTORY_ROW_HEIGHT = 56
+const HISTORY_LIST_HEIGHT = 320
+const historyFilter = ref('')
+const historyTotal = computed(() => history.items.value.length)
+const historyItems = computed(() => filterQueryHistory(history.items.value, historyFilter.value))
 const columnRows = computed(() => {
   // columns: [{field_name, timestamps, values, tags, measurement}]
   return (columnSeries.value as Array<Record<string, unknown>>).map((c) => ({
@@ -442,10 +447,16 @@ const columnRows = computed(() => {
     <p v-if="authzHint" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{{ authzHint }}</p>
     <p v-if="metaHint || metaSource === 'manual'" class="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">{{ metaHint || t('metaDbManualHint') }}（{{ t('queryMetaSource') }}: {{ metaSource }}）</p>
 
-    <div id="query-history" v-if="showHistory" class="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+    <div
+      id="query-history"
+      v-if="showHistory"
+      class="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
+      data-testid="query-history-panel"
+    >
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
         <span>{{ t('queryHistory') }}</span>
         <div class="flex flex-wrap items-center gap-2">
+          <span class="text-[11px] font-normal text-slate-400" data-testid="query-history-count">{{ historyItems.length }}</span>
           <button
             type="button"
             class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
@@ -455,12 +466,14 @@ const columnRows = computed(() => {
           <button
             type="button"
             class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            data-testid="query-import-history"
             @click="triggerImportHistory"
           ><Upload class="h-3 w-3" />{{ t('queryImport') }}</button>
           <button
             type="button"
             class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-            :disabled="!historyPreview.length"
+            data-testid="query-clear-history"
+            :disabled="!historyTotal"
             @click="clearHistoryOpen = true"
           >{{ t('clearHistory') }}</button>
           <input
@@ -473,52 +486,80 @@ const columnRows = computed(() => {
         </div>
       </div>
       <p class="mb-2 text-[11px] text-slate-400 dark:text-slate-500">{{ t('queryShortcutsHint') }}</p>
-      <ul class="max-h-64 space-y-1 overflow-auto sm:max-h-80">
-        <li
-          v-for="h in historyPreview"
-          :key="h.id"
-          class="rounded-lg border border-transparent px-2 py-1.5 hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+      <label class="mb-2 block text-xs text-slate-500 dark:text-slate-400">
+        {{ t('queryHistoryFilter') }}
+        <input
+          v-model="historyFilter"
+          data-testid="query-history-filter"
+          class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800"
+          :placeholder="t('queryHistoryFilterPh')"
+        />
+      </label>
+      <div v-if="historyItems.length" class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
+        <VirtualTable
+          :items="historyItems"
+          :row-height="HISTORY_ROW_HEIGHT"
+          :height="Math.min(HISTORY_LIST_HEIGHT, Math.max(168, historyItems.length * HISTORY_ROW_HEIGHT))"
+          data-testid="query-history-virtual-list"
         >
-          <div v-if="renamingId === h.id" class="flex flex-wrap items-center gap-1">
-            <input
-              v-model="renameDraft"
-              class="min-w-0 flex-1 rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800"
-              @keyup.enter="commitRename"
-              @keyup.escape="cancelRename"
-            />
-            <button type="button" class="rounded border px-2 py-1 text-xs dark:border-slate-600" @click="commitRename">{{ t('querySave') }}</button>
-            <button type="button" class="rounded border px-2 py-1 text-xs dark:border-slate-600" @click="cancelRename">{{ t('cancel') }}</button>
-          </div>
-          <div v-else class="flex items-start gap-2">
-            <button
-              type="button"
-              class="mt-0.5 shrink-0 rounded p-0.5"
-              :class="h.pinned ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400 dark:text-slate-600'"
-              :title="h.pinned ? t('queryUnpin') : t('queryPin')"
-              @click.stop="history.togglePin(h.id)"
+          <template #default="{ item: h, index }">
+            <div
+              class="flex h-full items-stretch border-b border-transparent px-2 py-1 hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+              :data-testid="`query-history-row-${index}`"
             >
-              <Star class="h-3.5 w-3.5" :fill="h.pinned ? 'currentColor' : 'none'" />
-            </button>
-            <button type="button" class="min-w-0 flex-1 text-left" @click="applyHistory(h.id)">
-              <div class="truncate text-xs font-medium text-slate-800 dark:text-slate-100">{{ history.titleOf(h) }}</div>
-              <div class="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-slate-400 dark:text-slate-500">
-                <span>{{ h.mode }}</span>
-                <span class="truncate">{{ h.form.database }}/{{ h.form.measurement || '*' }}</span>
-                <span>{{ new Date(h.at).toLocaleString() }}</span>
+              <div v-if="renamingId === h.id" class="flex w-full flex-wrap items-center gap-1 py-1">
+                <input
+                  v-model="renameDraft"
+                  class="min-w-0 flex-1 rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800"
+                  data-testid="query-history-rename-input"
+                  @keyup.enter="commitRename"
+                  @keyup.escape="cancelRename"
+                />
+                <button type="button" class="rounded border px-2 py-1 text-xs dark:border-slate-600" @click="commitRename">{{ t('querySave') }}</button>
+                <button type="button" class="rounded border px-2 py-1 text-xs dark:border-slate-600" @click="cancelRename">{{ t('cancel') }}</button>
               </div>
-            </button>
-            <div class="flex shrink-0 gap-0.5">
-              <button type="button" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700" :title="t('queryRename')" @click.stop="startRename(h.id)">
-                <Pencil class="h-3.5 w-3.5" />
-              </button>
-              <button type="button" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-700" :title="t('delete')" @click.stop="history.remove(h.id)">
-                <X class="h-3.5 w-3.5" />
-              </button>
+              <div v-else class="flex w-full items-start gap-2 py-1">
+                <button
+                  type="button"
+                  class="mt-0.5 shrink-0 rounded p-0.5"
+                  :class="h.pinned ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400 dark:text-slate-600'"
+                  :title="h.pinned ? t('queryUnpin') : t('queryPin')"
+                  :data-testid="`query-history-pin-${index}`"
+                  @click.stop="history.togglePin(h.id)"
+                >
+                  <Star class="h-3.5 w-3.5" :fill="h.pinned ? 'currentColor' : 'none'" />
+                </button>
+                <button type="button" class="min-w-0 flex-1 text-left" :data-testid="`query-history-apply-${index}`" @click="applyHistory(h.id)">
+                  <div class="truncate text-xs font-medium text-slate-800 dark:text-slate-100">{{ history.titleOf(h) }}</div>
+                  <div class="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-slate-400 dark:text-slate-500">
+                    <span>{{ h.mode }}</span>
+                    <span class="truncate">{{ h.form.database }}/{{ h.form.measurement || '*' }}</span>
+                    <span>{{ new Date(h.at).toLocaleString() }}</span>
+                  </div>
+                </button>
+                <div class="flex shrink-0 gap-0.5">
+                  <button type="button" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700" :title="t('queryRename')" :data-testid="`query-history-rename-${index}`" @click.stop="startRename(h.id)">
+                    <Pencil class="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-700" :title="t('delete')" :data-testid="`query-history-remove-${index}`" @click.stop="history.remove(h.id)">
+                    <X class="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </li>
-      </ul>
-      <EmptyState v-if="!historyPreview.length" compact :title="t('queryHistoryEmpty')" :description="t('queryHistoryEmptyDesc')" />
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="query-history-virtual-hint">
+          {{ t('queryHistoryVirtualHint') }}
+        </p>
+      </div>
+      <EmptyState
+        v-else
+        compact
+        data-testid="query-history-empty"
+        :title="historyFilter.trim() ? t('queryHistoryFilterEmpty') : t('queryHistoryEmpty')"
+        :description="historyFilter.trim() ? t('queryHistoryFilterEmptyDesc') : t('queryHistoryEmptyDesc')"
+      />
     </div>
 
     <div id="query-form" class="scroll-mt-20 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">

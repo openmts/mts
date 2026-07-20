@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  filterQueryHistory,
   historyItemTitle,
   mergeHistoryCap,
   normalizeHistoryItems,
@@ -63,4 +64,16 @@ test('normalizeHistoryItems drops invalid entries', () => {
   assert.equal(got.length, 1)
   assert.equal(got[0].name, 'n')
   assert.equal(got[0].pinned, true)
+})
+
+test('filterQueryHistory matches name mode database measurement', () => {
+  const items = [
+    { id: '1', mode: 'rows', name: '巡检', form: { database: 'prod', measurement: 'cpu' } },
+    { id: '2', mode: 'columns', form: { database: 'dev', measurement: 'mem' } },
+  ]
+  assert.equal(filterQueryHistory(items, '巡检').length, 1)
+  assert.equal(filterQueryHistory(items, 'columns').map((x) => x.id)[0], '2')
+  assert.equal(filterQueryHistory(items, 'prod').length, 1)
+  assert.equal(filterQueryHistory(items, '  ').length, 2)
+  assert.equal(filterQueryHistory(items, 'nope').length, 0)
 })

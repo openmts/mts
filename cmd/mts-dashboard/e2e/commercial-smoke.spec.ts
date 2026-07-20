@@ -127,6 +127,18 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('query-results-virtual-list')).toBeVisible()
     await expect(page.getByTestId('query-results-virtual-hint')).toBeVisible()
   }
+  // P134: 查询历史面板虚拟列表（有历史时）
+  await page.goto('/query#query-history')
+  await expect(page.getByTestId('query-page')).toBeVisible()
+  // 打开历史（hash 会自动 showHistory）
+  if (await page.getByTestId('query-history-panel').count()) {
+    await expect(page.getByTestId('query-history-panel')).toBeVisible()
+    await expect(page.getByTestId('query-history-filter')).toBeVisible()
+    if (await page.getByTestId('query-history-virtual-list').count()) {
+      await expect(page.getByTestId('query-history-virtual-list')).toBeVisible()
+      await expect(page.getByTestId('query-history-virtual-hint')).toBeVisible()
+    }
+  }
   // P120: 只读时间预填深链
   await page.goto('/query?range=1h#query-form')
   await expect(page.getByTestId('query-page')).toBeVisible()
