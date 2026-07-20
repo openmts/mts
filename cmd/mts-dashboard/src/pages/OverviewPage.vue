@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
+import { overviewFormToPrefill, parseOverviewPrefill } from '@/utils/routePrefill'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
@@ -55,6 +57,8 @@ interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: Doc
 
 const { isAdmin, getTokenExpiresAt } = useAuth()
 const router = useRouter()
+const route = useRoute()
+useHashScroll()
 const { t, locale } = useI18n()
 const { success, error: notifyError } = useNotify()
 const {
@@ -314,6 +318,31 @@ function toggleAutoRefresh() {
   }
 }
 
+
+function currentOverviewSection(): string {
+  const h = (route.hash || (typeof window !== 'undefined' ? window.location.hash : '') || '').replace(/^#/, '')
+  const known = new Set([
+    'overview-summary',
+    'overview-readiness',
+    'overview-health',
+    'overview-health-checks',
+    'overview-doctor',
+    'overview-workspace',
+    'overview-maint',
+  ])
+  if (known.has(h)) return h
+  const pre = parseOverviewPrefill(route.query as Record<string, unknown>, route.hash)
+  return pre.section || 'overview-summary'
+}
+
+async function copyOverviewShareLink() {
+  const path = overviewFormToPrefill({ section: currentOverviewSection() })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('overviewShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 function goReadiness() {
   void router.push('/ops/readiness')
 }
@@ -466,7 +495,7 @@ async function copyOverview() {
       :dismissible="false"
     />
 
-    <div class="mts-card p-4" data-testid="overview-summary">
+    <div id="overview-summary" class="mts-card scroll-mt-20 p-4" data-testid="overview-summary">
       <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
         <div class="flex items-center gap-2">
           <Clock3 class="h-4 w-4 mts-muted" />
@@ -497,6 +526,9 @@ async function copyOverview() {
         <button type="button" class="mts-btn" data-testid="overview-copy-snapshot" @click="copyOverview">
           <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopySnapshot') }}
         </button>
+        <button type="button" class="mts-btn" data-testid="overview-share-link" @click="copyOverviewShareLink">
+          {{ t('overviewShareLink') }}
+        </button>
         <button type="button" class="mts-btn ml-auto" data-testid="overview-about" @click="router.push('/about')">
           <Info class="h-3.5 w-3.5" />
           {{ t('about') }}
@@ -506,8 +538,9 @@ async function copyOverview() {
 
     <div
       v-if="showAdminPanels"
-      class="mts-card flex flex-wrap items-center justify-between gap-3 p-4"
+      id="overview-readiness"
       data-testid="overview-readiness-score"
+      class="mts-card flex flex-wrap items-center justify-between gap-3 scroll-mt-20 p-4"
     >
       <div class="min-w-0">
         <p class="text-xs mts-muted">{{ t('readinessScore') }}</p>
@@ -634,7 +667,7 @@ async function copyOverview() {
       </div>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="overview-health-grid">
+    <div id="overview-health" class="grid scroll-mt-20 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="overview-health-grid">
       <div class="mts-card p-5" data-testid="overview-connectivity">
         <div class="mb-2 flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 mts-muted">
@@ -685,7 +718,7 @@ async function copyOverview() {
       </div>
     </div>
 
-    <div v-if="healthChecks.length" class="mts-panel" data-testid="overview-health-checks">
+    <div v-if="healthChecks.length" id="overview-health-checks" class="mts-panel scroll-mt-20" data-testid="overview-health-checks">
       <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('healthChecks') }}</h2>
       <div class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
         <div class="grid grid-cols-[minmax(7rem,1fr)_minmax(5rem,0.6fr)_minmax(8rem,1.2fr)] border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
@@ -712,7 +745,7 @@ async function copyOverview() {
     </div>
 
 
-        <div v-if="showAdminPanels && doctorChecks.length" class="mts-panel" data-testid="overview-doctor-checks">
+        <div v-if="showAdminPanels && doctorChecks.length" id="overview-doctor" class="mts-panel scroll-mt-20" data-testid="overview-doctor-checks">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2">
           <ShieldCheck class="h-4 w-4 text-slate-500" />
@@ -753,8 +786,9 @@ async function copyOverview() {
 
     <div
       v-if="!showAdminPanels"
-      class="mts-card space-y-3 bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900/60 dark:text-slate-300"
+      id="overview-workspace"
       data-testid="overview-workspace-panel"
+      class="mts-card space-y-3 scroll-mt-20 bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900/60 dark:text-slate-300"
     >
       <p data-testid="overview-nonadmin-hint">{{ t('nonAdminOverview') }}</p>
       <p class="text-xs mts-muted">{{ t('nonAdminWorkspaceHint') }}</p>
@@ -788,7 +822,7 @@ async function copyOverview() {
           <span class="text-xs mts-muted">({{ maintenanceErrors.length }})</span>
         </div>
         <p v-if="!maintenanceErrors.length" class="text-sm mts-muted" data-testid="overview-maint-empty">{{ t('noMaintenanceErrors') }}</p>
-        <div v-else class="overflow-hidden rounded-lg border border-red-100 dark:border-red-900/40" data-testid="overview-maint-errors">
+        <div v-else class="overflow-hidden rounded-lg border border-red-100 dark:border-red-900/40" id="overview-maint" data-testid="overview-maint-errors">
           <VirtualTable
             :items="maintenanceErrors"
             :row-height="MAINT_ROW_HEIGHT"

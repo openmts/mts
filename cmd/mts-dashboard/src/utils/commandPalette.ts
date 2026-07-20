@@ -122,6 +122,18 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
 
 export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
   { id: 'overview', path: '/', labelKey: 'overview', keywords: ['home', 'dashboard', '概览', '健康'] },
+  {
+    id: 'overview-health',
+    path: '/#overview-health-checks',
+    labelKey: 'cmdOverviewHealth',
+    keywords: ['health checks', '健康检查', 'overview health'],
+  },
+  {
+    id: 'overview-workspace',
+    path: '/#overview-workspace',
+    labelKey: 'cmdOverviewWorkspace',
+    keywords: ['workspace', '工作区', 'non admin overview'],
+  },
   { id: 'databases', path: '/databases', labelKey: 'databases', keywords: ['db', '数据库', 'rp', 'schema', 'measurement'] },
   {
     id: 'databases-filter',
@@ -424,6 +436,18 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     adminOnly: true,
   },
   { id: 'about', path: '/about', labelKey: 'about', keywords: ['version', '关于', 'build'] },
+  {
+    id: 'about-client',
+    path: '/about#about-client',
+    labelKey: 'cmdAboutClient',
+    keywords: ['client build', '客户端版本', 'about client'],
+  },
+  {
+    id: 'about-server',
+    path: '/about#about-server',
+    labelKey: 'cmdAboutServer',
+    keywords: ['server version', '服务端版本', 'about server'],
+  },
   { id: 'account', path: '/account', labelKey: 'account', keywords: ['password', '账户', 'profile'] },
   {
     id: 'account-landing',

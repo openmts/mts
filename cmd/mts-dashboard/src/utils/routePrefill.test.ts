@@ -33,6 +33,10 @@ import {
   apiSpecFormToPrefill,
   parseAccountPrefill,
   accountFormToPrefill,
+  parseOverviewPrefill,
+  overviewFormToPrefill,
+  parseAboutPrefill,
+  aboutFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -251,4 +255,11 @@ test('apiSpec and account prefill helpers', () => {
     accountFormToPrefill({ landing_q: 'write' }),
     '/account?landing_q=write#account-landing',
   )
+})
+
+test('overview and about prefill helpers', () => {
+  assert.deepEqual(parseOverviewPrefill({}, '#overview-health-checks'), { section: 'overview-health-checks' })
+  assert.equal(overviewFormToPrefill({ section: 'overview-workspace' }), '/#overview-workspace')
+  assert.deepEqual(parseAboutPrefill({}, '#about-server'), { section: 'about-server' })
+  assert.equal(aboutFormToPrefill({ section: 'about-client' }), '/about#about-client')
 })

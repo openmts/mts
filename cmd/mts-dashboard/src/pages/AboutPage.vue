@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
+import { aboutFormToPrefill, parseAboutPrefill } from '@/utils/routePrefill'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
@@ -18,6 +21,8 @@ interface VersionResponse {
   built_at: string
 }
 
+const route = useRoute()
+useHashScroll()
 const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
@@ -67,6 +72,22 @@ async function copyAbout() {
   else notifyError(res.error || t.value('failed'))
 }
 
+
+function currentAboutSection(): string {
+  const h = (route.hash || (typeof window !== 'undefined' ? window.location.hash : '') || '').replace(/^#/, '')
+  if (h === 'about-client' || h === 'about-server') return h
+  const pre = parseAboutPrefill(route.query as Record<string, unknown>, route.hash)
+  return pre.section || 'about-client'
+}
+
+async function copyAboutShareLink() {
+  const path = aboutFormToPrefill({ section: currentAboutSection() })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('aboutShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 onMounted(() => {
   void loadVersion()
 })
@@ -89,13 +110,16 @@ onMounted(() => {
         <button type="button" class="mts-btn" data-testid="about-copy" @click="copyAbout">
           <Copy class="h-3.5 w-3.5" /> {{ t('aboutCopy') }}
         </button>
+        <button type="button" class="mts-btn" data-testid="about-share-link" @click="copyAboutShareLink">
+          {{ t('aboutShareLink') }}
+        </button>
       </div>
     </div>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
 
     <div class="grid gap-4 md:grid-cols-2">
-      <div class="mts-card p-4" data-testid="about-client">
+      <div id="about-client" class="mts-card scroll-mt-20 p-4" data-testid="about-client">
         <h2 class="mb-3 text-sm font-semibold">{{ t('aboutClient') }}</h2>
         <dl class="space-y-2 text-sm">
           <div class="flex justify-between gap-3">
@@ -125,7 +149,7 @@ onMounted(() => {
         </dl>
       </div>
 
-      <div class="mts-card p-4" data-testid="about-server">
+      <div id="about-server" class="mts-card scroll-mt-20 p-4" data-testid="about-server">
         <div class="mb-3 flex items-center justify-between gap-2">
           <h2 class="text-sm font-semibold">{{ t('aboutServer') }}</h2>
           <button

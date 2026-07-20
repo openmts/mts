@@ -85,6 +85,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('sidebar-drag-query')).toBeVisible()
   await expect(page.getByTestId('overview-export-json')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
+  await expect(page.getByTestId('overview-share-link')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
   await expect(page.getByTestId('server-unreachable-banner')).toHaveCount(0)
   await expect(page.getByTestId('overview-connectivity')).toBeVisible()
@@ -94,6 +95,8 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // account session card
   await page.goto('/account')
+  await expect(page.getByTestId('account-page')).toBeVisible()
+  await expect(page.getByTestId('account-share-link')).toBeVisible()
   await expect(page.getByTestId('account-session')).toBeVisible()
   await expect(page.getByTestId('account-session-remaining')).toBeVisible()
   await page.goto('/')
@@ -665,6 +668,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect.poll(async () => page.evaluate(() => document.getElementById('main-content')?.scrollTop ?? 0)).toBeGreaterThan(100)
   await page.goto('/about')
   await expect(page.getByTestId('about-page')).toBeVisible()
+  await expect(page.getByTestId('about-share-link')).toBeVisible()
   await expect.poll(async () => page.evaluate(() => document.getElementById('main-content')?.scrollTop ?? -1)).toBe(0)
 
   // 最近访问清空：多页后 clear，仅剩当前页（>1 才显示清空）
@@ -1040,6 +1044,25 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('metrics-page')).toBeVisible()
   await expect(page.getByTestId('metrics-filter')).toHaveValue('go_')
   await expect(page.getByTestId('metrics-share-link')).toBeVisible()
+
+  // P183–P184: ApiSpec/Account 筛选深链
+  await page.goto('/api-spec?q=flush#api-spec-filters')
+  await expect(page.getByTestId('api-spec-page')).toBeVisible()
+  await expect(page.getByTestId('api-spec-search')).toHaveValue('flush')
+  await expect(page.getByTestId('api-spec-share-link')).toBeVisible()
+  await page.goto('/account?landing_q=query#account-landing')
+  await expect(page.getByTestId('account-page')).toBeVisible()
+  await expect(page.getByTestId('account-landing-filter')).toHaveValue('query')
+  await expect(page.getByTestId('account-share-link')).toBeVisible()
+
+  // P185–P186: Overview/About 区块分享
+  await page.goto('/#overview-health-checks')
+  await expect(page.getByTestId('overview-page')).toBeVisible()
+  await expect(page.getByTestId('overview-share-link')).toBeVisible()
+  await page.goto('/about#about-server')
+  await expect(page.getByTestId('about-page')).toBeVisible()
+  await expect(page.getByTestId('about-share-link')).toBeVisible()
+  await expect(page.getByTestId('about-server')).toBeVisible()
 
   // 17) 非 admin 端到端：创建 reader、授权 default 读、只读库浏览
   await page.goto('/users')

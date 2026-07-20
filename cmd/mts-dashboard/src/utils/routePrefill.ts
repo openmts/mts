@@ -746,3 +746,78 @@ export function accountFormToPrefill(form: {
     hash: opts?.hash,
   })
 }
+
+
+export type OverviewPrefill = {
+  section?: string
+}
+
+const OVERVIEW_SECTIONS = new Set([
+  'overview-summary',
+  'overview-readiness',
+  'overview-health',
+  'overview-health-checks',
+  'overview-doctor',
+  'overview-workspace',
+  'overview-maint',
+])
+
+/** 概览页区块深链 */
+export function parseOverviewPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+  hash?: string,
+): OverviewPrefill {
+  const out: OverviewPrefill = {}
+  const fromQuery = firstQueryValue(query.section)
+  if (fromQuery && OVERVIEW_SECTIONS.has(fromQuery)) out.section = fromQuery
+  const h = (hash || '').replace(/^#/, '')
+  if (!out.section && h && OVERVIEW_SECTIONS.has(h)) out.section = h
+  return out
+}
+
+export function buildOverviewPrefillPath(opts: OverviewPrefill & { hash?: string }): string {
+  const section = opts.section && OVERVIEW_SECTIONS.has(opts.section) ? opts.section : undefined
+  const hashRaw = opts.hash || (section ? `#${section}` : '#overview-summary')
+  const hash = hashRaw.startsWith('#') ? hashRaw : `#${hashRaw}`
+  return `/${hash}`
+}
+
+export function overviewFormToPrefill(form: { section?: string }, opts?: { hash?: string }): string {
+  return buildOverviewPrefillPath({
+    section: form.section?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
+
+export type AboutPrefill = {
+  section?: string
+}
+
+const ABOUT_SECTIONS = new Set(['about-client', 'about-server'])
+
+/** 关于页区块深链 */
+export function parseAboutPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+  hash?: string,
+): AboutPrefill {
+  const out: AboutPrefill = {}
+  const fromQuery = firstQueryValue(query.section)
+  if (fromQuery && ABOUT_SECTIONS.has(fromQuery)) out.section = fromQuery
+  const h = (hash || '').replace(/^#/, '')
+  if (!out.section && h && ABOUT_SECTIONS.has(h)) out.section = h
+  return out
+}
+
+export function buildAboutPrefillPath(opts: AboutPrefill & { hash?: string }): string {
+  const section = opts.section && ABOUT_SECTIONS.has(opts.section) ? opts.section : undefined
+  const hashRaw = opts.hash || (section ? `#${section}` : '#about-client')
+  const hash = hashRaw.startsWith('#') ? hashRaw : `#${hashRaw}`
+  return `/about${hash}`
+}
+
+export function aboutFormToPrefill(form: { section?: string }, opts?: { hash?: string }): string {
+  return buildAboutPrefillPath({
+    section: form.section?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
