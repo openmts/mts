@@ -338,11 +338,20 @@ test('commercial browser smoke path', async ({ page }) => {
   // typed 模式已选中（深色底）
   await expect(page.getByTestId('write-mode-typed')).toHaveClass(/bg-slate-800/)
 
+  // P104: 命令面板分组（空查询可见导航+动作）
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await expect(page.getByTestId('command-palette-group-nav')).toBeVisible()
+  await expect(page.getByTestId('command-palette-group-action')).toBeVisible()
+  await page.keyboard.press('Escape')
+
   // P102: 命令面板页内动作（切换主题）
   const darkBefore = await page.locator('html').evaluate((el) => el.classList.contains('dark'))
   await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('theme')
+  await expect(page.getByTestId('command-palette-group-action')).toBeVisible()
+  await expect(page.getByTestId('command-palette-group-nav')).toHaveCount(0)
   await page.getByTestId('command-item-action-toggle-theme').click()
   await expect(page.getByTestId('command-palette')).toHaveCount(0)
   await expect.poll(async () => page.locator('html').evaluate((el) => el.classList.contains('dark'))).not.toBe(darkBefore)

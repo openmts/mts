@@ -316,6 +316,40 @@ export function isCommandAction(item: CommandNavItem): boolean {
   return item.kind === 'action' || Boolean(item.action)
 }
 
+export type CommandItemGroupId = 'nav' | 'action'
+
+export interface CommandItemGroup {
+  id: CommandItemGroupId
+  /** i18n MessageKey */
+  labelKey: string
+  items: CommandNavItem[]
+}
+
+/** 将过滤后的命令列表拆成导航 / 动作两组（保持组内相对顺序） */
+export function groupCommandItems(items: readonly CommandNavItem[]): CommandItemGroup[] {
+  const nav: CommandNavItem[] = []
+  const action: CommandNavItem[] = []
+  for (const item of items) {
+    if (isCommandAction(item)) action.push(item)
+    else nav.push(item)
+  }
+  const out: CommandItemGroup[] = []
+  if (nav.length) {
+    out.push({ id: 'nav', labelKey: 'commandPaletteGroupNav', items: nav })
+  }
+  if (action.length) {
+    out.push({ id: 'action', labelKey: 'commandPaletteGroupActions', items: action })
+  }
+  return out
+}
+
+/** 组扁平化，供键盘索引与展示顺序一致 */
+export function flattenCommandGroups(groups: readonly CommandItemGroup[]): CommandNavItem[] {
+  const out: CommandNavItem[] = []
+  for (const g of groups) out.push(...g.items)
+  return out
+}
+
 export function filterCommandItems(
   items: CommandNavItem[],
   query: string,

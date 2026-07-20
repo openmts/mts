@@ -8,6 +8,8 @@ import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import {
   allVisibleCommandItems,
   filterCommandItems,
+  flattenCommandGroups,
+  groupCommandItems,
   isCommandAction,
   matchCommandPaletteClose,
   matchCommandPaletteOpen,
@@ -42,10 +44,19 @@ const openShortcutsHelp = inject<(() => void) | undefined>('openShortcutsHelp', 
 const toggleSidebarCollapse = inject<(() => void) | undefined>('toggleSidebarCollapse', undefined)
 const scrollMainToTop = inject<(() => void) | undefined>('scrollMainToTop', undefined)
 
-const items = computed(() => {
+const filteredItems = computed(() => {
   const base = allVisibleCommandItems(isAdmin.value)
   return filterCommandItems(base, query.value, (key) => t.value(key as MessageKey) || key)
 })
+
+const itemGroups = computed(() => groupCommandItems(filteredItems.value))
+
+/** 键盘/选中索引用的扁平列表：导航在前、动作在后 */
+const items = computed(() => flattenCommandGroups(itemGroups.value))
+
+function flatIndexOf(item: CommandNavItem): number {
+  return items.value.findIndex((x) => x.id === item.id)
+}
 
 const recentItems = computed(() => {
   if (query.value.trim()) return []
@@ -249,32 +260,41 @@ defineExpose({ openPalette, closePalette, open })
             <span class="font-mono text-[11px] mts-muted">{{ r.path }}</span>
           </li>
           <li v-if="recentItems.length" class="my-1 border-t border-slate-100 dark:border-slate-800" aria-hidden="true" />
-          <li v-if="!items.length" class="px-3 py-6 text-center text-sm mts-muted">
+          <li v-if="!items.length" class="px-3 py-6 text-center text-sm mts-muted" data-testid="command-palette-empty">
             {{ t('commandPaletteEmpty') }}
           </li>
-          <li
-            v-for="(item, idx) in items"
-            :key="item.id"
-            role="option"
-            :aria-selected="idx === activeIndex"
-            class="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm"
-            :class="idx === activeIndex
-              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-              : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'"
-            :id="`command-option-${item.id}`"
-            :data-testid="`command-item-${item.id}`"
-            @mouseenter="activeIndex = idx"
-            @click="go(item)"
-          >
-            <span class="inline-flex min-w-0 items-center gap-1.5 font-medium">
-              <Zap v-if="isCommandAction(item)" class="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden="true" />
-              <span class="truncate">{{ t(item.labelKey as MessageKey) }}</span>
-            </span>
-            <span
-              class="shrink-0 font-mono text-[11px]"
-              :class="idx === activeIndex ? 'opacity-80' : 'mts-muted'"
-            >{{ isCommandAction(item) ? t('commandPaletteActionBadge') : item.path }}</span>
-          </li>
+          <template v-for="group in itemGroups" :key="group.id">
+            <li
+              class="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide mts-muted"
+              role="presentation"
+              :data-testid="`command-palette-group-${group.id}`"
+            >
+              {{ t(group.labelKey as MessageKey) }}
+            </li>
+            <li
+              v-for="item in group.items"
+              :key="item.id"
+              role="option"
+              :aria-selected="flatIndexOf(item) === activeIndex"
+              class="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm"
+              :class="flatIndexOf(item) === activeIndex
+                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'"
+              :id="`command-option-${item.id}`"
+              :data-testid="`command-item-${item.id}`"
+              @mouseenter="activeIndex = flatIndexOf(item)"
+              @click="go(item)"
+            >
+              <span class="inline-flex min-w-0 items-center gap-1.5 font-medium">
+                <Zap v-if="isCommandAction(item)" class="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden="true" />
+                <span class="truncate">{{ t(item.labelKey as MessageKey) }}</span>
+              </span>
+              <span
+                class="shrink-0 font-mono text-[11px]"
+                :class="flatIndexOf(item) === activeIndex ? 'opacity-80' : 'mts-muted'"
+              >{{ isCommandAction(item) ? t('commandPaletteActionBadge') : item.path }}</span>
+            </li>
+          </template>
         </ul>
         <div class="flex items-center gap-2 border-t border-slate-100 px-3 py-2 text-[11px] mts-muted dark:border-slate-800">
           <Command class="h-3 w-3" />

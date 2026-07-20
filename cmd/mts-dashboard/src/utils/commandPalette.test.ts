@@ -7,6 +7,8 @@ import {
   auditRangeToLocalInputs,
   filterAuditEvents,
   filterCommandItems,
+  flattenCommandGroups,
+  groupCommandItems,
   isCommandAction,
   matchCommandPaletteOpen,
   visibleCommandItems,
@@ -118,4 +120,25 @@ test('command actions catalog and filter', () => {
   const densityHits = filterCommandItems(all, '密度', resolve)
   assert.ok(densityHits.some((i) => i.id === 'action-toggle-density'))
   assert.ok(filterCommandItems(all, '返回顶部', resolve).some((i) => i.id === 'action-scroll-main-to-top'))
+})
+
+test('groupCommandItems splits nav and action', () => {
+  const all = allVisibleCommandItems(true)
+  const groups = groupCommandItems(all)
+  assert.ok(groups.some((g) => g.id === 'nav'))
+  assert.ok(groups.some((g) => g.id === 'action'))
+  const nav = groups.find((g) => g.id === 'nav')!
+  const action = groups.find((g) => g.id === 'action')!
+  assert.ok(nav.items.every((i) => !isCommandAction(i)))
+  assert.ok(action.items.every((i) => isCommandAction(i)))
+  const flat = flattenCommandGroups(groups)
+  assert.equal(flat.length, all.length)
+  assert.ok(flat.findIndex((i) => isCommandAction(i)) > flat.findIndex((i) => !isCommandAction(i)))
+  const themeOnly = filterCommandItems(all, 'theme', (k) => k)
+  const g2 = groupCommandItems(themeOnly)
+  assert.ok(g2.every((g) => g.id === 'action' || g.items.length))
+  assert.ok(g2.some((g) => g.id === 'action'))
+  assert.ok(!g2.some((g) => g.id === 'nav') || g2.find((g) => g.id === 'nav')!.items.length === 0)
+  // empty nav group omitted
+  assert.equal(g2.filter((g) => g.id === 'nav').length, 0)
 })
