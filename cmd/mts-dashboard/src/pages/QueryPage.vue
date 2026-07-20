@@ -123,6 +123,10 @@ const renamingId = ref<string | null>(null)
 const clearHistoryOpen = ref(false)
 const historyFileInput = ref<HTMLInputElement | null>(null)
 const columnKeys = RESULT_COLUMN_KEYS
+const QUERY_ROW_HEIGHT = 40
+const QUERY_LIST_HEIGHT = 400
+const COLUMN_ROW_HEIGHT = 40
+const COLUMN_LIST_HEIGHT = 320
 const resultGridClass = computed(() => gridColClass(resultColumns.value))
 const latency = computed(() => {
   if (!queryStats.value) return null
@@ -519,11 +523,11 @@ const columnRows = computed(() => {
 
     <div id="query-form" class="scroll-mt-20 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('database') }}
-        <input v-model="queryForm.database" list="db-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('queryPlaceholderManual')" />
+        <input v-model="queryForm.database" list="db-list" data-testid="query-database" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('queryPlaceholderManual')" />
         <datalist id="db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
       </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('measurement') }}
-        <input v-model="queryForm.measurement" list="meas-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :disabled="measurementsLoading" />
+        <input v-model="queryForm.measurement" list="meas-list" data-testid="query-measurement" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :disabled="measurementsLoading" />
         <datalist id="meas-list"><option v-for="m in measurements" :key="m" :value="m" /></datalist>
       </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('retentionPolicy') }}
@@ -576,10 +580,22 @@ const columnRows = computed(() => {
     </div>
 
     <div id="query-actions" class="scroll-mt-20 flex flex-wrap gap-2">
-      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" :disabled="loading" @click="runQuery">
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900"
+        data-testid="query-run"
+        :disabled="loading"
+        @click="runQuery"
+      >
         <Search class="h-4 w-4" /> {{ loading ? t('loading') : t('query') }}
       </button>
-      <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700" :disabled="!loading" @click="cancelQuery"><Square class="h-4 w-4" />{{ t('queryCancel') }}</button>
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700"
+        data-testid="query-cancel"
+        :disabled="!loading"
+        @click="cancelQuery"
+      ><Square class="h-4 w-4" />{{ t('queryCancel') }}</button>
       <button class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 dark:text-red-200" @click="deleteOpen = true"><Trash2 class="h-4 w-4" />{{ t('queryRangeDelete') }}</button>
       <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700" @click="copyResults">
         <component :is="copyState === 'ok' ? Check : Copy" class="h-4 w-4" />
@@ -626,15 +642,16 @@ const columnRows = computed(() => {
       />
     </div>
 
-    <div id="query-results" v-if="rows.length" class="scroll-mt-20 overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
+    <div id="query-results" v-if="rows.length" class="scroll-mt-20 overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900" data-testid="query-results">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-sm dark:border-slate-800">
         <span class="font-semibold">{{ t('queryRowResult') }}</span>
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-xs text-slate-500 dark:text-slate-400">{{ formatMessage(t('queryRowCountVirtual'), { count: rows.length }) }}</span>
+          <span class="text-xs text-slate-500 dark:text-slate-400" data-testid="query-row-count">{{ formatMessage(t('queryRowCountVirtual'), { count: rows.length }) }}</span>
           <div class="relative">
             <button
               type="button"
               class="mts-btn"
+              data-testid="query-column-picker"
               :title="t('queryColVisibility')"
               @click="showColumnPicker = !showColumnPicker"
             >
@@ -643,6 +660,7 @@ const columnRows = computed(() => {
             <div
               v-if="showColumnPicker"
               class="absolute right-0 z-20 mt-1 w-44 rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+              data-testid="query-column-picker-menu"
             >
               <label
                 v-for="k in columnKeys"
@@ -664,45 +682,77 @@ const columnRows = computed(() => {
         <div
           class="grid min-w-[480px] border-b px-4 py-2 text-left text-[11px] uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400"
           :class="resultGridClass"
+          data-testid="query-results-header"
         >
           <span v-if="resultColumns.time">{{ t('queryColTime') }}</span>
           <span v-if="resultColumns.measurement">{{ t('queryColMeasurement') }}</span>
           <span v-if="resultColumns.tags">{{ t('queryColTags') }}</span>
           <span v-if="resultColumns.fields">{{ t('queryColFields') }}</span>
         </div>
-        <VirtualTable :items="rows" :row-height="40" :height="400">
-          <template #default="{ item: row }">
+        <VirtualTable
+          :items="rows"
+          :row-height="QUERY_ROW_HEIGHT"
+          :height="QUERY_LIST_HEIGHT"
+          data-testid="query-results-virtual-list"
+        >
+          <template #default="{ item: row, index }">
             <div
               class="grid min-w-[480px] items-center border-b px-4 text-xs dark:border-slate-800"
               :class="resultGridClass"
+              :data-testid="`query-result-row-${index}`"
             >
-              <span v-if="resultColumns.time" class="font-mono">{{ formatTimestamp(row.timestamp) }}</span>
-              <span v-if="resultColumns.measurement">{{ row.measurement }}</span>
-              <span v-if="resultColumns.tags" class="truncate font-mono text-slate-500 dark:text-slate-400">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : t('emptyValue') }}</span>
-              <span v-if="resultColumns.fields" class="truncate font-mono">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any) }}</span>
+              <span v-if="resultColumns.time" class="truncate font-mono" :title="formatTimestamp(row.timestamp)">{{ formatTimestamp(row.timestamp) }}</span>
+              <span v-if="resultColumns.measurement" class="truncate" :title="row.measurement">{{ row.measurement }}</span>
+              <span v-if="resultColumns.tags" class="truncate font-mono text-slate-500 dark:text-slate-400" :title="row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : ''">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : t('emptyValue') }}</span>
+              <span v-if="resultColumns.fields" class="truncate font-mono" :title="showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any)">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any) }}</span>
             </div>
           </template>
         </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="query-results-virtual-hint">
+          {{ t('queryResultsVirtualHint') }}
+        </p>
       </div>
     </div>
 
-    <div v-if="columnRows.length" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800"><span class="font-semibold">{{ t('queryColumnSummary') }}</span><span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ formatMessage(t('querySeriesCount'), { count: columnRows.length }) }}</span></div>
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b text-left text-[11px] uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:border-slate-800">
-            <th class="px-4 py-2">{{ t('queryColMeasurement') }}</th><th class="px-4 py-2">{{ t('field') }}</th><th class="px-4 py-2">{{ t('queryColTags') }}</th><th class="px-4 py-2">{{ t('queryColPoints') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(c, i) in columnRows" :key="i" class="border-b dark:border-slate-800">
-            <td class="px-4 py-2 text-xs">{{ c.measurement }}</td>
-            <td class="px-4 py-2 text-xs">{{ c.field }}</td>
-            <td class="px-4 py-2 font-mono text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ c.tags }}</td>
-            <td class="px-4 py-2 text-xs">{{ c.points }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div
+      v-if="columnRows.length"
+      class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900"
+      data-testid="query-columns-summary"
+    >
+      <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800">
+        <span class="font-semibold">{{ t('queryColumnSummary') }}</span>
+        <span class="text-xs text-slate-500 dark:text-slate-400" data-testid="query-columns-count">{{ formatMessage(t('querySeriesCount'), { count: columnRows.length }) }}</span>
+      </div>
+      <div
+        class="grid grid-cols-[minmax(7rem,1fr)_minmax(6rem,0.8fr)_minmax(8rem,1.2fr)_minmax(5rem,0.6fr)] border-b px-4 py-2 text-left text-[11px] uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400"
+        data-testid="query-columns-header"
+      >
+        <span>{{ t('queryColMeasurement') }}</span>
+        <span>{{ t('field') }}</span>
+        <span>{{ t('queryColTags') }}</span>
+        <span>{{ t('queryColPoints') }}</span>
+      </div>
+      <VirtualTable
+        :items="columnRows"
+        :row-height="COLUMN_ROW_HEIGHT"
+        :height="Math.min(COLUMN_LIST_HEIGHT, Math.max(160, columnRows.length * COLUMN_ROW_HEIGHT))"
+        data-testid="query-columns-virtual-list"
+      >
+        <template #default="{ item: c, index }">
+          <div
+            class="grid h-full grid-cols-[minmax(7rem,1fr)_minmax(6rem,0.8fr)_minmax(8rem,1.2fr)_minmax(5rem,0.6fr)] items-center border-b px-4 text-xs dark:border-slate-800"
+            :data-testid="`query-column-row-${index}`"
+          >
+            <span class="truncate" :title="c.measurement">{{ c.measurement }}</span>
+            <span class="truncate" :title="c.field">{{ c.field }}</span>
+            <span class="truncate font-mono text-slate-500 dark:text-slate-400" :title="c.tags">{{ c.tags }}</span>
+            <span>{{ c.points }}</span>
+          </div>
+        </template>
+      </VirtualTable>
+      <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="query-columns-virtual-hint">
+        {{ t('queryColumnsVirtualHint') }}
+      </p>
     </div>
 
     <div v-if="rawOutput" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">

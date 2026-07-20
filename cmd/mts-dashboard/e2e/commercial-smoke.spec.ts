@@ -109,9 +109,24 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('write-mode-typed')).toBeVisible()
   await expect(page.getByTestId('write-prefs-hint')).toBeVisible()
 
-  // 4) 查询页可达 + 表单标签 i18n
+  // 4) 查询页可达 + 执行一次 rows 查询以验证结果虚拟列表
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
+  // 等库/表元数据预填后再查（写入后通常有 default + cpu）
+  await expect.poll(async () => {
+    const db = await page.getByTestId('query-database').inputValue()
+    return db.trim().length > 0
+  }, { timeout: 15_000 }).toBe(true)
+  const measInput = page.getByTestId('query-measurement')
+  if (!(await measInput.inputValue()).trim()) {
+    await measInput.fill('cpu')
+  }
+  await page.getByTestId('query-run').click()
+  await expect(page.getByTestId('query-run')).toBeEnabled({ timeout: 20_000 })
+  if (await page.getByTestId('query-results-virtual-list').count()) {
+    await expect(page.getByTestId('query-results-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('query-results-virtual-hint')).toBeVisible()
+  }
   // P120: 只读时间预填深链
   await page.goto('/query?range=1h#query-form')
   await expect(page.getByTestId('query-page')).toBeVisible()
@@ -128,6 +143,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByRole('main').getByText(/数据库|Database/).first()).toBeVisible()
   await expect(page.getByRole('main').getByText(/开始时间|Start/).first()).toBeVisible()
   await expect(page.getByTestId('query-export-csv')).toBeVisible()
+  // 若有结果则校验虚拟列表；冷启动无结果时跳过
+  if (await page.getByTestId('query-results-virtual-list').count()) {
+    await expect(page.getByTestId('query-results-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('query-results-virtual-hint')).toBeVisible()
+  }
+  if (await page.getByTestId('query-columns-virtual-list').count()) {
+    await expect(page.getByTestId('query-columns-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('query-columns-virtual-hint')).toBeVisible()
+  }
 
   // 5) 运维 Flush（确认按钮文案为「执行」）
   await page.goto('/operations')

@@ -702,3 +702,8 @@
 - 商业冒烟覆盖 notify-history-virtual-list / ops-maint-errors-virtual-list（有数据时）
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P133 状态（2026-07-20）
+- Query 行结果 virtual-list testid/hint；列摘要 VirtualTable
+- 商业冒烟覆盖 query-*-virtual-list（有结果时）
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
