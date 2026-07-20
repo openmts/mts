@@ -727,3 +727,11 @@
 - 全量检视报告：docs/review/code-review-2026-07-21-0002-mts-dashboard-full.md
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P138 状态（2026-07-21）
+- Write 表单写行上限 50 + RP 手填提示
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+## P139 状态（2026-07-21）
+- Query predicates/expr UI：**deferred**（不在本轮实现；内核能力保留 API）
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

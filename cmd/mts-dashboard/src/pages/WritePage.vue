@@ -58,10 +58,15 @@ watch(
 )
 const lineInput = ref('')
 const formRows = ref<FormRow[]>([createEmptyRow()])
+/** 表单写行数上限；大批量请用 Line Protocol / TypedBatch */
+const WRITE_FORM_ROW_MAX = 50
+const formRowCapReached = computed(() => formRows.value.length >= WRITE_FORM_ROW_MAX)
 const result = ref<{ ok: boolean; message: string } | null>(null)
 const loading = ref(false)
 const actionError = ref('')
 const metaHint = ref('')
+const rpMetaHint = ref('')
+const metaSource = ref<'admin' | 'manual' | 'partial'>('admin')
 const { success, error: notifyError, warn } = useNotify()
 const { t } = useI18n()
 function fieldTypeLabel(value: string): string {
@@ -162,6 +167,7 @@ onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
   const result = await listDatabasesDetailed()
   databases.value = result.names
+  metaSource.value = result.source
   metaHint.value = result.error || (result.source === 'manual' ? t.value('writeManualDbHint') : '')
   if (databases.value.length && !selectedDb.value) {
     selectedDb.value = databases.value[0]
@@ -177,12 +183,23 @@ onBeforeUnmount(() => {
 watch(selectedDb, async (db) => {
   retentionPolicies.value = []
   retentionPolicy.value = 'autogen'
+  rpMetaHint.value = ''
   if (!db) return
   try {
     const rps = await listRetentionPolicies(db)
     retentionPolicies.value = rps.map((p) => p.name)
-    if (retentionPolicies.value.length) retentionPolicy.value = retentionPolicies.value[0]
-  } catch { /* ignore */ }
+    if (retentionPolicies.value.length) {
+      retentionPolicy.value = retentionPolicies.value[0]
+      rpMetaHint.value = ''
+    } else if (metaSource.value === 'manual') {
+      rpMetaHint.value = t.value('writeRpManualHint')
+    } else {
+      // admin 路径空列表或 403 降级为空
+      rpMetaHint.value = t.value('writeRpEmptyHint')
+    }
+  } catch {
+    rpMetaHint.value = t.value('writeRpManualHint')
+  }
   // 自动填充 RP 不应算用户脏编辑
   markWriteClean()
 })
@@ -331,7 +348,13 @@ function addTypedTagCol() { typedTagCols.value.push({ name: '', values: '' }) }
 function removeTypedTagCol(i: number) { typedTagCols.value.splice(i, 1) }
 function addTypedFieldCol() { typedFieldCols.value.push({ name: '', type: 'float', values: '' }) }
 function removeTypedFieldCol(i: number) { typedFieldCols.value.splice(i, 1) }
-function addRow() { formRows.value.push(createEmptyRow()) }
+function addRow() {
+  if (formRows.value.length >= WRITE_FORM_ROW_MAX) {
+    notifyError(formatMessage(t.value('writeFormRowLimit'), { max: WRITE_FORM_ROW_MAX }))
+    return
+  }
+  formRows.value.push(createEmptyRow())
+}
 function removeRow(i: number) { formRows.value.splice(i, 1) }
 const modeLabel = computed(() => ({
   form: t.value('formWrite'),
@@ -408,8 +431,9 @@ function exportWriteDraft() {
         <datalist id="write-db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
       </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('retentionPolicy') }}
-        <input v-model="retentionPolicy" list="write-rp-list" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhAutogen')" />
+        <input v-model="retentionPolicy" list="write-rp-list" data-testid="write-retention-policy" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhAutogen')" />
         <datalist id="write-rp-list"><option v-for="rp in (retentionPolicies.length?retentionPolicies:['autogen'])" :key="rp" :value="rp" /></datalist>
+        <p v-if="rpMetaHint" class="mt-1 text-[11px] text-amber-700 dark:text-amber-200" data-testid="write-rp-meta-hint">{{ rpMetaHint }}</p>
       </label>
       <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 md:mt-6">
         <input v-model="syncWrite" type="checkbox" /> {{ t('writeSync') }}
@@ -452,7 +476,17 @@ function exportWriteDraft() {
           </div>
         </div>
       </div>
-      <button class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300" @click="addRow"><Plus class="h-3 w-3" /> {{ t('writeAddRow') }}</button>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50 dark:text-slate-300"
+          data-testid="write-add-row"
+          :disabled="formRowCapReached"
+          @click="addRow"
+        ><Plus class="h-3 w-3" /> {{ t('writeAddRow') }}</button>
+        <span class="text-[11px] mts-muted" data-testid="write-form-row-count">{{ formRows.length }}/{{ WRITE_FORM_ROW_MAX }}</span>
+        <span v-if="formRowCapReached" class="text-[11px] text-amber-700 dark:text-amber-200" data-testid="write-form-row-limit-hint">{{ formatMessage(t('writeFormRowLimitHint'), { max: WRITE_FORM_ROW_MAX }) }}</span>
+      </div>
     </div>
 
     <div id="write-body" v-else-if="writeMode==='typed'" class="scroll-mt-20 space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">

@@ -114,6 +114,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('write-mode-tabs')).toBeVisible()
   await expect(page.getByTestId('write-mode-typed')).toBeVisible()
   await expect(page.getByTestId('write-prefs-hint')).toBeVisible()
+  // P138: 表单写行上限指示（切到 form 模式可见）
+  await page.getByTestId('write-mode-form').click()
+  await expect(page.getByTestId('write-form-row-count')).toBeVisible()
+  await expect(page.getByTestId('write-add-row')).toBeVisible()
+  await expect(page.getByTestId('write-retention-policy')).toBeVisible()
 
   // 4) 查询页可达 + 执行一次 rows 查询以验证结果虚拟列表
   await page.goto('/query')

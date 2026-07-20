@@ -22,13 +22,13 @@
 - [x] EARS-DOC-P137-05 WHEN 更新基线 THE SYSTEM SHALL 记录 P137
 
 ## P138 — 写入与元数据边界
-- [ ] EARS-FE-P138-01 WHEN 表单写行数达到上限 THE SYSTEM SHALL 阻止继续新增并提示 Typed/Line
-- [ ] EARS-FE-P138-02 WHEN 非 admin 无法拉取 RP THE SYSTEM SHALL 保持手填可用并展示明确提示
-- [ ] EARS-DOC-P138-03 WHEN 更新基线 THE SYSTEM SHALL 记录 P138
+- [x] EARS-FE-P138-01 WHEN 表单写行数达到上限 THE SYSTEM SHALL 阻止继续新增并提示 Typed/Line
+- [x] EARS-FE-P138-02 WHEN 非 admin 无法拉取 RP THE SYSTEM SHALL 保持手填可用并展示明确提示
+- [x] EARS-DOC-P138-03 WHEN 更新基线 THE SYSTEM SHALL 记录 P138
 
 ## P139 — 查询高级语义（可选分阶段）
-- [ ] EARS-FE-P139-01 WHEN 用户填写 predicates 文本 THE SYSTEM SHALL 映射到 Query.predicates（校验失败可读）
-- [ ] EARS-FE-P139-02 WHEN 更新基线 THE SYSTEM SHALL 记录 P139（未做则标注 deferred）
+- [ ] EARS-FE-P139-01 WHEN 用户填写 predicates 文本 THE SYSTEM SHALL 映射到 Query.predicates（校验失败可读） — **deferred**
+- [x] EARS-FE-P139-02 WHEN 更新基线 THE SYSTEM SHALL 记录 P139（未做则标注 deferred）
 
 ## 部署侧（open，不计分）
 - [ ] OPS-EDGE-HTTPS 生产证书/HSTS 人工验收
