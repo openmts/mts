@@ -50,3 +50,10 @@
 - [ ] OPS-EDGE-HTTPS 生产证书/HSTS 人工验收
 - [ ] OPS-CRON-SYSTEMD 目标环境实装
 - [ ] OPS-OFFSITE-ALERT 跨主机备份+告警演练
+
+## P142 — Query series/fields meta
+- [x] EARS-FE-P142-01 选定 measurement 加载 fields/series
+- [x] EARS-FE-P142-02 series 超限截断提示
+- [x] EARS-FE-P142-03 选择 series 填充 tags
+- [x] EARS-FE-P142-04 商业冒烟 series meta testid
+- [x] EARS-DOC-P142-05 基线记录

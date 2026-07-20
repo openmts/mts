@@ -1,7 +1,16 @@
 import { ref } from 'vue'
 import { formatCaughtError } from '@/utils/apiError'
 import { apiPost, apiPostNDJSONStream } from '@/api/client'
-import { listDatabasesDetailed, listMeasurements, listRetentionPoliciesDetailed } from '@/api/meta'
+import {
+  listDatabasesDetailed,
+  listFields,
+  listMeasurements,
+  listRetentionPoliciesDetailed,
+  listSeries,
+  type FieldMeta,
+  type SeriesMeta,
+} from '@/api/meta'
+import { capSeriesList, fieldNames, tagsToExpr } from '@/utils/seriesMeta'
 import { makeFormErrorT } from '@/utils/formErrors'
 import { buildQueryFromForm } from '@/utils/queryFormBuild'
 import { useI18n } from '@/composables/useI18n'
@@ -18,6 +27,13 @@ export function useQueryWorkbench() {
   const measurements = ref<string[]>([])
   const retentionPolicies = ref<string[]>([])
   const measurementsLoading = ref(false)
+  const fieldOptions = ref<string[]>([])
+  const seriesOptions = ref<SeriesMeta[]>([])
+  const seriesTotal = ref(0)
+  const seriesTruncated = ref(false)
+  const seriesLoading = ref(false)
+  const seriesError = ref('')
+  const SERIES_CAP = 200
   const metaSource = ref<'admin' | 'manual' | 'partial'>('admin')
   const metaHint = ref('')
   const queryForm = ref({
@@ -64,6 +80,11 @@ export function useQueryWorkbench() {
   async function loadDbChildren(db: string) {
     measurements.value = []
     retentionPolicies.value = []
+    fieldOptions.value = []
+    seriesOptions.value = []
+    seriesTotal.value = 0
+    seriesTruncated.value = false
+    seriesError.value = ''
     if (!queryForm.value.measurement) queryForm.value.measurement = ''
     if (!db) return
     measurementsLoading.value = true
@@ -92,6 +113,36 @@ export function useQueryWorkbench() {
     } finally {
       measurementsLoading.value = false
     }
+  }
+
+  async function loadMeasurementMeta(db: string, measurement: string) {
+    fieldOptions.value = []
+    seriesOptions.value = []
+    seriesTotal.value = 0
+    seriesTruncated.value = false
+    seriesError.value = ''
+    if (!db.trim() || !measurement.trim()) return
+    seriesLoading.value = true
+    try {
+      const [fields, series] = await Promise.all([
+        listFields(db, measurement).catch(() => [] as FieldMeta[]),
+        listSeries(db, measurement).catch((e) => {
+          seriesError.value = formatCaughtError(e)
+          return [] as SeriesMeta[]
+        }),
+      ])
+      fieldOptions.value = fieldNames(fields)
+      const capped = capSeriesList(series, SERIES_CAP)
+      seriesOptions.value = capped.items
+      seriesTotal.value = capped.total
+      seriesTruncated.value = capped.truncated
+    } finally {
+      seriesLoading.value = false
+    }
+  }
+
+  function applySeriesTags(s: SeriesMeta) {
+    queryForm.value.tags = tagsToExpr(s.tags)
   }
 
   const { t: tMsg } = useI18n()
@@ -247,6 +298,14 @@ export function useQueryWorkbench() {
     measurements,
     retentionPolicies,
     measurementsLoading,
+    fieldOptions,
+    seriesOptions,
+    seriesTotal,
+    seriesTruncated,
+    seriesLoading,
+    seriesError,
+    loadMeasurementMeta,
+    applySeriesTags,
     metaSource,
     metaHint,
     queryForm,

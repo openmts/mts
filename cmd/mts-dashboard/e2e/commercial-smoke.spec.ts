@@ -167,6 +167,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByRole('main').getByText(/开始时间|Start/).first()).toBeVisible()
   await expect(page.getByTestId('query-export-csv')).toBeVisible()
   await expect(page.getByTestId('query-predicates')).toBeVisible()
+  await expect(page.getByTestId('query-series-meta')).toBeVisible()
+  await expect(page.getByTestId('query-series-select')).toBeVisible()
+  await expect(page.getByTestId('query-fields')).toBeVisible()
   // 若有结果则校验虚拟列表；冷启动无结果时跳过
   if (await page.getByTestId('query-results-virtual-list').count()) {
     await expect(page.getByTestId('query-results-virtual-list')).toBeVisible()

@@ -24,6 +24,7 @@ import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { latencyFromNanos } from '@/utils/queryLatency'
+import { seriesLabel } from '@/utils/seriesMeta'
 import {
   RESULT_COLUMN_KEYS,
   gridColClass,
@@ -41,6 +42,8 @@ import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star
 
 const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
+  fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError,
+  loadMeasurementMeta, applySeriesTags,
   queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, loading,
   loadDatabases, loadDbChildren, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
@@ -221,6 +224,16 @@ watch(() => queryForm.value.database, async (db) => {
   try { await loadDbChildren(db) }
   catch (e) { actionError.value = formatCaughtError(e) }
 })
+watch(
+  () => [queryForm.value.database, queryForm.value.measurement] as const,
+  async ([db, measurement]) => {
+    try {
+      await loadMeasurementMeta(db, measurement)
+    } catch (e) {
+      actionError.value = formatCaughtError(e)
+    }
+  },
+)
 
 function formatTimestamp(v: number): string {
   if (Math.abs(v) >= 1e15) return formatEpoch(v, 'ns')
@@ -230,6 +243,17 @@ function fillNowMs(which: 'start' | 'end') {
   const s = nowUnixMsString()
   if (which === 'start') queryForm.value.start_time = s
   else queryForm.value.end_time = s
+}
+
+function seriesOptionLabel(s: { id?: number; tags?: Record<string, string>; measurement?: string }): string {
+  return seriesLabel(s)
+}
+
+function onSeriesSelect(raw: string) {
+  if (!raw) return
+  const idx = Number(raw)
+  if (!Number.isInteger(idx) || idx < 0 || idx >= seriesOptions.value.length) return
+  applySeriesTags(seriesOptions.value[idx])
 }
 
 async function checkAuthz(perm: 'read' | 'write' = 'read') {
@@ -591,11 +615,48 @@ const columnRows = computed(() => {
         </div>
       </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('fields') }}
-        <input v-model="queryForm.fields" :placeholder="t('queryPhFields')" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+        <input
+          v-model="queryForm.fields"
+          list="query-field-list"
+          data-testid="query-fields"
+          :placeholder="t('queryPhFields')"
+          class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800"
+        />
+        <datalist id="query-field-list">
+          <option v-for="f in fieldOptions" :key="f" :value="f" />
+        </datalist>
+        <p v-if="fieldOptions.length" class="mt-1 text-[11px] mts-muted" data-testid="query-fields-meta-hint">
+          {{ formatMessage(t('queryFieldsMetaHint'), { count: fieldOptions.length }) }}
+        </p>
       </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('queryTagsExpr') }}
-        <input v-model="queryForm.tags" :placeholder="t('queryPhTags')" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+        <input v-model="queryForm.tags" data-testid="query-tags" :placeholder="t('queryPhTags')" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
       </label>
+      <div class="text-xs text-slate-500 dark:text-slate-400 md:col-span-2 lg:col-span-3" data-testid="query-series-meta">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span>{{ t('querySeriesPicker') }}</span>
+          <span v-if="seriesLoading" class="text-[11px] mts-muted">{{ t('loading') }}</span>
+          <span v-else-if="seriesTotal" class="text-[11px] mts-muted" data-testid="query-series-count">
+            {{ formatMessage(t('querySeriesCountMeta'), { shown: seriesOptions.length, total: seriesTotal }) }}
+          </span>
+        </div>
+        <select
+          class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800"
+          data-testid="query-series-select"
+          :disabled="seriesLoading || !seriesOptions.length"
+          @change="onSeriesSelect(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">{{ seriesOptions.length ? t('querySeriesPickPlaceholder') : t('querySeriesEmpty') }}</option>
+          <option v-for="(s, idx) in seriesOptions" :key="s.id ?? idx" :value="String(idx)">
+            {{ seriesOptionLabel(s) }}
+          </option>
+        </select>
+        <p v-if="seriesTruncated" class="mt-1 text-[11px] text-amber-700 dark:text-amber-200" data-testid="query-series-truncated">
+          {{ formatMessage(t('querySeriesTruncated'), { max: 200, total: seriesTotal }) }}
+        </p>
+        <p v-if="seriesError" class="mt-1 text-[11px] text-rose-600" data-testid="query-series-error">{{ seriesError }}</p>
+        <p class="mt-1 text-[11px] mts-muted">{{ t('querySeriesPickerHint') }}</p>
+      </div>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 md:col-span-2 lg:col-span-3">{{ t('queryPredicates') }}
         <textarea
           v-model="queryForm.predicates"

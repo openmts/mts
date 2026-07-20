@@ -746,3 +746,8 @@
 - 子路径部署：`VITE_BASE` 与 `http.dashboard_base` 对齐说明（代码侧已支持）
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P142 状态（2026-07-21）
+- Query fields datalist + series 选择器填充 tags（上限 200）
+- meta：`listFields` / `listSeries`；失败可手填
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

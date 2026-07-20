@@ -101,3 +101,45 @@ export async function listRetentionPolicies(
   const result = await listRetentionPoliciesDetailed(database, init)
   return result.policies
 }
+
+export type FieldMeta = { name: string; type?: number }
+
+export async function listFields(
+  database: string,
+  measurement: string,
+  init: RequestInit = {},
+): Promise<FieldMeta[]> {
+  if (!database.trim() || !measurement.trim()) return []
+  const data = await apiGet<{ fields?: FieldMeta[] }>(
+    `/api/v1/data/databases/${encodeURIComponent(database)}/measurements/${encodeURIComponent(measurement)}/fields`,
+    init,
+  )
+  return [...(data.fields ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export type SeriesMeta = {
+  id?: number
+  measurement?: string
+  tags?: Record<string, string>
+}
+
+export async function listSeries(
+  database: string,
+  measurement: string,
+  tags?: Record<string, string>,
+  init: RequestInit = {},
+): Promise<SeriesMeta[]> {
+  if (!database.trim() || !measurement.trim()) return []
+  const qs = new URLSearchParams()
+  if (tags) {
+    for (const [k, v] of Object.entries(tags)) {
+      if (k) qs.set(k, v)
+    }
+  }
+  const q = qs.toString()
+  const path =
+    `/api/v1/data/databases/${encodeURIComponent(database)}/measurements/${encodeURIComponent(measurement)}/series` +
+    (q ? `?${q}` : '')
+  const data = await apiGet<{ series?: SeriesMeta[] }>(path, init)
+  return data.series ?? []
+}
