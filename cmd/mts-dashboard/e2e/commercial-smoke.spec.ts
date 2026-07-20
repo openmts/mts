@@ -29,6 +29,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('login-password')).toHaveAttribute('aria-invalid', 'true')
   await expect(page.getByTestId('login-ttl')).toBeVisible()
 
+  // P187: 登录页展示深链 redirect 目标
+  await page.goto('/login?redirect=%2Fquery%3Fdatabase%3Ddefault')
+  await expect(page.getByTestId('login-redirect-hint')).toBeVisible()
+  await expect(page.getByTestId('login-redirect-path')).toContainText('/query')
+
   // 1) bootstrap 默认密码 -> 强制改密
   await login(page, 'admin', 'admin')
   await expect(page).toHaveURL(/force-change-password/)
@@ -52,6 +57,21 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('overview-doctor-virtual-list')).toBeVisible()
   }
   await expect(page.getByTestId('overview-summary')).toBeVisible()
+  // P187: 登出后访问受保护深链应带 redirect 提示，登录后回到原路径
+  await page.getByTestId('topbar-logout').click()
+  await expect(page).toHaveURL(/login/)
+  await page.goto('/query?database=default')
+  await expect(page).toHaveURL(/login/)
+  await expect(page.getByTestId('login-redirect-hint')).toBeVisible()
+  await expect(page.getByTestId('login-redirect-path')).toContainText('/query')
+  await page.getByTestId('login-username').fill('admin')
+  await page.getByTestId('login-password').fill(NEW_PASSWORD)
+  await page.getByTestId('login-submit').click()
+  await expect(page).toHaveURL(/\/query(?:\?|$)/)
+  await expect(page).not.toHaveURL(/login/)
+  await expect(page.getByTestId('query-page').or(page.getByRole('main')).first()).toBeVisible()
+  await page.goto('/')
+  await expect(page.getByTestId('overview-page')).toBeVisible()
   await expect(page.getByTestId('sidebar')).toBeVisible()
   await expect(page.getByTestId('sidebar-collapse-toggle')).toBeVisible()
   await expect(page.getByTestId('sidebar-section-workspace')).toBeVisible()
@@ -1063,6 +1083,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('about-page')).toBeVisible()
   await expect(page.getByTestId('about-share-link')).toBeVisible()
   await expect(page.getByTestId('about-server')).toBeVisible()
+
+  // P188: NotFound 路径展示与快捷入口
+  await page.goto('/this-route-does-not-exist-xyz')
+  await expect(page.getByTestId('not-found-page')).toBeVisible()
+  await expect(page.getByTestId('not-found-path')).toBeVisible()
+  await expect(page.getByTestId('not-found-go-overview')).toBeVisible()
+  await expect(page.getByTestId('not-found-go-query')).toBeVisible()
+  await page.getByTestId('not-found-go-overview').click()
+  await expect(page.getByTestId('overview-page')).toBeVisible()
 
   // 17) 非 admin 端到端：创建 reader、授权 default 读、只读库浏览
   await page.goto('/users')

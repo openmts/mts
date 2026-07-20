@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { sanitizeRedirect } from '@/router'
+import { formatRedirectLabel } from '@/utils/redirect'
 import { loadLandingPath, resolveLandingPath } from '@/utils/landingPrefs'
 import { loginReasonMessage } from '@/utils/authReason'
 import { parseLoginTTLSeconds } from '@/utils/loginTTL'
@@ -30,6 +31,12 @@ const loading = ref(false)
 const error = ref('')
 const reasonHint = computed(() =>
   loginReasonMessage(router.currentRoute.value.query.reason, locale.value),
+)
+const pendingRedirect = computed(() =>
+  sanitizeRedirect(router.currentRoute.value.query.redirect),
+)
+const pendingRedirectLabel = computed(() =>
+  pendingRedirect.value ? formatRedirectLabel(pendingRedirect.value) : '',
 )
 const invalid = computed(() => !!error.value)
 
@@ -61,7 +68,9 @@ async function handleLogin() {
         clearLoginUsernamePref(storage)
       }
       if (mustChangePassword.value) {
-        await router.push({ name: 'ForceChangePassword' })
+        const q: Record<string, string> = {}
+        if (pendingRedirect.value) q.redirect = pendingRedirect.value
+        await router.push({ name: 'ForceChangePassword', query: q })
         return
       }
       const redirect = resolveLandingPath({
@@ -97,6 +106,16 @@ async function handleLogin() {
         data-testid="login-reason"
       >
         {{ reasonHint }}
+      </p>
+
+      <p
+        v-if="pendingRedirect"
+        class="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+        role="status"
+        data-testid="login-redirect-hint"
+      >
+        {{ t('loginRedirectHint') }}
+        <span class="mt-0.5 block break-all font-mono text-[11px]" data-testid="login-redirect-path">{{ pendingRedirectLabel }}</span>
       </p>
 
       <form class="space-y-4" data-testid="login-form" @submit.prevent="handleLogin">

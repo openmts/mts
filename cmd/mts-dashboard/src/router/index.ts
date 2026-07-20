@@ -74,7 +74,13 @@ router.beforeEach((to, from) => {
 
   if (to.name === 'Login') {
     if (ok && isAuthenticated.value) {
-      if (mustChangePassword.value) return { name: 'ForceChangePassword' }
+      if (mustChangePassword.value) {
+        const redirect = sanitizeRedirect(to.query.redirect)
+        return {
+          name: 'ForceChangePassword',
+          query: redirect ? { redirect } : {},
+        }
+      }
       const storage = typeof localStorage !== 'undefined' ? localStorage : null
       const path = resolveLandingPath({
         redirectRaw: to.query.redirect,
@@ -89,9 +95,22 @@ router.beforeEach((to, from) => {
 
   if (to.name === 'ForceChangePassword') {
     if (!ok || !isAuthenticated.value) {
-      return { name: 'Login', query: { reason: 'auth' } }
+      const redirect = sanitizeRedirect(to.query.redirect)
+      return {
+        name: 'Login',
+        query: redirect ? { reason: 'auth', redirect } : { reason: 'auth' },
+      }
     }
-    if (!mustChangePassword.value) return { name: 'Overview' }
+    if (!mustChangePassword.value) {
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null
+      const path = resolveLandingPath({
+        redirectRaw: to.query.redirect,
+        preferredPath: loadLandingPath(storage),
+        isAdmin: isAdmin.value,
+        sanitizeRedirect,
+      })
+      return path
+    }
     return true
   }
 
@@ -100,7 +119,11 @@ router.beforeEach((to, from) => {
   }
 
   if (mustChangePassword.value) {
-    return { name: 'ForceChangePassword' }
+    const redirect = sanitizeRedirect(to.fullPath)
+    return {
+      name: 'ForceChangePassword',
+      query: redirect ? { redirect } : {},
+    }
   }
 
   if (to.meta.admin && !isAdmin.value) {

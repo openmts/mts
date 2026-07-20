@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { validateNewPassword } from '@/utils/passwordPolicy'
+import { formatRedirectLabel, sanitizeRedirect, withRedirectQuery } from '@/utils/redirect'
 import { KeyRound } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
 
 const router = useRouter()
+const route = useRoute()
 const { currentUser, changePassword, logout } = useAuth()
 const { t, locale } = useI18n()
+const pendingRedirect = computed(() => sanitizeRedirect(route.query.redirect))
+const pendingRedirectLabel = computed(() =>
+  pendingRedirect.value ? formatRedirectLabel(pendingRedirect.value) : '',
+)
 
 const oldPassword = ref('')
 const newPassword = ref('')
@@ -34,7 +40,10 @@ async function submit() {
       error.value = err
       return
     }
-    await router.replace({ name: 'Login', query: { reason: 'password_changed' } })
+    await router.replace({
+      name: 'Login',
+      query: withRedirectQuery({ reason: 'password_changed' }, route.query.redirect),
+    })
   } finally {
     loading.value = false
   }
@@ -58,6 +67,15 @@ async function doLogout() {
         <p class="text-sm text-slate-500 dark:text-slate-400">
           {{ t('forcePasswordDesc') }}
           <span class="font-medium text-slate-700 dark:text-slate-200">{{ currentUser || 'admin' }}</span>
+        </p>
+        <p
+          v-if="pendingRedirect"
+          class="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+          role="status"
+          data-testid="force-redirect-hint"
+        >
+          {{ t('forceRedirectHint') }}
+          <span class="mt-0.5 block break-all font-mono text-[11px]" data-testid="force-redirect-path">{{ pendingRedirectLabel }}</span>
         </p>
       </div>
 
