@@ -341,7 +341,7 @@ const columnRows = computed(() => {
   return (columnSeries.value as Array<Record<string, unknown>>).map((c) => ({
     measurement: String(c.measurement ?? ''),
     field: String(c.field_name ?? c.FieldName ?? ''),
-    tags: c.tags && typeof c.tags === 'object' ? JSON.stringify(c.tags) : '—',
+    tags: c.tags && typeof c.tags === 'object' ? JSON.stringify(c.tags) : t.value('emptyValue'),
     points: Array.isArray(c.timestamps) ? c.timestamps.length : (Array.isArray(c.values) ? (c.values as unknown[]).length : 0),
   }))
 })
@@ -611,7 +611,7 @@ const columnRows = computed(() => {
             >
               <span v-if="resultColumns.time" class="font-mono">{{ formatTimestamp(row.timestamp) }}</span>
               <span v-if="resultColumns.measurement">{{ row.measurement }}</span>
-              <span v-if="resultColumns.tags" class="truncate font-mono text-slate-500 dark:text-slate-400">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : '—' }}</span>
+              <span v-if="resultColumns.tags" class="truncate font-mono text-slate-500 dark:text-slate-400">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : t('emptyValue') }}</span>
               <span v-if="resultColumns.fields" class="truncate font-mono">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any) }}</span>
             </div>
           </template>

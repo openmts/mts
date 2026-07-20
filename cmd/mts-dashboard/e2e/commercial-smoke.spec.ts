@@ -60,6 +60,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByRole('main').getByRole('heading', { name: /^(存储|Storage)$/ })).toBeVisible()
   await expect(page.getByTestId('storage-data-snapshot')).toBeVisible()
 
+  // Config 表头 i18n（表头在空数据时仍可见；a11y 树中 th 可能暴露为 cell）
+  await page.goto('/config')
+  await expect(page.getByTestId('config-page')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { level: 1, name: /^(配置|Config)$/ })).toBeVisible()
+  await expect(page.getByTestId('config-schema-table').getByText(/^(名称|Name)$/)).toBeVisible()
+  await expect(page.getByTestId('config-error-codes-table').getByText(/^(错误码|Code)$/)).toBeVisible()
+
   // 8) 就绪中心：勾选持久化 + 导出/归档入口
   await page.goto('/ops/readiness')
   await expect(page.getByRole('main').getByRole('heading', { name: /就绪中心|Commercial readiness|可商用就绪/ })).toBeVisible()

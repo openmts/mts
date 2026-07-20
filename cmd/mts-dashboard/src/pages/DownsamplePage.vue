@@ -601,9 +601,9 @@ async function confirmRange() {
               <td class="px-4 py-2.5 text-xs mts-muted">{{ formatUnix(st.completed_until_unix) }}</td>
               <td class="px-4 py-2.5 text-xs mts-muted">{{ formatUnix(st.last_run_unix) }}</td>
               <td class="px-4 py-2.5 text-xs mts-muted">{{ formatUnix(st.last_success_unix || 0) }}</td>
-              <td class="px-4 py-2.5 text-xs mts-muted">{{ st.lag_seconds != null ? `${st.lag_seconds}s` : '—' }}</td>
+              <td class="px-4 py-2.5 text-xs mts-muted">{{ st.lag_seconds != null ? `${st.lag_seconds}s` : t('emptyValue') }}</td>
               <td class="px-4 py-2.5 text-xs" :class="st.last_error ? 'text-red-600' : 'mts-muted'">
-                {{ st.last_error || '—' }}
+                {{ st.last_error || t('emptyValue') }}
               </td>
             </tr>
           </tbody>

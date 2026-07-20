@@ -130,8 +130,8 @@ function levelLabel(level: AccessLevel): string {
                 {{ levelLabel(row.user) }}
               </span>
             </td>
-            <td class="px-3 py-2 font-mono text-xs text-slate-500 dark:text-slate-400">{{ row.route || '—' }}</td>
-            <td class="px-3 py-2 text-xs mts-muted">{{ textForLocale(row.notes, uiLocale) || '—' }}</td>
+            <td class="px-3 py-2 font-mono text-xs text-slate-500 dark:text-slate-400">{{ row.route || t('emptyValue') }}</td>
+            <td class="px-3 py-2 text-xs mts-muted">{{ textForLocale(row.notes, uiLocale) || t('emptyValue') }}</td>
           </tr>
           <tr v-if="!rows.length">
             <td colspan="6" class="px-3 py-8 text-center text-sm mts-muted">{{ t('accessMatrixEmpty') }}</td>

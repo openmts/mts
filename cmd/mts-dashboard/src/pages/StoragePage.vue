@@ -458,10 +458,10 @@ async function confirmDelete() {
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">Kind</th>
-              <th class="px-2 py-2">Name</th>
-              <th class="px-2 py-2">Size</th>
-              <th class="px-2 py-2">Time</th>
+              <th class="px-2 py-2">{{ t('storageColKind') }}</th>
+              <th class="px-2 py-2">{{ t('storageColName') }}</th>
+              <th class="px-2 py-2">{{ t('storageColSize') }}</th>
+              <th class="px-2 py-2">{{ t('storageColTime') }}</th>
             </tr>
           </thead>
           <tbody>

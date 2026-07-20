@@ -158,7 +158,7 @@ onMounted(() => { void load() })
         </select>
       </label>
       <label class="text-xs mts-muted grow">{{ t('accessGrantsSearch') }}
-        <input v-model="q" class="mts-input mt-1 text-sm" placeholder="user / db / permission" />
+        <input v-model="q" class="mts-input mt-1 text-sm" :placeholder="t('accessGrantsFilterPlaceholder')" />
       </label>
     </div>
 
@@ -186,7 +186,7 @@ onMounted(() => { void load() })
             class="border-b border-slate-100 dark:border-slate-800"
           >
             <td class="px-3 py-2 font-medium text-slate-800 dark:text-slate-100">{{ row.user }}</td>
-            <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ row.role || '—' }}</td>
+            <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ row.role || t('emptyValue') }}</td>
             <td class="px-3 py-2">
               <span
                 class="inline-flex rounded-full px-2 py-0.5 text-xs"

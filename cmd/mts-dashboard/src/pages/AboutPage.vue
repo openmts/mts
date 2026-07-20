@@ -77,11 +77,11 @@ onMounted(() => {
           </div>
           <div class="flex justify-between gap-3">
             <dt class="mts-muted">VITE_API_BASE</dt>
-            <dd class="font-mono">{{ client.apiBase || '—' }}</dd>
+            <dd class="font-mono">{{ client.apiBase || t('emptyValue') }}</dd>
           </div>
           <div class="flex justify-between gap-3">
             <dt class="mts-muted">{{ t('user') }}</dt>
-            <dd class="font-mono">{{ currentUser || '—' }}</dd>
+            <dd class="font-mono">{{ currentUser || t('emptyValue') }}</dd>
           </div>
         </dl>
       </div>
@@ -108,7 +108,7 @@ onMounted(() => {
             <dd class="font-mono">{{ server.built_at }}</dd>
           </div>
         </dl>
-        <p v-else class="text-xs mts-muted">{{ loading ? t('loading') : '—' }}</p>
+        <p v-else class="text-xs mts-muted">{{ loading ? t('loading') : t('emptyValue') }}</p>
       </div>
     </div>
   </div>

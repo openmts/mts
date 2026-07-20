@@ -522,7 +522,7 @@ const showAdminPanels = computed(() => isAdmin.value)
           <span class="text-xs mts-muted">({{ doctorChecks.length }})</span>
         </div>
         <span class="text-xs mts-muted">
-          HTTP TLS:
+          {{ t('doctorHttpTls') }}:
           <span :class="doctorTLS ? 'text-green-600' : 'text-amber-600'">
             {{ doctorTLS === null ? t('emptyValue') : doctorTLS ? t('enabled') : t('disabled') }}
           </span>

@@ -246,3 +246,9 @@
 - Overview 健康态/Ready/Doctor 表头与空值 i18n；评分等级与 Doctor 分项标签本地化
 - 预检/签核「建议下一步」面板（Overview + Readiness）+ 导出预检摘要 toast
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P56 状态（2026-07-20）
+- Config/Storage/ApiSpec 表头与端点摘要 i18n；Overview HTTP TLS 标签本地化
+- 关键管理页 emptyValue 统一；AccessGrants/ApiSpec 筛选 placeholder i18n
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

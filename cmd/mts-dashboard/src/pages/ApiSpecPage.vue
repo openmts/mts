@@ -83,8 +83,8 @@ const totalEndpoints = computed(() =>
   <div v-else class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <div>
-        <h1 class="mts-title">API Spec</h1>
-        <p class="text-xs mts-muted">{{ formatMessage(t('apiSpecDesc'), { version: version || '—', count: totalEndpoints }) }}</p>
+        <h1 class="mts-title" data-testid="api-spec-title">{{ t('apiSpec') }}</h1>
+        <p class="text-xs mts-muted">{{ formatMessage(t('apiSpecDesc'), { version: version || t('emptyValue'), count: totalEndpoints }) }}</p>
       </div>
       <button class="mts-btn" :disabled="loading" @click="load"><RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}</button>
     </div>
@@ -101,7 +101,7 @@ const totalEndpoints = computed(() =>
       <label class="text-xs mts-muted md:col-span-2">{{ t('apiSpecSearch') }}
         <div class="relative mt-1">
           <Search class="pointer-events-none absolute left-2 top-2.5 h-3.5 w-3.5 text-slate-400" />
-          <input v-model="q" class="mts-input pl-8" placeholder="method / path / description" />
+          <input v-model="q" class="mts-input pl-8" :placeholder="t('apiSpecSearchPlaceholder')" />
         </div>
       </label>
     </div>
@@ -109,24 +109,24 @@ const totalEndpoints = computed(() =>
     <div v-for="ns in filtered" :key="ns.name" class="mts-panel">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ ns.name }}</h2>
-        <span class="text-xs mts-muted">{{ ns.base_path || '—' }} · {{ ns.endpoints.length }} endpoints</span>
+        <span class="text-xs mts-muted">{{ ns.base_path || t('emptyValue') }} · {{ formatMessage(t('apiSpecEndpoints'), { count: ns.endpoints.length }) }}</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">Method</th>
-              <th class="px-2 py-2">Path</th>
-              <th class="px-2 py-2">Auth</th>
-              <th class="px-2 py-2">Description</th>
+              <th class="px-2 py-2">{{ t('apiSpecColMethod') }}</th>
+              <th class="px-2 py-2">{{ t('apiSpecColPath') }}</th>
+              <th class="px-2 py-2">{{ t('apiSpecColAuth') }}</th>
+              <th class="px-2 py-2">{{ t('apiSpecColDescription') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(ep, i) in ns.endpoints" :key="i" class="border-b border-slate-100 dark:border-slate-800">
               <td class="px-2 py-2 font-mono text-xs font-semibold">{{ ep.method }}</td>
               <td class="px-2 py-2 font-mono text-xs">{{ ep.path }}</td>
-              <td class="px-2 py-2 text-xs mts-muted">{{ ep.auth || '—' }}</td>
-              <td class="px-2 py-2 text-xs">{{ ep.description || '—' }}</td>
+              <td class="px-2 py-2 text-xs mts-muted">{{ ep.auth || t('emptyValue') }}</td>
+              <td class="px-2 py-2 text-xs">{{ ep.description || t('emptyValue') }}</td>
             </tr>
           </tbody>
         </table>

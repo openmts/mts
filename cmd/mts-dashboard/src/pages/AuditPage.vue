@@ -272,8 +272,8 @@ function exportCSV() {
               <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{{ evt.time }}</td>
               <td class="px-4 py-3 text-xs text-slate-700 dark:text-slate-200">{{ evt.user_name }}</td>
               <td class="px-4 py-3 text-xs font-medium text-slate-700 dark:text-slate-200">{{ evt.action }}</td>
-              <td class="px-4 py-3 text-xs mts-muted">{{ evt.database || '—' }}</td>
-              <td class="px-4 py-3 text-xs mts-muted">{{ evt.detail || '—' }}</td>
+              <td class="px-4 py-3 text-xs mts-muted">{{ evt.database || t('emptyValue') }}</td>
+              <td class="px-4 py-3 text-xs mts-muted">{{ evt.detail || t('emptyValue') }}</td>
             </tr>
           </tbody>
         </table>

@@ -60,11 +60,11 @@ async function submit() {
       <dl class="space-y-2 text-sm">
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('username') }}</dt>
-          <dd class="font-mono">{{ currentUser || '—' }}</dd>
+          <dd class="font-mono">{{ currentUser || t('emptyValue') }}</dd>
         </div>
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('accountRole') }}</dt>
-          <dd class="font-mono">{{ currentRole || '—' }}</dd>
+          <dd class="font-mono">{{ currentRole || t('emptyValue') }}</dd>
         </div>
       </dl>
     </div>

@@ -8,7 +8,6 @@ import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
-import EmptyState from '@/components/EmptyState.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { RefreshCw, CheckCircle } from 'lucide-vue-next'
 
@@ -122,7 +121,13 @@ function statusLabel(httpStatus: number): string {
 
 <template>
   <PermissionDenied v-if="!isAdmin" />
-  <div v-else class="space-y-6">
+  <div v-else class="space-y-6" data-testid="config-page">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="mts-title">{{ t('configTitle') }}</h1>
+        <p class="text-xs mts-muted">{{ t('configDesc') }}</p>
+      </div>
+    </div>
     <ActionResultBanner
       v-if="loadError"
       kind="error"
@@ -172,19 +177,21 @@ function statusLabel(httpStatus: number): string {
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configSchema') }}</h2>
         <input v-model="schemaFilter" class="mts-input max-w-xs text-xs"  :placeholder="t('configSchemaFilter')" />
       </div>
-      <EmptyState v-if="!filteredSchema.length" compact :title="t('configSchemaEmpty')" :description="t('configSchemaEmptyDesc')" />
-      <div v-else class="max-h-80 overflow-auto">
+      <div class="max-h-80 overflow-auto" data-testid="config-schema-table">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">Name</th>
-              <th class="px-2 py-2">Description</th>
+              <th class="px-2 py-2">{{ t('configColName') }}</th>
+              <th class="px-2 py-2">{{ t('configColDescription') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="f in filteredSchema" :key="f.name" class="border-b border-slate-100 dark:border-slate-800">
               <td class="px-2 py-2 font-mono text-xs">{{ f.name }}</td>
               <td class="px-2 py-2 text-xs mts-muted">{{ f.description }}</td>
+            </tr>
+            <tr v-if="!filteredSchema.length">
+              <td colspan="2" class="px-2 py-3 text-xs mts-muted">{{ t('configSchemaEmpty') }}</td>
             </tr>
           </tbody>
         </table>
@@ -193,13 +200,12 @@ function statusLabel(httpStatus: number): string {
 
     <div class="mts-panel">
       <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configErrorCodes') }}</h2>
-      <EmptyState v-if="!errorCodes.length" compact :title="t('configErrorCodesEmpty')" :description="t('configErrorCodesEmptyDesc')" />
-      <table v-else class="w-full text-sm">
+      <table class="w-full text-sm" data-testid="config-error-codes-table">
         <thead>
           <tr class="border-b border-slate-200 text-left dark:border-slate-700">
-            <th class="pb-2 text-xs font-medium mts-muted">Code</th>
-            <th class="pb-2 text-xs font-medium mts-muted">HTTP</th>
-            <th class="pb-2 text-xs font-medium mts-muted">gRPC</th>
+            <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColCode') }}</th>
+            <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColHTTP') }}</th>
+            <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColGRPC') }}</th>
             <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColDescription') }}</th>
           </tr>
         </thead>
@@ -209,6 +215,9 @@ function statusLabel(httpStatus: number): string {
             <td class="py-2"><span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">{{ ec.http_status }} {{ statusLabel(ec.http_status) }}</span></td>
             <td class="py-2 font-mono text-xs">{{ ec.grpc_code }}</td>
             <td class="py-2 text-xs mts-muted">{{ ec.description }}</td>
+          </tr>
+          <tr v-if="!errorCodes.length">
+            <td colspan="4" class="py-3 text-xs mts-muted">{{ t('configErrorCodesEmpty') }}</td>
           </tr>
         </tbody>
       </table>

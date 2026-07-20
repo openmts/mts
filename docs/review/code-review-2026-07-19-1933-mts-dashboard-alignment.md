@@ -605,3 +605,7 @@ Dashboard 已覆盖主要运维闭环（登录鉴权、查询/写入、库/用�
 - Overview/Readiness 硬编码健康态与 Doctor 表头已 i18n
 - 建议下一步 + 导出预检 toast 已落地
 - 部署侧验收仍 open
+
+## P56（2026-07-20）
+- Config/Storage/ApiSpec 表头与关键页 emptyValue 已本地化
+- 部署侧验收仍 open

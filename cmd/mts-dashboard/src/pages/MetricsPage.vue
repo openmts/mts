@@ -107,7 +107,7 @@ onMounted(() => { void load() })
             <p class="font-mono text-sm font-medium text-slate-800 dark:text-slate-100">{{ fam.name }}</p>
             <p class="text-xs mts-muted">
               <span v-if="fam.type" class="mr-2 uppercase">{{ fam.type }}</span>
-              {{ fam.help || '—' }}
+              {{ fam.help || t('emptyValue') }}
             </p>
           </div>
           <span class="text-xs mts-muted whitespace-nowrap">{{ fam.samples.length }} samples</span>
@@ -127,7 +127,7 @@ onMounted(() => { void load() })
                 class="border-t border-slate-100 dark:border-slate-800"
               >
                 <td class="px-3 py-1.5 font-mono text-slate-600 dark:text-slate-300">
-                  {{ formatSampleLabels(s.labels) || '—' }}
+                  {{ formatSampleLabels(s.labels) || t('emptyValue') }}
                 </td>
                 <td class="px-3 py-1.5 font-mono text-slate-800 dark:text-slate-100">{{ s.value }}</td>
               </tr>
