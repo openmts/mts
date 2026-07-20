@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   DEFAULT_BACK_TO_TOP_THRESHOLD,
   scrollElementToTop,
+  shouldResetScrollOnRouteChange,
   shouldShowBackToTop,
 } from './scrollTop.ts'
 
@@ -30,4 +31,11 @@ test('scrollElementToTop uses scrollTo then fallback', () => {
   assert.equal(scrollElementToTop(el, 'auto'), true)
   assert.equal(el.scrollTop, 0)
   assert.equal(scrollElementToTop(null), false)
+})
+
+test('shouldResetScrollOnRouteChange only on path change', () => {
+  assert.equal(shouldResetScrollOnRouteChange('/query', '/write'), true)
+  assert.equal(shouldResetScrollOnRouteChange('/query', '/query'), false)
+  assert.equal(shouldResetScrollOnRouteChange('', '/'), true)
+  assert.equal(shouldResetScrollOnRouteChange('/a', ''), false)
 })

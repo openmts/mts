@@ -38,3 +38,15 @@ export function scrollElementToTop(
     return false
   }
 }
+
+
+/** 路径变化时回顶；仅 hash 变化时保留滚动（深链锚点） */
+export function shouldResetScrollOnRouteChange(
+  fromPath: string,
+  toPath: string,
+): boolean {
+  const a = String(fromPath || '')
+  const b = String(toPath || '')
+  if (!b) return false
+  return a !== b
+}

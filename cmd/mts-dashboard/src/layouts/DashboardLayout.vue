@@ -26,7 +26,7 @@ import {
 } from '@/utils/recentRoutes'
 import { loadSidebarPrefs, saveSidebarPrefs } from '@/utils/sidebarPrefs'
 import { CLIENT_PREFS_CHANGED_EVENT } from '@/utils/clientPrefs'
-import { scrollElementToTop, shouldShowBackToTop } from '@/utils/scrollTop'
+import { scrollElementToTop, shouldResetScrollOnRouteChange, shouldShowBackToTop } from '@/utils/scrollTop'
 import { ArrowUp } from 'lucide-vue-next'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useServerReachability } from '@/composables/useServerReachability'
@@ -93,8 +93,8 @@ function onMainScroll() {
   showBackToTop.value = shouldShowBackToTop(el?.scrollTop ?? 0)
 }
 
-function scrollMainToTop() {
-  scrollElementToTop(mainContentRef.value)
+function scrollMainToTop(behavior: ScrollBehavior = 'smooth') {
+  scrollElementToTop(mainContentRef.value, behavior)
   showBackToTop.value = false
 }
 
@@ -136,6 +136,16 @@ watch(
     recent.value = recordRecentRoute(path, name)
   },
   { immediate: true },
+)
+
+// 路径切换时主内容回顶；同页仅 hash 变化保留滚动供锚点定位
+watch(
+  () => route.path,
+  (toPath, fromPath) => {
+    if (!shouldResetScrollOnRouteChange(fromPath || '', toPath || '')) return
+    // 即时回顶，避免 smooth 与 hash 滚动竞态
+    scrollMainToTop('auto')
+  },
 )
 
 function onPrefsChanged() {
@@ -306,7 +316,7 @@ function onSkipToMain(e: Event) {
       data-testid="back-to-top"
       :aria-label="t('backToTop')"
       :title="t('backToTop')"
-      @click="scrollMainToTop"
+      @click="() => scrollMainToTop('smooth')"
     >
       <ArrowUp class="h-4 w-4" aria-hidden="true" />
     </button>

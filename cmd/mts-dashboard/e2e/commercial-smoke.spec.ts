@@ -381,6 +381,21 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect.poll(async () => page.evaluate(() => document.getElementById('main-content')?.scrollTop ?? -1)).toBe(0)
   await expect(page.getByTestId('back-to-top')).toHaveCount(0)
 
+  // P106: 路由切换自动回顶
+  await page.evaluate(() => {
+    const main = document.getElementById('main-content') as HTMLElement | null
+    if (!main) return
+    const pad = document.createElement('div')
+    pad.style.height = '1200px'
+    main.appendChild(pad)
+    main.scrollTop = 700
+    main.dispatchEvent(new Event('scroll'))
+  })
+  await expect.poll(async () => page.evaluate(() => document.getElementById('main-content')?.scrollTop ?? 0)).toBeGreaterThan(100)
+  await page.goto('/about')
+  await expect(page.getByTestId('about-page')).toBeVisible()
+  await expect.poll(async () => page.evaluate(() => document.getElementById('main-content')?.scrollTop ?? -1)).toBe(0)
+
   // 最近访问清空：多页后 clear，仅剩当前页（>1 才显示清空）
   await page.goto('/write')
   await page.goto('/query')
