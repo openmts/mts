@@ -7,6 +7,7 @@ import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
@@ -49,6 +50,11 @@ const confirmLoading = ref(false)
 const clearLogOpen = ref(false)
 const clearLogLoading = ref(false)
 const actionLog = ref<OpsActionEntry[]>(loadOpsActionLog())
+const actionKindFilter = ref<'all' | OpsActionKind>('all')
+const actionStatusFilter = ref<'all' | 'ok' | 'error'>('all')
+const actionTextFilter = ref('')
+const ACTION_ROW_HEIGHT = 48
+const ACTION_LIST_HEIGHT = 288
 
 const confirmTitle = computed(() => ({
   flush: t.value('opsConfirmFlush'),
@@ -237,11 +243,11 @@ async function copyMaintErrors() {
 }
 
 function exportActionLog() {
-  if (!actionLog.value.length) {
+  if (!filteredActionLog.value.length) {
     warn(t.value('opsLogExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-ops-actions', 'json'), buildOpsActionExport(actionLog.value))
+  downloadJSON(stampFilename('mts-ops-actions', 'json'), buildOpsActionExport(filteredActionLog.value))
   success(t.value('opsLogExportOk'))
 }
 
@@ -268,6 +274,20 @@ function formatAt(at: number): string {
     return String(at)
   }
 }
+
+const filteredActionLog = computed(() => {
+  const q = actionTextFilter.value.trim().toLowerCase()
+  return actionLog.value.filter((item) => {
+    if (actionKindFilter.value !== 'all' && item.kind !== actionKindFilter.value) return false
+    if (actionStatusFilter.value !== 'all' && item.status !== actionStatusFilter.value) return false
+    if (!q) return true
+    return (
+      item.kind.toLowerCase().includes(q)
+      || item.status.toLowerCase().includes(q)
+      || item.message.toLowerCase().includes(q)
+    )
+  })
+})
 
 onMounted(() => { void loadStats() })
 </script>
@@ -409,7 +429,7 @@ onMounted(() => { void loadStats() })
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">{{ t('opsActionLog') }}</h2>
         <div class="flex flex-wrap gap-2">
-          <button type="button" class="mts-btn" data-testid="ops-export-log" @click="exportActionLog">
+          <button type="button" class="mts-btn" data-testid="ops-export-log" :disabled="!filteredActionLog.length" @click="exportActionLog">
             <Download class="h-3.5 w-3.5" />
             {{ t('opsExportLog') }}
           </button>
@@ -420,28 +440,76 @@ onMounted(() => { void loadStats() })
         </div>
       </div>
       <p class="mb-2 text-xs mts-muted">{{ t('opsActionLogHint') }}</p>
+      <div class="mb-3 flex flex-wrap items-end gap-2" data-testid="ops-action-filter-bar">
+        <label class="text-xs mts-muted">{{ t('opsActionFilterKind') }}
+          <select v-model="actionKindFilter" class="mts-input mt-1" data-testid="ops-action-filter-kind">
+            <option value="all">{{ t('opsActionFilterAll') }}</option>
+            <option value="flush">flush</option>
+            <option value="compact">compact</option>
+            <option value="retention">retention</option>
+            <option value="other">other</option>
+          </select>
+        </label>
+        <label class="text-xs mts-muted">{{ t('opsActionFilterStatus') }}
+          <select v-model="actionStatusFilter" class="mts-input mt-1" data-testid="ops-action-filter-status">
+            <option value="all">{{ t('opsActionFilterAll') }}</option>
+            <option value="ok">ok</option>
+            <option value="error">error</option>
+          </select>
+        </label>
+        <label class="text-xs mts-muted">{{ t('filter') }}
+          <input
+            v-model="actionTextFilter"
+            type="search"
+            class="mts-input mt-1 min-w-[12rem]"
+            data-testid="ops-action-filter-search"
+            :placeholder="t('opsActionFilterSearch')"
+          />
+        </label>
+        <span class="text-xs mts-muted" data-testid="ops-action-filter-count">
+          {{ formatMessage(t('opsActionFilterCount'), { shown: String(filteredActionLog.length), total: String(actionLog.length) }) }}
+        </span>
+      </div>
       <EmptyState
         v-if="!actionLog.length"
         compact
         :title="t('opsLogEmpty')"
         :description="t('opsLogEmptyDesc')"
       />
-      <ul v-else class="max-h-56 space-y-1 overflow-auto text-xs">
-        <li
-          v-for="item in actionLog"
-          :key="item.id"
-          class="flex flex-wrap items-start justify-between gap-2 rounded border border-slate-100 px-2 py-1.5 dark:border-slate-800"
+      <EmptyState
+        v-else-if="!filteredActionLog.length"
+        compact
+        data-testid="ops-action-filter-empty"
+        :title="t('opsActionFilterEmpty')"
+        :description="t('opsLogEmptyDesc')"
+      />
+      <div v-else class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
+        <VirtualTable
+          :items="filteredActionLog"
+          :row-height="ACTION_ROW_HEIGHT"
+          :height="Math.min(ACTION_LIST_HEIGHT, Math.max(144, filteredActionLog.length * ACTION_ROW_HEIGHT))"
+          data-testid="ops-action-virtual-list"
         >
-          <div class="min-w-0">
-            <span
-              class="mr-2 rounded px-1.5 py-0.5 font-medium"
-              :class="item.status === 'ok' ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200'"
-            >{{ item.kind }} · {{ item.status }}</span>
-            <span class="text-slate-700 dark:text-slate-200">{{ item.message }}</span>
-          </div>
-          <span class="shrink-0 mts-muted">{{ formatAt(item.at) }}</span>
-        </li>
-      </ul>
+          <template #default="{ item }">
+            <div
+              class="flex h-full items-start justify-between gap-2 border-b border-slate-100 px-2 py-1.5 text-xs dark:border-slate-800"
+              :data-testid="`ops-action-row-${item.id}`"
+            >
+              <div class="min-w-0">
+                <span
+                  class="mr-2 rounded px-1.5 py-0.5 font-medium"
+                  :class="item.status === 'ok' ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200'"
+                >{{ item.kind }} · {{ item.status }}</span>
+                <span class="text-slate-700 dark:text-slate-200">{{ item.message }}</span>
+              </div>
+              <span class="shrink-0 mts-muted">{{ formatAt(item.at) }}</span>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="ops-action-virtual-hint">
+          {{ t('opsActionVirtualHint') }}
+        </p>
+      </div>
     </div>
 
     <ConfirmDialog

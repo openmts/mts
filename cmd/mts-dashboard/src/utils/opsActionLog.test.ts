@@ -31,6 +31,15 @@ test('appendOpsAction prepends and caps', () => {
   assert.equal(items.length, 50)
 })
 
+test('appendOpsAction default max is 200', () => {
+  let items = appendOpsAction([], { kind: 'flush', status: 'ok', message: 'seed', at: 1 })
+  for (let i = 0; i < 250; i++) {
+    items = appendOpsAction(items, { kind: 'other', status: 'ok', message: String(i), at: 1000 + i })
+  }
+  assert.equal(items.length, 200)
+  assert.equal(items[0].message, '249')
+})
+
 test('save/load roundtrip and export', () => {
   const s = mem()
   const items = appendOpsAction([], { kind: 'retention', status: 'ok', message: 'done', at: 9 })

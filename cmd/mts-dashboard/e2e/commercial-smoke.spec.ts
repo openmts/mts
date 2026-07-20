@@ -598,6 +598,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/operations')
   await expect(page.getByTestId('ops-action-log')).toBeVisible()
   await expect(page.getByTestId('ops-export-log')).toBeVisible()
+  await expect(page.getByTestId('ops-action-filter-bar')).toBeVisible()
   await expect(page.getByTestId('ops-export-stats')).toBeVisible()
   await expect(page.getByTestId('ops-copy-stats')).toBeVisible()
   await expect(page.getByTestId('ops-export-maint-errors')).toBeVisible()
@@ -612,12 +613,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('confirm-dialog-cancel').click()
   await expect(page.getByTestId('confirm-dialog')).toHaveCount(0)
   await page.evaluate(() => {
-    localStorage.setItem('mts.dashboard.ops-actions.v1', JSON.stringify({
+    sessionStorage.setItem('mts.dashboard.ops-actions.v1', JSON.stringify({
       version: 1,
       items: [{ id: 'e2e', kind: 'flush', status: 'ok', message: 'seed', at: Date.now() }],
     }))
   })
   await page.reload()
+  await expect(page.getByTestId('ops-action-virtual-list')).toBeVisible()
+  await expect(page.getByTestId('ops-action-virtual-hint')).toBeVisible()
+  await expect(page.getByTestId('ops-action-filter-bar')).toBeVisible()
   await expect(page.getByTestId('ops-clear-log')).toBeEnabled()
   await page.getByTestId('ops-clear-log').click()
   await expect(page.getByTestId('confirm-dialog')).toBeVisible()

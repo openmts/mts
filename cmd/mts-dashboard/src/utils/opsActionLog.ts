@@ -2,7 +2,7 @@
 
 export const OPS_ACTION_LOG_KEY = 'mts.dashboard.ops-actions.v1'
 export const OPS_ACTION_LOG_VERSION = 1 as const
-export const OPS_ACTION_LOG_MAX = 50
+export const OPS_ACTION_LOG_MAX = 200
 
 export type OpsActionKind = 'flush' | 'compact' | 'retention' | 'other'
 export type OpsActionStatus = 'ok' | 'error'

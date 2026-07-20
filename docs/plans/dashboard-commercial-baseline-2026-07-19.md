@@ -692,3 +692,8 @@
 - 商业冒烟覆盖 metrics-virtual-list
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P131 状态（2026-07-20）
+- Operations 动作日志虚拟滚动 + 筛选；历史上限 200；导出覆盖筛选结果
+- 商业冒烟 sessionStorage 种子与 virtual-list 断言
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
