@@ -528,11 +528,11 @@ async function confirmRange() {
               >{{ policy.enabled ? t('downsampleEnabledOnly') : t('downsampleDisabledOnly') }}</span>
             </td>
             <td class="px-4 py-3 text-xs text-slate-500">
-              {{ getStatus(policy.name) ? formatUnix(getStatus(policy.name)!.completed_until_unix) : '-' }}
+              {{ getStatus(policy.name) ? formatUnix(getStatus(policy.name)!.completed_until_unix) : t('emptyValue') }}
             </td>
             <td class="px-4 py-3">
               <div class="flex items-center gap-1">
-                <button class="rounded p-1 text-slate-400 hover:text-slate-600" title="run" @click="runPolicy(policy.name)">
+                <button class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleRunTitle')" @click="runPolicy(policy.name)">
                   <PlayCircle class="h-4 w-4" />
                 </button>
                 <button
@@ -559,7 +559,7 @@ async function confirmRange() {
                 >
                   <Wrench class="h-4 w-4" />
                 </button>
-                <button class="rounded p-1 text-slate-400 hover:text-slate-600" title="reset" @click="resetPolicy(policy.name)">
+                <button class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleResetTitle')" @click="resetPolicy(policy.name)">
                   <RotateCcw class="h-4 w-4" />
                 </button>
                 <button class="rounded p-1 text-slate-400 hover:text-slate-600" @click="togglePolicy(policy)">

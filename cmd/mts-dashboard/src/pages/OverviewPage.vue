@@ -171,7 +171,23 @@ const sessionSummary = computed(() => {
   return sessionExpiryView(exp, nowMs.value)
 })
 
+function memoryLabel(key: string): string {
+  switch (key) {
+    case 'heap_alloc_bytes':
+      return t.value('memHeapAlloc')
+    case 'heap_inuse_bytes':
+      return t.value('memHeapInuse')
+    case 'sys_bytes':
+      return t.value('memSys')
+    case 'num_gc':
+      return t.value('memNumGC')
+    default:
+      return key
+  }
+}
+
 function formatBytes(bytes: number): string {
+
   if (bytes >= 1 << 30) return (bytes / (1 << 30)).toFixed(1) + ' GB'
   if (bytes >= 1 << 20) return (bytes / (1 << 20)).toFixed(1) + ' MB'
   if (bytes >= 1 << 10) return (bytes / (1 << 10)).toFixed(1) + ' KB'
@@ -574,7 +590,7 @@ const showAdminPanels = computed(() => isAdmin.value)
         <div v-if="!memorySnapshot" class="text-sm mts-muted">{{ t('emptyValue') }}</div>
         <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
           <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50" v-for="(v, k) in memorySnapshot" :key="String(k)">
-            <span class="mts-muted">{{ k }}</span>
+            <span class="mts-muted">{{ memoryLabel(String(k)) }}</span>
             <p class="font-semibold text-slate-800 dark:text-slate-100">{{ typeof v === 'number' && String(k).includes('bytes') ? formatBytes(v) : v }}</p>
           </div>
         </div>
@@ -587,11 +603,11 @@ const showAdminPanels = computed(() => isAdmin.value)
         </div>
         <div v-if="!compactionStats" class="text-sm mts-muted">{{ t('emptyValue') }}</div>
         <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          <div><span class="text-xs mts-muted">total</span><p class="text-sm font-medium">{{ compactionStats.total }}</p></div>
-          <div><span class="text-xs mts-muted">success</span><p class="text-sm font-medium text-green-600">{{ compactionStats.success }}</p></div>
-          <div><span class="text-xs mts-muted">failure</span><p class="text-sm font-medium text-red-600">{{ compactionStats.failure }}</p></div>
-          <div><span class="text-xs mts-muted">backlog</span><p class="text-sm font-medium text-yellow-600">{{ compactionStats.backlog }}</p></div>
-          <div><span class="text-xs mts-muted">active</span><p class="text-sm font-medium text-blue-600">{{ compactionStats.active }}</p></div>
+          <div><span class="text-xs mts-muted">{{ t('opsStatTotal') }}</span><p class="text-sm font-medium">{{ compactionStats.total }}</p></div>
+          <div><span class="text-xs mts-muted">{{ t('opsStatSuccess') }}</span><p class="text-sm font-medium text-green-600">{{ compactionStats.success }}</p></div>
+          <div><span class="text-xs mts-muted">{{ t('opsStatFailure') }}</span><p class="text-sm font-medium text-red-600">{{ compactionStats.failure }}</p></div>
+          <div><span class="text-xs mts-muted">{{ t('opsStatBacklog') }}</span><p class="text-sm font-medium text-yellow-600">{{ compactionStats.backlog }}</p></div>
+          <div><span class="text-xs mts-muted">{{ t('opsStatActive') }}</span><p class="text-sm font-medium text-blue-600">{{ compactionStats.active }}</p></div>
         </div>
         <p v-if="compactionStats?.last_error" class="mt-3 text-xs text-red-600 dark:text-red-300">{{ compactionStats.last_error }}</p>
       </div>
@@ -603,14 +619,14 @@ const showAdminPanels = computed(() => isAdmin.value)
         </div>
         <div v-if="!maintenanceStats" class="text-sm mts-muted">{{ t('emptyValue') }}</div>
         <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-4">
-          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact active: <span class="font-semibold">{{ maintenanceStats.compaction_active }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact backlog: <span class="font-semibold">{{ maintenanceStats.compaction_backlog }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact skipped: <span class="font-semibold">{{ maintenanceStats.compaction_skipped }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">compact failure: <span class="font-semibold">{{ maintenanceStats.compaction_failure }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">downsample active: <span class="font-semibold">{{ maintenanceStats.downsample_active }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">downsample inflight: <span class="font-semibold">{{ maintenanceStats.downsample_inflight }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">downsample failure: <span class="font-semibold">{{ maintenanceStats.downsample_failure }}</span></div>
-          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">errors: <span class="font-semibold">{{ maintenanceStats.maintenance_error_count }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatCompactActive') }}: <span class="font-semibold">{{ maintenanceStats.compaction_active }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatCompactBacklog') }}: <span class="font-semibold">{{ maintenanceStats.compaction_backlog }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatCompactSkipped') }}: <span class="font-semibold">{{ maintenanceStats.compaction_skipped }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatCompactFailure') }}: <span class="font-semibold">{{ maintenanceStats.compaction_failure }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatDownsampleActive') }}: <span class="font-semibold">{{ maintenanceStats.downsample_active }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatDownsampleInflight') }}: <span class="font-semibold">{{ maintenanceStats.downsample_inflight }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatDownsampleFailure') }}: <span class="font-semibold">{{ maintenanceStats.downsample_failure }}</span></div>
+          <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatErrors') }}: <span class="font-semibold">{{ maintenanceStats.maintenance_error_count }}</span></div>
         </div>
         <p v-if="maintenanceStats?.compaction_last_skip" class="mt-3 text-xs text-amber-700 dark:text-amber-200">{{ maintenanceStats.compaction_last_skip }}</p>
       </div>

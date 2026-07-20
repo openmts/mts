@@ -72,11 +72,11 @@ onMounted(() => {
             <dd class="font-mono">{{ client.mode }}</dd>
           </div>
           <div class="flex justify-between gap-3">
-            <dt class="mts-muted">BASE_URL</dt>
+            <dt class="mts-muted">{{ t('aboutBaseUrl') }}</dt>
             <dd class="font-mono">{{ client.base }}</dd>
           </div>
           <div class="flex justify-between gap-3">
-            <dt class="mts-muted">VITE_API_BASE</dt>
+            <dt class="mts-muted">{{ t('aboutApiBase') }}</dt>
             <dd class="font-mono">{{ client.apiBase || t('emptyValue') }}</dd>
           </div>
           <div class="flex justify-between gap-3">
@@ -100,11 +100,11 @@ onMounted(() => {
             <dd class="font-mono">{{ server.version }}</dd>
           </div>
           <div class="flex justify-between gap-3">
-            <dt class="mts-muted">commit</dt>
+            <dt class="mts-muted">{{ t('aboutCommit') }}</dt>
             <dd class="font-mono break-all">{{ server.commit }}</dd>
           </div>
           <div class="flex justify-between gap-3">
-            <dt class="mts-muted">built_at</dt>
+            <dt class="mts-muted">{{ t('aboutBuiltAt') }}</dt>
             <dd class="font-mono">{{ server.built_at }}</dd>
           </div>
         </dl>

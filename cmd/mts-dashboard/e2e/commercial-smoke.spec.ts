@@ -200,6 +200,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('overview-go-readiness').click()
   await expect(page).toHaveURL(/ops\/readiness/)
 
+  // About 字段标签
+  await page.goto('/about')
+  await expect(page.getByRole('main').getByText(/BASE_URL|API/).first()).toBeVisible()
+
   // 16) 权限矩阵 / 实时授权 / 指标 / 404（含矩阵行双语）
   await page.goto('/access')
   await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵|Capability matrix/ })).toBeVisible()
