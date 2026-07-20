@@ -676,3 +676,9 @@
 - 商业冒烟覆盖 downsample-virtual-list
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P128 状态（2026-07-20）
+- Storage 配置快照与 data_dir 快照列表虚拟滚动
+- 修复 loading EmptyState description 绑定
+- 商业冒烟覆盖 storage-*-virtual-list
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

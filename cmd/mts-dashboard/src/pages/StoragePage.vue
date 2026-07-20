@@ -7,6 +7,7 @@ import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
@@ -63,6 +64,9 @@ const exportData = ref<ExportData | null>(null)
 const actionResult = ref<ActionResult | null>(null)
 const loading = ref('')
 const listLoading = ref(false)
+const SNAPSHOT_ROW_HEIGHT = 44
+const DATA_ROW_HEIGHT = 48
+const SNAPSHOT_LIST_HEIGHT = 320
 const deleteOpen = ref(false)
 const deleteName = ref('')
 const deleteLoading = ref(false)
@@ -421,7 +425,7 @@ async function confirmDelete() {
         v-if="listLoading"
         compact
         :title="t('loading')"
-        description="{{ t('storageLoadingSnapshots') }}"
+        :description="t('storageLoadingSnapshots')"
       />
       <EmptyState
         v-else-if="!snapshots.length"
@@ -432,28 +436,42 @@ async function confirmDelete() {
           <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot'" @click="doSnapshot">{{ t('createSnapshot') }}</button>
         </template>
       </EmptyState>
-      <table v-else class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-            <th class="px-4 py-2">{{ t('storageColName') }}</th>
-            <th class="px-4 py-2">{{ t('storageColSize') }}</th>
-            <th class="px-4 py-2">{{ t('storageColTime') }}</th>
-            <th class="px-4 py-2"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="s in snapshots" :key="s.name" class="border-b border-slate-100 dark:border-slate-800">
-            <td class="px-4 py-2 font-mono text-xs">{{ s.name }}</td>
-            <td class="px-4 py-2 text-xs">{{ formatBytes(s.size_bytes) }}</td>
-            <td class="px-4 py-2 text-xs mts-muted">{{ s.mod_time }}</td>
-            <td class="px-4 py-2 text-right">
-              <button class="rounded p-1 text-slate-400 hover:text-red-600" :title="t('delete')" @click="requestDelete(s.name)">
-                <Trash2 class="h-4 w-4" />
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else data-testid="storage-snapshots-table">
+        <div
+          class="grid grid-cols-[minmax(10rem,1.4fr)_minmax(5rem,0.6fr)_minmax(8rem,1fr)_3rem] border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700"
+          data-testid="storage-snapshots-header"
+        >
+          <div class="px-4 py-2">{{ t('storageColName') }}</div>
+          <div class="px-4 py-2">{{ t('storageColSize') }}</div>
+          <div class="px-4 py-2">{{ t('storageColTime') }}</div>
+          <div class="px-4 py-2"></div>
+        </div>
+        <VirtualTable
+          :items="snapshots"
+          :row-height="SNAPSHOT_ROW_HEIGHT"
+          :height="Math.min(SNAPSHOT_LIST_HEIGHT, Math.max(176, snapshots.length * SNAPSHOT_ROW_HEIGHT))"
+          data-testid="storage-snapshots-virtual-list"
+        >
+          <template #default="{ item: s }">
+            <div
+              class="grid h-full grid-cols-[minmax(10rem,1.4fr)_minmax(5rem,0.6fr)_minmax(8rem,1fr)_3rem] items-center border-b border-slate-100 dark:border-slate-800"
+              :data-testid="`storage-snapshot-row-${s.name}`"
+            >
+              <div class="truncate px-4 font-mono text-xs" :title="s.name">{{ s.name }}</div>
+              <div class="px-4 text-xs">{{ formatBytes(s.size_bytes) }}</div>
+              <div class="truncate px-4 text-xs mts-muted" :title="s.mod_time">{{ s.mod_time }}</div>
+              <div class="px-2 text-right">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600" :title="t('delete')" :data-testid="`storage-delete-${s.name}`" @click="requestDelete(s.name)">
+                  <Trash2 class="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="storage-snapshots-virtual-hint">
+          {{ t('storageVirtualHint') }}
+        </p>
+      </div>
     </div>
 
     <div v-if="exportData" class="mts-panel">
@@ -507,24 +525,33 @@ async function confirmDelete() {
       </div>
       <pre v-if="dataSnapshotResult" class="mt-3 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(dataSnapshotResult, null, 2) }}</pre>
       <pre v-if="restoreDrillResult" class="mt-2 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-sky-300">{{ JSON.stringify(restoreDrillResult, null, 2) }}</pre>
-      <div v-if="dataSnapshots.length" class="mt-4 overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">{{ t('storageColKind') }}</th>
-              <th class="px-2 py-2">{{ t('storageColName') }}</th>
-              <th class="px-2 py-2">{{ t('storageColSize') }}</th>
-              <th class="px-2 py-2">{{ t('storageColTime') }}</th>
-              <th class="px-2 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="s in dataSnapshots" :key="s.path" class="border-b border-slate-100 dark:border-slate-800" :data-testid="`storage-data-row-${s.name}`">
-              <td class="px-2 py-2 text-xs">{{ s.kind }}</td>
-              <td class="px-2 py-2 font-mono text-xs">{{ s.name }}</td>
-              <td class="px-2 py-2 text-xs">{{ formatBytes(s.size_bytes || 0) }}</td>
-              <td class="px-2 py-2 text-xs mts-muted">{{ s.mod_time }}</td>
-              <td class="px-2 py-2 text-right text-xs">
+      <div v-if="dataSnapshots.length" class="mt-4 overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800" data-testid="storage-data-table">
+        <div
+          class="grid grid-cols-[minmax(5rem,0.7fr)_minmax(8rem,1.2fr)_minmax(5rem,0.6fr)_minmax(7rem,1fr)_minmax(10rem,1.2fr)] border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700"
+          data-testid="storage-data-header"
+        >
+          <div class="px-2 py-2">{{ t('storageColKind') }}</div>
+          <div class="px-2 py-2">{{ t('storageColName') }}</div>
+          <div class="px-2 py-2">{{ t('storageColSize') }}</div>
+          <div class="px-2 py-2">{{ t('storageColTime') }}</div>
+          <div class="px-2 py-2"></div>
+        </div>
+        <VirtualTable
+          :items="dataSnapshots"
+          :row-height="DATA_ROW_HEIGHT"
+          :height="Math.min(SNAPSHOT_LIST_HEIGHT, Math.max(176, dataSnapshots.length * DATA_ROW_HEIGHT))"
+          data-testid="storage-data-virtual-list"
+        >
+          <template #default="{ item: s }">
+            <div
+              class="grid h-full grid-cols-[minmax(5rem,0.7fr)_minmax(8rem,1.2fr)_minmax(5rem,0.6fr)_minmax(7rem,1fr)_minmax(10rem,1.2fr)] items-center border-b border-slate-100 dark:border-slate-800"
+              :data-testid="`storage-data-row-${s.name}`"
+            >
+              <div class="truncate px-2 text-xs">{{ s.kind }}</div>
+              <div class="truncate px-2 font-mono text-xs" :title="s.name">{{ s.name }}</div>
+              <div class="px-2 text-xs">{{ formatBytes(s.size_bytes || 0) }}</div>
+              <div class="truncate px-2 text-xs mts-muted" :title="s.mod_time">{{ s.mod_time }}</div>
+              <div class="px-2 text-right text-xs">
                 <button
                   v-if="s.kind !== 'restore-drill'"
                   type="button"
@@ -538,10 +565,13 @@ async function confirmDelete() {
                   :data-testid="`storage-copy-path-${s.name}`"
                   @click="copySnapshotPath(s.path || s.name)"
                 >{{ t('storageCopyPath') }}</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </div>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="storage-data-virtual-hint">
+          {{ t('storageDataVirtualHint') }}
+        </p>
       </div>
     </div>
 

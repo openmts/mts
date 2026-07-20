@@ -217,6 +217,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('storage-export-fetch')).toBeVisible()
   await expect(page.getByTestId('storage-drill-source')).toBeVisible()
   await expect(page.getByTestId('storage-drill-source-select')).toBeVisible()
+  // 快照虚拟列表：有数据时可见
+  if (await page.getByTestId('storage-snapshots-virtual-list').count()) {
+    await expect(page.getByTestId('storage-snapshots-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('storage-snapshots-virtual-hint')).toBeVisible()
+  }
+  if (await page.getByTestId('storage-data-virtual-list').count()) {
+    await expect(page.getByTestId('storage-data-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('storage-data-virtual-hint')).toBeVisible()
+  }
   await expect(page.getByRole('main').getByRole('heading', { name: /^(存储|Storage)$/ })).toBeVisible()
   await expect(page.getByTestId('storage-data-snapshot')).toBeVisible()
 
