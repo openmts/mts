@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { formatCaughtError } from '@/utils/apiError'
 import {
   setBearerToken,
   getBearerToken,
@@ -38,11 +39,11 @@ export function useAuth() {
     try {
       const data = await apiLogin(username, password)
       if (!data.token?.token) {
-        return '登录失败：服务端未返回有效 token'
+        return formatCaughtError({ code: 'internal', message: 'missing token' })
       }
       const role = (data.token.role || '').trim()
       if (role !== 'admin' && role !== 'user') {
-        return '登录失败：服务端未返回可信角色'
+        return formatCaughtError({ code: 'internal', message: 'invalid role' })
       }
       setBearerToken(data.token.token)
       setCurrentUser(data.token.user_name)
@@ -56,14 +57,14 @@ export function useAuth() {
       resetAuthRedirect()
       return null
     } catch (e) {
-      return e instanceof Error ? e.message : '登录失败'
+      return formatCaughtError(e)
     }
   }
 
   async function changePassword(oldPassword: string, newPassword: string): Promise<string | null> {
     try {
       const name = currentUser.value || getCurrentUser()
-      if (!name) return '未登录，无法修改密码'
+      if (!name) return formatCaughtError({ code: 'unauthenticated', message: 'not logged in' })
       await apiChangePassword(name, oldPassword, newPassword)
       // ChangePassword 会撤销 token，前端清会话并要求重新登录
       clearAuth()
@@ -73,7 +74,7 @@ export function useAuth() {
       isAuthenticated.value = false
       return null
     } catch (e) {
-      return e instanceof Error ? e.message : '修改密码失败'
+      return formatCaughtError(e)
     }
   }
 

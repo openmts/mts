@@ -1,5 +1,6 @@
 import { ref } from 'vue'
-import { apiPost, apiPostNDJSONStream, APIClientError } from '@/api/client'
+import { formatCaughtError } from '@/utils/apiError'
+import { apiPost, apiPostNDJSONStream } from '@/api/client'
 import { listDatabasesDetailed, listMeasurements, listRetentionPolicies } from '@/api/meta'
 import { parseTimeInt } from '@/utils/time'
 import { parseHumanDurationToNs } from '@/utils/duration'
@@ -261,7 +262,7 @@ export function useQueryWorkbench() {
             else if (type === 'end' && obj.stats) endStats = obj.stats
             else if (type === 'error') {
               errors += 1
-              streamError = obj.error?.message || streamError || '流式查询错误'
+              streamError = obj.error?.message || streamError || formatCaughtError({ code: 'internal', message: 'stream' })
             }
           },
           { signal },
@@ -275,11 +276,7 @@ export function useQueryWorkbench() {
       }
     } catch (e) {
       if (seq !== requestSeq) return
-      if (e instanceof APIClientError && (e.code === 'canceled' || e.status === 499)) {
-        actionError.value = '查询已取消'
-      } else {
-        actionError.value = e instanceof Error ? e.message : '查询失败'
-      }
+      actionError.value = formatCaughtError(e)
     } finally {
       if (seq === requestSeq) {
         loading.value = false

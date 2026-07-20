@@ -692,6 +692,30 @@ watch(
                 {{ t('readinessDeployKitCopied') }}
               </label>
             </div>
+            <div
+              class="mt-3 space-y-2 rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-900 dark:bg-amber-950/30"
+              data-testid="deploy-acceptance-boundary"
+            >
+              <p class="text-xs font-semibold text-amber-900 dark:text-amber-100">{{ t('readinessDeployAcceptanceTitle') }}</p>
+              <p class="text-[11px] text-amber-900/90 dark:text-amber-100/90">{{ t('readinessDeployAcceptanceBody') }}</p>
+              <p class="text-[11px] font-medium text-slate-700 dark:text-slate-200">{{ t('readinessDeployNextChecklist') }}</p>
+              <ol class="list-decimal space-y-1 pl-4 text-[11px] text-slate-700 dark:text-slate-200">
+                <li data-testid="deploy-accept-step-1">{{ t('readinessDeployStep1') }}</li>
+                <li data-testid="deploy-accept-step-2">{{ t('readinessDeployStep2') }}</li>
+                <li data-testid="deploy-accept-step-3">{{ t('readinessDeployStep3') }}</li>
+              </ol>
+              <div class="space-y-1" data-testid="deploy-runbook-links">
+                <p class="text-[11px] font-medium text-slate-700 dark:text-slate-200">{{ t('readinessDeployRunbookTitle') }}</p>
+                <p class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                  <span class="mts-muted">{{ t('readinessDeployRunbookProd') }}:</span>
+                  docs/ops/dashboard-production-runbook.md
+                </p>
+                <p class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                  <span class="mts-muted">{{ t('readinessDeployRunbookBackup') }}:</span>
+                  docs/ops/backup-orchestration.md
+                </p>
+              </div>
+            </div>
           </div>
           <button
             type="button"

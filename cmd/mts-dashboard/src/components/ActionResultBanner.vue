@@ -22,7 +22,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{ dismiss: [] }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const view = computed(() => {
   if (props.result?.message) return props.result
@@ -37,11 +37,22 @@ const view = computed(() => {
 })
 
 const cls = computed(() => (view.value ? actionResultClass(view.value.kind) : ''))
-const label = computed(() => (view.value ? actionResultLabel(view.value.kind) : ''))
+const label = computed(() =>
+  view.value
+    ? actionResultLabel(view.value.kind, locale.value === 'en' ? 'en' : 'zh')
+    : '',
+)
+const liveRole = computed(() => (view.value?.kind === 'error' ? 'alert' : 'status'))
 </script>
 
 <template>
-  <div v-if="view" class="flex items-start justify-between gap-3" :class="cls" role="status">
+  <div
+    v-if="view"
+    class="flex items-start justify-between gap-3"
+    :class="cls"
+    :role="liveRole"
+    :aria-live="view.kind === 'error' ? 'assertive' : 'polite'"
+  >
     <div class="min-w-0 flex-1">
       <div class="mb-0.5 text-[11px] font-semibold uppercase tracking-wide opacity-80">{{ label }}</div>
       <p class="whitespace-pre-wrap break-words text-sm">{{ view.message }}</p>
@@ -49,8 +60,9 @@ const label = computed(() => (view.value ? actionResultLabel(view.value.kind) : 
     <button
       v-if="dismissible"
       type="button"
-      class="shrink-0 rounded p-1 opacity-60 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+      class="mts-focus-ring shrink-0 rounded p-1 opacity-60 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
       :title="t('dismiss')"
+      :aria-label="t('dismiss')"
       @click="emit('dismiss')"
     >
       <X class="h-3.5 w-3.5" />

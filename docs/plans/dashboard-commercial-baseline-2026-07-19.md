@@ -292,3 +292,11 @@
 ## P64 状态（2026-07-20）
 - Write 字段类型下拉 i18n
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P65 状态（2026-07-20）
+- ActionResult 标签 / API 错误友好文案 i18n；HTTP status 推断主错误码；去掉 `[code]` 主文案前缀
+- skip-link 聚焦主内容 + 全局 focus-visible 环（含深色）
+- 部署材料验收边界说明、三步清单与 runbook 路径（不计分）
+- 登录/改密/查询失败路径统一 formatCaughtError
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

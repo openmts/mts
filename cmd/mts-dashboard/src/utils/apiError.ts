@@ -7,8 +7,10 @@ export interface FriendlyApiError {
   status?: number
   title: string
   message: string
-  /** 适合 toast / banner 的单行文案 */
+  /** 适合 toast / banner 的用户主文案（不含裸 code 前缀） */
   display: string
+  /** 诊断用 code，可放在 title/aria 次要位置 */
+  technicalCode: string
 }
 
 const TITLES: Record<string, { zh: string; en: string }> = {
@@ -35,53 +37,107 @@ const HINTS: Record<string, { zh: string; en: string }> = {
   network: { zh: '无法连接服务，请检查网络或服务状态', en: 'Cannot reach server; check network or service status' },
 }
 
+const KNOWN_CODES = new Set(Object.keys(TITLES))
+
 export function normalizeErrorCode(code: string | undefined | null): string {
   const c = String(code || '').trim().toLowerCase()
   if (!c) return 'internal'
   return c
 }
 
+/** HTTP status → 主错误码（code 缺失或 unknown 时使用） */
+export function errorCodeFromStatus(status: number | undefined | null): string | null {
+  if (status == null || !Number.isFinite(status)) return null
+  const s = Math.trunc(status)
+  if (s === 400) return 'bad_request'
+  if (s === 401) return 'unauthenticated'
+  if (s === 403) return 'permission_denied'
+  if (s === 404) return 'not_found'
+  if (s === 409) return 'already_exists'
+  if (s === 429) return 'resource_exhausted'
+  if (s === 499) return 'canceled'
+  if (s >= 500 && s < 600) return 'internal'
+  return null
+}
+
+export function resolveErrorCode(
+  code: string | undefined | null,
+  status?: number | null,
+): string {
+  const normalized = normalizeErrorCode(code)
+  if (KNOWN_CODES.has(normalized) && (code != null && String(code).trim() !== '')) {
+    return normalized
+  }
+  // code 为空 / unknown：优先 status
+  const fromStatus = errorCodeFromStatus(status ?? undefined)
+  if (fromStatus) return fromStatus
+  if (KNOWN_CODES.has(normalized)) return normalized
+  return 'internal'
+}
+
+/** 读取 Dashboard locale（与 useI18n 的 localStorage key 对齐） */
+export function resolveApiErrorLocale(explicit?: ApiErrorLocale | null): ApiErrorLocale {
+  if (explicit === 'zh' || explicit === 'en') return explicit
+  try {
+    const v = localStorage.getItem('mts_locale')
+    if (v === 'en' || v === 'zh') return v
+  } catch {
+    /* ignore */
+  }
+  return 'zh'
+}
+
 export function friendlyApiError(
   input: { code?: string; message?: string; status?: number } | null | undefined,
   locale: ApiErrorLocale = 'zh',
 ): FriendlyApiError {
-  const code = normalizeErrorCode(input?.code)
+  const technicalCode = normalizeErrorCode(input?.code)
+  const code = resolveErrorCode(input?.code, input?.status)
   const titleMap = TITLES[code] ?? TITLES.internal
   const hintMap = HINTS[code] ?? HINTS.internal
   const title = titleMap[locale]
   const hint = hintMap[locale]
   const raw = String(input?.message || '').trim()
-  // 若服务端 message 已足够友好且非空，拼在 hint 后；避免重复
+  // 服务端 message 若仅为 code/snake 或与 title 重复，则不拼入主文案
   let message = hint
   if (raw && raw !== hint && !raw.includes(hint)) {
-    message = `${hint}（${raw}）`
+    const rawLower = raw.toLowerCase()
+    const looksLikeBareCode =
+      rawLower === code ||
+      rawLower === technicalCode ||
+      /^[a-z][a-z0-9_]+$/.test(rawLower) && KNOWN_CODES.has(rawLower)
+    if (!looksLikeBareCode && raw !== title) {
+      message = locale === 'en' ? `${hint} (${raw})` : `${hint}（${raw}）`
+    }
   }
-  const display = `[${code}] ${title}：${message}`
+  // 主文案不以 [code] 开头；诊断 code 放 technicalCode
+  const display = `${title}：${message}`
   return {
     code,
     status: input?.status,
     title,
     message,
     display,
+    technicalCode: technicalCode === 'internal' && code !== 'internal' ? code : technicalCode,
   }
 }
 
-export function formatCaughtError(err: unknown, locale: ApiErrorLocale = 'zh'): string {
+export function formatCaughtError(err: unknown, locale?: ApiErrorLocale | null): string {
+  const loc = resolveApiErrorLocale(locale)
   if (err && typeof err === 'object') {
     const e = err as { code?: string; message?: string; status?: number; name?: string }
     if (e.name === 'APIClientError' || e.code || e.status) {
       return friendlyApiError(
         { code: e.code, message: e.message, status: e.status },
-        locale,
+        loc,
       ).display
     }
     if (err instanceof Error && err.message) {
-      // 网络类
-      if (/failed to fetch|network|load failed/i.test(err.message)) {
-        return friendlyApiError({ code: 'network', message: err.message }, locale).display
+      if (/failed to fetch|network|load failed|networkerror/i.test(err.message)) {
+        return friendlyApiError({ code: 'network', message: err.message }, loc).display
       }
-      return friendlyApiError({ code: 'internal', message: err.message }, locale).display
+      return friendlyApiError({ code: 'internal', message: err.message }, loc).display
     }
   }
-  return friendlyApiError({ code: 'internal', message: String(err ?? '') }, locale).display
+  return friendlyApiError({ code: 'internal', message: String(err ?? '') }, loc).display
 }

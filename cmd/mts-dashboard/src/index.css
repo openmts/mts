@@ -74,3 +74,28 @@ body {
   clip: auto;
   white-space: normal;
 }
+
+
+/* 可访问性：键盘焦点环（鼠标点击不强制 ring） */
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid rgb(14 165 233);
+  outline-offset: 2px;
+}
+.dark :where(a, button, input, select, textarea, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline-color: rgb(56 189 248);
+}
+.mts-focus-ring:focus-visible {
+  outline: 2px solid rgb(14 165 233);
+  outline-offset: 2px;
+}
+.dark .mts-focus-ring:focus-visible {
+  outline-color: rgb(56 189 248);
+}
+/* 主内容区获得程序焦点时给出轻边框，避免看不见焦点 */
+#main-content:focus-visible {
+  outline: 2px solid rgb(14 165 233);
+  outline-offset: -2px;
+}
+.dark #main-content:focus-visible {
+  outline-color: rgb(56 189 248);
+}

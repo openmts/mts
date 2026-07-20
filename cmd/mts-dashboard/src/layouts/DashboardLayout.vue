@@ -73,14 +73,28 @@ provide('toggleSidebar', toggleSidebar)
 provide('closeSidebar', closeSidebar)
 provide('openCommandPalette', openCommandPalette)
 provide('openShortcutsHelp', openShortcuts)
+
+function onSkipToMain(e: Event) {
+  e.preventDefault()
+  const main = document.getElementById('main-content')
+  if (!main) return
+  if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1')
+  main.focus({ preventScroll: false })
+  try {
+    main.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  } catch {
+    main.scrollIntoView()
+  }
+}
 </script>
 
 <template>
   <div class="flex h-screen bg-slate-50 dark:bg-slate-950">
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[200] focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-slate-900 focus:shadow dark:focus:bg-slate-800 dark:focus:text-slate-100"
+      class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[200] focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-slate-900 focus:shadow focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:bg-slate-800 dark:focus:text-slate-100 dark:focus:ring-sky-400 dark:focus:ring-offset-slate-950"
       data-testid="skip-to-main"
+      @click="onSkipToMain"
     >
       {{ t('skipToMain') }}
     </a>
@@ -108,7 +122,7 @@ provide('openShortcutsHelp', openShortcuts)
           {{ recentLabel(r) }}
         </button>
       </div>
-      <main id="main-content" class="flex-1 overflow-auto p-4 sm:p-6" tabindex="-1">
+      <main id="main-content" class="mts-focus-ring flex-1 overflow-auto p-4 sm:p-6 outline-none" tabindex="-1">
         <RouterView v-slot="{ Component }">
           <Suspense>
             <component :is="Component" />
