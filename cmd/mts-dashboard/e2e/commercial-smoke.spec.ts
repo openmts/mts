@@ -174,6 +174,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('query-fields')).toBeVisible()
   await expect(page.getByTestId('query-stats-panel')).toBeVisible()
   await expect(page.getByTestId('query-engine-stats')).toBeVisible()
+  await expect(page.getByTestId('query-range-delete')).toBeVisible()
+  await page.getByTestId('query-range-delete').click()
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+  await expect(page.getByTestId('confirm-dialog-confirm')).toBeDisabled()
+  await page.getByTestId('confirm-dialog-input').fill('DELETE')
+  await expect(page.getByTestId('confirm-dialog-confirm')).toBeEnabled()
+  await page.getByTestId('confirm-dialog-cancel').click()
   await page.getByTestId('query-engine-stats').click()
   await expect(page.getByTestId('query-stats-source-engine')).toBeVisible({ timeout: 15_000 })
   // 若有结果则校验虚拟列表；冷启动无结果时跳过
@@ -262,6 +269,7 @@ test('commercial browser smoke path', async ({ page }) => {
   }
   await page.goto('/users')
   await expect(page.getByTestId('users-page')).toBeVisible()
+  // grant panel may open via user row; skip if no data
   await expect(page.getByTestId('users-export-json')).toBeVisible()
   await expect(page.getByTestId('users-export-csv')).toBeVisible()
   await expect(page.getByTestId('users-table')).toBeVisible()

@@ -172,4 +172,6 @@ timeout 180s env GOSUMDB=sum.golang.org go test -count=1 -timeout 120s ./...
 | FE series filter | **部分完成**（P146 客户端筛选；无服务端分页） |
 | FE write meta | **已修复**（P147 measurement/field 建议） |
 | FE downsample meta | **已修复**（P148 创建表单 datalist） |
+| FE query delete confirm | **已修复**（P149 确认门禁+范围摘要） |
+| FE user grant panel | **已修复**（P150 筛选/空态） |
 | 部署侧三项 | open 不计分 |

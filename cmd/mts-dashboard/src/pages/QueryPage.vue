@@ -25,6 +25,7 @@ import { isDirty, snapshotForm } from '@/utils/formDirty'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { latencyFromNanos } from '@/utils/queryLatency'
 import { filterSeriesList, seriesLabel } from '@/utils/seriesMeta'
+import { buildQueryDeleteScope, formatQueryDeleteScopeMessage } from '@/utils/queryDeleteScope'
 import { detailStatCards, primaryStatCards, toneClass } from '@/utils/queryStatsView'
 import type { MessageKey } from '@/i18n/messages'
 import {
@@ -63,7 +64,6 @@ const authzChecking = ref(false)
 const copyState = ref<'idle' | 'ok' | 'fail'>('idle')
 let copyTimer: ReturnType<typeof setTimeout> | null = null
 const deleteOpen = ref(false)
-const deleteConfirmText = ref('')
 const deleteLoading = ref(false)
 const deleteResult = ref('')
 const PREFS_KEY = 'mts_query_prefs'
@@ -413,8 +413,26 @@ async function copyResults() {
   copyTimer = setTimeout(() => { copyState.value = 'idle' }, 1500)
 }
 
+const deleteScopeMessage = computed(() => {
+  try {
+    const query = buildQuery()
+    const scope = buildQueryDeleteScope(query)
+    return formatQueryDeleteScopeMessage(scope, {
+      database: t.value('database'),
+      retention: t.value('retentionPolicy'),
+      measurement: t.value('measurement'),
+      tags: t.value('queryTagsExpr'),
+      start: t.value('queryStartMs'),
+      end: t.value('queryEndMs'),
+      noTags: t.value('queryDeleteNoTags'),
+      warnNoTime: t.value('queryDeleteNoTimeWarn'),
+    })
+  } catch (e) {
+    return formatCaughtError(e)
+  }
+})
+
 async function doRangeDelete() {
-  if (deleteConfirmText.value !== 'DELETE') return
   deleteLoading.value = true
   deleteResult.value = ''
   try {
@@ -433,7 +451,6 @@ async function doRangeDelete() {
     deleteResult.value = t.value('queryDeleteSubmitted')
     success(deleteResult.value)
     deleteOpen.value = false
-    deleteConfirmText.value = ''
   } catch (e) {
     deleteResult.value = formatCaughtError(e)
     notifyError(deleteResult.value)
@@ -747,7 +764,12 @@ const columnRows = computed(() => {
         :disabled="engineStatsLoading || loading"
         @click="loadEngineStats"
       >{{ engineStatsLoading ? t('loading') : t('queryEngineStatsBtn') }}</button>
-      <button class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 dark:text-red-200" @click="deleteOpen = true"><Trash2 class="h-4 w-4" />{{ t('queryRangeDelete') }}</button>
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 dark:text-red-200"
+        data-testid="query-range-delete"
+        @click="deleteOpen = true"
+      ><Trash2 class="h-4 w-4" />{{ t('queryRangeDelete') }}</button>
       <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700" @click="copyResults">
         <component :is="copyState === 'ok' ? Check : Copy" class="h-4 w-4" />
         {{ streamMeta.previewOnly ? t('copyPreview') : t('copy') }}
@@ -967,7 +989,7 @@ const columnRows = computed(() => {
     <ConfirmDialog
       v-model:open="deleteOpen"
       :title="t('queryDeleteTitle')"
-      :message="t('queryDeleteMsg')"
+      :message="`${t('queryDeleteMsg')}\n\n${deleteScopeMessage}`"
       require-text="DELETE"
       :confirm-label="t('delete')"
       danger

@@ -96,3 +96,16 @@
 - [x] EARS-FE-P148-02 source db/measurement 驱动 measurement/field 建议
 - [x] EARS-FE-P148-03 商业冒烟 create meta
 - [x] EARS-DOC-P148-04 基线记录
+
+## P149 — Query 范围删除确认修复
+- [x] EARS-FE-P149-01 DELETE 输入可提交
+- [x] EARS-FE-P149-02 确认框范围摘要
+- [x] EARS-FE-P149-03 无时间警告
+- [x] EARS-FE-P149-04 商业冒烟
+- [x] EARS-DOC-P149-05 基线记录
+
+## P150 — UserGrantPanel 体验
+- [x] EARS-FE-P150-01 库筛选
+- [x] EARS-FE-P150-02 空态
+- [x] EARS-FE-P150-03 授权按钮 disabled
+- [x] EARS-DOC-P150-04 基线记录
