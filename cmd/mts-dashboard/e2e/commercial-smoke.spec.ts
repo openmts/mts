@@ -206,6 +206,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('downsample-page')).toBeVisible()
   await expect(page.getByTestId('downsample-export-json')).toBeVisible()
   await expect(page.getByTestId('downsample-export-csv')).toBeVisible()
+  if (await page.getByTestId('downsample-virtual-list').count()) {
+    await expect(page.getByTestId('downsample-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('downsample-virtual-hint')).toBeVisible()
+  }
 
   // 7) 存储与 data-snapshot 入口
   await page.goto('/storage')
@@ -655,6 +659,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('downsample-clear-select')).toBeVisible()
   await expect(page.getByTestId('downsample-batch-enable')).toBeVisible()
   await expect(page.getByTestId('downsample-status-panel')).toBeVisible()
+  if (await page.getByTestId('downsample-virtual-list').count()) {
+    await expect(page.getByTestId('downsample-virtual-list')).toBeVisible()
+  }
+  if (await page.getByTestId('downsample-status-virtual-list').count()) {
+    await expect(page.getByTestId('downsample-status-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('downsample-status-virtual-hint')).toBeVisible()
+  }
 
   // 15) Overview 就绪评分入口
   await page.goto('/')

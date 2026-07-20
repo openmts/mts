@@ -8,6 +8,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
@@ -145,6 +146,16 @@ const filteredStatuses = computed(() => {
   if (!policyFilter.value && !enabledFilter.value) return statuses.value
   return statuses.value.filter((s) => names.has(s.policy_name))
 })
+
+const statusByName = computed(() => {
+  const m = new Map<string, DownsampleStatus>()
+  for (const s of statuses.value) m.set(s.policy_name, s)
+  return m
+})
+
+const POLICY_ROW_HEIGHT = 56
+const STATUS_ROW_HEIGHT = 44
+const DOWNSAMPLE_LIST_HEIGHT = 400
 
 const selectedSet = computed(() => new Set(selectedNames.value))
 
@@ -310,7 +321,7 @@ function removePolicyFunction(idx: number) {
   newPolicy.value.functions.splice(idx, 1)
 }
 function getStatus(name: string) {
-  return statuses.value.find((s) => s.policy_name === name)
+  return statusByName.value.get(name)
 }
 function formatUnix(v: number) {
   if (!v) return '-'
@@ -523,93 +534,92 @@ function exportCSV() {
       <EmptyState data-testid="downsample-empty-filter" :title="t('downsampleFilterEmpty')" :description="t('downsampleFilterEmptyDesc')" />
     </div>
 
-    <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-            <th class="w-10 px-4 py-2.5">
+    <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900" data-testid="downsample-policies-table">
+      <div
+        class="grid grid-cols-[2.5rem_minmax(7rem,0.9fr)_minmax(10rem,1.4fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(11rem,1.2fr)] border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-400"
+        data-testid="downsample-policies-header"
+      >
+        <div class="px-3 py-2.5">
+          <input
+            type="checkbox"
+            data-testid="downsample-select-all-box"
+            :checked="allFilteredSelected"
+            @change="toggleSelectAllFiltered(($event.target as HTMLInputElement).checked)"
+          />
+        </div>
+        <div class="px-3 py-2.5">{{ t('downsampleColName') }}</div>
+        <div class="px-3 py-2.5">{{ t('downsampleColPath') }}</div>
+        <div class="px-3 py-2.5">{{ t('downsampleColInterval') }}</div>
+        <div class="px-3 py-2.5">{{ t('downsampleStatusFilter') }}</div>
+        <div class="px-3 py-2.5">{{ t('downsampleColCompleted') }}</div>
+        <div class="px-3 py-2.5">{{ t('action') }}</div>
+      </div>
+      <VirtualTable
+        :items="filteredPolicies"
+        :row-height="POLICY_ROW_HEIGHT"
+        :height="DOWNSAMPLE_LIST_HEIGHT"
+        data-testid="downsample-virtual-list"
+      >
+        <template #default="{ item: policy }">
+          <div
+            class="grid h-full grid-cols-[2.5rem_minmax(7rem,0.9fr)_minmax(10rem,1.4fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(11rem,1.2fr)] items-center border-b border-slate-50 dark:border-slate-800"
+            :data-testid="`downsample-row-${policy.name}`"
+          >
+            <div class="px-3">
               <input
                 type="checkbox"
-                data-testid="downsample-select-all-box"
-                :checked="allFilteredSelected"
-                @change="toggleSelectAllFiltered(($event.target as HTMLInputElement).checked)"
-              />
-            </th>
-            <th class="px-4 py-2.5">{{ t('downsampleColName') }}</th>
-            <th class="px-4 py-2.5">{{ t('downsampleColPath') }}</th>
-            <th class="px-4 py-2.5">{{ t('downsampleColInterval') }}</th>
-            <th class="px-4 py-2.5">{{ t('downsampleStatusFilter') }}</th>
-            <th class="px-4 py-2.5">{{ t('downsampleColCompleted') }}</th>
-            <th class="px-4 py-2.5">{{ t('action') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="policy in filteredPolicies" :key="policy.name" class="border-b border-slate-50">
-            <td class="px-4 py-3">
-              <input
-                type="checkbox"
+                class="h-3.5 w-3.5"
                 :data-testid="`downsample-select-${policy.name}`"
                 :checked="selectedSet.has(policy.name)"
+                :aria-label="t('listSelectCol') + ' ' + policy.name"
                 @change="toggleSelect(policy.name, ($event.target as HTMLInputElement).checked)"
               />
-            </td>
-            <td class="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{{ policy.name }}</td>
-            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
+            </div>
+            <div class="truncate px-3 font-medium text-slate-700 dark:text-slate-200" :title="policy.name">{{ policy.name }}</div>
+            <div class="truncate px-3 text-xs text-slate-600 dark:text-slate-300" :title="`${policy.source_database}/${policy.source_measurement} → ${policy.target_database}/${policy.target_measurement}`">
               {{ policy.source_database }}/{{ policy.source_measurement }} → {{ policy.target_database }}/{{ policy.target_measurement }}
-            </td>
-            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ formatDuration(policy.interval) }}</td>
-            <td class="px-4 py-3">
+            </div>
+            <div class="px-3 text-slate-600 dark:text-slate-300">{{ formatDuration(policy.interval) }}</div>
+            <div class="px-3">
               <span
                 class="rounded px-2 py-0.5 text-xs font-medium"
                 :class="policy.enabled ? 'bg-green-100 text-green-700 dark:text-green-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'"
               >{{ policy.enabled ? t('downsampleEnabledOnly') : t('downsampleDisabledOnly') }}</span>
-            </td>
-            <td class="px-4 py-3 text-xs text-slate-500">
+            </div>
+            <div class="truncate px-3 text-xs text-slate-500" :title="getStatus(policy.name) ? formatUnix(getStatus(policy.name)!.completed_until_unix) : ''">
               {{ getStatus(policy.name) ? formatUnix(getStatus(policy.name)!.completed_until_unix) : t('emptyValue') }}
-            </td>
-            <td class="px-4 py-3">
-              <div class="flex items-center gap-1">
-                <button class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleRunTitle')" @click="runPolicy(policy.name)">
+            </div>
+            <div class="px-2">
+              <div class="flex flex-wrap items-center gap-0.5">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleRunTitle')" :data-testid="`downsample-run-${policy.name}`" @click="runPolicy(policy.name)">
                   <PlayCircle class="h-4 w-4" />
                 </button>
-                <button
-                  class="rounded p-1 text-slate-400 hover:text-slate-600"
-                  :title="t('downsampleDryRun')"
-                  :data-testid="`downsample-dryrun-${policy.name}`"
-                  @click="openRange('dry-run', policy.name)"
-                >
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleDryRun')" :data-testid="`downsample-dryrun-${policy.name}`" @click="openRange('dry-run', policy.name)">
                   <FlaskConical class="h-4 w-4" />
                 </button>
-                <button
-                  class="rounded p-1 text-slate-400 hover:text-slate-600"
-                  :title="t('downsampleRunRange')"
-                  :data-testid="`downsample-runrange-${policy.name}`"
-                  @click="openRange('run-range', policy.name)"
-                >
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleRunRange')" :data-testid="`downsample-runrange-${policy.name}`" @click="openRange('run-range', policy.name)">
                   <Timer class="h-4 w-4" />
                 </button>
-                <button
-                  class="rounded p-1 text-slate-400 hover:text-slate-600"
-                  :title="t('downsampleRepair')"
-                  :data-testid="`downsample-repair-${policy.name}`"
-                  @click="openRange('repair', policy.name)"
-                >
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleRepair')" :data-testid="`downsample-repair-${policy.name}`" @click="openRange('repair', policy.name)">
                   <Wrench class="h-4 w-4" />
                 </button>
-                <button class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleResetTitle')" @click="resetPolicy(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleResetTitle')" :data-testid="`downsample-reset-${policy.name}`" @click="resetPolicy(policy.name)">
                   <RotateCcw class="h-4 w-4" />
                 </button>
-                <button class="rounded p-1 text-slate-400 hover:text-slate-600" @click="togglePolicy(policy)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :data-testid="`downsample-toggle-${policy.name}`" @click="togglePolicy(policy)">
                   <component :is="policy.enabled ? Pause : Play" class="h-4 w-4" />
                 </button>
-                <button class="rounded p-1 text-slate-400 hover:text-red-600" @click="requestDelete(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600" :data-testid="`downsample-delete-${policy.name}`" @click="requestDelete(policy.name)">
                   <Trash2 class="h-4 w-4" />
                 </button>
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </div>
+          </div>
+        </template>
+      </VirtualTable>
+      <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="downsample-virtual-hint">
+        {{ t('downsampleVirtualHint') }}
+      </p>
     </div>
 
     <div id="downsample-status" class="mts-card scroll-mt-20 overflow-hidden p-0" data-testid="downsample-status-panel">
@@ -621,30 +631,42 @@ function exportCSV() {
         <EmptyState compact :title="t('downsampleStatusEmpty')" :description="t('downsampleStatusEmptyDesc')" />
       </div>
       <div v-else class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-              <th class="px-4 py-2.5">{{ t('downsampleColName') }}</th>
-              <th class="px-4 py-2.5">{{ t('downsampleColCompleted') }}</th>
-              <th class="px-4 py-2.5">{{ t('downsampleColLastRun') }}</th>
-              <th class="px-4 py-2.5">{{ t('downsampleColLastSuccess') }}</th>
-              <th class="px-4 py-2.5">{{ t('downsampleColLag') }}</th>
-              <th class="px-4 py-2.5">{{ t('downsampleColError') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="st in filteredStatuses" :key="st.policy_name" class="border-b border-slate-50">
-              <td class="px-4 py-2.5 font-medium">{{ st.policy_name }}</td>
-              <td class="px-4 py-2.5 text-xs mts-muted">{{ formatUnix(st.completed_until_unix) }}</td>
-              <td class="px-4 py-2.5 text-xs mts-muted">{{ formatUnix(st.last_run_unix) }}</td>
-              <td class="px-4 py-2.5 text-xs mts-muted">{{ formatUnix(st.last_success_unix || 0) }}</td>
-              <td class="px-4 py-2.5 text-xs mts-muted">{{ st.lag_seconds != null ? `${st.lag_seconds}s` : t('emptyValue') }}</td>
-              <td class="px-4 py-2.5 text-xs" :class="st.last_error ? 'text-red-600' : 'mts-muted'">
-                {{ st.last_error || t('emptyValue') }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800" data-testid="downsample-status-table">
+          <div
+            class="grid grid-cols-[minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(5rem,0.6fr)_minmax(6rem,0.8fr)] border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400"
+            data-testid="downsample-status-header"
+          >
+            <div class="px-3 py-2.5">{{ t('downsampleColName') }}</div>
+            <div class="px-3 py-2.5">{{ t('downsampleColCompleted') }}</div>
+            <div class="px-3 py-2.5">{{ t('downsampleColLastRun') }}</div>
+            <div class="px-3 py-2.5">{{ t('downsampleColLastSuccess') }}</div>
+            <div class="px-3 py-2.5">{{ t('downsampleColLag') }}</div>
+            <div class="px-3 py-2.5">{{ t('downsampleColError') }}</div>
+          </div>
+          <VirtualTable
+            :items="filteredStatuses"
+            :row-height="STATUS_ROW_HEIGHT"
+            :height="Math.min(DOWNSAMPLE_LIST_HEIGHT, Math.max(176, filteredStatuses.length * STATUS_ROW_HEIGHT))"
+            data-testid="downsample-status-virtual-list"
+          >
+            <template #default="{ item: st }">
+              <div
+                class="grid h-full grid-cols-[minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(5rem,0.6fr)_minmax(6rem,0.8fr)] items-center border-b border-slate-50 dark:border-slate-800"
+                :data-testid="`downsample-status-row-${st.policy_name}`"
+              >
+                <div class="truncate px-3 font-medium text-slate-700 dark:text-slate-200">{{ st.policy_name }}</div>
+                <div class="truncate px-3 text-xs mts-muted">{{ formatUnix(st.completed_until_unix) }}</div>
+                <div class="truncate px-3 text-xs mts-muted">{{ formatUnix(st.last_run_unix) }}</div>
+                <div class="truncate px-3 text-xs mts-muted">{{ formatUnix(st.last_success_unix || 0) }}</div>
+                <div class="truncate px-3 text-xs mts-muted">{{ st.lag_seconds != null ? `${st.lag_seconds}s` : t('emptyValue') }}</div>
+                <div class="truncate px-3 text-xs" :class="st.last_error ? 'text-red-600 dark:text-red-300' : 'mts-muted'">{{ st.last_error || t('emptyValue') }}</div>
+              </div>
+            </template>
+          </VirtualTable>
+          <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="downsample-status-virtual-hint">
+            {{ t('downsampleStatusVirtualHint') }}
+          </p>
+        </div>
       </div>
     </div>
 

@@ -671,3 +671,8 @@
 - 商业冒烟覆盖 ops-status-strip
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P127 状态（2026-07-20）
+- Downsample 策略表/状态表虚拟滚动；选择/导出仍覆盖筛选全集
+- 商业冒烟覆盖 downsample-virtual-list
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
