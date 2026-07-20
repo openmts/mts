@@ -17,6 +17,17 @@ import {
 } from '@/utils/commandPalette'
 import { auditLimitOptions, buildAuditQueryString } from '@/utils/auditQuery'
 import { auditEventsToCSV } from '@/utils/auditExport'
+import { filterRowsByIds } from '@/utils/listSelection'
+import { useListSelection } from '@/composables/useListSelection'
+import {
+  cycleSortState,
+  loadSortState,
+  saveSortState,
+  sortByAccessor,
+  type SortState,
+} from '@/utils/listSort'
+import { auditRowId } from '@/utils/rowIds'
+import { formatMessage } from '@/utils/formatMessage'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 import { ScrollText, Download, RefreshCw, Eraser } from 'lucide-vue-next'
 
@@ -47,8 +58,58 @@ const auditEvents = ref<AuditEvent[]>([])
 const loading = ref(false)
 const loadError = ref('')
 
-const displayedEvents = computed(() => filterAuditEvents(auditEvents.value, clientQuery.value))
+const AUDIT_SORT_KEY = 'mts.dashboard.audit-sort.prefs.v1'
+const AUDIT_SORT_KEYS = ['time', 'user', 'action', 'database'] as const
+type AuditSortKey = (typeof AUDIT_SORT_KEYS)[number]
+const storage = typeof localStorage !== 'undefined' ? localStorage : null
+const auditSort = ref<SortState<AuditSortKey>>(
+  loadSortState(storage, AUDIT_SORT_KEY, AUDIT_SORT_KEYS),
+)
+
+const filteredEvents = computed(() =>
+  filterAuditEvents(auditEvents.value, clientQuery.value),
+)
+
+const displayedEvents = computed(() =>
+  sortByAccessor(filteredEvents.value, auditSort.value, {
+    time: (e) => e.time || '',
+    user: (e) => e.user_name || '',
+    action: (e) => e.action || '',
+    database: (e) => e.database || '',
+  }),
+)
+
+const visibleAuditIds = computed(() =>
+  displayedEvents.value.map((e, i) => auditRowId(e, i)),
+)
+const {
+  selectedCount,
+  allVisibleSelected,
+  someVisibleSelected,
+  exportIds,
+  isSelected,
+  toggle,
+  toggleAllVisible,
+  clear: clearSelection,
+} = useListSelection(visibleAuditIds)
+
 const filteredCount = computed(() => displayedEvents.value.length)
+
+function cycleAuditSort(key: AuditSortKey) {
+  auditSort.value = cycleSortState(auditSort.value, key)
+  saveSortState(storage, AUDIT_SORT_KEY, auditSort.value)
+}
+
+function auditSortIndicator(key: AuditSortKey): string {
+  if (auditSort.value.key !== key) return ''
+  return auditSort.value.dir === 'asc' ? '↑' : '↓'
+}
+
+function rowsForExport(): AuditEvent[] {
+  const withId = displayedEvents.value.map((e, i) => ({ row: e, id: auditRowId(e, i) }))
+  const picked = filterRowsByIds(withId, exportIds.value, (r) => r.id)
+  return picked.map((r) => r.row)
+}
 
 const quickRanges: { id: AuditQuickRange; labelKey: MessageKey }[] = [
   { id: '1h', labelKey: 'auditRange1h' },
@@ -96,11 +157,13 @@ async function loadAudit() {
     const data = await apiGet<AuditResponse>(`/api/v1/admin/audit?${qs}`)
     auditEvents.value = data.events ?? []
     serverTotal.value = typeof data.total === 'number' ? data.total : (data.events ?? []).length
+    clearSelection()
   } catch (e) {
     if (selectedUser.value) {
       try {
         const data = await apiGet<AuditResponse>(`/api/v1/users/${encodeURIComponent(selectedUser.value)}/audit`)
         auditEvents.value = data.events ?? []
+        clearSelection()
         loadError.value = ''
         return
       } catch (e2) {
@@ -130,24 +193,27 @@ function clearFilters() {
   sinceLocal.value = ''
   untilLocal.value = ''
   clientQuery.value = ''
+  clearSelection()
   void loadAudit()
 }
 
 function exportJSON() {
-  if (!displayedEvents.value.length) {
+  const rows = rowsForExport()
+  if (!rows.length) {
     warn(t.value('auditExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-audit', 'json'), displayedEvents.value)
+  downloadJSON(stampFilename('mts-audit', 'json'), rows)
   success(t.value('auditExportJSONOk'))
 }
 
 function exportCSV() {
-  if (!displayedEvents.value.length) {
+  const rows = rowsForExport()
+  if (!rows.length) {
     warn(t.value('auditExportEmpty'))
     return
   }
-  downloadText(stampFilename('mts-audit', 'csv'), auditEventsToCSV(displayedEvents.value), 'text/csv;charset=utf-8')
+  downloadText(stampFilename('mts-audit', 'csv'), auditEventsToCSV(rows), 'text/csv;charset=utf-8')
   success(t.value('auditExportCSVOk'))
 }
 </script>
@@ -234,10 +300,17 @@ function exportCSV() {
     </div>
 
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+      <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 dark:border-slate-800" data-testid="audit-selection-toolbar">
+        <button type="button" class="mts-btn" data-testid="audit-select-all" :disabled="!displayedEvents.length" @click="toggleAllVisible(true)">{{ t('listSelectAll') }}</button>
+        <button type="button" class="mts-btn" data-testid="audit-clear-selection" :disabled="!selectedCount" @click="clearSelection">{{ t('listClearSelection') }}</button>
+        <button type="button" class="mts-btn" data-testid="audit-sort-time" :title="t('listSortBy')" @click="cycleAuditSort('time')">{{ t('auditColTime') }} {{ auditSortIndicator('time') }}</button>
+        <button type="button" class="mts-btn" data-testid="audit-sort-user" :title="t('listSortBy')" @click="cycleAuditSort('user')">{{ t('user') }} {{ auditSortIndicator('user') }}</button>
+      </div>
       <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs mts-muted dark:border-slate-800">
         <span class="inline-flex items-center gap-1"><ScrollText class="h-3.5 w-3.5" /> {{ t('auditEvents') }}</span>
         <span class="inline-flex flex-wrap items-center gap-2">
           <span data-testid="audit-count">{{ filteredCount }} / {{ auditEvents.length }}</span>
+          <span v-if="selectedCount" class="text-sky-700 dark:text-sky-300" data-testid="audit-selected-count">{{ formatMessage(t('listSelectedCount'), { count: selectedCount }) }}</span>
           <span v-if="serverTotal != null" class="text-[11px]" data-testid="audit-total">{{ t('auditTotal') }}: {{ serverTotal }}</span>
           <span class="text-[11px]" data-testid="audit-merged-hint">{{ t('auditMergedHint') }}</span>
         </span>
@@ -260,18 +333,60 @@ function exportCSV() {
         </EmptyState>
       </div>
       <div v-else class="overflow-x-auto">
+        <div class="mts-table-wrap max-h-[28rem] overflow-auto">
         <table id="audit-table" class="scroll-mt-20 w-full text-sm" data-testid="audit-table">
           <thead>
             <tr class="border-b border-slate-200 text-left dark:border-slate-700">
-              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('auditColTime') }}</th>
-              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('user') }}</th>
-              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('action') }}</th>
-              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('database') }}</th>
-              <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('auditColDetail') }}</th>
+              <th class="sticky top-0 z-[1] w-10 bg-white px-3 py-3 dark:bg-slate-900">
+                <input
+                  type="checkbox"
+                  class="h-3.5 w-3.5"
+                  data-testid="audit-select-all-checkbox"
+                  :checked="allVisibleSelected"
+                  :indeterminate.prop="someVisibleSelected"
+                  :aria-label="t('listSelectAll')"
+                  @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
+                />
+              </th>
+              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">
+                <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-time-col" @click="cycleAuditSort('time')">
+                  {{ t('auditColTime') }} <span aria-hidden="true">{{ auditSortIndicator('time') }}</span>
+                </button>
+              </th>
+              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">
+                <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-user-col" @click="cycleAuditSort('user')">
+                  {{ t('user') }} <span aria-hidden="true">{{ auditSortIndicator('user') }}</span>
+                </button>
+              </th>
+              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">
+                <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-action-col" @click="cycleAuditSort('action')">
+                  {{ t('action') }} <span aria-hidden="true">{{ auditSortIndicator('action') }}</span>
+                </button>
+              </th>
+              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">
+                <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-database-col" @click="cycleAuditSort('database')">
+                  {{ t('database') }} <span aria-hidden="true">{{ auditSortIndicator('database') }}</span>
+                </button>
+              </th>
+              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">{{ t('auditColDetail') }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(evt, idx) in displayedEvents" :key="idx" class="border-b border-slate-100 last:border-b-0 dark:border-slate-800">
+            <tr
+              v-for="(evt, idx) in displayedEvents"
+              :key="auditRowId(evt, idx)"
+              class="border-b border-slate-100 last:border-b-0 dark:border-slate-800"
+            >
+              <td class="px-3 py-3">
+                <input
+                  type="checkbox"
+                  class="h-3.5 w-3.5"
+                  :data-testid="`audit-select-${idx}`"
+                  :checked="isSelected(auditRowId(evt, idx))"
+                  :aria-label="t('listSelectCol')"
+                  @change="toggle(auditRowId(evt, idx), ($event.target as HTMLInputElement).checked)"
+                />
+              </td>
               <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{{ evt.time }}</td>
               <td class="px-4 py-3 text-xs text-slate-700 dark:text-slate-200">{{ evt.user_name }}</td>
               <td class="px-4 py-3 text-xs font-medium text-slate-700 dark:text-slate-200">{{ evt.action }}</td>
@@ -280,6 +395,7 @@ function exportCSV() {
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   </div>

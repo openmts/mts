@@ -303,6 +303,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-export-csv')).toBeVisible()
   await expect(page.getByTestId('audit-limit')).toBeVisible()
   await expect(page.getByTestId('audit-merged-hint')).toBeVisible()
+  // P112: Audit 多选/排序入口（空表也可验证控件）
+  await expect(page.getByTestId('audit-selection-toolbar')).toBeVisible()
+  await expect(page.getByTestId('audit-select-all')).toBeVisible()
+  await expect(page.getByTestId('audit-sort-time')).toBeVisible()
+  await page.getByTestId('audit-sort-time').click()
+  await expect.poll(async () => page.evaluate(() => localStorage.getItem('mts.dashboard.audit-sort.prefs.v1'))).toBeTruthy()
 
   // 命令面板运维深链：签核备注 / 部署材料
   await page.getByTestId('topbar-command-palette').click()
@@ -530,6 +536,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('databases-sort-name').click()
   await expect.poll(async () => page.evaluate(() => localStorage.getItem('mts.dashboard.databases-sort.prefs.v1'))).toBeTruthy()
   await expect(page.getByRole('main').getByRole('heading', { name: /数据库|Databases/i })).toBeVisible()
+
+  // P112: Access Grants 多选/排序
+  await page.goto('/access/grants')
+  await expect(page.getByTestId('access-grants-page')).toBeVisible()
+  await expect(page.getByTestId('access-grants-selection-toolbar')).toBeVisible()
+  await expect(page.getByTestId('access-grants-select-all')).toBeVisible()
+  await expect(page.getByTestId('access-grants-sort-user')).toBeVisible()
+  await page.getByTestId('access-grants-sort-user').click()
+  await expect.poll(async () => page.evaluate(() => localStorage.getItem('mts.dashboard.access-grants-sort.prefs.v1'))).toBeTruthy()
 
   // 14) 降采样筛选/批量/状态/区间操作入口
   await page.goto('/downsample')

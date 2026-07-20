@@ -20,6 +20,16 @@ import { RefreshCw, ShieldCheck, Download } from 'lucide-vue-next'
 import { useNotify } from '@/composables/useNotify'
 import { buildGrantsExport, grantsToCSV } from '@/utils/grantsExport'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { filterRowsByIds } from '@/utils/listSelection'
+import { useListSelection } from '@/composables/useListSelection'
+import {
+  cycleSortState,
+  loadSortState,
+  saveSortState,
+  sortByAccessor,
+  type SortState,
+} from '@/utils/listSort'
+import { grantRowId } from '@/utils/rowIds'
 
 interface User {
   name: string
@@ -54,7 +64,15 @@ const users = computed(() => Array.from(new Set(rows.value.map((r) => r.user))).
 const databases = computed(() => Array.from(new Set(rows.value.map((r) => r.database))).sort())
 const permissions = computed(() => Array.from(new Set(rows.value.map((r) => r.permission))).sort())
 
-const filtered = computed(() =>
+const GRANTS_SORT_KEY = 'mts.dashboard.access-grants-sort.prefs.v1'
+const GRANTS_SORT_KEYS = ['user', 'role', 'status', 'database', 'permission'] as const
+type GrantSortKey = (typeof GRANTS_SORT_KEYS)[number]
+const storage = typeof localStorage !== 'undefined' ? localStorage : null
+const grantSort = ref<SortState<GrantSortKey>>(
+  loadSortState(storage, GRANTS_SORT_KEY, GRANTS_SORT_KEYS),
+)
+
+const filteredBase = computed(() =>
   filterGrantRows(rows.value, {
     user: userFilter.value,
     database: dbFilter.value,
@@ -62,7 +80,45 @@ const filtered = computed(() =>
     q: q.value,
   }),
 )
+
+const filtered = computed(() =>
+  sortByAccessor(filteredBase.value, grantSort.value, {
+    user: (r) => r.user,
+    role: (r) => r.role || '',
+    status: (r) => Boolean(r.disabled),
+    database: (r) => r.database,
+    permission: (r) => r.permission,
+  }),
+)
+
+const visibleGrantIds = computed(() => filtered.value.map((r) => grantRowId(r)))
+const {
+  selectedCount,
+  allVisibleSelected,
+  someVisibleSelected,
+  exportIds,
+  isSelected,
+  toggle,
+  toggleAllVisible,
+  clear: clearSelection,
+  pruneTo,
+} = useListSelection(visibleGrantIds)
+
 const coverage = computed(() => grantCoverage(filtered.value))
+
+function cycleGrantSort(key: GrantSortKey) {
+  grantSort.value = cycleSortState(grantSort.value, key)
+  saveSortState(storage, GRANTS_SORT_KEY, grantSort.value)
+}
+
+function grantSortIndicator(key: GrantSortKey): string {
+  if (grantSort.value.key !== key) return ''
+  return grantSort.value.dir === 'asc' ? '↑' : '↓'
+}
+
+function rowsForExport() {
+  return filterRowsByIds(filtered.value, exportIds.value, (r) => grantRowId(r))
+}
 
 async function load() {
   if (!isAdmin.value) return
@@ -100,6 +156,7 @@ async function load() {
     await Promise.all(Array.from({ length: Math.min(concurrency, usersList.length || 1) }, () => worker()))
     rows.value = flattenUserGrants(bundles)
     partialErrors.value = errs
+    pruneTo(rows.value.map((r) => grantRowId(r)))
   } catch (e) {
     loadError.value = formatCaughtError(e)
     rows.value = []
@@ -109,20 +166,22 @@ async function load() {
 }
 
 function exportJSON() {
-  if (!filtered.value.length) {
+  const list = rowsForExport()
+  if (!list.length) {
     warn(t.value('accessExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-access-grants', 'json'), buildGrantsExport(filtered.value))
+  downloadJSON(stampFilename('mts-access-grants', 'json'), buildGrantsExport(list))
   success(t.value('accessExported'))
 }
 
 function exportCSV() {
-  if (!filtered.value.length) {
+  const list = rowsForExport()
+  if (!list.length) {
     warn(t.value('accessExportEmpty'))
     return
   }
-  downloadText(stampFilename('mts-access-grants', 'csv'), grantsToCSV(filtered.value), 'text/csv;charset=utf-8')
+  downloadText(stampFilename('mts-access-grants', 'csv'), grantsToCSV(list), 'text/csv;charset=utf-8')
   success(t.value('accessExported'))
 }
 
@@ -198,8 +257,15 @@ onMounted(() => { void load() })
         </select>
       </label>
       <label class="text-xs mts-muted grow">{{ t('accessGrantsSearch') }}
-        <input v-model="q" class="mts-input mt-1 text-sm" :placeholder="t('accessGrantsFilterPlaceholder')" />
+        <input v-model="q" class="mts-input mt-1 text-sm" :placeholder="t('accessGrantsFilterPlaceholder')" data-testid="access-grants-search" />
       </label>
+      <span v-if="selectedCount" class="text-xs text-sky-700 dark:text-sky-300" data-testid="access-grants-selected-count">{{ formatMessage(t('listSelectedCount'), { count: selectedCount }) }}</span>
+      <div class="flex flex-wrap gap-2" data-testid="access-grants-selection-toolbar">
+        <button type="button" class="mts-btn" data-testid="access-grants-select-all" :disabled="!filtered.length" @click="toggleAllVisible(true)">{{ t('listSelectAll') }}</button>
+        <button type="button" class="mts-btn" data-testid="access-grants-clear-selection" :disabled="!selectedCount" @click="clearSelection">{{ t('listClearSelection') }}</button>
+        <button type="button" class="mts-btn" data-testid="access-grants-sort-user" :title="t('listSortBy')" @click="cycleGrantSort('user')">{{ t('accessGrantsColUser') }} {{ grantSortIndicator('user') }}</button>
+        <button type="button" class="mts-btn" data-testid="access-grants-sort-database" :title="t('listSortBy')" @click="cycleGrantSort('database')">{{ t('accessGrantsColDatabase') }} {{ grantSortIndicator('database') }}</button>
+      </div>
     </div>
 
     <div v-if="!loading && !filtered.length" class="mts-card">
@@ -208,23 +274,64 @@ onMounted(() => { void load() })
         :description="t('accessGrantsEmptyDesc')"
       />
     </div>
-    <div v-else class="mts-card overflow-auto">
-      <table class="min-w-full text-left text-sm">
+    <div v-else class="mts-card max-h-[28rem] overflow-auto" data-testid="access-grants-table-wrap">
+      <table class="min-w-full text-left text-sm" data-testid="access-grants-table">
         <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
           <tr>
-            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColUser') }}</th>
-            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColRole') }}</th>
-            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColStatus') }}</th>
-            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColDatabase') }}</th>
-            <th class="px-3 py-2 font-medium">{{ t('accessGrantsColPermission') }}</th>
+            <th class="sticky top-0 z-[1] w-10 bg-slate-50 px-3 py-2 dark:bg-slate-900/95">
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5"
+                data-testid="access-grants-select-all-checkbox"
+                :checked="allVisibleSelected"
+                :indeterminate.prop="someVisibleSelected"
+                :aria-label="t('listSelectAll')"
+                @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
+              />
+            </th>
+            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-user-col" @click="cycleGrantSort('user')">
+                {{ t('accessGrantsColUser') }} <span aria-hidden="true">{{ grantSortIndicator('user') }}</span>
+              </button>
+            </th>
+            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-role-col" @click="cycleGrantSort('role')">
+                {{ t('accessGrantsColRole') }} <span aria-hidden="true">{{ grantSortIndicator('role') }}</span>
+              </button>
+            </th>
+            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-status-col" @click="cycleGrantSort('status')">
+                {{ t('accessGrantsColStatus') }} <span aria-hidden="true">{{ grantSortIndicator('status') }}</span>
+              </button>
+            </th>
+            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-database-col" @click="cycleGrantSort('database')">
+                {{ t('accessGrantsColDatabase') }} <span aria-hidden="true">{{ grantSortIndicator('database') }}</span>
+              </button>
+            </th>
+            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-permission-col" @click="cycleGrantSort('permission')">
+                {{ t('accessGrantsColPermission') }} <span aria-hidden="true">{{ grantSortIndicator('permission') }}</span>
+              </button>
+            </th>
           </tr>
         </thead>
         <tbody>
           <tr
-            v-for="(row, i) in filtered"
-            :key="`${row.user}-${row.database}-${row.permission}-${i}`"
+            v-for="row in filtered"
+            :key="grantRowId(row)"
             class="border-b border-slate-100 dark:border-slate-800"
           >
+            <td class="px-3 py-2">
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5"
+                :data-testid="`access-grants-select-${row.user}-${row.database}-${row.permission}`"
+                :checked="isSelected(grantRowId(row))"
+                :aria-label="t('listSelectCol')"
+                @change="toggle(grantRowId(row), ($event.target as HTMLInputElement).checked)"
+              />
+            </td>
             <td class="px-3 py-2 font-medium text-slate-800 dark:text-slate-100">{{ row.user }}</td>
             <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ roleLabel(row.role) }}</td>
             <td class="px-3 py-2">
