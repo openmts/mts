@@ -216,7 +216,20 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['write submit', '提交写入', 'export draft'],
   },
   { id: 'users', path: '/users', labelKey: 'users', keywords: ['user', '用户', '权限'] },
+  {
+    id: 'users-filter',
+    path: '/users#users-filter-bar',
+    labelKey: 'cmdUsersFilter',
+    keywords: ['users filter', '用户筛选', 'role filter'],
+    adminOnly: true,
+  },
   { id: 'access', path: '/access', labelKey: 'accessMatrix', keywords: ['rbac', '矩阵', 'matrix'] },
+  {
+    id: 'access-filter',
+    path: '/access#access-matrix-filter-bar',
+    labelKey: 'cmdAccessFilter',
+    keywords: ['access filter', '矩阵筛选', 'rbac filter'],
+  },
   { id: 'grants', path: '/access/grants', labelKey: 'accessGrants', keywords: ['grant', '授权'], adminOnly: true },
   { id: 'metrics', path: '/observability/metrics', labelKey: 'metrics', keywords: ['prometheus', '指标'], adminOnly: true },
   {

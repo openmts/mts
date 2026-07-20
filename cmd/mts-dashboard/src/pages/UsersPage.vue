@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -26,6 +28,8 @@ import {
   type SortState,
 } from '@/utils/listSort'
 import { buildUsersExport, usersToCSV } from '@/utils/usersExport'
+import { parseUsersPrefill, usersFormToPrefill } from '@/utils/routePrefill'
+import { copyText } from '@/utils/clipboard'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
@@ -33,6 +37,8 @@ interface UsersResponse { users: User[] }
 interface DatabaseGrant { database: string; permission: string }
 interface PermissionsResponse { grants: DatabaseGrant[] }
 
+const route = useRoute()
+useHashScroll()
 const users = ref<User[]>([])
 const userFilter = ref('')
 const roleFilter = ref('')
@@ -111,7 +117,50 @@ onMounted(async () => {
     const { listDatabases } = await import('@/api/meta')
     databases.value = await listDatabases()
   } catch (_) { /* 非关键 */ }
+  await applyUsersPrefillFromRoute()
 })
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (!isAdmin.value) return
+    if (prev != null && path !== prev) void applyUsersPrefillFromRoute()
+  },
+)
+
+async function applyUsersPrefillFromRoute() {
+  if (!isAdmin.value) return
+  const pre = parseUsersPrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.q != null && userFilter.value !== pre.q) {
+    userFilter.value = pre.q
+    changed = true
+  }
+  if (pre.role != null && roleFilter.value !== pre.role) {
+    roleFilter.value = pre.role
+    changed = true
+  }
+  if (pre.user) {
+    const u = users.value.find((x) => x.name === pre.user)
+    if (u && selectedUser.value?.name !== u.name) {
+      await selectUser(u)
+      changed = true
+    }
+  }
+  if (changed) success(t.value('usersPrefillApplied'))
+}
+
+async function copyUsersShareLink() {
+  const path = usersFormToPrefill({
+    q: userFilter.value,
+    role: roleFilter.value || undefined,
+    user: selectedUser.value?.name,
+  }, { hash: selectedUser.value ? '#user-grant-panel' : '#users-filter-bar' })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('usersShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
 
 async function loadUsers() {
   try {
@@ -381,6 +430,9 @@ async function confirmBatch() {
         <button type="button" class="mts-btn" data-testid="users-export-csv" :disabled="!filteredUsers.length" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
         </button>
+        <button type="button" class="mts-btn" data-testid="users-share-link" @click="copyUsersShareLink">
+          {{ t('usersShareLink') }}
+        </button>
         <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="showChangeSelfPassword = true">
           <Lock class="h-3.5 w-3.5" /> {{ t('usersChangeMyPassword') }}
         </button>
@@ -403,7 +455,7 @@ async function confirmBatch() {
     </div>
 
     <template v-else>
-    <div class="flex flex-wrap items-end gap-3" data-testid="users-filter-bar">
+    <div id="users-filter-bar" class="scroll-mt-20 flex flex-wrap items-end gap-3" data-testid="users-filter-bar">
       <label class="text-xs mts-muted">{{ t('filter') }}
         <input
           v-model="userFilter"

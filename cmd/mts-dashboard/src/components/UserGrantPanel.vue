@@ -37,7 +37,7 @@ const canGrant = computed(() => props.grantDbs.length > 0 && props.grantPerms.le
 </script>
 
 <template>
-  <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900" data-testid="user-grant-panel">
+  <div id="user-grant-panel" class="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900" data-testid="user-grant-panel">
     <div class="mb-3 flex items-center justify-between">
       <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
         <Shield class="h-4 w-4 text-slate-500 dark:text-slate-400" />

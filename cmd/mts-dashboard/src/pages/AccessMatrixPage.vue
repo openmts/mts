@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
 import { useAuth } from '@/composables/useAuth'
 import {
   ACCESS_LEVEL_LABEL,
@@ -19,6 +21,8 @@ import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { useNotify } from '@/composables/useNotify'
 import { accessMatrixToCSV, buildAccessMatrixExport } from '@/utils/accessMatrixExport'
+import { parseAccessPrefill, accessFormToPrefill } from '@/utils/routePrefill'
+import { copyText } from '@/utils/clipboard'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 import { filterAccessMatrixRows } from '@/utils/listFilter'
 import { filterRowsByIds } from '@/utils/listSelection'
@@ -31,9 +35,11 @@ import {
   type SortState,
 } from '@/utils/listSort'
 
+const route = useRoute()
+useHashScroll()
 const { currentRole } = useAuth()
 const { t, locale } = useI18n()
-const { success, warn } = useNotify()
+const { success, warn, error: notifyError } = useNotify()
 const roleFilter = ref<'all' | RoleName>('all')
 const areaFilter = ref('')
 const textFilter = ref('')
@@ -127,6 +133,47 @@ function rowsForExport() {
   return filterRowsByIds(filteredRows.value, exportIds.value, (r) => r.id)
 }
 
+function applyAccessPrefillFromRoute() {
+  const pre = parseAccessPrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.role && roleFilter.value !== pre.role) {
+    roleFilter.value = pre.role as 'all' | RoleName
+    changed = true
+  }
+  if (pre.area != null && areaFilter.value !== pre.area) {
+    areaFilter.value = pre.area
+    changed = true
+  }
+  if (pre.q != null && textFilter.value !== pre.q) {
+    textFilter.value = pre.q
+    changed = true
+  }
+  if (changed) success(t.value('accessPrefillApplied'))
+}
+
+async function copyAccessShareLink() {
+  const path = accessFormToPrefill({
+    role: roleFilter.value === 'all' ? undefined : roleFilter.value,
+    area: areaFilter.value,
+    q: textFilter.value,
+  }, { hash: '#access-matrix-filter-bar' })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('accessShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
+onMounted(() => {
+  applyAccessPrefillFromRoute()
+})
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (prev != null && path !== prev) applyAccessPrefillFromRoute()
+  },
+)
+
 function exportMatrix() {
   const list = rowsForExport()
   if (!list.length) {
@@ -187,6 +234,9 @@ function exportMatrixCSV() {
         >
           <Download class="h-3.5 w-3.5" /> {{ t('accessMatrixExportCSV') }}
         </button>
+        <button type="button" class="mts-btn" data-testid="access-matrix-share-link" @click="copyAccessShareLink">
+          {{ t('accessShareLink') }}
+        </button>
       </div>
     </div>
 
@@ -205,7 +255,7 @@ function exportMatrixCSV() {
       </div>
     </div>
 
-    <div class="flex flex-wrap items-end gap-2" data-testid="access-matrix-filter-bar">
+    <div id="access-matrix-filter-bar" class="scroll-mt-20 flex flex-wrap items-end gap-2" data-testid="access-matrix-filter-bar">
       <label class="text-xs mts-muted">{{ t('accessMatrixRoleFilter') }}
         <select v-model="roleFilter" class="mts-input mt-1 w-auto text-sm" data-testid="access-matrix-role-filter">
           <option value="all">{{ t('accessMatrixAllRows') }}</option>

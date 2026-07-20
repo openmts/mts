@@ -11,6 +11,10 @@ import {
   parseDatabasesPrefill,
   buildDatabasesPrefillPath,
   databasesFormToPrefill,
+  parseUsersPrefill,
+  usersFormToPrefill,
+  parseAccessPrefill,
+  accessFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -141,4 +145,25 @@ test('databases prefill parse and share', () => {
     '/databases?database=metrics&q=m#databases-filter-bar',
   )
   assert.match(buildDatabasesPrefillPath({ database: 'd1' }), /database=d1/)
+})
+
+test('users and access prefill share helpers', () => {
+  assert.deepEqual(parseUsersPrefill({ q: 'alice', role: 'user', user: 'alice' }), {
+    q: 'alice',
+    role: 'user',
+    user: 'alice',
+  })
+  assert.equal(
+    usersFormToPrefill({ q: 'a', role: 'admin', user: 'root' }),
+    '/users?q=a&role=admin&user=root#users-filter-bar',
+  )
+  assert.deepEqual(parseAccessPrefill({ role: 'admin', area: 'access', q: 'audit' }), {
+    role: 'admin',
+    area: 'access',
+    q: 'audit',
+  })
+  assert.equal(
+    accessFormToPrefill({ role: 'user', area: 'workspace', q: 'query' }),
+    '/access?role=user&area=workspace&q=query#access-matrix-filter-bar',
+  )
 })

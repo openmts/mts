@@ -759,6 +759,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // 13) 用户/数据库筛选入口
   await page.goto('/users')
   await expect(page.getByTestId('users-filter')).toBeVisible()
+  await expect(page.getByTestId('users-share-link')).toBeVisible()
   await expect(page.getByTestId('users-role-filter')).toBeVisible()
   await expect(page.getByTestId('users-role-filter')).toContainText(/管理员|Admin|普通用户|User/)
   // P110: 用户多选 / 批量工具条
@@ -980,6 +981,18 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('databases-detail-panel')).toBeVisible()
   }
   await expect(page.getByTestId('databases-share-link')).toBeVisible()
+
+
+  // P175: 用户筛选深链
+  await page.goto('/users?role=user#users-filter-bar')
+  await expect(page.getByTestId('users-page')).toBeVisible()
+  await expect(page.getByTestId('users-role-filter')).toHaveValue('user')
+  await expect(page.getByTestId('users-share-link')).toBeVisible()
+  // P176: 能力矩阵筛选深链
+  await page.goto('/access?role=admin&q=audit#access-matrix-filter-bar')
+  await expect(page.getByTestId('access-matrix-role-filter')).toHaveValue('admin')
+  await expect(page.getByTestId('access-matrix-search')).toHaveValue('audit')
+  await expect(page.getByTestId('access-matrix-share-link')).toBeVisible()
 
   // 17) 非 admin 端到端：创建 reader、授权 default 读、只读库浏览
   await page.goto('/users')

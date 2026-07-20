@@ -291,3 +291,89 @@ export function databasesFormToPrefill(form: {
     hash: opts?.hash,
   })
 }
+
+export type UsersPrefill = {
+  q?: string
+  role?: string
+  user?: string
+}
+
+/** 用户页预填：筛选 + 可选打开授权面板（不自动改密/删除） */
+export function parseUsersPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): UsersPrefill {
+  const out: UsersPrefill = {}
+  const q = firstQueryValue(query.q ?? query.filter)
+  if (q) out.q = q
+  const role = firstQueryValue(query.role)
+  if (role === 'admin' || role === 'user') out.role = role
+  const user = firstQueryValue(query.user ?? query.user_name)
+  if (user) out.user = user
+  return out
+}
+
+export function buildUsersPrefillPath(opts: UsersPrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.q) params.set('q', opts.q)
+  if (opts.role) params.set('role', opts.role)
+  if (opts.user) params.set('user', opts.user)
+  const qs = params.toString()
+  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#users-filter-bar'
+  return qs ? `/users?${qs}${hash}` : `/users${hash}`
+}
+
+export function usersFormToPrefill(form: {
+  q?: string
+  role?: string
+  user?: string
+}, opts?: { hash?: string }): string {
+  return buildUsersPrefillPath({
+    q: form.q?.trim() || undefined,
+    role: form.role?.trim() || undefined,
+    user: form.user?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
+
+export type AccessPrefill = {
+  role?: string
+  area?: string
+  q?: string
+}
+
+/** 能力矩阵预填：role/area/搜索（只读） */
+export function parseAccessPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): AccessPrefill {
+  const out: AccessPrefill = {}
+  const role = firstQueryValue(query.role)
+  if (role === 'all' || role === 'admin' || role === 'user') out.role = role
+  const area = firstQueryValue(query.area)
+  if (area) out.area = area
+  const q = firstQueryValue(query.q ?? query.filter)
+  if (q) out.q = q
+  return out
+}
+
+export function buildAccessPrefillPath(opts: AccessPrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.role) params.set('role', opts.role)
+  if (opts.area) params.set('area', opts.area)
+  if (opts.q) params.set('q', opts.q)
+  const qs = params.toString()
+  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#access-matrix-filter-bar'
+  return qs ? `/access?${qs}${hash}` : `/access${hash}`
+}
+
+export function accessFormToPrefill(form: {
+  role?: string
+  area?: string
+  q?: string
+}, opts?: { hash?: string }): string {
+  return buildAccessPrefillPath({
+    role: form.role?.trim() || undefined,
+    area: form.area?.trim() || undefined,
+    q: form.q?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
