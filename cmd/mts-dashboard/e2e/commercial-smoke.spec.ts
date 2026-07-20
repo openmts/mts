@@ -132,6 +132,10 @@ test('commercial browser smoke path', async ({ page }) => {
   // 5) 运维 Flush（确认按钮文案为「执行」）
   await page.goto('/operations')
   await expect(page.getByTestId('ops-page')).toBeVisible()
+
+  await expect(page.getByTestId('ops-status-strip')).toBeVisible()
+  await expect(page.getByTestId('ops-status-connectivity')).toBeVisible()
+  await expect(page.getByTestId('ops-status-stats-at')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /^(运维|Operations)$/ })).toBeVisible()
   await expect(page.getByTestId('ops-export-stats')).toBeVisible()
   await expect(page.getByTestId('ops-copy-stats')).toBeVisible()

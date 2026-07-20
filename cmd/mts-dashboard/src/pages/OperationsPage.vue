@@ -25,6 +25,8 @@ import { buildMaintenanceErrorsExport, buildOpsStatsExport, formatOpsStatsPretty
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser, Copy } from 'lucide-vue-next'
 import type { CompactionStats, MaintenanceStats } from '@/api/types'
 import { useHashScroll } from '@/composables/useHashScroll'
+import { useServerReachability } from '@/composables/useServerReachability'
+import { formatMessage } from '@/utils/formatMessage'
 
 interface CompactionStatsResponse { stats: CompactionStats }
 interface MaintenanceStatsResponse { stats: MaintenanceStats }
@@ -34,6 +36,8 @@ const { isAdmin } = useAuth()
 useHashScroll()
 const { t } = useI18n()
 const { success, error: notifyError, warn, info } = useNotify()
+const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz } = useServerReachability()
+const statsLoadedAt = ref<number | null>(null)
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
 const loading = ref(false)
@@ -94,6 +98,8 @@ async function loadStats() {
     const errs = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[]
     if (errs.length && results.every((r) => r.status === 'rejected')) {
       loadError.value = formatCaughtError(errs[0].reason)
+    } else {
+      statsLoadedAt.value = Date.now()
     }
   } catch (e) {
     loadError.value = formatCaughtError(e)
@@ -101,6 +107,51 @@ async function loadStats() {
     loading.value = false
   }
 }
+
+const connectivityLabel = computed(() => {
+  switch (connectivityKind.value) {
+    case 'ok':
+      return t.value('connectivityOk')
+    case 'unreachable':
+      return t.value('connectivityUnreachable')
+    case 'offline':
+      return t.value('connectivityOffline')
+    default:
+      return t.value('connectivityUnknown')
+  }
+})
+
+const connectivityHint = computed(() => {
+  switch (connectivityKind.value) {
+    case 'ok':
+      return t.value('connectivityHintOk')
+    case 'unreachable':
+      return t.value('connectivityHintUnreachable')
+    case 'offline':
+      return t.value('connectivityHintOffline')
+    default:
+      return t.value('connectivityHintUnknown')
+  }
+})
+
+const connectivityToneClass = computed(() => {
+  switch (connectivityKind.value) {
+    case 'ok':
+      return 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+    case 'unreachable':
+      return 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200'
+    case 'offline':
+      return 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100'
+    default:
+      return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+  }
+})
+
+const statsLoadedLabel = computed(() => {
+  if (loading.value) return t.value('opsStatsLoading')
+  if (!statsLoadedAt.value) return t.value('opsStatsNeverLoaded')
+  return formatMessage(t.value('opsStatsLastLoaded'), { time: formatAt(statsLoadedAt.value) })
+})
 
 function openConfirm(kind: 'flush' | 'compact' | 'retention') {
   confirmKind.value = kind
@@ -252,6 +303,37 @@ onMounted(() => { void loadStats() })
       :result="actionResult"
       @dismiss="actionResult = null"
     />
+
+    <div
+      class="mts-panel flex flex-wrap items-center justify-between gap-3"
+      data-testid="ops-status-strip"
+    >
+      <div class="min-w-0 space-y-1">
+        <p class="text-xs font-semibold uppercase tracking-wide mts-muted">{{ t('opsStatusStripTitle') }}</p>
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <span
+            class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
+            :class="connectivityToneClass"
+            data-testid="ops-status-connectivity"
+            :title="connectivityHint"
+          >{{ t('connectivityTitle') }}: {{ connectivityLabel }}</span>
+          <span class="text-xs mts-muted" data-testid="ops-status-stats-at">{{ statsLoadedLabel }}</span>
+          <span
+            v-if="loading || reachChecking"
+            class="text-xs mts-muted"
+            data-testid="ops-status-loading"
+          >{{ loading ? t('opsStatsLoading') : t('connectivityUnknown') }}</span>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="ops-status-retry-readyz" :disabled="reachChecking" @click="retryReadyz">
+          <RefreshCw class="h-3.5 w-3.5" /> {{ t('connectivityTitle') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="ops-status-refresh-stats" :disabled="loading" @click="loadStats">
+          <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
+        </button>
+      </div>
+    </div>
 
     <div id="ops-maint-errors" class="mts-panel scroll-mt-20" data-testid="ops-maint-errors-panel">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">

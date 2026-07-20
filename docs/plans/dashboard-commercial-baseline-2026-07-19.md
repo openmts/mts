@@ -666,3 +666,8 @@
 - 选择/导出仍覆盖筛选全集；商业冒烟覆盖 databases-virtual-list
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P126 状态（2026-07-20）
+- Operations 只读状态条：连通性（/readyz）+ 统计刷新时间
+- 商业冒烟覆盖 ops-status-strip
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
