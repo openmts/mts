@@ -71,3 +71,9 @@
 - [x] EARS-FE-P144-03 列表选择保存
 - [x] EARS-FE-P144-04 商业冒烟
 - [x] EARS-DOC-P144-05 基线记录
+
+## P145 — Data 面库列表
+- [x] EARS-BE-P145-01 data 用户仅见可读库
+- [x] EARS-BE-P145-02 admin 路径仍拒绝非 admin
+- [x] EARS-FE-P145-03 listDatabases 优先 data
+- [x] EARS-DOC-P145-04 基线记录

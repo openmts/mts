@@ -102,6 +102,7 @@ func TestOperationRegistryMountsCoreHTTPPaths(t *testing.T) {
 		routeDataQueryStream,
 		routeDataDelete,
 		routeDataQueryStats,
+		routeDataDatabases,
 		routeDataDatabasesPrefix,
 		routeAuthLogin,
 		routeAuthLogout,

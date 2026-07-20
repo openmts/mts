@@ -19,7 +19,7 @@ Dashboard 在 P124–P136 后已具备可商用后台的主体骨架：鉴权/�
 | 功能闭环 | 良 | 读写/运维/权限/存储/就绪主路径可用 |
 | 前后端契约 | 良 | 历史 P0 已对齐；无新发现阻断错位 |
 | 列表性能 | 良 | 主列表已 VT；ApiSpec/Overview/Readiness doctor 仍有原生表 |
-| 非 admin 体验 | 中 | 库列表手填降级；RP 仍依赖 admin |
+| 非 admin 体验 | 良 | 库列表/RP 均有 data 面只读路径（P140/P145） |
 | 查询表达力 | 中高 | aggregates/window/group/order + predicates DSL；expr 树 UI 仍非目标 |
 | 可商用部署 | 中 | 边缘证书/cron/异地备份仍人工，不计入评分 |
 
@@ -93,7 +93,7 @@ Dashboard 在 P124–P136 后已具备可商用后台的主体骨架：鉴权/�
 - **位置**: `ReadinessPage.vue` doctor.checks
 - **建议**: VirtualTable + testid
 
-#### FE-FULL-P1-04 非 admin RP 元数据仍绑 admin 路径
+#### FE-FULL-P1-04 非 admin RP/库 元数据 — **已修复（P140 RP + P145 库列表）**
 - **位置**: `api/meta.ts` `listRetentionPolicies` → `/api/v1/admin/databases/.../retention-policies`
 - **风险**: 有 data 权限用户查询/写入页 RP 下拉为空，只能手填
 - **建议**: 服务端提供 data 面只读 RP 列表，或明确 UX 手填提示（已有部分）
@@ -163,7 +163,7 @@ timeout 180s env GOSUMDB=sum.golang.org go test -count=1 -timeout 120s ./...
 | FE-FULL-P1-01 ApiSpec VT | **已修复**（P137） |
 | FE-FULL-P1-02 Overview lists VT | **已修复**（P137） |
 | FE-FULL-P1-03 Readiness doctor VT | **已修复**（P137） |
-| FE-FULL-P1-04 非 admin RP | **已修复**（P140 data 面只读 RP + 前端优先） |
+| FE-FULL-P1-04 非 admin RP/库 | **已修复**（P140 RP + P145 库列表 data 面） |
 | FE-FULL-P2-01 predicates | **已修复**（P139 DSL；expr 树仍非目标） |
 | FE-FULL-P2-02 Write 行上限 | **已修复**（P138 上限 50） |
 | FE-FULL-P2-03 VITE_BASE | **已对齐说明**（P141；代码本已支持 dashboard_base） |

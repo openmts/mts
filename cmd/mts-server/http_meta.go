@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"strings"
 
 	mts "github.com/openmts/mts"
 )
@@ -95,6 +97,61 @@ func (r *serverRuntime) handleRetentionPolicies(
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
+}
+
+// handleDataDatabases 返回当前用户可读的 database 列表（data 面，非 admin）。
+func (r *serverRuntime) handleDataDatabases(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodGet) {
+		return
+	}
+	if err := r.requireDataToken(httpCredentialSource{request: request}); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	userName, err := r.authenticateDataUser(httpCredentialSource{request: request})
+	if err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	databases, err := r.listReadableDatabases(request.Context(), userName)
+	if err != nil {
+		writeAPIError(writer, err)
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, measurementsResponse{Databases: databases, Measurements: databases})
+}
+
+func (r *serverRuntime) listReadableDatabases(ctx context.Context, userName string) ([]string, error) {
+	databases, err := r.engine.ListDatabases(ctx)
+	if err != nil {
+		return nil, err
+	}
+	userName = strings.TrimSpace(userName)
+	if userName == "" {
+		// 与 authorizeDatabase 一致：无身份且未 RequireUser 时放行全量
+		if r.currentConfig().Auth.RequireUser {
+			return nil, newAPIError(errorCodeUnauthenticated, "user identity is required", nil)
+		}
+		return databases, nil
+	}
+	user, ok, err := r.engine.GetUser(ctx, userName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || user.Disabled {
+		return nil, mts.ErrPermissionDenied
+	}
+	if user.Role == mts.UserRoleAdmin {
+		return databases, nil
+	}
+	out := make([]string, 0, len(databases))
+	for _, database := range databases {
+		if err := r.engine.CheckUserDatabasePermission(ctx, userName, database, mts.DatabasePermissionRead); err != nil {
+			continue
+		}
+		out = append(out, database)
+	}
+	return out, nil
 }
 
 func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *http.Request) {

@@ -760,3 +760,8 @@
 - Account 落地页：筛选/分组/当前态/EmptyState；保留 select 降级
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P145 状态（2026-07-21）
+- Data 面库列表：`GET /api/v1/data/databases`（按 read 权限过滤）
+- Dashboard 优先 data 回退 admin，闭环非 admin 库下拉
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

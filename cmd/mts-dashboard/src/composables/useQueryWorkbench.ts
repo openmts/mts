@@ -8,6 +8,7 @@ import {
   listRetentionPoliciesDetailed,
   listSeries,
   type FieldMeta,
+  type MetaLoadSource,
   type SeriesMeta,
 } from '@/api/meta'
 import { capSeriesList, fieldNames, tagsToExpr } from '@/utils/seriesMeta'
@@ -35,7 +36,7 @@ export function useQueryWorkbench() {
   const seriesLoading = ref(false)
   const seriesError = ref('')
   const SERIES_CAP = 200
-  const metaSource = ref<'admin' | 'manual' | 'partial'>('admin')
+  const metaSource = ref<MetaLoadSource>('admin')
   const metaHint = ref('')
   const queryForm = ref({
     database: '',

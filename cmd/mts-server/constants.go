@@ -25,6 +25,7 @@ const (
 	routeDataQueryStream           = "/api/v1/data/query/stream"
 	routeDataQueryStats            = "/api/v1/data/query/stats"
 	routeDataDelete                = "/api/v1/data/delete"
+	routeDataDatabases             = "/api/v1/data/databases"
 	routeDataDatabasesPrefix       = "/api/v1/data/databases/"
 	routeAuthLogin                 = "/api/v1/auth/login"
 	routeAuthLogout                = "/api/v1/auth/logout"

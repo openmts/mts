@@ -161,6 +161,38 @@ func TestHTTPDataListRetentionPoliciesForReadUser(t *testing.T) {
 	}
 }
 
+func TestHTTPDataListDatabasesForReadUser(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	postJSON(t, server.URL+"/api/v1/admin/databases", databaseRequest{Name: "visibledb"}, http.StatusOK, &okResponse{})
+	postJSON(t, server.URL+"/api/v1/admin/databases", databaseRequest{Name: "hiddendb"}, http.StatusOK, &okResponse{})
+
+	seedUserWithPassword(t, runtime, mts.User{Name: "db-reader", Role: mts.UserRoleUser}, "secret")
+	if err := runtime.engine.GrantDatabasePermission(context.Background(), "db-reader", "visibledb", mts.DatabasePermissionRead); err != nil {
+		t.Fatalf("grant read: %v", err)
+	}
+	token := loginHTTPUser(t, server.URL, "db-reader", "secret")
+	headers := map[string]string{"Authorization": "Bearer " + token}
+
+	// admin path forbidden
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/databases", headers, http.StatusForbidden, &errorResponse{})
+
+	var resp measurementsResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/data/databases", headers, http.StatusOK, &resp)
+	names := resp.Databases
+	if len(names) == 0 {
+		names = resp.Measurements
+	}
+	if !containsString(names, "visibledb") {
+		t.Fatalf("data databases = %#v, want visibledb", resp)
+	}
+	if containsString(names, "hiddendb") {
+		t.Fatalf("data databases = %#v, must not include hiddendb", resp)
+	}
+}
+
 func containsString(items []string, want string) bool {
 	for _, item := range items {
 		if item == want {

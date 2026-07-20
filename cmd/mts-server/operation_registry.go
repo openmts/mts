@@ -166,6 +166,15 @@ func operationCatalog() []operation {
 			GRPCFn:      grpcQueryStats,
 		},
 		{
+			Name:        "list_data_databases",
+			Namespace:   "data",
+			Description: "list databases readable by current user",
+			Auth:        authDataToken,
+			HTTPMethods: []string{http.MethodGet},
+			HTTPPaths:   []string{routeDataDatabases},
+			HTTPHandler: (*serverRuntime).handleDataDatabases,
+		},
+		{
 			Name:         "data_database_metadata",
 			Namespace:    "data",
 			Description:  "list measurements/fields/series/retention-policies under database prefix",

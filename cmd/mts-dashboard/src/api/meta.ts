@@ -7,7 +7,7 @@ interface MeasurementsPayload {
   databases?: string[]
 }
 
-export type MetaLoadSource = 'admin' | 'manual' | 'partial'
+export type MetaLoadSource = 'admin' | 'data' | 'manual' | 'partial'
 
 export interface ListDatabasesResult {
   names: string[]
@@ -23,22 +23,37 @@ export async function listDatabases(init: RequestInit = {}): Promise<string[]> {
   return result.names
 }
 
-/** 优先 admin 列表；403/权限失败时返回空列表并标记 manual，供页面手填降级 */
+/**
+ * 列出 database：
+ * 1) 优先 data 面只读路径（有任一可读库即可，非 admin 友好）
+ * 2) 回退 admin 路径
+ * 3) 均失败则 manual 手填
+ */
 export async function listDatabasesDetailed(init: RequestInit = {}): Promise<ListDatabasesResult> {
+  const dataPath = '/api/v1/data/databases'
+  const adminPath = '/api/v1/admin/databases'
   try {
-    const data = await apiGet<MeasurementsPayload>('/api/v1/admin/databases', init)
+    const data = await apiGet<MeasurementsPayload>(dataPath, init)
     const names = data.databases ?? data.measurements ?? []
-    return { names: [...names].sort(), source: 'admin' }
+    return { names: [...names].sort(), source: 'data' as MetaLoadSource }
   } catch (e) {
-    const denied = e instanceof APIClientError && (e.status === 403 || e.code === 'permission_denied')
-    if (denied) {
-      return {
-        names: [],
-        source: 'manual',
-        error: formatCaughtError({ code: 'permission_denied', status: 403 }),
+    try {
+      const data = await apiGet<MeasurementsPayload>(adminPath, init)
+      const names = data.databases ?? data.measurements ?? []
+      return { names: [...names].sort(), source: 'admin' }
+    } catch (e2) {
+      const denied =
+        (e instanceof APIClientError && (e.status === 403 || e.code === 'permission_denied')) ||
+        (e2 instanceof APIClientError && (e2.status === 403 || e2.code === 'permission_denied'))
+      if (denied) {
+        return {
+          names: [],
+          source: 'manual',
+          error: formatCaughtError(e2 instanceof APIClientError ? e2 : e),
+        }
       }
+      return { names: [], source: 'manual', error: formatCaughtError(e2) }
     }
-    return { names: [], source: 'manual', error: formatCaughtError(e) }
   }
 }
 

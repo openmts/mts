@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
-import { listDatabasesDetailed, listRetentionPoliciesDetailed } from '@/api/meta'
+import { listDatabasesDetailed, listRetentionPoliciesDetailed, type MetaLoadSource } from '@/api/meta'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
@@ -66,7 +66,7 @@ const loading = ref(false)
 const actionError = ref('')
 const metaHint = ref('')
 const rpMetaHint = ref('')
-const metaSource = ref<'admin' | 'manual' | 'partial'>('admin')
+const metaSource = ref<MetaLoadSource>('admin')
 const { success, error: notifyError, warn } = useNotify()
 const { t } = useI18n()
 function fieldTypeLabel(value: string): string {
