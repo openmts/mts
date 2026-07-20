@@ -46,3 +46,35 @@ export function buildAccessMatrixExport(
     })),
   }
 }
+
+function escapeCSV(v: string): string {
+  const s = String(v ?? '')
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+  return s
+}
+
+/** 本地化矩阵 CSV（与 buildAccessMatrixExport 字段对齐） */
+export function accessMatrixToCSV(
+  rows: CapabilityRow[] | null | undefined,
+  locale: LocaleCode = 'zh',
+): string {
+  const list = Array.isArray(rows) ? rows : []
+  const header = ['id', 'area', 'capability', 'admin', 'user', 'route', 'notes']
+  const lines = [header.join(',')]
+  for (const r of list) {
+    lines.push(
+      [
+        r.id,
+        textForLocale(r.area, locale),
+        textForLocale(r.capability, locale),
+        textForLocale(ACCESS_LEVEL_LABEL[r.admin], locale),
+        textForLocale(ACCESS_LEVEL_LABEL[r.user], locale),
+        r.route || '',
+        r.notes ? textForLocale(r.notes, locale) : '',
+      ]
+        .map(escapeCSV)
+        .join(','),
+    )
+  }
+  return lines.join('\n') + (lines.length ? '\n' : '')
+}

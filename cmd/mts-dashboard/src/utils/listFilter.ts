@@ -54,3 +54,31 @@ export function filterDownsamplePolicies<
   if (enabled === 'disabled') list = list.filter((p) => !p.enabled)
   return list
 }
+
+
+export function filterAccessMatrixRows<
+  T extends {
+    areaKey?: string
+    area?: { zh?: string; en?: string } | string
+    capability?: { zh?: string; en?: string } | string
+    route?: string
+    notes?: { zh?: string; en?: string } | string
+  },
+>(
+  items: T[],
+  query: string,
+  pickText: (v: unknown) => string,
+): T[] {
+  const q = normalizeFilterQuery(query)
+  if (!q) return items
+  return items.filter((r) => {
+    const fields = [
+      pickText(r.area),
+      pickText(r.capability),
+      r.route || '',
+      pickText(r.notes),
+      r.areaKey || '',
+    ]
+    return fields.some((f) => String(f).toLowerCase().includes(q))
+  })
+}

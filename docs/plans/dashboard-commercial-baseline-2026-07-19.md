@@ -600,3 +600,9 @@
 - 商业冒烟覆盖 require-text 与 clear-log 确认
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+
+## P114 状态（2026-07-20）
+- Access Matrix：搜索、多选导出 JSON/CSV、列排序本机记忆、sticky 表头
+- 商业冒烟覆盖 search/select/sort/csv
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
