@@ -141,6 +141,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('command-item-audit').click()
   await expect(page).toHaveURL(/\/audit/)
   await expect(page.getByTestId('audit-quick-ranges')).toBeVisible()
+  await expect(page.getByTestId('audit-export-json')).toBeVisible()
+  await expect(page.getByTestId('audit-export-csv')).toBeVisible()
 
   // 命令面板运维深链：签核备注 / 部署材料
   await page.keyboard.press('Control+KeyK')
@@ -169,6 +171,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('users-role-filter')).toContainText(/管理员|Admin|普通用户|User/)
   await page.goto('/databases')
   await expect(page.getByTestId('databases-filter')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('heading', { name: /数据库|Databases/i })).toBeVisible()
 
   // 14) 降采样筛选/批量/状态/区间操作入口
   await page.goto('/downsample')

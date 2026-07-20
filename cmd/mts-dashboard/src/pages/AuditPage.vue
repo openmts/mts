@@ -228,9 +228,12 @@ function exportCSV() {
         </button>
         <button type="button" class="mts-btn" data-testid="audit-export-json" @click="exportJSON">
           <Download class="h-3.5 w-3.5" />
-          {{ t('export') }}
+          {{ t('exportJSON') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="audit-export-csv" @click="exportCSV">CSV</button>
+        <button type="button" class="mts-btn" data-testid="audit-export-csv" @click="exportCSV">
+          <Download class="h-3.5 w-3.5" />
+          {{ t('exportCSV') }}
+        </button>
       </div>
     </div>
 

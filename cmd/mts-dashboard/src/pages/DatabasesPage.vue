@@ -211,8 +211,19 @@ function formatDuration(ns: number): string {
   if (ns % 1e9 === 0) return `${ns / 1e9}s`
   return `${ns}ns`
 }
-function fieldTypeName(t: number): string {
-  return ({ 1: 'float', 2: 'int', 3: 'string', 4: 'bool' } as Record<number, string>)[t] || String(t)
+function fieldTypeName(type: number): string {
+  switch (type) {
+    case 1:
+      return t.value('typeFloat')
+    case 2:
+      return t.value('typeInt')
+    case 3:
+      return t.value('typeString')
+    case 4:
+      return t.value('typeBool')
+    default:
+      return String(type)
+  }
 }
 </script>
 <template>
@@ -272,7 +283,7 @@ function fieldTypeName(t: number): string {
         </div>
         <div v-if="db.expanded && db.loaded" class="border-t border-slate-100">
           <div class="px-6 py-3">
-            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">Measurements</p>
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('databasesMeasurements') }}</p>
             <EmptyState v-if="!db.measurements.length" compact :title="t('databasesNoMeasurement')" :description="t('databasesNoMeasurementDesc')" />
             <div v-for="meas in db.measurements" :key="meas.name" class="mb-2 rounded border border-slate-100">
               <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" @click="toggleMeasurement(meas, db.name)">
@@ -283,12 +294,12 @@ function fieldTypeName(t: number): string {
               <div v-if="meas.expanded" class="border-t border-slate-50 px-4 py-2 text-xs text-slate-600 dark:text-slate-300">
                 <div v-if="meas.loading" class="text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</div>
                 <template v-else>
-                  <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Fields</p>
+                  <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('databasesFields') }}</p>
                   <div class="mb-2 flex flex-wrap gap-1">
                     <span v-for="f in meas.fields" :key="f.name" class="rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5">{{ f.name }}:{{ fieldTypeName(f.type) }}</span>
                     <span v-if="!meas.fields.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
                   </div>
-                  <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Series</p>
+                  <p class="mb-1 font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('databasesSeries') }}</p>
                   <div class="space-y-1">
                     <div v-for="s in meas.series" :key="s.id" class="flex items-center gap-1">
                       <Tag class="h-3 w-3 text-slate-400 dark:text-slate-500" />
