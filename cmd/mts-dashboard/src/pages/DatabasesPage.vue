@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { listDatabases, listMeasurements, listRetentionPolicies } from '@/api/meta'
 import {
-  Plus, Trash2, ChevronDown, ChevronRight, Table2, Tag, Clock,
+  Plus, Trash2, ChevronDown, ChevronRight, Table2, Tag, Clock, Download,
 } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -18,6 +18,8 @@ import { formatMessage } from '@/utils/formatMessage'
 import { filterByName } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
+import { buildDatabasesExport, databasesToCSV } from '@/utils/databasesExport'
+import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
 interface Series { id: number; measurement: string; tags: Record<string, string> }
@@ -41,7 +43,7 @@ interface DatabaseEntry {
 }
 const { isAdmin } = useAuth()
 const { t } = useI18n()
-const { success, error: notifyError } = useNotify()
+const { success, error: notifyError, warn } = useNotify()
 const databases = ref<DatabaseEntry[]>([])
 const dbFilter = ref('')
 const filteredDatabases = computed(() => filterByName(databases.value, dbFilter.value))
@@ -220,10 +222,40 @@ function fieldTypeName(type: number): string {
       return String(type)
   }
 }
+
+function exportJSON() {
+  if (!filteredDatabases.value.length) {
+    warn(t.value('inventoryExportEmpty'))
+    return
+  }
+  const rows = filteredDatabases.value.map((db) => ({
+    name: db.name,
+    measurement_count: db.loaded ? db.measurements.length : undefined,
+    retention_policy_count: db.loaded ? db.retentionPolicies.length : undefined,
+    loaded: db.loaded,
+  }))
+  downloadJSON(stampFilename('mts-databases', 'json'), buildDatabasesExport(rows))
+  success(t.value('inventoryExported'))
+}
+
+function exportCSV() {
+  if (!filteredDatabases.value.length) {
+    warn(t.value('inventoryExportEmpty'))
+    return
+  }
+  const rows = filteredDatabases.value.map((db) => ({
+    name: db.name,
+    measurement_count: db.loaded ? db.measurements.length : undefined,
+    retention_policy_count: db.loaded ? db.retentionPolicies.length : undefined,
+    loaded: db.loaded,
+  }))
+  downloadText(stampFilename('mts-databases', 'csv'), databasesToCSV(rows), 'text/csv;charset=utf-8')
+  success(t.value('inventoryExported'))
+}
 </script>
 <template>
   <PermissionDenied v-if="!isAdmin" />
-  <div v-else class="space-y-4">
+  <div v-else class="space-y-4" data-testid="databases-page">
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -232,6 +264,12 @@ function fieldTypeName(type: number): string {
         <p class="text-xs mts-muted">{{ t('databasesDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="databases-export-json" :disabled="!filteredDatabases.length" @click="exportJSON">
+          <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="databases-export-csv" :disabled="!filteredDatabases.length" @click="exportCSV">
+          <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
+        </button>
         <input v-model="newDbName" type="text" :placeholder="t('databasesCreatePlaceholder')" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="createDatabase" />
         <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="createDatabase">
           <Plus class="h-4 w-4" /> {{ t('databasesCreate') }}

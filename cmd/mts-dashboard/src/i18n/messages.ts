@@ -827,6 +827,10 @@ export const messages = {
     apiSpecExportMarkdown: '导出 Markdown',
     apiSpecExported: 'API Spec 已导出',
     apiSpecExportEmpty: '暂无端点可导出',
+    inventoryExportJSON: '导出 JSON',
+    inventoryExportCSV: '导出 CSV',
+    inventoryExported: '清单已导出',
+    inventoryExportEmpty: '暂无数据可导出',
     apiSpecNamespace: '命名空间',
 
     configExportEffective: '导出生效配置',
@@ -1727,6 +1731,10 @@ export const messages = {
     apiSpecExportMarkdown: 'Export Markdown',
     apiSpecExported: 'API Spec exported',
     apiSpecExportEmpty: 'No endpoints to export',
+    inventoryExportJSON: 'Export JSON',
+    inventoryExportCSV: 'Export CSV',
+    inventoryExported: 'Inventory exported',
+    inventoryExportEmpty: 'Nothing to export',
     apiSpecNamespace: 'Namespace',
 
     configExportEffective: 'Export effective config',

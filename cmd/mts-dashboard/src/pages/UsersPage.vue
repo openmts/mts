@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
-import { Plus, Trash2, Key, Lock } from 'lucide-vue-next'
+import { Plus, Trash2, Key, Lock, Download } from 'lucide-vue-next'
 import UserModals from '@/components/UserModals.vue'
 import UserGrantPanel from '@/components/UserGrantPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -14,6 +14,8 @@ import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { filterUsers } from '@/utils/listFilter'
+import { buildUsersExport, usersToCSV } from '@/utils/usersExport'
+import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
 interface UsersResponse { users: User[] }
@@ -31,7 +33,7 @@ function roleLabel(role?: string): string {
   if (role === 'admin') return t.value('roleAdmin')
   return t.value('roleUser')
 }
-const { success, error: notifyError } = useNotify()
+const { success, error: notifyError, warn } = useNotify()
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
 const showCreate = ref(false)
@@ -231,16 +233,40 @@ function openSetPassword(name: string) {
   setPasswordValue.value = ''
   showSetPassword.value = true
 }
+
+function exportJSON() {
+  if (!filteredUsers.value.length) {
+    warn(t.value('inventoryExportEmpty'))
+    return
+  }
+  downloadJSON(stampFilename('mts-users', 'json'), buildUsersExport(filteredUsers.value))
+  success(t.value('inventoryExported'))
+}
+
+function exportCSV() {
+  if (!filteredUsers.value.length) {
+    warn(t.value('inventoryExportEmpty'))
+    return
+  }
+  downloadText(stampFilename('mts-users', 'csv'), usersToCSV(filteredUsers.value), 'text/csv;charset=utf-8')
+  success(t.value('inventoryExported'))
+}
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6" data-testid="users-page">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('usersTitle') }}</h1>
         <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('usersDesc') }}</p>
       </div>
       <div class="flex gap-2">
+        <button type="button" class="mts-btn" data-testid="users-export-json" :disabled="!filteredUsers.length" @click="exportJSON">
+          <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="users-export-csv" :disabled="!filteredUsers.length" @click="exportCSV">
+          <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
+        </button>
         <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="showChangeSelfPassword = true">
           <Lock class="h-3.5 w-3.5" /> {{ t('usersChangeMyPassword') }}
         </button>

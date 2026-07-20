@@ -103,6 +103,20 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByRole('main').getByRole('heading', { name: /指标浏览|Metrics explorer/ })).toBeVisible()
   await expect(page.getByRole('main').getByText(/指标族|Families|样本|Samples/i).first()).toBeVisible()
 
+  // 6b) 库/用户/降采样清单导出
+  await page.goto('/databases')
+  await expect(page.getByTestId('databases-page')).toBeVisible()
+  await expect(page.getByTestId('databases-export-json')).toBeVisible()
+  await expect(page.getByTestId('databases-export-csv')).toBeVisible()
+  await page.goto('/users')
+  await expect(page.getByTestId('users-page')).toBeVisible()
+  await expect(page.getByTestId('users-export-json')).toBeVisible()
+  await expect(page.getByTestId('users-export-csv')).toBeVisible()
+  await page.goto('/downsample')
+  await expect(page.getByTestId('downsample-page')).toBeVisible()
+  await expect(page.getByTestId('downsample-export-json')).toBeVisible()
+  await expect(page.getByTestId('downsample-export-csv')).toBeVisible()
+
   // 7) 存储与 data-snapshot 入口
   await page.goto('/storage')
   await expect(page.getByTestId('storage-drill-source')).toBeVisible()

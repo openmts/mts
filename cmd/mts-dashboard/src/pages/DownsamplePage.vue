@@ -11,6 +11,8 @@ import { formatCaughtError } from '@/utils/apiError'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
+import { buildDownsampleExport, downsampleToCSV } from '@/utils/downsampleExport'
+import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { parseHumanDurationToNs, formatNsDuration } from '@/utils/duration'
 import {
@@ -23,7 +25,7 @@ import {
   type DownsampleRangeMode,
 } from '@/utils/downsampleRange'
 import {
-  Plus, Trash2, Play, Pause, RefreshCw, PlayCircle, RotateCcw, FlaskConical, Wrench, Timer,
+  Plus, Trash2, Play, Pause, RefreshCw, PlayCircle, RotateCcw, FlaskConical, Wrench, Timer, Download,
 } from 'lucide-vue-next'
 import type {
   DownsamplePolicy, DownsampleStatus, DownsampleRunResult, DownsampleDryRunResult,
@@ -34,7 +36,7 @@ interface StatusesResponse { statuses: DownsampleStatus[] }
 
 const { isAdmin } = useAuth()
 const { t, locale } = useI18n()
-const { success, error: notifyError } = useNotify()
+const { success, error: notifyError, warn } = useNotify()
 const policies = ref<DownsamplePolicy[]>([])
 const statuses = ref<DownsampleStatus[]>([])
 const loadError = ref('')
@@ -422,11 +424,33 @@ async function confirmRange() {
     rangeLoading.value = false
   }
 }
+
+function exportJSON() {
+  if (!filteredPolicies.value.length) {
+    warn(t.value('inventoryExportEmpty'))
+    return
+  }
+  downloadJSON(stampFilename('mts-downsample-policies', 'json'), buildDownsampleExport(filteredPolicies.value))
+  success(t.value('inventoryExported'))
+}
+
+function exportCSV() {
+  if (!filteredPolicies.value.length) {
+    warn(t.value('inventoryExportEmpty'))
+    return
+  }
+  downloadText(
+    stampFilename('mts-downsample-policies', 'csv'),
+    downsampleToCSV(filteredPolicies.value),
+    'text/csv;charset=utf-8',
+  )
+  success(t.value('inventoryExported'))
+}
 </script>
 
 <template>
   <PermissionDenied v-if="!isAdmin" />
-  <div v-else class="space-y-6">
+  <div v-else class="space-y-6" data-testid="downsample-page">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('downsampleTitle') }}</h1>
@@ -471,6 +495,12 @@ async function confirmRange() {
         <button type="button" class="mts-btn" data-testid="downsample-clear-select" :disabled="!selectedNames.length" @click="clearSelection">{{ t('downsampleClearSelect') }}</button>
         <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
         <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
+        <button type="button" class="mts-btn" data-testid="downsample-export-json" :disabled="!filteredPolicies.length" @click="exportJSON">
+          <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="downsample-export-csv" :disabled="!filteredPolicies.length" @click="exportCSV">
+          <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
+        </button>
       </div>
     </div>
 

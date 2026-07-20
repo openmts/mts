@@ -400,3 +400,9 @@
 - Access grants JSON/CSV 导出；权限矩阵 JSON 导出；API Spec JSON/Markdown 导出
 - 商业冒烟覆盖 access-matrix / access-grants / api-spec 导出 testid
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P81 状态（2026-07-20）
+- 数据库/用户/降采样筛选清单 JSON+CSV 导出
+- 商业冒烟覆盖 databases/users/downsample 导出 testid
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
