@@ -14,15 +14,25 @@ export interface HealthSnapshot {
 }
 
 export interface QueryStatsData {
-  candidate_shards: number
-  shards_scanned: number
-  shards_skipped: number
-  parts_scanned: number
-  parts_skipped: number
-  samples_read: number
-  samples_returned: number
-  duration_nanos: number
-  errors: number
+  candidate_shards?: number
+  shards_scanned?: number
+  shards_skipped?: number
+  parts_scanned?: number
+  parts_skipped?: number
+  index_rows_read?: number
+  index_rows_skipped?: number
+  time_blocks_read?: number
+  value_blocks_read?: number
+  value_pages_read?: number
+  value_pages_skipped?: number
+  samples_read?: number
+  samples_returned?: number
+  errors?: number
+  duration_nanos?: number
+  budget_errors?: number
+  cancellations?: number
+  started_unix_nanos?: number
+  read_epoch?: number
 }
 
 export interface QueryResultRow {

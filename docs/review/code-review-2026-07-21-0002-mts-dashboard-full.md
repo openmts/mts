@@ -60,7 +60,7 @@ Dashboard 在 P124–P136 后已具备可商用后台的主体骨架：鉴权/�
 
 | 能力 | 影响 | 优先级 |
 |---|---|---|
-| 独立 `GET /api/v1/data/query/stats` | 查询 stats 已嵌在结果；可不接 | P3 |
+| 独立 `GET /api/v1/data/query/stats` | Query 页引擎快照入口已接（P143） | 已完成 |
 | series 列表 query 过滤 UI | fields/series 选择器已接（P142；无完整过滤分页） | 部分完成 |
 | Query `predicates` / `expr` | predicates DSL 已暴露；expr 树 UI 仍非目标 | 部分完成 |
 | 非 admin 的 RP 列表 API | 仅 admin 路径；data 用户 RP 手填 | P1 |
@@ -120,7 +120,7 @@ Dashboard 在 P124–P136 后已具备可商用后台的主体骨架：鉴权/�
 
 ### P3
 
-#### FE-FULL-P3-01 独立 query/stats 端点入口
+#### FE-FULL-P3-01 独立 query/stats 端点入口 — **已修复（P143）**
 #### FE-FULL-P3-02 Account 着陆选项等小列表 EmptyState 一致性
 
 ---
@@ -167,4 +167,5 @@ timeout 180s env GOSUMDB=sum.golang.org go test -count=1 -timeout 120s ./...
 | FE-FULL-P2-01 predicates | **已修复**（P139 DSL；expr 树仍非目标） |
 | FE-FULL-P2-02 Write 行上限 | **已修复**（P138 上限 50） |
 | FE-FULL-P2-03 VITE_BASE | **已对齐说明**（P141；代码本已支持 dashboard_base） |
+| FE-FULL-P3-01 query/stats | **已修复**（P143） |
 | 部署侧三项 | open 不计分 |

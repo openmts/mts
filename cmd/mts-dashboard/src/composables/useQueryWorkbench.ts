@@ -16,6 +16,7 @@ import { buildQueryFromForm } from '@/utils/queryFormBuild'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { formatMessage } from '@/utils/formatMessage'
+import { fetchEngineQueryStats } from '@/api/queryMeta'
 import type { QueryResultRow, QueryStatsData } from '@/api/types'
 
 export type { QueryResultRow, QueryStatsData }
@@ -59,6 +60,10 @@ export function useQueryWorkbench() {
   const queryMode = ref<QueryMode>('rows')
   const rows = ref<QueryResultRow[]>([])
   const queryStats = ref<QueryStatsData | null>(null)
+  const engineStatsSource = ref<'query' | 'engine' | ''>('')
+  const engineStatsLoading = ref(false)
+  const engineStatsError = ref('')
+  const engineStatsAt = ref<number | null>(null)
   const rawOutput = ref('')
   const columnSeries = ref<unknown[]>([])
   const streamMeta = ref({ lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 })
@@ -187,6 +192,8 @@ export function useQueryWorkbench() {
     rows.value = []
     columnSeries.value = []
     queryStats.value = null
+    engineStatsSource.value = 'query'
+    engineStatsError.value = ''
     rawOutput.value = ''
     streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
     const { signal, seq } = beginRequest()
@@ -287,6 +294,21 @@ export function useQueryWorkbench() {
     }
   }
 
+  async function loadEngineStats() {
+    engineStatsLoading.value = true
+    engineStatsError.value = ''
+    try {
+      const stats = await fetchEngineQueryStats()
+      queryStats.value = stats
+      engineStatsSource.value = 'engine'
+      engineStatsAt.value = Date.now()
+    } catch (e) {
+      engineStatsError.value = formatCaughtError(e)
+    } finally {
+      engineStatsLoading.value = false
+    }
+  }
+
   function resultTextForCopy(): string {
     if (rawOutput.value) return rawOutput.value
     if (rows.value.length) return JSON.stringify(rows.value, null, 2)
@@ -313,6 +335,11 @@ export function useQueryWorkbench() {
     rows,
     columnSeries,
     queryStats,
+    engineStatsSource,
+    engineStatsLoading,
+    engineStatsError,
+    engineStatsAt,
+    loadEngineStats,
     rawOutput,
     streamMeta,
     actionError,

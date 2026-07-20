@@ -57,3 +57,10 @@
 - [x] EARS-FE-P142-03 选择 series 填充 tags
 - [x] EARS-FE-P142-04 商业冒烟 series meta testid
 - [x] EARS-DOC-P142-05 基线记录
+
+## P143 — Query engine stats
+- [x] EARS-FE-P143-01 GET query/stats 入口
+- [x] EARS-FE-P143-02 来源区分 query/engine
+- [x] EARS-FE-P143-03 空态引导
+- [x] EARS-FE-P143-04 商业冒烟
+- [x] EARS-DOC-P143-05 基线记录

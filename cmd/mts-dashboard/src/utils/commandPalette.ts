@@ -137,6 +137,12 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['query history', '查询历史', 'history'],
   },
   {
+    id: 'query-stats',
+    path: '/query#query-stats',
+    labelKey: 'cmdQueryStats',
+    keywords: ['query stats', '查询统计', 'engine stats', 'query/stats'],
+  },
+  {
     id: 'query-results',
     path: '/query#query-results',
     labelKey: 'cmdQueryResults',

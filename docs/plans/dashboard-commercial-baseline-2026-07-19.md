@@ -751,3 +751,8 @@
 - meta：`listFields` / `listSeries`；失败可手填
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P143 状态（2026-07-21）
+- 独立 `GET /api/v1/data/query/stats` 入口（Query 页 + 命令面板）
+- stats 来源区分、详细指标折叠、空态引导
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

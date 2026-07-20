@@ -170,6 +170,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('query-series-meta')).toBeVisible()
   await expect(page.getByTestId('query-series-select')).toBeVisible()
   await expect(page.getByTestId('query-fields')).toBeVisible()
+  await expect(page.getByTestId('query-stats-panel')).toBeVisible()
+  await expect(page.getByTestId('query-engine-stats')).toBeVisible()
+  await page.getByTestId('query-engine-stats').click()
+  await expect(page.getByTestId('query-stats-source-engine')).toBeVisible({ timeout: 15_000 })
   // 若有结果则校验虚拟列表；冷启动无结果时跳过
   if (await page.getByTestId('query-results-virtual-list').count()) {
     await expect(page.getByTestId('query-results-virtual-list')).toBeVisible()

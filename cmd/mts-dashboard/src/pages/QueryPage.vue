@@ -25,6 +25,8 @@ import { isDirty, snapshotForm } from '@/utils/formDirty'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { latencyFromNanos } from '@/utils/queryLatency'
 import { seriesLabel } from '@/utils/seriesMeta'
+import { detailStatCards, primaryStatCards, toneClass } from '@/utils/queryStatsView'
+import type { MessageKey } from '@/i18n/messages'
 import {
   RESULT_COLUMN_KEYS,
   gridColClass,
@@ -45,6 +47,7 @@ const {
   fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError,
   loadMeasurementMeta, applySeriesTags,
   queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, loading,
+  engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, loadEngineStats,
   loadDatabases, loadDbChildren, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
 const history = useQueryHistory()
@@ -239,6 +242,16 @@ function formatTimestamp(v: number): string {
   if (Math.abs(v) >= 1e15) return formatEpoch(v, 'ns')
   return formatEpoch(v, 'ms')
 }
+const primaryStatsCards = computed(() => (queryStats.value ? primaryStatCards(queryStats.value) : []))
+const detailStatsCards = computed(() => (queryStats.value ? detailStatCards(queryStats.value) : []))
+const engineStatsAtLabel = computed(() => {
+  if (!engineStatsAt.value) return ''
+  return formatEpoch(engineStatsAt.value, 'ms')
+})
+function statLabel(key: string): string {
+  return t.value(key as MessageKey)
+}
+
 function fillNowMs(which: 'start' | 'end') {
   const s = nowUnixMsString()
   if (which === 'start') queryForm.value.start_time = s
@@ -709,6 +722,13 @@ const columnRows = computed(() => {
         :disabled="!loading"
         @click="cancelQuery"
       ><Square class="h-4 w-4" />{{ t('queryCancel') }}</button>
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700"
+        data-testid="query-engine-stats"
+        :disabled="engineStatsLoading || loading"
+        @click="loadEngineStats"
+      >{{ engineStatsLoading ? t('loading') : t('queryEngineStatsBtn') }}</button>
       <button class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 dark:text-red-200" @click="deleteOpen = true"><Trash2 class="h-4 w-4" />{{ t('queryRangeDelete') }}</button>
       <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700" @click="copyResults">
         <component :is="copyState === 'ok' ? Check : Copy" class="h-4 w-4" />
@@ -722,23 +742,70 @@ const columnRows = computed(() => {
     <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
     <p v-if="deleteResult" class="mts-alert-ok">{{ deleteResult }}</p>
 
-    <div id="query-stats" v-if="queryStats" class="scroll-mt-20 space-y-2">
-      <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('queryStatScan') }}</p><p class="text-lg font-semibold">{{ queryStats.shards_scanned }}</p></div>
-        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('queryStatSkip') }}</p><p class="text-lg font-semibold">{{ queryStats.shards_skipped }}</p></div>
-        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('queryStatRead') }}</p><p class="text-lg font-semibold text-blue-600">{{ queryStats.samples_read }}</p></div>
-        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('queryStatReturn') }}</p><p class="text-lg font-semibold text-green-600">{{ queryStats.samples_returned }}</p></div>
-        <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('queryStatDuration') }}</p><p class="text-lg font-semibold text-amber-600">{{ (queryStats.duration_nanos / 1e6).toFixed(1) }}ms</p></div>
-      </div>
-      <div v-if="latency" class="mts-card px-3 py-2">
-        <div class="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span class="text-slate-600 dark:text-slate-300">{{ t('queryLatencyWaterline') }} · <span class="font-medium">{{ latency.label }}</span></span>
-          <span class="font-mono text-slate-500 dark:text-slate-400">{{ latency.durationMs.toFixed(1) }} ms · {{ t('queryLatencyLegend') }}</span>
+    <div id="query-stats" class="scroll-mt-20 space-y-2" data-testid="query-stats-panel">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <span class="font-semibold text-slate-700 dark:text-slate-200">{{ t('queryStatsTitle') }}</span>
+          <span
+            v-if="engineStatsSource === 'engine'"
+            class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-stats-source-engine"
+          >{{ t('queryStatsSourceEngine') }}</span>
+          <span
+            v-else-if="engineStatsSource === 'query' && queryStats"
+            class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"
+            data-testid="query-stats-source-query"
+          >{{ t('queryStatsSourceQuery') }}</span>
+          <span v-if="engineStatsSource === 'engine' && engineStatsAtLabel" class="text-[11px] mts-muted" data-testid="query-stats-at">
+            {{ engineStatsAtLabel }}
+          </span>
         </div>
-        <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-          <div class="h-full rounded-full transition-all" :class="latency.toneClass" :style="{ width: latency.barPercent + '%' }" />
-        </div>
+        <button
+          type="button"
+          class="mts-btn text-xs"
+          data-testid="query-engine-stats-inline"
+          :disabled="engineStatsLoading || loading"
+          @click="loadEngineStats"
+        >{{ engineStatsLoading ? t('loading') : t('queryEngineStatsBtn') }}</button>
       </div>
+      <p v-if="engineStatsError" class="mts-alert-error text-xs" data-testid="query-engine-stats-error">{{ engineStatsError }}</p>
+      <template v-if="queryStats">
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-5" data-testid="query-stats-primary">
+          <div
+            v-for="card in primaryStatsCards"
+            :key="card.key"
+            class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <p class="text-[11px] text-slate-400 dark:text-slate-500">{{ statLabel(card.labelKey) }}</p>
+            <p class="text-lg font-semibold" :class="toneClass(card.tone)">{{ card.value }}</p>
+          </div>
+        </div>
+        <details class="mts-card p-3" data-testid="query-stats-details">
+          <summary class="cursor-pointer text-xs font-medium text-slate-600 dark:text-slate-300">{{ t('queryStatsDetails') }}</summary>
+          <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            <div v-for="card in detailStatsCards" :key="card.key" class="rounded-lg border border-slate-100 px-2 py-1.5 dark:border-slate-800">
+              <p class="text-[10px] mts-muted">{{ statLabel(card.labelKey) }}</p>
+              <p class="font-mono text-sm font-semibold" :class="toneClass(card.tone)">{{ card.value }}</p>
+            </div>
+          </div>
+        </details>
+        <div v-if="latency" class="mts-card px-3 py-2">
+          <div class="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span class="text-slate-600 dark:text-slate-300">{{ t('queryLatencyWaterline') }} · <span class="font-medium">{{ latency.label }}</span></span>
+            <span class="font-mono text-slate-500 dark:text-slate-400">{{ latency.durationMs.toFixed(1) }} ms · {{ t('queryLatencyLegend') }}</span>
+          </div>
+          <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <div class="h-full rounded-full transition-all" :class="latency.toneClass" :style="{ width: latency.barPercent + '%' }" />
+          </div>
+        </div>
+      </template>
+      <EmptyState
+        v-else
+        compact
+        data-testid="query-stats-empty"
+        :title="t('queryStatsEmptyTitle')"
+        :description="t('queryStatsEmptyDesc')"
+      />
     </div>
 
     <div id="query-chart" class="scroll-mt-20">
