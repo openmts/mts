@@ -104,6 +104,10 @@ test('commercial browser smoke path', async ({ page }) => {
   // Config 表头 i18n（表头在空数据时仍可见；a11y 树中 th 可能暴露为 cell）
   await page.goto('/config')
   await expect(page.getByTestId('config-page')).toBeVisible()
+  await expect(page.getByTestId('config-export-effective')).toBeVisible()
+  await expect(page.getByTestId('config-copy-effective')).toBeVisible()
+  await expect(page.getByTestId('config-export-schema')).toBeVisible()
+  await expect(page.getByTestId('config-export-error-codes')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { level: 1, name: /^(配置|Config)$/ })).toBeVisible()
   await expect(page.getByTestId('config-schema-table').getByText(/^(名称|Name)$/)).toBeVisible()
   await expect(page.getByTestId('config-error-codes-table').getByText(/^(错误码|Code)$/)).toBeVisible()
@@ -203,6 +207,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/operations')
   await expect(page.getByTestId('ops-action-log')).toBeVisible()
   await expect(page.getByTestId('ops-export-log')).toBeVisible()
+  await expect(page.getByTestId('ops-export-maint-errors')).toBeVisible()
+  await expect(page.getByTestId('ops-copy-maint-errors')).toBeVisible()
   await page.locator('[data-testid="skip-to-main"]').evaluate((el: HTMLElement) => el.focus())
   await expect(page.getByTestId('skip-to-main')).toBeFocused()
 

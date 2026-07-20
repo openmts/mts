@@ -20,7 +20,9 @@ import {
   type OpsActionKind,
 } from '@/utils/opsActionLog'
 import { downloadJSON, stampFilename } from '@/utils/download'
-import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser } from 'lucide-vue-next'
+import { copyText } from '@/utils/clipboard'
+import { buildMaintenanceErrorsExport, maintenanceErrorsToText } from '@/utils/opsExport'
+import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser, Copy } from 'lucide-vue-next'
 import type { CompactionStats, MaintenanceStats } from '@/api/types'
 
 interface CompactionStatsResponse { stats: CompactionStats }
@@ -127,6 +129,28 @@ async function runConfirmed() {
   }
 }
 
+function exportMaintErrors() {
+  if (!maintenanceErrors.value.length) {
+    warn(t.value('opsMaintErrorsEmpty'))
+    return
+  }
+  downloadJSON(
+    stampFilename('mts-ops-maintenance-errors', 'json'),
+    buildMaintenanceErrorsExport(maintenanceErrors.value),
+  )
+  success(t.value('opsMaintErrorsExported'))
+}
+
+async function copyMaintErrors() {
+  if (!maintenanceErrors.value.length) {
+    warn(t.value('opsMaintErrorsEmpty'))
+    return
+  }
+  const res = await copyText(maintenanceErrorsToText(maintenanceErrors.value))
+  if (res.ok) success(t.value('opsMaintErrorsCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 function exportActionLog() {
   if (!actionLog.value.length) {
     warn(t.value('opsLogExportEmpty'))
@@ -155,7 +179,7 @@ onMounted(() => { void loadStats() })
 
 <template>
   <PermissionDenied v-if="!isAdmin" />
-  <div v-else class="space-y-6">
+  <div v-else class="space-y-6" data-testid="ops-page">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="mts-title">{{ t('opsTitle') }}</h1>
@@ -177,9 +201,19 @@ onMounted(() => { void loadStats() })
       @dismiss="actionResult = null"
     />
 
-    <div class="mts-panel">
-      <div class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-        <AlertTriangle class="h-4 w-4" /> {{ t('maintenanceErrors') }} ({{ maintenanceErrors.length }})
+    <div class="mts-panel" data-testid="ops-maint-errors-panel">
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <AlertTriangle class="h-4 w-4" /> {{ t('maintenanceErrors') }} ({{ maintenanceErrors.length }})
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="mts-btn" data-testid="ops-export-maint-errors" :disabled="!maintenanceErrors.length" @click="exportMaintErrors">
+            <Download class="h-3.5 w-3.5" /> {{ t('opsExportMaintErrors') }}
+          </button>
+          <button type="button" class="mts-btn" data-testid="ops-copy-maint-errors" :disabled="!maintenanceErrors.length" @click="copyMaintErrors">
+            <Copy class="h-3.5 w-3.5" /> {{ t('opsCopyMaintErrors') }}
+          </button>
+        </div>
       </div>
       <EmptyState
         v-if="!maintenanceErrors.length"

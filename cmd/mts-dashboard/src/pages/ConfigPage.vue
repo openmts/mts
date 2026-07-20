@@ -9,7 +9,15 @@ import { formatMessage } from '@/utils/formatMessage'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
-import { RefreshCw, CheckCircle } from 'lucide-vue-next'
+import {
+  buildConfigSchemaExport,
+  buildEffectiveConfigExport,
+  buildErrorCodesExport,
+  formatConfigPretty,
+} from '@/utils/configExport'
+import { downloadJSON, stampFilename } from '@/utils/download'
+import { copyText } from '@/utils/clipboard'
+import { RefreshCw, CheckCircle, Download, Copy } from 'lucide-vue-next'
 
 interface ConfigResponse { config: Record<string, unknown> }
 interface ValidateResponse { ok: boolean; error?: string }
@@ -111,6 +119,43 @@ function clearServiceTokens() {
   success(t.value('configTokenCleared'))
 }
 
+function exportEffective() {
+  if (!config.value) {
+    notifyError(t.value('configExportEmpty'))
+    return
+  }
+  downloadJSON(stampFilename('mts-config-effective', 'json'), buildEffectiveConfigExport(config.value))
+  success(t.value('configExported'))
+}
+
+async function copyEffective() {
+  if (!config.value) {
+    notifyError(t.value('configCopyEmpty'))
+    return
+  }
+  const res = await copyText(formatConfigPretty(config.value))
+  if (res.ok) success(t.value('configCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
+function exportSchema() {
+  if (!filteredSchema.value.length) {
+    notifyError(t.value('configExportEmpty'))
+    return
+  }
+  downloadJSON(stampFilename('mts-config-schema', 'json'), buildConfigSchemaExport(filteredSchema.value))
+  success(t.value('configExported'))
+}
+
+function exportErrorCodes() {
+  if (!errorCodes.value.length) {
+    notifyError(t.value('configExportEmpty'))
+    return
+  }
+  downloadJSON(stampFilename('mts-error-codes', 'json'), buildErrorCodesExport(errorCodes.value))
+  success(t.value('configExported'))
+}
+
 function statusLabel(httpStatus: number): string {
   if (httpStatus >= 200 && httpStatus < 300) return t.value('configHttpOk')
   if (httpStatus >= 400 && httpStatus < 500) return t.value('configHttpClientErr')
@@ -126,6 +171,14 @@ function statusLabel(httpStatus: number): string {
       <div>
         <h1 class="mts-title">{{ t('configTitle') }}</h1>
         <p class="text-xs mts-muted">{{ t('configDesc') }}</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="config-export-effective" :disabled="!config" @click="exportEffective">
+          <Download class="h-3.5 w-3.5" /> {{ t('configExportEffective') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="config-copy-effective" :disabled="!config" @click="copyEffective">
+          <Copy class="h-3.5 w-3.5" /> {{ t('configCopyEffective') }}
+        </button>
       </div>
     </div>
     <ActionResultBanner
@@ -169,13 +222,18 @@ function statusLabel(httpStatus: number): string {
 
     <div v-if="config" class="mts-panel">
       <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configEffective') }}</h2>
-      <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400">{{ JSON.stringify(config, null, 2) }}</pre>
+      <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400" data-testid="config-effective-json">{{ JSON.stringify(config, null, 2) }}</pre>
     </div>
 
     <div class="mts-panel">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configSchema') }}</h2>
-        <input v-model="schemaFilter" class="mts-input max-w-xs text-xs"  :placeholder="t('configSchemaFilter')" />
+        <div class="flex flex-wrap items-center gap-2">
+          <input v-model="schemaFilter" class="mts-input max-w-xs text-xs" data-testid="config-schema-filter" :placeholder="t('configSchemaFilter')" />
+          <button type="button" class="mts-btn" data-testid="config-export-schema" :disabled="!filteredSchema.length" @click="exportSchema">
+            <Download class="h-3.5 w-3.5" /> {{ t('configExportSchema') }}
+          </button>
+        </div>
       </div>
       <div class="mts-table-wrap max-h-80 overflow-auto" data-testid="config-schema-table">
         <table class="w-full min-w-[36rem] text-sm">
@@ -199,7 +257,12 @@ function statusLabel(httpStatus: number): string {
     </div>
 
     <div class="mts-panel">
-      <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configErrorCodes') }}</h2>
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configErrorCodes') }}</h2>
+        <button type="button" class="mts-btn" data-testid="config-export-error-codes" :disabled="!errorCodes.length" @click="exportErrorCodes">
+          <Download class="h-3.5 w-3.5" /> {{ t('configExportErrorCodes') }}
+        </button>
+      </div>
       <div class="mts-table-wrap"><table class="w-full min-w-[36rem] text-sm" data-testid="config-error-codes-table">
         <thead>
           <tr class="border-b border-slate-200 text-left dark:border-slate-700">
