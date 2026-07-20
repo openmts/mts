@@ -35,6 +35,20 @@ const actionError = ref('')
 const metaHint = ref('')
 const { success, error: notifyError } = useNotify()
 const { t } = useI18n()
+function fieldTypeLabel(value: string): string {
+  switch (value) {
+    case 'float':
+      return t.value('typeFloat')
+    case 'int':
+      return t.value('typeInt')
+    case 'string':
+      return t.value('typeString')
+    case 'bool':
+      return t.value('typeBool')
+    default:
+      return value
+  }
+}
 function trErr(key: MessageKey, vars: Record<string, string | number> = {}) {
   return formatMessage(t.value(key), vars)
 }
@@ -320,7 +334,7 @@ const modeLabel = computed(() => ({
               <input v-model="fd.key" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhKey')" />
               <input v-model="fd.value" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhValue')" />
               <select v-model="fd.type" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800">
-                <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">{{ ft.label }}</option>
+                <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">{{ fieldTypeLabel(ft.value) }}</option>
               </select>
             </div>
             <button class="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500" @click="row.fields.push({key:'',value:'',type:'float'})">{{ t('writeAddField') }}</button>
@@ -355,10 +369,7 @@ const modeLabel = computed(() => ({
         <div v-for="(col, i) in typedFieldCols" :key="'f'+i" class="mb-2 grid gap-2 rounded border border-slate-100 p-2 dark:border-slate-800 md:grid-cols-4">
           <input v-model="col.name" class="mts-input text-xs" :placeholder="t('writePhFieldName')" />
           <select v-model="col.type" class="mts-input text-xs">
-            <option value="float">float</option>
-            <option value="int">int</option>
-            <option value="string">string</option>
-            <option value="bool">bool</option>
+            <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">{{ fieldTypeLabel(ft.value) }}</option>
           </select>
           <textarea v-model="col.values" rows="3" class="mts-input font-mono text-xs md:col-span-2" :placeholder="t('writePerLineValue')" />
           <button type="button" class="text-xs text-red-500 md:col-span-4" :disabled="typedFieldCols.length<=1" @click="removeTypedFieldCol(i)">{{ t('writeRemoveFieldCol') }}</button>

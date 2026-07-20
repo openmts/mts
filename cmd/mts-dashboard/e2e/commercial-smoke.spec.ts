@@ -35,6 +35,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByRole('main').locator('textarea').first().fill('cpu,host=e2e-playwright usage=0.42 1000')
   await page.getByRole('main').getByRole('button', { name: '写入', exact: true }).click()
   await expect(page.getByRole('main').getByText(/写入成功/).first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('main').getByRole('button', { name: /表单写入|Form write/i })).toBeVisible()
 
   // 4) 查询页可达 + 表单标签 i18n
   await page.goto('/query')
