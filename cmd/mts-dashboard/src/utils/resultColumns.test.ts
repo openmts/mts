@@ -6,6 +6,7 @@ import {
   parseResultColumns,
   toggleResultColumn,
   visibleColumnCount,
+  resultColumnLabel,
 } from './resultColumns.ts'
 
 test('parseResultColumns fills defaults and keeps one column', () => {
@@ -24,4 +25,10 @@ test('gridColClass maps count', () => {
   assert.equal(gridColClass(DEFAULT_RESULT_COLUMNS), 'grid-cols-4')
   assert.equal(gridColClass({ time: true, measurement: false, tags: false, fields: false }), 'grid-cols-1')
   assert.equal(visibleColumnCount(DEFAULT_RESULT_COLUMNS), 4)
+})
+
+test('resultColumnLabel locale', () => {
+  assert.equal(resultColumnLabel('time', 'zh'), '时间')
+  assert.equal(resultColumnLabel('time', 'en'), 'Time')
+  assert.equal(resultColumnLabel('measurement', 'en'), 'Measurement')
 })

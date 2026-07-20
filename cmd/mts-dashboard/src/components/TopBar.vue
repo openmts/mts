@@ -37,8 +37,14 @@ const pageTitle = computed(() => {
 
 const sessionView = computed(() => {
   const exp = parseExpiresAt(getTokenExpiresAt())
-  return sessionExpiryView(exp, nowMs.value)
+  return sessionExpiryView(exp, nowMs.value, undefined, undefined, locale.value === 'en' ? 'en' : 'zh')
 })
+
+function roleLabel(role?: string | null): string {
+  if (role === 'admin') return t.value('roleAdmin')
+  if (role === 'user') return t.value('roleUser')
+  return role || ''
+}
 
 const showSessionBadge = computed(() => shouldShowSessionBadge(sessionView.value.urgency))
 
@@ -113,10 +119,14 @@ onBeforeUnmount(() => {
   <header class="flex h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-900 sm:px-6">
     <div class="flex items-center gap-3">
       <button
-        class="rounded p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:hidden"
+        type="button"
+        class="mts-focus-ring rounded p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:hidden"
+        :aria-label="t('topbarMenu')"
+        :title="t('topbarMenu')"
+        data-testid="topbar-menu"
         @click="emit('toggle-sidebar')"
       >
-        <Menu class="h-5 w-5" />
+        <Menu class="h-5 w-5" aria-hidden="true" />
       </button>
       <h1 class="max-w-[40vw] truncate text-base font-medium text-slate-800 dark:text-slate-100 sm:max-w-none sm:text-lg">{{ pageTitle }}</h1>
     </div>
@@ -125,6 +135,7 @@ onBeforeUnmount(() => {
         type="button"
         class="hidden items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 sm:inline-flex"
         :title="t('commandPaletteTitle')"
+        :aria-label="t('commandPaletteTitle')"
         data-testid="topbar-command-palette"
         @click="emit('open-command-palette')"
       >
@@ -137,6 +148,7 @@ onBeforeUnmount(() => {
         class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
         data-testid="topbar-shortcuts"
         :title="t('shortcutHelpTitle')"
+        :aria-label="t('shortcutHelpTitle')"
         @click="emit('open-shortcuts')"
       >
         <Keyboard class="h-3.5 w-3.5" />
@@ -149,13 +161,20 @@ onBeforeUnmount(() => {
         :title="t('sessionExpiry')"
         data-testid="session-badge"
       >{{ t('sessionLeft') }} {{ sessionView.label }}</span>
-      <button class="rounded p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800" :title="t('lang')" @click="toggleLocale">
+      <button type="button" class="mts-focus-ring rounded p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800" :title="t('lang')" :aria-label="t('lang')" data-testid="topbar-lang" @click="toggleLocale">
         <Languages class="h-4 w-4" />
         <span class="sr-only">{{ locale }}</span>
       </button>
-      <button class="rounded p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800" @click="toggleTheme">
-        <Moon v-if="theme === 'light'" class="h-4 w-4" />
-        <Sun v-else class="h-4 w-4" />
+      <button
+        type="button"
+        class="mts-focus-ring rounded p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+        :aria-label="t('topbarTheme')"
+        :title="t('topbarTheme')"
+        data-testid="topbar-theme"
+        @click="toggleTheme"
+      >
+        <Moon v-if="theme === 'light'" class="h-4 w-4" aria-hidden="true" />
+        <Sun v-else class="h-4 w-4" aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -164,7 +183,7 @@ onBeforeUnmount(() => {
         data-testid="topbar-account"
         @click="router.push({ name: 'Account' })"
       >
-        {{ currentUser }}<span v-if="currentRole" class="text-slate-400 dark:text-slate-500"> · {{ currentRole }}</span>
+        {{ currentUser }}<span v-if="currentRole" class="text-slate-400 dark:text-slate-500"> · {{ roleLabel(currentRole) }}</span>
       </button>
       <button
         class="rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"

@@ -4,7 +4,18 @@ import router from './router'
 import { setOnAuthFailed, clearAuth } from './api/client'
 import { useAuth } from './composables/useAuth'
 import { useNotify } from './composables/useNotify'
+import { loginReasonMessage } from './utils/authReason'
 import './index.css'
+
+function currentLocale(): 'zh' | 'en' {
+  try {
+    const v = localStorage.getItem('mts_locale')
+    if (v === 'en' || v === 'zh') return v
+  } catch {
+    /* ignore */
+  }
+  return 'zh'
+}
 
 const app = createApp(App)
 app.use(router)
@@ -16,7 +27,7 @@ setOnAuthFailed(() => {
   syncFromStorage()
   try {
     const { error } = useNotify()
-    error('登录已过期或会话失效，请重新登录')
+    error(loginReasonMessage('session', currentLocale()))
   } catch {
     /* notify 在 SSR/无 window 时忽略 */
   }
@@ -36,7 +47,7 @@ window.addEventListener('storage', (ev) => {
   if (!ensureSession() && router.currentRoute.value.name !== 'Login') {
     try {
       const { error } = useNotify()
-      error('会话已在其他标签页退出')
+      error(loginReasonMessage('storage', currentLocale()))
     } catch { /* ignore */ }
     void router.replace({ name: 'Login', query: { reason: 'storage' } })
   }

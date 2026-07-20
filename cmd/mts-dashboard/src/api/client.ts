@@ -196,7 +196,7 @@ function triggerAuthFailed() {
 }
 
 async function readAPIError(response: Response, fallbackText = ''): Promise<APIError> {
-  let err: APIError = { ok: false, code: 'internal', message: response.statusText || '请求失败' }
+  let err: APIError = { ok: false, code: 'internal', message: response.statusText || 'request failed' }
   const text = fallbackText || await response.text().catch(() => '')
   if (!text) return err
   try {
@@ -223,7 +223,7 @@ function handleAuthFailure(path: string, status: number, code: string) {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (bearerToken && isTokenExpired()) {
     triggerAuthFailed()
-    throw new APIClientError(401, 'unauthenticated', '登录已过期，请重新登录')
+    throw new APIClientError(401, 'unauthenticated', 'session expired')
   }
   const method = (options.method || 'GET').toUpperCase()
   const headers = authHeaders(options.headers as Record<string, string> | undefined, method)
@@ -238,7 +238,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       })
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new APIClientError(499, 'canceled', '请求已取消')
+        throw new APIClientError(499, 'canceled', 'request canceled')
       }
       throw err
     }
@@ -257,7 +257,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     try {
       return JSON.parse(text) as T
     } catch (_) {
-      throw new APIClientError(response.status, 'internal', '响应不是合法 JSON')
+      throw new APIClientError(response.status, 'internal', 'invalid JSON response')
     }
   } finally {
     endRequest()
@@ -272,7 +272,7 @@ export function apiGet<T>(path: string, init: RequestInit = {}): Promise<T> {
 export async function apiGetText(path: string, init: RequestInit = {}): Promise<string> {
   if (bearerToken && isTokenExpired()) {
     triggerAuthFailed()
-    throw new APIClientError(401, 'unauthenticated', '登录已过期，请重新登录')
+    throw new APIClientError(401, 'unauthenticated', 'session expired')
   }
   const method = 'GET'
   const headers = authHeaders(init.headers as Record<string, string> | undefined, method)
@@ -283,7 +283,7 @@ export async function apiGetText(path: string, init: RequestInit = {}): Promise<
       response = await fetch(`${API_BASE}${path}`, { ...init, method, headers })
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new APIClientError(499, 'canceled', '请求已取消')
+        throw new APIClientError(499, 'canceled', 'request canceled')
       }
       throw err
     }
@@ -329,7 +329,7 @@ export async function apiPostNDJSONStream(
 ): Promise<{ status: number; lines: number }> {
   if (bearerToken && isTokenExpired()) {
     triggerAuthFailed()
-    throw new APIClientError(401, 'unauthenticated', '登录已过期，请重新登录')
+    throw new APIClientError(401, 'unauthenticated', 'session expired')
   }
   const headers = authHeaders(init.headers as Record<string, string> | undefined, 'POST')
   beginRequest()
@@ -344,7 +344,7 @@ export async function apiPostNDJSONStream(
       })
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new APIClientError(499, 'canceled', '请求已取消')
+        throw new APIClientError(499, 'canceled', 'request canceled')
       }
       throw err
     }
@@ -404,7 +404,7 @@ export async function apiPostNDJSONStream(
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new APIClientError(499, 'canceled', '请求已取消')
+        throw new APIClientError(499, 'canceled', 'request canceled')
       }
       throw err
     } finally {

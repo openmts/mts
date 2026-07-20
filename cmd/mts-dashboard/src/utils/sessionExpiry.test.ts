@@ -12,6 +12,8 @@ test('sessionExpiryView levels', () => {
   const now = 1_000_000
   assert.equal(sessionExpiryView(null, now).urgency, 'unknown')
   assert.equal(sessionExpiryView(now - 1, now).urgency, 'expired')
+  assert.equal(sessionExpiryView(now - 1, now).label, '已过期')
+  assert.equal(sessionExpiryView(now - 1, now, undefined, undefined, 'en').label, 'Expired')
   assert.equal(sessionExpiryView(now + 60_000, now).urgency, 'critical')
   assert.equal(sessionExpiryView(now + 5 * 60_000, now).urgency, 'warn')
   assert.equal(sessionExpiryView(now + 30 * 60_000, now).urgency, 'ok')

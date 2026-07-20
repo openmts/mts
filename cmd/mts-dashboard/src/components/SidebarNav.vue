@@ -61,8 +61,15 @@ function go(to: string) {
     >
       <div class="flex h-14 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-700">
         <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('appName') }}</span>
-        <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800 lg:hidden" @click="emit('close')">
-          <X class="h-4 w-4" />
+        <button
+          type="button"
+          class="mts-focus-ring rounded p-1 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800 lg:hidden"
+          :aria-label="t('topbarCloseNav')"
+          :title="t('topbarCloseNav')"
+          data-testid="sidebar-close"
+          @click="emit('close')"
+        >
+          <X class="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
       <nav class="flex-1 space-y-0.5 overflow-auto p-2" :aria-label="t('appName')">

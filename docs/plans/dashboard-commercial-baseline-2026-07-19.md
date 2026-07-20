@@ -300,3 +300,11 @@
 - 部署材料验收边界说明、三步清单与 runbook 路径（不计分）
 - 登录/改密/查询失败路径统一 formatCaughtError
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P66 状态（2026-07-20）
+- ErrorBoundary / 会话过期标签 / 延迟水线 / 结果列标签 i18n
+- API client 固定中文 message 收口为 code 友好路径；meta 列表错误 formatCaughtError
+- 鉴权失败与跨标签登出 toast 使用 loginReasonMessage
+- TopBar/Sidebar 图标按钮 aria-label；角色展示本地化
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

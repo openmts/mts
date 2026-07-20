@@ -168,7 +168,7 @@ function goExportPreflight() {
 
 const sessionSummary = computed(() => {
   const exp = parseExpiresAt(getTokenExpiresAt())
-  return sessionExpiryView(exp, nowMs.value)
+  return sessionExpiryView(exp, nowMs.value, undefined, undefined, locale.value === 'en' ? 'en' : 'zh')
 })
 
 function memoryLabel(key: string): string {

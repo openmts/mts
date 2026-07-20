@@ -1,14 +1,27 @@
 /** 查询结果表列可见性 */
 
 export type ResultColumnKey = 'time' | 'measurement' | 'tags' | 'fields'
+export type ResultColumnLocale = 'zh' | 'en'
 
 export const RESULT_COLUMN_KEYS: ResultColumnKey[] = ['time', 'measurement', 'tags', 'fields']
 
+/** @deprecated 默认中文标签；展示请用 resultColumnLabel */
 export const RESULT_COLUMN_LABELS: Record<ResultColumnKey, string> = {
   time: '时间',
   measurement: 'Measurement',
   tags: 'Tags',
   fields: 'Fields',
+}
+
+const LABELS: Record<ResultColumnKey, Record<ResultColumnLocale, string>> = {
+  time: { zh: '时间', en: 'Time' },
+  measurement: { zh: 'Measurement', en: 'Measurement' },
+  tags: { zh: 'Tags', en: 'Tags' },
+  fields: { zh: 'Fields', en: 'Fields' },
+}
+
+export function resultColumnLabel(key: ResultColumnKey, locale: ResultColumnLocale = 'zh'): string {
+  return LABELS[key][locale === 'en' ? 'en' : 'zh']
 }
 
 export type ResultColumnVisibility = Record<ResultColumnKey, boolean>

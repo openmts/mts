@@ -1,4 +1,5 @@
 import { apiGet, APIClientError } from './client'
+import { formatCaughtError } from '@/utils/apiError'
 
 /** 服务端 list databases 同时返回 databases（正式）与 measurements（兼容） */
 interface MeasurementsPayload {
@@ -29,12 +30,15 @@ export async function listDatabasesDetailed(init: RequestInit = {}): Promise<Lis
     const names = data.databases ?? data.measurements ?? []
     return { names: [...names].sort(), source: 'admin' }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : '加载数据库列表失败'
     const denied = e instanceof APIClientError && (e.status === 403 || e.code === 'permission_denied')
     if (denied) {
-      return { names: [], source: 'manual', error: '当前账号无库列表权限，请手动输入 database' }
+      return {
+        names: [],
+        source: 'manual',
+        error: formatCaughtError({ code: 'permission_denied', status: 403 }),
+      }
     }
-    return { names: [], source: 'manual', error: msg }
+    return { names: [], source: 'manual', error: formatCaughtError(e) }
   }
 }
 

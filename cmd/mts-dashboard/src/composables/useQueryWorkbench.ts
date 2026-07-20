@@ -50,7 +50,7 @@ export function useQueryWorkbench() {
     const result = await listDatabasesDetailed()
     databases.value = result.names
     metaSource.value = result.source
-    metaHint.value = result.error || (result.source === 'manual' ? '可手动输入 database' : '')
+    metaHint.value = result.error || ''
     if (databases.value.length && !queryForm.value.database) {
       queryForm.value.database = databases.value[0]
     }
