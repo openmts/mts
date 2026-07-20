@@ -606,3 +606,9 @@
 - 商业冒烟覆盖 search/select/sort/csv
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+
+## P115 状态（2026-07-20）
+- 抽取 ListSelectionToolbar；Users/Databases/Access Matrix/Access Grants 接入统一选择工具条
+- 商业冒烟既有 selection testid 兼容
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

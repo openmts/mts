@@ -9,6 +9,7 @@ import UserGrantPanel from '@/components/UserGrantPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
@@ -417,13 +418,18 @@ async function confirmBatch() {
         </select>
       </label>
       <span class="text-xs mts-muted" data-testid="users-filter-count">{{ filteredUsers.length }} / {{ users.length }}</span>
-      <span v-if="selectedCount" class="text-xs text-sky-700 dark:text-sky-300" data-testid="users-selected-count">{{ formatMessage(t('listSelectedCount'), { count: selectedCount }) }}</span>
-      <div class="flex flex-wrap gap-2" data-testid="users-selection-toolbar">
-        <button type="button" class="mts-btn" data-testid="users-select-all" :disabled="!filteredUsers.length" @click="toggleAllVisible(true)">{{ t('listSelectAll') }}</button>
-        <button type="button" class="mts-btn" data-testid="users-clear-selection" :disabled="!selectedCount" @click="clearSelection">{{ t('listClearSelection') }}</button>
-        <button type="button" class="mts-btn" data-testid="users-batch-enable" :disabled="!selectedCount" @click="openBatch('enable')">{{ t('listBatchEnable') }}</button>
-        <button type="button" class="mts-btn" data-testid="users-batch-disable" :disabled="!selectedCount" @click="openBatch('disable')">{{ t('listBatchDisable') }}</button>
-      </div>
+      <ListSelectionToolbar
+        prefix="users"
+        :selected-count="selectedCount"
+        :has-visible="!!filteredUsers.length"
+        @select-all="toggleAllVisible(true)"
+        @clear="clearSelection"
+      >
+        <template #actions>
+          <button type="button" class="mts-btn" data-testid="users-batch-enable" :disabled="!selectedCount" @click="openBatch('enable')">{{ t('listBatchEnable') }}</button>
+          <button type="button" class="mts-btn" data-testid="users-batch-disable" :disabled="!selectedCount" @click="openBatch('disable')">{{ t('listBatchDisable') }}</button>
+        </template>
+      </ListSelectionToolbar>
     </div>
 
     <div v-if="!filteredUsers.length" class="mts-card">

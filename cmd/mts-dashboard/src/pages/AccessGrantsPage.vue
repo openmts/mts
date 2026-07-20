@@ -9,6 +9,7 @@ import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import {
   filterGrantRows,
   flattenUserGrants,
@@ -259,13 +260,18 @@ onMounted(() => { void load() })
       <label class="text-xs mts-muted grow">{{ t('accessGrantsSearch') }}
         <input v-model="q" class="mts-input mt-1 text-sm" :placeholder="t('accessGrantsFilterPlaceholder')" data-testid="access-grants-search" />
       </label>
-      <span v-if="selectedCount" class="text-xs text-sky-700 dark:text-sky-300" data-testid="access-grants-selected-count">{{ formatMessage(t('listSelectedCount'), { count: selectedCount }) }}</span>
-      <div class="flex flex-wrap gap-2" data-testid="access-grants-selection-toolbar">
-        <button type="button" class="mts-btn" data-testid="access-grants-select-all" :disabled="!filtered.length" @click="toggleAllVisible(true)">{{ t('listSelectAll') }}</button>
-        <button type="button" class="mts-btn" data-testid="access-grants-clear-selection" :disabled="!selectedCount" @click="clearSelection">{{ t('listClearSelection') }}</button>
-        <button type="button" class="mts-btn" data-testid="access-grants-sort-user" :title="t('listSortBy')" @click="cycleGrantSort('user')">{{ t('accessGrantsColUser') }} {{ grantSortIndicator('user') }}</button>
-        <button type="button" class="mts-btn" data-testid="access-grants-sort-database" :title="t('listSortBy')" @click="cycleGrantSort('database')">{{ t('accessGrantsColDatabase') }} {{ grantSortIndicator('database') }}</button>
-      </div>
+      <ListSelectionToolbar
+        prefix="access-grants"
+        :selected-count="selectedCount"
+        :has-visible="!!filtered.length"
+        @select-all="toggleAllVisible(true)"
+        @clear="clearSelection"
+      >
+        <template #actions>
+          <button type="button" class="mts-btn" data-testid="access-grants-sort-user" :title="t('listSortBy')" @click="cycleGrantSort('user')">{{ t('accessGrantsColUser') }} {{ grantSortIndicator('user') }}</button>
+          <button type="button" class="mts-btn" data-testid="access-grants-sort-database" :title="t('listSortBy')" @click="cycleGrantSort('database')">{{ t('accessGrantsColDatabase') }} {{ grantSortIndicator('database') }}</button>
+        </template>
+      </ListSelectionToolbar>
     </div>
 
     <div v-if="!loading && !filtered.length" class="mts-card">

@@ -13,6 +13,7 @@ import {
   type RoleName,
 } from '@/utils/rbacMatrix'
 import { Download, Shield } from 'lucide-vue-next'
+import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { useNotify } from '@/composables/useNotify'
@@ -225,17 +226,18 @@ function exportMatrixCSV() {
         />
       </label>
       <span class="text-xs mts-muted" data-testid="access-matrix-filter-count">{{ filteredRows.length }} / {{ RBAC_CAPABILITY_MATRIX.length }}</span>
-      <span
-        v-if="selectedCount"
-        class="text-xs text-sky-700 dark:text-sky-300"
-        data-testid="access-matrix-selected-count"
-      >{{ formatMessage(t('listSelectedCount'), { count: selectedCount }) }}</span>
-      <div class="flex flex-wrap gap-2" data-testid="access-matrix-selection-toolbar">
-        <button type="button" class="mts-btn" data-testid="access-matrix-select-all" :disabled="!filteredRows.length" @click="toggleAllVisible(true)">{{ t('listSelectAll') }}</button>
-        <button type="button" class="mts-btn" data-testid="access-matrix-clear-selection" :disabled="!selectedCount" @click="clearSelection">{{ t('listClearSelection') }}</button>
-        <button type="button" class="mts-btn" data-testid="access-matrix-sort-area" :title="t('listSortBy')" @click="cycleMatrixSort('area')">{{ t('accessMatrixColArea') }} {{ sortIndicator('area') }}</button>
-        <button type="button" class="mts-btn" data-testid="access-matrix-sort-capability" :title="t('listSortBy')" @click="cycleMatrixSort('capability')">{{ t('accessMatrixColCapability') }} {{ sortIndicator('capability') }}</button>
-      </div>
+      <ListSelectionToolbar
+        prefix="access-matrix"
+        :selected-count="selectedCount"
+        :has-visible="!!filteredRows.length"
+        @select-all="toggleAllVisible(true)"
+        @clear="clearSelection"
+      >
+        <template #actions>
+          <button type="button" class="mts-btn" data-testid="access-matrix-sort-area" :title="t('listSortBy')" @click="cycleMatrixSort('area')">{{ t('accessMatrixColArea') }} {{ sortIndicator('area') }}</button>
+          <button type="button" class="mts-btn" data-testid="access-matrix-sort-capability" :title="t('listSortBy')" @click="cycleMatrixSort('capability')">{{ t('accessMatrixColCapability') }} {{ sortIndicator('capability') }}</button>
+        </template>
+      </ListSelectionToolbar>
     </div>
 
     <div class="mts-card max-h-[28rem] overflow-auto" data-testid="access-matrix-table-wrap">
