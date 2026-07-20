@@ -331,3 +331,10 @@
 - Account 改密 aria-invalid / alert 对齐登录页
 - 商业冒烟：健康时无不可达条；账户改密校验错误可见
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P70 状态（2026-07-20）
+- 服务可达性探测单例共享；Overview 连通性卡片与顶栏同源
+- health check status i18n 映射
+- 商业冒烟覆盖 Overview 连通性指示
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

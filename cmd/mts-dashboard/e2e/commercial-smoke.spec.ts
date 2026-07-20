@@ -39,6 +39,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-summary')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
   await expect(page.getByTestId('server-unreachable-banner')).toHaveCount(0)
+  await expect(page.getByTestId('overview-connectivity')).toBeVisible()
+  await expect(page.getByTestId('overview-connectivity-kind')).toBeVisible()
   await expect(page.getByTestId('topbar-account')).toBeVisible()
   await expect(page.getByTestId('skip-to-main')).toHaveCount(1)
   await expect(page).toHaveTitle(/仪表盘|概览|Overview/)

@@ -5,6 +5,8 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
+import { useServerReachability } from '@/composables/useServerReachability'
+import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
 import { clientBuildInfo } from '@/utils/buildInfo'
@@ -43,6 +45,12 @@ interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: Doc
 const { isAdmin, getTokenExpiresAt } = useAuth()
 const router = useRouter()
 const { t, locale } = useI18n()
+const {
+  kind: connectivityKind,
+  showUnreachableBanner,
+  checking: reachChecking,
+  checkOnce: retryReadyz,
+} = useServerReachability()
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const healthy = ref<boolean | null>(null)
 const ready = ref<boolean | null>(null)
@@ -311,6 +319,47 @@ onBeforeUnmount(() => {
   if (clockTimer) clearInterval(clockTimer)
 })
 
+
+const connectivityLabel = computed(() => {
+  switch (connectivityKind.value) {
+    case 'ok':
+      return t.value('connectivityOk')
+    case 'unreachable':
+      return t.value('connectivityUnreachable')
+    case 'offline':
+      return t.value('connectivityOffline')
+    default:
+      return t.value('connectivityUnknown')
+  }
+})
+const connectivityHint = computed(() => {
+  switch (connectivityKind.value) {
+    case 'ok':
+      return t.value('connectivityHintOk')
+    case 'unreachable':
+      return t.value('connectivityHintUnreachable')
+    case 'offline':
+      return t.value('connectivityHintOffline')
+    default:
+      return t.value('connectivityHintUnknown')
+  }
+})
+const connectivityTone = computed(() => {
+  switch (connectivityKind.value) {
+    case 'ok':
+      return 'text-green-600 dark:text-green-400'
+    case 'unreachable':
+      return 'text-red-600 dark:text-red-400'
+    case 'offline':
+      return 'text-amber-700 dark:text-amber-300'
+    default:
+      return 'mts-muted'
+  }
+})
+function formatHealthStatus(status?: string) {
+  return healthStatusLabel(status, locale.value === 'en' ? 'en' : 'zh')
+}
+
 const showAdminPanels = computed(() => isAdmin.value)
 </script>
 
@@ -485,21 +534,50 @@ const showAdminPanels = computed(() => isAdmin.value)
       </div>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="overview-health-grid">
+      <div class="mts-card p-5" data-testid="overview-connectivity">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 mts-muted">
+            <Activity class="h-4 w-4" aria-hidden="true" />
+            <span class="text-xs">{{ t('connectivityTitle') }}</span>
+          </div>
+          <button
+            v-if="connectivityKind === 'unreachable' || connectivityKind === 'unknown'"
+            type="button"
+            class="mts-btn mts-focus-ring"
+            data-testid="overview-connectivity-retry"
+            :disabled="reachChecking"
+            @click="retryReadyz"
+          >
+            {{ t('serverUnreachableRetry') }}
+          </button>
+        </div>
+        <p class="text-2xl font-semibold" :class="connectivityTone" data-testid="overview-connectivity-kind">
+          {{ connectivityLabel }}
+        </p>
+        <p class="mt-1 text-[11px] mts-muted" data-testid="overview-connectivity-hint">{{ connectivityHint }}</p>
+        <p
+          v-if="showUnreachableBanner"
+          class="mt-2 text-[11px] text-red-700 dark:text-red-300"
+          data-testid="overview-connectivity-banner-sync"
+        >
+          {{ t('connectivityHintUnreachable') }}
+        </p>
+      </div>
       <div class="mts-card p-5">
-        <div class="mb-2 flex items-center gap-2 mts-muted"><Activity class="h-4 w-4" /><span class="text-xs">{{ t('healthy') }}</span></div>
+        <div class="mb-2 flex items-center gap-2 mts-muted"><Activity class="h-4 w-4" aria-hidden="true" /><span class="text-xs">{{ t('healthy') }}</span></div>
         <p class="text-2xl font-semibold" :class="healthy ? 'text-green-600' : healthy === false ? 'text-red-600' : 'mts-muted'">
           {{ healthy === null ? t('emptyValue') : healthy ? t('healthy') : t('unhealthy') }}
         </p>
       </div>
       <div class="mts-card p-5">
-        <div class="mb-2 flex items-center gap-2 mts-muted"><Activity class="h-4 w-4" /><span class="text-xs">{{ t('ready') }}</span></div>
+        <div class="mb-2 flex items-center gap-2 mts-muted"><Activity class="h-4 w-4" aria-hidden="true" /><span class="text-xs">{{ t('ready') }}</span></div>
         <p class="text-2xl font-semibold" :class="ready ? 'text-green-600' : ready === false ? 'text-amber-600' : 'mts-muted'">
           {{ ready === null ? t('emptyValue') : ready ? t('ready') : t('notReady') }}
         </p>
       </div>
-      <div class="mts-card p-5 sm:col-span-2">
-        <div class="mb-2 flex items-center gap-2 mts-muted"><AlertTriangle class="h-4 w-4" /><span class="text-xs">{{ t('reasons') }}</span></div>
+      <div class="mts-card p-5">
+        <div class="mb-2 flex items-center gap-2 mts-muted"><AlertTriangle class="h-4 w-4" aria-hidden="true" /><span class="text-xs">{{ t('reasons') }}</span></div>
         <p v-if="!healthReasons.length" class="text-sm mts-muted">{{ t('emptyValue') }}</p>
         <ul v-else class="list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-200">
           <li v-for="(r, i) in healthReasons" :key="i">{{ r }}</li>
@@ -521,7 +599,7 @@ const showAdminPanels = computed(() => isAdmin.value)
           <tbody>
             <tr v-for="(c, i) in healthChecks" :key="i" class="border-b border-slate-100 dark:border-slate-800">
               <td class="px-2 py-2 font-mono text-xs">{{ c.name }}</td>
-              <td class="px-2 py-2 text-xs" :class="c.status === 'ok' || c.status === 'passed' ? 'text-green-600' : 'text-red-600'">{{ c.status }}</td>
+              <td class="px-2 py-2 text-xs" :class="healthStatusToneClass(c.status)">{{ formatHealthStatus(c.status) }}</td>
               <td class="px-2 py-2 text-xs mts-muted">{{ c.reason || t('emptyValue') }}</td>
             </tr>
           </tbody>
