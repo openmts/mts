@@ -501,6 +501,27 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('ops-copy-stats')).toBeVisible()
   await expect(page.getByTestId('ops-export-maint-errors')).toBeVisible()
   await expect(page.getByTestId('ops-copy-maint-errors')).toBeVisible()
+  // P113: Retention 需输入口令；清空日志需确认
+  await page.getByTestId('ops-retention').click()
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+  await expect(page.getByTestId('confirm-dialog-input')).toBeVisible()
+  await expect(page.getByTestId('confirm-dialog-confirm')).toBeDisabled()
+  await page.getByTestId('confirm-dialog-input').fill('RETENTION')
+  await expect(page.getByTestId('confirm-dialog-confirm')).toBeEnabled()
+  await page.getByTestId('confirm-dialog-cancel').click()
+  await expect(page.getByTestId('confirm-dialog')).toHaveCount(0)
+  await page.evaluate(() => {
+    localStorage.setItem('mts.dashboard.ops-actions.v1', JSON.stringify({
+      version: 1,
+      items: [{ id: 'e2e', kind: 'flush', status: 'ok', message: 'seed', at: Date.now() }],
+    }))
+  })
+  await page.reload()
+  await expect(page.getByTestId('ops-clear-log')).toBeEnabled()
+  await page.getByTestId('ops-clear-log').click()
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+  await page.getByTestId('confirm-dialog-confirm').click()
+  await expect(page.getByTestId('ops-clear-log')).toBeDisabled()
   await page.locator('[data-testid="skip-to-main"]').evaluate((el: HTMLElement) => el.focus())
   await expect(page.getByTestId('skip-to-main')).toBeFocused()
 

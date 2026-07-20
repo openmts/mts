@@ -42,6 +42,8 @@ const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceErrors = ref<string[]>([])
 const confirmKind = ref<'flush' | 'compact' | 'retention' | null>(null)
 const confirmLoading = ref(false)
+const clearLogOpen = ref(false)
+const clearLogLoading = ref(false)
 const actionLog = ref<OpsActionEntry[]>(loadOpsActionLog())
 
 const confirmTitle = computed(() => ({
@@ -53,8 +55,13 @@ const confirmTitle = computed(() => ({
 const confirmMessage = computed(() => ({
   flush: t.value('opsMsgFlush'),
   compact: t.value('opsMsgCompact'),
-  retention: t.value('opsMsgRetention'),
+  retention: t.value('opsMsgRetention') + '\n' + t.value('opsRetentionRequireHint'),
 }))
+
+const confirmRequireText = computed(() => {
+  if (confirmKind.value === 'retention') return t.value('opsRetentionRequire')
+  return ''
+})
 
 function persistLog() {
   saveOpsActionLog(actionLog.value)
@@ -187,10 +194,20 @@ function exportActionLog() {
   success(t.value('opsLogExportOk'))
 }
 
-function clearLog() {
-  actionLog.value = []
-  clearOpsActionLog()
-  info(t.value('opsLogCleared'))
+function openClearLog() {
+  clearLogOpen.value = true
+}
+
+function confirmClearLog() {
+  clearLogLoading.value = true
+  try {
+    actionLog.value = []
+    clearOpsActionLog()
+    info(t.value('opsLogCleared'))
+    clearLogOpen.value = false
+  } finally {
+    clearLogLoading.value = false
+  }
 }
 
 function formatAt(at: number): string {
@@ -314,7 +331,7 @@ onMounted(() => { void loadStats() })
             <Download class="h-3.5 w-3.5" />
             {{ t('opsExportLog') }}
           </button>
-          <button type="button" class="mts-btn" data-testid="ops-clear-log" :disabled="!actionLog.length" @click="clearLog">
+          <button type="button" class="mts-btn" data-testid="ops-clear-log" :disabled="!actionLog.length" @click="openClearLog">
             <Eraser class="h-3.5 w-3.5" />
             {{ t('opsClearLog') }}
           </button>
@@ -350,10 +367,22 @@ onMounted(() => { void loadStats() })
       :title="confirmKind ? confirmTitle[confirmKind] : ''"
       :message="confirmKind ? confirmMessage[confirmKind] : ''"
       :confirm-label="t('opsExecute')"
+      :require-text="confirmRequireText"
       danger
       :loading="confirmLoading"
+      data-testid="ops-danger-confirm"
       @update:open="(v) => { if (!v) confirmKind = null }"
       @confirm="runConfirmed"
+    />
+    <ConfirmDialog
+      v-model:open="clearLogOpen"
+      :title="t('opsClearLogTitle')"
+      :message="t('opsClearLogMsg')"
+      :confirm-label="t('opsClearLog')"
+      danger
+      :loading="clearLogLoading"
+      data-testid="ops-clear-log-confirm"
+      @confirm="confirmClearLog"
     />
   </div>
 </template>

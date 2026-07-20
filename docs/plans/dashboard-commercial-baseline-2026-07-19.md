@@ -594,3 +594,9 @@
 - 商业冒烟覆盖 selection toolbar 与 sort prefs
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+
+## P113 状态（2026-07-20）
+- Retention 二次确认需输入 RETENTION；清空操作历史改为 ConfirmDialog
+- 商业冒烟覆盖 require-text 与 clear-log 确认
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
