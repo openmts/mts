@@ -7,12 +7,15 @@ import type { MessageKey } from '@/i18n/messages'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import {
   allVisibleCommandItems,
+  commandItemIndexMap,
+  commandListKeyFromEvent,
   filterCommandItems,
   flattenCommandGroups,
   groupCommandItems,
   isCommandAction,
   matchCommandPaletteClose,
   matchCommandPaletteOpen,
+  moveCommandActiveIndex,
   recentCommandItems,
   type CommandActionId,
   type CommandNavItem,
@@ -54,8 +57,19 @@ const itemGroups = computed(() => groupCommandItems(filteredItems.value))
 /** 键盘/选中索引用的扁平列表：导航在前、动作在后 */
 const items = computed(() => flattenCommandGroups(itemGroups.value))
 
+const itemIndexById = computed(() => commandItemIndexMap(items.value))
+
 function flatIndexOf(item: CommandNavItem): number {
-  return items.value.findIndex((x) => x.id === item.id)
+  return itemIndexById.value.get(item.id) ?? -1
+}
+
+function scrollActiveOptionIntoView() {
+  void nextTick(() => {
+    const item = items.value[activeIndex.value]
+    if (!item || typeof document === 'undefined') return
+    const el = document.getElementById(`command-option-${item.id}`)
+    el?.scrollIntoView({ block: 'nearest' })
+  })
 }
 
 const recentItems = computed(() => {
@@ -154,16 +168,12 @@ function onGlobalKey(e: KeyboardEvent) {
     closePalette()
     return
   }
-  if (e.key === 'ArrowDown') {
+  const listKey = commandListKeyFromEvent(e)
+  if (listKey !== 'none') {
     e.preventDefault()
     if (!items.value.length) return
-    activeIndex.value = (activeIndex.value + 1) % items.value.length
-    return
-  }
-  if (e.key === 'ArrowUp') {
-    e.preventDefault()
-    if (!items.value.length) return
-    activeIndex.value = (activeIndex.value - 1 + items.value.length) % items.value.length
+    activeIndex.value = moveCommandActiveIndex(activeIndex.value, items.value.length, listKey)
+    scrollActiveOptionIntoView()
     return
   }
   if (e.key === 'Enter') {

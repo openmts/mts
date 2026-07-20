@@ -5,12 +5,15 @@ import {
   COMMAND_NAV_ITEMS,
   allVisibleCommandItems,
   auditRangeToLocalInputs,
+  commandItemIndexMap,
+  commandListKeyFromEvent,
   filterAuditEvents,
   filterCommandItems,
   flattenCommandGroups,
   groupCommandItems,
   isCommandAction,
   matchCommandPaletteOpen,
+  moveCommandActiveIndex,
   visibleCommandItems,
 } from './commandPalette.ts'
 
@@ -141,4 +144,21 @@ test('groupCommandItems splits nav and action', () => {
   assert.ok(!g2.some((g) => g.id === 'nav') || g2.find((g) => g.id === 'nav')!.items.length === 0)
   // empty nav group omitted
   assert.equal(g2.filter((g) => g.id === 'nav').length, 0)
+})
+
+test('moveCommandActiveIndex and index map', () => {
+  assert.equal(moveCommandActiveIndex(0, 0, 'next'), 0)
+  assert.equal(moveCommandActiveIndex(0, 3, 'next'), 1)
+  assert.equal(moveCommandActiveIndex(2, 3, 'next'), 0)
+  assert.equal(moveCommandActiveIndex(0, 3, 'prev'), 2)
+  assert.equal(moveCommandActiveIndex(1, 3, 'home'), 0)
+  assert.equal(moveCommandActiveIndex(0, 3, 'end'), 2)
+  const map = commandItemIndexMap([{ id: 'a' }, { id: 'b' }, { id: 'a' }])
+  assert.equal(map.get('a'), 0)
+  assert.equal(map.get('b'), 1)
+  const e = { key: 'Home' } as KeyboardEvent
+  assert.equal(commandListKeyFromEvent(e), 'home')
+  assert.equal(commandListKeyFromEvent({ key: 'End' } as KeyboardEvent), 'end')
+  assert.equal(commandListKeyFromEvent({ key: 'ArrowDown' } as KeyboardEvent), 'next')
+  assert.equal(commandListKeyFromEvent({ key: 'x' } as KeyboardEvent), 'none')
 })

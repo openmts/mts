@@ -343,6 +343,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-palette')).toBeVisible()
   await expect(page.getByTestId('command-palette-group-nav')).toBeVisible()
   await expect(page.getByTestId('command-palette-group-action')).toBeVisible()
+  // P105: Home/End 跨组键盘定位
+  await page.keyboard.press('End')
+  await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveAttribute('data-testid', /command-item-action-/)
+  await page.keyboard.press('Home')
+  await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveAttribute('data-testid', /command-item-/)
   await page.keyboard.press('Escape')
 
   // P102: 命令面板页内动作（切换主题）

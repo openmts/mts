@@ -377,6 +377,56 @@ export function matchCommandPaletteClose(e: KeyboardEvent): boolean {
   return e.key === 'Escape'
 }
 
+export type CommandListKey =
+  | 'next'
+  | 'prev'
+  | 'home'
+  | 'end'
+  | 'none'
+
+/** 解析列表导航键（不处理打开/关闭） */
+export function commandListKeyFromEvent(e: KeyboardEvent): CommandListKey {
+  if (e.key === 'ArrowDown') return 'next'
+  if (e.key === 'ArrowUp') return 'prev'
+  if (e.key === 'Home') return 'home'
+  if (e.key === 'End') return 'end'
+  return 'none'
+}
+
+/** 列表 activeIndex 移动；len<=0 时返回 0 */
+export function moveCommandActiveIndex(
+  current: number,
+  len: number,
+  key: CommandListKey,
+): number {
+  if (len <= 0) return 0
+  const cur = Number.isFinite(current) ? Math.trunc(current) : 0
+  const clamped = ((cur % len) + len) % len
+  switch (key) {
+    case 'next':
+      return (clamped + 1) % len
+    case 'prev':
+      return (clamped - 1 + len) % len
+    case 'home':
+      return 0
+    case 'end':
+      return len - 1
+    default:
+      return clamped
+  }
+}
+
+/** id -> flat index，O(1) 查选中态 */
+export function commandItemIndexMap(
+  items: readonly { id: string }[],
+): Map<string, number> {
+  const m = new Map<string, number>()
+  items.forEach((it, i) => {
+    if (!m.has(it.id)) m.set(it.id, i)
+  })
+  return m
+}
+
 export type AuditQuickRange = '1h' | '24h' | '7d' | '30d' | 'clear'
 
 /** 返回 datetime-local 字符串（本地时区） */
