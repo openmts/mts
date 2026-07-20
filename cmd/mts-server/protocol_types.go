@@ -196,7 +196,10 @@ type metadataRequest struct {
 }
 
 type seriesResponse struct {
-	Series []mts.Series `json:"series"`
+	Series    []mts.Series `json:"series"`
+	Total     int          `json:"total,omitempty"`
+	Truncated bool         `json:"truncated,omitempty"`
+	Limit     int          `json:"limit,omitempty"`
 }
 
 type configResponse struct {

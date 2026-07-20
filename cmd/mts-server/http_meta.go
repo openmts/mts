@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 
 	mts "github.com/openmts/mts"
@@ -208,13 +209,21 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 				writeAPIError(writer, err)
 				return
 			}
-			writeHTTPJSON(writer, http.StatusOK, seriesResponse{Series: series})
+			writeHTTPJSON(writer, http.StatusOK, buildSeriesResponse(series, seriesLimit(request)))
 		default:
 			writeAPIError(writer, newAPIError(errorCodeNotFound, "metadata resource not found", nil))
 		}
 		return
 	}
 	writeAPIError(writer, newAPIError(errorCodeNotFound, "metadata resource not found", nil))
+}
+
+// seriesQueryReserved 为 series 列表查询保留参数，不得当作 tag 过滤键。
+var seriesQueryReserved = map[string]struct{}{
+	"limit":  {},
+	"offset": {},
+	"page":   {},
+	"q":      {},
 }
 
 func queryTags(request *http.Request) map[string]string {
@@ -224,10 +233,38 @@ func queryTags(request *http.Request) map[string]string {
 		if len(value) == 0 || key == "" {
 			continue
 		}
+		if _, reserved := seriesQueryReserved[strings.ToLower(key)]; reserved {
+			continue
+		}
 		tags[key] = value[0]
 	}
 	if len(tags) == 0 {
 		return nil
 	}
 	return tags
+}
+
+func seriesLimit(request *http.Request) int {
+	raw := strings.TrimSpace(request.URL.Query().Get("limit"))
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+func buildSeriesResponse(series []mts.Series, limit int) seriesResponse {
+	total := len(series)
+	if limit <= 0 || total <= limit {
+		return seriesResponse{Series: series, Total: total, Truncated: false, Limit: limit}
+	}
+	return seriesResponse{
+		Series:    series[:limit],
+		Total:     total,
+		Truncated: true,
+		Limit:     limit,
+	}
 }

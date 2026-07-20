@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -200,4 +201,47 @@ func containsString(items []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestDataSeriesLimitAndReservedQuery(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	postJSON(t, server.URL+"/api/v1/admin/databases", databaseRequest{Name: "seriesdb"}, http.StatusOK, &okResponse{})
+	for i := 0; i < 5; i++ {
+		host := "h" + strconv.Itoa(i)
+		postJSON(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{{
+			Database:    "seriesdb",
+			Measurement: "cpu",
+			Tags:        map[string]string{"host": host, "zone": "z1"},
+			Timestamp:   int64(10 + i),
+			Fields:      map[string]mts.FieldValue{"usage": mts.Float64Value(float64(i))},
+		}}}, http.StatusOK, &writeResponse{})
+	}
+
+	var limited seriesResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/data/databases/seriesdb/measurements/cpu/series?limit=2", nil, http.StatusOK, &limited)
+	if limited.Total < 5 {
+		t.Fatalf("total = %d, want >= 5", limited.Total)
+	}
+	if len(limited.Series) != 2 {
+		t.Fatalf("series len = %d, want 2", len(limited.Series))
+	}
+	if !limited.Truncated {
+		t.Fatalf("expected truncated=true")
+	}
+	if limited.Limit != 2 {
+		t.Fatalf("limit = %d, want 2", limited.Limit)
+	}
+
+	// limit 为保留字，不得当作 tag；host 过滤仍生效
+	var filtered seriesResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/data/databases/seriesdb/measurements/cpu/series?host=h1&limit=10", nil, http.StatusOK, &filtered)
+	if filtered.Total != 1 || len(filtered.Series) != 1 {
+		t.Fatalf("filtered = total=%d len=%d, want 1", filtered.Total, len(filtered.Series))
+	}
+	if filtered.Series[0].Tags["host"] != "h1" {
+		t.Fatalf("tags = %#v", filtered.Series[0].Tags)
+	}
 }

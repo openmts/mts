@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
-import { listDatabases, listMeasurements, listRetentionPolicies } from '@/api/meta'
+import { listDatabases, listMeasurements, listRetentionPolicies, listSeriesDetailed } from '@/api/meta'
+import { seriesLabel } from '@/utils/seriesMeta'
+import { formatMessage } from '@/utils/formatMessage'
 import {
   Plus, Trash2, ChevronDown, ChevronRight, Table2, Tag, Clock, Download,
 } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
-import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -16,7 +17,6 @@ import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
-import { formatMessage } from '@/utils/formatMessage'
 import { filterByName } from '@/utils/listFilter'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
@@ -34,13 +34,14 @@ import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
 interface Series { id: number; measurement: string; tags: Record<string, string> }
-interface SeriesResponse { series: Series[] }
 interface MeasurementEntry {
   name: string
   expanded: boolean
   loading: boolean
   fields: FieldSchema[]
   series: Series[]
+  seriesTotal: number
+  seriesTruncated: boolean
 }
 interface DatabaseEntry {
   name: string
@@ -53,6 +54,7 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
+const SERIES_CAP = 200
 const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
 const databases = ref<DatabaseEntry[]>([])
@@ -100,7 +102,6 @@ const confirmOpen = ref(false)
 const confirmDbName = ref('')
 const confirmLoading = ref(false)
 onMounted(async () => {
-  if (!isAdmin.value) return
   try {
     const names = await listDatabases()
     databases.value = names.map((name) => ({
@@ -132,6 +133,8 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
       loading: false,
       fields: [],
       series: [],
+      seriesTotal: 0,
+      seriesTruncated: false,
     }))
     db.retentionPolicies = rps.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
     db.loaded = true
@@ -156,15 +159,21 @@ async function toggleExpand(db: DatabaseEntry) {
 }
 async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
   meas.expanded = !meas.expanded
-  if (meas.expanded && !meas.fields.length) {
+  if (meas.expanded && !meas.fields.length && !meas.series.length && !meas.seriesTotal) {
     meas.loading = true
     try {
-      const [fieldsData, seriesData] = await Promise.all([
+      const [fieldsData, seriesResult] = await Promise.all([
         apiGet<FieldsResponse>(`/api/v1/data/databases/${encodeURIComponent(dbName)}/measurements/${encodeURIComponent(meas.name)}/fields`),
-        apiGet<SeriesResponse>(`/api/v1/data/databases/${encodeURIComponent(dbName)}/measurements/${encodeURIComponent(meas.name)}/series`),
+        listSeriesDetailed(dbName, meas.name, { limit: SERIES_CAP }),
       ])
       meas.fields = fieldsData.fields ?? []
-      meas.series = seriesData.series ?? []
+      meas.series = (seriesResult.series as Series[]).map((s) => ({
+        id: s.id ?? 0,
+        measurement: s.measurement ?? meas.name,
+        tags: s.tags ?? {},
+      }))
+      meas.seriesTotal = seriesResult.total
+      meas.seriesTruncated = seriesResult.truncated
     } catch (e) {
       const msg = formatCaughtError(e); actionResult.value = makeActionResult('error', msg)
     } finally {
@@ -173,6 +182,7 @@ async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
   }
 }
 async function createDatabase() {
+  if (!isAdmin.value) return
   if (!newDbName.value.trim()) return
   actionResult.value = null
   try {
@@ -197,6 +207,7 @@ async function createDatabase() {
   }
 }
 function requestDeleteDatabase(name: string) {
+  if (!isAdmin.value) return
   confirmDbName.value = name
   confirmOpen.value = true
 }
@@ -220,6 +231,7 @@ async function confirmDeleteDatabase() {
   }
 }
 async function createRetentionPolicy(db: DatabaseEntry) {
+  if (!isAdmin.value) return
   const name = db.newRpName.trim()
   if (!name) return
   const dur = db.newRpDuration.trim()
@@ -315,14 +327,18 @@ function exportCSV() {
 }
 </script>
 <template>
-  <PermissionDenied v-if="!isAdmin" />
-  <div v-else class="space-y-4" data-testid="databases-page">
+  <div class="space-y-4" data-testid="databases-page">
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
+    <p
+      v-if="!isAdmin"
+      class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+      data-testid="databases-readonly-hint"
+    >{{ t('databasesReadOnlyHint') }}</p>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('databases') }}</h1>
-        <p class="text-xs mts-muted">{{ t('databasesDesc') }}</p>
+        <p class="text-xs mts-muted">{{ isAdmin ? t('databasesDesc') : t('databasesReadOnlyDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="mts-btn" data-testid="databases-export-json" :disabled="!filteredDatabases.length" @click="exportJSON">
@@ -331,10 +347,12 @@ function exportCSV() {
         <button type="button" class="mts-btn" data-testid="databases-export-csv" :disabled="!filteredDatabases.length" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
         </button>
-        <input v-model="newDbName" type="text" :placeholder="t('databasesCreatePlaceholder')" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="createDatabase" />
-        <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="createDatabase">
-          <Plus class="h-4 w-4" /> {{ t('databasesCreate') }}
-        </button>
+        <template v-if="isAdmin">
+          <input v-model="newDbName" type="text" :placeholder="t('databasesCreatePlaceholder')" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" data-testid="databases-create-input" @keyup.enter="createDatabase" />
+          <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="databases-create-btn" @click="createDatabase">
+            <Plus class="h-4 w-4" /> {{ t('databasesCreate') }}
+          </button>
+        </template>
       </div>
     </div>
 
@@ -368,8 +386,8 @@ function exportCSV() {
         :title="databases.length ? t('databasesFilterEmpty') : t('databasesEmpty')"
         :description="databases.length ? t('databasesFilterEmptyDesc') : t('databasesEmptyDesc')"
       >
-        <template v-if="!databases.length" #action>
-          <button type="button" class="mts-btn-primary" @click="createDatabase">{{ t('databasesCreate') }}</button>
+        <template v-if="!databases.length && isAdmin" #action>
+          <button type="button" class="mts-btn-primary" data-testid="databases-empty-create" @click="createDatabase">{{ t('databasesCreate') }}</button>
         </template>
       </EmptyState>
     </div>
@@ -408,6 +426,7 @@ function exportCSV() {
                 </button>
               </div>
               <button
+                v-if="isAdmin"
                 type="button"
                 class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300"
                 :title="t('databasesDeleteDbBtnTitle')"
@@ -458,12 +477,17 @@ function exportCSV() {
                   <span v-if="!meas.fields.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
                 </div>
                 <p class="mb-1 font-medium text-slate-500 dark:text-slate-400">{{ t('databasesSeries') }}</p>
-                <div class="space-y-1">
+                <div class="space-y-1" data-testid="databases-series-list">
                   <div v-for="s in meas.series" :key="s.id" class="flex items-center gap-1">
                     <Tag class="h-3 w-3 text-slate-400 dark:text-slate-500" />
-                    <span class="font-mono">{{ s.tags && Object.keys(s.tags).length ? JSON.stringify(s.tags) : '{}' }}</span>
+                    <span class="font-mono">{{ seriesLabel(s) }}</span>
                   </div>
                   <span v-if="!meas.series.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
+                  <p
+                    v-if="meas.seriesTruncated"
+                    class="text-[11px] text-amber-700 dark:text-amber-200"
+                    data-testid="databases-series-truncated"
+                  >{{ formatMessage(t('databasesSeriesTruncated'), { max: SERIES_CAP, total: meas.seriesTotal }) }}</p>
                 </div>
               </template>
             </div>
@@ -482,7 +506,7 @@ function exportCSV() {
               <span class="text-xs text-slate-500 dark:text-slate-400">{{ formatDuration(rp.duration) }}</span>
             </div>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
+          <div v-if="isAdmin" class="flex flex-wrap items-center gap-2" data-testid="databases-rp-create">
             <input v-model="activeDatabase.newRpName" type="text" :placeholder="t('databasesRpNamePlaceholder')" class="w-28 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-name" />
             <input v-model="activeDatabase.newRpDuration" type="text" :placeholder="t('databasesRpDurationPlaceholder')" class="w-24 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-duration" />
             <button type="button" class="inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" data-testid="databases-rp-add" @click="createRetentionPolicy(activeDatabase)">

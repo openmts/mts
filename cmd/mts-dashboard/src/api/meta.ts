@@ -138,23 +138,61 @@ export type SeriesMeta = {
   tags?: Record<string, string>
 }
 
+export type ListSeriesResult = {
+  series: SeriesMeta[]
+  total: number
+  truncated: boolean
+  limit: number
+}
+
+export type ListSeriesOptions = {
+  tags?: Record<string, string>
+  limit?: number
+  init?: RequestInit
+}
+
+/** 列出 series：支持 tag 过滤与 limit（服务端截断并返回 total/truncated） */
+export async function listSeriesDetailed(
+  database: string,
+  measurement: string,
+  opts: ListSeriesOptions = {},
+): Promise<ListSeriesResult> {
+  if (!database.trim() || !measurement.trim()) {
+    return { series: [], total: 0, truncated: false, limit: opts.limit ?? 0 }
+  }
+  const qs = new URLSearchParams()
+  if (opts.tags) {
+    for (const [k, v] of Object.entries(opts.tags)) {
+      if (k) qs.set(k, v)
+    }
+  }
+  if (opts.limit != null && opts.limit > 0) qs.set('limit', String(opts.limit))
+  const q = qs.toString()
+  const path =
+    `/api/v1/data/databases/${encodeURIComponent(database)}/measurements/${encodeURIComponent(measurement)}/series` +
+    (q ? `?${q}` : '')
+  const data = await apiGet<{
+    series?: SeriesMeta[]
+    total?: number
+    truncated?: boolean
+    limit?: number
+  }>(path, opts.init)
+  const series = data.series ?? []
+  const total = typeof data.total === 'number' ? data.total : series.length
+  return {
+    series,
+    total,
+    truncated: !!data.truncated,
+    limit: typeof data.limit === 'number' ? data.limit : opts.limit ?? 0,
+  }
+}
+
 export async function listSeries(
   database: string,
   measurement: string,
   tags?: Record<string, string>,
   init: RequestInit = {},
 ): Promise<SeriesMeta[]> {
-  if (!database.trim() || !measurement.trim()) return []
-  const qs = new URLSearchParams()
-  if (tags) {
-    for (const [k, v] of Object.entries(tags)) {
-      if (k) qs.set(k, v)
-    }
-  }
-  const q = qs.toString()
-  const path =
-    `/api/v1/data/databases/${encodeURIComponent(database)}/measurements/${encodeURIComponent(measurement)}/series` +
-    (q ? `?${q}` : '')
-  const data = await apiGet<{ series?: SeriesMeta[] }>(path, init)
-  return data.series ?? []
+  const result = await listSeriesDetailed(database, measurement, { tags, init })
+  return result.series
 }

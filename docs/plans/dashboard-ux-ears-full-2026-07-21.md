@@ -109,3 +109,27 @@
 - [x] EARS-FE-P150-02 空态
 - [x] EARS-FE-P150-03 授权按钮 disabled
 - [x] EARS-DOC-P150-04 基线记录
+
+## P151 — 非 admin 只读库浏览器
+- [x] EARS-FE-P151-01 非 admin data 面浏览库
+- [x] EARS-FE-P151-02 隐藏写操作
+- [x] EARS-FE-P151-03 admin 完整能力
+- [x] EARS-FE-P151-04 商业冒烟
+- [x] EARS-DOC-P151-05 基线
+
+## P152 — Query series 服务端 tag 过滤
+- [x] EARS-FE-P152-01/02/03 tags 刷新 + 非法提示
+- [x] EARS-DOC-P152-04 基线
+
+## P153 — 库页 series 截断
+- [x] EARS-FE-P153-01/02 截断提示
+- [x] EARS-DOC-P153-03 基线
+
+## P154 — Users 授权 e2e
+- [x] EARS-FE-P154-01/02 testid + 冒烟
+- [x] EARS-DOC-P154-03 基线
+
+## P155 — series limit/total API
+- [x] EARS-BE-P155-01/02 reserved qs + total
+- [x] EARS-FE-P155-03 listSeriesDetailed limit
+- [x] EARS-DOC-P155-04 基线

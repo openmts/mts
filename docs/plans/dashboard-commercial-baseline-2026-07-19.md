@@ -789,3 +789,24 @@
 - UserGrantPanel：库筛选、空态、选择提示、授权按钮 disabled
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P151 状态（2026-07-21）
+- `/databases` 非 admin 只读浏览 data 面库/measurement/fields/series
+- 隐藏创建删除库与新建 RP；admin 能力不变
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+## P152 状态（2026-07-21）
+- Query series「按 Tags 刷新」走服务端 tag 过滤
+- **仍不宣称可商用目标完成**
+
+## P153 状态（2026-07-21）
+- Databases measurement series 上限 200 + total 提示
+- **仍不宣称可商用目标完成**
+
+## P154 状态（2026-07-21）
+- Users 打开授权面板 e2e + `users-open-grant-*`
+- **仍不宣称可商用目标完成**
+
+## P155 状态（2026-07-21）
+- series API `limit`/`total`/`truncated`；保留字 limit/offset/page/q 不当 tag
+- 前端 `listSeriesDetailed` 消费服务端截断
+- **仍不宣称可商用目标完成**

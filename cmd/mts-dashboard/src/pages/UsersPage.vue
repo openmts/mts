@@ -508,7 +508,7 @@ async function confirmBatch() {
                 />
               </div>
               <div class="min-w-0 px-4">
-                <button class="text-left font-medium text-slate-800 hover:underline dark:text-slate-100" @click="selectUser(u)">{{ u.name }}</button>
+                <button type="button" class="text-left font-medium text-slate-800 hover:underline dark:text-slate-100" :data-testid="`users-open-grant-${u.name}`" @click="selectUser(u)">{{ u.name }}</button>
                 <span v-if="u.display_name" class="ml-2 text-xs text-slate-400 dark:text-slate-500">{{ u.display_name }}</span>
               </div>
               <div class="px-4 text-slate-600 dark:text-slate-300">{{ roleLabel(u.role) }}</div>

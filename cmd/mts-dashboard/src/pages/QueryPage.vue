@@ -46,7 +46,7 @@ import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star
 const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
   fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError,
-  loadMeasurementMeta, applySeriesTags,
+  loadMeasurementMeta, refreshSeriesWithTags, applySeriesTags,
   queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, loading,
   engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, loadEngineStats,
   loadDatabases, loadDbChildren, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
@@ -688,6 +688,14 @@ const columnRows = computed(() => {
           :placeholder="t('querySeriesFilterPh')"
           :disabled="seriesLoading || !seriesOptions.length"
         />
+        <button
+          type="button"
+          class="mts-btn mt-1 text-xs"
+          data-testid="query-series-refresh"
+          :disabled="seriesLoading || !queryForm.measurement"
+          @click="refreshSeriesWithTags"
+        >{{ t('querySeriesRefreshByTags') }}</button>
+
         <select
           class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800"
           data-testid="query-series-select"

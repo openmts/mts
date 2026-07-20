@@ -6,14 +6,14 @@ import {
   listFields,
   listMeasurements,
   listRetentionPoliciesDetailed,
-  listSeries,
+  listSeriesDetailed,
   type FieldMeta,
   type MetaLoadSource,
   type SeriesMeta,
 } from '@/api/meta'
-import { capSeriesList, fieldNames, tagsToExpr } from '@/utils/seriesMeta'
+import { fieldNames, tagsToExpr } from '@/utils/seriesMeta'
 import { makeFormErrorT } from '@/utils/formErrors'
-import { buildQueryFromForm } from '@/utils/queryFormBuild'
+import { buildQueryFromForm, parseTags } from '@/utils/queryFormBuild'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { formatMessage } from '@/utils/formatMessage'
@@ -121,36 +121,6 @@ export function useQueryWorkbench() {
     }
   }
 
-  async function loadMeasurementMeta(db: string, measurement: string) {
-    fieldOptions.value = []
-    seriesOptions.value = []
-    seriesTotal.value = 0
-    seriesTruncated.value = false
-    seriesError.value = ''
-    if (!db.trim() || !measurement.trim()) return
-    seriesLoading.value = true
-    try {
-      const [fields, series] = await Promise.all([
-        listFields(db, measurement).catch(() => [] as FieldMeta[]),
-        listSeries(db, measurement).catch((e) => {
-          seriesError.value = formatCaughtError(e)
-          return [] as SeriesMeta[]
-        }),
-      ])
-      fieldOptions.value = fieldNames(fields)
-      const capped = capSeriesList(series, SERIES_CAP)
-      seriesOptions.value = capped.items
-      seriesTotal.value = capped.total
-      seriesTruncated.value = capped.truncated
-    } finally {
-      seriesLoading.value = false
-    }
-  }
-
-  function applySeriesTags(s: SeriesMeta) {
-    queryForm.value.tags = tagsToExpr(s.tags)
-  }
-
   const { t: tMsg } = useI18n()
   const formT = () =>
     makeFormErrorT({
@@ -166,6 +136,81 @@ export function useQueryWorkbench() {
       queryErrPredKind: tMsg.value('queryErrPredKind' as MessageKey),
       queryErrPredName: tMsg.value('queryErrPredName' as MessageKey),
     })
+
+  function parseTagsSafe(text: string): { tags?: Record<string, string>; error?: string } {
+    const raw = text.trim()
+    if (!raw) return {}
+    try {
+      return { tags: parseTags(raw, formT()) }
+    } catch (e) {
+      return { error: formatCaughtError(e) }
+    }
+  }
+
+  async function loadMeasurementMeta(db: string, measurement: string, opts?: { useFormTags?: boolean }) {
+    fieldOptions.value = []
+    seriesOptions.value = []
+    seriesTotal.value = 0
+    seriesTruncated.value = false
+    seriesError.value = ''
+    if (!db.trim() || !measurement.trim()) return
+    seriesLoading.value = true
+    try {
+      let tagFilter: Record<string, string> | undefined
+      if (opts?.useFormTags) {
+        const parsed = parseTagsSafe(queryForm.value.tags)
+        if (parsed.error) {
+          seriesError.value = parsed.error
+        } else {
+          tagFilter = parsed.tags
+        }
+      }
+      const [fields, seriesResult] = await Promise.all([
+        listFields(db, measurement).catch(() => [] as FieldMeta[]),
+        listSeriesDetailed(db, measurement, { tags: tagFilter, limit: SERIES_CAP }).catch((e) => {
+          seriesError.value = seriesError.value || formatCaughtError(e)
+          return { series: [] as SeriesMeta[], total: 0, truncated: false, limit: SERIES_CAP }
+        }),
+      ])
+      fieldOptions.value = fieldNames(fields)
+      seriesOptions.value = seriesResult.series
+      seriesTotal.value = seriesResult.total
+      seriesTruncated.value = seriesResult.truncated
+    } finally {
+      seriesLoading.value = false
+    }
+  }
+
+  /** 用当前表单 tags 向服务端重新过滤 series */
+  async function refreshSeriesWithTags() {
+    const db = queryForm.value.database
+    const measurement = queryForm.value.measurement
+    if (!db.trim() || !measurement.trim()) return
+    seriesLoading.value = true
+    seriesError.value = ''
+    try {
+      const parsed = parseTagsSafe(queryForm.value.tags)
+      if (parsed.error) {
+        seriesError.value = parsed.error
+        return
+      }
+      const seriesResult = await listSeriesDetailed(db, measurement, {
+        tags: parsed.tags,
+        limit: SERIES_CAP,
+      })
+      seriesOptions.value = seriesResult.series
+      seriesTotal.value = seriesResult.total
+      seriesTruncated.value = seriesResult.truncated
+    } catch (e) {
+      seriesError.value = formatCaughtError(e)
+    } finally {
+      seriesLoading.value = false
+    }
+  }
+
+  function applySeriesTags(s: SeriesMeta) {
+    queryForm.value.tags = tagsToExpr(s.tags)
+  }
 
   function buildQuery(): Record<string, unknown> {
     return buildQueryFromForm(queryForm.value, formT())
@@ -328,6 +373,7 @@ export function useQueryWorkbench() {
     seriesLoading,
     seriesError,
     loadMeasurementMeta,
+    refreshSeriesWithTags,
     applySeriesTags,
     metaSource,
     metaHint,
