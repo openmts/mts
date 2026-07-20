@@ -8,7 +8,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="flex min-h-[50vh] items-center justify-center">
+  <div class="flex min-h-[50vh] items-center justify-center" data-testid="not-found-page">
     <EmptyState :title="t('notFoundTitle')" :description="t('notFoundDesc')">
       <template #icon>
         <span class="text-lg font-semibold">404</span>
@@ -18,6 +18,7 @@ const { t } = useI18n()
           <button
             type="button"
             class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+            data-testid="not-found-go-overview"
             @click="router.push({ name: 'Overview' })"
           >
             {{ t('notFoundGoOverview') }}
@@ -25,6 +26,7 @@ const { t } = useI18n()
           <button
             type="button"
             class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+            data-testid="not-found-go-back"
             @click="router.back()"
           >
             {{ t('notFoundGoBack') }}

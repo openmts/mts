@@ -81,7 +81,10 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // 5) 运维 Flush（确认按钮文案为「执行」）
   await page.goto('/operations')
+  await expect(page.getByTestId('ops-page')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /^(运维|Operations)$/ })).toBeVisible()
+  await expect(page.getByTestId('ops-export-stats')).toBeVisible()
+  await expect(page.getByTestId('ops-copy-stats')).toBeVisible()
   await expect(page.getByTestId('ops-flush')).toContainText(/Flush/)
   await expect(page.getByTestId('ops-retention')).toContainText(/保留策略|Retention/i)
   await page.getByRole('main').getByRole('button', { name: /Flush/ }).first().click()
@@ -241,6 +244,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/operations')
   await expect(page.getByTestId('ops-action-log')).toBeVisible()
   await expect(page.getByTestId('ops-export-log')).toBeVisible()
+  await expect(page.getByTestId('ops-export-stats')).toBeVisible()
+  await expect(page.getByTestId('ops-copy-stats')).toBeVisible()
   await expect(page.getByTestId('ops-export-maint-errors')).toBeVisible()
   await expect(page.getByTestId('ops-copy-maint-errors')).toBeVisible()
   await page.locator('[data-testid="skip-to-main"]').evaluate((el: HTMLElement) => el.focus())
@@ -309,6 +314,8 @@ test('commercial browser smoke path', async ({ page }) => {
   // 账户页改密表单可达
   await page.goto('/account')
   await expect(page.getByTestId('account-page')).toBeVisible()
+  await expect(page.getByTestId('account-export-json')).toBeVisible()
+  await expect(page.getByTestId('account-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('account-password-form')).toBeVisible()
   await page.getByTestId('account-password-submit').click()
   await expect(page.getByTestId('account-password-error')).toBeVisible()
@@ -350,5 +357,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/observability/metrics')
   await expect(page.getByRole('main').getByRole('heading', { name: /指标浏览|Metrics explorer/ })).toBeVisible()
   await page.goto('/this-route-should-404')
+  await expect(page.getByTestId('not-found-page')).toBeVisible()
+  await expect(page.getByTestId('not-found-go-overview')).toBeVisible()
   await expect(page.getByText(/页面不存在|Page not found|404/).first()).toBeVisible()
 })

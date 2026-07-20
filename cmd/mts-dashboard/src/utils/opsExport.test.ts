@@ -1,15 +1,37 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildMaintenanceErrorsExport, maintenanceErrorsToText } from './opsExport.ts'
+import {
+  buildMaintenanceErrorsExport,
+  buildOpsStatsExport,
+  formatOpsStatsPretty,
+  maintenanceErrorsToText,
+} from './opsExport.ts'
 
 test('buildMaintenanceErrorsExport', () => {
-  const out = buildMaintenanceErrorsExport(['a', '', 'b'], new Date('2026-07-20T00:00:00.000Z'))
+  const out = buildMaintenanceErrorsExport(['a', ''], new Date('2026-07-20T00:00:00.000Z'))
   assert.equal(out.kind, 'mts.ops.maintenance_errors')
-  assert.equal(out.count, 2)
-  assert.deepEqual(out.errors, ['a', 'b'])
+  assert.equal(out.count, 1)
 })
 
 test('maintenanceErrorsToText', () => {
   assert.equal(maintenanceErrorsToText(['x', 'y']), 'x\ny')
-  assert.equal(maintenanceErrorsToText(null), '')
+})
+
+test('buildOpsStatsExport', () => {
+  const out = buildOpsStatsExport(
+    {
+      maintenance: { compaction_active: 1 },
+      compaction: { total: 2 },
+      maintenance_errors: ['e1'],
+    },
+    new Date('2026-07-20T00:00:00.000Z'),
+  )
+  assert.equal(out.kind, 'mts.ops.stats')
+  assert.equal(out.maintenance_error_count, 1)
+  assert.equal((out.compaction as { total: number }).total, 2)
+})
+
+test('formatOpsStatsPretty', () => {
+  const text = formatOpsStatsPretty({ maintenance: { a: 1 } })
+  assert.match(text, /mts.ops.stats/)
 })

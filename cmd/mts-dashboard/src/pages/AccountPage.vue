@@ -8,7 +8,10 @@ import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { validateNewPassword } from '@/utils/passwordPolicy'
-import { KeyRound, UserRound } from 'lucide-vue-next'
+import { KeyRound, UserRound, Download, Copy } from 'lucide-vue-next'
+import { buildAccountExport, formatAccountExportPretty } from '@/utils/accountExport'
+import { downloadJSON, stampFilename } from '@/utils/download'
+import { copyText } from '@/utils/clipboard'
 
 const router = useRouter()
 const { currentUser, currentRole, changePassword } = useAuth()
@@ -43,7 +46,7 @@ function roleLabel(role?: string | null): string {
   if (role === 'user') return t.value('roleUser')
   return role
 }
-const { success } = useNotify()
+const { success, error: notifyError } = useNotify()
 
 const oldPassword = ref('')
 const newPassword = ref('')
@@ -52,6 +55,30 @@ const loading = ref(false)
 const error = ref('')
 const info = ref('')
 const invalid = computed(() => !!error.value)
+
+
+function accountSnapshotInput() {
+  return {
+    username: currentUser.value || '',
+    role: currentRole.value || '',
+    session: {
+      expires_at: expiresAtText.value,
+      remaining: remainingText.value,
+      urgency: sessionView.value.urgency,
+    },
+  }
+}
+
+function exportAccount() {
+  downloadJSON(stampFilename('mts-account', 'json'), buildAccountExport(accountSnapshotInput()))
+  success(t.value('accountExported'))
+}
+
+async function copyAccount() {
+  const res = await copyText(formatAccountExportPretty(accountSnapshotInput()))
+  if (res.ok) success(t.value('accountCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
 
 async function submit() {
   error.value = ''
@@ -80,12 +107,22 @@ async function submit() {
 
 <template>
   <div class="mx-auto max-w-xl space-y-6" data-testid="account-page">
-    <div>
-      <h1 class="mts-title flex items-center gap-2">
-        <UserRound class="h-5 w-5" aria-hidden="true" />
-        {{ t('accountTitle') }}
-      </h1>
-      <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="mts-title flex items-center gap-2">
+          <UserRound class="h-5 w-5" aria-hidden="true" />
+          {{ t('accountTitle') }}
+        </h1>
+        <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="account-export-json" @click="exportAccount">
+          <Download class="h-3.5 w-3.5" /> {{ t('accountExportJSON') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="account-copy-snapshot" @click="copyAccount">
+          <Copy class="h-3.5 w-3.5" /> {{ t('accountCopySnapshot') }}
+        </button>
+      </div>
     </div>
 
     <div class="mts-card p-4">

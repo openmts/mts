@@ -21,7 +21,7 @@ import {
 } from '@/utils/opsActionLog'
 import { downloadJSON, stampFilename } from '@/utils/download'
 import { copyText } from '@/utils/clipboard'
-import { buildMaintenanceErrorsExport, maintenanceErrorsToText } from '@/utils/opsExport'
+import { buildMaintenanceErrorsExport, buildOpsStatsExport, formatOpsStatsPretty, maintenanceErrorsToText } from '@/utils/opsExport'
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser, Copy } from 'lucide-vue-next'
 import type { CompactionStats, MaintenanceStats } from '@/api/types'
 
@@ -129,6 +129,31 @@ async function runConfirmed() {
   }
 }
 
+
+function exportStats() {
+  downloadJSON(
+    stampFilename('mts-ops-stats', 'json'),
+    buildOpsStatsExport({
+      maintenance: maintenanceStats.value,
+      compaction: compactionStats.value,
+      maintenance_errors: maintenanceErrors.value,
+    }),
+  )
+  success(t.value('opsStatsExported'))
+}
+
+async function copyStats() {
+  const res = await copyText(
+    formatOpsStatsPretty({
+      maintenance: maintenanceStats.value,
+      compaction: compactionStats.value,
+      maintenance_errors: maintenanceErrors.value,
+    }),
+  )
+  if (res.ok) success(t.value('opsStatsCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 function exportMaintErrors() {
   if (!maintenanceErrors.value.length) {
     warn(t.value('opsMaintErrorsEmpty'))
@@ -185,9 +210,17 @@ onMounted(() => { void loadStats() })
         <h1 class="mts-title">{{ t('opsTitle') }}</h1>
         <p class="text-xs mts-muted">{{ t('opsDesc') }}</p>
       </div>
-      <button type="button" class="mts-btn" :disabled="loading" data-testid="ops-refresh" @click="loadStats">
-        <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
-      </button>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" :disabled="loading" data-testid="ops-refresh" @click="loadStats">
+          <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="ops-export-stats" @click="exportStats">
+          <Download class="h-3.5 w-3.5" /> {{ t('opsExportStats') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="ops-copy-stats" @click="copyStats">
+          <Copy class="h-3.5 w-3.5" /> {{ t('opsCopyStats') }}
+        </button>
+      </div>
     </div>
 
     <ActionResultBanner
@@ -245,7 +278,7 @@ onMounted(() => { void loadStats() })
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
-      <div class="mts-card p-5">
+      <div class="mts-card p-5" data-testid="ops-maint-stats">
         <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceStats') }}</h2>
         <EmptyState v-if="!maintenanceStats" compact :title="t('opsNoMaintStats')" :description="t('opsStatsEmptyHint')" />
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
@@ -257,7 +290,7 @@ onMounted(() => { void loadStats() })
           <div>{{ t('opsStatErrors') }}: <b>{{ maintenanceStats.maintenance_error_count }}</b></div>
         </dl>
       </div>
-      <div class="mts-card p-5">
+      <div class="mts-card p-5" data-testid="ops-compact-stats">
         <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('compactionStats') }}</h2>
         <EmptyState v-if="!compactionStats" compact :title="t('opsNoCompactStats')" :description="t('opsStatsEmptyHint')" />
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">

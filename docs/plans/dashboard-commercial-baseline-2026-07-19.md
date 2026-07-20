@@ -418,3 +418,9 @@
 - Overview 运维快照导出/复制；Write 结果与草稿导出
 - 商业冒烟覆盖 overview-export / write-export testid
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P84 状态（2026-07-20）
+- Operations 统计导出/复制；Account 会话快照导出/复制；404 导航 testid
+- 商业冒烟覆盖 ops-export-stats / account-export / not-found
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
