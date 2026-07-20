@@ -78,13 +78,13 @@ function roleLabel(role: string): string {
 
     <div class="grid gap-3 sm:grid-cols-2">
       <div class="mts-card p-3">
-        <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ t('accessMatrixAdminDist') }}</p>
+        <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ formatMessage(t('accessMatrixAdminDist'), { role: t('roleAdmin') }) }}</p>
         <p class="mt-1 text-xs mts-muted">
           {{ formatMessage(t('accessMatrixDistLine'), { full: adminCounts.full, self: adminCounts.self, data: adminCounts.data_scoped, none: adminCounts.none }) }}
         </p>
       </div>
       <div class="mts-card p-3">
-        <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ t('accessMatrixUserDist') }}</p>
+        <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ formatMessage(t('accessMatrixUserDist'), { role: t('roleUser') }) }}</p>
         <p class="mt-1 text-xs mts-muted">
           {{ formatMessage(t('accessMatrixDistLine'), { full: userCounts.full, self: userCounts.self, data: userCounts.data_scoped, none: userCounts.none }) }}
         </p>
@@ -95,8 +95,8 @@ function roleLabel(role: string): string {
       <label class="text-xs mts-muted">{{ t('accessMatrixRoleFilter') }}</label>
       <select v-model="roleFilter" class="mts-input w-auto text-sm">
         <option value="all">{{ t('accessMatrixAllRows') }}</option>
-        <option value="admin">{{ t('accessMatrixAdminOnly') }}</option>
-        <option value="user">{{ t('accessMatrixUserOnly') }}</option>
+        <option value="admin">{{ formatMessage(t('accessMatrixAdminOnly'), { role: t('roleAdmin') }) }}</option>
+        <option value="user">{{ formatMessage(t('accessMatrixUserOnly'), { role: t('roleUser') }) }}</option>
       </select>
       <label class="text-xs mts-muted ml-2">{{ t('accessMatrixArea') }}</label>
       <select v-model="areaFilter" class="mts-input w-auto text-sm">

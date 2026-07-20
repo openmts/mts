@@ -110,14 +110,14 @@ onMounted(() => { void load() })
               {{ fam.help || t('emptyValue') }}
             </p>
           </div>
-          <span class="text-xs mts-muted whitespace-nowrap">{{ fam.samples.length }} samples</span>
+          <span class="text-xs mts-muted whitespace-nowrap">{{ formatMessage(t('metricsSampleCount'), { count: fam.samples.length }) }}</span>
         </button>
         <div v-if="expanded[fam.name]" class="border-t border-slate-100 dark:border-slate-800">
           <table class="min-w-full text-left text-xs">
             <thead class="bg-slate-50 text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">
               <tr>
-                <th class="px-3 py-1.5 font-medium">labels</th>
-                <th class="px-3 py-1.5 font-medium">value</th>
+                <th class="px-3 py-1.5 font-medium">{{ t('metricsColLabels') }}</th>
+                <th class="px-3 py-1.5 font-medium">{{ t('metricsColValue') }}</th>
               </tr>
             </thead>
             <tbody>
