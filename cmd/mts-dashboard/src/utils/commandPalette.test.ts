@@ -54,6 +54,11 @@ test('command palette includes ops deep links for admin', () => {
     'storage-edge-https',
     'readiness-deploy-kit',
     'readiness-signoff',
+    'operations-flush',
+    'operations-compact',
+    'operations-retention',
+    'operations-action-log',
+    'operations-maint-errors',
   ]) {
     assert.ok(admin.some((i) => i.id === id), id)
   }
@@ -61,6 +66,8 @@ test('command palette includes ops deep links for admin', () => {
   assert.ok(filterCommandItems(admin, 'signoff', resolve).some((i) => i.id === 'readiness-signoff'))
   assert.ok(filterCommandItems(admin, 'deploy kit', resolve).some((i) => i.id === 'readiness-deploy-kit'))
   assert.ok(filterCommandItems(admin, '#data-restore', resolve).some((i) => i.id === 'storage-data-restore'))
+  assert.ok(filterCommandItems(admin, 'memtable', resolve).some((i) => i.id === 'operations-flush'))
+  assert.ok(filterCommandItems(admin, 'ops log', resolve).some((i) => i.id === 'operations-action-log'))
   const user = visibleCommandItems(COMMAND_NAV_ITEMS, false)
-  assert.ok(user.every((i) => !i.id.startsWith('readiness') && !i.id.startsWith('storage-')))
+  assert.ok(user.every((i) => !i.id.startsWith('readiness') && !i.id.startsWith('storage-') && !i.id.startsWith('operations-')))
 })

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { apiGet, apiPost } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -24,11 +25,13 @@ import { copyText } from '@/utils/clipboard'
 import { buildMaintenanceErrorsExport, buildOpsStatsExport, formatOpsStatsPretty, maintenanceErrorsToText } from '@/utils/opsExport'
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser, Copy } from 'lucide-vue-next'
 import type { CompactionStats, MaintenanceStats } from '@/api/types'
+import { scheduleScrollToHash } from '@/utils/hashScroll'
 
 interface CompactionStatsResponse { stats: CompactionStats }
 interface MaintenanceStatsResponse { stats: MaintenanceStats }
 interface MaintenanceErrorsResponse { errors: string[] }
 
+const route = useRoute()
 const { isAdmin } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError, warn, info } = useNotify()
@@ -199,7 +202,19 @@ function formatAt(at: number): string {
   }
 }
 
-onMounted(() => { void loadStats() })
+function scrollToCurrentHash() {
+  scheduleScrollToHash(typeof window !== 'undefined' ? window.location.hash : route.hash, typeof document !== 'undefined' ? document : null)
+}
+
+onMounted(() => {
+  void loadStats()
+  scrollToCurrentHash()
+  if (typeof window !== 'undefined') window.addEventListener('hashchange', scrollToCurrentHash)
+})
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') window.removeEventListener('hashchange', scrollToCurrentHash)
+})
+watch(() => route.hash, () => scrollToCurrentHash())
 </script>
 
 <template>
@@ -234,7 +249,7 @@ onMounted(() => { void loadStats() })
       @dismiss="actionResult = null"
     />
 
-    <div class="mts-panel" data-testid="ops-maint-errors-panel">
+    <div id="ops-maint-errors" class="mts-panel scroll-mt-20" data-testid="ops-maint-errors-panel">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <AlertTriangle class="h-4 w-4" /> {{ t('maintenanceErrors') }} ({{ maintenanceErrors.length }})
@@ -259,18 +274,18 @@ onMounted(() => { void loadStats() })
       </ul>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-3">
-      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-flush" @click="openConfirm('flush')">
+    <div id="ops-actions" class="grid gap-4 scroll-mt-20 sm:grid-cols-3">
+      <button type="button" id="ops-flush" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-flush" @click="openConfirm('flush')">
         <DatabaseBackup class="mb-2 h-5 w-5 mts-muted" />
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionFlush') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsFlushHint') }}</p>
       </button>
-      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-compact" @click="openConfirm('compact')">
+      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" id="ops-compact" data-testid="ops-compact" @click="openConfirm('compact')">
         <Layers class="mb-2 h-5 w-5 mts-muted" />
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionCompact') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsCompactHint') }}</p>
       </button>
-      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-retention" @click="openConfirm('retention')">
+      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" id="ops-retention" data-testid="ops-retention" @click="openConfirm('retention')">
         <Timer class="mb-2 h-5 w-5 mts-muted" />
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionRetention') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsRetentionHint') }}</p>
@@ -304,7 +319,7 @@ onMounted(() => { void loadStats() })
       </div>
     </div>
 
-    <div class="mts-card p-4" data-testid="ops-action-log">
+    <div id="ops-action-log" class="mts-card scroll-mt-20 p-4" data-testid="ops-action-log">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">{{ t('opsActionLog') }}</h2>
         <div class="flex flex-wrap gap-2">

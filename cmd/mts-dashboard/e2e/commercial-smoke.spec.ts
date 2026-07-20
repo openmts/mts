@@ -295,6 +295,19 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page).toHaveURL(/ops\/readiness/)
   await expect(page.getByTestId('readiness-deploy-kit')).toBeVisible()
 
+  // P99: 运维页深链 flush / action-log
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('memtable')
+  await page.getByTestId('command-item-operations-flush').click()
+  await expect(page).toHaveURL(/\/operations(?:#ops-flush)?/)
+  await expect(page.getByTestId('ops-flush')).toBeVisible()
+  await page.getByTestId('topbar-command-palette').click()
+  await page.getByTestId('command-palette-input').fill('ops log')
+  await page.getByTestId('command-item-operations-action-log').click()
+  await expect(page).toHaveURL(/\/operations/)
+  await expect(page.getByTestId('ops-action-log')).toBeVisible()
+
   // 最近访问清空：多页后 clear，仅剩当前页（>1 才显示清空）
   await page.goto('/write')
   await page.goto('/query')
