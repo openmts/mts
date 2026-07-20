@@ -268,6 +268,25 @@ export function apiGet<T>(path: string, init: RequestInit = {}): Promise<T> {
   return request<T>(path, { ...init, method: 'GET' })
 }
 
+/** 轻量可达性探测：不携带鉴权、不触发全局 loading、不因过期 token 强制登出 */
+export async function probeReadyz(init: RequestInit = {}): Promise<{ ok: boolean; status: number }> {
+  try {
+    const response = await fetch(`${API_BASE}/readyz`, {
+      method: 'GET',
+      cache: 'no-store',
+      ...init,
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        ...(init.headers as Record<string, string> | undefined),
+      },
+    })
+    const status = response.status
+    return { ok: status >= 200 && status < 300, status }
+  } catch {
+    return { ok: false, status: 0 }
+  }
+}
+
 /** 拉取非 JSON 文本响应（如 Prometheus /metrics） */
 export async function apiGetText(path: string, init: RequestInit = {}): Promise<string> {
   if (bearerToken && isTokenExpired()) {

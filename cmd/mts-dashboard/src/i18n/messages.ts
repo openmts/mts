@@ -790,6 +790,10 @@ export const messages = {
     offlineBannerTitle: '网络离线',
     loginErrorRegion: '登录错误',
     forcePasswordErrorRegion: '改密错误',
+    serverUnreachableTitle: '服务不可达',
+    serverUnreachableBody: '浏览器在线，但无法访问 /readyz。请检查 mts-server 进程、反向代理或 API 地址（VITE_API_BASE）。',
+    serverUnreachableRetry: '立即重试',
+    accountErrorRegion: '账户改密错误',
     unsavedLeaveConfirm: '有未保存的表单更改，确定离开当前页面？',
   },
   en: {
@@ -1581,6 +1585,10 @@ export const messages = {
     offlineBannerTitle: 'Offline',
     loginErrorRegion: 'Login error',
     forcePasswordErrorRegion: 'Password change error',
+    serverUnreachableTitle: 'Server unreachable',
+    serverUnreachableBody: 'Browser is online but /readyz failed. Check mts-server, reverse proxy, or API base (VITE_API_BASE).',
+    serverUnreachableRetry: 'Retry now',
+    accountErrorRegion: 'Account password error',
     unsavedLeaveConfirm: 'You have unsaved form changes. Leave this page?',
   },
 } as const

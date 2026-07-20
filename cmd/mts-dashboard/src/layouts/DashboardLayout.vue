@@ -19,9 +19,11 @@ import {
   type RecentRouteEntry,
 } from '@/utils/recentRoutes'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { useServerReachability } from '@/composables/useServerReachability'
 
 const { t } = useI18n()
 const { offline } = useNetworkStatus()
+const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 const route = useRoute()
 const router = useRouter()
 const sidebarOpen = ref(false)
@@ -116,6 +118,27 @@ function onSkipToMain(e: Event) {
       >
         <span class="font-semibold">{{ t('offlineBannerTitle') }}</span>
         <span class="ml-1">{{ t('offlineBanner') }}</span>
+      </div>
+      <div
+        v-if="!offline && showUnreachableBanner"
+        class="flex flex-wrap items-center justify-between gap-2 border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100 sm:px-6"
+        role="alert"
+        aria-live="assertive"
+        data-testid="server-unreachable-banner"
+      >
+        <div class="min-w-0">
+          <span class="font-semibold">{{ t('serverUnreachableTitle') }}</span>
+          <span class="ml-1">{{ t('serverUnreachableBody') }}</span>
+        </div>
+        <button
+          type="button"
+          class="mts-btn mts-focus-ring shrink-0"
+          data-testid="server-unreachable-retry"
+          :disabled="reachChecking"
+          @click="retryReadyz"
+        >
+          {{ t('serverUnreachableRetry') }}
+        </button>
       </div>
       <div
         v-if="recent.length"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -25,6 +25,7 @@ const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
 const info = ref('')
+const invalid = computed(() => !!error.value)
 
 async function submit() {
   error.value = ''
@@ -52,10 +53,10 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-xl space-y-6">
+  <div class="mx-auto max-w-xl space-y-6" data-testid="account-page">
     <div>
       <h1 class="mts-title flex items-center gap-2">
-        <UserRound class="h-5 w-5" />
+        <UserRound class="h-5 w-5" aria-hidden="true" />
         {{ t('accountTitle') }}
       </h1>
       <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
@@ -66,23 +67,32 @@ async function submit() {
       <dl class="space-y-2 text-sm">
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('username') }}</dt>
-          <dd class="font-mono">{{ currentUser || t('emptyValue') }}</dd>
+          <dd class="font-mono" data-testid="account-username">{{ currentUser || t('emptyValue') }}</dd>
         </div>
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('accountRole') }}</dt>
-          <dd class="font-mono">{{ roleLabel(currentRole) }}</dd>
+          <dd class="font-mono" data-testid="account-role">{{ roleLabel(currentRole) }}</dd>
         </div>
       </dl>
     </div>
 
     <div class="mts-card p-4">
       <h2 class="mb-1 flex items-center gap-2 text-sm font-semibold">
-        <KeyRound class="h-4 w-4" />
+        <KeyRound class="h-4 w-4" aria-hidden="true" />
         {{ t('accountChangePassword') }}
       </h2>
       <p class="mb-4 text-xs mts-muted">{{ t('accountChangePasswordHint') }}</p>
 
-      <ActionResultBanner v-if="error" kind="error" :message="error" @dismiss="error = ''" />
+      <div
+        v-if="error"
+        role="alert"
+        aria-live="assertive"
+        :aria-label="t('accountErrorRegion')"
+        data-testid="account-password-error"
+        class="mb-3"
+      >
+        <ActionResultBanner kind="error" :message="error" @dismiss="error = ''" />
+      </div>
       <ActionResultBanner v-if="info" kind="info" :message="info" @dismiss="info = ''" />
 
       <form class="space-y-3" data-testid="account-password-form" @submit.prevent="submit">
@@ -93,8 +103,10 @@ async function submit() {
             v-model="oldPassword"
             type="password"
             autocomplete="current-password"
-            class="mts-input"
+            class="mts-input mts-focus-ring"
             data-testid="account-old-password"
+            :aria-invalid="invalid ? 'true' : undefined"
+            :aria-describedby="error ? 'account-password-error-desc' : undefined"
           />
         </div>
         <div>
@@ -104,8 +116,10 @@ async function submit() {
             v-model="newPassword"
             type="password"
             autocomplete="new-password"
-            class="mts-input"
+            class="mts-input mts-focus-ring"
             data-testid="account-new-password"
+            :aria-invalid="invalid ? 'true' : undefined"
+            :aria-describedby="error ? 'account-password-error-desc' : undefined"
           />
         </div>
         <div>
@@ -115,11 +129,20 @@ async function submit() {
             v-model="confirmPassword"
             type="password"
             autocomplete="new-password"
-            class="mts-input"
+            class="mts-input mts-focus-ring"
             data-testid="account-confirm-password"
+            :aria-invalid="invalid ? 'true' : undefined"
+            :aria-describedby="error ? 'account-password-error-desc' : undefined"
           />
         </div>
-        <button type="submit" class="mts-btn-primary" :disabled="loading" data-testid="account-password-submit">
+        <p v-if="error" id="account-password-error-desc" class="sr-only">{{ error }}</p>
+        <button
+          type="submit"
+          class="mts-btn-primary mts-focus-ring"
+          :disabled="loading"
+          data-testid="account-password-submit"
+          :aria-busy="loading ? 'true' : undefined"
+        >
           {{ loading ? t('loading') : t('accountSubmitPassword') }}
         </button>
       </form>

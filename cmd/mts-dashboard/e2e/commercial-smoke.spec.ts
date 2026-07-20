@@ -38,6 +38,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByText(/概览|健康|Healthy|Ready/i).first()).toBeVisible()
   await expect(page.getByTestId('overview-summary')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
+  await expect(page.getByTestId('server-unreachable-banner')).toHaveCount(0)
   await expect(page.getByTestId('topbar-account')).toBeVisible()
   await expect(page.getByTestId('skip-to-main')).toHaveCount(1)
   await expect(page).toHaveTitle(/仪表盘|概览|Overview/)
@@ -240,6 +241,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('skip-to-main').focus()
   await page.keyboard.press('Enter')
   await expect(page.locator('#main-content')).toBeFocused()
+
+  // 账户页改密表单可达
+  await page.goto('/account')
+  await expect(page.getByTestId('account-page')).toBeVisible()
+  await expect(page.getByTestId('account-password-form')).toBeVisible()
+  await page.getByTestId('account-password-submit').click()
+  await expect(page.getByTestId('account-password-error')).toBeVisible()
+  await expect(page.getByTestId('account-old-password')).toHaveAttribute('aria-invalid', 'true')
 
   // About 字段标签
   await page.goto('/about')
