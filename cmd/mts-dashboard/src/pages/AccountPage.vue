@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
+import { parseAccountPrefill, accountFormToPrefill } from '@/utils/routePrefill'
 import { useAuth } from '@/composables/useAuth'
 import { getTokenExpiresAt } from '@/api/client'
 import { parseExpiresAt, sessionExpiryView, formatRemaining } from '@/utils/sessionExpiry'
@@ -42,6 +44,8 @@ import {
 import { loadNavOrderPrefs, saveNavOrderMap } from '@/utils/navOrder'
 
 const router = useRouter()
+const route = useRoute()
+useHashScroll()
 const { currentUser, currentRole, changePassword, isAdmin } = useAuth()
 const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
@@ -86,6 +90,34 @@ const landingViews = computed(() =>
 )
 const filteredLandingViews = computed(() => filterLandingOptions(landingViews.value, landingFilter.value))
 const groupedLanding = computed(() => groupLandingOptions(filteredLandingViews.value))
+
+function applyAccountPrefillFromRoute() {
+  const pre = parseAccountPrefill(route.query as Record<string, unknown>)
+  if (pre.landing_q != null && landingFilter.value !== pre.landing_q) {
+    landingFilter.value = pre.landing_q
+    success(t.value('accountPrefillApplied'))
+  }
+}
+
+async function copyAccountShareLink() {
+  const path = accountFormToPrefill({ landing_q: landingFilter.value })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('accountShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
+onMounted(() => {
+  applyAccountPrefillFromRoute()
+})
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (prev != null && path !== prev) applyAccountPrefillFromRoute()
+  },
+)
+
 function selectLanding(path: string) {
   if (landingPath.value === path) return
   landingPath.value = path
@@ -298,6 +330,9 @@ async function submit() {
         <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="account-share-link" @click="copyAccountShareLink">
+          {{ t('accountShareLink') }}
+        </button>
         <button type="button" class="mts-btn" data-testid="account-export-json" @click="exportAccount">
           <Download class="h-3.5 w-3.5" /> {{ t('accountExportJSON') }}
         </button>
@@ -321,7 +356,7 @@ async function submit() {
       </dl>
     </div>
 
-    <div class="mts-card p-4" data-testid="account-landing">
+    <div id="account-landing" class="mts-card scroll-mt-20 p-4" data-testid="account-landing">
       <h2 class="mb-1 text-sm font-semibold">{{ t('accountLandingTitle') }}</h2>
       <p class="mb-3 text-xs mts-muted">{{ t('accountLandingHint') }}</p>
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">

@@ -675,3 +675,74 @@ export function metricsFormToPrefill(form: {
     hash: opts?.hash,
   })
 }
+
+
+export type ApiSpecPrefill = {
+  ns?: string
+  q?: string
+}
+
+/** API 契约页命名空间/搜索预填 */
+export function parseApiSpecPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): ApiSpecPrefill {
+  const out: ApiSpecPrefill = {}
+  const ns = firstQueryValue(query.ns ?? query.namespace)
+  if (ns) out.ns = ns
+  const q = firstQueryValue(query.q ?? query.filter)
+  if (q) out.q = q
+  return out
+}
+
+export function buildApiSpecPrefillPath(opts: ApiSpecPrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.ns) params.set('ns', opts.ns)
+  if (opts.q) params.set('q', opts.q)
+  const qs = params.toString()
+  const hashRaw = opts.hash || '#api-spec-filters'
+  const hash = hashRaw.startsWith('#') ? hashRaw : `#${hashRaw}`
+  return qs ? `/api-spec?${qs}${hash}` : `/api-spec${hash}`
+}
+
+export function apiSpecFormToPrefill(form: {
+  ns?: string
+  q?: string
+}, opts?: { hash?: string }): string {
+  return buildApiSpecPrefillPath({
+    ns: form.ns?.trim() || undefined,
+    q: form.q?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
+
+export type AccountPrefill = {
+  landing_q?: string
+}
+
+/** 账户页落地页筛选预填（不写密码/token） */
+export function parseAccountPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): AccountPrefill {
+  const out: AccountPrefill = {}
+  const landing_q = firstQueryValue(query.landing_q ?? query.q)
+  if (landing_q) out.landing_q = landing_q
+  return out
+}
+
+export function buildAccountPrefillPath(opts: AccountPrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.landing_q) params.set('landing_q', opts.landing_q)
+  const qs = params.toString()
+  const hashRaw = opts.hash || '#account-landing'
+  const hash = hashRaw.startsWith('#') ? hashRaw : `#${hashRaw}`
+  return qs ? `/account?${qs}${hash}` : `/account${hash}`
+}
+
+export function accountFormToPrefill(form: {
+  landing_q?: string
+}, opts?: { hash?: string }): string {
+  return buildAccountPrefillPath({
+    landing_q: form.landing_q?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}

@@ -365,6 +365,13 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['login audit', '登录审计', 'action login', 'prefill audit'],
   },
   { id: 'api-spec', path: '/api-spec', labelKey: 'apiSpec', keywords: ['openapi', '契约', 'spec'], adminOnly: true },
+  {
+    id: 'api-spec-filters',
+    path: '/api-spec#api-spec-filters',
+    labelKey: 'cmdApiSpecFilters',
+    keywords: ['api filter', '契约筛选', 'namespace filter', 'openapi filter'],
+    adminOnly: true,
+  },
   { id: 'storage', path: '/storage', labelKey: 'storage', keywords: ['snapshot', 'backup', '存储', 'restore'], adminOnly: true },
   {
     id: 'storage-data-restore',
@@ -418,6 +425,12 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
   },
   { id: 'about', path: '/about', labelKey: 'about', keywords: ['version', '关于', 'build'] },
   { id: 'account', path: '/account', labelKey: 'account', keywords: ['password', '账户', 'profile'] },
+  {
+    id: 'account-landing',
+    path: '/account#account-landing',
+    labelKey: 'cmdAccountLanding',
+    keywords: ['landing page', '默认落地', 'landing filter', '账户落地'],
+  },
 ]
 
 export function visibleCommandItems(

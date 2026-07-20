@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
+import { parseApiSpecPrefill, apiSpecFormToPrefill } from '@/utils/routePrefill'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -12,6 +15,7 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { apiSpecToMarkdown, buildApiSpecExport } from '@/utils/apiSpecExport'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { copyText } from '@/utils/clipboard'
 
 interface APIEndpoint {
   method: string
@@ -30,6 +34,8 @@ interface APISpecResponse {
 }
 
 const { isAdmin } = useAuth()
+const route = useRoute()
+useHashScroll()
 const { success, error: notifyError, warn } = useNotify()
 const { t, locale } = useI18n()
 const loading = ref(false)
@@ -49,7 +55,9 @@ async function load() {
     const data = await apiGet<APISpecResponse>('/api/v1/admin/api-spec')
     version.value = data.version || 'v1'
     namespaces.value = data.namespaces || []
-    if (!nsFilter.value && namespaces.value.length) nsFilter.value = namespaces.value[0].name
+    if (!nsFilter.value && namespaces.value.length) {
+      nsFilter.value = namespaces.value[0].name
+    }
   } catch (e) {
     loadError.value = formatCaughtError(e)
     notifyError(loadError.value)
@@ -58,7 +66,45 @@ async function load() {
   }
 }
 
-onMounted(() => { void load() })
+
+function applyApiSpecPrefillFromRoute() {
+  if (!isAdmin.value) return
+  const pre = parseApiSpecPrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.ns != null && nsFilter.value !== pre.ns) {
+    nsFilter.value = pre.ns
+    changed = true
+  }
+  if (pre.q != null && q.value !== pre.q) {
+    q.value = pre.q
+    changed = true
+  }
+  if (changed) success(t.value('apiSpecPrefillApplied'))
+}
+
+async function copyApiSpecShareLink() {
+  const path = apiSpecFormToPrefill({
+    ns: nsFilter.value || undefined,
+    q: q.value,
+  })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('apiSpecShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
+onMounted(() => {
+  applyApiSpecPrefillFromRoute()
+  void load()
+})
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (!isAdmin.value) return
+    if (prev != null && path !== prev) applyApiSpecPrefillFromRoute()
+  },
+)
 
 const filtered = computed(() => {
   const text = q.value.trim().toLowerCase()
@@ -138,6 +184,9 @@ function exportMarkdown() {
         >
           <Download class="h-3.5 w-3.5" /> {{ t('apiSpecExportMarkdown') }}
         </button>
+        <button type="button" class="mts-btn" data-testid="api-spec-share-link" @click="copyApiSpecShareLink">
+          {{ t('apiSpecShareLink') }}
+        </button>
         <button class="mts-btn" data-testid="api-spec-refresh" :disabled="loading" :aria-busy="loading ? 'true' : undefined" @click="load">
           <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" /> {{ t('refresh') }}
         </button>
@@ -146,7 +195,7 @@ function exportMarkdown() {
 
     <p v-if="loadError" class="mts-alert-error" data-testid="api-spec-error">{{ loadError }}</p>
 
-    <div class="grid gap-3 md:grid-cols-3">
+    <div id="api-spec-filters" class="grid gap-3 scroll-mt-20 md:grid-cols-3" data-testid="api-spec-filters">
       <label class="text-xs mts-muted md:col-span-1">{{ t('apiSpecNamespace') }}
         <select v-model="nsFilter" class="mts-input mt-1" data-testid="api-spec-ns-filter">
           <option value="">{{ t('apiSpecAll') }}</option>

@@ -246,6 +246,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('api-spec-page')).toBeVisible()
   await expect(page.getByTestId('api-spec-export-json')).toBeVisible()
   await expect(page.getByTestId('api-spec-export-md')).toBeVisible()
+  await expect(page.getByTestId('api-spec-share-link')).toBeVisible()
   await page.goto('/observability/metrics')
   await expect(page.getByTestId('metrics-page')).toBeVisible()
   await expect(page.getByTestId('metrics-share-link')).toBeVisible()

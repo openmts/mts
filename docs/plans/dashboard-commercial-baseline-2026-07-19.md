@@ -900,3 +900,9 @@
 
 ## P182 状态（2026-07-21）
 - Config 筛选/区块深链（schema_q/error_q）与 Metrics 筛选深链（q/family）
+
+## P183 状态（2026-07-21）
+- ApiSpec 筛选深链（ns/q）与复制分享
+
+## P184 状态（2026-07-21）
+- Account 落地页筛选深链（landing_q）与复制分享

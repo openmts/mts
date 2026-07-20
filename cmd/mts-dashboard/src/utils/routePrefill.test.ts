@@ -29,6 +29,10 @@ import {
   configFormToPrefill,
   parseMetricsPrefill,
   metricsFormToPrefill,
+  parseApiSpecPrefill,
+  apiSpecFormToPrefill,
+  parseAccountPrefill,
+  accountFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -233,5 +237,18 @@ test('readiness config metrics prefill helpers', () => {
   assert.equal(
     metricsFormToPrefill({ q: 'prom', family: 'go_threads' }),
     '/observability/metrics?q=prom&family=go_threads#metrics-detail',
+  )
+})
+
+test('apiSpec and account prefill helpers', () => {
+  assert.deepEqual(parseApiSpecPrefill({ ns: 'admin', q: 'flush' }), { ns: 'admin', q: 'flush' })
+  assert.equal(
+    apiSpecFormToPrefill({ ns: 'data', q: 'query' }),
+    '/api-spec?ns=data&q=query#api-spec-filters',
+  )
+  assert.deepEqual(parseAccountPrefill({ landing_q: 'query' }), { landing_q: 'query' })
+  assert.equal(
+    accountFormToPrefill({ landing_q: 'write' }),
+    '/account?landing_q=write#account-landing',
   )
 })
