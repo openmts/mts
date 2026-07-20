@@ -598,6 +598,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-go-deploy-kit')).toBeVisible()
   await expect(page.getByTestId('overview-signoff-completeness')).toBeVisible()
   await expect(page.getByTestId('overview-go-signoff')).toBeVisible()
+
+  await expect(page.getByTestId('overview-signoff-panel')).toBeVisible()
+  await expect(page.getByTestId('overview-signoff-progress-bar')).toBeVisible()
+  // 冒烟路径前序已填写 edge 签核，进度应 >=33 且仍有缺失跳转
+  await expect.poll(async () => Number(await page.getByTestId('overview-signoff-progress-bar').getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(33)
+  await expect(page.getByTestId('overview-signoff-missing-jumps')).toBeVisible()
+  await expect(page.getByTestId('overview-signoff-jump-backupOffsite').or(page.getByTestId('overview-signoff-jump-backupAlert')).first()).toBeVisible()
   await expect(page.getByTestId('overview-export-preflight')).toBeVisible()
   await expect(page.getByTestId('overview-next-steps')).toBeVisible()
   await expect(page.locator('[data-testid^="overview-next-step-"]').first()).toBeVisible()

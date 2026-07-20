@@ -631,3 +631,8 @@
 - 商业冒烟覆盖 deploy→signoff 串联
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P119 状态（2026-07-20）
+- Overview 签核进度条与缺失字段跳转；仍不计入 readiness 总分
+- 商业冒烟覆盖 overview-signoff-panel
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

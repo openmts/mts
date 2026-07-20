@@ -19,6 +19,7 @@ import { backupScheduleProgress } from '@/utils/backupSchedule'
 import {
   assessSignoffCompleteness,
   signoffFieldLabel,
+  signoffProgressPercent,
 } from '@/utils/signoffExport'
 import { buildExportPreflight } from '@/utils/exportPreflight'
 import { buildOpsNextSteps } from '@/utils/opsNextSteps'
@@ -117,6 +118,7 @@ const signoffCompleteness = computed(() => assessSignoffCompleteness(localReadin
 const signoffMissingLabels = computed(() =>
   signoffCompleteness.value.missing.map((f) => signoffFieldLabel(f, uiLocale.value)),
 )
+const signoffProgress = computed(() => signoffProgressPercent(localReadiness.value.signoffNotes))
 
 const overviewPreflight = computed(() => {
   const state = localReadiness.value
@@ -530,22 +532,54 @@ async function copyOverview() {
           {{ t('overviewGoSignoff') }}
         </button>
       </div>
-      <p
-        class="basis-full text-[11px]"
-        data-testid="overview-signoff-completeness"
-        :class="signoffCompleteness.complete ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-200'"
-      >
-        {{
-          signoffCompleteness.complete
-            ? t('readinessSignoffComplete')
-            : formatMessage(t('readinessSignoffMissing'), {
-                missing: signoffMissingLabels.join(uiLocale === 'en' ? ', ' : '、'),
-                filled: String(signoffCompleteness.filledCount),
-                total: String(signoffCompleteness.total),
-              })
-        }}
-        <span class="mts-muted"> · {{ t('overviewSignoffHint') }}</span>
-      </p>
+      <div class="basis-full space-y-1.5" data-testid="overview-signoff-panel">
+        <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+          <span class="mts-muted" data-testid="overview-signoff-progress-label">
+            {{ formatMessage(t('readinessSignoffProgress'), { percent: String(signoffProgress) }) }}
+          </span>
+          <span class="mts-muted">{{ t('overviewSignoffHint') }}</span>
+        </div>
+        <div
+          class="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+          role="progressbar"
+          :aria-valuenow="signoffProgress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          data-testid="overview-signoff-progress-bar"
+        >
+          <div
+            class="h-full rounded-full transition-[width] duration-200"
+            :class="signoffCompleteness.complete ? 'bg-emerald-500' : 'bg-amber-500'"
+            :style="{ width: `${signoffProgress}%` }"
+            data-testid="overview-signoff-progress-fill"
+          />
+        </div>
+        <p
+          class="text-[11px]"
+          data-testid="overview-signoff-completeness"
+          :class="signoffCompleteness.complete ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-200'"
+        >
+          {{
+            signoffCompleteness.complete
+              ? t('readinessSignoffComplete')
+              : formatMessage(t('readinessSignoffMissing'), {
+                  missing: signoffMissingLabels.join(uiLocale === 'en' ? ', ' : '、'),
+                  filled: String(signoffCompleteness.filledCount),
+                  total: String(signoffCompleteness.total),
+                })
+          }}
+        </p>
+        <div v-if="signoffCompleteness.missing.length" class="flex flex-wrap gap-2" data-testid="overview-signoff-missing-jumps">
+          <button
+            v-for="field in signoffCompleteness.missing"
+            :key="field"
+            type="button"
+            class="mts-btn !px-2 !py-0.5 text-[10px]"
+            :data-testid="`overview-signoff-jump-${field}`"
+            @click="router.push({ path: '/ops/readiness', hash: `#signoff-field-${field}` })"
+          >{{ t('readinessSignoffJump') }}: {{ signoffFieldLabel(field, uiLocale) }}</button>
+        </div>
+      </div>
       <div class="basis-full flex flex-wrap items-center gap-2 text-[11px]" data-testid="overview-export-preflight">
         <span
           :class="overviewPreflight.warnCount > 0 ? 'text-amber-700 dark:text-amber-200' : 'text-emerald-700 dark:text-emerald-300'"
