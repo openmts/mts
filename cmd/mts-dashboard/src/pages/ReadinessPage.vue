@@ -45,6 +45,11 @@ import {
   type SignoffNotes,
 } from '@/utils/readinessState'
 import {
+  localizedSignoffGuideSteps,
+  applySignoffExample,
+  signoffGuideSummary,
+} from '@/utils/signoffGuide'
+import {
   assessSignoffCompleteness,
   composeSignoffArchiveNote,
   confirmExportWithMissingSignoff,
@@ -252,6 +257,26 @@ function jumpRelatedSignoff(field?: SignoffNoteField | null) {
 
 function relatedTemplatesFor(field: SignoffNoteField) {
   return templatesForSignoffField(field)
+}
+
+function guideStepsFor(field: SignoffNoteField) {
+  return localizedSignoffGuideSteps(field, uiLocale.value)
+}
+
+function guideSummaryFor(field: SignoffNoteField) {
+  return signoffGuideSummary(field, uiLocale.value)
+}
+
+function applyExampleToSignoff(field: SignoffNoteField) {
+  const current = state.value.signoffNotes?.[field] ?? ''
+  const next = applySignoffExample(current, field, uiLocale.value)
+  if (next == null) {
+    notifyError(t.value('readinessSignoffExampleBlocked'))
+    return
+  }
+  saveSignoff(field, next)
+  success(t.value('readinessSignoffExampleApplied'))
+  focusSignoffField(field)
 }
 
 async function copySignoffMissing() {
@@ -914,6 +939,9 @@ watch(
         <h2 class="text-sm font-semibold">{{ t('readinessSignoffTitle') }}</h2>
         <p class="mt-1 text-xs mts-muted">{{ t('readinessSignoffHint') }}</p>
         <p class="mt-1 text-[11px] text-amber-700 dark:text-amber-200">{{ t('readinessSignoffManualNote') }}</p>
+        <div class="mt-2 rounded-lg border border-sky-100 bg-sky-50/70 px-2 py-1.5 text-[11px] text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100" data-testid="readiness-signoff-guide-banner">
+          {{ t('readinessSignoffGuideBanner') }}
+        </div>
         <div class="mt-2" data-testid="signoff-progress">
           <div class="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs">
             <span class="mts-muted">{{ formatMessage(t('readinessSignoffProgress'), { percent: String(signoffProgress) }) }}</span>
@@ -986,7 +1014,26 @@ watch(
             maxlength="2000"
             @input="saveSignoff('edgeHttps', ($event.target as HTMLTextAreaElement).value)"
           />
-          <div class="mt-1 flex flex-wrap items-center gap-2" data-testid="signoff-related-edgeHttps">
+                    <details class="mt-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 dark:border-slate-800 dark:bg-slate-900/40" data-testid="signoff-guide-edgeHttps">
+            <summary class="cursor-pointer text-[11px] font-medium text-slate-700 dark:text-slate-200" data-testid="signoff-guide-summary-edgeHttps">
+              {{ t('readinessSignoffGuideToggle') }}
+            </summary>
+            <p class="mt-1 text-[11px] mts-muted" data-testid="signoff-guide-blurb-edgeHttps">{{ guideSummaryFor('edgeHttps') }}</p>
+            <ol class="mt-1 list-decimal space-y-1 pl-4 text-[11px] text-slate-600 dark:text-slate-300">
+              <li v-for="step in guideStepsFor('edgeHttps')" :key="step.id" :data-testid="`signoff-guide-step-edgeHttps-${step.id}`">
+                <span class="font-medium">{{ step.title }}</span>
+                <span class="mts-muted"> — {{ step.detail }}</span>
+              </li>
+            </ol>
+            <button
+              type="button"
+              class="mts-btn mt-2 !px-2 !py-0.5 text-[10px]"
+              data-testid="signoff-guide-fill-edgeHttps"
+              @click="applyExampleToSignoff('edgeHttps')"
+            >{{ t('readinessSignoffFillExample') }}</button>
+            <p class="mt-1 text-[10px] text-amber-700 dark:text-amber-200">{{ t('readinessSignoffExampleNote') }}</p>
+          </details>
+<div class="mt-1 flex flex-wrap items-center gap-2" data-testid="signoff-related-edgeHttps">
             <span class="text-[10px] mts-muted">{{ t('readinessSignoffRelatedTemplates') }}:</span>
             <button
               v-for="tpl in relatedTemplatesFor('edgeHttps')"
@@ -1016,7 +1063,26 @@ watch(
             maxlength="2000"
             @input="saveSignoff('backupOffsite', ($event.target as HTMLTextAreaElement).value)"
           />
-          <div class="mt-1 flex flex-wrap items-center gap-2" data-testid="signoff-related-backupOffsite">
+                    <details class="mt-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 dark:border-slate-800 dark:bg-slate-900/40" data-testid="signoff-guide-backupOffsite">
+            <summary class="cursor-pointer text-[11px] font-medium text-slate-700 dark:text-slate-200" data-testid="signoff-guide-summary-backupOffsite">
+              {{ t('readinessSignoffGuideToggle') }}
+            </summary>
+            <p class="mt-1 text-[11px] mts-muted" data-testid="signoff-guide-blurb-backupOffsite">{{ guideSummaryFor('backupOffsite') }}</p>
+            <ol class="mt-1 list-decimal space-y-1 pl-4 text-[11px] text-slate-600 dark:text-slate-300">
+              <li v-for="step in guideStepsFor('backupOffsite')" :key="step.id" :data-testid="`signoff-guide-step-backupOffsite-${step.id}`">
+                <span class="font-medium">{{ step.title }}</span>
+                <span class="mts-muted"> — {{ step.detail }}</span>
+              </li>
+            </ol>
+            <button
+              type="button"
+              class="mts-btn mt-2 !px-2 !py-0.5 text-[10px]"
+              data-testid="signoff-guide-fill-backupOffsite"
+              @click="applyExampleToSignoff('backupOffsite')"
+            >{{ t('readinessSignoffFillExample') }}</button>
+            <p class="mt-1 text-[10px] text-amber-700 dark:text-amber-200">{{ t('readinessSignoffExampleNote') }}</p>
+          </details>
+<div class="mt-1 flex flex-wrap items-center gap-2" data-testid="signoff-related-backupOffsite">
             <span class="text-[10px] mts-muted">{{ t('readinessSignoffRelatedTemplates') }}:</span>
             <button
               v-for="tpl in relatedTemplatesFor('backupOffsite').slice(0, 3)"
@@ -1046,7 +1112,26 @@ watch(
             maxlength="2000"
             @input="saveSignoff('backupAlert', ($event.target as HTMLTextAreaElement).value)"
           />
-          <div class="mt-1 flex flex-wrap items-center gap-2" data-testid="signoff-related-backupAlert">
+                    <details class="mt-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 dark:border-slate-800 dark:bg-slate-900/40" data-testid="signoff-guide-backupAlert">
+            <summary class="cursor-pointer text-[11px] font-medium text-slate-700 dark:text-slate-200" data-testid="signoff-guide-summary-backupAlert">
+              {{ t('readinessSignoffGuideToggle') }}
+            </summary>
+            <p class="mt-1 text-[11px] mts-muted" data-testid="signoff-guide-blurb-backupAlert">{{ guideSummaryFor('backupAlert') }}</p>
+            <ol class="mt-1 list-decimal space-y-1 pl-4 text-[11px] text-slate-600 dark:text-slate-300">
+              <li v-for="step in guideStepsFor('backupAlert')" :key="step.id" :data-testid="`signoff-guide-step-backupAlert-${step.id}`">
+                <span class="font-medium">{{ step.title }}</span>
+                <span class="mts-muted"> — {{ step.detail }}</span>
+              </li>
+            </ol>
+            <button
+              type="button"
+              class="mts-btn mt-2 !px-2 !py-0.5 text-[10px]"
+              data-testid="signoff-guide-fill-backupAlert"
+              @click="applyExampleToSignoff('backupAlert')"
+            >{{ t('readinessSignoffFillExample') }}</button>
+            <p class="mt-1 text-[10px] text-amber-700 dark:text-amber-200">{{ t('readinessSignoffExampleNote') }}</p>
+          </details>
+<div class="mt-1 flex flex-wrap items-center gap-2" data-testid="signoff-related-backupAlert">
             <span class="text-[10px] mts-muted">{{ t('readinessSignoffRelatedTemplates') }}:</span>
             <button
               v-for="tpl in relatedTemplatesFor('backupAlert')"

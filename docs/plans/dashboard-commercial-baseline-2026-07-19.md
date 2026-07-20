@@ -717,3 +717,8 @@
 - 商业冒烟覆盖 command-palette-result-count / data-density
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P136 状态（2026-07-20）
+- Readiness 签核字段填写引导 + 空白示例填充；不计入评分
+- 商业冒烟覆盖 signoff-guide-* 与 backupOffsite 示例
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

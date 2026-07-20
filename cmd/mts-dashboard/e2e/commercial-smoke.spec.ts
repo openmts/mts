@@ -337,6 +337,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('signoff-jump-backupOffsite').or(page.getByTestId('signoff-jump-backupAlert')).first()).toBeVisible()
   await expect(page.getByTestId('signoff-copy-missing')).toBeVisible()
   await expect(page.getByTestId('signoff-related-edgeHttps')).toBeVisible()
+  await expect(page.getByTestId('readiness-signoff-guide-banner')).toBeVisible()
+  await expect(page.getByTestId('signoff-guide-edgeHttps')).toBeVisible()
+  // 空白备份字段可一键示例
+  await page.getByTestId('signoff-guide-summary-backupOffsite').click()
+  await page.getByTestId('signoff-guide-fill-backupOffsite').click()
+  await expect.poll(async () => (await page.getByTestId('signoff-backup-offsite').inputValue()).length).toBeGreaterThan(20)
+  await expect.poll(async () => page.getByTestId('signoff-field-status-backupOffsite').innerText()).toMatch(/已填|Filled/)
   await expect(page.getByTestId('deploy-jump-signoff-nginx-https')).toBeVisible()
   await page.getByTestId('deploy-jump-signoff-nginx-https').click()
   await expect(page.getByTestId('signoff-edge-https')).toBeFocused()
