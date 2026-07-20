@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import {
-  COMMAND_NAV_ITEMS,
+  allVisibleCommandItems,
   filterCommandItems,
+  isCommandAction,
   matchCommandPaletteClose,
   matchCommandPaletteOpen,
   recentCommandItems,
-  visibleCommandItems,
+  type CommandActionId,
   type CommandNavItem,
 } from '@/utils/commandPalette'
 import { loadRecentRoutes } from '@/utils/recentRoutes'
 import { resolveRouteTitleKey } from '@/utils/pageTitle'
-import { Search, Command, History } from 'lucide-vue-next'
+import { useTheme } from '@/composables/useTheme'
+import { useDensity } from '@/composables/useDensity'
+import { useNotify } from '@/composables/useNotify'
+import { Search, Command, History, Zap } from 'lucide-vue-next'
 
 const open = ref(false)
 const query = ref('')
@@ -27,10 +31,18 @@ let trap: FocusTrapHandle | null = null
 
 const router = useRouter()
 const { isAdmin } = useAuth()
-const { t } = useI18n()
+const { t, toggleLocale } = useI18n()
+const { toggleTheme } = useTheme()
+const { toggleDensity } = useDensity()
+const { success } = useNotify()
+
+const focusSidebarFilter = inject<(() => void) | undefined>('focusSidebarFilter', undefined)
+const openNotifyHistory = inject<(() => void) | undefined>('openNotifyHistory', undefined)
+const openShortcutsHelp = inject<(() => void) | undefined>('openShortcutsHelp', undefined)
+const toggleSidebarCollapse = inject<(() => void) | undefined>('toggleSidebarCollapse', undefined)
 
 const items = computed(() => {
-  const base = visibleCommandItems(COMMAND_NAV_ITEMS, isAdmin.value)
+  const base = allVisibleCommandItems(isAdmin.value)
   return filterCommandItems(base, query.value, (key) => t.value(key as MessageKey) || key)
 })
 
@@ -73,8 +85,44 @@ function closePalette() {
   trap = null
 }
 
+function runAction(action: CommandActionId) {
+  switch (action) {
+    case 'toggle-theme':
+      toggleTheme()
+      success(t.value('cmdActionThemeToggled'))
+      break
+    case 'toggle-locale':
+      toggleLocale()
+      success(t.value('cmdActionLocaleToggled'))
+      break
+    case 'toggle-density':
+      toggleDensity()
+      success(t.value('cmdActionDensityToggled'))
+      break
+    case 'focus-sidebar-filter':
+      focusSidebarFilter?.()
+      break
+    case 'open-notify-history':
+      openNotifyHistory?.()
+      break
+    case 'open-shortcuts':
+      openShortcutsHelp?.()
+      break
+    case 'toggle-sidebar-collapse':
+      toggleSidebarCollapse?.()
+      success(t.value('cmdActionSidebarCollapseToggled'))
+      break
+    default:
+      break
+  }
+}
+
 function go(item: CommandNavItem) {
   closePalette()
+  if (isCommandAction(item) && item.action) {
+    runAction(item.action)
+    return
+  }
   void router.push(item.path)
 }
 
@@ -214,11 +262,14 @@ defineExpose({ openPalette, closePalette, open })
             @mouseenter="activeIndex = idx"
             @click="go(item)"
           >
-            <span class="font-medium">{{ t(item.labelKey as MessageKey) }}</span>
+            <span class="inline-flex min-w-0 items-center gap-1.5 font-medium">
+              <Zap v-if="isCommandAction(item)" class="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden="true" />
+              <span class="truncate">{{ t(item.labelKey as MessageKey) }}</span>
+            </span>
             <span
-              class="font-mono text-[11px]"
+              class="shrink-0 font-mono text-[11px]"
               :class="idx === activeIndex ? 'opacity-80' : 'mts-muted'"
-            >{{ item.path }}</span>
+            >{{ isCommandAction(item) ? t('commandPaletteActionBadge') : item.path }}</span>
           </li>
         </ul>
         <div class="flex items-center gap-2 border-t border-slate-100 px-3 py-2 text-[11px] mts-muted dark:border-slate-800">

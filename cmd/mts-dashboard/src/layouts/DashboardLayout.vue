@@ -143,6 +143,13 @@ provide('closeSidebar', closeSidebar)
 provide('openCommandPalette', openCommandPalette)
 provide('openShortcutsHelp', openShortcuts)
 provide('openNotifyHistory', openNotifyHistory)
+provide('focusSidebarFilter', () => {
+  if (!sidebarOpen.value && typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+    sidebarOpen.value = true
+  }
+  sidebarNavRef.value?.focusFilter()
+})
+provide('toggleSidebarCollapse', toggleSidebarCollapse)
 
 function onSkipToMain(e: Event) {
   e.preventDefault()

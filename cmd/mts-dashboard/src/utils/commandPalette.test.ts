@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  COMMAND_ACTION_ITEMS,
   COMMAND_NAV_ITEMS,
+  allVisibleCommandItems,
   auditRangeToLocalInputs,
   filterAuditEvents,
   filterCommandItems,
+  isCommandAction,
   matchCommandPaletteOpen,
   visibleCommandItems,
 } from './commandPalette.ts'
@@ -100,4 +103,17 @@ test('non-admin query write deep links visible', () => {
   for (const id of ['query-history', 'write-mode-typed', 'write-actions']) {
     assert.ok(user.some((i) => i.id === id), id)
   }
+})
+
+test('command actions catalog and filter', () => {
+  assert.ok(COMMAND_ACTION_ITEMS.length >= 6)
+  assert.ok(COMMAND_ACTION_ITEMS.every((i) => isCommandAction(i)))
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'action-toggle-theme'))
+  assert.ok(all.some((i) => i.id === 'query'))
+  const resolve = (k: string) => k
+  const themeHits = filterCommandItems(all, 'theme', resolve)
+  assert.ok(themeHits.some((i) => i.id === 'action-toggle-theme'))
+  const densityHits = filterCommandItems(all, '密度', resolve)
+  assert.ok(densityHits.some((i) => i.id === 'action-toggle-density'))
 })

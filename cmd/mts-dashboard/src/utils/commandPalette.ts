@@ -7,7 +7,79 @@ export interface CommandNavItem {
   labelKey: string
   keywords: string[]
   adminOnly?: boolean
+  /** nav 跳转；action 为页内动作 */
+  kind?: 'nav' | 'action'
+  action?: CommandActionId
 }
+
+export type CommandActionId =
+  | 'toggle-theme'
+  | 'toggle-locale'
+  | 'toggle-density'
+  | 'focus-sidebar-filter'
+  | 'open-notify-history'
+  | 'open-shortcuts'
+  | 'toggle-sidebar-collapse'
+
+/** 页内快捷动作（不离开当前路由，除非动作本身导航） */
+export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
+  {
+    id: 'action-toggle-theme',
+    path: 'action:toggle-theme',
+    labelKey: 'cmdActionToggleTheme',
+    keywords: ['theme', 'dark', 'light', '主题', '暗色', '亮色'],
+    kind: 'action',
+    action: 'toggle-theme',
+  },
+  {
+    id: 'action-toggle-locale',
+    path: 'action:toggle-locale',
+    labelKey: 'cmdActionToggleLocale',
+    keywords: ['locale', 'language', 'i18n', '中文', 'english', '语言'],
+    kind: 'action',
+    action: 'toggle-locale',
+  },
+  {
+    id: 'action-toggle-density',
+    path: 'action:toggle-density',
+    labelKey: 'cmdActionToggleDensity',
+    keywords: ['density', 'compact', 'comfortable', '密度', '紧凑'],
+    kind: 'action',
+    action: 'toggle-density',
+  },
+  {
+    id: 'action-focus-sidebar-filter',
+    path: 'action:focus-sidebar-filter',
+    labelKey: 'cmdActionFocusSidebarFilter',
+    keywords: ['sidebar filter', 'nav filter', '侧栏过滤', '导航过滤', '/'],
+    kind: 'action',
+    action: 'focus-sidebar-filter',
+  },
+  {
+    id: 'action-open-notify-history',
+    path: 'action:open-notify-history',
+    labelKey: 'cmdActionOpenNotifyHistory',
+    keywords: ['notify history', 'toasts', '通知历史', '消息历史'],
+    kind: 'action',
+    action: 'open-notify-history',
+  },
+  {
+    id: 'action-open-shortcuts',
+    path: 'action:open-shortcuts',
+    labelKey: 'cmdActionOpenShortcuts',
+    keywords: ['shortcuts', 'hotkeys', '快捷键', '帮助'],
+    kind: 'action',
+    action: 'open-shortcuts',
+  },
+  {
+    id: 'action-toggle-sidebar-collapse',
+    path: 'action:toggle-sidebar-collapse',
+    labelKey: 'cmdActionToggleSidebarCollapse',
+    keywords: ['collapse sidebar', 'expand sidebar', '折叠侧栏', '展开侧栏'],
+    kind: 'action',
+    action: 'toggle-sidebar-collapse',
+  },
+]
 
 export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
   { id: 'overview', path: '/', labelKey: 'overview', keywords: ['home', 'dashboard', '概览', '健康'] },
@@ -221,6 +293,18 @@ export function visibleCommandItems(
   isAdmin: boolean,
 ): CommandNavItem[] {
   return items.filter((i) => !i.adminOnly || isAdmin)
+}
+
+/** 导航 + 页内动作（按角色过滤） */
+export function allVisibleCommandItems(isAdmin: boolean): CommandNavItem[] {
+  return [
+    ...visibleCommandItems(COMMAND_NAV_ITEMS, isAdmin),
+    ...visibleCommandItems(COMMAND_ACTION_ITEMS, isAdmin),
+  ]
+}
+
+export function isCommandAction(item: CommandNavItem): boolean {
+  return item.kind === 'action' || Boolean(item.action)
 }
 
 export function filterCommandItems(

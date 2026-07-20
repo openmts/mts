@@ -338,6 +338,15 @@ test('commercial browser smoke path', async ({ page }) => {
   // typed 模式已选中（深色底）
   await expect(page.getByTestId('write-mode-typed')).toHaveClass(/bg-slate-800/)
 
+  // P102: 命令面板页内动作（切换主题）
+  const darkBefore = await page.locator('html').evaluate((el) => el.classList.contains('dark'))
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('theme')
+  await page.getByTestId('command-item-action-toggle-theme').click()
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  await expect.poll(async () => page.locator('html').evaluate((el) => el.classList.contains('dark'))).not.toBe(darkBefore)
+
   // 最近访问清空：多页后 clear，仅剩当前页（>1 才显示清空）
   await page.goto('/write')
   await page.goto('/query')
