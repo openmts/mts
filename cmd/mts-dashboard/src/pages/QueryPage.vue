@@ -364,7 +364,7 @@ const columnRows = computed(() => {
         >{{ t('queryDirtyBadge') }}</span>
       </div>
       <div class="flex gap-2">
-        <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showHistory = !showHistory" title="Ctrl/⌘+H"><History class="h-3.5 w-3.5" />{{ t('queryHistoryBtn') }}</button>
+        <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showHistory = !showHistory" :title="t('queryHistoryShortcutTitle')"><History class="h-3.5 w-3.5" />{{ t('queryHistoryBtn') }}</button>
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showChart = !showChart"><BarChart3 class="h-3.5 w-3.5" />{{ t('queryChartBtn') }}</button>
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showRawFields = !showRawFields">{{ showRawFields ? t('queryScalarFields') : t('queryRawFields') }}</button>
         <button class="mts-btn" :disabled="authzChecking" @click="checkAuthz('read')">{{ t('queryAuthzCheck') }}</button>

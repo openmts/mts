@@ -141,11 +141,11 @@ function statusLabel(httpStatus: number): string {
       <p class="mb-4 text-xs mts-muted">{{ t('configTokenHint') }}</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="mb-1 block text-xs mts-muted">X-MTS-Admin-Token</label>
+          <label class="mb-1 block text-xs mts-muted">{{ t('configAdminTokenLabel') }}</label>
           <input v-model="adminTokenInput" type="password" class="mts-input"  :placeholder="t('optional')" />
         </div>
         <div>
-          <label class="mb-1 block text-xs mts-muted">X-MTS-Data-Token</label>
+          <label class="mb-1 block text-xs mts-muted">{{ t('configDataTokenLabel') }}</label>
           <input v-model="dataTokenInput" type="password" class="mts-input"  :placeholder="t('optional')" />
         </div>
       </div>

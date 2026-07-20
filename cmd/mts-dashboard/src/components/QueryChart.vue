@@ -45,7 +45,7 @@ const paths = computed(() => {
             <option v-for="f in fieldNames" :key="f" :value="f">{{ f }}</option>
           </select>
         </label>
-        <label class="mts-muted">max series
+        <label class="mts-muted">{{ t('chartMaxSeries') }}
           <select v-model.number="maxSeries" class="ml-1 rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800">
             <option :value="3">3</option>
             <option :value="6">6</option>

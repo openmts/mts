@@ -7,6 +7,7 @@ import {
   type ActionResultKind,
 } from '@/utils/actionResult'
 import { X } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
 
 const props = withDefaults(defineProps<{
   result?: ActionResult | null
@@ -21,6 +22,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{ dismiss: [] }>()
+const { t } = useI18n()
 
 const view = computed(() => {
   if (props.result?.message) return props.result
@@ -48,7 +50,7 @@ const label = computed(() => (view.value ? actionResultLabel(view.value.kind) : 
       v-if="dismissible"
       type="button"
       class="shrink-0 rounded p-1 opacity-60 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
-      title="关闭"
+      :title="t('dismiss')"
       @click="emit('dismiss')"
     >
       <X class="h-3.5 w-3.5" />

@@ -195,17 +195,17 @@ onMounted(() => { void loadStats() })
     <div class="grid gap-4 sm:grid-cols-3">
       <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-flush" @click="openConfirm('flush')">
         <DatabaseBackup class="mb-2 h-5 w-5 mts-muted" />
-        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">Flush</p>
+        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionFlush') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsFlushHint') }}</p>
       </button>
       <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-compact" @click="openConfirm('compact')">
         <Layers class="mb-2 h-5 w-5 mts-muted" />
-        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">Compact</p>
+        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionCompact') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsCompactHint') }}</p>
       </button>
       <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-retention" @click="openConfirm('retention')">
         <Timer class="mb-2 h-5 w-5 mts-muted" />
-        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">Apply Retention</p>
+        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionRetention') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsRetentionHint') }}</p>
       </button>
     </div>
@@ -215,23 +215,23 @@ onMounted(() => { void loadStats() })
         <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceStats') }}</h2>
         <EmptyState v-if="!maintenanceStats" compact :title="t('opsNoMaintStats')" :description="t('opsStatsEmptyHint')" />
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
-          <div>compact active: <b>{{ maintenanceStats.compaction_active }}</b></div>
-          <div>compact backlog: <b>{{ maintenanceStats.compaction_backlog }}</b></div>
-          <div>compact failure: <b>{{ maintenanceStats.compaction_failure }}</b></div>
-          <div>downsample inflight: <b>{{ maintenanceStats.downsample_inflight }}</b></div>
-          <div>downsample failure: <b>{{ maintenanceStats.downsample_failure }}</b></div>
-          <div>errors: <b>{{ maintenanceStats.maintenance_error_count }}</b></div>
+          <div>{{ t('opsStatCompactActive') }}: <b>{{ maintenanceStats.compaction_active }}</b></div>
+          <div>{{ t('opsStatCompactBacklog') }}: <b>{{ maintenanceStats.compaction_backlog }}</b></div>
+          <div>{{ t('opsStatCompactFailure') }}: <b>{{ maintenanceStats.compaction_failure }}</b></div>
+          <div>{{ t('opsStatDownsampleInflight') }}: <b>{{ maintenanceStats.downsample_inflight }}</b></div>
+          <div>{{ t('opsStatDownsampleFailure') }}: <b>{{ maintenanceStats.downsample_failure }}</b></div>
+          <div>{{ t('opsStatErrors') }}: <b>{{ maintenanceStats.maintenance_error_count }}</b></div>
         </dl>
       </div>
       <div class="mts-card p-5">
         <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('compactionStats') }}</h2>
         <EmptyState v-if="!compactionStats" compact :title="t('opsNoCompactStats')" :description="t('opsStatsEmptyHint')" />
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
-          <div>total: <b>{{ compactionStats.total }}</b></div>
-          <div>success: <b>{{ compactionStats.success }}</b></div>
-          <div>failure: <b>{{ compactionStats.failure }}</b></div>
-          <div>backlog: <b>{{ compactionStats.backlog }}</b></div>
-          <div>active: <b>{{ compactionStats.active }}</b></div>
+          <div>{{ t('opsStatTotal') }}: <b>{{ compactionStats.total }}</b></div>
+          <div>{{ t('opsStatSuccess') }}: <b>{{ compactionStats.success }}</b></div>
+          <div>{{ t('opsStatFailure') }}: <b>{{ compactionStats.failure }}</b></div>
+          <div>{{ t('opsStatBacklog') }}: <b>{{ compactionStats.backlog }}</b></div>
+          <div>{{ t('opsStatActive') }}: <b>{{ compactionStats.active }}</b></div>
         </dl>
         <p v-if="compactionStats?.last_error" class="mt-2 text-xs text-red-600 dark:text-red-300">{{ compactionStats.last_error }}</p>
       </div>

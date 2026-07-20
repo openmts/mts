@@ -257,3 +257,8 @@
 ## P57 状态（2026-07-20）
 - Query/Write/Downsample 表单标签与 placeholder i18n；查询结果列头本地化
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P58 状态（2026-07-20）
+- Operations 动作卡/统计标签、图表 max series、横幅关闭、Config Token 标签 i18n
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

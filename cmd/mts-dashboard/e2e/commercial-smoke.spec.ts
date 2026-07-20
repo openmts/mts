@@ -45,6 +45,8 @@ test('commercial browser smoke path', async ({ page }) => {
   // 5) 运维 Flush（确认按钮文案为「执行」）
   await page.goto('/operations')
   await expect(page.getByRole('main').getByRole('heading', { name: /^(运维|Operations)$/ })).toBeVisible()
+  await expect(page.getByTestId('ops-flush')).toContainText(/Flush/)
+  await expect(page.getByTestId('ops-retention')).toContainText(/保留策略|Retention/i)
   await page.getByRole('main').getByRole('button', { name: /Flush/ }).first().click()
   await page.getByRole('button', { name: '执行', exact: true }).click()
   await expect(page.getByRole('main').getByText('Flush 已完成').first()).toBeVisible({ timeout: 20_000 })
