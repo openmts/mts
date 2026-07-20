@@ -18,7 +18,8 @@ import {
   type AuditQuickRange,
 } from '@/utils/commandPalette'
 import { auditLimitOptions, buildAuditQueryString } from '@/utils/auditQuery'
-import { parseAuditPrefill } from '@/utils/routePrefill'
+import { parseAuditPrefill, auditFormToPrefill, type PrefillTimeRange, isPrefillTimeRange } from '@/utils/routePrefill'
+import { copyText } from '@/utils/clipboard'
 import { auditEventsToCSV } from '@/utils/auditExport'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
@@ -53,6 +54,7 @@ const { success, error: notifyError, warn } = useNotify()
 const users = ref<User[]>([])
 const selectedUser = ref('')
 const actionFilter = ref('')
+const lastQuickRange = ref<PrefillTimeRange | ''>('')
 const sinceLocal = ref('')
 const untilLocal = ref('')
 const clientQuery = ref('')
@@ -216,6 +218,7 @@ function applyQuickRange(range: AuditQuickRange) {
   const r = auditRangeToLocalInputs(range)
   sinceLocal.value = r.since
   untilLocal.value = r.until
+  lastQuickRange.value = isPrefillTimeRange(range) ? range : ''
   void loadAudit()
 }
 
@@ -230,6 +233,7 @@ function applyAuditPrefillFromRoute(opts?: { reload?: boolean }) {
       untilLocal.value = r.until
       changed = true
     }
+    lastQuickRange.value = pre.range
   }
   if (pre.action != null && actionFilter.value !== pre.action) {
     actionFilter.value = pre.action
@@ -258,8 +262,24 @@ function clearFilters() {
   sinceLocal.value = ''
   untilLocal.value = ''
   clientQuery.value = ''
+  lastQuickRange.value = ''
   clearSelection()
   void loadAudit()
+}
+
+async function copyAuditShareLink() {
+  // 相对时间快捷优先；无 since/until 时仅 action/user/q
+  const range = lastQuickRange.value && isPrefillTimeRange(lastQuickRange.value) ? lastQuickRange.value : undefined
+  const path = auditFormToPrefill({
+    range,
+    action: actionFilter.value,
+    q: clientQuery.value,
+    user: isAdmin.value ? selectedUser.value : (currentUser.value || selectedUser.value),
+  }, { hash: '#audit-filters' })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('auditShareCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 function exportJSON() {
@@ -374,6 +394,9 @@ watch(
         <button type="button" class="mts-btn" data-testid="audit-export-csv" @click="exportCSV">
           <Download class="h-3.5 w-3.5" />
           {{ t('exportCSV') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="audit-share-link" @click="copyAuditShareLink">
+          {{ t('auditShareLink') }}
         </button>
       </div>
     </div>

@@ -6,6 +6,8 @@ import {
   buildWritePrefillPath,
   parseWritePrefill,
   queryFormToPrefill,
+  writeFormToPrefill,
+  auditFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -113,4 +115,15 @@ test('query prefill absolute start/end preferred over range', () => {
   assert.equal(parsed.end_time, '1700003600000')
   assert.equal(parsed.range, undefined)
   assert.equal(parsed.database, 'm')
+})
+
+test('write/audit form share helpers', () => {
+  assert.equal(
+    writeFormToPrefill({ database: 'metrics', measurement: 'cpu' }),
+    '/write?database=metrics&measurement=cpu#write-mode-typed',
+  )
+  assert.equal(
+    auditFormToPrefill({ range: '24h', action: 'login', user: 'reader' }),
+    '/audit?range=24h&action=login&user=reader#audit-filters',
+  )
 })

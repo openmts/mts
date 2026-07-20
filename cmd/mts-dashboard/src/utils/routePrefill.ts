@@ -226,3 +226,31 @@ export function buildWritePrefillPath(opts: {
   return qs ? `/write?${qs}${hash}` : `/write${hash}`
 }
 
+/** 从写入目标构造分享预填（不包含 payload/token） */
+export function writeFormToPrefill(form: {
+  database?: string
+  measurement?: string
+}, opts?: { hash?: string }): string {
+  return buildWritePrefillPath({
+    database: form.database?.trim() || undefined,
+    measurement: form.measurement?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
+
+/** 从审计筛选构造分享预填 */
+export function auditFormToPrefill(form: {
+  range?: PrefillTimeRange
+  action?: string
+  q?: string
+  user?: string
+}, opts?: { hash?: string }): string {
+  return buildAuditPrefillPath({
+    range: form.range,
+    action: form.action?.trim() || undefined,
+    q: form.q?.trim() || undefined,
+    user: form.user?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
+

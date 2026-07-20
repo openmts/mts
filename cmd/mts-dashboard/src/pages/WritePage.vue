@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
-import { parseWritePrefill } from '@/utils/routePrefill'
+import { parseWritePrefill, writeFormToPrefill } from '@/utils/routePrefill'
+import { copyText } from '@/utils/clipboard'
 import { apiPost } from '@/api/client'
 import {
   listDatabasesDetailed,
@@ -286,6 +287,21 @@ function applyWritePrefillFromRoute() {
   if (changed) {
     success(t.value('writePrefillApplied'))
   }
+}
+
+async function copyWriteShareLink() {
+  const measurement =
+    writeMode.value === 'form'
+      ? formRows.value[0]?.measurement
+      : typedMeasurement.value
+  const path = writeFormToPrefill(
+    { database: selectedDb.value, measurement },
+    { hash: writeMode.value === 'typed' ? '#write-mode-typed' : '#write-target' },
+  )
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('writeShareCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 watch(
@@ -733,6 +749,9 @@ function exportWriteDraft() {
       </button>
       <button type="button" class="mts-btn" data-testid="write-export-draft" @click="exportWriteDraft">
         <Download class="h-3.5 w-3.5" /> {{ t('writeExportDraft') }}
+      </button>
+      <button type="button" class="mts-btn" data-testid="write-share-link" @click="copyWriteShareLink">
+        {{ t('writeShareLink') }}
       </button>
       <span
         v-if="formDirty"

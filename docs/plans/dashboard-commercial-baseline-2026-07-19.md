@@ -864,3 +864,9 @@
 
 ## P170 状态（2026-07-21）
 - 非 admin Overview 工作区增加审计入口
+
+## P171 状态（2026-07-21）
+- Write 页复制预填深链（database/measurement，无 payload）
+
+## P172 状态（2026-07-21）
+- Audit 页复制筛选深链（range/action/user/q）

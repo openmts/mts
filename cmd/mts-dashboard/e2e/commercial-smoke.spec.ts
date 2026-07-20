@@ -104,6 +104,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/write')
   await expect(page.getByTestId('write-page')).toBeVisible()
   await expect(page.getByTestId('write-export-draft')).toBeVisible()
+  await expect(page.getByTestId('write-share-link')).toBeVisible()
   await expect(page.getByTestId('write-export-result')).toBeVisible()
   await page.getByRole('main').getByRole('button', { name: 'Line Protocol' }).click()
   await page.getByRole('main').locator('textarea').first().fill('cpu,host=e2e-playwright usage=0.42 1000')
@@ -487,6 +488,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-quick-ranges')).toBeVisible()
   await expect(page.getByTestId('audit-export-json')).toBeVisible()
   await expect(page.getByTestId('audit-export-csv')).toBeVisible()
+  await expect(page.getByTestId('audit-share-link')).toBeVisible()
   await expect(page.getByTestId('audit-limit')).toBeVisible()
   await expect(page.getByTestId('audit-merged-hint')).toBeVisible()
   // P112: Audit 多选/排序入口（空表也可验证控件）
@@ -1023,6 +1025,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-self-hint')).toBeVisible()
   await expect(page.getByTestId('audit-user')).toBeDisabled()
   await expect(page.getByTestId('audit-reload')).toBeVisible()
+  await expect(page.getByTestId('audit-share-link')).toBeVisible()
   // 查询分享链接
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
