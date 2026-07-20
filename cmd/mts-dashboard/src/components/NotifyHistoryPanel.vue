@@ -6,9 +6,13 @@ import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { Bell, X, Download, Copy } from 'lucide-vue-next'
 import {
   filterNotifyHistory,
+  notifyHistoryRangeBounds,
+  parseNotifyTimeBound,
   type NotifyHistoryEntry,
   type NotifyHistoryKindFilter,
+  type NotifyHistoryQuickRange,
 } from '@/utils/notifyHistory'
+import { toDatetimeLocalValue } from '@/utils/commandPalette'
 import {
   buildNotifyHistoryExport,
   formatNotifyHistoryExportPretty,
@@ -25,14 +29,62 @@ let trap: FocusTrapHandle | null = null
 
 const kindFilter = ref<NotifyHistoryKindFilter>('all')
 const searchQuery = ref('')
+const timeRange = ref<NotifyHistoryQuickRange>('all')
+const sinceLocal = ref('')
+const untilLocal = ref('')
+const timeBounds = computed(() => {
+  if (timeRange.value !== 'all') {
+    return notifyHistoryRangeBounds(timeRange.value)
+  }
+  return {
+    sinceMs: parseNotifyTimeBound(sinceLocal.value),
+    untilMs: parseNotifyTimeBound(untilLocal.value),
+  }
+})
 const entries = computed(() =>
-  filterNotifyHistory(history.value, { kind: kindFilter.value, query: searchQuery.value }),
+  filterNotifyHistory(history.value, {
+    kind: kindFilter.value,
+    query: searchQuery.value,
+    sinceMs: timeBounds.value.sinceMs,
+    untilMs: timeBounds.value.untilMs,
+  }),
 )
 const filterOptions: NotifyHistoryKindFilter[] = ['all', 'success', 'error', 'warn', 'info']
+const timeRangeOptions: NotifyHistoryQuickRange[] = ['all', '1h', '24h', '7d', '30d']
 function filterOptionLabel(k: NotifyHistoryKindFilter): string {
   if (k === 'all') return t.value('notifyHistoryFilterAll')
   return kindLabel(k)
 }
+function timeRangeLabel(r: NotifyHistoryQuickRange): string {
+  if (r === 'all') return t.value('notifyHistoryTimeAll')
+  if (r === '1h') return t.value('notifyHistoryTime1h')
+  if (r === '24h') return t.value('notifyHistoryTime24h')
+  if (r === '7d') return t.value('notifyHistoryTime7d')
+  return t.value('notifyHistoryTime30d')
+}
+function onTimeRangeChange() {
+  if (timeRange.value === 'all') return
+  const b = notifyHistoryRangeBounds(timeRange.value)
+  sinceLocal.value = b.sinceMs != null ? toDatetimeLocalValue(new Date(b.sinceMs)) : ''
+  untilLocal.value = b.untilMs != null ? toDatetimeLocalValue(new Date(b.untilMs)) : ''
+}
+function onCustomTimeInput() {
+  // 自定义时间时切回 all 语义（仍用 since/until）
+  timeRange.value = 'all'
+}
+function clearTimeFilter() {
+  timeRange.value = 'all'
+  sinceLocal.value = ''
+  untilLocal.value = ''
+}
+const hasActiveFilter = computed(
+  () =>
+    kindFilter.value !== 'all' ||
+    !!searchQuery.value.trim() ||
+    timeRange.value !== 'all' ||
+    !!sinceLocal.value ||
+    !!untilLocal.value,
+)
 
 function close() {
   open.value = false
@@ -217,6 +269,57 @@ onBeforeUnmount(() => {
             autocomplete="off"
           />
         </div>
+        <div>
+          <label class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300" for="notify-history-time-range">
+            {{ t('notifyHistoryTimeRange') }}
+          </label>
+          <select
+            id="notify-history-time-range"
+            v-model="timeRange"
+            class="mts-input mts-focus-ring text-xs"
+            data-testid="notify-history-time-range"
+            @change="onTimeRangeChange"
+          >
+            <option v-for="r in timeRangeOptions" :key="r" :value="r">{{ timeRangeLabel(r) }}</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div>
+            <label class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300" for="notify-history-since">
+              {{ t('notifyHistorySince') }}
+            </label>
+            <input
+              id="notify-history-since"
+              v-model="sinceLocal"
+              type="datetime-local"
+              class="mts-input mts-focus-ring text-xs"
+              data-testid="notify-history-since"
+              @change="onCustomTimeInput"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300" for="notify-history-until">
+              {{ t('notifyHistoryUntil') }}
+            </label>
+            <input
+              id="notify-history-until"
+              v-model="untilLocal"
+              type="datetime-local"
+              class="mts-input mts-focus-ring text-xs"
+              data-testid="notify-history-until"
+              @change="onCustomTimeInput"
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          class="mts-btn mts-focus-ring w-full text-xs"
+          data-testid="notify-history-time-clear"
+          :disabled="!hasActiveFilter"
+          @click="clearTimeFilter(); kindFilter = 'all'; searchQuery = ''"
+        >
+          {{ t('notifyHistoryClearFilters') }}
+        </button>
       </div>
       <ul class="flex-1 space-y-2 overflow-auto p-3" data-testid="notify-history-list">
         <li
@@ -225,7 +328,7 @@ onBeforeUnmount(() => {
           data-testid="notify-history-empty"
         >
           {{
-            history.length && (kindFilter !== 'all' || searchQuery.trim())
+            history.length && hasActiveFilter
               ? t('notifyHistoryFilterEmpty')
               : t('notifyHistoryEmpty')
           }}

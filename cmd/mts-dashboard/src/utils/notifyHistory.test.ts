@@ -5,7 +5,9 @@ import {
   clearNotifyHistory,
   filterNotifyHistory,
   filterNotifyHistoryByKind,
+  filterNotifyHistoryByTime,
   loadNotifyHistory,
+  notifyHistoryRangeBounds,
   recordNotifyHistory,
   searchNotifyHistory,
 } from './notifyHistory.ts'
@@ -67,4 +69,40 @@ test('filterNotifyHistory combines kind and query', () => {
   const got = filterNotifyHistory(items, { kind: 'error', query: 'fail' })
   assert.equal(got.length, 1)
   assert.equal(got[0]?.id, '1')
+})
+
+test('filterNotifyHistoryByTime inclusive bounds', () => {
+  const items = [
+    { id: '1', kind: 'info' as const, message: 'a', count: 1, at: 100 },
+    { id: '2', kind: 'info' as const, message: 'b', count: 1, at: 200 },
+    { id: '3', kind: 'info' as const, message: 'c', count: 1, at: 300 },
+  ]
+  assert.deepEqual(
+    filterNotifyHistoryByTime(items, { sinceMs: 200, untilMs: 300 }).map((x) => x.id),
+    ['2', '3'],
+  )
+  assert.equal(filterNotifyHistoryByTime(items, {}).length, 3)
+})
+
+test('notifyHistoryRangeBounds', () => {
+  const b = notifyHistoryRangeBounds('1h', 10_000_000)
+  assert.equal(b.untilMs, 10_000_000)
+  assert.equal(b.sinceMs, 10_000_000 - 3600_000)
+  assert.deepEqual(notifyHistoryRangeBounds('all', 1), { sinceMs: null, untilMs: null })
+})
+
+test('filterNotifyHistory with time + kind + query', () => {
+  const items = [
+    { id: '1', kind: 'error' as const, message: 'old fail', count: 1, at: 100 },
+    { id: '2', kind: 'error' as const, message: 'new fail', count: 1, at: 500 },
+    { id: '3', kind: 'info' as const, message: 'new fail', count: 1, at: 600 },
+  ]
+  const got = filterNotifyHistory(items, {
+    kind: 'error',
+    query: 'fail',
+    sinceMs: 400,
+    untilMs: 700,
+  })
+  assert.equal(got.length, 1)
+  assert.equal(got[0]?.id, '2')
 })

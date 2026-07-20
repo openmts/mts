@@ -124,10 +124,54 @@ export function searchNotifyHistory(
   })
 }
 
+export function parseNotifyTimeBound(raw: unknown): number | null {
+  if (raw == null || raw === '') return null
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  const s = String(raw).trim()
+  if (!s) return null
+  const ms = Date.parse(s)
+  return Number.isFinite(ms) ? ms : null
+}
+
+/** 闭区间 [sinceMs, untilMs]；缺省端不限制 */
+export function filterNotifyHistoryByTime(
+  items: readonly NotifyHistoryEntry[],
+  opts: { sinceMs?: number | null; untilMs?: number | null } = {},
+): NotifyHistoryEntry[] {
+  const since = opts.sinceMs == null || !Number.isFinite(opts.sinceMs) ? null : opts.sinceMs
+  const until = opts.untilMs == null || !Number.isFinite(opts.untilMs) ? null : opts.untilMs
+  if (since == null && until == null) return items.slice()
+  return items.filter((x) => {
+    if (since != null && x.at < since) return false
+    if (until != null && x.at > until) return false
+    return true
+  })
+}
+
+export type NotifyHistoryQuickRange = '1h' | '24h' | '7d' | '30d' | 'all'
+
+export function notifyHistoryRangeBounds(
+  range: NotifyHistoryQuickRange,
+  nowMs = Date.now(),
+): { sinceMs: number | null; untilMs: number | null } {
+  if (range === 'all') return { sinceMs: null, untilMs: null }
+  const hours = range === '1h' ? 1 : range === '24h' ? 24 : range === '7d' ? 24 * 7 : 24 * 30
+  return { sinceMs: nowMs - hours * 3600_000, untilMs: nowMs }
+}
+
 export function filterNotifyHistory(
   items: readonly NotifyHistoryEntry[],
-  opts: { kind?: NotifyHistoryKindFilter; query?: string } = {},
+  opts: {
+    kind?: NotifyHistoryKindFilter
+    query?: string
+    sinceMs?: number | null
+    untilMs?: number | null
+  } = {},
 ): NotifyHistoryEntry[] {
   const byKind = filterNotifyHistoryByKind(items, opts.kind ?? 'all')
-  return searchNotifyHistory(byKind, opts.query ?? '')
+  const byTime = filterNotifyHistoryByTime(byKind, {
+    sinceMs: opts.sinceMs,
+    untilMs: opts.untilMs,
+  })
+  return searchNotifyHistory(byTime, opts.query ?? '')
 }
