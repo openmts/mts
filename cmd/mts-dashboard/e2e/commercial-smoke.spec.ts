@@ -768,6 +768,33 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('notify-history-panel')).toBeVisible()
   await expect(page.getByTestId('notify-history-filter')).toHaveValue('error')
   await page.getByTestId('notify-history-close').click()
+
+  // P196: 快捷键帮助深链
+  await page.goto('/?shortcuts=1#shortcuts-help')
+  await expect(page.getByTestId('shortcuts-help')).toBeVisible()
+  await page.getByTestId('shortcuts-help-close').click()
+  await expect(page.getByTestId('shortcuts-help')).toHaveCount(0)
+  await page.getByTestId('topbar-command-palette').click()
+  await page.getByTestId('command-palette-input').fill('快捷键帮助')
+  await expect(page.getByTestId('command-item-shortcuts-help-deeplink')).toBeVisible()
+  await page.getByTestId('command-item-shortcuts-help-deeplink').click()
+  await expect(page.getByTestId('shortcuts-help')).toBeVisible()
+  await page.getByTestId('shortcuts-help-close').click()
+
+  // P195: 离线时写提交按钮禁用（模拟 navigator.onLine=false）
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('offline-banner')).toBeVisible()
+  await expect(page.getByTestId('write-submit')).toBeDisabled()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0)
   await page.locator('#main-content').focus()
   await page.keyboard.press('Control+Shift+KeyH')
   await expect(page.getByTestId('notify-history-panel')).toBeVisible()

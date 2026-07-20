@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiGet, apiPost } from '@/api/client'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -39,6 +41,7 @@ const { isAdmin } = useAuth()
 const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
+const { offline } = useNetworkStatus()
 const { success, error: notifyError, warn, info } = useNotify()
 const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz } = useServerReachability()
 const statsLoadedAt = ref<number | null>(null)
@@ -166,11 +169,20 @@ const statsLoadedLabel = computed(() => {
 })
 
 function openConfirm(kind: 'flush' | 'compact' | 'retention') {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineOpsBlocked'))
+    return
+  }
   confirmKind.value = kind
 }
 
 async function runConfirmed() {
   if (!confirmKind.value) return
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineOpsBlocked'))
+    confirmKind.value = null
+    return
+  }
   const kind = confirmKind.value
   confirmLoading.value = true
   actionResult.value = null

@@ -34,6 +34,7 @@ import {
   resolveShareDeepLinkAction,
   stripSensitiveUrlParams,
 } from '@/utils/shareDeepLink'
+import { pathOpensShortcutsHelp } from '@/utils/shortcutsPrefill'
 import { Search, Command, History, Zap } from 'lucide-vue-next'
 
 const open = ref(false)
@@ -228,6 +229,10 @@ function go(item: CommandNavItem) {
   if (isCommandAction(item) && item.action) {
     runAction(item.action)
     return
+  }
+  // 同路径 router.push 不触发 watch：深链目标仍强制打开面板
+  if (pathOpensShortcutsHelp(item.path)) {
+    openShortcutsHelp?.()
   }
   void router.push(item.path)
 }

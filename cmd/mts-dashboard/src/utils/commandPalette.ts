@@ -2,6 +2,7 @@
 
 import { buildAuditPrefillPath, buildQueryPrefillPath } from './routePrefill.ts'
 import { notifyHistoryFormToPrefill } from './notifyHistoryPrefill.ts'
+import { buildShortcutsPrefillPath } from './shortcutsPrefill.ts'
 
 
 export interface CommandNavItem {
@@ -464,6 +465,12 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     path: notifyHistoryFormToPrefill({ kind: 'error', range: '24h' }, { path: '/' }),
     labelKey: 'cmdNotifyHistoryErrors',
     keywords: ['notify errors', '错误通知', 'error toast', 'nh_kind error'],
+  },
+  {
+    id: 'shortcuts-help-deeplink',
+    path: buildShortcutsPrefillPath({ path: '/' }),
+    labelKey: 'cmdShortcutsHelp',
+    keywords: ['keyboard shortcuts', '快捷键帮助', 'hotkeys help', 'shortcuts=1'],
   },
   { id: 'about', path: '/about', labelKey: 'about', keywords: ['version', '关于', 'build'] },
   {

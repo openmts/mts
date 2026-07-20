@@ -8,6 +8,7 @@ import CommandPalette from '@/components/CommandPalette.vue'
 import ShortcutsHelp from '@/components/ShortcutsHelp.vue'
 import NotifyHistoryPanel from '@/components/NotifyHistoryPanel.vue'
 import { parseNotifyHistoryPrefill, type NotifyHistoryPrefill } from '@/utils/notifyHistoryPrefill'
+import { parseShortcutsPrefill } from '@/utils/shortcutsPrefill'
 import BreadcrumbBar from '@/components/BreadcrumbBar.vue'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
@@ -99,10 +100,19 @@ function applyNotifyHistoryFromRoute() {
   if (pre.open) notifyHistoryOpen.value = true
 }
 
+function applyShortcutsFromRoute() {
+  const pre = parseShortcutsPrefill(
+    route.query as Record<string, unknown>,
+    route.hash,
+  )
+  if (pre.open) shortcutsOpen.value = true
+}
+
 watch(
   () => route.fullPath,
   () => {
     applyNotifyHistoryFromRoute()
+    applyShortcutsFromRoute()
   },
   { immediate: true },
 )

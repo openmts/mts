@@ -25,6 +25,8 @@ import type { MessageKey } from '@/i18n/messages'
 import { Send, Plus, Trash2, Download } from 'lucide-vue-next'
 import EmptyState from '@/components/EmptyState.vue'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import {
   fieldTypes, buildFormPoints, parseLineProtocolDetailed, parsePrometheusText, type FormRow,
@@ -82,6 +84,7 @@ const actionError = ref('')
 const metaHint = ref('')
 const rpMetaHint = ref('')
 const metaSource = ref<MetaLoadSource>('admin')
+const { offline } = useNetworkStatus()
 const { success, error: notifyError, warn } = useNotify()
 const { t } = useI18n()
 
@@ -448,6 +451,12 @@ async function checkWriteAuthz() {
 }
 
 async function submit() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    actionError.value = t.value('offlineWriteBlocked')
+    notifyError(actionError.value)
+    result.value = { ok: false, message: actionError.value }
+    return
+  }
   loading.value = true
   actionError.value = ''
   result.value = null
@@ -741,7 +750,7 @@ function exportWriteDraft() {
     </div>
 
     <div id="write-actions" class="scroll-mt-20 flex flex-wrap items-center gap-2">
-      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" data-testid="write-submit" :disabled="loading" @click="submit">
+      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" data-testid="write-submit" :disabled="loading || offline" :title="offline ? t('offlineWriteBlocked') : undefined" @click="submit">
         <Send class="h-4 w-4" /> {{ loading ? t('loading') : t('writeSubmit') }}
       </button>
       <button type="button" class="mts-btn" data-testid="write-export-result" :disabled="!result" @click="exportWriteResult">

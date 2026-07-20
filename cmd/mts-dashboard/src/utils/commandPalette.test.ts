@@ -119,6 +119,8 @@ test('notify history command deep links', () => {
   assert.ok(all.some((i) => i.id === 'notify-history'))
   assert.ok(all.some((i) => i.id === 'notify-history-errors'))
   assert.ok(all.find((i) => i.id === 'notify-history-errors')?.path.includes('nh_kind=error'))
+  assert.ok(all.some((i) => i.id === 'shortcuts-help-deeplink'))
+  assert.ok(all.find((i) => i.id === 'shortcuts-help-deeplink')?.path.includes('shortcuts=1'))
 })
 
 test('non-admin query write deep links visible', () => {

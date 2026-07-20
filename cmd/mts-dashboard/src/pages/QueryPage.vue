@@ -24,6 +24,8 @@ import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 import { loadQueryPrefs, saveQueryPrefs } from '@/utils/queryPrefs'
 import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { latencyFromNanos } from '@/utils/queryLatency'
 import { filterSeriesList, seriesLabel } from '@/utils/seriesMeta'
@@ -57,6 +59,7 @@ const history = useQueryHistory()
 const seriesFilter = ref('')
 const route = useRoute()
 useHashScroll()
+const { offline } = useNetworkStatus()
 const { success, error: notifyError } = useNotify()
 const { t, locale } = useI18n()
 const { currentUser, isAdmin } = useAuth()
@@ -467,6 +470,11 @@ const deleteScopeMessage = computed(() => {
 })
 
 async function doRangeDelete() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    deleteResult.value = t.value('offlineDeleteBlocked')
+    notifyError(deleteResult.value)
+    return
+  }
   deleteLoading.value = true
   deleteResult.value = ''
   try {
