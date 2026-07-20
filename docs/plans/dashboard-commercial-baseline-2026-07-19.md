@@ -732,7 +732,9 @@
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
 ## P139 状态（2026-07-21）
-- Query predicates/expr UI：**deferred**（不在本轮实现；内核能力保留 API）
+- Query predicates DSL UI 已实现（tag/field 比较；无完整 expr 树）
+- 入口：`query-predicates`；解析：`parsePredicates` → `Query.predicates`
+- 门禁：dashboard unit/build/e2e + `make e2e` + `go test ./...` 通过
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
 ## P140 状态（2026-07-21）

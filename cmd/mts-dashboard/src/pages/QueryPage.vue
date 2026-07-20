@@ -596,6 +596,16 @@ const columnRows = computed(() => {
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('queryTagsExpr') }}
         <input v-model="queryForm.tags" :placeholder="t('queryPhTags')" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
       </label>
+      <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 md:col-span-2 lg:col-span-3">{{ t('queryPredicates') }}
+        <textarea
+          v-model="queryForm.predicates"
+          data-testid="query-predicates"
+          rows="2"
+          class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800"
+          :placeholder="t('queryPhPredicates')"
+        />
+        <span class="mt-1 block text-[11px] mts-muted">{{ t('queryPredicatesHint') }}</span>
+      </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('order') }}
         <select v-model="queryForm.order" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800">
           <option value="">{{ t('queryDefault') }}</option>

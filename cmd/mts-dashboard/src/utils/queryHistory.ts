@@ -14,6 +14,7 @@ export interface QueryHistoryForm {
   aggregates?: string
   window?: string
   group_tags?: string
+  predicates?: string
 }
 
 export interface QueryHistoryRecord {

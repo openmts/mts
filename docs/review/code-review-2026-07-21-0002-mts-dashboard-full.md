@@ -20,7 +20,7 @@ Dashboard 在 P124–P136 后已具备可商用后台的主体骨架：鉴权/�
 | 前后端契约 | 良 | 历史 P0 已对齐；无新发现阻断错位 |
 | 列表性能 | 良 | 主列表已 VT；ApiSpec/Overview/Readiness doctor 仍有原生表 |
 | 非 admin 体验 | 中 | 库列表手填降级；RP 仍依赖 admin |
-| 查询表达力 | 中 | aggregates/window/group/order 已有；predicates/expr 未暴露 |
+| 查询表达力 | 中高 | aggregates/window/group/order + predicates DSL；expr 树 UI 仍非目标 |
 | 可商用部署 | 中 | 边缘证书/cron/异地备份仍人工，不计入评分 |
 
 ---
@@ -62,7 +62,7 @@ Dashboard 在 P124–P136 后已具备可商用后台的主体骨架：鉴权/�
 |---|---|---|
 | 独立 `GET /api/v1/data/query/stats` | 查询 stats 已嵌在结果；可不接 | P3 |
 | series 列表 query 过滤 UI | meta API 有 series；Query 表单未做 series 选择器 | P2 |
-| Query `predicates` / `expr` | 内核能力；Builder 未暴露 | P2 |
+| Query `predicates` / `expr` | predicates DSL 已暴露；expr 树 UI 仍非目标 | 部分完成 |
 | 非 admin 的 RP 列表 API | 仅 admin 路径；data 用户 RP 手填 | P1 |
 | `GET /api/v1/admin/config`（非 effective） | 已有 effective/schema/validate/reload | P3 |
 | pprof `/debug/pprof/*` | 故意不进 UI | — |
@@ -164,7 +164,7 @@ timeout 180s env GOSUMDB=sum.golang.org go test -count=1 -timeout 120s ./...
 | FE-FULL-P1-02 Overview lists VT | **已修复**（P137） |
 | FE-FULL-P1-03 Readiness doctor VT | **已修复**（P137） |
 | FE-FULL-P1-04 非 admin RP | **已修复**（P140 data 面只读 RP + 前端优先） |
-| FE-FULL-P2-01 predicates | open（P139 deferred） |
+| FE-FULL-P2-01 predicates | **已修复**（P139 DSL；expr 树仍非目标） |
 | FE-FULL-P2-02 Write 行上限 | **已修复**（P138 上限 50） |
 | FE-FULL-P2-03 VITE_BASE | **已对齐说明**（P141；代码本已支持 dashboard_base） |
 | 部署侧三项 | open 不计分 |

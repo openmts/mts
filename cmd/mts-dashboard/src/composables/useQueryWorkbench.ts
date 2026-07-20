@@ -37,6 +37,8 @@ export function useQueryWorkbench() {
     window: '',
     // group by tags：逗号分隔
     group_tags: '',
+    // 谓词 DSL，见 parsePredicates
+    predicates: '',
   })
   const queryMode = ref<QueryMode>('rows')
   const rows = ref<QueryResultRow[]>([])
@@ -103,6 +105,9 @@ export function useQueryWorkbench() {
       queryErrEndTime: tMsg.value('queryErrEndTime' as MessageKey),
       queryErrOffset: tMsg.value('queryErrOffset' as MessageKey),
       queryErrLimit: tMsg.value('queryErrLimit' as MessageKey),
+      queryErrPredFormat: tMsg.value('queryErrPredFormat' as MessageKey),
+      queryErrPredKind: tMsg.value('queryErrPredKind' as MessageKey),
+      queryErrPredName: tMsg.value('queryErrPredName' as MessageKey),
     })
 
   function buildQuery(): Record<string, unknown> {

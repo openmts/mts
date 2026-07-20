@@ -26,9 +26,11 @@
 - [x] EARS-FE-P138-02 WHEN 非 admin 无法拉取 RP THE SYSTEM SHALL 保持手填可用并展示明确提示
 - [x] EARS-DOC-P138-03 WHEN 更新基线 THE SYSTEM SHALL 记录 P138
 
-## P139 — 查询高级语义（可选分阶段）
-- [ ] EARS-FE-P139-01 WHEN 用户填写 predicates 文本 THE SYSTEM SHALL 映射到 Query.predicates（校验失败可读） — **deferred**
-- [x] EARS-FE-P139-02 WHEN 更新基线 THE SYSTEM SHALL 记录 P139（未做则标注 deferred）
+## P139 — 查询高级语义
+- [x] EARS-FE-P139-01 predicates DSL → Query.predicates
+- [x] EARS-FE-P139-02 非法谓词可读错误
+- [x] EARS-FE-P139-03 查询页暴露 query-predicates
+- [x] EARS-DOC-P139-04 基线记录（expr 树 UI 仍非目标）
 
 ## 部署侧（open，不计分）
 - [ ] OPS-EDGE-HTTPS 生产证书/HSTS 人工验收
