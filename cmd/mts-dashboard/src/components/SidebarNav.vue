@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -70,6 +70,20 @@ function go(to: string) {
 function clearFilter() {
   navFilter.value = ''
 }
+
+async function focusFilter() {
+  if (props.collapsed) {
+    emit('toggle-collapse')
+  }
+  await nextTick()
+  // 折叠切换后可能需要再等一轮渲染
+  await nextTick()
+  const el = document.getElementById('sidebar-filter-input') as HTMLInputElement | null
+  el?.focus()
+  el?.select()
+}
+
+defineExpose({ focusFilter, clearFilter })
 </script>
 
 <template>

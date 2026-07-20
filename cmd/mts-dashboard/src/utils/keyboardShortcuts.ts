@@ -8,6 +8,7 @@ export interface ShortcutEntry {
 
 export const DASHBOARD_SHORTCUTS: ShortcutEntry[] = [
   { id: 'palette', keys: 'Ctrl/⌘ + K', labelKey: 'shortcutPalette' },
+  { id: 'nav-filter', keys: '/', labelKey: 'shortcutNavFilter' },
   { id: 'help', keys: '?', labelKey: 'shortcutHelp' },
   { id: 'skip', keys: 'Tab', labelKey: 'shortcutSkip' },
 ]
@@ -16,6 +17,13 @@ export function matchShortcutHelpOpen(e: KeyboardEvent, editable: boolean): bool
   if (editable) return false
   if (e.metaKey || e.ctrlKey || e.altKey) return false
   return e.key === '?' || (e.shiftKey && e.key === '/')
+}
+
+/** 非输入态按 / 聚焦侧栏导航过滤（不含 Shift+/ 的 ?） */
+export function matchSidebarFilterFocus(e: KeyboardEvent, editable: boolean): boolean {
+  if (editable) return false
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false
+  return e.key === '/'
 }
 
 export function isEditableTarget(target: EventTarget | null): boolean {

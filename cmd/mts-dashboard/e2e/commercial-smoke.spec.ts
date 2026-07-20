@@ -235,6 +235,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('sidebar-nav-home')).toHaveCount(0)
   await page.getByTestId('sidebar-filter-clear').click()
   await expect(page.getByTestId('sidebar-nav-home')).toBeVisible()
+  // / 聚焦侧栏过滤（非输入态；先 blur 输入框）
+  await page.locator('#main-content').focus()
+  await page.keyboard.press('/')
+  await expect(page.getByTestId('sidebar-filter')).toBeFocused()
   // 命令面板跳转（在清空最近访问前，避免额外 goto 干扰）
   await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()

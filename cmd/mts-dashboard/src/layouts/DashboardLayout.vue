@@ -13,6 +13,7 @@ import { resolveRouteTitleKey } from '@/utils/pageTitle'
 import {
   isEditableTarget,
   matchShortcutHelpOpen,
+  matchSidebarFilterFocus,
 } from '@/utils/keyboardShortcuts'
 import {
   clearRecentRoutes,
@@ -34,6 +35,7 @@ const sidebarCollapsed = ref(
   loadSidebarPrefs(typeof localStorage !== 'undefined' ? localStorage : null).collapsed,
 )
 const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
+const sidebarNavRef = ref<InstanceType<typeof SidebarNav> | null>(null)
 const shortcutsOpen = ref(false)
 const recent = ref<RecentRouteEntry[]>(loadRecentRoutes())
 const showBreadcrumb = computed(() => route.path !== '/')
@@ -74,6 +76,15 @@ function onGlobalKey(e: KeyboardEvent) {
   if (matchShortcutHelpOpen(e, isEditableTarget(e.target))) {
     e.preventDefault()
     shortcutsOpen.value = !shortcutsOpen.value
+    return
+  }
+  if (matchSidebarFilterFocus(e, isEditableTarget(e.target))) {
+    e.preventDefault()
+    // 移动端抽屉未开时先打开
+    if (!sidebarOpen.value && typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+      sidebarOpen.value = true
+    }
+    sidebarNavRef.value?.focusFilter()
   }
 }
 
@@ -123,6 +134,7 @@ function onSkipToMain(e: Event) {
     </a>
     <div class="no-print">
       <SidebarNav
+        ref="sidebarNavRef"
         :visible="sidebarOpen"
         :collapsed="sidebarCollapsed"
         @close="closeSidebar"
