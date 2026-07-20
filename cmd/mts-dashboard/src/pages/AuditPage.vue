@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
@@ -17,6 +18,7 @@ import {
   type AuditQuickRange,
 } from '@/utils/commandPalette'
 import { auditLimitOptions, buildAuditQueryString } from '@/utils/auditQuery'
+import { parseAuditPrefill } from '@/utils/routePrefill'
 import { auditEventsToCSV } from '@/utils/auditExport'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
@@ -44,6 +46,7 @@ interface AuditEvent {
 interface AuditResponse { events: AuditEvent[]; total?: number }
 
 useHashScroll()
+const route = useRoute()
 const { isAdmin } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
@@ -127,6 +130,7 @@ onMounted(async () => {
   } catch (e) {
     loadError.value = formatCaughtError(e)
   }
+  applyAuditPrefillFromRoute({ reload: false })
   await loadAudit()
 })
 
@@ -188,6 +192,36 @@ function applyQuickRange(range: AuditQuickRange) {
   void loadAudit()
 }
 
+/** 深链只读预填：筛选条件，不自动导出 */
+function applyAuditPrefillFromRoute(opts?: { reload?: boolean }) {
+  const pre = parseAuditPrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.range) {
+    const r = auditRangeToLocalInputs(pre.range)
+    if (sinceLocal.value !== r.since || untilLocal.value !== r.until) {
+      sinceLocal.value = r.since
+      untilLocal.value = r.until
+      changed = true
+    }
+  }
+  if (pre.action != null && actionFilter.value !== pre.action) {
+    actionFilter.value = pre.action
+    changed = true
+  }
+  if (pre.q != null && clientQuery.value !== pre.q) {
+    clientQuery.value = pre.q
+    changed = true
+  }
+  if (pre.user != null && selectedUser.value !== pre.user) {
+    selectedUser.value = pre.user
+    changed = true
+  }
+  if (changed) {
+    success(t.value('auditPrefillApplied'))
+    if (opts?.reload !== false && isAdmin.value) void loadAudit()
+  }
+}
+
 function clearFilters() {
   selectedUser.value = ''
   actionFilter.value = ''
@@ -217,6 +251,15 @@ function exportCSV() {
   downloadText(stampFilename('mts-audit', 'csv'), auditEventsToCSV(rows), 'text/csv;charset=utf-8')
   success(t.value('auditExportCSVOk'))
 }
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (path === prev) return
+    // 仅 query/hash 变化时应用预填；首次由 onMounted 处理
+    if (prev != null) applyAuditPrefillFromRoute()
+  },
+)
 </script>
 
 <template>

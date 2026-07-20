@@ -1,5 +1,8 @@
 /** 命令面板导航项与过滤（纯函数） */
 
+import { buildAuditPrefillPath, buildQueryPrefillPath } from './routePrefill.ts'
+
+
 export interface CommandNavItem {
   id: string
   path: string
@@ -145,6 +148,24 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     labelKey: 'cmdQueryChart',
     keywords: ['query chart', '查询图表', 'chart'],
   },
+  {
+    id: 'query-range-1h',
+    path: buildQueryPrefillPath({ range: '1h' }),
+    labelKey: 'cmdQueryRange1h',
+    keywords: ['last 1h', '最近1小时', 'range 1h', 'prefill query', '查询时间预填'],
+  },
+  {
+    id: 'query-range-24h',
+    path: buildQueryPrefillPath({ range: '24h' }),
+    labelKey: 'cmdQueryRange24h',
+    keywords: ['last 24h', '最近24小时', 'range 24h', 'prefill query'],
+  },
+  {
+    id: 'query-range-7d',
+    path: buildQueryPrefillPath({ range: '7d' }),
+    labelKey: 'cmdQueryRange7d',
+    keywords: ['last 7d', '最近7天', 'range 7d', 'prefill query'],
+  },
   { id: 'write', path: '/write', labelKey: 'write', keywords: ['insert', '写入', 'line protocol', 'typed'] },
   {
     id: 'write-mode-typed',
@@ -282,6 +303,27 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['audit table', '审计表', 'events'],
     adminOnly: true,
   },
+  {
+    id: 'audit-range-1h',
+    path: buildAuditPrefillPath({ range: '1h' }),
+    labelKey: 'cmdAuditRange1h',
+    keywords: ['audit 1h', '审计1小时', 'prefill audit', 'range 1h'],
+    adminOnly: true,
+  },
+  {
+    id: 'audit-range-24h',
+    path: buildAuditPrefillPath({ range: '24h' }),
+    labelKey: 'cmdAuditRange24h',
+    keywords: ['audit 24h', '审计24小时', 'prefill audit'],
+    adminOnly: true,
+  },
+  {
+    id: 'audit-action-login',
+    path: buildAuditPrefillPath({ range: '24h', action: 'login' }),
+    labelKey: 'cmdAuditPrefillLogin',
+    keywords: ['login audit', '登录审计', 'action login', 'prefill audit'],
+    adminOnly: true,
+  },
   { id: 'api-spec', path: '/api-spec', labelKey: 'apiSpec', keywords: ['openapi', '契约', 'spec'], adminOnly: true },
   { id: 'storage', path: '/storage', labelKey: 'storage', keywords: ['snapshot', 'backup', '存储', 'restore'], adminOnly: true },
   {
@@ -401,6 +443,7 @@ export function isCommandDeepLink(item: CommandNavItem): boolean {
  * 空查询时折叠导航：默认只保留主路由，隐藏 hash 深链。
  * deepLinkCount 始终统计深链数，便于展开后仍显示「收起」。
  */
+
 export function collapseNavItemsForEmptyQuery(
   items: readonly CommandNavItem[],
   expanded: boolean,

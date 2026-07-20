@@ -81,10 +81,16 @@ test('command palette includes ops deep links for admin', () => {
     'downsample-status',
     'audit-filters',
     'audit-table',
+    'audit-range-1h',
+    'audit-range-24h',
+    'audit-action-login',
     'query-form',
     'query-history',
     'query-results',
     'query-chart',
+    'query-range-1h',
+    'query-range-24h',
+    'query-range-7d',
     'write-mode-typed',
     'write-mode-line',
     'write-mode-form',
@@ -203,3 +209,18 @@ test('empty query nav collapse', () => {
   assert.ok(qGroups.some((g) => g.items.some((i) => i.id === 'operations-flush')))
 })
 
+
+test('command palette prefill deep links are read-only paths', () => {
+  const admin = visibleCommandItems(COMMAND_NAV_ITEMS, true)
+  const q1 = admin.find((i) => i.id === 'query-range-1h')
+  assert.ok(q1)
+  assert.match(q1!.path, /\/query\?range=1h/)
+  assert.doesNotMatch(q1!.path, /execute|auto-run/)
+  const a1 = admin.find((i) => i.id === 'audit-range-24h')
+  assert.ok(a1)
+  assert.match(a1!.path, /\/audit\?range=24h/)
+  assert.equal(a1!.adminOnly, true)
+  const login = admin.find((i) => i.id === 'audit-action-login')
+  assert.ok(login)
+  assert.match(login!.path, /action=login/)
+})

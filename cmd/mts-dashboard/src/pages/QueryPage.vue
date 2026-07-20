@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
+import {
+  parseQueryPrefill,
+  timeRangeToQueryFormTimes,
+} from '@/utils/routePrefill'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
@@ -58,6 +62,8 @@ const PREFS_KEY = 'mts_query_prefs'
 const initialPrefs = loadQueryPrefs(typeof localStorage !== 'undefined' ? localStorage : null, PREFS_KEY)
 const showHistory = ref(initialPrefs.showHistory)
 const showChart = ref(initialPrefs.showChart)
+const formBaseline = ref(snapshotForm({ mode: queryMode.value, form: queryForm.value }))
+const formDirty = computed(() => isDirty(formBaseline.value, { mode: queryMode.value, form: queryForm.value }))
 
 function applyQueryHash(hash?: string | null) {
   const raw = hash ?? (typeof window !== 'undefined' ? window.location.hash : route.hash)
@@ -69,9 +75,43 @@ function applyQueryHash(hash?: string | null) {
     scheduleScrollToHash(raw)
   })
 }
+
+/** 深链只读预填：改时间/库表，不自动执行查询 */
+function applyQueryPrefillFromRoute() {
+  const pre = parseQueryPrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.range) {
+    const times = timeRangeToQueryFormTimes(pre.range)
+    if (queryForm.value.start_time !== times.start_time || queryForm.value.end_time !== times.end_time) {
+      queryForm.value.start_time = times.start_time
+      queryForm.value.end_time = times.end_time
+      changed = true
+    }
+  }
+  if (pre.database && queryForm.value.database !== pre.database) {
+    queryForm.value.database = pre.database
+    changed = true
+  }
+  if (pre.measurement && queryForm.value.measurement !== pre.measurement) {
+    queryForm.value.measurement = pre.measurement
+    changed = true
+  }
+  if (changed) {
+    formBaseline.value = snapshotForm({ mode: queryMode.value, form: queryForm.value })
+    success(t.value('queryPrefillApplied'))
+  }
+}
+
 watch(
   () => route.hash,
   (h) => applyQueryHash(h),
+  { immediate: true },
+)
+watch(
+  () => route.fullPath,
+  () => {
+    applyQueryPrefillFromRoute()
+  },
   { immediate: true },
 )
 const showRawFields = ref(initialPrefs.showRawFields)
@@ -84,8 +124,6 @@ const clearHistoryOpen = ref(false)
 const historyFileInput = ref<HTMLInputElement | null>(null)
 const columnKeys = RESULT_COLUMN_KEYS
 const resultGridClass = computed(() => gridColClass(resultColumns.value))
-const formBaseline = ref(snapshotForm({ mode: queryMode.value, form: queryForm.value }))
-const formDirty = computed(() => isDirty(formBaseline.value, { mode: queryMode.value, form: queryForm.value }))
 const latency = computed(() => {
   if (!queryStats.value) return null
   return latencyFromNanos(
@@ -496,13 +534,13 @@ const columnRows = computed(() => {
       </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('queryStartMs') }}
         <div class="mt-1 flex gap-1">
-          <input v-model="queryForm.start_time" class="w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+          <input v-model="queryForm.start_time" data-testid="query-start-time" class="w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
           <button class="rounded border px-2 text-xs" @click="fillNowMs('start')">{{ t('queryNow') }}</button>
         </div>
       </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('queryEndMs') }}
         <div class="mt-1 flex gap-1">
-          <input v-model="queryForm.end_time" class="w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
+          <input v-model="queryForm.end_time" data-testid="query-end-time" class="w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
           <button class="rounded border px-2 text-xs" @click="fillNowMs('end')">{{ t('queryNow') }}</button>
         </div>
       </label>
