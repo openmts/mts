@@ -10,6 +10,7 @@ import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import {
   filterGrantRows,
   flattenUserGrants,
@@ -93,6 +94,8 @@ const filtered = computed(() =>
 )
 
 const visibleGrantIds = computed(() => filtered.value.map((r) => grantRowId(r)))
+const GRANTS_ROW_HEIGHT = 48
+const GRANTS_LIST_HEIGHT = 448
 const {
   selectedCount,
   allVisibleSelected,
@@ -280,85 +283,99 @@ onMounted(() => { void load() })
         :description="t('accessGrantsEmptyDesc')"
       />
     </div>
-    <div v-else class="mts-card max-h-[28rem] overflow-auto" data-testid="access-grants-table-wrap">
-      <table class="min-w-full text-left text-sm" data-testid="access-grants-table">
-        <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
-          <tr>
-            <th class="sticky top-0 z-[1] w-10 bg-slate-50 px-3 py-2 dark:bg-slate-900/95">
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5"
-                data-testid="access-grants-select-all-checkbox"
-                :checked="allVisibleSelected"
-                :indeterminate.prop="someVisibleSelected"
-                :aria-label="t('listSelectAll')"
-                @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
-              />
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-user-col" @click="cycleGrantSort('user')">
-                {{ t('accessGrantsColUser') }} <span aria-hidden="true">{{ grantSortIndicator('user') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-role-col" @click="cycleGrantSort('role')">
-                {{ t('accessGrantsColRole') }} <span aria-hidden="true">{{ grantSortIndicator('role') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-status-col" @click="cycleGrantSort('status')">
-                {{ t('accessGrantsColStatus') }} <span aria-hidden="true">{{ grantSortIndicator('status') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-database-col" @click="cycleGrantSort('database')">
-                {{ t('accessGrantsColDatabase') }} <span aria-hidden="true">{{ grantSortIndicator('database') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-permission-col" @click="cycleGrantSort('permission')">
-                {{ t('accessGrantsColPermission') }} <span aria-hidden="true">{{ grantSortIndicator('permission') }}</span>
-              </button>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in filtered"
-            :key="grantRowId(row)"
-            class="border-b border-slate-100 dark:border-slate-800"
-          >
-            <td class="px-3 py-2">
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5"
-                :data-testid="`access-grants-select-${row.user}-${row.database}-${row.permission}`"
-                :checked="isSelected(grantRowId(row))"
-                :aria-label="t('listSelectCol')"
-                @change="toggle(grantRowId(row), ($event.target as HTMLInputElement).checked)"
-              />
-            </td>
-            <td class="px-3 py-2 font-medium text-slate-800 dark:text-slate-100">{{ row.user }}</td>
-            <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ roleLabel(row.role) }}</td>
-            <td class="px-3 py-2">
-              <span
-                class="inline-flex rounded-full px-2 py-0.5 text-xs"
-                :class="row.disabled
-                  ? 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-100'
-                  : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100'"
-              >
-                {{ row.disabled ? t('accessGrantsDisabled') : t('accessGrantsEnabled') }}
-              </span>
-            </td>
-            <td class="px-3 py-2 font-mono text-xs">{{ row.database }}</td>
-            <td class="px-3 py-2">
-              <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                {{ permText(row.permission) }}
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+        <div v-else class="mts-card overflow-hidden p-0" data-testid="access-grants-table-wrap">
+      <div
+        id="access-grants-table"
+        class="min-w-[44rem] overflow-hidden"
+        data-testid="access-grants-table"
+      >
+        <div
+          class="grid grid-cols-[2.5rem_minmax(7rem,1fr)_minmax(5rem,0.7fr)_minmax(5rem,0.7fr)_minmax(7rem,1fr)_minmax(6rem,0.9fr)] border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400"
+          data-testid="access-grants-table-header"
+        >
+          <div class="px-3 py-2">
+            <input
+              type="checkbox"
+              class="h-3.5 w-3.5"
+              data-testid="access-grants-select-all-checkbox"
+              :checked="allVisibleSelected"
+              :indeterminate.prop="someVisibleSelected"
+              :aria-label="t('listSelectAll')"
+              @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
+            />
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-user-col" @click="cycleGrantSort('user')">
+              {{ t('accessGrantsColUser') }} <span aria-hidden="true">{{ grantSortIndicator('user') }}</span>
+            </button>
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-role-col" @click="cycleGrantSort('role')">
+              {{ t('accessGrantsColRole') }} <span aria-hidden="true">{{ grantSortIndicator('role') }}</span>
+            </button>
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-status-col" @click="cycleGrantSort('status')">
+              {{ t('accessGrantsColStatus') }} <span aria-hidden="true">{{ grantSortIndicator('status') }}</span>
+            </button>
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-database-col" @click="cycleGrantSort('database')">
+              {{ t('accessGrantsColDatabase') }} <span aria-hidden="true">{{ grantSortIndicator('database') }}</span>
+            </button>
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-permission-col" @click="cycleGrantSort('permission')">
+              {{ t('accessGrantsColPermission') }} <span aria-hidden="true">{{ grantSortIndicator('permission') }}</span>
+            </button>
+          </div>
+        </div>
+        <VirtualTable
+          :items="filtered"
+          :row-height="GRANTS_ROW_HEIGHT"
+          :height="GRANTS_LIST_HEIGHT"
+          data-testid="access-grants-virtual-list"
+        >
+          <template #default="{ item: row }">
+            <div
+              class="grid h-full grid-cols-[2.5rem_minmax(7rem,1fr)_minmax(5rem,0.7fr)_minmax(5rem,0.7fr)_minmax(7rem,1fr)_minmax(6rem,0.9fr)] items-center border-b border-slate-100 dark:border-slate-800"
+              :data-testid="`access-grants-row-${row.user}-${row.database}-${row.permission}`"
+            >
+              <div class="px-3">
+                <input
+                  type="checkbox"
+                  class="h-3.5 w-3.5"
+                  :data-testid="`access-grants-select-${row.user}-${row.database}-${row.permission}`"
+                  :checked="isSelected(grantRowId(row))"
+                  :aria-label="t('listSelectCol')"
+                  @change="toggle(grantRowId(row), ($event.target as HTMLInputElement).checked)"
+                />
+              </div>
+              <div class="truncate px-3 font-medium text-slate-800 dark:text-slate-100">{{ row.user }}</div>
+              <div class="truncate px-3 text-slate-600 dark:text-slate-300">{{ roleLabel(row.role) }}</div>
+              <div class="px-3">
+                <span
+                  class="inline-flex rounded-full px-2 py-0.5 text-xs"
+                  :class="row.disabled
+                    ? 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-100'
+                    : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100'"
+                >
+                  {{ row.disabled ? t('accessGrantsDisabled') : t('accessGrantsEnabled') }}
+                </span>
+              </div>
+              <div class="truncate px-3 font-mono text-xs">{{ row.database }}</div>
+              <div class="px-3">
+                <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {{ permText(row.permission) }}
+                </span>
+              </div>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="access-grants-virtual-hint">
+          {{ t('accessGrantsVirtualHint') }}
+        </p>
+      </div>
     </div>
   </div>
 </template>

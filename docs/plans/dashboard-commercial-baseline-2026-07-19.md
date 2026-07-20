@@ -651,3 +651,8 @@
 - 商业冒烟覆盖 users-table/virtual-list
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P123 状态（2026-07-20）
+- Access Grants 列表虚拟滚动；选择/导出仍覆盖筛选全集
+- 商业冒烟在有数据时覆盖 virtual-list
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

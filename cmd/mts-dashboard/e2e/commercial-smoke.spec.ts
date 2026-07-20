@@ -153,6 +153,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
   await expect(page.getByTestId('access-grants-export-json')).toBeVisible()
   await expect(page.getByTestId('access-grants-export-csv')).toBeVisible()
+  // 有授权数据时虚拟列表；无数据时 EmptyState
+  if (await page.getByTestId('access-grants-table').count()) {
+    await expect(page.getByTestId('access-grants-table')).toBeVisible()
+    await expect(page.getByTestId('access-grants-table-header')).toBeVisible()
+    await expect(page.getByTestId('access-grants-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('access-grants-virtual-hint')).toBeVisible()
+  }
   await page.goto('/api-spec')
   await expect(page.getByTestId('api-spec-page')).toBeVisible()
   await expect(page.getByTestId('api-spec-export-json')).toBeVisible()
