@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { sanitizeRedirect } from '@/router'
+import { loadLandingPath, resolveLandingPath } from '@/utils/landingPrefs'
 import { loginReasonMessage } from '@/utils/authReason'
 import { parseLoginTTLSeconds } from '@/utils/loginTTL'
 import { loadLoginTTLPref, saveLoginTTLPref } from '@/utils/loginTTLPrefs'
@@ -15,7 +16,7 @@ import {
 import { Eye, EyeOff, Server } from 'lucide-vue-next'
 
 const router = useRouter()
-const { login, mustChangePassword } = useAuth()
+const { login, mustChangePassword, isAdmin } = useAuth()
 const { t, locale } = useI18n()
 
 const storage = typeof localStorage !== 'undefined' ? localStorage : null
@@ -63,7 +64,12 @@ async function handleLogin() {
         await router.push({ name: 'ForceChangePassword' })
         return
       }
-      const redirect = sanitizeRedirect(router.currentRoute.value.query.redirect) || '/'
+      const redirect = resolveLandingPath({
+        redirectRaw: router.currentRoute.value.query.redirect,
+        preferredPath: loadLandingPath(storage),
+        isAdmin: isAdmin.value,
+        sanitizeRedirect,
+      })
       await router.push(redirect)
     }
   } finally {

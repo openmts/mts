@@ -134,3 +134,30 @@ export function filterAuditEvents<T extends { action?: string; detail?: string; 
     return hay.includes(q)
   })
 }
+
+export interface RecentCommandSource {
+  path: string
+  name?: string
+}
+
+/** 命令面板空查询时展示的最近访问（最多 max） */
+export function recentCommandItems(
+  recent: readonly RecentCommandSource[],
+  max = 5,
+): Array<{ id: string; path: string; name: string }> {
+  const out: Array<{ id: string; path: string; name: string }> = []
+  const seen = new Set<string>()
+  for (const r of recent) {
+    const path = String(r.path || '').trim()
+    if (!path || path.startsWith('/login')) continue
+    if (seen.has(path)) continue
+    seen.add(path)
+    out.push({
+      id: `recent-${path}`,
+      path,
+      name: r.name ? String(r.name) : '',
+    })
+    if (out.length >= max) break
+  }
+  return out
+}

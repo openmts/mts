@@ -10,10 +10,13 @@ import {
   filterCommandItems,
   matchCommandPaletteClose,
   matchCommandPaletteOpen,
+  recentCommandItems,
   visibleCommandItems,
   type CommandNavItem,
 } from '@/utils/commandPalette'
-import { Search, Command } from 'lucide-vue-next'
+import { loadRecentRoutes } from '@/utils/recentRoutes'
+import { resolveRouteTitleKey } from '@/utils/pageTitle'
+import { Search, Command, History } from 'lucide-vue-next'
 
 const open = ref(false)
 const query = ref('')
@@ -30,6 +33,22 @@ const items = computed(() => {
   const base = visibleCommandItems(COMMAND_NAV_ITEMS, isAdmin.value)
   return filterCommandItems(base, query.value, (key) => t.value(key as MessageKey) || key)
 })
+
+const recentItems = computed(() => {
+  if (query.value.trim()) return []
+  return recentCommandItems(loadRecentRoutes(), 5)
+})
+
+function recentLabel(name: string, path: string): string {
+  const key = resolveRouteTitleKey(name || null)
+  if (key) return t.value(key)
+  return path
+}
+
+function goRecent(path: string) {
+  closePalette()
+  void router.push(path)
+}
 
 function openPalette() {
   open.value = true
@@ -152,6 +171,28 @@ defineExpose({ openPalette, closePalette, open })
           </kbd>
         </div>
         <ul id="command-palette-listbox" class="max-h-80 overflow-auto p-1" role="listbox" data-testid="command-palette-listbox">
+          <li
+            v-if="recentItems.length"
+            class="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide mts-muted"
+            data-testid="command-palette-recent-label"
+          >
+            <span class="inline-flex items-center gap-1">
+              <History class="h-3 w-3" aria-hidden="true" />
+              {{ t('commandPaletteRecent') }}
+            </span>
+          </li>
+          <li
+            v-for="r in recentItems"
+            :key="r.id"
+            role="option"
+            class="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+            :data-testid="`command-recent-${r.path}`"
+            @click="goRecent(r.path)"
+          >
+            <span class="font-medium">{{ recentLabel(r.name, r.path) }}</span>
+            <span class="font-mono text-[11px] mts-muted">{{ r.path }}</span>
+          </li>
+          <li v-if="recentItems.length" class="my-1 border-t border-slate-100 dark:border-slate-800" aria-hidden="true" />
           <li v-if="!items.length" class="px-3 py-6 text-center text-sm mts-muted">
             {{ t('commandPaletteEmpty') }}
           </li>

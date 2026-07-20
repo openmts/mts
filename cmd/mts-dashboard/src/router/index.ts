@@ -3,6 +3,8 @@ import { useAuth } from '@/composables/useAuth'
 import { setRouteLoading } from '@/composables/useGlobalLoading'
 import { allowNavigationWhenDirty, anyRouteDirty } from '@/utils/routeDirty'
 import { messages, type Locale } from '@/i18n/messages'
+import { loadLandingPath, resolveLandingPath } from '@/utils/landingPrefs'
+import { sanitizeRedirect } from '@/utils/redirect'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -73,7 +75,14 @@ router.beforeEach((to, from) => {
   if (to.name === 'Login') {
     if (ok && isAuthenticated.value) {
       if (mustChangePassword.value) return { name: 'ForceChangePassword' }
-      return { name: 'Overview' }
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null
+      const path = resolveLandingPath({
+        redirectRaw: to.query.redirect,
+        preferredPath: loadLandingPath(storage),
+        isAdmin: isAdmin.value,
+        sanitizeRedirect,
+      })
+      return path
     }
     return true
   }

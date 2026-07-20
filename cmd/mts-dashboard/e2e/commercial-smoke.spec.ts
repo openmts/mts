@@ -216,6 +216,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // 10) 账户页改密入口 + 会话徽章
   await page.goto('/account')
   await expect(page.getByTestId('account-password-form')).toBeVisible()
+  await expect(page.getByTestId('account-landing-select')).toBeVisible()
   await expect(page.getByTestId('session-badge')).toBeVisible()
 
   // 11) 命令面板跳转 + 快捷键帮助 + 最近访问
@@ -242,6 +243,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // 命令面板跳转（在清空最近访问前，避免额外 goto 干扰）
   await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()
+  await expect(page.getByTestId('command-palette-recent-label')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('audit')
   await expect(page.getByTestId('command-item-audit')).toBeVisible()
   await page.getByTestId('command-item-audit').click()

@@ -13,9 +13,16 @@ import PasswordHints from '@/components/PasswordHints.vue'
 import { buildAccountExport, formatAccountExportPretty } from '@/utils/accountExport'
 import { downloadJSON, stampFilename } from '@/utils/download'
 import { copyText } from '@/utils/clipboard'
+import {
+  LANDING_PATH_OPTIONS,
+  isAdminOnlyLandingPath,
+  loadLandingPath,
+  saveLandingPath,
+} from '@/utils/landingPrefs'
+import type { MessageKey } from '@/i18n/messages'
 
 const router = useRouter()
-const { currentUser, currentRole, changePassword } = useAuth()
+const { currentUser, currentRole, changePassword, isAdmin } = useAuth()
 const { t, locale } = useI18n()
 const nowMs = ref(Date.now())
 const expiresAt = computed(() => parseExpiresAt(getTokenExpiresAt()))
@@ -48,6 +55,39 @@ function roleLabel(role?: string | null): string {
   return role
 }
 const { success, error: notifyError } = useNotify()
+const storage = typeof localStorage !== 'undefined' ? localStorage : null
+const landingPath = ref(loadLandingPath(storage))
+const landingOptions = computed(() =>
+  LANDING_PATH_OPTIONS.filter((p) => isAdmin.value || !isAdminOnlyLandingPath(p)),
+)
+function landingLabel(path: string): string {
+  // map path -> route name roughly via pageTitle keys
+  const map: Record<string, MessageKey> = {
+    '/': 'overview',
+    '/query': 'query',
+    '/write': 'write',
+    '/users': 'users',
+    '/access': 'accessMatrix',
+    '/access/grants': 'accessGrants',
+    '/databases': 'databases',
+    '/observability/metrics': 'metrics',
+    '/config': 'config',
+    '/operations': 'operations',
+    '/downsample': 'downsample',
+    '/audit': 'audit',
+    '/api-spec': 'apiSpec',
+    '/storage': 'storage',
+    '/ops/readiness': 'readiness',
+    '/about': 'about',
+    '/account': 'account',
+  }
+  const key = map[path]
+  return key ? t.value(key) : path
+}
+function onLandingChange() {
+  saveLandingPath(storage, landingPath.value)
+  success(t.value('accountLandingSaved'))
+}
 
 const oldPassword = ref('')
 const newPassword = ref('')
@@ -138,6 +178,23 @@ async function submit() {
           <dd class="font-mono" data-testid="account-role">{{ roleLabel(currentRole) }}</dd>
         </div>
       </dl>
+    </div>
+
+    <div class="mts-card p-4" data-testid="account-landing">
+      <h2 class="mb-1 text-sm font-semibold">{{ t('accountLandingTitle') }}</h2>
+      <p class="mb-3 text-xs mts-muted">{{ t('accountLandingHint') }}</p>
+      <label class="mb-1 block text-sm font-medium" for="account-landing-select">{{ t('accountLandingLabel') }}</label>
+      <select
+        id="account-landing-select"
+        v-model="landingPath"
+        class="mts-input mts-focus-ring"
+        data-testid="account-landing-select"
+        @change="onLandingChange"
+      >
+        <option v-for="p in landingOptions" :key="p" :value="p">
+          {{ landingLabel(p) }} ({{ p }})
+        </option>
+      </select>
     </div>
 
     <div class="mts-card p-4" data-testid="account-session">
