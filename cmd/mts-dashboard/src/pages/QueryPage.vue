@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch, computed, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
+import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
 import { useQueryWorkbench } from '@/composables/useQueryWorkbench'
 import { useQueryHistory } from '@/composables/useQueryHistory'
@@ -37,6 +40,8 @@ const {
   loadDatabases, loadDbChildren, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
 const history = useQueryHistory()
+const route = useRoute()
+useHashScroll()
 const { success, error: notifyError } = useNotify()
 const { t, locale } = useI18n()
 const { currentUser, isAdmin } = useAuth()
@@ -53,6 +58,22 @@ const PREFS_KEY = 'mts_query_prefs'
 const initialPrefs = loadQueryPrefs(typeof localStorage !== 'undefined' ? localStorage : null, PREFS_KEY)
 const showHistory = ref(initialPrefs.showHistory)
 const showChart = ref(initialPrefs.showChart)
+
+function applyQueryHash(hash?: string | null) {
+  const raw = hash ?? (typeof window !== 'undefined' ? window.location.hash : route.hash)
+  const id = hashTargetId(raw)
+  if (id === 'query-history') showHistory.value = true
+  if (id === 'query-chart') showChart.value = true
+  // 面板打开后再滚一次，避免 v-if 未挂载
+  void nextTick(() => {
+    scheduleScrollToHash(raw)
+  })
+}
+watch(
+  () => route.hash,
+  (h) => applyQueryHash(h),
+  { immediate: true },
+)
 const showRawFields = ref(initialPrefs.showRawFields)
 const resultColumns = ref<ResultColumnVisibility>({ ...initialPrefs.resultColumns })
 const showColumnPicker = ref(false)
@@ -354,7 +375,7 @@ const columnRows = computed(() => {
 
 <template>
   <div class="space-y-4" data-testid="query-page">
-    <div class="flex flex-wrap items-center justify-between gap-2">
+    <div id="query-toolbar" class="scroll-mt-20 flex flex-wrap items-center justify-between gap-2">
       <div class="flex flex-wrap items-center gap-2">
         <button
           v-for="m in modeOptions" :key="m.value"
@@ -379,7 +400,7 @@ const columnRows = computed(() => {
     <p v-if="authzHint" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{{ authzHint }}</p>
     <p v-if="metaHint || metaSource === 'manual'" class="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">{{ metaHint || t('metaDbManualHint') }}（{{ t('queryMetaSource') }}: {{ metaSource }}）</p>
 
-    <div v-if="showHistory" class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+    <div id="query-history" v-if="showHistory" class="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
         <span>{{ t('queryHistory') }}</span>
         <div class="flex flex-wrap items-center gap-2">
@@ -458,7 +479,7 @@ const columnRows = computed(() => {
       <EmptyState v-if="!historyPreview.length" compact :title="t('queryHistoryEmpty')" :description="t('queryHistoryEmptyDesc')" />
     </div>
 
-    <div class="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
+    <div id="query-form" class="scroll-mt-20 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('database') }}
         <input v-model="queryForm.database" list="db-list" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('queryPlaceholderManual')" />
         <datalist id="db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
@@ -516,7 +537,7 @@ const columnRows = computed(() => {
       </label>
     </div>
 
-    <div class="flex flex-wrap gap-2">
+    <div id="query-actions" class="scroll-mt-20 flex flex-wrap gap-2">
       <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" :disabled="loading" @click="runQuery">
         <Search class="h-4 w-4" /> {{ loading ? t('loading') : t('query') }}
       </button>
@@ -534,7 +555,7 @@ const columnRows = computed(() => {
     <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
     <p v-if="deleteResult" class="mts-alert-ok">{{ deleteResult }}</p>
 
-    <div v-if="queryStats" class="space-y-2">
+    <div id="query-stats" v-if="queryStats" class="scroll-mt-20 space-y-2">
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('queryStatScan') }}</p><p class="text-lg font-semibold">{{ queryStats.shards_scanned }}</p></div>
         <div class="rounded-xl border bg-white p-3 dark:border-slate-700 dark:bg-slate-900"><p class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('queryStatSkip') }}</p><p class="text-lg font-semibold">{{ queryStats.shards_skipped }}</p></div>
@@ -553,7 +574,9 @@ const columnRows = computed(() => {
       </div>
     </div>
 
-    <QueryChart v-if="showChart && rows.length" :rows="rows" />
+    <div id="query-chart" class="scroll-mt-20">
+      <QueryChart v-if="showChart && rows.length" :rows="rows" />
+    </div>
 
     <div
       v-if="queryAttempted && !loading && !actionError && !rows.length && !columnRows.length && !rawOutput"
@@ -565,7 +588,7 @@ const columnRows = computed(() => {
       />
     </div>
 
-    <div v-if="rows.length" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
+    <div id="query-results" v-if="rows.length" class="scroll-mt-20 overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-sm dark:border-slate-800">
         <span class="font-semibold">{{ t('queryRowResult') }}</span>
         <div class="flex flex-wrap items-center gap-2">

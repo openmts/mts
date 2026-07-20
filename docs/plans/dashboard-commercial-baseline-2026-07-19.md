@@ -520,3 +520,9 @@
 - Metrics/Config/Audit/Downsample 锚点 + 命令面板深链；useHashScroll 统一
 - 商业冒烟覆盖 config-effective / audit-filters
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P101 状态（2026-07-20）
+- Query/Write 工作台锚点与命令面板深链；hash 驱动历史/图表/写入模式
+- 商业冒烟覆盖 query-history / write-mode-typed
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

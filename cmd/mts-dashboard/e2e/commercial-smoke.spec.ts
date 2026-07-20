@@ -13,6 +13,10 @@ async function login(page: Page, user: string, password: string) {
 test.describe.configure({ mode: 'serial' })
 
 test('commercial browser smoke path', async ({ page }) => {
+  // 脏表单离开确认：冒烟路径自动接受，避免深链被 confirm 卡住
+  page.on('dialog', async (dialog) => {
+    await dialog.accept()
+  })
   // 0) 登录表单校验：空密码 -> alert 错误区
   await page.goto('/login')
   await expect(page.getByTestId('login-toggle-password')).toBeVisible()
@@ -319,6 +323,20 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('command-item-audit-filters').click()
   await expect(page).toHaveURL(/\/audit/)
   await expect(page.getByTestId('audit-quick-ranges')).toBeVisible()
+
+  // P101: 查询/写入工作台深链
+  await page.getByTestId('topbar-command-palette').click()
+  await page.getByTestId('command-palette-input').fill('query history')
+  await page.getByTestId('command-item-query-history').click()
+  await expect(page).toHaveURL(/\/query/)
+  await expect(page.getByTestId('query-export-history')).toBeVisible()
+  await page.getByTestId('topbar-command-palette').click()
+  await page.getByTestId('command-palette-input').fill('typed batch')
+  await page.getByTestId('command-item-write-mode-typed').click()
+  await expect(page).toHaveURL(/\/write/)
+  await expect(page.getByTestId('write-mode-typed')).toBeVisible()
+  // typed 模式已选中（深色底）
+  await expect(page.getByTestId('write-mode-typed')).toHaveClass(/bg-slate-800/)
 
   // 最近访问清空：多页后 clear，仅剩当前页（>1 才显示清空）
   await page.goto('/write')

@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
+import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
 import { listDatabasesDetailed, listRetentionPolicies } from '@/api/meta'
 import { checkDatabasePermission } from '@/api/authz'
@@ -24,6 +27,9 @@ import { makeFormErrorT } from '@/utils/formErrors'
 
 type WriteMode = 'form' | 'line' | 'prometheus' | 'typed'
 
+const route = useRoute()
+useHashScroll()
+
 const databases = ref<string[]>([])
 const retentionPolicies = ref<string[]>([])
 const selectedDb = ref('')
@@ -32,6 +38,24 @@ const initialWritePrefs = loadWritePrefs(typeof localStorage !== 'undefined' ? l
 const syncWrite = ref(initialWritePrefs.syncWrite)
 const usePointsTyped = ref(initialWritePrefs.usePointsTyped)
 const writeMode = ref<WriteMode>(initialWritePrefs.writeMode as WriteMode)
+
+const WRITE_MODES: WriteMode[] = ['form', 'line', 'prometheus', 'typed']
+function applyWriteHash(hash?: string | null) {
+  const raw = hash ?? (typeof window !== 'undefined' ? window.location.hash : route.hash)
+  const id = hashTargetId(raw)
+  if (id.startsWith('write-mode-')) {
+    const mode = id.slice('write-mode-'.length) as WriteMode
+    if (WRITE_MODES.includes(mode)) writeMode.value = mode
+  }
+  void nextTick(() => {
+    scheduleScrollToHash(raw)
+  })
+}
+watch(
+  () => route.hash,
+  (h) => applyWriteHash(h),
+  { immediate: true },
+)
 const lineInput = ref('')
 const formRows = ref<FormRow[]>([createEmptyRow()])
 const result = ref<{ ok: boolean; message: string } | null>(null)
@@ -360,12 +384,13 @@ function exportWriteDraft() {
 <template>
   <div class="space-y-4" data-testid="write-page">
     <div class="space-y-2">
-      <div class="flex flex-wrap gap-2" data-testid="write-mode-tabs">
+      <div id="write-mode-tabs" class="scroll-mt-20 flex flex-wrap gap-2" data-testid="write-mode-tabs">
         <button
           v-for="m in (['form','line','prometheus','typed'] as const)"
           :key="m"
           type="button"
-          class="rounded-lg border px-3 py-1.5 text-xs"
+          class="scroll-mt-20 rounded-lg border px-3 py-1.5 text-xs"
+          :id="`write-mode-${m}`"
           :data-testid="`write-mode-${m}`"
           :class="writeMode===m ? 'border-slate-800 bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'"
           @click="writeMode=m"
@@ -377,7 +402,7 @@ function exportWriteDraft() {
       <p class="text-[11px] mts-muted" data-testid="write-prefs-hint">{{ t('writeModeRemembered') }}</p>
     </div>
 
-    <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-4">
+    <div id="write-target" class="scroll-mt-20 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-4">
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('database') }}
         <input v-model="selectedDb" list="write-db-list" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhDatabase')" />
         <datalist id="write-db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
@@ -395,7 +420,7 @@ function exportWriteDraft() {
     </div>
     <p v-if="metaHint" class="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{{ metaHint }}</p>
 
-    <div v-if="writeMode==='form'" class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+    <div id="write-body" v-if="writeMode==='form'" class="scroll-mt-20 space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div v-for="(row, idx) in formRows" :key="idx" class="rounded border border-slate-100 p-3 dark:border-slate-800">
         <div class="mb-2 flex justify-between text-xs font-medium">{{ formatMessage(t('writeRowN'), { n: idx+1 }) }}
           <button class="text-red-500" @click="removeRow(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
@@ -430,7 +455,7 @@ function exportWriteDraft() {
       <button class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300" @click="addRow"><Plus class="h-3 w-3" /> {{ t('writeAddRow') }}</button>
     </div>
 
-    <div v-else-if="writeMode==='typed'" class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+    <div id="write-body" v-else-if="writeMode==='typed'" class="scroll-mt-20 space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('writeTypedHint') }}</p>
       <div class="grid gap-3 md:grid-cols-2">
         <label class="text-xs">{{ t('measurement') }}<input v-model="typedMeasurement" class="mts-input mt-1" /></label>
@@ -463,11 +488,11 @@ function exportWriteDraft() {
       </div>
     </div>
 
-    <div v-else class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+    <div id="write-body" v-else class="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <textarea v-model="lineInput" rows="10" class="w-full rounded border border-slate-300 dark:border-slate-600 px-3 py-2 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="modeLabel" />
     </div>
 
-    <div class="flex flex-wrap items-center gap-2">
+    <div id="write-actions" class="scroll-mt-20 flex flex-wrap items-center gap-2">
       <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" data-testid="write-submit" :disabled="loading" @click="submit">
         <Send class="h-4 w-4" /> {{ loading ? t('loading') : t('writeSubmit') }}
       </button>

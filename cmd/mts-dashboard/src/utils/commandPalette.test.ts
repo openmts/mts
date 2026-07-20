@@ -68,6 +68,15 @@ test('command palette includes ops deep links for admin', () => {
     'downsample-status',
     'audit-filters',
     'audit-table',
+    'query-form',
+    'query-history',
+    'query-results',
+    'query-chart',
+    'write-mode-typed',
+    'write-mode-line',
+    'write-mode-form',
+    'write-mode-prometheus',
+    'write-actions',
   ]) {
     assert.ok(admin.some((i) => i.id === id), id)
   }
@@ -80,6 +89,15 @@ test('command palette includes ops deep links for admin', () => {
   assert.ok(filterCommandItems(admin, 'effective config', resolve).some((i) => i.id === 'config-effective'))
   assert.ok(filterCommandItems(admin, 'audit filters', resolve).some((i) => i.id === 'audit-filters'))
   assert.ok(filterCommandItems(admin, 'watermark', resolve).some((i) => i.id === 'downsample-status'))
+  assert.ok(filterCommandItems(admin, 'typed batch', resolve).some((i) => i.id === 'write-mode-typed'))
+  assert.ok(filterCommandItems(admin, 'query history', resolve).some((i) => i.id === 'query-history'))
   const user = visibleCommandItems(COMMAND_NAV_ITEMS, false)
   assert.ok(user.every((i) => !i.adminOnly))
+})
+
+test('non-admin query write deep links visible', () => {
+  const user = visibleCommandItems(COMMAND_NAV_ITEMS, false)
+  for (const id of ['query-history', 'write-mode-typed', 'write-actions']) {
+    assert.ok(user.some((i) => i.id === id), id)
+  }
 })
