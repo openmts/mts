@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseConfigPrefill, configFormToPrefill } from '@/utils/routePrefill'
 import { apiGet, apiPost, getAdminToken, setAdminToken, getDataToken, setDataToken } from '@/api/client'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
@@ -34,6 +36,7 @@ interface SchemaResponse { fields: SchemaField[] }
 useHashScroll()
 const route = useRoute()
 const { isAdmin } = useAuth()
+const { offline } = useNetworkStatus()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
 const config = ref<Record<string, unknown> | null>(null)
@@ -127,6 +130,12 @@ watch(
 )
 
 async function handleValidate() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   actionResult.value = null
   validateResult.value = null
   try {
@@ -147,6 +156,12 @@ async function handleValidate() {
 }
 
 async function handleReload() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   actionResult.value = null
   reloadResult.value = null
   try {
@@ -269,8 +284,8 @@ function statusLabel(httpStatus: number): string {
     </div>
 
     <div class="flex flex-wrap gap-3">
-      <button class="mts-btn-primary" @click="handleValidate"><CheckCircle class="h-4 w-4" />{{ t('configValidate') }}</button>
-      <button class="mts-btn-primary" @click="handleReload"><RefreshCw class="h-4 w-4" />{{ t('configReload') }}</button>
+      <button class="mts-btn-primary" data-testid="config-validate" @click="handleValidate" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined"><CheckCircle class="h-4 w-4" />{{ t('configValidate') }}</button>
+      <button class="mts-btn-primary" data-testid="config-reload" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="handleReload"><RefreshCw class="h-4 w-4" />{{ t('configReload') }}</button>
     </div>
     <div v-if="validateResult" :class="validateResult.ok ? 'mts-alert-ok' : 'mts-alert-error'">
       <p v-if="validateResult.ok">{{ t('configValidateOk') }}</p>

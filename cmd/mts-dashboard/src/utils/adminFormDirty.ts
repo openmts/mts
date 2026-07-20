@@ -82,3 +82,33 @@ export function isDownsampleCreateDraftDirty(
 export function shouldBlockLeaveAdminCreate(open: boolean, draftDirty: boolean): boolean {
   return open === true && draftDirty === true
 }
+
+export type DatabaseCreateDraft = {
+  name?: string
+}
+
+export type RetentionPolicyDraft = {
+  name?: string
+  duration?: string
+}
+
+/** 库创建输入是否相对空草稿有改动 */
+export function isDatabaseCreateDraftDirty(draft: DatabaseCreateDraft | null | undefined): boolean {
+  return nonEmpty(draft?.name)
+}
+
+/** RP 草稿是否有未提交输入 */
+export function isRetentionPolicyDraftDirty(draft: RetentionPolicyDraft | null | undefined): boolean {
+  return nonEmpty(draft?.name) || nonEmpty(draft?.duration)
+}
+
+/** 任一展开库的 RP 草稿脏 */
+export function anyRetentionPolicyDraftDirty(
+  items: Array<RetentionPolicyDraft | null | undefined> | null | undefined,
+): boolean {
+  if (!items?.length) return false
+  for (const d of items) {
+    if (isRetentionPolicyDraftDirty(d)) return true
+  }
+  return false
+}

@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import {
+  anyRetentionPolicyDraftDirty,
+  isDatabaseCreateDraftDirty,
+} from '@/utils/adminFormDirty'
+import { registerDirtyChecker } from '@/utils/routeDirty'
 import { listDatabases, listMeasurements, listRetentionPolicies, listSeriesDetailed } from '@/api/meta'
 import { seriesLabel } from '@/utils/seriesMeta'
 import { formatMessage } from '@/utils/formatMessage'
@@ -123,6 +128,9 @@ const confirmOpen = ref(false)
 const confirmDbName = ref('')
 const confirmLoading = ref(false)
 onMounted(async () => {
+  unregisterDatabasesDirty = registerDirtyChecker('databases', () => databasesFormDirty.value)
+  window.addEventListener('beforeunload', onDatabasesBeforeUnload)
+
   try {
     const names = await listDatabases()
     databases.value = names.map((name) => ({
@@ -240,6 +248,22 @@ async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
     }
   }
 }
+
+const databasesFormDirty = computed(() => {
+  if (isDatabaseCreateDraftDirty({ name: newDbName.value })) return true
+  return anyRetentionPolicyDraftDirty(
+    databases.value.map((db) => ({ name: db.newRpName, duration: db.newRpDuration })),
+  )
+})
+
+function onDatabasesBeforeUnload(e: BeforeUnloadEvent) {
+  if (!databasesFormDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+let unregisterDatabasesDirty: (() => void) | null = null
+
 async function createDatabase() {
   if (shouldBlockOfflineMutation(offline.value)) {
     const msg = t.value('offlineAdminBlocked')
@@ -428,6 +452,12 @@ function exportCSV() {
   downloadText(stampFilename('mts-databases', 'csv'), databasesToCSV(rows), 'text/csv;charset=utf-8')
   success(t.value('inventoryExported'))
 }
+
+onBeforeUnmount(() => {
+  unregisterDatabasesDirty?.()
+  unregisterDatabasesDirty = null
+  window.removeEventListener('beforeunload', onDatabasesBeforeUnload)
+})
 </script>
 <template>
   <div class="space-y-4" data-testid="databases-page">
@@ -458,6 +488,11 @@ function exportCSV() {
           <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="databases-create-btn" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="createDatabase">
             <Plus class="h-4 w-4" /> {{ t('databasesCreate') }}
           </button>
+          <span
+            v-if="databasesFormDirty"
+            data-testid="databases-dirty-badge"
+            class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+          >{{ t('adminDirtyBadge') }}</span>
         </template>
       </div>
     </div>

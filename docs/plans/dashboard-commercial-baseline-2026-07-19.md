@@ -947,3 +947,9 @@
 
 ## P198 状态（2026-07-21）
 - Users/Downsample/Databases 管理写离线门禁
+
+## P199 状态（2026-07-21）
+- Config/Storage 管理写离线门禁
+
+## P200 状态（2026-07-21）
+- Databases 创建/RP 草稿脏离开守卫

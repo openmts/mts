@@ -2,6 +2,8 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiPost, apiGet, apiDelete } from '@/api/client'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -51,6 +53,7 @@ interface ExportResponse { export: ExportData }
 
 const route = useRoute()
 const { isAdmin } = useAuth()
+const { offline } = useNetworkStatus()
 const { success, error: notifyError } = useNotify()
 const { t , locale } = useI18n()
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
@@ -148,6 +151,12 @@ watch(
 )
 
 async function doValidate() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   loading.value = 'validate'
   actionResult.value = null
   try {
@@ -164,6 +173,12 @@ async function doValidate() {
 }
 
 async function doSnapshot() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   loading.value = 'snapshot'
   actionResult.value = null
   try {
@@ -181,6 +196,12 @@ async function doSnapshot() {
 }
 
 async function doDataSnapshot() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   loading.value = 'data-snapshot'
   actionResult.value = null
   try {
@@ -199,6 +220,12 @@ async function doDataSnapshot() {
 }
 
 async function doRestoreDrill() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   loading.value = 'restore-drill'
   actionResult.value = null
   try {
@@ -281,6 +308,12 @@ function requestDelete(name: string) {
 }
 
 async function confirmDelete() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   deleteLoading.value = true
   try {
     await apiDelete(`/api/v1/admin/storage/snapshots?name=${encodeURIComponent(deleteName.value)}`)

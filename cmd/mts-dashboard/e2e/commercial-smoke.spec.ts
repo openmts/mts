@@ -819,6 +819,29 @@ test('commercial browser smoke path', async ({ page }) => {
   })
   await page.getByTestId('users-create-cancel').click()
 
+  // P200: Databases 创建草稿脏标记
+  await page.goto('/databases')
+  await expect(page.getByTestId('databases-create-input')).toBeVisible()
+  await page.getByTestId('databases-create-input').fill('draft-db-e2e')
+  await expect(page.getByTestId('databases-dirty-badge')).toBeVisible()
+  await page.getByTestId('databases-create-input').fill('')
+  await expect(page.getByTestId('databases-dirty-badge')).toHaveCount(0)
+
+  // P199: Config offline 时 validate/reload disabled
+  await page.goto('/config')
+  await expect(page.getByTestId('config-page')).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('offline-banner')).toBeVisible()
+  await expect(page.getByTestId('config-validate')).toBeDisabled()
+  await expect(page.getByTestId('config-reload')).toBeDisabled()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+
   await page.keyboard.press('Control+Shift+KeyH')
   await expect(page.getByTestId('notify-history-panel')).toBeVisible()
   await page.keyboard.press('Escape')

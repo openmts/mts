@@ -1,8 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  anyRetentionPolicyDraftDirty,
+  isDatabaseCreateDraftDirty,
   isDownsampleCreateDraftDirty,
   isPasswordDraftDirty,
+  isRetentionPolicyDraftDirty,
   isUserCreateDraftDirty,
   shouldBlockLeaveAdminCreate,
 } from './adminFormDirty.ts'
@@ -40,4 +43,14 @@ test('shouldBlockLeaveAdminCreate', () => {
   assert.equal(shouldBlockLeaveAdminCreate(true, true), true)
   assert.equal(shouldBlockLeaveAdminCreate(true, false), false)
   assert.equal(shouldBlockLeaveAdminCreate(false, true), false)
+})
+
+test('database create and RP drafts', () => {
+  assert.equal(isDatabaseCreateDraftDirty({ name: '' }), false)
+  assert.equal(isDatabaseCreateDraftDirty({ name: 'metrics' }), true)
+  assert.equal(isRetentionPolicyDraftDirty({ name: '', duration: '' }), false)
+  assert.equal(isRetentionPolicyDraftDirty({ name: 'rp', duration: '' }), true)
+  assert.equal(isRetentionPolicyDraftDirty({ name: '', duration: '7d' }), true)
+  assert.equal(anyRetentionPolicyDraftDirty([{ name: '' }, { name: 'x', duration: '1d' }]), true)
+  assert.equal(anyRetentionPolicyDraftDirty([{ name: '', duration: '' }]), false)
 })
