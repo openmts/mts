@@ -11,6 +11,9 @@ import {
   filterCommandItems,
   flattenCommandGroups,
   groupCommandItems,
+  collapseNavItemsForEmptyQuery,
+  applyEmptyQueryNavCollapse,
+  isCommandDeepLink,
   isCommandAction,
   matchCommandPaletteOpen,
   moveCommandActiveIndex,
@@ -162,3 +165,34 @@ test('moveCommandActiveIndex and index map', () => {
   assert.equal(commandListKeyFromEvent({ key: 'ArrowDown' } as KeyboardEvent), 'next')
   assert.equal(commandListKeyFromEvent({ key: 'x' } as KeyboardEvent), 'none')
 })
+
+test('empty query nav collapse', () => {
+  const all = allVisibleCommandItems(true)
+  const groups = groupCommandItems(all)
+  const nav = groups.find((g) => g.id === 'nav')!
+  assert.ok(nav.items.some((i) => isCommandDeepLink(i)))
+  const collapsed = collapseNavItemsForEmptyQuery(nav.items, false)
+  assert.ok(collapsed.hiddenCount > 0)
+  assert.ok(collapsed.items.every((i) => !isCommandDeepLink(i)))
+  assert.ok(collapsed.items.some((i) => i.id === 'query'))
+  const expanded = collapseNavItemsForEmptyQuery(nav.items, true)
+  assert.equal(expanded.hiddenCount, 0)
+  assert.ok(expanded.deepLinkCount > 0)
+  assert.equal(expanded.items.length, nav.items.length)
+
+  const applied = applyEmptyQueryNavCollapse(groups, false)
+  assert.ok(applied.navHiddenCount > 0)
+  assert.ok(applied.navDeepLinkCount > 0)
+  const appliedOpen = applyEmptyQueryNavCollapse(groups, true)
+  assert.equal(appliedOpen.navHiddenCount, 0)
+  assert.equal(appliedOpen.navDeepLinkCount, applied.navDeepLinkCount)
+  const flat = flattenCommandGroups(applied.groups)
+  assert.ok(flat.every((i) => isCommandAction(i) || !isCommandDeepLink(i)))
+  assert.ok(flat.some((i) => i.id === 'action-toggle-theme'))
+
+  const withQuery = filterCommandItems(all, 'flush', (k) => k)
+  const qGroups = groupCommandItems(withQuery)
+  // 有查询时 UI 不折叠；纯函数仍可折叠但 caller 只在 empty query 调用
+  assert.ok(qGroups.some((g) => g.items.some((i) => i.id === 'operations-flush')))
+})
+

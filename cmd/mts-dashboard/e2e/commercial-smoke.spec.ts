@@ -361,6 +361,16 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-palette')).toBeVisible()
   await expect(page.getByTestId('command-palette-group-nav')).toBeVisible()
   await expect(page.getByTestId('command-palette-group-action')).toBeVisible()
+  await expect(page.getByTestId('command-palette-group-nav-count')).toBeVisible()
+  await expect(page.getByTestId('command-palette-group-action-count')).toBeVisible()
+  // P108: 空查询默认折叠深链导航
+  await expect(page.getByTestId('command-palette-nav-expand')).toBeVisible()
+  await expect(page.getByTestId('command-item-query')).toBeVisible()
+  await expect(page.getByTestId('command-item-query-history')).toHaveCount(0)
+  await page.getByTestId('command-palette-nav-expand').click()
+  await expect(page.getByTestId('command-item-query-history')).toBeVisible()
+  await page.getByTestId('command-palette-nav-expand').click()
+  await expect(page.getByTestId('command-item-query-history')).toHaveCount(0)
   // P105: Home/End 跨组键盘定位
   await page.keyboard.press('End')
   await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveAttribute('data-testid', /command-item-action-/)

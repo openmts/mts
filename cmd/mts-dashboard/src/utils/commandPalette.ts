@@ -350,6 +350,49 @@ export function flattenCommandGroups(groups: readonly CommandItemGroup[]): Comma
   return out
 }
 
+/** 导航深链（hash 锚点）；动作项恒为 false */
+export function isCommandDeepLink(item: CommandNavItem): boolean {
+  if (isCommandAction(item)) return false
+  return item.path.includes('#')
+}
+
+/**
+ * 空查询时折叠导航：默认只保留主路由，隐藏 hash 深链。
+ * deepLinkCount 始终统计深链数，便于展开后仍显示「收起」。
+ */
+export function collapseNavItemsForEmptyQuery(
+  items: readonly CommandNavItem[],
+  expanded: boolean,
+): { items: CommandNavItem[]; hiddenCount: number; deepLinkCount: number } {
+  const deepLinkCount = items.reduce((n, i) => n + (isCommandDeepLink(i) ? 1 : 0), 0)
+  if (expanded || !deepLinkCount) {
+    return { items: items.slice(), hiddenCount: 0, deepLinkCount }
+  }
+  const primary = items.filter((i) => !isCommandDeepLink(i))
+  return { items: primary, hiddenCount: deepLinkCount, deepLinkCount }
+}
+
+/** 对分组结果应用空查询导航折叠；非 nav 组不动 */
+export function applyEmptyQueryNavCollapse(
+  groups: readonly CommandItemGroup[],
+  navExpanded: boolean,
+): { groups: CommandItemGroup[]; navHiddenCount: number; navDeepLinkCount: number } {
+  let navHiddenCount = 0
+  let navDeepLinkCount = 0
+  const out: CommandItemGroup[] = []
+  for (const g of groups) {
+    if (g.id !== 'nav') {
+      out.push({ ...g, items: g.items.slice() })
+      continue
+    }
+    const collapsed = collapseNavItemsForEmptyQuery(g.items, navExpanded)
+    navHiddenCount = collapsed.hiddenCount
+    navDeepLinkCount = collapsed.deepLinkCount
+    out.push({ ...g, items: collapsed.items })
+  }
+  return { groups: out, navHiddenCount, navDeepLinkCount }
+}
+
 export function filterCommandItems(
   items: CommandNavItem[],
   query: string,

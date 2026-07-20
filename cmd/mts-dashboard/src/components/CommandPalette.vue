@@ -9,6 +9,7 @@ import {
   allVisibleCommandItems,
   commandItemIndexMap,
   commandListKeyFromEvent,
+  applyEmptyQueryNavCollapse,
   filterCommandItems,
   flattenCommandGroups,
   groupCommandItems,
@@ -25,10 +26,12 @@ import { resolveRouteTitleKey } from '@/utils/pageTitle'
 import { useTheme } from '@/composables/useTheme'
 import { useDensity } from '@/composables/useDensity'
 import { useNotify } from '@/composables/useNotify'
+import { formatMessage } from '@/utils/formatMessage'
 import { Search, Command, History, Zap } from 'lucide-vue-next'
 
 const open = ref(false)
 const query = ref('')
+const navExpanded = ref(false)
 const activeIndex = ref(0)
 const panelRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLInputElement | null>(null)
@@ -52,10 +55,31 @@ const filteredItems = computed(() => {
   return filterCommandItems(base, query.value, (key) => t.value(key as MessageKey) || key)
 })
 
-const itemGroups = computed(() => groupCommandItems(filteredItems.value))
+const emptyQuery = computed(() => !query.value.trim())
+
+const collapsedView = computed(() => {
+  const groups = groupCommandItems(filteredItems.value)
+  if (!emptyQuery.value) {
+    return { groups, navHiddenCount: 0, navDeepLinkCount: 0 }
+  }
+  return applyEmptyQueryNavCollapse(groups, navExpanded.value)
+})
+
+const itemGroups = computed(() => collapsedView.value.groups)
+const navHiddenCount = computed(() => collapsedView.value.navHiddenCount)
+const navDeepLinkCount = computed(() => collapsedView.value.navDeepLinkCount)
 
 /** 键盘/选中索引用的扁平列表：导航在前、动作在后 */
 const items = computed(() => flattenCommandGroups(itemGroups.value))
+
+function groupCountLabel(count: number): string {
+  return String(count)
+}
+
+function expandNavLabel(): string {
+  const n = navHiddenCount.value || navDeepLinkCount.value
+  return formatMessage(t.value('commandPaletteNavExpand'), { count: n })
+}
 
 const itemIndexById = computed(() => commandItemIndexMap(items.value))
 
@@ -91,6 +115,7 @@ function goRecent(path: string) {
 function openPalette() {
   open.value = true
   query.value = ''
+  navExpanded.value = false
   activeIndex.value = 0
   void nextTick(() => {
     if (panelRef.value) {
@@ -106,6 +131,7 @@ function openPalette() {
 function closePalette() {
   open.value = false
   query.value = ''
+  navExpanded.value = false
   activeIndex.value = 0
   trap?.release()
   trap = null
@@ -182,6 +208,11 @@ function onGlobalKey(e: KeyboardEvent) {
     if (item) go(item)
   }
 }
+
+watch(query, () => {
+  if (!query.value.trim()) navExpanded.value = false
+  activeIndex.value = 0
+})
 
 watch(items, (list) => {
   if (activeIndex.value >= list.length) activeIndex.value = 0
@@ -275,11 +306,22 @@ defineExpose({ openPalette, closePalette, open })
           </li>
           <template v-for="group in itemGroups" :key="group.id">
             <li
-              class="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide mts-muted"
+              class="flex items-center justify-between gap-2 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide mts-muted"
               role="presentation"
               :data-testid="`command-palette-group-${group.id}`"
             >
-              {{ t(group.labelKey as MessageKey) }}
+              <span class="inline-flex items-center gap-1.5">
+                <span
+                  class="inline-block h-1.5 w-1.5 rounded-full"
+                  :class="group.id === 'action' ? 'bg-amber-400' : 'bg-sky-400'"
+                  aria-hidden="true"
+                />
+                {{ t(group.labelKey as MessageKey) }}
+              </span>
+              <span
+                class="rounded-full bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                :data-testid="`command-palette-group-${group.id}-count`"
+              >{{ groupCountLabel(group.items.length) }}</span>
             </li>
             <li
               v-for="item in group.items"
@@ -303,6 +345,20 @@ defineExpose({ openPalette, closePalette, open })
                 class="shrink-0 font-mono text-[11px]"
                 :class="flatIndexOf(item) === activeIndex ? 'opacity-80' : 'mts-muted'"
               >{{ isCommandAction(item) ? t('commandPaletteActionBadge') : item.path }}</span>
+            </li>
+            <li
+              v-if="group.id === 'nav' && emptyQuery && navDeepLinkCount > 0"
+              class="px-2 py-1"
+              role="presentation"
+            >
+              <button
+                type="button"
+                class="mts-focus-ring w-full rounded-lg border border-dashed border-slate-200 px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                data-testid="command-palette-nav-expand"
+                @click="navExpanded = !navExpanded; activeIndex = 0"
+              >
+                {{ navExpanded ? t('commandPaletteNavCollapse') : expandNavLabel() }}
+              </button>
             </li>
           </template>
         </ul>
