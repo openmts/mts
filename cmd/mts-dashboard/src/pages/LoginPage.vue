@@ -7,15 +7,24 @@ import { sanitizeRedirect } from '@/router'
 import { loginReasonMessage } from '@/utils/authReason'
 import { parseLoginTTLSeconds } from '@/utils/loginTTL'
 import { loadLoginTTLPref, saveLoginTTLPref } from '@/utils/loginTTLPrefs'
-import { Server } from 'lucide-vue-next'
+import {
+  clearLoginUsernamePref,
+  loadLoginUsernamePref,
+  saveLoginUsernamePref,
+} from '@/utils/loginUsernamePrefs'
+import { Eye, EyeOff, Server } from 'lucide-vue-next'
 
 const router = useRouter()
 const { login, mustChangePassword } = useAuth()
 const { t, locale } = useI18n()
 
-const username = ref('admin')
+const storage = typeof localStorage !== 'undefined' ? localStorage : null
+const remembered = loadLoginUsernamePref(storage)
+const username = ref(remembered || 'admin')
 const password = ref('')
-const ttlSeconds = ref(loadLoginTTLPref(typeof localStorage !== 'undefined' ? localStorage : null))
+const showPassword = ref(false)
+const rememberUsername = ref(!!remembered)
+const ttlSeconds = ref(loadLoginTTLPref(storage))
 const loading = ref(false)
 const error = ref('')
 const reasonHint = computed(() =>
@@ -44,10 +53,12 @@ async function handleLogin() {
     if (err) {
       error.value = err
     } else {
-      saveLoginTTLPref(
-        typeof localStorage !== 'undefined' ? localStorage : null,
-        ttlSeconds.value,
-      )
+      saveLoginTTLPref(storage, ttlSeconds.value)
+      if (rememberUsername.value) {
+        saveLoginUsernamePref(storage, username.value)
+      } else {
+        clearLoginUsernamePref(storage)
+      }
       if (mustChangePassword.value) {
         await router.push({ name: 'ForceChangePassword' })
         return
@@ -100,19 +111,43 @@ async function handleLogin() {
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200" for="password">{{ t('password') }}</label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            name="password"
-            autocomplete="current-password"
-            class="mts-input mts-focus-ring"
-            data-testid="login-password"
-            :placeholder="t('loginPasswordPlaceholder')"
-            :aria-invalid="invalid ? 'true' : undefined"
-            :aria-describedby="error ? 'login-error' : undefined"
-          />
+          <div class="relative">
+            <input
+              id="password"
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              name="password"
+              autocomplete="current-password"
+              class="mts-input mts-focus-ring pr-10"
+              data-testid="login-password"
+              :placeholder="t('loginPasswordPlaceholder')"
+              :aria-invalid="invalid ? 'true' : undefined"
+              :aria-describedby="error ? 'login-error' : undefined"
+            />
+            <button
+              type="button"
+              class="mts-focus-ring absolute inset-y-0 right-1 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              data-testid="login-toggle-password"
+              :aria-label="showPassword ? t('loginHidePassword') : t('loginShowPassword')"
+              :title="showPassword ? t('loginHidePassword') : t('loginShowPassword')"
+              :aria-pressed="showPassword ? 'true' : 'false'"
+              @click="showPassword = !showPassword"
+            >
+              <EyeOff v-if="showPassword" class="h-4 w-4" aria-hidden="true" />
+              <Eye v-else class="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
+
+        <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+          <input
+            v-model="rememberUsername"
+            type="checkbox"
+            class="rounded border-slate-300"
+            data-testid="login-remember-user"
+          />
+          {{ t('loginRememberUser') }}
+        </label>
 
         <div>
           <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="ttl">{{ t('loginTTLLabel') }}</label>
@@ -143,16 +178,16 @@ async function handleLogin() {
 
         <button
           type="submit"
-          :disabled="loading"
           class="mts-focus-ring w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
           data-testid="login-submit"
+          :disabled="loading"
           :aria-busy="loading ? 'true' : undefined"
         >
           {{ loading ? t('loggingIn') : t('login') }}
         </button>
       </form>
 
-      <div class="mt-5 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
+      <div class="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
         <p class="font-medium text-slate-600 dark:text-slate-300">{{ t('loginDefaultPolicy') }}</p>
         <p class="mt-1">{{ t('loginDefaultHint') }}</p>
       </div>

@@ -863,6 +863,11 @@ export const messages = {
     passwordHintNotDefault: '不能使用默认密码 admin',
     passwordHintDiffOld: '不能与旧密码相同',
     passwordHintConfirmMatch: '两次新密码一致',
+    loginShowPassword: '显示密码',
+    loginHidePassword: '隐藏密码',
+    loginRememberUser: '记住用户名',
+    breadcrumbCopyPath: '复制路径',
+    breadcrumbPathCopied: '路径已复制',
     apiSpecNamespace: '命名空间',
 
     configExportEffective: '导出生效配置',
@@ -1799,6 +1804,11 @@ export const messages = {
     passwordHintNotDefault: 'Cannot use default password admin',
     passwordHintDiffOld: 'Must differ from old password',
     passwordHintConfirmMatch: 'New passwords match',
+    loginShowPassword: 'Show password',
+    loginHidePassword: 'Hide password',
+    loginRememberUser: 'Remember username',
+    breadcrumbCopyPath: 'Copy path',
+    breadcrumbPathCopied: 'Path copied',
     apiSpecNamespace: 'Namespace',
 
     configExportEffective: 'Export effective config',

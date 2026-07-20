@@ -15,6 +15,8 @@ test.describe.configure({ mode: 'serial' })
 test('commercial browser smoke path', async ({ page }) => {
   // 0) 登录表单校验：空密码 -> alert 错误区
   await page.goto('/login')
+  await expect(page.getByTestId('login-toggle-password')).toBeVisible()
+  await expect(page.getByTestId('login-remember-user')).toBeVisible()
   await page.getByTestId('login-username').fill('admin')
   await page.getByTestId('login-password').fill('')
   await page.getByTestId('login-submit').click()
@@ -79,6 +81,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('query-page')).toBeVisible()
   await expect(page.getByTestId('breadcrumb-bar')).toBeVisible()
   await expect(page.getByTestId('breadcrumb-current')).toBeVisible()
+  await expect(page.getByTestId('breadcrumb-copy-path')).toBeVisible()
   await expect(page.getByRole('main').getByText(/查询|Query/i).first()).toBeVisible()
   await expect(page.getByRole('main').getByText(/数据库|Database/).first()).toBeVisible()
   await expect(page.getByRole('main').getByText(/开始时间|Start/).first()).toBeVisible()

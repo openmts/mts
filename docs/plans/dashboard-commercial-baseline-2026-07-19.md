@@ -430,3 +430,9 @@
 - 侧栏折叠记忆、面包屑导航、改密策略分项实时提示
 - 商业冒烟覆盖 sidebar-collapse / breadcrumb / password-hints
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P86 状态（2026-07-20）
+- 登录密码显隐、记住用户名；面包屑复制路径
+- 商业冒烟覆盖 login-toggle/remember 与 breadcrumb-copy
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
