@@ -153,13 +153,6 @@ watch(limit, () => {
   void loadAudit()
 })
 
-function auditEventUnix(e: AuditEvent): number | undefined {
-  const raw = e.time
-  if (!raw) return undefined
-  const ms = Date.parse(String(raw))
-  if (Number.isNaN(ms)) return undefined
-  return Math.floor(ms / 1000)
-}
 
 function toUnix(local: string): number | undefined {
   if (!local) return undefined
@@ -181,24 +174,18 @@ async function loadAudit() {
         return
       }
       selectedUser.value = name
-      const data = await apiGet<AuditResponse>(`/api/v1/users/${encodeURIComponent(name)}/audit`)
-      let events = data.events ?? []
-      // 客户端按 action / 时间粗过滤（user audit 端点无 qs）
-      const action = actionFilter.value.trim().toLowerCase()
-      if (action) events = events.filter((e) => String(e.action || '').toLowerCase().includes(action))
       const since = toUnix(sinceLocal.value)
       const until = toUnix(untilLocal.value)
-      if (since != null) events = events.filter((e) => {
-        const ts = auditEventUnix(e)
-        return ts != null && ts >= since
+      const qs = buildAuditQueryString({
+        action: actionFilter.value,
+        sinceUnix: since,
+        untilUnix: until,
+        limit: limit.value,
       })
-      if (until != null) events = events.filter((e) => {
-        const ts = auditEventUnix(e)
-        return ts != null && ts <= until
-      })
-      if (limit.value > 0) events = events.slice(0, limit.value)
-      auditEvents.value = events
-      serverTotal.value = events.length
+      // 自身审计：服务端 action/since/until/limit；user_name 由路径固定
+      const data = await apiGet<AuditResponse>(`/api/v1/users/${encodeURIComponent(name)}/audit?${qs}`)
+      auditEvents.value = data.events ?? []
+      serverTotal.value = (data.events ?? []).length
       clearSelection()
       return
     }

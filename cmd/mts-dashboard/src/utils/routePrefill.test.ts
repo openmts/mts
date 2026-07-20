@@ -92,3 +92,25 @@ test('query prefill supports tags/fields and share helper', () => {
     '/query?database=m&measurement=cpu&tags=host%3Da#query-form',
   )
 })
+
+test('query prefill absolute start/end preferred over range', () => {
+  const path = queryFormToPrefill({
+    database: 'm',
+    measurement: 'cpu',
+    start_time: '1700000000000',
+    end_time: '1700003600000',
+  })
+  assert.match(path, /start_time=1700000000000/)
+  assert.match(path, /end_time=1700003600000/)
+  assert.doesNotMatch(path, /range=/)
+  const parsed = parseQueryPrefill({
+    range: '1h',
+    start_time: '1700000000000',
+    end_time: '1700003600000',
+    database: 'm',
+  })
+  assert.equal(parsed.start_time, '1700000000000')
+  assert.equal(parsed.end_time, '1700003600000')
+  assert.equal(parsed.range, undefined)
+  assert.equal(parsed.database, 'm')
+})

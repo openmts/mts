@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	mts "github.com/openmts/mts"
@@ -214,7 +215,28 @@ func (r *serverRuntime) handleUserAudit(writer http.ResponseWriter, request *htt
 			return
 		}
 	}
-	writeHTTPJSON(writer, http.StatusOK, userAuditResponse{Events: r.audit.list(userName)})
+	req := auditListRequest{UserName: strings.TrimSpace(userName)}
+	q := request.URL.Query()
+	if v := strings.TrimSpace(q.Get("action")); v != "" {
+		req.Action = v
+	}
+	if v := q.Get("since_unix"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			req.SinceUnix = n
+		}
+	}
+	if v := q.Get("until_unix"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			req.UntilUnix = n
+		}
+	}
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			req.Limit = n
+		}
+	}
+	events := r.audit.listFiltered(req)
+	writeHTTPJSON(writer, http.StatusOK, userAuditResponse{Events: events})
 }
 
 func (r *serverRuntime) handleAuthzDatabaseCheck(writer http.ResponseWriter, request *http.Request) {

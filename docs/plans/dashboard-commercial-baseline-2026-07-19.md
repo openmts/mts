@@ -855,3 +855,12 @@
 
 ## P167 状态（2026-07-21）
 - 库页 series 行一键跳转 Query（tags 预填）
+
+## P168 状态（2026-07-21）
+- Query 分享链接写入绝对 start_time/end_time（优先于 range）
+
+## P169 状态（2026-07-21）
+- 自身审计 API 支持 action/since_unix/until_unix/limit 服务端过滤
+
+## P170 状态（2026-07-21）
+- 非 admin Overview 工作区增加审计入口

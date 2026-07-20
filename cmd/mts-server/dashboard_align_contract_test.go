@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -265,4 +266,16 @@ func TestHTTPUserSelfAudit(t *testing.T) {
 	// 不能读他人
 	seedUserWithPassword(t, runtime, mts.User{Name: "audit-other", Role: mts.UserRoleUser}, "secret")
 	getJSONWithHeaders(t, server.URL+"/api/v1/users/audit-other/audit", headers, http.StatusForbidden, &errorResponse{})
+
+	// 自身审计支持 action/limit 查询参数（服务端过滤）
+	var filtered userAuditResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/users/audit-self/audit?action=login&limit=10", headers, http.StatusOK, &filtered)
+	for _, ev := range filtered.Events {
+		if ev.Action == "" {
+			t.Fatalf("empty action in filtered audit")
+		}
+		if !strings.Contains(ev.Action, "login") {
+			t.Fatalf("action %q not filtered by login", ev.Action)
+		}
+	}
 }

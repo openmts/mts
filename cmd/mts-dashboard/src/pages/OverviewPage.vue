@@ -771,6 +771,9 @@ async function copyOverview() {
         <button type="button" class="mts-btn" data-testid="overview-go-access" @click="router.push('/access')">
           {{ t('accessMatrix') }}
         </button>
+        <button type="button" class="mts-btn" data-testid="overview-go-audit" @click="router.push('/audit')">
+          {{ t('audit') }}
+        </button>
         <button type="button" class="mts-btn" data-testid="overview-go-account" @click="router.push('/account')">
           {{ t('account') }}
         </button>

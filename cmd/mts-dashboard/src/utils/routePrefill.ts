@@ -30,6 +30,8 @@ export function timeRangeToQueryFormTimes(
 
 export type QueryPrefill = {
   range?: PrefillTimeRange
+  start_time?: string
+  end_time?: string
   database?: string
   measurement?: string
   retention_policy?: string
@@ -50,6 +52,12 @@ export function parseQueryPrefill(
   const out: QueryPrefill = {}
   const rangeRaw = firstQueryValue(query.range)
   if (isPrefillTimeRange(rangeRaw)) out.range = rangeRaw
+  const startTime = firstQueryValue(query.start_time ?? query.start)
+  if (startTime && isEpochMsString(startTime)) out.start_time = startTime
+  const endTime = firstQueryValue(query.end_time ?? query.end)
+  if (endTime && isEpochMsString(endTime)) out.end_time = endTime
+  // 同时有 range 与绝对时间时，绝对时间优先（分享可复现）
+  if (out.start_time || out.end_time) delete out.range
   const database = firstQueryValue(query.database ?? query.db)
   if (database) out.database = database
   const measurement = firstQueryValue(query.measurement ?? query.meas)
@@ -93,7 +101,15 @@ export function parseAuditPrefill(
 
 export function buildQueryPrefillPath(opts: QueryPrefill & { hash?: string }): string {
   const params = new URLSearchParams()
-  if (opts.range) params.set('range', opts.range)
+  const start = opts.start_time?.trim()
+  const end = opts.end_time?.trim()
+  const hasAbs = Boolean(start && isEpochMsString(start)) || Boolean(end && isEpochMsString(end))
+  if (hasAbs) {
+    if (start && isEpochMsString(start)) params.set('start_time', start)
+    if (end && isEpochMsString(end)) params.set('end_time', end)
+  } else if (opts.range) {
+    params.set('range', opts.range)
+  }
   if (opts.database) params.set('database', opts.database)
   if (opts.measurement) params.set('measurement', opts.measurement)
   if (opts.retention_policy) params.set('retention_policy', opts.retention_policy)
@@ -126,8 +142,14 @@ export function queryFormToPrefill(form: {
   start_time?: string
   end_time?: string
 }, opts?: { range?: PrefillTimeRange; hash?: string }): string {
+  const start = form.start_time?.trim()
+  const end = form.end_time?.trim()
+  const absStart = start && isEpochMsString(start) ? start : undefined
+  const absEnd = end && isEpochMsString(end) ? end : undefined
   return buildQueryPrefillPath({
-    range: opts?.range,
+    range: absStart || absEnd ? undefined : opts?.range,
+    start_time: absStart,
+    end_time: absEnd,
     database: form.database?.trim() || undefined,
     measurement: form.measurement?.trim() || undefined,
     retention_policy: form.retention_policy?.trim() || undefined,
@@ -158,6 +180,16 @@ export function buildAuditPrefillPath(opts: {
   const qs = params.toString()
   const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#audit-filters'
   return qs ? `/audit?${qs}${hash}` : `/audit${hash}`
+}
+
+/** 查询表单 epoch 毫秒字符串（纯数字，合理时间窗） */
+export function isEpochMsString(v: string): boolean {
+  const s = v.trim()
+  if (!/^-?\d{10,16}$/.test(s)) return false
+  const n = Number(s)
+  if (!Number.isFinite(n)) return false
+  // 允许 2001-01 至 2100 附近（ms 或 sec 误传时 10 位秒也接受为合法数字，表单约定 ms）
+  return Math.abs(n) >= 1_000_000_000
 }
 
 function firstQueryValue(v: unknown): string | undefined {

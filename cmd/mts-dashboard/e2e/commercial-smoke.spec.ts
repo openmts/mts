@@ -1005,6 +1005,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-workspace-panel')).toBeVisible()
   await expect(page.getByTestId('overview-go-query')).toBeVisible()
   await expect(page.getByTestId('overview-go-databases')).toBeVisible()
+  await expect(page.getByTestId('overview-go-audit')).toBeVisible()
   await page.getByTestId('overview-go-databases').click()
   await expect(page).toHaveURL(/\/databases/)
   await page.goto('/databases')

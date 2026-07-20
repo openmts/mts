@@ -90,7 +90,16 @@ function applyQueryHash(hash?: string | null) {
 function applyQueryPrefillFromRoute() {
   const pre = parseQueryPrefill(route.query as Record<string, unknown>)
   let changed = false
-  if (pre.range) {
+  if (pre.start_time || pre.end_time) {
+    if (pre.start_time && queryForm.value.start_time !== pre.start_time) {
+      queryForm.value.start_time = pre.start_time
+      changed = true
+    }
+    if (pre.end_time && queryForm.value.end_time !== pre.end_time) {
+      queryForm.value.end_time = pre.end_time
+      changed = true
+    }
+  } else if (pre.range) {
     const times = timeRangeToQueryFormTimes(pre.range)
     if (queryForm.value.start_time !== times.start_time || queryForm.value.end_time !== times.end_time) {
       queryForm.value.start_time = times.start_time
