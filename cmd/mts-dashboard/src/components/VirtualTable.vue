@@ -50,6 +50,7 @@ onBeforeUnmount(() => {
   <div
     ref="scroller"
     class="relative w-full overflow-auto"
+    role="list"
     :style="{ height: height + 'px' }"
   >
     <div :style="{ height: innerHeight + 'px', position: 'relative' }">

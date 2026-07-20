@@ -329,6 +329,16 @@ test('commercial browser smoke path', async ({ page }) => {
   // P112: Audit 多选/排序入口（空表也可验证控件）
   await expect(page.getByTestId('audit-selection-toolbar')).toBeVisible()
   await expect(page.getByTestId('audit-select-all')).toBeVisible()
+  await expect(page.getByTestId('audit-table')).toBeVisible()
+  await expect(page.getByTestId('audit-table-header')).toBeVisible()
+  // 空结果时空状态；有事件时虚拟列表
+  const emptyBody = page.getByTestId('audit-empty-body')
+  if (await emptyBody.count()) {
+    await expect(emptyBody).toBeVisible()
+  } else {
+    await expect(page.getByTestId('audit-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('audit-virtual-hint')).toBeVisible()
+  }
   await expect(page.getByTestId('audit-sort-time')).toBeVisible()
   await page.getByTestId('audit-sort-time').click()
   await expect.poll(async () => page.evaluate(() => localStorage.getItem('mts.dashboard.audit-sort.prefs.v1'))).toBeTruthy()

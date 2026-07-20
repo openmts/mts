@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
@@ -83,8 +84,20 @@ const displayedEvents = computed(() =>
   }),
 )
 
+/** 带稳定序号，供虚拟列表与选择 id 复用 */
+const displayedRows = computed(() =>
+  displayedEvents.value.map((evt, idx) => ({
+    evt,
+    idx,
+    id: auditRowId(evt, idx),
+  })),
+)
+
+const AUDIT_ROW_HEIGHT = 44
+const AUDIT_LIST_HEIGHT = 448
+
 const visibleAuditIds = computed(() =>
-  displayedEvents.value.map((e, i) => auditRowId(e, i)),
+  displayedRows.value.map((r) => r.id),
 )
 const {
   selectedCount,
@@ -110,9 +123,9 @@ function auditSortIndicator(key: AuditSortKey): string {
 }
 
 function rowsForExport(): AuditEvent[] {
-  const withId = displayedEvents.value.map((e, i) => ({ row: e, id: auditRowId(e, i) }))
-  const picked = filterRowsByIds(withId, exportIds.value, (r) => r.id)
-  return picked.map((r) => r.row)
+  const withId = displayedRows.value.map((r) => ({ row: r.evt, id: r.id }))
+  const picked = filterRowsByIds(withId, exportIds.value, (x) => x.id)
+  return picked.map((x) => x.row)
 }
 
 const quickRanges: { id: AuditQuickRange; labelKey: MessageKey }[] = [
@@ -366,86 +379,103 @@ watch(
           <span class="text-[11px]" data-testid="audit-merged-hint">{{ t('auditMergedHint') }}</span>
         </span>
       </div>
-      <div v-if="!displayedEvents.length">
-        <EmptyState
-          v-if="loading"
-          compact
-          :title="t('loading')"
-          :description="t('auditLoadingDesc')"
-        />
-        <EmptyState
-          v-else
-          :title="t('auditEmptyTitle')"
-          :description="t('auditEmptyDesc')"
+      <div class="overflow-x-auto px-2 pb-2 pt-1 sm:px-3">
+        <div
+          id="audit-table"
+          class="scroll-mt-20 overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800"
+          data-testid="audit-table"
         >
-          <template #action>
-            <button type="button" class="mts-btn-primary" :disabled="loading" @click="loadAudit">{{ t('refresh') }}</button>
-          </template>
-        </EmptyState>
-      </div>
-      <div v-else class="overflow-x-auto">
-        <div class="mts-table-wrap max-h-[28rem] overflow-auto">
-        <table id="audit-table" class="scroll-mt-20 w-full text-sm" data-testid="audit-table">
-          <thead>
-            <tr class="border-b border-slate-200 text-left dark:border-slate-700">
-              <th class="sticky top-0 z-[1] w-10 bg-white px-3 py-3 dark:bg-slate-900">
-                <input
-                  type="checkbox"
-                  class="h-3.5 w-3.5"
-                  data-testid="audit-select-all-checkbox"
-                  :checked="allVisibleSelected"
-                  :indeterminate.prop="someVisibleSelected"
-                  :aria-label="t('listSelectAll')"
-                  @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
-                />
-              </th>
-              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">
-                <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-time-col" @click="cycleAuditSort('time')">
-                  {{ t('auditColTime') }} <span aria-hidden="true">{{ auditSortIndicator('time') }}</span>
-                </button>
-              </th>
-              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">
-                <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-user-col" @click="cycleAuditSort('user')">
-                  {{ t('user') }} <span aria-hidden="true">{{ auditSortIndicator('user') }}</span>
-                </button>
-              </th>
-              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">
-                <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-action-col" @click="cycleAuditSort('action')">
-                  {{ t('action') }} <span aria-hidden="true">{{ auditSortIndicator('action') }}</span>
-                </button>
-              </th>
-              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">
-                <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-database-col" @click="cycleAuditSort('database')">
-                  {{ t('database') }} <span aria-hidden="true">{{ auditSortIndicator('database') }}</span>
-                </button>
-              </th>
-              <th class="sticky top-0 z-[1] bg-white px-4 py-3 text-xs font-medium mts-muted dark:bg-slate-900">{{ t('auditColDetail') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(evt, idx) in displayedEvents"
-              :key="auditRowId(evt, idx)"
-              class="border-b border-slate-100 last:border-b-0 dark:border-slate-800"
+          <div
+            class="grid grid-cols-[2.5rem_minmax(9rem,1.1fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1.4fr)] gap-0 border-b border-slate-100 bg-white text-left dark:border-slate-800 dark:bg-slate-900"
+            data-testid="audit-table-header"
+          >
+            <div class="sticky top-0 z-[1] px-3 py-3">
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5"
+                data-testid="audit-select-all-checkbox"
+                :checked="allVisibleSelected"
+                :indeterminate.prop="someVisibleSelected && !allVisibleSelected"
+                :aria-label="t('listSelectAll')"
+                @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
+              />
+            </div>
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-time-col" @click="cycleAuditSort('time')">
+                {{ t('auditColTime') }} <span aria-hidden="true">{{ auditSortIndicator('time') }}</span>
+              </button>
+            </div>
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-user-col" @click="cycleAuditSort('user')">
+                {{ t('user') }} <span aria-hidden="true">{{ auditSortIndicator('user') }}</span>
+              </button>
+            </div>
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-action-col" @click="cycleAuditSort('action')">
+                {{ t('action') }} <span aria-hidden="true">{{ auditSortIndicator('action') }}</span>
+              </button>
+            </div>
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-database-col" @click="cycleAuditSort('database')">
+                {{ t('database') }} <span aria-hidden="true">{{ auditSortIndicator('database') }}</span>
+              </button>
+            </div>
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">{{ t('auditColDetail') }}</div>
+          </div>
+          <div v-if="!displayedEvents.length" data-testid="audit-empty-body">
+            <EmptyState
+              v-if="loading"
+              compact
+              :title="t('loading')"
+              :description="t('auditLoadingDesc')"
+            />
+            <EmptyState
+              v-else
+              :title="t('auditEmptyTitle')"
+              :description="t('auditEmptyDesc')"
             >
-              <td class="px-3 py-3">
-                <input
-                  type="checkbox"
-                  class="h-3.5 w-3.5"
-                  :data-testid="`audit-select-${idx}`"
-                  :checked="isSelected(auditRowId(evt, idx))"
-                  :aria-label="t('listSelectCol')"
-                  @change="toggle(auditRowId(evt, idx), ($event.target as HTMLInputElement).checked)"
-                />
-              </td>
-              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{{ evt.time }}</td>
-              <td class="px-4 py-3 text-xs text-slate-700 dark:text-slate-200">{{ evt.user_name }}</td>
-              <td class="px-4 py-3 text-xs font-medium text-slate-700 dark:text-slate-200">{{ evt.action }}</td>
-              <td class="px-4 py-3 text-xs mts-muted">{{ evt.database || t('emptyValue') }}</td>
-              <td class="px-4 py-3 text-xs mts-muted">{{ evt.detail || t('emptyValue') }}</td>
-            </tr>
-          </tbody>
-        </table>
+              <template #action>
+                <button type="button" class="mts-btn-primary" :disabled="loading" @click="loadAudit">{{ t('refresh') }}</button>
+              </template>
+            </EmptyState>
+          </div>
+          <VirtualTable
+            v-else
+            :items="displayedRows"
+            :row-height="AUDIT_ROW_HEIGHT"
+            :height="AUDIT_LIST_HEIGHT"
+            data-testid="audit-virtual-list"
+          >
+            <template #default="{ item: row }">
+              <div
+                class="grid h-full grid-cols-[2.5rem_minmax(9rem,1.1fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1.4fr)] items-center border-b border-slate-100 last:border-b-0 dark:border-slate-800"
+                :data-testid="`audit-row-${row.idx}`"
+              >
+                <div class="px-3">
+                  <input
+                    type="checkbox"
+                    class="h-3.5 w-3.5"
+                    :data-testid="`audit-select-${row.idx}`"
+                    :checked="isSelected(row.id)"
+                    :aria-label="t('listSelectCol')"
+                    @change="toggle(row.id, ($event.target as HTMLInputElement).checked)"
+                  />
+                </div>
+                <div class="truncate px-4 text-xs text-slate-600 dark:text-slate-300">{{ row.evt.time }}</div>
+                <div class="truncate px-4 text-xs text-slate-700 dark:text-slate-200">{{ row.evt.user_name }}</div>
+                <div class="truncate px-4 text-xs font-medium text-slate-700 dark:text-slate-200">{{ row.evt.action }}</div>
+                <div class="truncate px-4 text-xs mts-muted">{{ row.evt.database || t('emptyValue') }}</div>
+                <div class="truncate px-4 text-xs mts-muted" :title="row.evt.detail || ''">{{ row.evt.detail || t('emptyValue') }}</div>
+              </div>
+            </template>
+          </VirtualTable>
+          <p
+            v-if="displayedEvents.length"
+            class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800"
+            data-testid="audit-virtual-hint"
+          >
+            {{ t('auditVirtualHint') }}
+          </p>
         </div>
       </div>
     </div>
