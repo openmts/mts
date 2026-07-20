@@ -64,8 +64,11 @@ export function parseClientPrefsImport(text: string): ParseClientPrefsResult {
     return { ok: false, error: 'invalid_shape' }
   }
   const o = parsed as Record<string, unknown>
-  // 完整快照
+  // 独立偏好包或完整快照
   if (o.prefs && typeof o.prefs === 'object') {
+    return { ok: true, prefs: normalizeClientPrefs(o.prefs as AccountPrefsSnapshot) }
+  }
+  if (o.kind === 'mts.client.prefs' && o.prefs && typeof o.prefs === 'object') {
     return { ok: true, prefs: normalizeClientPrefs(o.prefs as AccountPrefsSnapshot) }
   }
   // 直接 prefs 或扁平字段

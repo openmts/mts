@@ -40,3 +40,14 @@ test('parseClientPrefsImport from snapshot and flat', () => {
   assert.equal(parseClientPrefsImport('{').ok, false)
   assert.equal(parseClientPrefsImport('{"x":1}').ok, false)
 })
+
+test('parseClientPrefsImport from client prefs export', () => {
+  const raw = JSON.stringify({
+    kind: 'mts.client.prefs',
+    version: 1,
+    prefs: { landing_path: '/audit', density: 'compact', locale: 'zh', theme: 'light', sidebar_collapsed: false },
+  })
+  const r = parseClientPrefsImport(raw)
+  assert.equal(r.ok, true)
+  if (r.ok) assert.equal(r.prefs.landing_path, '/audit')
+})

@@ -484,3 +484,9 @@
 - 本机偏好重置/导入；通知历史类型过滤
 - 商业冒烟覆盖 account-prefs / notify-history-filter
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P95 状态（2026-07-20）
+- 本机偏好独立导出/复制；通知历史文本搜索
+- 商业冒烟覆盖 account-prefs-export/copy 与 notify-history-search
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

@@ -11,6 +11,7 @@ import { validateNewPassword } from '@/utils/passwordPolicy'
 import { KeyRound, UserRound, Download, Copy } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
 import { buildAccountExport, formatAccountExportPretty } from '@/utils/accountExport'
+import { buildClientPrefsExport, formatClientPrefsExportPretty } from '@/utils/clientPrefsExport'
 import { downloadJSON, stampFilename } from '@/utils/download'
 import { copyText } from '@/utils/clipboard'
 import {
@@ -214,6 +215,31 @@ async function copyAccount() {
   else notifyError(res.error || t.value('failed'))
 }
 
+function currentClientPrefs() {
+  const snap = accountSnapshotInput().prefs
+  return {
+    landing_path: snap.landing_path,
+    density: snap.density as ClientPrefs['density'],
+    sidebar_collapsed: snap.sidebar_collapsed,
+    locale: snap.locale as ClientPrefs['locale'],
+    theme: snap.theme as ClientPrefs['theme'],
+  }
+}
+
+function exportClientPrefsOnly() {
+  downloadJSON(
+    stampFilename('mts-client-prefs', 'json'),
+    buildClientPrefsExport(currentClientPrefs()),
+  )
+  success(t.value('accountPrefsExported'))
+}
+
+async function copyClientPrefsOnly() {
+  const res = await copyText(formatClientPrefsExportPretty(currentClientPrefs()))
+  if (res.ok) success(t.value('accountPrefsCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 async function submit() {
   error.value = ''
   info.value = ''
@@ -310,6 +336,14 @@ async function submit() {
       <h2 class="mb-1 text-sm font-semibold">{{ t('accountPrefsToolsTitle') }}</h2>
       <p class="mb-3 text-xs mts-muted">{{ t('accountPrefsToolsHint') }}</p>
       <div class="mb-3 flex flex-wrap gap-2">
+        <button type="button" class="mts-btn mts-focus-ring" data-testid="account-prefs-export" @click="exportClientPrefsOnly">
+          <Download class="h-3.5 w-3.5" aria-hidden="true" />
+          {{ t('accountPrefsExportBtn') }}
+        </button>
+        <button type="button" class="mts-btn mts-focus-ring" data-testid="account-prefs-copy" @click="copyClientPrefsOnly">
+          <Copy class="h-3.5 w-3.5" aria-hidden="true" />
+          {{ t('accountPrefsCopyBtn') }}
+        </button>
         <button type="button" class="mts-btn mts-focus-ring" data-testid="account-prefs-reset" @click="resetClientPrefs">
           {{ t('accountPrefsResetBtn') }}
         </button>

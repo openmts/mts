@@ -111,3 +111,23 @@ export function filterNotifyHistoryByKind(
   if (kind === 'all') return items.slice()
   return items.filter((x) => x.kind === kind)
 }
+
+export function searchNotifyHistory(
+  items: readonly NotifyHistoryEntry[],
+  query: string,
+): NotifyHistoryEntry[] {
+  const q = String(query || '').trim().toLowerCase()
+  if (!q) return items.slice()
+  return items.filter((x) => {
+    const hay = `${x.kind} ${x.message}`.toLowerCase()
+    return hay.includes(q)
+  })
+}
+
+export function filterNotifyHistory(
+  items: readonly NotifyHistoryEntry[],
+  opts: { kind?: NotifyHistoryKindFilter; query?: string } = {},
+): NotifyHistoryEntry[] {
+  const byKind = filterNotifyHistoryByKind(items, opts.kind ?? 'all')
+  return searchNotifyHistory(byKind, opts.query ?? '')
+}

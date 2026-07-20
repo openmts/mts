@@ -5,7 +5,7 @@ import { useNotify } from '@/composables/useNotify'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { Bell, X, Download, Copy } from 'lucide-vue-next'
 import {
-  filterNotifyHistoryByKind,
+  filterNotifyHistory,
   type NotifyHistoryEntry,
   type NotifyHistoryKindFilter,
 } from '@/utils/notifyHistory'
@@ -24,7 +24,10 @@ const panelRef = ref<HTMLElement | null>(null)
 let trap: FocusTrapHandle | null = null
 
 const kindFilter = ref<NotifyHistoryKindFilter>('all')
-const entries = computed(() => filterNotifyHistoryByKind(history.value, kindFilter.value))
+const searchQuery = ref('')
+const entries = computed(() =>
+  filterNotifyHistory(history.value, { kind: kindFilter.value, query: searchQuery.value }),
+)
 const filterOptions: NotifyHistoryKindFilter[] = ['all', 'success', 'error', 'warn', 'info']
 function filterOptionLabel(k: NotifyHistoryKindFilter): string {
   if (k === 'all') return t.value('notifyHistoryFilterAll')
@@ -186,18 +189,34 @@ onBeforeUnmount(() => {
       <p class="border-b border-slate-100 px-4 py-2 text-xs mts-muted dark:border-slate-800">
         {{ t('notifyHistoryHint') }}
       </p>
-      <div class="border-b border-slate-100 px-4 py-2 dark:border-slate-800" data-testid="notify-history-filter-wrap">
-        <label class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300" for="notify-history-filter">
-          {{ t('notifyHistoryFilter') }}
-        </label>
-        <select
-          id="notify-history-filter"
-          v-model="kindFilter"
-          class="mts-input mts-focus-ring text-xs"
-          data-testid="notify-history-filter"
-        >
-          <option v-for="k in filterOptions" :key="k" :value="k">{{ filterOptionLabel(k) }}</option>
-        </select>
+      <div class="space-y-2 border-b border-slate-100 px-4 py-2 dark:border-slate-800" data-testid="notify-history-filter-wrap">
+        <div>
+          <label class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300" for="notify-history-filter">
+            {{ t('notifyHistoryFilter') }}
+          </label>
+          <select
+            id="notify-history-filter"
+            v-model="kindFilter"
+            class="mts-input mts-focus-ring text-xs"
+            data-testid="notify-history-filter"
+          >
+            <option v-for="k in filterOptions" :key="k" :value="k">{{ filterOptionLabel(k) }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300" for="notify-history-search">
+            {{ t('notifyHistorySearch') }}
+          </label>
+          <input
+            id="notify-history-search"
+            v-model="searchQuery"
+            type="search"
+            class="mts-input mts-focus-ring text-xs"
+            data-testid="notify-history-search"
+            :placeholder="t('notifyHistorySearchPlaceholder')"
+            autocomplete="off"
+          />
+        </div>
       </div>
       <ul class="flex-1 space-y-2 overflow-auto p-3" data-testid="notify-history-list">
         <li
@@ -205,7 +224,11 @@ onBeforeUnmount(() => {
           class="px-2 py-8 text-center text-sm mts-muted"
           data-testid="notify-history-empty"
         >
-          {{ history.length && kindFilter !== 'all' ? t('notifyHistoryFilterEmpty') : t('notifyHistoryEmpty') }}
+          {{
+            history.length && (kindFilter !== 'all' || searchQuery.trim())
+              ? t('notifyHistoryFilterEmpty')
+              : t('notifyHistoryEmpty')
+          }}
         </li>
         <li
           v-for="e in entries"

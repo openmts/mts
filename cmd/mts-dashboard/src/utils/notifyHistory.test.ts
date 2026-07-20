@@ -3,9 +3,11 @@ import test from 'node:test'
 import {
   appendNotifyHistory,
   clearNotifyHistory,
+  filterNotifyHistory,
   filterNotifyHistoryByKind,
   loadNotifyHistory,
   recordNotifyHistory,
+  searchNotifyHistory,
 } from './notifyHistory.ts'
 
 function mem() {
@@ -44,4 +46,25 @@ test('filterNotifyHistoryByKind', () => {
   assert.equal(filterNotifyHistoryByKind(items, 'all').length, 2)
   assert.equal(filterNotifyHistoryByKind(items, 'error').length, 1)
   assert.equal(filterNotifyHistoryByKind(items, 'error')[0]?.message, 'b')
+})
+
+test('searchNotifyHistory matches message and kind', () => {
+  const items = [
+    { id: '1', kind: 'info' as const, message: 'flush ok', count: 1, at: 1 },
+    { id: '2', kind: 'error' as const, message: 'compact fail', count: 1, at: 2 },
+  ]
+  assert.equal(searchNotifyHistory(items, 'flush').length, 1)
+  assert.equal(searchNotifyHistory(items, 'ERROR').length, 1)
+  assert.equal(searchNotifyHistory(items, '').length, 2)
+})
+
+test('filterNotifyHistory combines kind and query', () => {
+  const items = [
+    { id: '1', kind: 'error' as const, message: 'a fail', count: 1, at: 1 },
+    { id: '2', kind: 'error' as const, message: 'b ok', count: 1, at: 2 },
+    { id: '3', kind: 'info' as const, message: 'a fail', count: 1, at: 3 },
+  ]
+  const got = filterNotifyHistory(items, { kind: 'error', query: 'fail' })
+  assert.equal(got.length, 1)
+  assert.equal(got[0]?.id, '1')
 })
