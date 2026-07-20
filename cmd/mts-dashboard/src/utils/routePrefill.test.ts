@@ -15,6 +15,10 @@ import {
   usersFormToPrefill,
   parseAccessPrefill,
   accessFormToPrefill,
+  parseAccessGrantsPrefill,
+  accessGrantsFormToPrefill,
+  parseDownsamplePrefill,
+  downsampleFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -165,5 +169,24 @@ test('users and access prefill share helpers', () => {
   assert.equal(
     accessFormToPrefill({ role: 'user', area: 'workspace', q: 'query' }),
     '/access?role=user&area=workspace&q=query#access-matrix-filter-bar',
+  )
+})
+
+test('access grants and downsample prefill helpers', () => {
+  assert.deepEqual(
+    parseAccessGrantsPrefill({ user: 'alice', database: 'metrics', permission: 'read', q: 'cpu' }),
+    { user: 'alice', database: 'metrics', permission: 'read', q: 'cpu' },
+  )
+  assert.equal(
+    accessGrantsFormToPrefill({ user: 'alice', database: 'm', permission: 'write' }),
+    '/access/grants?user=alice&database=m&permission=write#access-grants-filters',
+  )
+  assert.deepEqual(parseDownsamplePrefill({ q: 'cpu', enabled: 'enabled' }), {
+    q: 'cpu',
+    enabled: 'enabled',
+  })
+  assert.equal(
+    downsampleFormToPrefill({ q: 'roll', enabled: 'disabled' }),
+    '/downsample?q=roll&enabled=disabled#downsample-filters',
   )
 })

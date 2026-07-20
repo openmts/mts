@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
@@ -21,6 +23,8 @@ import {
 import { RefreshCw, ShieldCheck, Download } from 'lucide-vue-next'
 import { useNotify } from '@/composables/useNotify'
 import { buildGrantsExport, grantsToCSV } from '@/utils/grantsExport'
+import { parseAccessGrantsPrefill, accessGrantsFormToPrefill } from '@/utils/routePrefill'
+import { copyText } from '@/utils/clipboard'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
@@ -41,9 +45,11 @@ interface User {
 interface UsersResponse { users: User[] }
 interface PermissionsResponse { grants: Array<{ database: string; permission: string }> }
 
+const route = useRoute()
+useHashScroll()
 const { isAdmin } = useAuth()
 const { t, locale } = useI18n()
-const { success, warn } = useNotify()
+const { success, warn, error: notifyError } = useNotify()
 function roleLabel(role?: string): string {
   if (!role) return t.value('emptyValue')
   if (role === 'admin') return t.value('roleAdmin')
@@ -189,7 +195,54 @@ function exportCSV() {
   success(t.value('accessExported'))
 }
 
-onMounted(() => { void load() })
+function applyAccessGrantsPrefillFromRoute() {
+  if (!isAdmin.value) return
+  const pre = parseAccessGrantsPrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.user != null && userFilter.value !== pre.user) {
+    userFilter.value = pre.user
+    changed = true
+  }
+  if (pre.database != null && dbFilter.value !== pre.database) {
+    dbFilter.value = pre.database
+    changed = true
+  }
+  if (pre.permission != null && permFilter.value !== pre.permission) {
+    permFilter.value = pre.permission
+    changed = true
+  }
+  if (pre.q != null && q.value !== pre.q) {
+    q.value = pre.q
+    changed = true
+  }
+  if (changed) success(t.value('accessGrantsPrefillApplied'))
+}
+
+async function copyAccessGrantsShareLink() {
+  const path = accessGrantsFormToPrefill({
+    user: userFilter.value,
+    database: dbFilter.value,
+    permission: permFilter.value,
+    q: q.value,
+  }, { hash: '#access-grants-filters' })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('accessGrantsShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
+onMounted(async () => {
+  await load()
+  applyAccessGrantsPrefillFromRoute()
+})
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (!isAdmin.value) return
+    if (prev != null && path !== prev) applyAccessGrantsPrefillFromRoute()
+  },
+)
 </script>
 
 <template>
@@ -214,6 +267,9 @@ onMounted(() => { void load() })
         </button>
         <button type="button" class="mts-btn" data-testid="access-grants-refresh" :disabled="loading" :aria-busy="loading ? 'true' : undefined" @click="load">
           <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" /> {{ t('refresh') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="access-grants-share-link" @click="copyAccessGrantsShareLink">
+          {{ t('accessGrantsShareLink') }}
         </button>
       </div>
     </div>
@@ -241,21 +297,21 @@ onMounted(() => { void load() })
       </div>
     </div>
 
-    <div class="flex flex-wrap items-end gap-2">
+    <div id="access-grants-filters" class="scroll-mt-20 flex flex-wrap items-end gap-2" data-testid="access-grants-filter-bar">
       <label class="text-xs mts-muted">{{ t('accessGrantsUser') }}
-        <select v-model="userFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm">
+        <select v-model="userFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm" data-testid="access-grants-user-filter">
           <option value="">{{ t('accessGrantsAll') }}</option>
           <option v-for="u in users" :key="u" :value="u">{{ u }}</option>
         </select>
       </label>
       <label class="text-xs mts-muted">{{ t('accessGrantsDatabase') }}
-        <select v-model="dbFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm">
+        <select v-model="dbFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm" data-testid="access-grants-db-filter">
           <option value="">{{ t('accessGrantsAll') }}</option>
           <option v-for="d in databases" :key="d" :value="d">{{ d }}</option>
         </select>
       </label>
       <label class="text-xs mts-muted">{{ t('accessGrantsPermission') }}
-        <select v-model="permFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm">
+        <select v-model="permFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm" data-testid="access-grants-perm-filter">
           <option value="">{{ t('accessGrantsAll') }}</option>
           <option v-for="p in permissions" :key="p" :value="p">{{ permText(p) }}</option>
         </select>

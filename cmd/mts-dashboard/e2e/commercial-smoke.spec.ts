@@ -228,6 +228,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
   await expect(page.getByTestId('access-grants-export-json')).toBeVisible()
   await expect(page.getByTestId('access-grants-export-csv')).toBeVisible()
+  await expect(page.getByTestId('access-grants-share-link')).toBeVisible()
   // 有授权数据时虚拟列表；无数据时 EmptyState
   if (await page.getByTestId('access-grants-table').count()) {
     await expect(page.getByTestId('access-grants-table')).toBeVisible()
@@ -840,6 +841,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/downsample')
   await expect(page.getByTestId('downsample-filter-bar')).toBeVisible()
   await expect(page.getByTestId('downsample-filter')).toBeVisible()
+  await expect(page.getByTestId('downsample-share-link')).toBeVisible()
   await expect(page.getByTestId('downsample-selection-toolbar')).toBeVisible()
   await expect(page.getByTestId('downsample-select-all')).toBeVisible()
   await expect(page.getByTestId('downsample-clear-select')).toBeVisible()
@@ -993,6 +995,18 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('access-matrix-role-filter')).toHaveValue('admin')
   await expect(page.getByTestId('access-matrix-search')).toHaveValue('audit')
   await expect(page.getByTestId('access-matrix-share-link')).toBeVisible()
+
+
+  // P177: 授权总览筛选深链
+  await page.goto('/access/grants?q=read#access-grants-filters')
+  await expect(page.getByTestId('access-grants-page')).toBeVisible()
+  await expect(page.getByTestId('access-grants-search')).toHaveValue('read')
+  await expect(page.getByTestId('access-grants-share-link')).toBeVisible()
+  // P178: 降采样筛选深链
+  await page.goto('/downsample?enabled=enabled#downsample-filters')
+  await expect(page.getByTestId('downsample-page')).toBeVisible()
+  await expect(page.getByTestId('downsample-enabled-filter')).toHaveValue('enabled')
+  await expect(page.getByTestId('downsample-share-link')).toBeVisible()
 
   // 17) 非 admin 端到端：创建 reader、授权 default 读、只读库浏览
   await page.goto('/users')

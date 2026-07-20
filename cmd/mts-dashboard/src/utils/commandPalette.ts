@@ -231,6 +231,13 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['access filter', '矩阵筛选', 'rbac filter'],
   },
   { id: 'grants', path: '/access/grants', labelKey: 'accessGrants', keywords: ['grant', '授权'], adminOnly: true },
+  {
+    id: 'access-grants-filter',
+    path: '/access/grants#access-grants-filters',
+    labelKey: 'cmdAccessGrantsFilter',
+    keywords: ['grants filter', '授权筛选', 'permission filter'],
+    adminOnly: true,
+  },
   { id: 'metrics', path: '/observability/metrics', labelKey: 'metrics', keywords: ['prometheus', '指标'], adminOnly: true },
   {
     id: 'metrics-summary',

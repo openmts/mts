@@ -882,3 +882,9 @@
 
 ## P176 状态（2026-07-21）
 - Access 矩阵筛选深链（role/area/q）与复制筛选链接
+
+## P177 状态（2026-07-21）
+- Access Grants 筛选深链（user/database/permission/q）与复制筛选链接
+
+## P178 状态（2026-07-21）
+- Downsample 策略筛选深链（q/enabled）与复制筛选链接

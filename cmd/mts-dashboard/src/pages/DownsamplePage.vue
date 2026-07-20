@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useHashScroll } from '@/composables/useHashScroll'
+import { useRoute } from 'vue-router'
+import { parseDownsamplePrefill, downsampleFormToPrefill } from '@/utils/routePrefill'
+import { copyText } from '@/utils/clipboard'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { listDatabases, listFields, listMeasurements } from '@/api/meta'
 import { fieldNames } from '@/utils/seriesMeta'
@@ -41,6 +44,7 @@ interface PoliciesResponse { policies: DownsamplePolicy[] }
 interface StatusesResponse { statuses: DownsampleStatus[] }
 
 useHashScroll()
+const route = useRoute()
 const { isAdmin } = useAuth()
 const { t, locale } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
@@ -194,7 +198,44 @@ watch(
   },
 )
 
-onMounted(loadData)
+function applyDownsamplePrefillFromRoute() {
+  const pre = parseDownsamplePrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.q != null && policyFilter.value !== pre.q) {
+    policyFilter.value = pre.q
+    changed = true
+  }
+  if (pre.enabled === 'enabled' || pre.enabled === 'disabled') {
+    if (enabledFilter.value !== pre.enabled) {
+      enabledFilter.value = pre.enabled as DownsampleEnabledFilter
+      changed = true
+    }
+  }
+  if (changed) success(t.value('downsamplePrefillApplied'))
+}
+
+async function copyDownsampleShareLink() {
+  const path = downsampleFormToPrefill({
+    q: policyFilter.value,
+    enabled: enabledFilter.value || undefined,
+  }, { hash: '#downsample-filters' })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('downsampleShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
+onMounted(() => {
+  void loadData()
+  applyDownsamplePrefillFromRoute()
+})
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (prev != null && path !== prev) applyDownsamplePrefillFromRoute()
+  },
+)
 
 async function loadData() {
   if (!isAdmin.value) return
@@ -597,6 +638,9 @@ function exportCSV() {
           </button>
           <button type="button" class="mts-btn" data-testid="downsample-export-csv" :disabled="!filteredPolicies.length" @click="exportCSV">
             <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
+          </button>
+          <button type="button" class="mts-btn" data-testid="downsample-share-link" @click="copyDownsampleShareLink">
+            {{ t('downsampleShareLink') }}
           </button>
         </template>
       </ListSelectionToolbar>

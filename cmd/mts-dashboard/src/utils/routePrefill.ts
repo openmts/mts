@@ -377,3 +377,89 @@ export function accessFormToPrefill(form: {
     hash: opts?.hash,
   })
 }
+
+export type AccessGrantsPrefill = {
+  user?: string
+  database?: string
+  permission?: string
+  q?: string
+}
+
+/** Grants 总览预填：user/database/permission/q（只读筛选） */
+export function parseAccessGrantsPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): AccessGrantsPrefill {
+  const out: AccessGrantsPrefill = {}
+  const user = firstQueryValue(query.user ?? query.user_name)
+  if (user) out.user = user
+  const database = firstQueryValue(query.database ?? query.db)
+  if (database) out.database = database
+  const permission = firstQueryValue(query.permission ?? query.perm)
+  if (permission) out.permission = permission
+  const q = firstQueryValue(query.q ?? query.filter)
+  if (q) out.q = q
+  return out
+}
+
+export function buildAccessGrantsPrefillPath(opts: AccessGrantsPrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.user) params.set('user', opts.user)
+  if (opts.database) params.set('database', opts.database)
+  if (opts.permission) params.set('permission', opts.permission)
+  if (opts.q) params.set('q', opts.q)
+  const qs = params.toString()
+  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#access-grants-filters'
+  return qs ? `/access/grants?${qs}${hash}` : `/access/grants${hash}`
+}
+
+export function accessGrantsFormToPrefill(form: {
+  user?: string
+  database?: string
+  permission?: string
+  q?: string
+}, opts?: { hash?: string }): string {
+  return buildAccessGrantsPrefillPath({
+    user: form.user?.trim() || undefined,
+    database: form.database?.trim() || undefined,
+    permission: form.permission?.trim() || undefined,
+    q: form.q?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
+
+export type DownsamplePrefill = {
+  q?: string
+  enabled?: string
+}
+
+/** 降采样策略筛选预填（不自动 run/enable） */
+export function parseDownsamplePrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): DownsamplePrefill {
+  const out: DownsamplePrefill = {}
+  const q = firstQueryValue(query.q ?? query.filter)
+  if (q) out.q = q
+  const enabled = firstQueryValue(query.enabled)
+  if (enabled === 'enabled' || enabled === 'disabled') out.enabled = enabled
+  return out
+}
+
+export function buildDownsamplePrefillPath(opts: DownsamplePrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.q) params.set('q', opts.q)
+  if (opts.enabled) params.set('enabled', opts.enabled)
+  const qs = params.toString()
+  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#downsample-filters'
+  return qs ? `/downsample?${qs}${hash}` : `/downsample${hash}`
+}
+
+export function downsampleFormToPrefill(form: {
+  q?: string
+  enabled?: string
+}, opts?: { hash?: string }): string {
+  return buildDownsamplePrefillPath({
+    q: form.q?.trim() || undefined,
+    enabled: form.enabled?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
