@@ -16,6 +16,13 @@ import { formatMessage } from '@/utils/formatMessage'
 import { filterUsers } from '@/utils/listFilter'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
+import {
+  cycleSortState,
+  loadSortState,
+  saveSortState,
+  sortByAccessor,
+  type SortState,
+} from '@/utils/listSort'
 import { buildUsersExport, usersToCSV } from '@/utils/usersExport'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 
@@ -27,8 +34,31 @@ interface PermissionsResponse { grants: DatabaseGrant[] }
 const users = ref<User[]>([])
 const userFilter = ref('')
 const roleFilter = ref('')
-const filteredUsers = computed(() => filterUsers(users.value, userFilter.value, roleFilter.value))
+const USERS_SORT_KEY = 'mts.dashboard.users-sort.prefs.v1'
+const USERS_SORT_KEYS = ['name', 'role', 'status'] as const
+type UserSortKey = (typeof USERS_SORT_KEYS)[number]
+const storage = typeof localStorage !== 'undefined' ? localStorage : null
+const userSort = ref<SortState<UserSortKey>>(loadSortState(storage, USERS_SORT_KEY, USERS_SORT_KEYS))
+
+const filteredUsers = computed(() => {
+  const base = filterUsers(users.value, userFilter.value, roleFilter.value)
+  return sortByAccessor(base, userSort.value, {
+    name: (u) => u.name,
+    role: (u) => u.role || '',
+    status: (u) => Boolean(u.disabled),
+  })
+})
 const visibleUserIds = computed(() => filteredUsers.value.map((u) => u.name))
+
+function cycleUserSort(key: UserSortKey) {
+  userSort.value = cycleSortState(userSort.value, key)
+  saveSortState(storage, USERS_SORT_KEY, userSort.value)
+}
+
+function userSortIndicator(key: UserSortKey): string {
+  if (userSort.value.key !== key) return ''
+  return userSort.value.dir === 'asc' ? '↑' : '↓'
+}
 const {
   selectedIds,
   selectedCount,
@@ -409,10 +439,10 @@ async function confirmBatch() {
     </div>
 
     <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-    <div class="mts-table-wrap" data-testid="users-table-wrap"><table class="w-full min-w-[40rem] text-sm">
+    <div class="mts-table-wrap max-h-[28rem] overflow-auto" data-testid="users-table-wrap"><table class="w-full min-w-[40rem] text-sm">
         <thead>
           <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
-            <th class="w-10 px-3 py-2.5">
+            <th class="sticky top-0 z-[1] w-10 bg-slate-50/95 px-3 py-2.5 backdrop-blur dark:bg-slate-900/95">
               <input
                 type="checkbox"
                 class="h-3.5 w-3.5"
@@ -423,10 +453,22 @@ async function confirmBatch() {
                 @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
               />
             </th>
-            <th class="px-4 py-2.5">{{ t('usersColUser') }}</th>
-            <th class="px-4 py-2.5">{{ t('usersColRole') }}</th>
-            <th class="px-4 py-2.5">{{ t('usersColStatus') }}</th>
-            <th class="px-4 py-2.5">{{ t('action') }}</th>
+            <th class="sticky top-0 z-[1] bg-slate-50/95 px-4 py-2.5 backdrop-blur dark:bg-slate-900/95">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-name" @click="cycleUserSort('name')">
+                {{ t('usersColUser') }} <span aria-hidden="true">{{ userSortIndicator('name') }}</span>
+              </button>
+            </th>
+            <th class="sticky top-0 z-[1] bg-slate-50/95 px-4 py-2.5 backdrop-blur dark:bg-slate-900/95">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-role" @click="cycleUserSort('role')">
+                {{ t('usersColRole') }} <span aria-hidden="true">{{ userSortIndicator('role') }}</span>
+              </button>
+            </th>
+            <th class="sticky top-0 z-[1] bg-slate-50/95 px-4 py-2.5 backdrop-blur dark:bg-slate-900/95">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-status" @click="cycleUserSort('status')">
+                {{ t('usersColStatus') }} <span aria-hidden="true">{{ userSortIndicator('status') }}</span>
+              </button>
+            </th>
+            <th class="sticky top-0 z-[1] bg-slate-50/95 px-4 py-2.5 backdrop-blur dark:bg-slate-900/95">{{ t('action') }}</th>
           </tr>
         </thead>
         <tbody>

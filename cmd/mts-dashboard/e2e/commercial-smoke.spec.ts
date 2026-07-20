@@ -520,6 +520,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('databases-select-all').click()
   await expect(page.getByTestId('databases-selected-count')).toBeVisible()
   await page.getByTestId('databases-clear-selection').click()
+  // P111: 列排序
+  await page.goto('/users')
+  await expect(page.getByTestId('users-sort-name')).toBeVisible()
+  await page.getByTestId('users-sort-name').click()
+  await expect.poll(async () => page.evaluate(() => localStorage.getItem('mts.dashboard.users-sort.prefs.v1'))).toBeTruthy()
+  await page.goto('/databases')
+  await expect(page.getByTestId('databases-sort-name')).toBeVisible()
+  await page.getByTestId('databases-sort-name').click()
+  await expect.poll(async () => page.evaluate(() => localStorage.getItem('mts.dashboard.databases-sort.prefs.v1'))).toBeTruthy()
   await expect(page.getByRole('main').getByRole('heading', { name: /数据库|Databases/i })).toBeVisible()
 
   // 14) 降采样筛选/批量/状态/区间操作入口

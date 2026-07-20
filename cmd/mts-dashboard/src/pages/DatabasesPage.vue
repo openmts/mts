@@ -18,6 +18,13 @@ import { formatMessage } from '@/utils/formatMessage'
 import { filterByName } from '@/utils/listFilter'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
+import {
+  cycleSortState,
+  loadSortState,
+  saveSortState,
+  sortByAccessor,
+  type SortState,
+} from '@/utils/listSort'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { buildDatabasesExport, databasesToCSV } from '@/utils/databasesExport'
@@ -48,8 +55,27 @@ const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
 const databases = ref<DatabaseEntry[]>([])
 const dbFilter = ref('')
-const filteredDatabases = computed(() => filterByName(databases.value, dbFilter.value))
+const DB_SORT_KEY = 'mts.dashboard.databases-sort.prefs.v1'
+const DB_SORT_KEYS = ['name'] as const
+type DbSortKey = (typeof DB_SORT_KEYS)[number]
+const dbStorage = typeof localStorage !== 'undefined' ? localStorage : null
+const dbSort = ref<SortState<DbSortKey>>(loadSortState(dbStorage, DB_SORT_KEY, DB_SORT_KEYS))
+
+const filteredDatabases = computed(() => {
+  const base = filterByName(databases.value, dbFilter.value)
+  return sortByAccessor(base, dbSort.value, { name: (d) => d.name })
+})
 const visibleDbIds = computed(() => filteredDatabases.value.map((d) => d.name))
+
+function cycleDbSort() {
+  dbSort.value = cycleSortState(dbSort.value, 'name')
+  saveSortState(dbStorage, DB_SORT_KEY, dbSort.value)
+}
+
+function dbSortIndicator(): string {
+  if (dbSort.value.key !== 'name') return ''
+  return dbSort.value.dir === 'asc' ? '↑' : '↓'
+}
 const {
   selectedIds,
   selectedCount,
@@ -319,6 +345,7 @@ function exportCSV() {
       <div class="flex flex-wrap gap-2" data-testid="databases-selection-toolbar">
         <button type="button" class="mts-btn" data-testid="databases-select-all" :disabled="!filteredDatabases.length" @click="toggleAllVisible(true)">{{ t('listSelectAll') }}</button>
         <button type="button" class="mts-btn" data-testid="databases-clear-selection" :disabled="!selectedCount" @click="clearSelection">{{ t('listClearSelection') }}</button>
+        <button type="button" class="mts-btn" data-testid="databases-sort-name" :title="t('listSortBy')" @click="cycleDbSort">{{ t('listSortBy') }} {{ dbSortIndicator() }}</button>
       </div>
     </div>
 

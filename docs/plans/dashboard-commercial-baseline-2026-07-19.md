@@ -582,3 +582,9 @@
 - 商业冒烟覆盖 selection toolbar
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+
+## P111 状态（2026-07-20）
+- Users 表头列排序（name/role/status）+ sticky 表头；Databases 名称排序
+- 排序本机记忆；商业冒烟覆盖 users-sort / databases-sort
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
