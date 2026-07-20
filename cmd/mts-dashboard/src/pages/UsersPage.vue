@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import {
+  isPasswordDraftDirty,
+  isUserCreateDraftDirty,
+  shouldBlockLeaveAdminCreate,
+} from '@/utils/adminFormDirty'
+import { registerDirtyChecker } from '@/utils/routeDirty'
 import { Plus, Trash2, Key, Lock, Download } from 'lucide-vue-next'
 import UserModals from '@/components/UserModals.vue'
 import UserGrantPanel from '@/components/UserGrantPanel.vue'
@@ -83,6 +91,7 @@ const {
 } = useListSelection(visibleUserIds)
 const databases = ref<string[]>([])
 const { currentUser, isAdmin } = useAuth()
+const { offline } = useNetworkStatus()
 const { t } = useI18n()
 function roleLabel(role?: string): string {
   if (role === 'admin') return t.value('roleAdmin')
@@ -111,6 +120,9 @@ const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
 
 onMounted(async () => {
+  unregisterUsersDirty = registerDirtyChecker('users', () => usersFormDirty.value)
+  window.addEventListener('beforeunload', onUsersBeforeUnload)
+
   if (!isAdmin.value) return
   await loadUsers()
   try {
@@ -172,7 +184,33 @@ async function loadUsers() {
   }
 }
 
+const usersFormDirty = computed(() => {
+  if (shouldBlockLeaveAdminCreate(showCreate.value, isUserCreateDraftDirty(newUser.value))) return true
+  if (showSetPassword.value && isPasswordDraftDirty(setPasswordValue.value)) return true
+  if (
+    showChangeSelfPassword.value &&
+    isPasswordDraftDirty(selfNewPassword.value, selfOldPassword.value)
+  ) {
+    return true
+  }
+  return false
+})
+
+function onUsersBeforeUnload(e: BeforeUnloadEvent) {
+  if (!usersFormDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+let unregisterUsersDirty: (() => void) | null = null
+
 async function createUser() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   if (!newUser.value.name.trim()) return
   actionResult.value = null
   try {
@@ -195,6 +233,12 @@ async function createUser() {
 }
 
 async function doSetPassword() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   if (!setPasswordValue.value) return
   actionResult.value = null
   try {
@@ -211,6 +255,12 @@ async function doSetPassword() {
 }
 
 async function doChangeSelfPassword() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   if (!selfOldPassword.value || !selfNewPassword.value) return
   actionResult.value = null
   try {
@@ -237,6 +287,12 @@ function requestDelete(name: string) {
 }
 
 async function confirmDelete() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   const name = deleteName.value
   if (!name) return
   deleteLoading.value = true
@@ -258,6 +314,12 @@ async function confirmDelete() {
 }
 
 async function toggleDisable(user: User) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   try {
     await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled })
     await loadUsers()
@@ -294,6 +356,12 @@ function toggleGrantPerm(perm: string) {
 }
 
 async function grantPermission() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   if (!grantDbs.value.length || !grantPerms.value.length || !selectedUser.value) return
   actionResult.value = null
   try {
@@ -317,6 +385,12 @@ async function grantPermission() {
 }
 
 async function revokeGrant(g: DatabaseGrant) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   if (!selectedUser.value) return
   try {
     await apiDelete(`/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(g.database)}/${encodeURIComponent(g.permission)}`)
@@ -367,6 +441,12 @@ function openBatch(mode: 'enable' | 'disable') {
 }
 
 async function confirmBatch() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   const names = selectedIds.value.slice()
   if (!names.length) {
     batchOpen.value = false
@@ -414,6 +494,11 @@ async function confirmBatch() {
     batchLoading.value = false
   }
 }
+onBeforeUnmount(() => {
+  unregisterUsersDirty?.()
+  unregisterUsersDirty = null
+  window.removeEventListener('beforeunload', onUsersBeforeUnload)
+})
 </script>
 
 <template>
@@ -439,6 +524,11 @@ async function confirmBatch() {
         <button v-if="isAdmin" type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700" data-testid="users-create-open" @click="showCreate = true">
           <Plus class="h-3.5 w-3.5" /> {{ t('usersCreate') }}
         </button>
+        <span
+          v-if="usersFormDirty"
+          data-testid="users-dirty-badge"
+          class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+        >{{ t('adminDirtyBadge') }}</span>
       </div>
     </div>
 

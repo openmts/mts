@@ -5,6 +5,13 @@ import { useRoute } from 'vue-router'
 import { parseDownsamplePrefill, downsampleFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import {
+  isDownsampleCreateDraftDirty,
+  shouldBlockLeaveAdminCreate,
+} from '@/utils/adminFormDirty'
+import { registerDirtyChecker } from '@/utils/routeDirty'
 import { listDatabases, listFields, listMeasurements } from '@/api/meta'
 import { fieldNames } from '@/utils/seriesMeta'
 import { useAuth } from '@/composables/useAuth'
@@ -46,6 +53,7 @@ interface StatusesResponse { statuses: DownsampleStatus[] }
 useHashScroll()
 const route = useRoute()
 const { isAdmin } = useAuth()
+const { offline } = useNetworkStatus()
 const { t, locale } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
 const policies = ref<DownsamplePolicy[]>([])
@@ -226,6 +234,9 @@ async function copyDownsampleShareLink() {
 }
 
 onMounted(() => {
+  unregisterDownsampleDirty = registerDirtyChecker('downsample', () => downsampleFormDirty.value)
+  window.addEventListener('beforeunload', onDownsampleBeforeUnload)
+
   void loadData()
   applyDownsamplePrefillFromRoute()
 })
@@ -310,6 +321,12 @@ function openBatch(mode: 'enable' | 'disable') {
 }
 
 async function confirmBatch() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   const names = [...selectedNames.value]
   if (!names.length) {
     batchOpen.value = false
@@ -356,7 +373,37 @@ const newPolicyTagsText = computed({
   },
 })
 
+
+const downsampleFormDirty = computed(() => {
+  if (!showCreate.value) return false
+  return isDownsampleCreateDraftDirty({
+    name: newPolicy.value.name,
+    source_database: newPolicy.value.source_database,
+    source_measurement: newPolicy.value.source_measurement,
+    target_database: newPolicy.value.target_database,
+    target_measurement: newPolicy.value.target_measurement,
+    interval_human: intervalHuman.value,
+    group_by_tags: newPolicy.value.group_by_tags.join(','),
+    enabled: newPolicy.value.enabled,
+    functions_json: JSON.stringify(newPolicy.value.functions ?? []),
+  })
+})
+
+function onDownsampleBeforeUnload(e: BeforeUnloadEvent) {
+  if (!downsampleFormDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+let unregisterDownsampleDirty: (() => void) | null = null
+
 async function createPolicy() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   if (!newPolicy.value.name.trim()) return
   actionResult.value = null
   try {
@@ -399,6 +446,12 @@ function requestDelete(name: string) {
 }
 
 async function confirmDelete() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   deleteLoading.value = true
   try {
     await apiDelete(`/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`)
@@ -416,6 +469,12 @@ async function confirmDelete() {
 }
 
 async function togglePolicy(policy: DownsamplePolicy) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   const action = policy.enabled ? 'disable' : 'enable'
   try {
     await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`)
@@ -448,6 +507,12 @@ function formatDuration(ns: number) {
 }
 
 async function runPolicy(name: string) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   try {
     const data = await apiPost<{ result: DownsampleRunResult }>(
       `/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/run`,
@@ -465,6 +530,12 @@ async function runPolicy(name: string) {
 }
 
 async function resetPolicy(name: string) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   try {
     await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/reset`, {
       reset: { allow_policy_replace: true },
@@ -510,6 +581,12 @@ const rangeConfirmLabel = computed(() => {
 })
 
 async function confirmRange() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   if (!rangeName.value) return
   const loc = locale.value === 'en' ? 'en' : 'zh'
   const check = validateDownsampleRange({
@@ -576,6 +653,12 @@ function exportCSV() {
   )
   success(t.value('inventoryExported'))
 }
+
+onBeforeUnmount(() => {
+  unregisterDownsampleDirty?.()
+  unregisterDownsampleDirty = null
+  window.removeEventListener('beforeunload', onDownsampleBeforeUnload)
+})
 </script>
 
 <template>
@@ -650,6 +733,7 @@ function exportCSV() {
       <EmptyState data-testid="downsample-empty" :title="t('downsampleEmpty')" :description="t('downsampleEmptyDesc')">
         <template #action>
           <button type="button" class="mts-btn-primary" @click="showCreate = true">{{ t('downsampleCreate') }}</button>
+        <span v-if="downsampleFormDirty" data-testid="downsample-dirty-badge" class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">{{ t('adminDirtyBadge') }}</span>
         </template>
       </EmptyState>
     </div>
@@ -895,7 +979,7 @@ function exportCSV() {
         </div>
         <div class="mt-4 flex justify-end gap-2">
           <button class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" @click="showCreate = false">{{ t('cancel') }}</button>
-          <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white" @click="createPolicy">{{ t('create') }}</button>
+          <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" data-testid="downsample-create-submit" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="createPolicy">{{ t('create') }}</button>
         </div>
       </div>
     </div>

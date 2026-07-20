@@ -3,6 +3,8 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 import { listDatabases, listMeasurements, listRetentionPolicies, listSeriesDetailed } from '@/api/meta'
 import { seriesLabel } from '@/utils/seriesMeta'
 import { formatMessage } from '@/utils/formatMessage'
@@ -63,6 +65,7 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
+const { offline } = useNetworkStatus()
 const route = useRoute()
 const router = useRouter()
 useHashScroll()
@@ -238,6 +241,12 @@ async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
   }
 }
 async function createDatabase() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   if (!isAdmin.value) return
   if (!newDbName.value.trim()) return
   actionResult.value = null
@@ -268,6 +277,12 @@ function requestDeleteDatabase(name: string) {
   confirmOpen.value = true
 }
 async function confirmDeleteDatabase() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   const name = confirmDbName.value
   if (!name) return
   confirmLoading.value = true
@@ -287,6 +302,12 @@ async function confirmDeleteDatabase() {
   }
 }
 async function createRetentionPolicy(db: DatabaseEntry) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   if (!isAdmin.value) return
   const name = db.newRpName.trim()
   if (!name) return
@@ -434,7 +455,7 @@ function exportCSV() {
         </button>
         <template v-if="isAdmin">
           <input v-model="newDbName" type="text" :placeholder="t('databasesCreatePlaceholder')" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" data-testid="databases-create-input" @keyup.enter="createDatabase" />
-          <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="databases-create-btn" @click="createDatabase">
+          <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="databases-create-btn" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="createDatabase">
             <Plus class="h-4 w-4" /> {{ t('databasesCreate') }}
           </button>
         </template>

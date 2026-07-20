@@ -796,6 +796,29 @@ test('commercial browser smoke path', async ({ page }) => {
   })
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
   await page.locator('#main-content').focus()
+  // P197/P198: Users 创建草稿脏标记 + 离线拦截创建
+  await page.goto('/users')
+  await expect(page.getByTestId('users-create-open')).toBeVisible()
+  await page.getByTestId('users-create-open').click()
+  await page.getByTestId('users-create-name').fill('draft-user-e2e')
+  await expect(page.getByTestId('users-dirty-badge')).toBeVisible()
+  await page.getByTestId('users-create-cancel').click()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('offline-banner')).toBeVisible()
+  await page.getByTestId('users-create-open').click()
+  await page.getByTestId('users-create-name').fill('offline-user-e2e')
+  await page.getByTestId('users-create-submit').click()
+  // 离线应保留创建弹层（请求被前端拦截）
+  await expect(page.getByTestId('users-create-name')).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+  await page.getByTestId('users-create-cancel').click()
+
   await page.keyboard.press('Control+Shift+KeyH')
   await expect(page.getByTestId('notify-history-panel')).toBeVisible()
   await page.keyboard.press('Escape')
