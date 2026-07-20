@@ -26,6 +26,8 @@ import {
 } from '@/utils/recentRoutes'
 import { loadSidebarPrefs, saveSidebarPrefs } from '@/utils/sidebarPrefs'
 import { CLIENT_PREFS_CHANGED_EVENT } from '@/utils/clientPrefs'
+import { scrollElementToTop, shouldShowBackToTop } from '@/utils/scrollTop'
+import { ArrowUp } from 'lucide-vue-next'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useServerReachability } from '@/composables/useServerReachability'
 
@@ -40,6 +42,8 @@ const sidebarCollapsed = ref(
 )
 const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
 const sidebarNavRef = ref<InstanceType<typeof SidebarNav> | null>(null)
+const mainContentRef = ref<HTMLElement | null>(null)
+const showBackToTop = ref(false)
 const shortcutsOpen = ref(false)
 const notifyHistoryOpen = ref(false)
 const recent = ref<RecentRouteEntry[]>(loadRecentRoutes())
@@ -83,6 +87,17 @@ function togglePinRecent(path: string, e?: Event) {
 function openNotifyHistory() {
   notifyHistoryOpen.value = true
 }
+
+function onMainScroll() {
+  const el = mainContentRef.value
+  showBackToTop.value = shouldShowBackToTop(el?.scrollTop ?? 0)
+}
+
+function scrollMainToTop() {
+  scrollElementToTop(mainContentRef.value)
+  showBackToTop.value = false
+}
+
 
 function onGlobalKey(e: KeyboardEvent) {
   if (shortcutsOpen.value && e.key === 'Escape') {
@@ -150,6 +165,7 @@ provide('focusSidebarFilter', () => {
   sidebarNavRef.value?.focusFilter()
 })
 provide('toggleSidebarCollapse', toggleSidebarCollapse)
+provide('scrollMainToTop', scrollMainToTop)
 
 function onSkipToMain(e: Event) {
   e.preventDefault()
@@ -272,7 +288,7 @@ function onSkipToMain(e: Event) {
           {{ t('recentRoutesClear') }}
         </button>
       </div>
-      <main id="main-content" class="mts-focus-ring flex-1 overflow-auto p-4 sm:p-6 outline-none" tabindex="-1">
+      <main ref="mainContentRef" id="main-content" class="mts-focus-ring flex-1 overflow-auto p-4 sm:p-6 outline-none" tabindex="-1" data-testid="main-content" @scroll.passive="onMainScroll">
         <RouterView v-slot="{ Component }">
           <Suspense>
             <component :is="Component" />
@@ -283,6 +299,17 @@ function onSkipToMain(e: Event) {
         </RouterView>
       </main>
     </div>
+    <button
+      v-if="showBackToTop"
+      type="button"
+      class="no-print mts-focus-ring fixed bottom-5 right-5 z-[90] inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+      data-testid="back-to-top"
+      :aria-label="t('backToTop')"
+      :title="t('backToTop')"
+      @click="scrollMainToTop"
+    >
+      <ArrowUp class="h-4 w-4" aria-hidden="true" />
+    </button>
     <CommandPalette ref="commandPaletteRef" />
     <ShortcutsHelp v-model:open="shortcutsOpen" />
     <NotifyHistoryPanel v-model:open="notifyHistoryOpen" />

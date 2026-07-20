@@ -20,6 +20,7 @@ export type CommandActionId =
   | 'open-notify-history'
   | 'open-shortcuts'
   | 'toggle-sidebar-collapse'
+  | 'scroll-main-to-top'
 
 /** 页内快捷动作（不离开当前路由，除非动作本身导航） */
 export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
@@ -78,6 +79,14 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
     keywords: ['collapse sidebar', 'expand sidebar', '折叠侧栏', '展开侧栏'],
     kind: 'action',
     action: 'toggle-sidebar-collapse',
+  },
+  {
+    id: 'action-scroll-main-to-top',
+    path: 'action:scroll-main-to-top',
+    labelKey: 'cmdActionScrollMainToTop',
+    keywords: ['back to top', 'scroll top', '返回顶部', '回到顶部'],
+    kind: 'action',
+    action: 'scroll-main-to-top',
   },
 ]
 

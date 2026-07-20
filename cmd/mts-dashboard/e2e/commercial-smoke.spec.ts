@@ -347,6 +347,26 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-palette')).toHaveCount(0)
   await expect.poll(async () => page.locator('html').evaluate((el) => el.classList.contains('dark'))).not.toBe(darkBefore)
 
+  // P103: 主内容返回顶部（就绪页足够长）
+  await page.goto('/ops/readiness')
+  await expect(page.getByTestId('readiness-signoff-notes').or(page.getByTestId('readiness-deploy-kit')).first()).toBeVisible()
+  await page.evaluate(() => {
+    const main = document.getElementById('main-content') as HTMLElement | null
+    if (!main) return
+    // 强制可滚高度，避免短视口不出现按钮
+    main.style.minHeight = '200px'
+    const pad = document.createElement('div')
+    pad.setAttribute('data-testid', 'e2e-scroll-pad')
+    pad.style.height = '1200px'
+    main.appendChild(pad)
+    main.scrollTop = 900
+    main.dispatchEvent(new Event('scroll'))
+  })
+  await expect(page.getByTestId('back-to-top')).toBeVisible()
+  await page.getByTestId('back-to-top').click()
+  await expect.poll(async () => page.evaluate(() => document.getElementById('main-content')?.scrollTop ?? -1)).toBe(0)
+  await expect(page.getByTestId('back-to-top')).toHaveCount(0)
+
   // 最近访问清空：多页后 clear，仅剩当前页（>1 才显示清空）
   await page.goto('/write')
   await page.goto('/query')

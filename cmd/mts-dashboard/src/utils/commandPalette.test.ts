@@ -106,7 +106,8 @@ test('non-admin query write deep links visible', () => {
 })
 
 test('command actions catalog and filter', () => {
-  assert.ok(COMMAND_ACTION_ITEMS.length >= 6)
+  assert.ok(COMMAND_ACTION_ITEMS.length >= 7)
+  assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-scroll-main-to-top'))
   assert.ok(COMMAND_ACTION_ITEMS.every((i) => isCommandAction(i)))
   const all = allVisibleCommandItems(true)
   assert.ok(all.some((i) => i.id === 'action-toggle-theme'))
@@ -116,4 +117,5 @@ test('command actions catalog and filter', () => {
   assert.ok(themeHits.some((i) => i.id === 'action-toggle-theme'))
   const densityHits = filterCommandItems(all, '密度', resolve)
   assert.ok(densityHits.some((i) => i.id === 'action-toggle-density'))
+  assert.ok(filterCommandItems(all, '返回顶部', resolve).some((i) => i.id === 'action-scroll-main-to-top'))
 })

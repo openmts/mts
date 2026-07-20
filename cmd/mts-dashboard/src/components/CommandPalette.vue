@@ -40,6 +40,7 @@ const focusSidebarFilter = inject<(() => void) | undefined>('focusSidebarFilter'
 const openNotifyHistory = inject<(() => void) | undefined>('openNotifyHistory', undefined)
 const openShortcutsHelp = inject<(() => void) | undefined>('openShortcutsHelp', undefined)
 const toggleSidebarCollapse = inject<(() => void) | undefined>('toggleSidebarCollapse', undefined)
+const scrollMainToTop = inject<(() => void) | undefined>('scrollMainToTop', undefined)
 
 const items = computed(() => {
   const base = allVisibleCommandItems(isAdmin.value)
@@ -111,6 +112,9 @@ function runAction(action: CommandActionId) {
     case 'toggle-sidebar-collapse':
       toggleSidebarCollapse?.()
       success(t.value('cmdActionSidebarCollapseToggled'))
+      break
+    case 'scroll-main-to-top':
+      scrollMainToTop?.()
       break
     default:
       break
