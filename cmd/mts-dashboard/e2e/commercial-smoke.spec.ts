@@ -60,6 +60,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByRole('main').getByRole('button', { name: '写入', exact: true }).click()
   await expect(page.getByRole('main').getByText(/写入成功/).first()).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('main').getByRole('button', { name: /表单写入|Form write/i })).toBeVisible()
+  await expect(page.getByTestId('write-mode-tabs')).toBeVisible()
+  await expect(page.getByTestId('write-mode-typed')).toBeVisible()
+  await expect(page.getByTestId('write-prefs-hint')).toBeVisible()
 
   // 4) 查询页可达 + 表单标签 i18n
   await page.goto('/query')
@@ -174,6 +177,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-quick-ranges')).toBeVisible()
   await expect(page.getByTestId('audit-export-json')).toBeVisible()
   await expect(page.getByTestId('audit-export-csv')).toBeVisible()
+  await expect(page.getByTestId('audit-limit')).toBeVisible()
+  await expect(page.getByTestId('audit-merged-hint')).toBeVisible()
 
   // 命令面板运维深链：签核备注 / 部署材料
   await page.keyboard.press('Control+KeyK')

@@ -17,6 +17,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import {
   fieldTypes, buildFormPoints, parseLineProtocolDetailed, parsePrometheusText, type FormRow,
 } from '@/composables/usePointParsers'
+import { loadWritePrefs, saveWritePrefs, type WriteModePref } from '@/utils/writePrefs'
 import { makeFormErrorT } from '@/utils/formErrors'
 
 type WriteMode = 'form' | 'line' | 'prometheus' | 'typed'
@@ -25,9 +26,10 @@ const databases = ref<string[]>([])
 const retentionPolicies = ref<string[]>([])
 const selectedDb = ref('')
 const retentionPolicy = ref('autogen')
-const syncWrite = ref(false)
-const usePointsTyped = ref(true)
-const writeMode = ref<WriteMode>('form')
+const initialWritePrefs = loadWritePrefs(typeof localStorage !== 'undefined' ? localStorage : null)
+const syncWrite = ref(initialWritePrefs.syncWrite)
+const usePointsTyped = ref(initialWritePrefs.usePointsTyped)
+const writeMode = ref<WriteMode>(initialWritePrefs.writeMode as WriteMode)
 const lineInput = ref('')
 const formRows = ref<FormRow[]>([createEmptyRow()])
 const result = ref<{ ok: boolean; message: string } | null>(null)
@@ -98,6 +100,17 @@ function writeSnapshot() {
 }
 const writeBaseline = ref(snapshotForm(writeSnapshot()))
 const formDirty = computed(() => isDirty(writeBaseline.value, writeSnapshot()))
+watch(
+  [writeMode, usePointsTyped, syncWrite],
+  () => {
+    saveWritePrefs(typeof localStorage !== 'undefined' ? localStorage : null, {
+      writeMode: writeMode.value as WriteModePref,
+      usePointsTyped: usePointsTyped.value,
+      syncWrite: syncWrite.value,
+    })
+  },
+  { deep: false },
+)
 function markWriteClean() {
   writeBaseline.value = snapshotForm(writeSnapshot())
 }
@@ -304,11 +317,22 @@ const modeLabel = computed(() => ({
 
 <template>
   <div class="space-y-4">
-    <div class="flex flex-wrap gap-2">
-      <button v-for="m in (['form','line','prometheus','typed'] as const)" :key="m"
-        class="rounded-lg border px-3 py-1.5 text-xs"
-        :class="writeMode===m ? 'border-slate-800 bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'"
-        @click="writeMode=m">{{ ({form:t('formWrite'), line:t('lineProtocol'), prometheus:t('prometheus'), typed:t('typedBatch')})[m] }}</button>
+    <div class="space-y-2">
+      <div class="flex flex-wrap gap-2" data-testid="write-mode-tabs">
+        <button
+          v-for="m in (['form','line','prometheus','typed'] as const)"
+          :key="m"
+          type="button"
+          class="rounded-lg border px-3 py-1.5 text-xs"
+          :data-testid="`write-mode-${m}`"
+          :class="writeMode===m ? 'border-slate-800 bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'"
+          @click="writeMode=m"
+        >
+          {{ ({form:t('formWrite'), line:t('lineProtocol'), prometheus:t('prometheus'), typed:t('typedBatch')})[m] }}
+          <span v-if="m==='typed'" class="ml-1 rounded bg-emerald-500/20 px-1 text-[10px] text-emerald-700 dark:text-emerald-300">{{ t('writePreferTypedBadge') }}</span>
+        </button>
+      </div>
+      <p class="text-[11px] mts-muted" data-testid="write-prefs-hint">{{ t('writeModeRemembered') }}</p>
     </div>
 
     <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-4">

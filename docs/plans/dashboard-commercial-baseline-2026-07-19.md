@@ -366,3 +366,9 @@
 - 账户页会话过期/剩余展示
 - 商业冒烟覆盖 account-session
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P75 状态（2026-07-20）
+- 写入默认 TypedBatch + 本机偏好记忆；审计 limit/total/持久化合并提示；登录 TTL 记忆
+- 商业冒烟覆盖 write-mode 与 audit-limit
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { apiGet } from '@/api/client'
@@ -14,6 +14,7 @@ import {
   filterAuditEvents,
   type AuditQuickRange,
 } from '@/utils/commandPalette'
+import { auditLimitOptions, buildAuditQueryString } from '@/utils/auditQuery'
 import { ScrollText, Download, RefreshCw, Eraser } from 'lucide-vue-next'
 
 interface User { name: string; display_name?: string }
@@ -36,6 +37,8 @@ const actionFilter = ref('')
 const sinceLocal = ref('')
 const untilLocal = ref('')
 const clientQuery = ref('')
+const limit = ref(500)
+const serverTotal = ref<number | null>(null)
 const auditEvents = ref<AuditEvent[]>([])
 const loading = ref(false)
 const loadError = ref('')
@@ -61,6 +64,11 @@ onMounted(async () => {
   await loadAudit()
 })
 
+watch(limit, () => {
+  if (!isAdmin.value) return
+  void loadAudit()
+})
+
 function toUnix(local: string): number | undefined {
   if (!local) return undefined
   const ms = Date.parse(local)
@@ -72,17 +80,18 @@ async function loadAudit() {
   loading.value = true
   loadError.value = ''
   try {
-    const params = new URLSearchParams()
-    if (selectedUser.value) params.set('user_name', selectedUser.value)
-    if (actionFilter.value.trim()) params.set('action', actionFilter.value.trim())
     const since = toUnix(sinceLocal.value)
     const until = toUnix(untilLocal.value)
-    if (since) params.set('since_unix', String(since))
-    if (until) params.set('until_unix', String(until))
-    params.set('limit', '500')
-    const qs = params.toString()
-    const data = await apiGet<AuditResponse>(`/api/v1/admin/audit${qs ? `?${qs}` : ''}`)
+    const qs = buildAuditQueryString({
+      userName: selectedUser.value || undefined,
+      action: actionFilter.value,
+      sinceUnix: since,
+      untilUnix: until,
+      limit: limit.value,
+    })
+    const data = await apiGet<AuditResponse>(`/api/v1/admin/audit?${qs}`)
     auditEvents.value = data.events ?? []
+    serverTotal.value = typeof data.total === 'number' ? data.total : (data.events ?? []).length
   } catch (e) {
     if (selectedUser.value) {
       try {
@@ -97,6 +106,7 @@ async function loadAudit() {
       loadError.value = formatCaughtError(e)
     }
     auditEvents.value = []
+    serverTotal.value = null
     notifyError(loadError.value)
   } finally {
     loading.value = false
@@ -221,6 +231,11 @@ function exportCSV() {
           data-testid="audit-client-filter"
         />
       </label>
+      <label class="text-xs mts-muted">{{ t('auditLimit') }}
+        <select v-model.number="limit" class="mts-input mt-1" data-testid="audit-limit">
+          <option v-for="n in auditLimitOptions()" :key="n" :value="n">{{ n }}</option>
+        </select>
+      </label>
       <div class="flex flex-wrap items-end gap-2">
         <button type="button" :disabled="loading" class="mts-btn-primary" data-testid="audit-reload" @click="loadAudit">
           <RefreshCw class="h-3.5 w-3.5" />
@@ -240,7 +255,11 @@ function exportCSV() {
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
       <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs mts-muted dark:border-slate-800">
         <span class="inline-flex items-center gap-1"><ScrollText class="h-3.5 w-3.5" /> {{ t('auditEvents') }}</span>
-        <span data-testid="audit-count">{{ filteredCount }} / {{ auditEvents.length }}</span>
+        <span class="inline-flex flex-wrap items-center gap-2">
+          <span data-testid="audit-count">{{ filteredCount }} / {{ auditEvents.length }}</span>
+          <span v-if="serverTotal != null" class="text-[11px]" data-testid="audit-total">{{ t('auditTotal') }}: {{ serverTotal }}</span>
+          <span class="text-[11px]" data-testid="audit-merged-hint">{{ t('auditMergedHint') }}</span>
+        </span>
       </div>
       <div v-if="!displayedEvents.length">
         <EmptyState

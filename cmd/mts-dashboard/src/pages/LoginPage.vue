@@ -6,6 +6,7 @@ import { useI18n } from '@/composables/useI18n'
 import { sanitizeRedirect } from '@/router'
 import { loginReasonMessage } from '@/utils/authReason'
 import { parseLoginTTLSeconds } from '@/utils/loginTTL'
+import { loadLoginTTLPref, saveLoginTTLPref } from '@/utils/loginTTLPrefs'
 import { Server } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -14,7 +15,7 @@ const { t, locale } = useI18n()
 
 const username = ref('admin')
 const password = ref('')
-const ttlSeconds = ref('')
+const ttlSeconds = ref(loadLoginTTLPref(typeof localStorage !== 'undefined' ? localStorage : null))
 const loading = ref(false)
 const error = ref('')
 const reasonHint = computed(() =>
@@ -43,6 +44,10 @@ async function handleLogin() {
     if (err) {
       error.value = err
     } else {
+      saveLoginTTLPref(
+        typeof localStorage !== 'undefined' ? localStorage : null,
+        ttlSeconds.value,
+      )
       if (mustChangePassword.value) {
         await router.push({ name: 'ForceChangePassword' })
         return

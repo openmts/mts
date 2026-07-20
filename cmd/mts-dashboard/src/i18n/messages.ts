@@ -817,6 +817,12 @@ export const messages = {
     readinessDeployDrillRunbooks: 'Runbook',
     readinessDeployDrillTemplates: '材料包样例',
 
+    writeModeRemembered: '写入模式与选项会保存在本机',
+    writePreferTypedBadge: '推荐 · 列式高性能',
+    auditLimit: '条数上限',
+    auditTotal: '服务返回',
+    auditMergedHint: '列表已合并内存环与 _internal.audit_log 持久化结果',
+
     queryStreamPreviewFooter: '… 共 {lines} 行，仅预览前 {limit} 行（复制也仅含预览）',
     databasesErrBadDuration: 'RP 时长格式无效（如 1h / 7d）',
     databasesErrDurationOverflow: 'RP 时长超出安全整数范围',
@@ -1669,6 +1675,12 @@ export const messages = {
     readinessDeployDrillEvidence: 'Evidence',
     readinessDeployDrillRunbooks: 'Runbooks',
     readinessDeployDrillTemplates: 'Kit samples',
+
+    writeModeRemembered: 'Write mode and options are saved on this device',
+    writePreferTypedBadge: 'Recommended · columnar high-performance',
+    auditLimit: 'Limit',
+    auditTotal: 'Server total',
+    auditMergedHint: 'List merges in-memory ring with durable _internal.audit_log',
 
     queryStreamPreviewFooter: '… {lines} lines total; preview first {limit} only (copy is preview-only)',
     databasesErrBadDuration: 'Invalid RP duration (e.g. 1h / 7d)',
