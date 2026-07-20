@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { listDatabases, listMeasurements, listRetentionPolicies, listSeriesDetailed } from '@/api/meta'
 import { seriesLabel } from '@/utils/seriesMeta'
@@ -31,7 +32,13 @@ import {
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { buildDatabasesExport, databasesToCSV } from '@/utils/databasesExport'
-import { buildQueryPrefillPath, buildWritePrefillPath } from '@/utils/routePrefill'
+import {
+  buildQueryPrefillPath,
+  buildWritePrefillPath,
+  parseDatabasesPrefill,
+  databasesFormToPrefill,
+} from '@/utils/routePrefill'
+import { copyText } from '@/utils/clipboard'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
@@ -56,7 +63,9 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
+const route = useRoute()
 const router = useRouter()
+useHashScroll()
 const SERIES_CAP = 200
 const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
@@ -124,10 +133,46 @@ onMounted(async () => {
       newRpDuration: '',
     }))
     pruneTo(names)
+    await applyDatabasesPrefillFromRoute()
   } catch (e) {
     loadError.value = formatCaughtError(e)
   }
 })
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (prev != null && path !== prev) void applyDatabasesPrefillFromRoute()
+  },
+)
+
+async function applyDatabasesPrefillFromRoute() {
+  const pre = parseDatabasesPrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.q != null && dbFilter.value !== pre.q) {
+    dbFilter.value = pre.q
+    changed = true
+  }
+  if (pre.database) {
+    const db = databases.value.find((d) => d.name === pre.database)
+    if (db && !db.expanded) {
+      await toggleExpand(db)
+      changed = true
+    }
+  }
+  if (changed) success(t.value('databasesPrefillApplied'))
+}
+
+async function copyDatabasesShareLink() {
+  const path = databasesFormToPrefill({
+    database: activeDatabase.value?.name,
+    q: dbFilter.value,
+  }, { hash: activeDatabase.value ? '#databases-detail' : '#databases-filter-bar' })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('databasesShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
 async function loadDatabaseDetails(db: DatabaseEntry) {
   db.loading = true
   actionResult.value = null
@@ -384,6 +429,9 @@ function exportCSV() {
         <button type="button" class="mts-btn" data-testid="databases-export-csv" :disabled="!filteredDatabases.length" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
         </button>
+        <button type="button" class="mts-btn" data-testid="databases-share-link" @click="copyDatabasesShareLink">
+          {{ t('databasesShareLink') }}
+        </button>
         <template v-if="isAdmin">
           <input v-model="newDbName" type="text" :placeholder="t('databasesCreatePlaceholder')" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" data-testid="databases-create-input" @keyup.enter="createDatabase" />
           <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="databases-create-btn" @click="createDatabase">
@@ -393,7 +441,7 @@ function exportCSV() {
       </div>
     </div>
 
-    <div class="flex flex-wrap items-end gap-3" data-testid="databases-filter-bar">
+    <div id="databases-filter-bar" class="scroll-mt-20 flex flex-wrap items-end gap-3" data-testid="databases-filter-bar">
       <label class="text-xs mts-muted">{{ t('filter') }}
         <input
           v-model="dbFilter"
@@ -482,7 +530,8 @@ function exportCSV() {
 
       <div
         v-if="activeDatabase && activeDatabase.expanded && activeDatabase.loaded"
-        class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+        id="databases-detail"
+        class="scroll-mt-20 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
         data-testid="databases-detail-panel"
       >
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2 dark:border-slate-800">

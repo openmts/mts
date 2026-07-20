@@ -254,3 +254,40 @@ export function auditFormToPrefill(form: {
   })
 }
 
+
+export type DatabasesPrefill = {
+  database?: string
+  q?: string
+}
+
+/** 库页预填：database 展开详情；q 为库名筛选（不自动写操作） */
+export function parseDatabasesPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): DatabasesPrefill {
+  const out: DatabasesPrefill = {}
+  const database = firstQueryValue(query.database ?? query.db)
+  if (database) out.database = database
+  const q = firstQueryValue(query.q ?? query.filter)
+  if (q) out.q = q
+  return out
+}
+
+export function buildDatabasesPrefillPath(opts: DatabasesPrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.database) params.set('database', opts.database)
+  if (opts.q) params.set('q', opts.q)
+  const qs = params.toString()
+  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#databases-filter-bar'
+  return qs ? `/databases?${qs}${hash}` : `/databases${hash}`
+}
+
+export function databasesFormToPrefill(form: {
+  database?: string
+  q?: string
+}, opts?: { hash?: string }): string {
+  return buildDatabasesPrefillPath({
+    database: form.database?.trim() || undefined,
+    q: form.q?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}

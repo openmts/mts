@@ -261,6 +261,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('databases-page')).toBeVisible()
   await expect(page.getByTestId('databases-export-json')).toBeVisible()
   await expect(page.getByTestId('databases-export-csv')).toBeVisible()
+  await expect(page.getByTestId('databases-share-link')).toBeVisible()
   // 导航对登录用户开放（admin 冒烟可见侧栏 + 创建控件）
   await expect(page.getByTestId('sidebar-nav-row-databases')).toBeVisible()
   await expect(page.getByTestId('databases-create-input')).toBeVisible()
@@ -969,6 +970,16 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('not-found-page')).toBeVisible()
   await expect(page.getByTestId('not-found-go-overview')).toBeVisible()
   await expect(page.getByText(/页面不存在|Page not found|404/).first()).toBeVisible()
+
+
+  // P173: 库页深链展开 + 分享按钮
+  await page.goto('/databases?database=default#databases-detail')
+  await expect(page.getByTestId('databases-page')).toBeVisible()
+  // 若 default 存在则详情可见
+  if (await page.getByTestId('databases-detail-panel').count()) {
+    await expect(page.getByTestId('databases-detail-panel')).toBeVisible()
+  }
+  await expect(page.getByTestId('databases-share-link')).toBeVisible()
 
   // 17) 非 admin 端到端：创建 reader、授权 default 读、只读库浏览
   await page.goto('/users')

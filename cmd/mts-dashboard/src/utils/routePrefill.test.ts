@@ -8,6 +8,9 @@ import {
   queryFormToPrefill,
   writeFormToPrefill,
   auditFormToPrefill,
+  parseDatabasesPrefill,
+  buildDatabasesPrefillPath,
+  databasesFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -126,4 +129,16 @@ test('write/audit form share helpers', () => {
     auditFormToPrefill({ range: '24h', action: 'login', user: 'reader' }),
     '/audit?range=24h&action=login&user=reader#audit-filters',
   )
+})
+
+test('databases prefill parse and share', () => {
+  assert.deepEqual(parseDatabasesPrefill({ database: 'metrics', q: 'met' }), {
+    database: 'metrics',
+    q: 'met',
+  })
+  assert.equal(
+    databasesFormToPrefill({ database: 'metrics', q: 'm' }),
+    '/databases?database=metrics&q=m#databases-filter-bar',
+  )
+  assert.match(buildDatabasesPrefillPath({ database: 'd1' }), /database=d1/)
 })
