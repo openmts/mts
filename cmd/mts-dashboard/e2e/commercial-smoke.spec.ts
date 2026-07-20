@@ -503,8 +503,23 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('users-filter')).toBeVisible()
   await expect(page.getByTestId('users-role-filter')).toBeVisible()
   await expect(page.getByTestId('users-role-filter')).toContainText(/管理员|Admin|普通用户|User/)
+  // P110: 用户多选 / 批量工具条
+  await expect(page.getByTestId('users-selection-toolbar')).toBeVisible()
+  await expect(page.getByTestId('users-select-all')).toBeVisible()
+  await expect(page.getByTestId('users-batch-enable')).toBeDisabled()
+  await expect(page.getByTestId('users-batch-disable')).toBeDisabled()
+  await page.getByTestId('users-select-all').click()
+  await expect(page.getByTestId('users-selected-count')).toBeVisible()
+  await expect(page.getByTestId('users-batch-enable')).toBeEnabled()
+  await page.getByTestId('users-clear-selection').click()
+  await expect(page.getByTestId('users-selected-count')).toHaveCount(0)
   await page.goto('/databases')
   await expect(page.getByTestId('databases-filter')).toBeVisible()
+  await expect(page.getByTestId('databases-selection-toolbar')).toBeVisible()
+  await expect(page.getByTestId('databases-select-all')).toBeVisible()
+  await page.getByTestId('databases-select-all').click()
+  await expect(page.getByTestId('databases-selected-count')).toBeVisible()
+  await page.getByTestId('databases-clear-selection').click()
   await expect(page.getByRole('main').getByRole('heading', { name: /数据库|Databases/i })).toBeVisible()
 
   // 14) 降采样筛选/批量/状态/区间操作入口

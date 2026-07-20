@@ -14,6 +14,8 @@ import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { filterUsers } from '@/utils/listFilter'
+import { filterRowsByIds } from '@/utils/listSelection'
+import { useListSelection } from '@/composables/useListSelection'
 import { buildUsersExport, usersToCSV } from '@/utils/usersExport'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 
@@ -26,6 +28,19 @@ const users = ref<User[]>([])
 const userFilter = ref('')
 const roleFilter = ref('')
 const filteredUsers = computed(() => filterUsers(users.value, userFilter.value, roleFilter.value))
+const visibleUserIds = computed(() => filteredUsers.value.map((u) => u.name))
+const {
+  selectedIds,
+  selectedCount,
+  allVisibleSelected,
+  someVisibleSelected,
+  exportIds,
+  isSelected,
+  toggle,
+  toggleAllVisible,
+  clear: clearSelection,
+  pruneTo,
+} = useListSelection(visibleUserIds)
 const databases = ref<string[]>([])
 const { currentUser, isAdmin } = useAuth()
 const { t } = useI18n()
@@ -51,6 +66,9 @@ const grantPerms = ref<string[]>([])
 const deleteOpen = ref(false)
 const deleteName = ref('')
 const deleteLoading = ref(false)
+const batchOpen = ref(false)
+const batchMode = ref<'enable' | 'disable'>('enable')
+const batchLoading = ref(false)
 
 onMounted(async () => {
   if (!isAdmin.value) return
@@ -65,6 +83,7 @@ async function loadUsers() {
   try {
     const data = await apiGet<UsersResponse>('/api/v1/users')
     users.value = data.users ?? []
+    pruneTo(users.value.map((u) => u.name))
   } catch (e) {
     loadError.value = formatCaughtError(e)
   }
@@ -234,22 +253,83 @@ function openSetPassword(name: string) {
   showSetPassword.value = true
 }
 
+function rowsForExport() {
+  return filterRowsByIds(filteredUsers.value, exportIds.value, (u) => u.name)
+}
+
 function exportJSON() {
-  if (!filteredUsers.value.length) {
+  const rows = rowsForExport()
+  if (!rows.length) {
     warn(t.value('inventoryExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-users', 'json'), buildUsersExport(filteredUsers.value))
+  downloadJSON(stampFilename('mts-users', 'json'), buildUsersExport(rows))
   success(t.value('inventoryExported'))
 }
 
 function exportCSV() {
-  if (!filteredUsers.value.length) {
+  const rows = rowsForExport()
+  if (!rows.length) {
     warn(t.value('inventoryExportEmpty'))
     return
   }
-  downloadText(stampFilename('mts-users', 'csv'), usersToCSV(filteredUsers.value), 'text/csv;charset=utf-8')
+  downloadText(stampFilename('mts-users', 'csv'), usersToCSV(rows), 'text/csv;charset=utf-8')
   success(t.value('inventoryExported'))
+}
+
+function openBatch(mode: 'enable' | 'disable') {
+  if (!selectedIds.value.length) return
+  batchMode.value = mode
+  batchOpen.value = true
+}
+
+async function confirmBatch() {
+  const names = selectedIds.value.slice()
+  if (!names.length) {
+    batchOpen.value = false
+    return
+  }
+  batchLoading.value = true
+  let ok = 0
+  let skip = 0
+  let fail = 0
+  const wantDisabled = batchMode.value === 'disable'
+  try {
+    for (const name of names) {
+      const user = users.value.find((u) => u.name === name)
+      if (!user) {
+        skip += 1
+        continue
+      }
+      if (wantDisabled && name === currentUser.value) {
+        skip += 1
+        continue
+      }
+      if (Boolean(user.disabled) === wantDisabled) {
+        skip += 1
+        continue
+      }
+      try {
+        await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, {
+          ...user,
+          disabled: wantDisabled,
+        })
+        ok += 1
+      } catch {
+        fail += 1
+      }
+    }
+    await loadUsers()
+    const key = fail ? 'listBatchPartial' : 'listBatchDone'
+    const msg = formatMessage(t.value(key), { ok, skip, fail })
+    actionResult.value = makeActionResult(fail ? 'error' : 'ok', msg)
+    if (fail) notifyError(msg)
+    else success(msg)
+    clearSelection()
+    batchOpen.value = false
+  } finally {
+    batchLoading.value = false
+  }
 }
 </script>
 
@@ -307,6 +387,13 @@ function exportCSV() {
         </select>
       </label>
       <span class="text-xs mts-muted" data-testid="users-filter-count">{{ filteredUsers.length }} / {{ users.length }}</span>
+      <span v-if="selectedCount" class="text-xs text-sky-700 dark:text-sky-300" data-testid="users-selected-count">{{ formatMessage(t('listSelectedCount'), { count: selectedCount }) }}</span>
+      <div class="flex flex-wrap gap-2" data-testid="users-selection-toolbar">
+        <button type="button" class="mts-btn" data-testid="users-select-all" :disabled="!filteredUsers.length" @click="toggleAllVisible(true)">{{ t('listSelectAll') }}</button>
+        <button type="button" class="mts-btn" data-testid="users-clear-selection" :disabled="!selectedCount" @click="clearSelection">{{ t('listClearSelection') }}</button>
+        <button type="button" class="mts-btn" data-testid="users-batch-enable" :disabled="!selectedCount" @click="openBatch('enable')">{{ t('listBatchEnable') }}</button>
+        <button type="button" class="mts-btn" data-testid="users-batch-disable" :disabled="!selectedCount" @click="openBatch('disable')">{{ t('listBatchDisable') }}</button>
+      </div>
     </div>
 
     <div v-if="!filteredUsers.length" class="mts-card">
@@ -325,6 +412,17 @@ function exportCSV() {
     <div class="mts-table-wrap" data-testid="users-table-wrap"><table class="w-full min-w-[40rem] text-sm">
         <thead>
           <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
+            <th class="w-10 px-3 py-2.5">
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5"
+                data-testid="users-select-all-checkbox"
+                :checked="allVisibleSelected"
+                :indeterminate.prop="someVisibleSelected"
+                :aria-label="t('listSelectAll')"
+                @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
+              />
+            </th>
             <th class="px-4 py-2.5">{{ t('usersColUser') }}</th>
             <th class="px-4 py-2.5">{{ t('usersColRole') }}</th>
             <th class="px-4 py-2.5">{{ t('usersColStatus') }}</th>
@@ -333,6 +431,16 @@ function exportCSV() {
         </thead>
         <tbody>
           <tr v-for="u in filteredUsers" :key="u.name" class="border-b border-slate-50 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="px-3 py-3">
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5"
+                :data-testid="`users-select-${u.name}`"
+                :checked="isSelected(u.name)"
+                :aria-label="t('listSelectCol') + ' ' + u.name"
+                @change="toggle(u.name, ($event.target as HTMLInputElement).checked)"
+              />
+            </td>
             <td class="px-4 py-3">
               <button class="text-left font-medium text-slate-800 dark:text-slate-100 hover:underline" @click="selectUser(u)">{{ u.name }}</button>
               <span v-if="u.display_name" class="ml-2 text-xs text-slate-400 dark:text-slate-500">{{ u.display_name }}</span>
@@ -383,6 +491,15 @@ function exportCSV() {
       @change-password="doChangeSelfPassword"
     />
 
+    <ConfirmDialog
+      v-model:open="batchOpen"
+      :title="batchMode === 'enable' ? t('listBatchEnableTitle') : t('listBatchDisableTitle')"
+      :message="(batchMode === 'enable' ? t('listBatchEnableMsg') : t('listBatchDisableMsg')) + ` (${selectedCount})`"
+      :confirm-label="batchMode === 'enable' ? t('listBatchEnable') : t('listBatchDisable')"
+      :danger="batchMode === 'disable'"
+      :loading="batchLoading"
+      @confirm="confirmBatch"
+    />
     <ConfirmDialog
       v-model:open="deleteOpen"
       :title="t('usersDeleteTitle')"

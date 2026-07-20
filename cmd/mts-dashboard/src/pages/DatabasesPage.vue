@@ -16,6 +16,8 @@ import { formatCaughtError } from '@/utils/apiError'
 import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
 import { formatMessage } from '@/utils/formatMessage'
 import { filterByName } from '@/utils/listFilter'
+import { filterRowsByIds } from '@/utils/listSelection'
+import { useListSelection } from '@/composables/useListSelection'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { buildDatabasesExport, databasesToCSV } from '@/utils/databasesExport'
@@ -47,6 +49,19 @@ const { success, error: notifyError, warn } = useNotify()
 const databases = ref<DatabaseEntry[]>([])
 const dbFilter = ref('')
 const filteredDatabases = computed(() => filterByName(databases.value, dbFilter.value))
+const visibleDbIds = computed(() => filteredDatabases.value.map((d) => d.name))
+const {
+  selectedIds,
+  selectedCount,
+  allVisibleSelected,
+  someVisibleSelected,
+  exportIds,
+  isSelected,
+  toggle,
+  toggleAllVisible,
+  clear: clearSelection,
+  pruneTo,
+} = useListSelection(visibleDbIds)
 const newDbName = ref('')
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
@@ -67,6 +82,7 @@ onMounted(async () => {
       newRpName: '',
       newRpDuration: '',
     }))
+    pruneTo(names)
   } catch (e) {
     loadError.value = formatCaughtError(e)
   }
@@ -158,6 +174,7 @@ async function confirmDeleteDatabase() {
   try {
     await apiDelete(`/api/v1/admin/databases/${encodeURIComponent(name)}`)
     databases.value = databases.value.filter((d) => d.name !== name)
+    pruneTo(databases.value.map((d) => d.name))
     confirmOpen.value = false
     success(formatMessage(t.value('databasesDeleted'), { name }))
   } catch (e) {
@@ -223,27 +240,37 @@ function fieldTypeName(type: number): string {
   }
 }
 
+function rowsForExport() {
+  return filterRowsByIds(filteredDatabases.value, exportIds.value, (d) => d.name)
+}
+
 function exportJSON() {
-  if (!filteredDatabases.value.length) {
+  const list = rowsForExport()
+  if (!list.length) {
     warn(t.value('inventoryExportEmpty'))
     return
   }
-  const rows = filteredDatabases.value.map((db) => ({
-    name: db.name,
-    measurement_count: db.loaded ? db.measurements.length : undefined,
-    retention_policy_count: db.loaded ? db.retentionPolicies.length : undefined,
-    loaded: db.loaded,
-  }))
-  downloadJSON(stampFilename('mts-databases', 'json'), buildDatabasesExport(rows))
+  downloadJSON(
+    stampFilename('mts-databases', 'json'),
+    buildDatabasesExport(
+      list.map((db) => ({
+        name: db.name,
+        measurement_count: db.loaded ? db.measurements.length : undefined,
+        retention_policy_count: db.loaded ? db.retentionPolicies.length : undefined,
+        loaded: db.loaded,
+      })),
+    ),
+  )
   success(t.value('inventoryExported'))
 }
 
 function exportCSV() {
-  if (!filteredDatabases.value.length) {
+  const list = rowsForExport()
+  if (!list.length) {
     warn(t.value('inventoryExportEmpty'))
     return
   }
-  const rows = filteredDatabases.value.map((db) => ({
+  const rows = list.map((db) => ({
     name: db.name,
     measurement_count: db.loaded ? db.measurements.length : undefined,
     retention_policy_count: db.loaded ? db.retentionPolicies.length : undefined,
@@ -288,6 +315,11 @@ function exportCSV() {
         />
       </label>
       <span class="text-xs mts-muted" data-testid="databases-filter-count">{{ filteredDatabases.length }} / {{ databases.length }}</span>
+      <span v-if="selectedCount" class="text-xs text-sky-700 dark:text-sky-300" data-testid="databases-selected-count">{{ formatMessage(t('listSelectedCount'), { count: selectedCount }) }}</span>
+      <div class="flex flex-wrap gap-2" data-testid="databases-selection-toolbar">
+        <button type="button" class="mts-btn" data-testid="databases-select-all" :disabled="!filteredDatabases.length" @click="toggleAllVisible(true)">{{ t('listSelectAll') }}</button>
+        <button type="button" class="mts-btn" data-testid="databases-clear-selection" :disabled="!selectedCount" @click="clearSelection">{{ t('listClearSelection') }}</button>
+      </div>
     </div>
 
     <div v-if="!filteredDatabases.length" class="mts-card">
@@ -305,11 +337,22 @@ function exportCSV() {
     <div v-else class="space-y-2">
 <div v-for="db in filteredDatabases" :key="db.name" class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
+          <div class="flex min-w-0 items-center gap-2">
+            <input
+              type="checkbox"
+              class="h-3.5 w-3.5 shrink-0"
+              :data-testid="`databases-select-${db.name}`"
+              :checked="isSelected(db.name)"
+              :aria-label="t('listSelectCol') + ' ' + db.name"
+              @change="toggle(db.name, ($event.target as HTMLInputElement).checked)"
+              @click.stop
+            />
           <button class="flex items-center gap-2 text-left" @click="toggleExpand(db)">
             <component :is="db.expanded ? ChevronDown : ChevronRight" class="h-4 w-4 text-slate-400 dark:text-slate-500" />
             <span class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ db.name }}</span>
             <span v-if="db.loading" class="text-xs text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</span>
           </button>
+          </div>
           <button class="rounded p-1 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:text-red-300" :title="t('databasesDeleteDbBtnTitle')" @click="requestDeleteDatabase(db.name)">
             <Trash2 class="h-4 w-4" />
           </button>

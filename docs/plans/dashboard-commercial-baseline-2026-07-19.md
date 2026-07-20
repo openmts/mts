@@ -575,3 +575,10 @@
 - 商业冒烟覆盖 copy-page-url 与 focus/reload 入口
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+
+## P110 状态（2026-07-20）
+- Users/Databases 多选、全选过滤结果、清空选择；导出优先已选行
+- Users 批量启用/禁用（确认框，跳过当前用户与已达目标状态）
+- 商业冒烟覆盖 selection toolbar
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
