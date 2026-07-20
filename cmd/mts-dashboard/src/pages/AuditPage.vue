@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useHashScroll } from '@/composables/useHashScroll'
 import EmptyState from '@/components/EmptyState.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { apiGet } from '@/api/client'
@@ -30,6 +31,7 @@ interface AuditEvent {
 }
 interface AuditResponse { events: AuditEvent[]; total?: number }
 
+useHashScroll()
 const { isAdmin } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
@@ -164,7 +166,7 @@ function exportCSV() {
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
     <p class="mts-alert-warn">{{ t('auditHint') }}</p>
 
-    <div class="flex flex-wrap gap-2" data-testid="audit-quick-ranges">
+    <div id="audit-filters" class="scroll-mt-20 flex flex-wrap gap-2" data-testid="audit-quick-ranges">
       <button
         v-for="r in quickRanges"
         :key="r.id"
@@ -258,7 +260,7 @@ function exportCSV() {
         </EmptyState>
       </div>
       <div v-else class="overflow-x-auto">
-        <table class="w-full text-sm" data-testid="audit-table">
+        <table id="audit-table" class="scroll-mt-20 w-full text-sm" data-testid="audit-table">
           <thead>
             <tr class="border-b border-slate-200 text-left dark:border-slate-700">
               <th class="px-4 py-3 text-xs font-medium mts-muted">{{ t('auditColTime') }}</th>

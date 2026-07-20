@@ -308,6 +308,18 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page).toHaveURL(/\/operations/)
   await expect(page.getByTestId('ops-action-log')).toBeVisible()
 
+  // P100: 配置/审计深链
+  await page.getByTestId('topbar-command-palette').click()
+  await page.getByTestId('command-palette-input').fill('effective config')
+  await page.getByTestId('command-item-config-effective').click()
+  await expect(page).toHaveURL(/\/config/)
+  await expect(page.getByTestId('config-effective-json')).toBeVisible()
+  await page.getByTestId('topbar-command-palette').click()
+  await page.getByTestId('command-palette-input').fill('audit filters')
+  await page.getByTestId('command-item-audit-filters').click()
+  await expect(page).toHaveURL(/\/audit/)
+  await expect(page.getByTestId('audit-quick-ranges')).toBeVisible()
+
   // 最近访问清空：多页后 clear，仅剩当前页（>1 才显示清空）
   await page.goto('/write')
   await page.goto('/query')

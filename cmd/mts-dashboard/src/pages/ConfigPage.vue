@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, getAdminToken, setAdminToken, getDataToken, setDataToken } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
@@ -27,6 +28,7 @@ interface ErrorCodesResponse { codes: ErrorCodeSpec[] }
 interface SchemaField { name: string; description: string }
 interface SchemaResponse { fields: SchemaField[] }
 
+useHashScroll()
 const { isAdmin } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
@@ -222,7 +224,7 @@ function statusLabel(httpStatus: number): string {
 
     <div v-if="config" class="mts-panel">
       <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configEffective') }}</h2>
-      <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400" data-testid="config-effective-json">{{ JSON.stringify(config, null, 2) }}</pre>
+      <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400" id="config-effective" data-testid="config-effective-json">{{ JSON.stringify(config, null, 2) }}</pre>
     </div>
 
     <div class="mts-panel">
@@ -235,7 +237,7 @@ function statusLabel(httpStatus: number): string {
           </button>
         </div>
       </div>
-      <div class="mts-table-wrap max-h-80 overflow-auto" data-testid="config-schema-table">
+      <div class="mts-table-wrap max-h-80 overflow-auto scroll-mt-20" id="config-schema" data-testid="config-schema-table">
         <table class="w-full min-w-[36rem] text-sm">
           <thead>
             <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
@@ -263,7 +265,7 @@ function statusLabel(httpStatus: number): string {
           <Download class="h-3.5 w-3.5" /> {{ t('configExportErrorCodes') }}
         </button>
       </div>
-      <div class="mts-table-wrap"><table class="w-full min-w-[36rem] text-sm" data-testid="config-error-codes-table">
+      <div class="mts-table-wrap"><table class="w-full min-w-[36rem] text-sm scroll-mt-20" id="config-error-codes" data-testid="config-error-codes-table">
         <thead>
           <tr class="border-b border-slate-200 text-left dark:border-slate-700">
             <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColCode') }}</th>

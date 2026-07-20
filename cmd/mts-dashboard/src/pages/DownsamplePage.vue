@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -34,6 +35,7 @@ import type {
 interface PoliciesResponse { policies: DownsamplePolicy[] }
 interface StatusesResponse { statuses: DownsampleStatus[] }
 
+useHashScroll()
 const { isAdmin } = useAuth()
 const { t, locale } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
@@ -469,7 +471,7 @@ function exportCSV() {
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 
-    <div class="flex flex-wrap items-end gap-3" data-testid="downsample-filter-bar">
+    <div id="downsample-filters" class="scroll-mt-20 flex flex-wrap items-end gap-3" data-testid="downsample-filter-bar">
       <label class="text-xs mts-muted">{{ t('filter') }}
         <input
           v-model="policyFilter"
@@ -605,7 +607,7 @@ function exportCSV() {
       </table>
     </div>
 
-    <div class="mts-card overflow-hidden p-0" data-testid="downsample-status-panel">
+    <div id="downsample-status" class="mts-card scroll-mt-20 overflow-hidden p-0" data-testid="downsample-status-panel">
       <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('downsampleStatusPanel') }}</h2>
         <p class="text-[11px] mts-muted">{{ t('downsampleStatusPanelHint') }}</p>

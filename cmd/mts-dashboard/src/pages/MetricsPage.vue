@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGetText } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
@@ -21,6 +22,7 @@ import { useNotify } from '@/composables/useNotify'
 import { Activity, RefreshCw, Download } from 'lucide-vue-next'
 
 const { isAdmin } = useAuth()
+useHashScroll()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
 const loading = ref(false)
@@ -157,7 +159,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="grid gap-3 sm:grid-cols-2">
-      <div class="mts-card p-3" data-testid="metrics-summary-families">
+      <div class="mts-card p-3" id="metrics-summary" data-testid="metrics-summary-families">
         <p class="text-xs mts-muted">{{ t('metricsFamilies') }}</p>
         <p class="text-xl font-semibold text-slate-800 dark:text-slate-100">{{ summary.families }}</p>
       </div>
@@ -171,7 +173,7 @@ onBeforeUnmount(() => {
       <input
         v-model="q"
         class="mts-input max-w-xl text-sm"
-        data-testid="metrics-filter"
+        id="metrics-filter" data-testid="metrics-filter"
         :placeholder="t('metricsFilterPlaceholder')"
         :aria-label="t('metricsFilterPlaceholder')"
       />
@@ -182,7 +184,7 @@ onBeforeUnmount(() => {
     <div v-if="!loading && !filtered.length" class="mts-card" data-testid="metrics-empty">
       <EmptyState :title="t('metricsEmpty')" :description="t('metricsEmptyDesc')" />
     </div>
-    <div v-else class="space-y-2" data-testid="metrics-list">
+    <div class="space-y-2 scroll-mt-20" v-else id="metrics-list" data-testid="metrics-list">
       <div
         v-for="fam in filtered"
         :key="fam.name"

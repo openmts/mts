@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
 import { apiGet, apiPost } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -25,14 +24,14 @@ import { copyText } from '@/utils/clipboard'
 import { buildMaintenanceErrorsExport, buildOpsStatsExport, formatOpsStatsPretty, maintenanceErrorsToText } from '@/utils/opsExport'
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser, Copy } from 'lucide-vue-next'
 import type { CompactionStats, MaintenanceStats } from '@/api/types'
-import { scheduleScrollToHash } from '@/utils/hashScroll'
+import { useHashScroll } from '@/composables/useHashScroll'
 
 interface CompactionStatsResponse { stats: CompactionStats }
 interface MaintenanceStatsResponse { stats: MaintenanceStats }
 interface MaintenanceErrorsResponse { errors: string[] }
 
-const route = useRoute()
 const { isAdmin } = useAuth()
+useHashScroll()
 const { t } = useI18n()
 const { success, error: notifyError, warn, info } = useNotify()
 const loadError = ref('')
@@ -202,19 +201,7 @@ function formatAt(at: number): string {
   }
 }
 
-function scrollToCurrentHash() {
-  scheduleScrollToHash(typeof window !== 'undefined' ? window.location.hash : route.hash, typeof document !== 'undefined' ? document : null)
-}
-
-onMounted(() => {
-  void loadStats()
-  scrollToCurrentHash()
-  if (typeof window !== 'undefined') window.addEventListener('hashchange', scrollToCurrentHash)
-})
-onBeforeUnmount(() => {
-  if (typeof window !== 'undefined') window.removeEventListener('hashchange', scrollToCurrentHash)
-})
-watch(() => route.hash, () => scrollToCurrentHash())
+onMounted(() => { void loadStats() })
 </script>
 
 <template>
@@ -349,9 +336,7 @@ watch(() => route.hash, () => scrollToCurrentHash())
           <div class="min-w-0">
             <span
               class="mr-2 rounded px-1.5 py-0.5 font-medium"
-              :class="item.status === 'ok'
-                ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
-                : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200'"
+              :class="item.status === 'ok' ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200'"
             >{{ item.kind }} · {{ item.status }}</span>
             <span class="text-slate-700 dark:text-slate-200">{{ item.message }}</span>
           </div>

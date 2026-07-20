@@ -59,6 +59,15 @@ test('command palette includes ops deep links for admin', () => {
     'operations-retention',
     'operations-action-log',
     'operations-maint-errors',
+    'metrics-summary',
+    'metrics-list',
+    'config-effective',
+    'config-schema',
+    'config-error-codes',
+    'downsample-filters',
+    'downsample-status',
+    'audit-filters',
+    'audit-table',
   ]) {
     assert.ok(admin.some((i) => i.id === id), id)
   }
@@ -68,6 +77,9 @@ test('command palette includes ops deep links for admin', () => {
   assert.ok(filterCommandItems(admin, '#data-restore', resolve).some((i) => i.id === 'storage-data-restore'))
   assert.ok(filterCommandItems(admin, 'memtable', resolve).some((i) => i.id === 'operations-flush'))
   assert.ok(filterCommandItems(admin, 'ops log', resolve).some((i) => i.id === 'operations-action-log'))
+  assert.ok(filterCommandItems(admin, 'effective config', resolve).some((i) => i.id === 'config-effective'))
+  assert.ok(filterCommandItems(admin, 'audit filters', resolve).some((i) => i.id === 'audit-filters'))
+  assert.ok(filterCommandItems(admin, 'watermark', resolve).some((i) => i.id === 'downsample-status'))
   const user = visibleCommandItems(COMMAND_NAV_ITEMS, false)
-  assert.ok(user.every((i) => !i.id.startsWith('readiness') && !i.id.startsWith('storage-') && !i.id.startsWith('operations-')))
+  assert.ok(user.every((i) => !i.adminOnly))
 })
