@@ -117,6 +117,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // P138: 表单写行上限指示（切到 form 模式可见）
   await page.getByTestId('write-mode-form').click()
   await expect(page.getByTestId('write-form-row-count')).toBeVisible()
+  await expect(page.getByTestId('write-meta-panel')).toBeVisible()
   await expect(page.getByTestId('write-add-row')).toBeVisible()
   await expect(page.getByTestId('write-retention-policy')).toBeVisible()
 

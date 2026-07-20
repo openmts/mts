@@ -63,7 +63,7 @@ Dashboard 在 P124–P136 后已具备可商用后台的主体骨架：鉴权/�
 | 独立 `GET /api/v1/data/query/stats` | Query 页引擎快照入口已接（P143） | 已完成 |
 | series 列表 query 过滤 UI | fields/series 选择器 + 客户端筛选（P142/P146；无服务端分页） | 部分完成 |
 | Query `predicates` / `expr` | predicates DSL 已暴露；expr 树 UI 仍非目标 | 部分完成 |
-| 非 admin 的 RP 列表 API | 仅 admin 路径；data 用户 RP 手填 | P1 |
+| 非 admin 的 RP/库 列表 API | data 面已接（P140/P145） | 已完成 |
 | `GET /api/v1/admin/config`（非 effective） | 已有 effective/schema/validate/reload | P3 |
 | pprof `/debug/pprof/*` | 故意不进 UI | — |
 
@@ -170,4 +170,5 @@ timeout 180s env GOSUMDB=sum.golang.org go test -count=1 -timeout 120s ./...
 | FE-FULL-P3-01 query/stats | **已修复**（P143） |
 | FE-FULL-P3-02 Account landing | **已修复**（P144） |
 | FE series filter | **部分完成**（P146 客户端筛选；无服务端分页） |
+| FE write meta | **已修复**（P147 measurement/field 建议） |
 | 部署侧三项 | open 不计分 |

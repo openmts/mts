@@ -4,7 +4,14 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
-import { listDatabasesDetailed, listRetentionPoliciesDetailed, type MetaLoadSource } from '@/api/meta'
+import {
+  listDatabasesDetailed,
+  listFields,
+  listMeasurements,
+  listRetentionPoliciesDetailed,
+  type MetaLoadSource,
+} from '@/api/meta'
+import { fieldNames } from '@/utils/seriesMeta'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
@@ -32,6 +39,11 @@ useHashScroll()
 
 const databases = ref<string[]>([])
 const retentionPolicies = ref<string[]>([])
+const measurements = ref<string[]>([])
+const fieldOptions = ref<string[]>([])
+const measurementsLoading = ref(false)
+const fieldsLoading = ref(false)
+const writeMetaError = ref('')
 const selectedDb = ref('')
 const retentionPolicy = ref('autogen')
 const initialWritePrefs = loadWritePrefs(typeof localStorage !== 'undefined' ? localStorage : null)
@@ -184,24 +196,104 @@ watch(selectedDb, async (db) => {
   retentionPolicies.value = []
   retentionPolicy.value = 'autogen'
   rpMetaHint.value = ''
+  measurements.value = []
+  fieldOptions.value = []
+  writeMetaError.value = ''
   if (!db) return
+  measurementsLoading.value = true
   try {
-    const rpResult = await listRetentionPoliciesDetailed(db)
-    retentionPolicies.value = rpResult.policies.map((p) => p.name)
-    if (retentionPolicies.value.length) {
-      retentionPolicy.value = retentionPolicies.value[0]
-      rpMetaHint.value = ''
-    } else if (rpResult.source === 'manual') {
+    try {
+      const rpResult = await listRetentionPoliciesDetailed(db)
+      retentionPolicies.value = rpResult.policies.map((p) => p.name)
+      if (retentionPolicies.value.length) {
+        retentionPolicy.value = retentionPolicies.value[0]
+        rpMetaHint.value = ''
+      } else if (rpResult.source === 'manual') {
+        rpMetaHint.value = t.value('writeRpManualHint')
+      } else {
+        rpMetaHint.value = t.value('writeRpEmptyHint')
+      }
+    } catch {
       rpMetaHint.value = t.value('writeRpManualHint')
-    } else {
-      rpMetaHint.value = t.value('writeRpEmptyHint')
     }
-  } catch {
-    rpMetaHint.value = t.value('writeRpManualHint')
+    try {
+      measurements.value = await listMeasurements(db)
+    } catch (e) {
+      measurements.value = []
+      writeMetaError.value = formatCaughtError(e)
+    }
+  } finally {
+    measurementsLoading.value = false
   }
   // 自动填充 RP 不应算用户脏编辑
   markWriteClean()
 })
+
+async function loadWriteFields(measurement: string) {
+  fieldOptions.value = []
+  const db = selectedDb.value.trim()
+  const m = measurement.trim()
+  if (!db || !m) return
+  fieldsLoading.value = true
+  try {
+    const fields = await listFields(db, m)
+    fieldOptions.value = fieldNames(fields)
+  } catch (e) {
+    fieldOptions.value = []
+    writeMetaError.value = formatCaughtError(e)
+  } finally {
+    fieldsLoading.value = false
+  }
+}
+
+function onFormMeasurementBlur(row: FormRow) {
+  void loadWriteFields(row.measurement)
+}
+
+function onTypedMeasurementBlur() {
+  void loadWriteFields(typedMeasurement.value)
+}
+
+function applyFieldSuggestion(name: string, row: FormRow) {
+  const token = name.trim()
+  if (!token) return
+  if (row.fields.some((f) => f.key.trim() === token)) return
+  // 优先填充第一个空 key
+  const empty = row.fields.find((f) => !f.key.trim())
+  if (empty) {
+    empty.key = token
+    return
+  }
+  row.fields.push({ key: token, value: '', type: 'float' })
+}
+
+function applyTypedFieldSuggestion(name: string) {
+  const token = name.trim()
+  if (!token) return
+  if (typedFieldCols.value.some((c) => c.name.trim() === token)) return
+  const empty = typedFieldCols.value.find((c) => !c.name.trim())
+  if (empty) {
+    empty.name = token
+    return
+  }
+  typedFieldCols.value.push({ name: token, type: 'float', values: '' })
+}
+
+function applyMeasurementSuggestion(name: string) {
+  const token = name.trim()
+  if (!token) return
+  typedMeasurement.value = token
+  if (formRows.value[0]) formRows.value[0].measurement = token
+  void loadWriteFields(token)
+}
+
+function applyFieldChip(name: string) {
+  if (writeMode.value === 'typed') {
+    applyTypedFieldSuggestion(name)
+    return
+  }
+  if (formRows.value[0]) applyFieldSuggestion(name, formRows.value[0])
+}
 
 function buildTypedBatch(): Record<string, unknown> {
   if (!typedMeasurement.value.trim()) throw new Error(trErr('writeErrMeasurementRequired'))
@@ -428,6 +520,8 @@ function exportWriteDraft() {
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('database') }}
         <input v-model="selectedDb" list="write-db-list" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhDatabase')" />
         <datalist id="write-db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
+        <datalist id="write-meas-list"><option v-for="m in measurements" :key="m" :value="m" /></datalist>
+        <datalist id="write-field-list"><option v-for="f in fieldOptions" :key="f" :value="f" /></datalist>
       </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('retentionPolicy') }}
         <input v-model="retentionPolicy" list="write-rp-list" data-testid="write-retention-policy" class="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhAutogen')" />
@@ -442,6 +536,49 @@ function exportWriteDraft() {
       </label>
     </div>
     <p v-if="metaHint" class="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{{ metaHint }}</p>
+    <div
+      v-if="selectedDb"
+      class="rounded-xl border border-slate-200 bg-white p-3 text-xs dark:border-slate-700 dark:bg-slate-900"
+      data-testid="write-meta-panel"
+    >
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span class="font-medium text-slate-700 dark:text-slate-200">{{ t('writeMetaTitle') }}</span>
+        <span class="mts-muted" data-testid="write-meta-count">
+          {{ formatMessage(t('writeMetaCount'), { meas: measurements.length, fields: fieldOptions.length }) }}
+        </span>
+      </div>
+      <p v-if="measurementsLoading || fieldsLoading" class="mts-muted">{{ t('loading') }}</p>
+      <p v-else-if="writeMetaError" class="text-rose-600" data-testid="write-meta-error">{{ writeMetaError }}</p>
+      <div v-else class="space-y-2">
+        <div>
+          <p class="mb-1 mts-muted">{{ t('writeMetaMeasurements') }}</p>
+          <div v-if="measurements.length" class="flex flex-wrap gap-1" data-testid="write-meas-chips">
+            <button
+              v-for="m in measurements.slice(0, 24)"
+              :key="m"
+              type="button"
+              class="rounded-full border border-slate-200 px-2 py-0.5 font-mono text-[11px] hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+              @click="applyMeasurementSuggestion(m)"
+            >{{ m }}</button>
+          </div>
+          <p v-else class="mts-muted" data-testid="write-meas-empty">{{ t('writeMetaMeasEmpty') }}</p>
+        </div>
+        <div>
+          <p class="mb-1 mts-muted">{{ t('writeMetaFields') }}</p>
+          <div v-if="fieldOptions.length" class="flex flex-wrap gap-1" data-testid="write-field-chips">
+            <button
+              v-for="f in fieldOptions.slice(0, 32)"
+              :key="f"
+              type="button"
+              class="rounded-full border border-slate-200 px-2 py-0.5 font-mono text-[11px] hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+              @click="applyFieldChip(f)"
+            >{{ f }}</button>
+          </div>
+          <p v-else class="mts-muted" data-testid="write-field-empty">{{ t('writeMetaFieldEmpty') }}</p>
+        </div>
+      </div>
+      <p class="mt-2 text-[11px] mts-muted">{{ t('writeMetaHint') }}</p>
+    </div>
 
     <div id="write-body" v-if="writeMode==='form'" class="scroll-mt-20 space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div v-for="(row, idx) in formRows" :key="idx" class="rounded border border-slate-100 p-3 dark:border-slate-800">
@@ -449,7 +586,14 @@ function exportWriteDraft() {
           <button class="text-red-500" @click="removeRow(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
         </div>
         <div class="grid gap-2 md:grid-cols-3">
-          <input v-model="row.measurement" :placeholder="t('writePhMeasurement')" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
+          <input
+            v-model="row.measurement"
+            list="write-meas-list"
+            data-testid="write-form-measurement"
+            :placeholder="t('writePhMeasurement')"
+            class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800"
+            @blur="onFormMeasurementBlur(row)"
+          />
           <input v-model="row.timestamp" :placeholder="t('writePhTimestampMs')" class="rounded border px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" />
           <div class="text-[11px] text-slate-400 dark:text-slate-500">{{ t('writeFormTagsFieldsHint') }}</div>
         </div>
@@ -465,7 +609,12 @@ function exportWriteDraft() {
           <div>
             <p class="mb-1 text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('fields') }}</p>
             <div v-for="(fd, fi) in row.fields" :key="fi" class="mb-1 flex gap-1">
-              <input v-model="fd.key" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhKey')" />
+              <input
+                v-model="fd.key"
+                list="write-field-list"
+                class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800"
+                :placeholder="t('writePhKey')"
+              />
               <input v-model="fd.value" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="t('writePhValue')" />
               <select v-model="fd.type" class="w-1/3 rounded border px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-800">
                 <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">{{ fieldTypeLabel(ft.value) }}</option>
@@ -491,7 +640,15 @@ function exportWriteDraft() {
     <div id="write-body" v-else-if="writeMode==='typed'" class="scroll-mt-20 space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('writeTypedHint') }}</p>
       <div class="grid gap-3 md:grid-cols-2">
-        <label class="text-xs">{{ t('measurement') }}<input v-model="typedMeasurement" class="mts-input mt-1" /></label>
+        <label class="text-xs">{{ t('measurement') }}
+          <input
+            v-model="typedMeasurement"
+            list="write-meas-list"
+            data-testid="write-typed-measurement"
+            class="mts-input mt-1"
+            @blur="onTypedMeasurementBlur"
+          />
+        </label>
         <label class="text-xs">{{ t('writeTimestampsMs') }}
           <textarea v-model="typedTimestamps" rows="3" class="mts-input mt-1 font-mono text-xs" />
         </label>
@@ -511,7 +668,7 @@ function exportWriteDraft() {
           <button type="button" class="text-slate-500" @click="addTypedFieldCol">{{ t('writeAddFieldCol') }}</button>
         </div>
         <div v-for="(col, i) in typedFieldCols" :key="'f'+i" class="mb-2 grid gap-2 rounded border border-slate-100 p-2 dark:border-slate-800 md:grid-cols-4">
-          <input v-model="col.name" class="mts-input text-xs" :placeholder="t('writePhFieldName')" />
+          <input v-model="col.name" list="write-field-list" class="mts-input text-xs" :placeholder="t('writePhFieldName')" />
           <select v-model="col.type" class="mts-input text-xs">
             <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">{{ fieldTypeLabel(ft.value) }}</option>
           </select>

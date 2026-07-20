@@ -83,3 +83,10 @@
 - [x] EARS-FE-P146-02 无匹配提示
 - [x] EARS-FE-P146-03 商业冒烟 filter testid
 - [x] EARS-DOC-P146-04 基线记录
+
+## P147 — Write measurement/fields meta
+- [x] EARS-FE-P147-01 选定库加载 measurement
+- [x] EARS-FE-P147-02 measurement 加载 field
+- [x] EARS-FE-P147-03 芯片填充 form/Typed
+- [x] EARS-FE-P147-04 商业冒烟 write-meta-panel
+- [x] EARS-DOC-P147-05 基线记录
