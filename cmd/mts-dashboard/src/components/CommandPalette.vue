@@ -27,6 +27,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useDensity } from '@/composables/useDensity'
 import { useNotify } from '@/composables/useNotify'
 import { formatMessage } from '@/utils/formatMessage'
+import { copyText } from '@/utils/clipboard'
 import { Search, Command, History, Zap } from 'lucide-vue-next'
 
 const open = ref(false)
@@ -42,7 +43,7 @@ const { isAdmin } = useAuth()
 const { t, toggleLocale } = useI18n()
 const { toggleTheme } = useTheme()
 const { toggleDensity } = useDensity()
-const { success } = useNotify()
+const { success, error: notifyError } = useNotify()
 
 const focusSidebarFilter = inject<(() => void) | undefined>('focusSidebarFilter', undefined)
 const openNotifyHistory = inject<(() => void) | undefined>('openNotifyHistory', undefined)
@@ -166,6 +167,25 @@ function runAction(action: CommandActionId) {
       break
     case 'scroll-main-to-top':
       scrollMainToTop?.()
+      break
+    case 'copy-page-url': {
+      const href = typeof window !== 'undefined' ? window.location.href : ''
+      void copyText(href).then((r) => {
+        if (r.ok) success(t.value('cmdActionUrlCopied'))
+        else notifyError(t.value('cmdActionUrlCopyFailed'))
+      })
+      break
+    }
+    case 'focus-main': {
+      if (typeof document !== 'undefined') {
+        const el = document.getElementById('main-content') as HTMLElement | null
+        el?.focus()
+      }
+      break
+    }
+    case 'reload-page':
+      success(t.value('cmdActionReloading'))
+      if (typeof window !== 'undefined') window.location.reload()
       break
     default:
       break

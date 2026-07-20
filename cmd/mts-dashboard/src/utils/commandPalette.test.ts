@@ -114,8 +114,11 @@ test('non-admin query write deep links visible', () => {
 })
 
 test('command actions catalog and filter', () => {
-  assert.ok(COMMAND_ACTION_ITEMS.length >= 7)
+  assert.ok(COMMAND_ACTION_ITEMS.length >= 10)
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-scroll-main-to-top'))
+  assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-copy-page-url'))
+  assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-focus-main'))
+  assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-reload-page'))
   assert.ok(COMMAND_ACTION_ITEMS.every((i) => isCommandAction(i)))
   const all = allVisibleCommandItems(true)
   assert.ok(all.some((i) => i.id === 'action-toggle-theme'))
@@ -126,6 +129,8 @@ test('command actions catalog and filter', () => {
   const densityHits = filterCommandItems(all, '密度', resolve)
   assert.ok(densityHits.some((i) => i.id === 'action-toggle-density'))
   assert.ok(filterCommandItems(all, '返回顶部', resolve).some((i) => i.id === 'action-scroll-main-to-top'))
+  assert.ok(filterCommandItems(all, '复制链接', resolve).some((i) => i.id === 'action-copy-page-url'))
+  assert.ok(filterCommandItems(all, 'reload', resolve).some((i) => i.id === 'action-reload-page'))
 })
 
 test('groupCommandItems splits nav and action', () => {

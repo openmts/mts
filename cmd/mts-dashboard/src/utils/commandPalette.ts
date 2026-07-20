@@ -21,6 +21,9 @@ export type CommandActionId =
   | 'open-shortcuts'
   | 'toggle-sidebar-collapse'
   | 'scroll-main-to-top'
+  | 'copy-page-url'
+  | 'focus-main'
+  | 'reload-page'
 
 /** 页内快捷动作（不离开当前路由，除非动作本身导航） */
 export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
@@ -87,6 +90,30 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
     keywords: ['back to top', 'scroll top', '返回顶部', '回到顶部'],
     kind: 'action',
     action: 'scroll-main-to-top',
+  },
+  {
+    id: 'action-copy-page-url',
+    path: 'action:copy-page-url',
+    labelKey: 'cmdActionCopyPageUrl',
+    keywords: ['copy url', 'copy link', '复制链接', '复制地址', 'url'],
+    kind: 'action',
+    action: 'copy-page-url',
+  },
+  {
+    id: 'action-focus-main',
+    path: 'action:focus-main',
+    labelKey: 'cmdActionFocusMain',
+    keywords: ['focus main', 'main content', '聚焦主内容', '主区域'],
+    kind: 'action',
+    action: 'focus-main',
+  },
+  {
+    id: 'action-reload-page',
+    path: 'action:reload-page',
+    labelKey: 'cmdActionReloadPage',
+    keywords: ['reload', 'refresh', '刷新页面', '重新加载'],
+    kind: 'action',
+    action: 'reload-page',
   },
 ]
 

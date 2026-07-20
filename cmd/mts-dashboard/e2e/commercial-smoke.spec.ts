@@ -389,6 +389,23 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-palette')).toHaveCount(0)
   await expect.poll(async () => page.locator('html').evaluate((el) => el.classList.contains('dark'))).not.toBe(darkBefore)
 
+  // P109: 复制当前页链接动作入口
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('copy url')
+  await expect(page.getByTestId('command-item-action-copy-page-url')).toBeVisible()
+  await page.getByTestId('command-item-action-copy-page-url').click()
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  // focus main / reload 仅校验入口可达，避免 reload 打断后续断言
+  await page.getByTestId('topbar-command-palette').click()
+  await page.getByTestId('command-palette-input').fill('focus main')
+  await expect(page.getByTestId('command-item-action-focus-main')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.getByTestId('topbar-command-palette').click()
+  await page.getByTestId('command-palette-input').fill('reload')
+  await expect(page.getByTestId('command-item-action-reload-page')).toBeVisible()
+  await page.keyboard.press('Escape')
+
   // P103: 主内容返回顶部（就绪页足够长）
   await page.goto('/ops/readiness')
   await expect(page.getByTestId('readiness-signoff-notes').or(page.getByTestId('readiness-deploy-kit')).first()).toBeVisible()
