@@ -14,6 +14,7 @@ import {
 } from '@/utils/rbacMatrix'
 import { Download, Shield } from 'lucide-vue-next'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { useNotify } from '@/composables/useNotify'
@@ -74,6 +75,8 @@ const filteredRows = computed(() => {
 })
 
 const visibleIds = computed(() => filteredRows.value.map((r) => r.id))
+const MATRIX_ROW_HEIGHT = 48
+const MATRIX_LIST_HEIGHT = 448
 const {
   selectedCount,
   allVisibleSelected,
@@ -240,78 +243,102 @@ function exportMatrixCSV() {
       </ListSelectionToolbar>
     </div>
 
-    <div class="mts-card max-h-[28rem] overflow-auto" data-testid="access-matrix-table-wrap">
-      <table class="min-w-full text-left text-sm" data-testid="access-matrix-table">
-        <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
-          <tr>
-            <th class="sticky top-0 z-[1] w-10 bg-slate-50 px-3 py-2 dark:bg-slate-900/95">
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5"
-                data-testid="access-matrix-select-all-checkbox"
-                :checked="allVisibleSelected"
-                :indeterminate.prop="someVisibleSelected"
-                :aria-label="t('listSelectAll')"
-                @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
-              />
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-area-col" @click="cycleMatrixSort('area')">
-                {{ t('accessMatrixColArea') }} <span aria-hidden="true">{{ sortIndicator('area') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-capability-col" @click="cycleMatrixSort('capability')">
-                {{ t('accessMatrixColCapability') }} <span aria-hidden="true">{{ sortIndicator('capability') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-admin-col" @click="cycleMatrixSort('admin')">
-                {{ t('roleAdmin') }} <span aria-hidden="true">{{ sortIndicator('admin') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-user-col" @click="cycleMatrixSort('user')">
-                {{ t('roleUser') }} <span aria-hidden="true">{{ sortIndicator('user') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-route-col" @click="cycleMatrixSort('route')">
-                {{ t('accessMatrixColRoute') }} <span aria-hidden="true">{{ sortIndicator('route') }}</span>
-              </button>
-            </th>
-            <th class="sticky top-0 z-[1] bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900/95">{{ t('accessMatrixColNote') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in filteredRows"
-            :key="row.id"
-            class="border-b border-slate-100 dark:border-slate-800"
-          >
-            <td class="px-3 py-2">
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5"
-                :data-testid="`access-matrix-select-${row.id}`"
-                :checked="isSelected(row.id)"
-                :aria-label="t('listSelectCol')"
-                @change="toggle(row.id, ($event.target as HTMLInputElement).checked)"
-              />
-            </td>
-            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{{ textForLocale(row.area, uiLocale) }}</td>
-            <td class="px-3 py-2 text-slate-800 dark:text-slate-100">{{ textForLocale(row.capability, uiLocale) }}</td>
-            <td class="px-3 py-2">
-              <span class="inline-flex rounded-full px-2 py-0.5 text-xs" :class="levelClass(row.admin)">{{ levelLabel(row.admin) }}</span>
-            </td>
-            <td class="px-3 py-2">
-              <span class="inline-flex rounded-full px-2 py-0.5 text-xs" :class="levelClass(row.user)">{{ levelLabel(row.user) }}</span>
-            </td>
-            <td class="px-3 py-2 font-mono text-xs mts-muted">{{ row.route || t('emptyValue') }}</td>
-            <td class="px-3 py-2 text-xs mts-muted">{{ row.notes ? textForLocale(row.notes, uiLocale) : t('emptyValue') }}</td>
-          </tr>
-        </tbody>
-      </table>
+        <div class="mts-card overflow-hidden p-0" data-testid="access-matrix-table-wrap">
+      <div
+        id="access-matrix-table"
+        class="min-w-[52rem] overflow-hidden"
+        data-testid="access-matrix-table"
+      >
+        <div
+          class="grid grid-cols-[2.5rem_minmax(5rem,0.8fr)_minmax(8rem,1.2fr)_minmax(5rem,0.7fr)_minmax(5rem,0.7fr)_minmax(7rem,1fr)_minmax(7rem,1.1fr)] border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400"
+          data-testid="access-matrix-table-header"
+        >
+          <div class="px-3 py-2">
+            <input
+              type="checkbox"
+              class="h-3.5 w-3.5"
+              data-testid="access-matrix-select-all-checkbox"
+              :checked="allVisibleSelected"
+              :indeterminate.prop="someVisibleSelected"
+              :aria-label="t('listSelectAll')"
+              @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
+            />
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-area-col" @click="cycleMatrixSort('area')">
+              {{ t('accessMatrixColArea') }} <span aria-hidden="true">{{ sortIndicator('area') }}</span>
+            </button>
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-capability-col" @click="cycleMatrixSort('capability')">
+              {{ t('accessMatrixColCapability') }} <span aria-hidden="true">{{ sortIndicator('capability') }}</span>
+            </button>
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-admin-col" @click="cycleMatrixSort('admin')">
+              {{ t('roleAdmin') }} <span aria-hidden="true">{{ sortIndicator('admin') }}</span>
+            </button>
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-user-col" @click="cycleMatrixSort('user')">
+              {{ t('roleUser') }} <span aria-hidden="true">{{ sortIndicator('user') }}</span>
+            </button>
+          </div>
+          <div class="px-3 py-2">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-route-col" @click="cycleMatrixSort('route')">
+              {{ t('accessMatrixColRoute') }} <span aria-hidden="true">{{ sortIndicator('route') }}</span>
+            </button>
+          </div>
+          <div class="px-3 py-2">{{ t('accessMatrixColNote') }}</div>
+        </div>
+        <div v-if="!filteredRows.length" class="px-3 py-8 text-center text-sm mts-muted" data-testid="access-matrix-empty">
+          {{ t('accessMatrixFilterEmpty') }}
+        </div>
+        <VirtualTable
+          v-else
+          :items="filteredRows"
+          :row-height="MATRIX_ROW_HEIGHT"
+          :height="MATRIX_LIST_HEIGHT"
+          data-testid="access-matrix-virtual-list"
+        >
+          <template #default="{ item: row }">
+            <div
+              class="grid h-full grid-cols-[2.5rem_minmax(5rem,0.8fr)_minmax(8rem,1.2fr)_minmax(5rem,0.7fr)_minmax(5rem,0.7fr)_minmax(7rem,1fr)_minmax(7rem,1.1fr)] items-center border-b border-slate-100 dark:border-slate-800"
+              :data-testid="`access-matrix-row-${row.id}`"
+            >
+              <div class="px-3">
+                <input
+                  type="checkbox"
+                  class="h-3.5 w-3.5"
+                  :data-testid="`access-matrix-select-${row.id}`"
+                  :checked="isSelected(row.id)"
+                  :aria-label="t('listSelectCol')"
+                  @change="toggle(row.id, ($event.target as HTMLInputElement).checked)"
+                />
+              </div>
+              <div class="truncate px-3 text-slate-700 dark:text-slate-200">{{ textForLocale(row.area, uiLocale) }}</div>
+              <div class="truncate px-3 text-slate-800 dark:text-slate-100">{{ textForLocale(row.capability, uiLocale) }}</div>
+              <div class="px-3">
+                <span class="inline-flex rounded-full px-2 py-0.5 text-xs" :class="levelClass(row.admin)">{{ levelLabel(row.admin) }}</span>
+              </div>
+              <div class="px-3">
+                <span class="inline-flex rounded-full px-2 py-0.5 text-xs" :class="levelClass(row.user)">{{ levelLabel(row.user) }}</span>
+              </div>
+              <div class="truncate px-3 font-mono text-xs mts-muted">{{ row.route || t('emptyValue') }}</div>
+              <div class="truncate px-3 text-xs mts-muted" :title="row.notes ? textForLocale(row.notes, uiLocale) : ''">
+                {{ row.notes ? textForLocale(row.notes, uiLocale) : t('emptyValue') }}
+              </div>
+            </div>
+          </template>
+        </VirtualTable>
+        <p
+          v-if="filteredRows.length"
+          class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800"
+          data-testid="access-matrix-virtual-hint"
+        >
+          {{ t('accessMatrixVirtualHint') }}
+        </p>
+      </div>
     </div>
   </div>
 </template>

@@ -148,6 +148,10 @@ test('commercial browser smoke path', async ({ page }) => {
   // a11y 树中 th 可能暴露为 cell
   await expect(page.getByRole('main').getByText(/管理员|Admin/).first()).toBeVisible()
   await expect(page.getByTestId('access-matrix-export')).toBeVisible()
+  await expect(page.getByTestId('access-matrix-table')).toBeVisible()
+  await expect(page.getByTestId('access-matrix-table-header')).toBeVisible()
+  await expect(page.getByTestId('access-matrix-virtual-list')).toBeVisible()
+  await expect(page.getByTestId('access-matrix-virtual-hint')).toBeVisible()
   await page.goto('/access/grants')
   await expect(page.getByTestId('access-grants-page')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
@@ -719,19 +723,22 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('access-matrix-search').fill('query')
   await expect(page.getByTestId('access-matrix-filter-count')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵|Capability matrix/ })).toBeVisible()
-  // 使用 table cell，避免命中 select 中隐藏的 option
-  await expect(page.getByRole('main').getByRole('cell', { name: '数据面' }).first()).toBeVisible()
-  await expect(page.getByRole('main').getByRole('cell', { name: /查询 rows/i }).first()).toBeVisible()
+  // 虚拟列表为 div 行（非 table cell）；限定在列表内，避免命中 select option
+  const matrixList = page.getByTestId('access-matrix-virtual-list')
+  await expect(matrixList).toBeVisible()
+  await expect(matrixList.getByText('数据面', { exact: true }).first()).toBeVisible()
+  await expect(matrixList.getByText(/查询 rows/i).first()).toBeVisible()
   // 切换语言后 capability 行与区域标签应为英文
   const localeBtn = page.locator('header button').filter({ has: page.locator('.sr-only', { hasText: /^(zh|en)$/ }) })
   await localeBtn.click()
   await expect(page.getByRole('main').getByRole('heading', { name: /Capability matrix/ })).toBeVisible()
-  await expect(page.getByRole('main').getByRole('cell', { name: 'Data plane' }).first()).toBeVisible()
-  await expect(page.getByRole('main').getByRole('cell', { name: /Query rows\/columns\/stream\/explain/i }).first()).toBeVisible()
-  await expect(page.getByRole('main').getByRole('cell', { name: /Non-admin needs read grant/i }).first()).toBeVisible()
+  await expect(matrixList.getByText('Data plane', { exact: true }).first()).toBeVisible()
+  await expect(matrixList.getByText(/Query rows\/columns\/stream\/explain/i).first()).toBeVisible()
+  await expect(matrixList.getByText(/Non-admin needs read grant/i).first()).toBeVisible()
   // 切回中文，避免后续步骤依赖中文文案
   await localeBtn.click()
   await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵/ })).toBeVisible()
+
   await page.goto('/access/grants')
   await expect(page.getByTestId('access-grants-page')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
