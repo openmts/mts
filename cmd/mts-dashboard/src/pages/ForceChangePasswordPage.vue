@@ -5,6 +5,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { validateNewPassword } from '@/utils/passwordPolicy'
 import { KeyRound } from 'lucide-vue-next'
+import PasswordHints from '@/components/PasswordHints.vue'
 
 const router = useRouter()
 const { currentUser, changePassword, logout } = useAuth()
@@ -100,6 +101,12 @@ async function doLogout() {
             :aria-describedby="error ? 'force-password-error' : undefined"
           />
         </div>
+        <PasswordHints
+          class="mt-1"
+          :old-password="oldPassword"
+          :new-password="newPassword"
+          :confirm-password="confirmPassword"
+        />
         <p
           v-if="error"
           id="force-password-error"

@@ -424,3 +424,9 @@
 - Operations 统计导出/复制；Account 会话快照导出/复制；404 导航 testid
 - 商业冒烟覆盖 ops-export-stats / account-export / not-found
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P85 状态（2026-07-20）
+- 侧栏折叠记忆、面包屑导航、改密策略分项实时提示
+- 商业冒烟覆盖 sidebar-collapse / breadcrumb / password-hints
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

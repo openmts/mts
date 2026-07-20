@@ -5,11 +5,11 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import {
   LayoutDashboard, Database, Users, Settings, Wrench,
-  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound,
+  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-vue-next'
 
-defineProps<{ visible: boolean }>()
-const emit = defineEmits<{ close: [] }>()
+defineProps<{ visible: boolean; collapsed: boolean }>()
+const emit = defineEmits<{ close: []; 'toggle-collapse': [] }>()
 const route = useRoute()
 const router = useRouter()
 const { isAdmin } = useAuth()
@@ -42,6 +42,12 @@ function isActive(to: string) {
   return route.path === to || route.path.startsWith(to + '/')
 }
 
+function navTestId(to: string): string {
+  if (to === '/') return 'sidebar-nav-home'
+  const slug = to.startsWith('/') ? to.slice(1) : to
+  return `sidebar-nav-${slug.split('/').join('-')}`
+}
+
 function go(to: string) {
   void router.push(to)
   emit('close')
@@ -56,14 +62,25 @@ function go(to: string) {
       @click="emit('close')"
     />
     <aside
-      class="fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-slate-200 bg-white transition-transform dark:border-slate-700 dark:bg-slate-900 lg:static lg:translate-x-0"
-      :class="visible ? 'translate-x-0' : '-translate-x-full'"
+      class="fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white transition-[width,transform] dark:border-slate-700 dark:bg-slate-900 lg:static lg:translate-x-0"
+      :class="[
+        visible ? 'translate-x-0' : '-translate-x-full',
+        collapsed ? 'w-16' : 'w-60',
+      ]"
+      data-testid="sidebar"
+      :data-collapsed="collapsed ? 'true' : 'false'"
     >
-      <div class="flex h-14 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-700">
-        <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('appName') }}</span>
+      <div
+        class="flex h-14 items-center border-b border-slate-200 dark:border-slate-700"
+        :class="collapsed ? 'justify-center px-2' : 'justify-between px-4'"
+      >
+        <span
+          class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100"
+          :class="collapsed ? 'sr-only' : ''"
+        >{{ t('appName') }}</span>
         <button
           type="button"
-          class="mts-focus-ring rounded p-1 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800 lg:hidden"
+          class="mts-focus-ring rounded p-1 text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800 lg:hidden"
           :aria-label="t('topbarCloseNav')"
           :title="t('topbarCloseNav')"
           data-testid="sidebar-close"
@@ -71,21 +88,38 @@ function go(to: string) {
         >
           <X class="h-4 w-4" aria-hidden="true" />
         </button>
+        <button
+          type="button"
+          class="mts-focus-ring hidden rounded p-1 text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800 lg:inline-flex"
+          :aria-label="collapsed ? t('sidebarExpand') : t('sidebarCollapse')"
+          :title="collapsed ? t('sidebarExpand') : t('sidebarCollapse')"
+          data-testid="sidebar-collapse-toggle"
+          @click="emit('toggle-collapse')"
+        >
+          <PanelLeftOpen v-if="collapsed" class="h-4 w-4" aria-hidden="true" />
+          <PanelLeftClose v-else class="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
-      <nav class="flex-1 space-y-0.5 overflow-auto p-2" :aria-label="t('appName')">
+      <nav class="flex-1 space-y-0.5 overflow-auto p-2" :aria-label="t('appName')" data-testid="sidebar-nav">
         <button
           v-for="item in navItems"
           :key="item.to"
           type="button"
-          class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm"
-          :class="isActive(item.to)
-            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900'
-            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-800'"
+          class="flex w-full items-center gap-2 rounded-lg py-2 text-left text-sm"
+          :class="[
+            isActive(item.to)
+              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+            collapsed ? 'justify-center px-2' : 'px-3',
+          ]"
           :aria-current="isActive(item.to) ? 'page' : undefined"
+          :title="item.label"
+          :aria-label="item.label"
+          :data-testid="navTestId(item.to)"
           @click="go(item.to)"
         >
-          <component :is="item.icon" class="h-4 w-4 shrink-0" />
-          <span>{{ item.label }}</span>
+          <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span :class="collapsed ? 'sr-only' : ''">{{ item.label }}</span>
         </button>
       </nav>
     </aside>

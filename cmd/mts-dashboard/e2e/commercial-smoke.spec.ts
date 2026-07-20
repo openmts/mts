@@ -26,6 +26,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // 1) bootstrap 默认密码 -> 强制改密
   await login(page, 'admin', 'admin')
   await expect(page).toHaveURL(/force-change-password/)
+  await expect(page.getByTestId('password-hints')).toBeVisible()
   await page.getByTestId('force-old').fill('admin')
   await page.getByTestId('force-new').fill(NEW_PASSWORD)
   await page.getByTestId('force-confirm').fill(NEW_PASSWORD)
@@ -39,6 +40,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByText(/概览|健康|Healthy|Ready/i).first()).toBeVisible()
   await expect(page.getByTestId('overview-page')).toBeVisible()
   await expect(page.getByTestId('overview-summary')).toBeVisible()
+  await expect(page.getByTestId('sidebar')).toBeVisible()
+  await expect(page.getByTestId('sidebar-collapse-toggle')).toBeVisible()
   await expect(page.getByTestId('overview-export-json')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
@@ -74,6 +77,8 @@ test('commercial browser smoke path', async ({ page }) => {
   // 4) 查询页可达 + 表单标签 i18n
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
+  await expect(page.getByTestId('breadcrumb-bar')).toBeVisible()
+  await expect(page.getByTestId('breadcrumb-current')).toBeVisible()
   await expect(page.getByRole('main').getByText(/查询|Query/i).first()).toBeVisible()
   await expect(page.getByRole('main').getByText(/数据库|Database/).first()).toBeVisible()
   await expect(page.getByRole('main').getByText(/开始时间|Start/).first()).toBeVisible()
@@ -317,6 +322,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('account-export-json')).toBeVisible()
   await expect(page.getByTestId('account-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('account-password-form')).toBeVisible()
+  await expect(page.getByTestId('password-hints')).toBeVisible()
   await page.getByTestId('account-password-submit').click()
   await expect(page.getByTestId('account-password-error')).toBeVisible()
   await expect(page.getByTestId('account-old-password')).toHaveAttribute('aria-invalid', 'true')

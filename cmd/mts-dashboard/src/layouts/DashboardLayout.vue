@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SidebarNav from '@/components/SidebarNav.vue'
 import TopBar from '@/components/TopBar.vue'
 import PageSkeleton from '@/components/PageSkeleton.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ShortcutsHelp from '@/components/ShortcutsHelp.vue'
+import BreadcrumbBar from '@/components/BreadcrumbBar.vue'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { resolveRouteTitleKey } from '@/utils/pageTitle'
@@ -18,6 +19,7 @@ import {
   recordRecentRoute,
   type RecentRouteEntry,
 } from '@/utils/recentRoutes'
+import { loadSidebarPrefs, saveSidebarPrefs } from '@/utils/sidebarPrefs'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useServerReachability } from '@/composables/useServerReachability'
 
@@ -27,12 +29,22 @@ const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking }
 const route = useRoute()
 const router = useRouter()
 const sidebarOpen = ref(false)
+const sidebarCollapsed = ref(
+  loadSidebarPrefs(typeof localStorage !== 'undefined' ? localStorage : null).collapsed,
+)
 const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
 const shortcutsOpen = ref(false)
 const recent = ref<RecentRouteEntry[]>(loadRecentRoutes())
+const showBreadcrumb = computed(() => route.path !== '/')
 
 function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value }
 function closeSidebar() { sidebarOpen.value = false }
+function toggleSidebarCollapse() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  saveSidebarPrefs(typeof localStorage !== 'undefined' ? localStorage : null, {
+    collapsed: sidebarCollapsed.value,
+  })
+}
 function openCommandPalette() { commandPaletteRef.value?.openPalette() }
 function openShortcuts() { shortcutsOpen.value = true }
 
@@ -102,7 +114,14 @@ function onSkipToMain(e: Event) {
     >
       {{ t('skipToMain') }}
     </a>
-    <div class="no-print"><SidebarNav :visible="sidebarOpen" @close="closeSidebar" /></div>
+    <div class="no-print">
+      <SidebarNav
+        :visible="sidebarOpen"
+        :collapsed="sidebarCollapsed"
+        @close="closeSidebar"
+        @toggle-collapse="toggleSidebarCollapse"
+      />
+    </div>
     <div class="flex flex-1 flex-col overflow-hidden">
       <div class="no-print">
         <TopBar
@@ -111,6 +130,7 @@ function onSkipToMain(e: Event) {
           @open-shortcuts="openShortcuts"
         />
       </div>
+      <BreadcrumbBar v-if="showBreadcrumb" />
       <div
         v-if="offline"
         class="no-print border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100 sm:px-6"

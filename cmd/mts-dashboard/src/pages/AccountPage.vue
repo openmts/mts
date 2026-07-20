@@ -9,6 +9,7 @@ import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { validateNewPassword } from '@/utils/passwordPolicy'
 import { KeyRound, UserRound, Download, Copy } from 'lucide-vue-next'
+import PasswordHints from '@/components/PasswordHints.vue'
 import { buildAccountExport, formatAccountExportPretty } from '@/utils/accountExport'
 import { downloadJSON, stampFilename } from '@/utils/download'
 import { copyText } from '@/utils/clipboard'
@@ -217,7 +218,12 @@ async function submit() {
           />
         </div>
         <p v-if="error" id="account-password-error-desc" class="sr-only">{{ error }}</p>
-        <button
+      <PasswordHints
+        :old-password="oldPassword"
+        :new-password="newPassword"
+        :confirm-password="confirmPassword"
+      />
+<button
           type="submit"
           class="mts-btn-primary mts-focus-ring"
           :disabled="loading"
