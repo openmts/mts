@@ -101,3 +101,13 @@ function normalize(raw: unknown): NotifyHistoryEntry | null {
   const id = String(o.id || `${at}-${kind}`)
   return { id, kind, message, count, at }
 }
+
+export type NotifyHistoryKindFilter = 'all' | NotifyKind
+
+export function filterNotifyHistoryByKind(
+  items: readonly NotifyHistoryEntry[],
+  kind: NotifyHistoryKindFilter,
+): NotifyHistoryEntry[] {
+  if (kind === 'all') return items.slice()
+  return items.filter((x) => x.kind === kind)
+}

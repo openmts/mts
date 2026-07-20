@@ -25,6 +25,7 @@ import {
   type RecentRouteEntry,
 } from '@/utils/recentRoutes'
 import { loadSidebarPrefs, saveSidebarPrefs } from '@/utils/sidebarPrefs'
+import { CLIENT_PREFS_CHANGED_EVENT } from '@/utils/clientPrefs'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useServerReachability } from '@/composables/useServerReachability'
 
@@ -122,11 +123,19 @@ watch(
   { immediate: true },
 )
 
+function onPrefsChanged() {
+  sidebarCollapsed.value = loadSidebarPrefs(
+    typeof localStorage !== 'undefined' ? localStorage : null,
+  ).collapsed
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onGlobalKey)
+  window.addEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKey)
+  window.removeEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
 })
 
 provide('toggleSidebar', toggleSidebar)

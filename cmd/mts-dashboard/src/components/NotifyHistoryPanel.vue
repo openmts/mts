@@ -4,7 +4,11 @@ import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { Bell, X, Download, Copy } from 'lucide-vue-next'
-import type { NotifyHistoryEntry } from '@/utils/notifyHistory'
+import {
+  filterNotifyHistoryByKind,
+  type NotifyHistoryEntry,
+  type NotifyHistoryKindFilter,
+} from '@/utils/notifyHistory'
 import {
   buildNotifyHistoryExport,
   formatNotifyHistoryExportPretty,
@@ -19,7 +23,13 @@ const { history, clearHistory, reloadHistory, success, error: notifyError } = us
 const panelRef = ref<HTMLElement | null>(null)
 let trap: FocusTrapHandle | null = null
 
-const entries = computed(() => history.value)
+const kindFilter = ref<NotifyHistoryKindFilter>('all')
+const entries = computed(() => filterNotifyHistoryByKind(history.value, kindFilter.value))
+const filterOptions: NotifyHistoryKindFilter[] = ['all', 'success', 'error', 'warn', 'info']
+function filterOptionLabel(k: NotifyHistoryKindFilter): string {
+  if (k === 'all') return t.value('notifyHistoryFilterAll')
+  return kindLabel(k)
+}
 
 function close() {
   open.value = false
@@ -176,13 +186,26 @@ onBeforeUnmount(() => {
       <p class="border-b border-slate-100 px-4 py-2 text-xs mts-muted dark:border-slate-800">
         {{ t('notifyHistoryHint') }}
       </p>
+      <div class="border-b border-slate-100 px-4 py-2 dark:border-slate-800" data-testid="notify-history-filter-wrap">
+        <label class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300" for="notify-history-filter">
+          {{ t('notifyHistoryFilter') }}
+        </label>
+        <select
+          id="notify-history-filter"
+          v-model="kindFilter"
+          class="mts-input mts-focus-ring text-xs"
+          data-testid="notify-history-filter"
+        >
+          <option v-for="k in filterOptions" :key="k" :value="k">{{ filterOptionLabel(k) }}</option>
+        </select>
+      </div>
       <ul class="flex-1 space-y-2 overflow-auto p-3" data-testid="notify-history-list">
         <li
           v-if="!entries.length"
           class="px-2 py-8 text-center text-sm mts-muted"
           data-testid="notify-history-empty"
         >
-          {{ t('notifyHistoryEmpty') }}
+          {{ history.length && kindFilter !== 'all' ? t('notifyHistoryFilterEmpty') : t('notifyHistoryEmpty') }}
         </li>
         <li
           v-for="e in entries"

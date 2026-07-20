@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   appendNotifyHistory,
   clearNotifyHistory,
+  filterNotifyHistoryByKind,
   loadNotifyHistory,
   recordNotifyHistory,
 } from './notifyHistory.ts'
@@ -33,4 +34,14 @@ test('record/clear notify history storage', () => {
   assert.equal(loadNotifyHistory(s).length, 1)
   clearNotifyHistory(s)
   assert.equal(loadNotifyHistory(s).length, 0)
+})
+
+test('filterNotifyHistoryByKind', () => {
+  const items = [
+    { id: '1', kind: 'info' as const, message: 'a', count: 1, at: 1 },
+    { id: '2', kind: 'error' as const, message: 'b', count: 1, at: 2 },
+  ]
+  assert.equal(filterNotifyHistoryByKind(items, 'all').length, 2)
+  assert.equal(filterNotifyHistoryByKind(items, 'error').length, 1)
+  assert.equal(filterNotifyHistoryByKind(items, 'error')[0]?.message, 'b')
 })

@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import {
+  DEFAULT_CLIENT_PREFS,
+  normalizeClientPrefs,
+  parseClientPrefsImport,
+} from './clientPrefs.ts'
+
+test('normalizeClientPrefs defaults and clamps', () => {
+  assert.deepEqual(normalizeClientPrefs({}), DEFAULT_CLIENT_PREFS)
+  const n = normalizeClientPrefs({
+    landing_path: '/query',
+    density: 'compact',
+    sidebar_collapsed: true,
+    locale: 'en',
+    theme: 'dark',
+  })
+  assert.equal(n.landing_path, '/query')
+  assert.equal(n.density, 'compact')
+  assert.equal(n.sidebar_collapsed, true)
+  assert.equal(n.locale, 'en')
+  assert.equal(n.theme, 'dark')
+  assert.equal(normalizeClientPrefs({ landing_path: '/login' }).landing_path, '/')
+})
+
+test('parseClientPrefsImport from snapshot and flat', () => {
+  const snap = parseClientPrefsImport(JSON.stringify({
+    kind: 'mts.account.snapshot',
+    prefs: { landing_path: '/write', density: 'compact', locale: 'en', theme: 'dark', sidebar_collapsed: true },
+  }))
+  assert.equal(snap.ok, true)
+  if (snap.ok) {
+    assert.equal(snap.prefs.landing_path, '/write')
+    assert.equal(snap.prefs.density, 'compact')
+  }
+  const flat = parseClientPrefsImport(JSON.stringify({ landing_path: '/about', density: 'comfortable' }))
+  assert.equal(flat.ok, true)
+  if (flat.ok) assert.equal(flat.prefs.landing_path, '/about')
+  assert.equal(parseClientPrefsImport('').ok, false)
+  assert.equal(parseClientPrefsImport('{').ok, false)
+  assert.equal(parseClientPrefsImport('{"x":1}').ok, false)
+})

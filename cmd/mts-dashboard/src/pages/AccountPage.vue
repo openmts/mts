@@ -22,12 +22,19 @@ import {
 import type { MessageKey } from '@/i18n/messages'
 import { useDensity } from '@/composables/useDensity'
 import type { UiDensity } from '@/utils/densityPrefs'
-import { loadSidebarPrefs } from '@/utils/sidebarPrefs'
+import { loadSidebarPrefs, saveSidebarPrefs } from '@/utils/sidebarPrefs'
 import { useTheme } from '@/composables/useTheme'
+import {
+  DEFAULT_CLIENT_PREFS,
+  CLIENT_PREFS_CHANGED_EVENT,
+  normalizeClientPrefs,
+  parseClientPrefsImport,
+  type ClientPrefs,
+} from '@/utils/clientPrefs'
 
 const router = useRouter()
 const { currentUser, currentRole, changePassword, isAdmin } = useAuth()
-const { t, locale } = useI18n()
+const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
 const expiresAt = computed(() => parseExpiresAt(getTokenExpiresAt()))
 const sessionView = computed(() =>
@@ -94,7 +101,73 @@ function onLandingChange() {
 }
 
 const { density, setDensity } = useDensity()
-const { theme } = useTheme()
+const { theme, setTheme } = useTheme()
+const prefsImportText = ref('')
+const prefsImportError = ref('')
+const prefsFileRef = ref<HTMLInputElement | null>(null)
+
+function emitPrefsChanged() {
+  if (typeof window === 'undefined') return
+  try {
+    window.dispatchEvent(new CustomEvent(CLIENT_PREFS_CHANGED_EVENT))
+  } catch { /* ignore */ }
+}
+
+function applyClientPrefs(prefs: ClientPrefs) {
+  const n = normalizeClientPrefs(prefs)
+  landingPath.value = n.landing_path
+  saveLandingPath(storage, n.landing_path)
+  setDensity(n.density)
+  saveSidebarPrefs(storage, { collapsed: n.sidebar_collapsed })
+  setLocale(n.locale)
+  setTheme(n.theme)
+  emitPrefsChanged()
+}
+
+function resetClientPrefs() {
+  prefsImportError.value = ''
+  applyClientPrefs(DEFAULT_CLIENT_PREFS)
+  success(t.value('accountPrefsReset'))
+}
+
+function importClientPrefsFromText(raw: string) {
+  prefsImportError.value = ''
+  const parsed = parseClientPrefsImport(raw)
+  if (!parsed.ok) {
+    prefsImportError.value = t.value(
+      parsed.error === 'empty'
+        ? 'accountPrefsImportEmpty'
+        : parsed.error === 'invalid_json'
+          ? 'accountPrefsImportInvalidJson'
+          : 'accountPrefsImportInvalidShape',
+    )
+    return
+  }
+  applyClientPrefs(parsed.prefs)
+  prefsImportText.value = ''
+  success(t.value('accountPrefsImported'))
+}
+
+function onPrefsImportSubmit() {
+  importClientPrefsFromText(prefsImportText.value)
+}
+
+function onPrefsFilePick() {
+  prefsFileRef.value?.click()
+}
+
+async function onPrefsFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const text = await file.text()
+    importClientPrefsFromText(text)
+  } catch {
+    prefsImportError.value = t.value('accountPrefsImportInvalidJson')
+  }
+}
 function onDensityChange(e: Event) {
   const v = (e.target as HTMLSelectElement).value as UiDensity
   setDensity(v)
@@ -231,6 +304,50 @@ async function submit() {
         <option value="comfortable">{{ t('accountDensityComfortable') }}</option>
         <option value="compact">{{ t('accountDensityCompact') }}</option>
       </select>
+    </div>
+
+    <div class="mts-card p-4" data-testid="account-prefs-tools">
+      <h2 class="mb-1 text-sm font-semibold">{{ t('accountPrefsToolsTitle') }}</h2>
+      <p class="mb-3 text-xs mts-muted">{{ t('accountPrefsToolsHint') }}</p>
+      <div class="mb-3 flex flex-wrap gap-2">
+        <button type="button" class="mts-btn mts-focus-ring" data-testid="account-prefs-reset" @click="resetClientPrefs">
+          {{ t('accountPrefsResetBtn') }}
+        </button>
+        <button type="button" class="mts-btn mts-focus-ring" data-testid="account-prefs-import-file" @click="onPrefsFilePick">
+          {{ t('accountPrefsImportFile') }}
+        </button>
+        <input
+          ref="prefsFileRef"
+          type="file"
+          accept="application/json,.json"
+          class="hidden"
+          data-testid="account-prefs-file-input"
+          @change="onPrefsFileChange"
+        />
+      </div>
+      <label class="mb-1 block text-sm font-medium" for="account-prefs-import-text">{{ t('accountPrefsImportLabel') }}</label>
+      <textarea
+        id="account-prefs-import-text"
+        v-model="prefsImportText"
+        rows="4"
+        class="mts-input mts-focus-ring font-mono text-xs"
+        data-testid="account-prefs-import-text"
+        :placeholder="t('accountPrefsImportPlaceholder')"
+      />
+      <p
+        v-if="prefsImportError"
+        class="mt-2 text-xs text-red-600 dark:text-red-300"
+        role="alert"
+        data-testid="account-prefs-import-error"
+      >{{ prefsImportError }}</p>
+      <button
+        type="button"
+        class="mts-btn-primary mts-focus-ring mt-3"
+        data-testid="account-prefs-import-submit"
+        @click="onPrefsImportSubmit"
+      >
+        {{ t('accountPrefsImportBtn') }}
+      </button>
     </div>
 
     <div class="mts-card p-4" data-testid="account-session">
