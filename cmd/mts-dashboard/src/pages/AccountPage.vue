@@ -20,6 +20,8 @@ import {
   saveLandingPath,
 } from '@/utils/landingPrefs'
 import type { MessageKey } from '@/i18n/messages'
+import { useDensity } from '@/composables/useDensity'
+import type { UiDensity } from '@/utils/densityPrefs'
 
 const router = useRouter()
 const { currentUser, currentRole, changePassword, isAdmin } = useAuth()
@@ -87,6 +89,13 @@ function landingLabel(path: string): string {
 function onLandingChange() {
   saveLandingPath(storage, landingPath.value)
   success(t.value('accountLandingSaved'))
+}
+
+const { density, setDensity } = useDensity()
+function onDensityChange(e: Event) {
+  const v = (e.target as HTMLSelectElement).value as UiDensity
+  setDensity(v)
+  success(t.value('accountDensitySaved'))
 }
 
 const oldPassword = ref('')
@@ -194,6 +203,22 @@ async function submit() {
         <option v-for="p in landingOptions" :key="p" :value="p">
           {{ landingLabel(p) }} ({{ p }})
         </option>
+      </select>
+    </div>
+
+    <div class="mts-card p-4" data-testid="account-density">
+      <h2 class="mb-1 text-sm font-semibold">{{ t('accountDensityTitle') }}</h2>
+      <p class="mb-3 text-xs mts-muted">{{ t('accountDensityHint') }}</p>
+      <label class="mb-1 block text-sm font-medium" for="account-density-select">{{ t('accountDensityLabel') }}</label>
+      <select
+        id="account-density-select"
+        class="mts-input mts-focus-ring"
+        data-testid="account-density-select"
+        :value="density"
+        @change="onDensityChange"
+      >
+        <option value="comfortable">{{ t('accountDensityComfortable') }}</option>
+        <option value="compact">{{ t('accountDensityCompact') }}</option>
       </select>
     </div>
 

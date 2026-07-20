@@ -44,6 +44,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-summary')).toBeVisible()
   await expect(page.getByTestId('sidebar')).toBeVisible()
   await expect(page.getByTestId('sidebar-collapse-toggle')).toBeVisible()
+  await expect(page.getByTestId('sidebar-section-workspace')).toBeVisible()
+  await expect(page.getByTestId('sidebar-section-label-workspace')).toBeVisible()
   await expect(page.getByTestId('overview-export-json')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
@@ -217,6 +219,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/account')
   await expect(page.getByTestId('account-password-form')).toBeVisible()
   await expect(page.getByTestId('account-landing-select')).toBeVisible()
+  await expect(page.getByTestId('account-density-select')).toBeVisible()
+  await page.getByTestId('account-density-select').selectOption('compact')
+  await expect(page.locator('html')).toHaveAttribute('data-density', 'compact')
+  await page.getByTestId('account-density-select').selectOption('comfortable')
+  await expect(page.locator('html')).not.toHaveAttribute('data-density', 'compact')
   await expect(page.getByTestId('session-badge')).toBeVisible()
 
   // 11) 命令面板跳转 + 快捷键帮助 + 最近访问

@@ -3,11 +3,13 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
+import type { MessageKey } from '@/i18n/messages'
 import {
   LayoutDashboard, Database, Users, Settings, Wrench,
   ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-vue-next'
 import { filterNavItems } from '@/utils/navFilter'
+import { groupNavItems } from '@/utils/navSections'
 
 const props = defineProps<{ visible: boolean; collapsed: boolean }>()
 const emit = defineEmits<{ close: []; 'toggle-collapse': [] }>()
@@ -39,10 +41,12 @@ const allNavItems = computed(() => [
 
 const roleNavItems = computed(() => allNavItems.value.filter((i) => !i.adminOnly || isAdmin.value))
 
-const navItems = computed(() => {
+const filteredNavItems = computed(() => {
   if (props.collapsed) return roleNavItems.value
   return filterNavItems(roleNavItems.value, navFilter.value)
 })
+
+const navGroups = computed(() => groupNavItems(filteredNavItems.value))
 
 watch(
   () => props.collapsed,
@@ -76,7 +80,6 @@ async function focusFilter() {
     emit('toggle-collapse')
   }
   await nextTick()
-  // 折叠切换后可能需要再等一轮渲染
   await nextTick()
   const el = document.getElementById('sidebar-filter-input') as HTMLInputElement | null
   el?.focus()
@@ -163,32 +166,46 @@ defineExpose({ focusFilter, clearFilter })
       </div>
       <nav class="flex-1 space-y-0.5 overflow-auto p-2" :aria-label="t('appName')" data-testid="sidebar-nav">
         <p
-          v-if="!collapsed && navFilter.trim() && navItems.length === 0"
+          v-if="!collapsed && navFilter.trim() && !filteredNavItems.length"
           class="px-2 py-3 text-center text-xs text-slate-400 dark:text-slate-500"
           data-testid="sidebar-filter-empty"
         >
           {{ t('sidebarFilterEmpty') }}
         </p>
-        <button
-          v-for="item in navItems"
-          :key="item.to"
-          type="button"
-          class="flex w-full items-center gap-2 rounded-lg py-2 text-left text-sm"
-          :class="[
-            isActive(item.to)
-              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
-            collapsed ? 'justify-center px-2' : 'px-3',
-          ]"
-          :aria-current="isActive(item.to) ? 'page' : undefined"
-          :title="item.label"
-          :aria-label="item.label"
-          :data-testid="navTestId(item.to)"
-          @click="go(item.to)"
+        <div
+          v-for="group in navGroups"
+          :key="group.id"
+          class="space-y-0.5"
+          :data-testid="`sidebar-section-${group.id}`"
         >
-          <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span :class="collapsed ? 'sr-only' : ''">{{ item.label }}</span>
-        </button>
+          <p
+            v-if="!collapsed"
+            class="px-2 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+            :data-testid="`sidebar-section-label-${group.id}`"
+          >
+            {{ t(group.labelKey as MessageKey) }}
+          </p>
+          <button
+            v-for="item in group.items"
+            :key="item.to"
+            type="button"
+            class="flex w-full items-center gap-2 rounded-lg py-2 text-left text-sm"
+            :class="[
+              isActive(item.to)
+                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+              collapsed ? 'justify-center px-2' : 'px-3',
+            ]"
+            :aria-current="isActive(item.to) ? 'page' : undefined"
+            :title="item.label"
+            :aria-label="item.label"
+            :data-testid="navTestId(item.to)"
+            @click="go(item.to)"
+          >
+            <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span :class="collapsed ? 'sr-only' : ''">{{ item.label }}</span>
+          </button>
+        </div>
       </nav>
     </aside>
   </div>

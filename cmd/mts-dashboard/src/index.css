@@ -146,3 +146,24 @@ body {
     box-shadow: none !important;
   }
 }
+
+/* 紧凑密度：减小主内容与卡片内边距 */
+html[data-density="compact"] main#main-content {
+  @apply p-3 sm:p-4;
+}
+html[data-density="compact"] .mts-panel {
+  @apply p-3 sm:p-4;
+}
+html[data-density="compact"] .mts-card {
+  @apply rounded-lg;
+}
+html[data-density="compact"] .mts-input {
+  @apply px-2.5 py-1.5 text-xs;
+}
+html[data-density="compact"] .mts-btn,
+html[data-density="compact"] .mts-btn-primary {
+  @apply px-2 py-1 text-[11px];
+}
+html[data-density="compact"] .mts-title {
+  @apply text-base;
+}
