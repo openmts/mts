@@ -169,6 +169,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('query-predicates')).toBeVisible()
   await expect(page.getByTestId('query-series-meta')).toBeVisible()
   await expect(page.getByTestId('query-series-select')).toBeVisible()
+  await expect(page.getByTestId('query-series-filter')).toBeVisible()
   await expect(page.getByTestId('query-fields')).toBeVisible()
   await expect(page.getByTestId('query-stats-panel')).toBeVisible()
   await expect(page.getByTestId('query-engine-stats')).toBeVisible()

@@ -4,6 +4,7 @@ import {
   appendFieldToken,
   capSeriesList,
   fieldNames,
+  filterSeriesList,
   seriesLabel,
   tagsToExpr,
 } from './seriesMeta.ts'
@@ -31,4 +32,16 @@ test('fieldNames and appendFieldToken', () => {
   assert.deepEqual(fieldNames([{ name: 'a' }, { name: ' ' }, { name: 'b' }]), ['a', 'b'])
   assert.equal(appendFieldToken('usage', 'cpu'), 'usage,cpu')
   assert.equal(appendFieldToken('usage,cpu', 'usage'), 'usage,cpu')
+})
+
+test('filterSeriesList by tag and free text', () => {
+  const items = [
+    { id: 1, tags: { host: 'a', zone: 'z1' } },
+    { id: 2, tags: { host: 'b', zone: 'z2' } },
+    { id: 3, measurement: 'cpu', tags: {} },
+  ]
+  assert.equal(filterSeriesList(items, 'host=a').length, 1)
+  assert.equal(filterSeriesList(items, 'z2').length, 1)
+  assert.equal(filterSeriesList(items, '').length, 3)
+  assert.equal(filterSeriesList(items, 'cpu').length, 1)
 })

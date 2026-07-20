@@ -77,3 +77,9 @@
 - [x] EARS-BE-P145-02 admin 路径仍拒绝非 admin
 - [x] EARS-FE-P145-03 listDatabases 优先 data
 - [x] EARS-DOC-P145-04 基线记录
+
+## P146 — Query series 筛选
+- [x] EARS-FE-P146-01 series 下拉客户端筛选
+- [x] EARS-FE-P146-02 无匹配提示
+- [x] EARS-FE-P146-03 商业冒烟 filter testid
+- [x] EARS-DOC-P146-04 基线记录

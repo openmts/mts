@@ -54,3 +54,23 @@ export function appendFieldToken(current: string, name: string): string {
   parts.push(token)
   return parts.join(',')
 }
+
+
+/** 按标签表达式或自由文本筛选 series（客户端） */
+export function filterSeriesList<T extends SeriesLike>(items: T[], query: string): T[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return [...items]
+  return items.filter((s) => {
+    const label = seriesLabel(s).toLowerCase()
+    if (label.includes(q)) return true
+    if (s.measurement && s.measurement.toLowerCase().includes(q)) return true
+    if (s.id != null && String(s.id).includes(q)) return true
+    if (s.tags) {
+      for (const [k, v] of Object.entries(s.tags)) {
+        if (k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q)) return true
+        if (`${k}=${v}`.toLowerCase().includes(q)) return true
+      }
+    }
+    return false
+  })
+}

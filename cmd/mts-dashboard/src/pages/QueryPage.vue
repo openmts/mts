@@ -24,7 +24,7 @@ import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { latencyFromNanos } from '@/utils/queryLatency'
-import { seriesLabel } from '@/utils/seriesMeta'
+import { filterSeriesList, seriesLabel } from '@/utils/seriesMeta'
 import { detailStatCards, primaryStatCards, toneClass } from '@/utils/queryStatsView'
 import type { MessageKey } from '@/i18n/messages'
 import {
@@ -51,6 +51,7 @@ const {
   loadDatabases, loadDbChildren, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
 const history = useQueryHistory()
+const seriesFilter = ref('')
 const route = useRoute()
 useHashScroll()
 const { success, error: notifyError } = useNotify()
@@ -230,6 +231,7 @@ watch(() => queryForm.value.database, async (db) => {
 watch(
   () => [queryForm.value.database, queryForm.value.measurement] as const,
   async ([db, measurement]) => {
+    seriesFilter.value = ''
     try {
       await loadMeasurementMeta(db, measurement)
     } catch (e) {
@@ -242,6 +244,7 @@ function formatTimestamp(v: number): string {
   if (Math.abs(v) >= 1e15) return formatEpoch(v, 'ns')
   return formatEpoch(v, 'ms')
 }
+const filteredSeriesOptions = computed(() => filterSeriesList(seriesOptions.value, seriesFilter.value))
 const primaryStatsCards = computed(() => (queryStats.value ? primaryStatCards(queryStats.value) : []))
 const detailStatsCards = computed(() => (queryStats.value ? detailStatCards(queryStats.value) : []))
 const engineStatsAtLabel = computed(() => {
@@ -267,6 +270,14 @@ function onSeriesSelect(raw: string) {
   const idx = Number(raw)
   if (!Number.isInteger(idx) || idx < 0 || idx >= seriesOptions.value.length) return
   applySeriesTags(seriesOptions.value[idx])
+}
+
+function onSeriesSelectFiltered(raw: string) {
+  if (!raw) return
+  const idx = Number(raw)
+  const list = filteredSeriesOptions.value
+  if (!Number.isInteger(idx) || idx < 0 || idx >= list.length) return
+  applySeriesTags(list[idx])
 }
 
 async function checkAuthz(perm: 'read' | 'write' = 'read') {
@@ -650,17 +661,24 @@ const columnRows = computed(() => {
           <span>{{ t('querySeriesPicker') }}</span>
           <span v-if="seriesLoading" class="text-[11px] mts-muted">{{ t('loading') }}</span>
           <span v-else-if="seriesTotal" class="text-[11px] mts-muted" data-testid="query-series-count">
-            {{ formatMessage(t('querySeriesCountMeta'), { shown: seriesOptions.length, total: seriesTotal }) }}
+            {{ formatMessage(t('querySeriesCountMeta'), { shown: filteredSeriesOptions.length, total: seriesTotal }) }}
           </span>
         </div>
+        <input
+          v-model="seriesFilter"
+          class="mt-1 w-full rounded border px-2 py-1.5 text-xs dark:border-slate-600 dark:bg-slate-800"
+          data-testid="query-series-filter"
+          :placeholder="t('querySeriesFilterPh')"
+          :disabled="seriesLoading || !seriesOptions.length"
+        />
         <select
           class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800"
           data-testid="query-series-select"
-          :disabled="seriesLoading || !seriesOptions.length"
-          @change="onSeriesSelect(($event.target as HTMLSelectElement).value)"
+          :disabled="seriesLoading || !filteredSeriesOptions.length"
+          @change="onSeriesSelectFiltered(($event.target as HTMLSelectElement).value)"
         >
-          <option value="">{{ seriesOptions.length ? t('querySeriesPickPlaceholder') : t('querySeriesEmpty') }}</option>
-          <option v-for="(s, idx) in seriesOptions" :key="s.id ?? idx" :value="String(idx)">
+          <option value="">{{ filteredSeriesOptions.length ? t('querySeriesPickPlaceholder') : (seriesOptions.length ? t('querySeriesFilterEmpty') : t('querySeriesEmpty')) }}</option>
+          <option v-for="(s, idx) in filteredSeriesOptions" :key="s.id ?? idx" :value="String(idx)">
             {{ seriesOptionLabel(s) }}
           </option>
         </select>
