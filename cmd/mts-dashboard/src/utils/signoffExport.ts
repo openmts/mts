@@ -53,6 +53,29 @@ export function assessSignoffCompleteness(notes?: SignoffNotes | null): SignoffC
   }
 }
 
+/** 0-100 进度（按已填字段数） */
+export function signoffProgressPercent(notes?: SignoffNotes | null): number {
+  const c = assessSignoffCompleteness(notes)
+  if (!c.total) return 0
+  return Math.round((c.filledCount / c.total) * 100)
+}
+
+export function signoffFieldAnchorId(field: SignoffNoteField): string {
+  return `signoff-field-${field}`
+}
+
+export function formatSignoffMissingClipboard(
+  missing: SignoffNoteField[],
+  locale: LocaleCode = 'zh',
+): string {
+  if (!missing.length) {
+    return locale === 'en'
+      ? 'All sign-off note fields are filled (still not production acceptance).'
+      : '三项签核备注均已填写（仍不等于生产验收完成）。'
+  }
+  return formatMissingSignoffMessage(missing, locale)
+}
+
 /** 将签核备注合成为归档顶层 note（可与已有 note 合并；不宣称验收完成） */
 export function composeSignoffArchiveNote(
   notes?: SignoffNotes | null,

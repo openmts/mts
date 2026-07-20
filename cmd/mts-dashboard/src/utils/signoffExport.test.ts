@@ -5,7 +5,10 @@ import {
   composeSignoffArchiveNote,
   confirmExportWithMissingSignoff,
   formatMissingSignoffMessage,
+  formatSignoffMissingClipboard,
+  signoffFieldAnchorId,
   signoffFieldLabel,
+  signoffProgressPercent,
 } from './signoffExport.ts'
 
 test('assessSignoffCompleteness reports missing fields', () => {
@@ -79,4 +82,16 @@ test('confirmExportWithMissingSignoff respects confirm result', () => {
     true,
   )
   assert.equal(called, false)
+})
+
+test('signoffProgressPercent and anchors', () => {
+  assert.equal(signoffProgressPercent({}), 0)
+  assert.equal(signoffProgressPercent({ edgeHttps: 'x' }), 33)
+  assert.equal(
+    signoffProgressPercent({ edgeHttps: 'a', backupOffsite: 'b', backupAlert: 'c' }),
+    100,
+  )
+  assert.equal(signoffFieldAnchorId('edgeHttps'), 'signoff-field-edgeHttps')
+  assert.match(formatSignoffMissingClipboard(['backupAlert'], 'zh'), /备份失败告警|告警/)
+  assert.match(formatSignoffMissingClipboard([], 'en'), /All sign-off/)
 })

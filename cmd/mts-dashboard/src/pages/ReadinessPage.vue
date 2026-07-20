@@ -48,6 +48,10 @@ import {
   composeSignoffArchiveNote,
   confirmExportWithMissingSignoff,
   signoffFieldLabel,
+  signoffProgressPercent,
+  signoffFieldAnchorId,
+  formatSignoffMissingClipboard,
+  type SignoffNoteField,
 } from '@/utils/signoffExport'
 import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import {
@@ -131,6 +135,7 @@ const signoffCompleteness = computed(() => assessSignoffCompleteness(state.value
 const signoffMissingLabels = computed(() =>
   signoffCompleteness.value.missing.map((f) => signoffFieldLabel(f, uiLocale.value)),
 )
+const signoffProgress = computed(() => signoffProgressPercent(state.value.signoffNotes))
 
 const doctorWarns = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'warn'))
 const doctorOKs = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'ok'))
@@ -214,6 +219,31 @@ function toggle(
 
 function saveSignoff(field: keyof SignoffNotes, value: string) {
   state.value = setSignoffNote(field, value)
+}
+
+function isSignoffFieldFilled(field: SignoffNoteField): boolean {
+  return !signoffCompleteness.value.missing.includes(field)
+}
+
+function focusSignoffField(field: SignoffNoteField) {
+  const id = signoffFieldAnchorId(field)
+  const el = typeof document !== 'undefined' ? document.getElementById(id) : null
+  if (el instanceof HTMLElement) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.focus()
+  }
+}
+
+async function copySignoffMissing() {
+  const text = formatSignoffMissingClipboard(signoffCompleteness.value.missing, uiLocale.value)
+  const r = await copyText(text)
+  if (r.ok) {
+    success(t.value('readinessSignoffCopied'))
+    flash('ok', t.value('readinessSignoffCopied'))
+  } else {
+    notifyError(t.value('readinessCopyFailed'))
+    flash('error', t.value('readinessCopyFailed'))
+  }
 }
 
 async function loadServerVersion() {
@@ -853,6 +883,33 @@ watch(
         <h2 class="text-sm font-semibold">{{ t('readinessSignoffTitle') }}</h2>
         <p class="mt-1 text-xs mts-muted">{{ t('readinessSignoffHint') }}</p>
         <p class="mt-1 text-[11px] text-amber-700 dark:text-amber-200">{{ t('readinessSignoffManualNote') }}</p>
+        <div class="mt-2" data-testid="signoff-progress">
+          <div class="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span class="mts-muted">{{ formatMessage(t('readinessSignoffProgress'), { percent: String(signoffProgress) }) }}</span>
+            <button
+              v-if="!signoffCompleteness.complete"
+              type="button"
+              class="mts-btn"
+              data-testid="signoff-copy-missing"
+              @click="copySignoffMissing"
+            >{{ t('readinessSignoffCopyMissing') }}</button>
+          </div>
+          <div
+            class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+            role="progressbar"
+            :aria-valuenow="signoffProgress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            data-testid="signoff-progress-bar"
+          >
+            <div
+              class="h-full rounded-full transition-[width] duration-200"
+              :class="signoffCompleteness.complete ? 'bg-emerald-500' : 'bg-amber-500'"
+              :style="{ width: `${signoffProgress}%` }"
+              data-testid="signoff-progress-fill"
+            />
+          </div>
+        </div>
         <p
           class="mt-2 text-xs"
           data-testid="signoff-completeness"
@@ -868,39 +925,73 @@ watch(
                 })
           }}
         </p>
+        <div v-if="signoffCompleteness.missing.length" class="mt-2 flex flex-wrap gap-2" data-testid="signoff-missing-jumps">
+          <button
+            v-for="field in signoffCompleteness.missing"
+            :key="field"
+            type="button"
+            class="mts-btn"
+            :data-testid="`signoff-jump-${field}`"
+            @click="focusSignoffField(field)"
+          >{{ t('readinessSignoffJump') }}: {{ signoffFieldLabel(field, uiLocale) }}</button>
+        </div>
       </div>
       <div class="space-y-3">
         <label class="block text-xs text-slate-700 dark:text-slate-200">
-          <span class="mb-1 block font-medium">{{ t('readinessSignoffEdge') }}</span>
+          <span class="mb-1 flex items-center justify-between gap-2 font-medium">
+            <span>{{ t('readinessSignoffEdge') }}</span>
+            <span
+              class="rounded-full px-2 py-0.5 text-[10px] font-normal"
+              data-testid="signoff-field-status-edgeHttps"
+              :class="isSignoffFieldFilled('edgeHttps') ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100'"
+            >{{ isSignoffFieldFilled('edgeHttps') ? t('readinessSignoffFieldDone') : t('readinessSignoffFieldTodo') }}</span>
+          </span>
           <textarea
+            id="signoff-field-edgeHttps"
             data-testid="signoff-edge-https"
             class="mts-input min-h-[4.5rem] w-full text-xs"
             :value="state.signoffNotes?.edgeHttps ?? ''"
             :placeholder="t('readinessSignoffEdgePh')"
             maxlength="2000"
-            @change="saveSignoff('edgeHttps', ($event.target as HTMLTextAreaElement).value)"
+            @input="saveSignoff('edgeHttps', ($event.target as HTMLTextAreaElement).value)"
           />
         </label>
         <label class="block text-xs text-slate-700 dark:text-slate-200">
-          <span class="mb-1 block font-medium">{{ t('readinessSignoffBackup') }}</span>
+          <span class="mb-1 flex items-center justify-between gap-2 font-medium">
+            <span>{{ t('readinessSignoffBackup') }}</span>
+            <span
+              class="rounded-full px-2 py-0.5 text-[10px] font-normal"
+              data-testid="signoff-field-status-backupOffsite"
+              :class="isSignoffFieldFilled('backupOffsite') ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100'"
+            >{{ isSignoffFieldFilled('backupOffsite') ? t('readinessSignoffFieldDone') : t('readinessSignoffFieldTodo') }}</span>
+          </span>
           <textarea
+            id="signoff-field-backupOffsite"
             data-testid="signoff-backup-offsite"
             class="mts-input min-h-[4.5rem] w-full text-xs"
             :value="state.signoffNotes?.backupOffsite ?? ''"
             :placeholder="t('readinessSignoffBackupPh')"
             maxlength="2000"
-            @change="saveSignoff('backupOffsite', ($event.target as HTMLTextAreaElement).value)"
+            @input="saveSignoff('backupOffsite', ($event.target as HTMLTextAreaElement).value)"
           />
         </label>
         <label class="block text-xs text-slate-700 dark:text-slate-200">
-          <span class="mb-1 block font-medium">{{ t('readinessSignoffAlert') }}</span>
+          <span class="mb-1 flex items-center justify-between gap-2 font-medium">
+            <span>{{ t('readinessSignoffAlert') }}</span>
+            <span
+              class="rounded-full px-2 py-0.5 text-[10px] font-normal"
+              data-testid="signoff-field-status-backupAlert"
+              :class="isSignoffFieldFilled('backupAlert') ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100'"
+            >{{ isSignoffFieldFilled('backupAlert') ? t('readinessSignoffFieldDone') : t('readinessSignoffFieldTodo') }}</span>
+          </span>
           <textarea
+            id="signoff-field-backupAlert"
             data-testid="signoff-backup-alert"
             class="mts-input min-h-[4.5rem] w-full text-xs"
             :value="state.signoffNotes?.backupAlert ?? ''"
             :placeholder="t('readinessSignoffAlertPh')"
             maxlength="2000"
-            @change="saveSignoff('backupAlert', ($event.target as HTMLTextAreaElement).value)"
+            @input="saveSignoff('backupAlert', ($event.target as HTMLTextAreaElement).value)"
           />
         </label>
       </div>
