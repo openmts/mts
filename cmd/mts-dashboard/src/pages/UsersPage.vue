@@ -296,7 +296,7 @@ function openSetPassword(name: string) {
     </div>
 
     <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-    <table class="w-full text-sm">
+    <div class="mts-table-wrap" data-testid="users-table-wrap"><table class="w-full min-w-[40rem] text-sm">
         <thead>
           <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
             <th class="px-4 py-2.5">{{ t('usersColUser') }}</th>
@@ -324,7 +324,7 @@ function openSetPassword(name: string) {
             </td>
           </tr>
         </tbody>
-      </table>
+      </table></div>
     </div>
 
     </template>

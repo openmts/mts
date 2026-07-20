@@ -177,8 +177,8 @@ function statusLabel(httpStatus: number): string {
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configSchema') }}</h2>
         <input v-model="schemaFilter" class="mts-input max-w-xs text-xs"  :placeholder="t('configSchemaFilter')" />
       </div>
-      <div class="max-h-80 overflow-auto" data-testid="config-schema-table">
-        <table class="w-full text-sm">
+      <div class="mts-table-wrap max-h-80 overflow-auto" data-testid="config-schema-table">
+        <table class="w-full min-w-[36rem] text-sm">
           <thead>
             <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
               <th class="px-2 py-2">{{ t('configColName') }}</th>
@@ -200,7 +200,7 @@ function statusLabel(httpStatus: number): string {
 
     <div class="mts-panel">
       <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configErrorCodes') }}</h2>
-      <table class="w-full text-sm" data-testid="config-error-codes-table">
+      <div class="mts-table-wrap"><table class="w-full min-w-[36rem] text-sm" data-testid="config-error-codes-table">
         <thead>
           <tr class="border-b border-slate-200 text-left dark:border-slate-700">
             <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColCode') }}</th>
@@ -220,7 +220,7 @@ function statusLabel(httpStatus: number): string {
             <td colspan="4" class="py-3 text-xs mts-muted">{{ t('configErrorCodesEmpty') }}</td>
           </tr>
         </tbody>
-      </table>
+      </table></div>
     </div>
   </div>
 </template>

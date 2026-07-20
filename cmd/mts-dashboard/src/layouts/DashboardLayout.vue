@@ -102,16 +102,18 @@ function onSkipToMain(e: Event) {
     >
       {{ t('skipToMain') }}
     </a>
-    <SidebarNav :visible="sidebarOpen" @close="closeSidebar" />
+    <div class="no-print"><SidebarNav :visible="sidebarOpen" @close="closeSidebar" /></div>
     <div class="flex flex-1 flex-col overflow-hidden">
-      <TopBar
-        @toggle-sidebar="toggleSidebar"
-        @open-command-palette="openCommandPalette"
-        @open-shortcuts="openShortcuts"
-      />
+      <div class="no-print">
+        <TopBar
+          @toggle-sidebar="toggleSidebar"
+          @open-command-palette="openCommandPalette"
+          @open-shortcuts="openShortcuts"
+        />
+      </div>
       <div
         v-if="offline"
-        class="border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100 sm:px-6"
+        class="no-print border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100 sm:px-6"
         role="status"
         aria-live="polite"
         data-testid="offline-banner"
@@ -121,7 +123,7 @@ function onSkipToMain(e: Event) {
       </div>
       <div
         v-if="!offline && showUnreachableBanner"
-        class="flex flex-wrap items-center justify-between gap-2 border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100 sm:px-6"
+        class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100 sm:px-6"
         role="alert"
         aria-live="assertive"
         data-testid="server-unreachable-banner"
@@ -142,7 +144,7 @@ function onSkipToMain(e: Event) {
       </div>
       <div
         v-if="recent.length"
-        class="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5 dark:border-slate-700 dark:bg-slate-900 sm:px-6"
+        class="no-print flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5 dark:border-slate-700 dark:bg-slate-900 sm:px-6"
         data-testid="recent-routes"
       >
         <span class="text-[11px] mts-muted">{{ t('recentRoutes') }}</span>

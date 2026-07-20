@@ -805,6 +805,7 @@ export const messages = {
     connectivityHintUnknown: '正在探测 /readyz…',
     healthStatusOk: '正常',
     healthStatusFailed: '失败',
+    topbarConnectivity: '连通性',
     unsavedLeaveConfirm: '有未保存的表单更改，确定离开当前页面？',
   },
   en: {
@@ -1611,6 +1612,7 @@ export const messages = {
     connectivityHintUnknown: 'Probing /readyz…',
     healthStatusOk: 'OK',
     healthStatusFailed: 'Failed',
+    topbarConnectivity: 'Connectivity',
     unsavedLeaveConfirm: 'You have unsaved form changes. Leave this page?',
   },
 } as const

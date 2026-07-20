@@ -7,6 +7,7 @@ import { useNotify } from '@/composables/useNotify'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Menu, Moon, Sun, Languages, Search, Keyboard } from 'lucide-vue-next'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
+import { useServerReachability } from '@/composables/useServerReachability'
 import {
   emptySessionGuardState,
   nextSessionGuardAction,
@@ -21,6 +22,7 @@ const router = useRouter()
 const { currentUser, currentRole, logout, loggingOut, getTokenExpiresAt, ensureSession } = useAuth()
 const { theme, toggleTheme } = useTheme()
 const { t, locale, toggleLocale } = useI18n()
+const { kind: connectivityKind } = useServerReachability()
 const { info, warn, error: notifyError } = useNotify()
 const nowMs = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
@@ -45,6 +47,32 @@ function roleLabel(role?: string | null): string {
   if (role === 'user') return t.value('roleUser')
   return role || ''
 }
+
+
+const connectivityBadgeClass = computed(() => {
+  switch (connectivityKind.value) {
+    case 'ok':
+      return 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+    case 'unreachable':
+      return 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200'
+    case 'offline':
+      return 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100'
+    default:
+      return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+  }
+})
+const connectivityBadgeLabel = computed(() => {
+  switch (connectivityKind.value) {
+    case 'ok':
+      return t.value('connectivityOk')
+    case 'unreachable':
+      return t.value('connectivityUnreachable')
+    case 'offline':
+      return t.value('connectivityOffline')
+    default:
+      return t.value('connectivityUnknown')
+  }
+})
 
 const showSessionBadge = computed(() => shouldShowSessionBadge(sessionView.value.urgency))
 
@@ -154,6 +182,15 @@ onBeforeUnmount(() => {
         <Keyboard class="h-3.5 w-3.5" />
         <span class="hidden sm:inline">?</span>
       </button>
+      <span
+        class="hidden rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline"
+        :class="connectivityBadgeClass"
+        :title="`${t('topbarConnectivity')}: ${connectivityBadgeLabel}`"
+        :aria-label="`${t('topbarConnectivity')}: ${connectivityBadgeLabel}`"
+        data-testid="topbar-connectivity"
+        role="status"
+        aria-live="polite"
+      >{{ connectivityBadgeLabel }}</span>
       <span
         v-if="showSessionBadge && sessionView.label"
         class="hidden rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline"

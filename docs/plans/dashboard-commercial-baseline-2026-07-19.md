@@ -338,3 +338,10 @@
 - health check status i18n 映射
 - 商业冒烟覆盖 Overview 连通性指示
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P71 状态（2026-07-20）
+- Doctor level i18n（Overview/就绪中心）；TopBar 连通性迷你徽章
+- Users/Config 表横向滚动；打印隐藏导航与瞬时条
+- 商业冒烟覆盖 topbar-connectivity
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

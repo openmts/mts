@@ -112,3 +112,37 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+
+/* 表格横向滚动容器 */
+.mts-table-wrap {
+  @apply w-full overflow-x-auto;
+}
+
+/* 打印：保留主内容，隐藏导航与瞬时 UI */
+@media print {
+  .no-print,
+  [data-testid="notify-host"],
+  [data-testid="global-progress"],
+  [data-testid="command-palette"],
+  [data-testid="shortcuts-help"],
+  [data-testid="offline-banner"],
+  [data-testid="server-unreachable-banner"],
+  [data-testid="skip-to-main"],
+  [data-testid="recent-routes"] {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  #main-content {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  .mts-card,
+  .mts-panel {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+}

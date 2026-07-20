@@ -634,7 +634,7 @@ const showAdminPanels = computed(() => isAdmin.value)
           </thead>
           <tbody>
             <tr v-for="(c, i) in doctorChecks" :key="i" class="border-b border-slate-100 dark:border-slate-800">
-              <td class="px-2 py-2 text-xs" :class="c.level === 'ok' ? 'text-green-600' : 'text-amber-600'">{{ c.level }}</td>
+              <td class="px-2 py-2 text-xs" :class="healthStatusToneClass(c.level)">{{ formatHealthStatus(c.level) }}</td>
               <td class="px-2 py-2 font-mono text-xs">{{ c.code }}</td>
               <td class="px-2 py-2 text-xs mts-muted">{{ c.message }}</td>
             </tr>

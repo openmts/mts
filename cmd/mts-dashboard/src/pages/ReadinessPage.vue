@@ -7,6 +7,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
+import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
 import { scheduleScrollToHash } from '@/utils/hashScroll'
 import { buildExportPreflight, formatExportPreflightText } from '@/utils/exportPreflight'
 import { buildOpsNextSteps } from '@/utils/opsNextSteps'
@@ -90,6 +91,10 @@ interface VersionResponse {
 const { isAdmin, currentUser } = useAuth()
 const { t, locale } = useI18n()
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
+
+function formatDoctorLevel(level?: string) {
+  return healthStatusLabel(level, uiLocale.value === 'en' ? 'en' : 'zh')
+}
 const router = useRouter()
 const route = useRoute()
 const { success, error: notifyError } = useNotify()
@@ -838,7 +843,7 @@ watch(
           </thead>
           <tbody>
             <tr v-for="(c, i) in doctor.checks ?? []" :key="i" class="border-b border-slate-100 dark:border-slate-800">
-              <td class="px-2 py-2 text-xs" :class="c.level === 'ok' ? 'text-green-600' : 'text-amber-600'">{{ c.level }}</td>
+              <td class="px-2 py-2 text-xs" :class="healthStatusToneClass(c.level)">{{ formatDoctorLevel(c.level) }}</td>
               <td class="px-2 py-2 font-mono text-xs">{{ c.code }}</td>
               <td class="px-2 py-2 text-xs mts-muted">{{ c.message }}</td>
             </tr>
