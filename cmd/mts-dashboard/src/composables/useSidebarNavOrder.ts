@@ -1,4 +1,5 @@
-import { computed, ref, type Ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
+import { CLIENT_PREFS_CHANGED_EVENT } from '@/utils/clientPrefs'
 import { groupNavItems } from '@/utils/navSections'
 import {
   applyNavOrder,
@@ -67,6 +68,23 @@ export function useSidebarNavOrder<T extends { to: string }>(
     return direction === 'up' ? idx > 0 : idx < group.items.length - 1
   }
 
+  function reloadFromStorage() {
+    orderMap.value = loadNavOrderPrefs(storage)
+  }
+
+  function onPrefsChanged() {
+    reloadFromStorage()
+  }
+
+  onMounted(() => {
+    if (typeof window === 'undefined') return
+    window.addEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
+  })
+  onBeforeUnmount(() => {
+    if (typeof window === 'undefined') return
+    window.removeEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
+  })
+
   return {
     orderMap,
     orderedRoleNavItems,
@@ -75,6 +93,7 @@ export function useSidebarNavOrder<T extends { to: string }>(
     resetSectionOrder,
     resetAllOrder,
     canMove,
+    reloadFromStorage,
   }
 }
 

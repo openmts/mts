@@ -3,6 +3,7 @@
 import { normalizeLandingPath } from './landingPrefs.ts'
 import { normalizeUiDensity, type UiDensity } from './densityPrefs.ts'
 import type { AccountPrefsSnapshot } from './accountExport.ts'
+import { parseNavOrderMap, type NavOrderMap } from './navOrder.ts'
 
 export type ClientLocale = 'zh' | 'en'
 export type ClientTheme = 'light' | 'dark'
@@ -13,6 +14,7 @@ export interface ClientPrefs {
   sidebar_collapsed: boolean
   locale: ClientLocale
   theme: ClientTheme
+  nav_order: NavOrderMap
 }
 
 export const DEFAULT_CLIENT_PREFS: ClientPrefs = {
@@ -21,6 +23,7 @@ export const DEFAULT_CLIENT_PREFS: ClientPrefs = {
   sidebar_collapsed: false,
   locale: 'zh',
   theme: 'light',
+  nav_order: {},
 }
 
 export const CLIENT_PREFS_CHANGED_EVENT = 'mts-dashboard-prefs-changed'
@@ -41,6 +44,7 @@ export function normalizeClientPrefs(raw: AccountPrefsSnapshot | null | undefine
     sidebar_collapsed: !!p.sidebar_collapsed,
     locale: normalizeClientLocale(p.locale),
     theme: normalizeClientTheme(p.theme),
+    nav_order: parseNavOrderMap(p.nav_order),
   }
 }
 
@@ -77,7 +81,8 @@ export function parseClientPrefsImport(text: string): ParseClientPrefsResult {
     'density' in o ||
     'sidebar_collapsed' in o ||
     'locale' in o ||
-    'theme' in o
+    'theme' in o ||
+    'nav_order' in o
   ) {
     return { ok: true, prefs: normalizeClientPrefs(o as AccountPrefsSnapshot) }
   }
@@ -90,6 +95,7 @@ export function clientPrefsEqual(a: ClientPrefs, b: ClientPrefs): boolean {
     a.density === b.density &&
     a.sidebar_collapsed === b.sidebar_collapsed &&
     a.locale === b.locale &&
-    a.theme === b.theme
+    a.theme === b.theme &&
+    JSON.stringify(a.nav_order) === JSON.stringify(b.nav_order)
   )
 }

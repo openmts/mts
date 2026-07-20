@@ -32,6 +32,7 @@ import {
   parseClientPrefsImport,
   type ClientPrefs,
 } from '@/utils/clientPrefs'
+import { loadNavOrderPrefs, saveNavOrderMap } from '@/utils/navOrder'
 
 const router = useRouter()
 const { currentUser, currentRole, changePassword, isAdmin } = useAuth()
@@ -122,6 +123,7 @@ function applyClientPrefs(prefs: ClientPrefs) {
   saveSidebarPrefs(storage, { collapsed: n.sidebar_collapsed })
   setLocale(n.locale)
   setTheme(n.theme)
+  saveNavOrderMap(storage, n.nav_order || {})
   emitPrefsChanged()
 }
 
@@ -200,6 +202,7 @@ function accountSnapshotInput() {
       sidebar_collapsed: side.collapsed,
       locale: locale.value,
       theme: theme.value,
+      nav_order: loadNavOrderPrefs(storage),
     },
   }
 }
@@ -223,6 +226,7 @@ function currentClientPrefs() {
     sidebar_collapsed: snap.sidebar_collapsed,
     locale: snap.locale as ClientPrefs['locale'],
     theme: snap.theme as ClientPrefs['theme'],
+    nav_order: snap.nav_order || {},
   }
 }
 

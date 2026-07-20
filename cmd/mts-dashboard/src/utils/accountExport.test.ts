@@ -31,3 +31,22 @@ test('buildAccountExport includes prefs', () => {
   assert.equal(out.prefs.density, 'compact')
   assert.equal(out.prefs.sidebar_collapsed, true)
 })
+
+test('buildAccountExport includes nav_order', () => {
+  const out = buildAccountExport({
+    username: 'a',
+    role: 'admin',
+    prefs: {
+      landing_path: '/query',
+      density: 'compact',
+      sidebar_collapsed: true,
+      locale: 'en',
+      theme: 'dark',
+      nav_order: { workspace: ['/query', '/'] },
+    },
+  })
+  assert.deepEqual(out.prefs.nav_order, { workspace: ['/query', '/'] })
+  const empty = buildAccountExport({ username: 'a' })
+  assert.deepEqual(empty.prefs.nav_order, {})
+})
+

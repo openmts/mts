@@ -1,3 +1,5 @@
+import { parseNavOrderMap } from './navOrder.ts'
+
 /** 账户会话与资料导出（纯函数，不含密钥） */
 
 export interface AccountPrefsSnapshot {
@@ -6,6 +8,8 @@ export interface AccountPrefsSnapshot {
   sidebar_collapsed?: boolean
   locale?: string
   theme?: string
+  /** 侧栏组内导航顺序 sectionId -> paths */
+  nav_order?: Record<string, string[]>
 }
 
 export function buildAccountExport(
@@ -37,10 +41,12 @@ export function buildAccountExport(
     sidebar_collapsed: boolean
     locale: string
     theme: string
+    nav_order: Record<string, string[]>
   }
 } {
   const session = input.session || {}
   const prefs = input.prefs || {}
+  const nav = parseNavOrderMap(prefs.nav_order)
   return {
     kind: 'mts.account.snapshot',
     version: 1,
@@ -58,6 +64,7 @@ export function buildAccountExport(
       sidebar_collapsed: !!prefs.sidebar_collapsed,
       locale: prefs.locale || 'zh',
       theme: prefs.theme || 'light',
+      nav_order: nav,
     },
   }
 }

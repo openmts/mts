@@ -234,6 +234,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('account-prefs-copy')).toBeVisible()
   await expect(page.getByTestId('account-prefs-reset')).toBeVisible()
   await expect(page.getByTestId('account-prefs-import-submit')).toBeVisible()
+  // P98：偏好导出/重置应覆盖侧栏导航排序（本机 localStorage）
+  const navKey = 'mts.dashboard.nav-order.prefs.v1'
+  const orderBefore = await page.evaluate((k) => localStorage.getItem(k), navKey)
+  expect(orderBefore).toBeTruthy()
+  await page.getByTestId('account-prefs-reset').click()
+  await expect.poll(async () => page.evaluate((k) => localStorage.getItem(k), navKey)).toBeNull()
   await page.getByTestId('account-density-select').selectOption('compact')
   await expect(page.locator('html')).toHaveAttribute('data-density', 'compact')
   await page.getByTestId('account-density-select').selectOption('comfortable')

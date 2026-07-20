@@ -12,6 +12,12 @@ test('buildClientPrefsExport shape', () => {
   assert.equal(out.generated_at, '2026-07-20T00:00:00.000Z')
   assert.equal(out.prefs.landing_path, '/query')
   assert.equal(out.prefs.density, 'compact')
+  assert.deepEqual(out.prefs.nav_order, {})
+  const withNav = buildClientPrefsExport(
+    { nav_order: { workspace: ['/query', '/'] } },
+    new Date('2026-07-20T00:00:00.000Z'),
+  )
+  assert.deepEqual(withNav.prefs.nav_order, { workspace: ['/query', '/'] })
   assert.ok(!('token' in out))
   assert.ok(!('password' in out.prefs as object))
 })
