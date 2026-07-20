@@ -817,6 +817,14 @@ export const messages = {
     readinessDeployDrillRunbooks: 'Runbook',
     readinessDeployDrillTemplates: '材料包样例',
 
+    metricsAutoRefresh: '自动刷新',
+    metricsAutoOff: '关闭',
+    metricsExportRaw: '下载原始 /metrics',
+    metricsExportJSON: '下载 JSON',
+    metricsExported: '指标已导出',
+    metricsExpandAll: '全部展开',
+    metricsCollapseAll: '全部折叠',
+
     storageSelectDataSnapshot: '选择 data-snapshot 作为演练源',
     storageSelectDataSnapshotHint: '仅 data-snapshot-* 可作为旁路恢复源；restore-drill 结果不可再作为源',
     storageNoDataSnapshot: '暂无 data-snapshot，请先创建',
@@ -1682,6 +1690,14 @@ export const messages = {
     readinessDeployDrillEvidence: 'Evidence',
     readinessDeployDrillRunbooks: 'Runbooks',
     readinessDeployDrillTemplates: 'Kit samples',
+
+    metricsAutoRefresh: 'Auto refresh',
+    metricsAutoOff: 'Off',
+    metricsExportRaw: 'Download raw /metrics',
+    metricsExportJSON: 'Download JSON',
+    metricsExported: 'Metrics exported',
+    metricsExpandAll: 'Expand all',
+    metricsCollapseAll: 'Collapse all',
 
     storageSelectDataSnapshot: 'Select data-snapshot as drill source',
     storageSelectDataSnapshotHint: 'Only data-snapshot-* can be restore-drill sources; restore-drill outputs cannot',

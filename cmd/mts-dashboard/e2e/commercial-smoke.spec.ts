@@ -87,6 +87,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/access/grants')
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
   await page.goto('/observability/metrics')
+  await expect(page.getByTestId('metrics-page')).toBeVisible()
+  await expect(page.getByTestId('metrics-filter')).toBeVisible()
+  await expect(page.getByTestId('metrics-export-raw')).toBeVisible()
+  await expect(page.getByTestId('metrics-auto-refresh')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /指标浏览|Metrics explorer/ })).toBeVisible()
   await expect(page.getByRole('main').getByText(/指标族|Families|样本|Samples/i).first()).toBeVisible()
 
