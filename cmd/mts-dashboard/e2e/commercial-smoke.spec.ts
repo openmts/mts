@@ -236,6 +236,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('config-copy-effective')).toBeVisible()
   await expect(page.getByTestId('config-export-schema')).toBeVisible()
   await expect(page.getByTestId('config-export-error-codes')).toBeVisible()
+  if (await page.getByTestId('config-schema-virtual-list').count()) {
+    await expect(page.getByTestId('config-schema-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('config-schema-virtual-hint')).toBeVisible()
+  }
+  if (await page.getByTestId('config-error-codes-virtual-list').count()) {
+    await expect(page.getByTestId('config-error-codes-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('config-error-codes-virtual-hint')).toBeVisible()
+  }
+  await expect(page.getByTestId('config-error-codes-filter')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { level: 1, name: /^(配置|Config)$/ })).toBeVisible()
   await expect(page.getByTestId('config-schema-table').getByText(/^(名称|Name)$/)).toBeVisible()
   await expect(page.getByTestId('config-error-codes-table').getByText(/^(错误码|Code)$/)).toBeVisible()

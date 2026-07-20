@@ -682,3 +682,8 @@
 - 商业冒烟覆盖 storage-*-virtual-list
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P129 状态（2026-07-20）
+- Config schema / error-codes 表虚拟滚动；错误码筛选+导出覆盖筛选结果
+- 商业冒烟覆盖 config-*-virtual-list
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

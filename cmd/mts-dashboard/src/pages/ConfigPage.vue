@@ -9,6 +9,7 @@ import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import {
   buildConfigSchemaExport,
@@ -38,6 +39,10 @@ const reloadResult = ref<ReloadResponse | null>(null)
 const errorCodes = ref<ErrorCodeSpec[]>([])
 const schemaFields = ref<SchemaField[]>([])
 const schemaFilter = ref('')
+const SCHEMA_ROW_HEIGHT = 40
+const ERROR_ROW_HEIGHT = 44
+const CONFIG_LIST_HEIGHT = 320
+const errorCodeFilter = ref('')
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
 const adminTokenInput = ref(getAdminToken())
@@ -48,6 +53,17 @@ const filteredSchema = computed(() => {
   if (!q) return schemaFields.value
   return schemaFields.value.filter((f) =>
     f.name.toLowerCase().includes(q) || (f.description || '').toLowerCase().includes(q),
+  )
+})
+
+const filteredErrorCodes = computed(() => {
+  const q = errorCodeFilter.value.trim().toLowerCase()
+  if (!q) return errorCodes.value
+  return errorCodes.value.filter((ec) =>
+    ec.code.toLowerCase().includes(q)
+    || String(ec.http_status).includes(q)
+    || (ec.grpc_code || '').toLowerCase().includes(q)
+    || (ec.description || '').toLowerCase().includes(q),
   )
 })
 
@@ -150,11 +166,11 @@ function exportSchema() {
 }
 
 function exportErrorCodes() {
-  if (!errorCodes.value.length) {
+  if (!filteredErrorCodes.value.length) {
     notifyError(t.value('configExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-error-codes', 'json'), buildErrorCodesExport(errorCodes.value))
+  downloadJSON(stampFilename('mts-error-codes', 'json'), buildErrorCodesExport(filteredErrorCodes.value))
   success(t.value('configExported'))
 }
 
@@ -237,55 +253,101 @@ function statusLabel(httpStatus: number): string {
           </button>
         </div>
       </div>
-      <div class="mts-table-wrap max-h-80 overflow-auto scroll-mt-20" id="config-schema" data-testid="config-schema-table">
-        <table class="w-full min-w-[36rem] text-sm">
-          <thead>
-            <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">{{ t('configColName') }}</th>
-              <th class="px-2 py-2">{{ t('configColDescription') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="f in filteredSchema" :key="f.name" class="border-b border-slate-100 dark:border-slate-800">
-              <td class="px-2 py-2 font-mono text-xs">{{ f.name }}</td>
-              <td class="px-2 py-2 text-xs mts-muted">{{ f.description }}</td>
-            </tr>
-            <tr v-if="!filteredSchema.length">
-              <td colspan="2" class="px-2 py-3 text-xs mts-muted">{{ t('configSchemaEmpty') }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800 scroll-mt-20" id="config-schema" data-testid="config-schema-table">
+        <div
+          class="grid grid-cols-[minmax(10rem,0.9fr)_minmax(14rem,1.4fr)] border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700"
+          data-testid="config-schema-header"
+        >
+          <div class="px-2 py-2">{{ t('configColName') }}</div>
+          <div class="px-2 py-2">{{ t('configColDescription') }}</div>
+        </div>
+        <div v-if="!filteredSchema.length" class="px-2 py-3 text-xs mts-muted" data-testid="config-schema-empty">
+          {{ t('configSchemaEmpty') }}
+        </div>
+        <VirtualTable
+          v-else
+          :items="filteredSchema"
+          :row-height="SCHEMA_ROW_HEIGHT"
+          :height="Math.min(CONFIG_LIST_HEIGHT, Math.max(160, filteredSchema.length * SCHEMA_ROW_HEIGHT))"
+          data-testid="config-schema-virtual-list"
+        >
+          <template #default="{ item: f }">
+            <div
+              class="grid h-full grid-cols-[minmax(10rem,0.9fr)_minmax(14rem,1.4fr)] items-center border-b border-slate-100 dark:border-slate-800"
+              :data-testid="`config-schema-row-${f.name}`"
+            >
+              <div class="truncate px-2 font-mono text-xs" :title="f.name">{{ f.name }}</div>
+              <div class="truncate px-2 text-xs mts-muted" :title="f.description">{{ f.description }}</div>
+            </div>
+          </template>
+        </VirtualTable>
+        <p
+          v-if="filteredSchema.length"
+          class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800"
+          data-testid="config-schema-virtual-hint"
+        >
+          {{ t('configSchemaVirtualHint') }}
+        </p>
       </div>
     </div>
 
     <div class="mts-panel">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configErrorCodes') }}</h2>
-        <button type="button" class="mts-btn" data-testid="config-export-error-codes" :disabled="!errorCodes.length" @click="exportErrorCodes">
-          <Download class="h-3.5 w-3.5" /> {{ t('configExportErrorCodes') }}
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            v-model="errorCodeFilter"
+            class="mts-input max-w-xs text-xs"
+            data-testid="config-error-codes-filter"
+            :placeholder="t('configErrorCodesFilter')"
+          />
+          <button type="button" class="mts-btn" data-testid="config-export-error-codes" :disabled="!filteredErrorCodes.length" @click="exportErrorCodes">
+            <Download class="h-3.5 w-3.5" /> {{ t('configExportErrorCodes') }}
+          </button>
+        </div>
       </div>
-      <div class="mts-table-wrap"><table class="w-full min-w-[36rem] text-sm scroll-mt-20" id="config-error-codes" data-testid="config-error-codes-table">
-        <thead>
-          <tr class="border-b border-slate-200 text-left dark:border-slate-700">
-            <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColCode') }}</th>
-            <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColHTTP') }}</th>
-            <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColGRPC') }}</th>
-            <th class="pb-2 text-xs font-medium mts-muted">{{ t('configColDescription') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="ec in errorCodes" :key="ec.code" class="border-b border-slate-100 last:border-b-0 dark:border-slate-800">
-            <td class="py-2 font-mono text-xs">{{ ec.code }}</td>
-            <td class="py-2"><span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">{{ ec.http_status }} {{ statusLabel(ec.http_status) }}</span></td>
-            <td class="py-2 font-mono text-xs">{{ ec.grpc_code }}</td>
-            <td class="py-2 text-xs mts-muted">{{ ec.description }}</td>
-          </tr>
-          <tr v-if="!errorCodes.length">
-            <td colspan="4" class="py-3 text-xs mts-muted">{{ t('configErrorCodesEmpty') }}</td>
-          </tr>
-        </tbody>
-      </table></div>
+      <div class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800 scroll-mt-20" id="config-error-codes" data-testid="config-error-codes-table">
+        <div
+          class="grid grid-cols-[minmax(8rem,0.9fr)_minmax(7rem,0.7fr)_minmax(7rem,0.7fr)_minmax(12rem,1.4fr)] border-b border-slate-200 text-left dark:border-slate-700"
+          data-testid="config-error-codes-header"
+        >
+          <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColCode') }}</div>
+          <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColHTTP') }}</div>
+          <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColGRPC') }}</div>
+          <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColDescription') }}</div>
+        </div>
+        <div v-if="!filteredErrorCodes.length" class="px-2 py-3 text-xs mts-muted" data-testid="config-error-codes-empty">
+          {{ t('configErrorCodesEmpty') }}
+        </div>
+        <VirtualTable
+          v-else
+          :items="filteredErrorCodes"
+          :row-height="ERROR_ROW_HEIGHT"
+          :height="Math.min(CONFIG_LIST_HEIGHT, Math.max(176, filteredErrorCodes.length * ERROR_ROW_HEIGHT))"
+          data-testid="config-error-codes-virtual-list"
+        >
+          <template #default="{ item: ec }">
+            <div
+              class="grid h-full grid-cols-[minmax(8rem,0.9fr)_minmax(7rem,0.7fr)_minmax(7rem,0.7fr)_minmax(12rem,1.4fr)] items-center border-b border-slate-100 dark:border-slate-800"
+              :data-testid="`config-error-code-row-${ec.code}`"
+            >
+              <div class="truncate px-2 font-mono text-xs" :title="ec.code">{{ ec.code }}</div>
+              <div class="px-2">
+                <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">{{ ec.http_status }} {{ statusLabel(ec.http_status) }}</span>
+              </div>
+              <div class="truncate px-2 font-mono text-xs" :title="ec.grpc_code">{{ ec.grpc_code }}</div>
+              <div class="truncate px-2 text-xs mts-muted" :title="ec.description">{{ ec.description }}</div>
+            </div>
+          </template>
+        </VirtualTable>
+        <p
+          v-if="filteredErrorCodes.length"
+          class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800"
+          data-testid="config-error-codes-virtual-hint"
+        >
+          {{ t('configErrorCodesVirtualHint') }}
+        </p>
+      </div>
     </div>
   </div>
 </template>
