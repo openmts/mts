@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
 import { listDatabases, listMeasurements, listRetentionPolicies, listSeriesDetailed } from '@/api/meta'
 import { seriesLabel } from '@/utils/seriesMeta'
@@ -30,6 +31,7 @@ import {
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { buildDatabasesExport, databasesToCSV } from '@/utils/databasesExport'
+import { buildQueryPrefillPath, buildWritePrefillPath } from '@/utils/routePrefill'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
@@ -54,6 +56,7 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
+const router = useRouter()
 const SERIES_CAP = 200
 const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
@@ -279,6 +282,28 @@ function parseDuration(s: string): number {
 function formatDuration(ns: number): string {
   return formatRPDuration(ns)
 }
+
+function openQueryFor(db: string, measurement?: string) {
+  void router.push(
+    buildQueryPrefillPath({
+      database: db,
+      measurement: measurement || undefined,
+      range: '1h',
+      hash: '#query-form',
+    }),
+  )
+}
+
+function openWriteFor(db: string, measurement?: string) {
+  void router.push(
+    buildWritePrefillPath({
+      database: db,
+      measurement: measurement || undefined,
+      hash: '#write-mode-typed',
+    }),
+  )
+}
+
 function fieldTypeName(type: number): string {
   switch (type) {
     case 1:
@@ -456,11 +481,25 @@ function exportCSV() {
         class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
         data-testid="databases-detail-panel"
       >
-        <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 dark:border-slate-800">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2 dark:border-slate-800">
           <p class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ activeDatabase.name }}</p>
-          <button type="button" class="mts-btn" data-testid="databases-detail-collapse" @click="activeDatabase.expanded = false">
-            {{ t('collapse') }}
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              class="mts-btn text-xs"
+              data-testid="databases-open-query"
+              @click="openQueryFor(activeDatabase.name)"
+            >{{ t('databasesOpenQuery') }}</button>
+            <button
+              type="button"
+              class="mts-btn text-xs"
+              data-testid="databases-open-write"
+              @click="openWriteFor(activeDatabase.name)"
+            >{{ t('databasesOpenWrite') }}</button>
+            <button type="button" class="mts-btn" data-testid="databases-detail-collapse" @click="activeDatabase.expanded = false">
+              {{ t('collapse') }}
+            </button>
+          </div>
         </div>
         <div class="px-6 py-3">
           <div class="mb-2 flex flex-wrap items-end justify-between gap-2">
@@ -490,16 +529,32 @@ function exportCSV() {
             :description="t('databasesMeasFilterEmptyDesc')"
           />
           <div v-for="meas in filteredMeasurements" :key="meas.name" class="mb-2 rounded border border-slate-100 dark:border-slate-800">
-            <button
-              type="button"
-              class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-              :data-testid="`databases-meas-${meas.name}`"
-              @click="toggleMeasurement(meas, activeDatabase.name)"
-            >
-              <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-              <Table2 class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-              {{ meas.name }}
-            </button>
+            <div class="flex flex-wrap items-center justify-between gap-1">
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                :data-testid="`databases-meas-${meas.name}`"
+                @click="toggleMeasurement(meas, activeDatabase.name)"
+              >
+                <component :is="meas.expanded ? ChevronDown : ChevronRight" class="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                <Table2 class="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                <span class="truncate">{{ meas.name }}</span>
+              </button>
+              <div class="flex shrink-0 items-center gap-1 px-2 py-1">
+                <button
+                  type="button"
+                  class="mts-btn px-2 py-0.5 text-[11px]"
+                  :data-testid="`databases-meas-query-${meas.name}`"
+                  @click="openQueryFor(activeDatabase.name, meas.name)"
+                >{{ t('query') }}</button>
+                <button
+                  type="button"
+                  class="mts-btn px-2 py-0.5 text-[11px]"
+                  :data-testid="`databases-meas-write-${meas.name}`"
+                  @click="openWriteFor(activeDatabase.name, meas.name)"
+                >{{ t('write') }}</button>
+              </div>
+            </div>
             <div v-if="meas.expanded" class="border-t border-slate-50 px-4 py-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-300">
               <div v-if="meas.loading" class="text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</div>
               <template v-else>

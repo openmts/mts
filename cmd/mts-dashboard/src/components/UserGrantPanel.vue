@@ -73,7 +73,7 @@ const canGrant = computed(() => props.grantDbs.length > 0 && props.grantPerms.le
       <div>
         <div class="mb-1 flex items-center justify-between gap-2">
           <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('database') }}</p>
-          <span class="text-[11px] mts-muted" data-testid="user-grant-db-count">{{ filteredDatabases.length }}/{{ databases.length }}</span>
+          <span class="text-[11px] mts-muted" data-testid="user-grant-db-filter-count">{{ filteredDatabases.length }}/{{ databases.length }}</span>
         </div>
         <input
           v-model="dbFilter"

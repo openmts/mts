@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
+import { parseWritePrefill } from '@/utils/routePrefill'
 import { apiPost } from '@/api/client'
 import {
   listDatabasesDetailed,
@@ -68,6 +69,7 @@ watch(
   (h) => applyWriteHash(h),
   { immediate: true },
 )
+
 const lineInput = ref('')
 const formRows = ref<FormRow[]>([createEmptyRow()])
 /** 表单写行数上限；大批量请用 Line Protocol / TypedBatch */
@@ -81,6 +83,7 @@ const rpMetaHint = ref('')
 const metaSource = ref<MetaLoadSource>('admin')
 const { success, error: notifyError, warn } = useNotify()
 const { t } = useI18n()
+
 function fieldTypeLabel(value: string): string {
   switch (value) {
     case 'float':
@@ -127,6 +130,36 @@ type TypedTagCol = { name: string; values: string }
 type TypedFieldCol = { name: string; type: 'float' | 'int' | 'string' | 'bool'; values: string }
 const typedTagCols = ref<TypedTagCol[]>([{ name: 'host', values: 'server01\nserver02' }])
 const typedFieldCols = ref<TypedFieldCol[]>([{ name: 'usage', type: 'float', values: '0.7\n0.8' }])
+
+function applyWritePrefillFromRoute() {
+  const pre = parseWritePrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.database && selectedDb.value !== pre.database) {
+    selectedDb.value = pre.database
+    changed = true
+  }
+  if (pre.measurement) {
+    if (typedMeasurement.value !== pre.measurement) {
+      typedMeasurement.value = pre.measurement
+      changed = true
+    }
+    if (formRows.value[0] && formRows.value[0].measurement !== pre.measurement) {
+      formRows.value[0].measurement = pre.measurement
+      changed = true
+    }
+  }
+  if (changed) {
+    success(t.value('writePrefillApplied'))
+  }
+}
+
+watch(
+  () => route.fullPath,
+  () => {
+    applyWritePrefillFromRoute()
+  },
+  { immediate: true },
+)
 
 function writeSnapshot() {
   return {

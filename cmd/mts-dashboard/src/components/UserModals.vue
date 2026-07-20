@@ -102,17 +102,17 @@ onBeforeUnmount(() => {
     >
       <h3 id="create-user-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('usersCreateTitle') }}</h3>
       <div class="space-y-2">
-        <input :value="newUser.name" @input="emit('update:newUser', { ...newUser, name: ($event.target as HTMLInputElement).value })" :placeholder="t('username')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
-        <input :value="newUser.display_name" @input="emit('update:newUser', { ...newUser, display_name: ($event.target as HTMLInputElement).value })" :placeholder="t('displayNameOptional')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
-        <select :value="newUser.role" @change="emit('update:newUser', { ...newUser, role: ($event.target as HTMLSelectElement).value })" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800">
+        <input data-testid="users-create-name" :value="newUser.name" @input="emit('update:newUser', { ...newUser, name: ($event.target as HTMLInputElement).value })" :placeholder="t('username')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
+        <input data-testid="users-create-display" :value="newUser.display_name" @input="emit('update:newUser', { ...newUser, display_name: ($event.target as HTMLInputElement).value })" :placeholder="t('displayNameOptional')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
+        <select data-testid="users-create-role" :value="newUser.role" @change="emit('update:newUser', { ...newUser, role: ($event.target as HTMLSelectElement).value })" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800">
           <option value="user">{{ t('roleUser') }}</option>
           <option value="admin">{{ t('roleAdmin') }}</option>
         </select>
-        <input :value="newUser.password" @input="emit('update:newUser', { ...newUser, password: ($event.target as HTMLInputElement).value })" type="password" :placeholder="t('passwordOptional')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
+        <input data-testid="users-create-password" :value="newUser.password" @input="emit('update:newUser', { ...newUser, password: ($event.target as HTMLInputElement).value })" type="password" :placeholder="t('passwordOptional')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
-        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showCreate', false)">{{ t('cancel') }}</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('create-user')">{{ t('create') }}</button>
+        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" data-testid="users-create-cancel" @click="emit('update:showCreate', false)">{{ t('cancel') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="users-create-submit" @click="emit('create-user')">{{ t('create') }}</button>
       </div>
     </div>
   </div>

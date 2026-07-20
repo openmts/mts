@@ -384,7 +384,7 @@ async function confirmBatch() {
         <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="showChangeSelfPassword = true">
           <Lock class="h-3.5 w-3.5" /> {{ t('usersChangeMyPassword') }}
         </button>
-        <button v-if="isAdmin" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700" @click="showCreate = true">
+        <button v-if="isAdmin" type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700" data-testid="users-create-open" @click="showCreate = true">
           <Plus class="h-3.5 w-3.5" /> {{ t('usersCreate') }}
         </button>
       </div>

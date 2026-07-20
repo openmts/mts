@@ -793,9 +793,21 @@ test('commercial browser smoke path', async ({ page }) => {
     await expandDb.click()
     if (await page.getByTestId('databases-detail-panel').count()) {
       await expect(page.getByTestId('databases-detail-panel')).toBeVisible()
+      await expect(page.getByTestId('databases-open-query')).toBeVisible()
+      await expect(page.getByTestId('databases-open-write')).toBeVisible()
       if (await page.getByTestId('databases-meas-filter').count()) {
         await expect(page.getByTestId('databases-meas-filter')).toBeVisible()
         await expect(page.getByTestId('databases-meas-count')).toBeVisible()
+      }
+      const measQuery = page.locator('[data-testid^="databases-meas-query-"]').first()
+      if (await measQuery.count()) {
+        await measQuery.click()
+        await expect(page).toHaveURL(/\/query\?/)
+        await expect(page.getByTestId('query-page')).toBeVisible()
+        await expect(page.getByTestId('query-database')).not.toHaveValue('')
+        // 回到库页继续后续用例
+        await page.goto('/databases')
+        await expect(page.getByTestId('databases-page')).toBeVisible()
       }
     }
   }
@@ -927,6 +939,10 @@ test('commercial browser smoke path', async ({ page }) => {
   // 切回中文，避免后续步骤依赖中文文案
   await localeBtn.click()
   await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵/ })).toBeVisible()
+  await page.getByTestId('access-matrix-search').fill('')
+  await page.getByTestId('access-matrix-search').fill('元数据')
+  await expect(matrixList.getByText(/数据库元数据只读浏览/i).first()).toBeVisible()
+  await page.getByTestId('access-matrix-search').fill('')
 
   await page.goto('/access/grants')
   await expect(page.getByTestId('access-grants-page')).toBeVisible()
@@ -942,4 +958,45 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('not-found-page')).toBeVisible()
   await expect(page.getByTestId('not-found-go-overview')).toBeVisible()
   await expect(page.getByText(/页面不存在|Page not found|404/).first()).toBeVisible()
+
+  // 17) 非 admin 端到端：创建 reader、授权 default 读、只读库浏览
+  await page.goto('/users')
+  await expect(page.getByTestId('users-page')).toBeVisible()
+  await page.getByTestId('users-create-open').click()
+  await expect(page.locator('[data-modal="create-user"]')).toBeVisible()
+  await page.getByTestId('users-create-name').fill('reader-e2e')
+  await page.getByTestId('users-create-role').selectOption('user')
+  await page.getByTestId('users-create-password').fill('ReaderPass!2026')
+  await page.getByTestId('users-create-submit').click()
+  await expect(page.getByTestId('users-row-reader-e2e')).toBeVisible({ timeout: 15_000 })
+  await page.getByTestId('users-open-grant-reader-e2e').click()
+  await expect(page.getByTestId('user-grant-panel')).toBeVisible()
+  // 仅匹配库名 checkbox，排除 count/filter 等
+  const grantDbBoxes = page.locator('input[type="checkbox"][data-testid^="user-grant-db-"]')
+  const grantDefault = page.getByTestId('user-grant-db-default')
+  if (await grantDefault.count()) {
+    await grantDefault.check()
+  } else if (await grantDbBoxes.count()) {
+    await grantDbBoxes.first().check()
+  }
+  if (await grantDbBoxes.count()) {
+    await page.getByTestId('user-grant-perm-read').check()
+    await expect(page.getByTestId('user-grant-submit')).toBeEnabled()
+    await page.getByTestId('user-grant-submit').click()
+  }
+  await page.getByTestId('topbar-logout').click()
+  await expect(page).toHaveURL(/login/)
+  await login(page, 'reader-e2e', 'ReaderPass!2026')
+  await expect(page).not.toHaveURL(/login|force-change/)
+  // 侧栏可见 databases，不可见 operations
+  await expect(page.getByTestId('sidebar-nav-row-databases')).toBeVisible()
+  await expect(page.getByTestId('sidebar-nav-row-operations')).toHaveCount(0)
+  await page.goto('/databases')
+  await expect(page.getByTestId('databases-page')).toBeVisible()
+  await expect(page.getByTestId('databases-readonly-hint')).toBeVisible()
+  await expect(page.getByTestId('databases-create-input')).toHaveCount(0)
+  await expect(page.getByTestId('databases-create-btn')).toHaveCount(0)
+  // 管理页应权限空态
+  await page.goto('/operations')
+  await expect(page.getByText(/无权限访问|权限不足|Permission denied|没有权限/i).first()).toBeVisible()
 })

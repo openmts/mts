@@ -3,6 +3,8 @@ import test from 'node:test'
 import {
   buildAuditPrefillPath,
   buildQueryPrefillPath,
+  buildWritePrefillPath,
+  parseWritePrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -52,4 +54,15 @@ test('build prefill paths are read-only deep links', () => {
   assert.equal(buildAuditPrefillPath({ range: '24h', action: 'write' }), '/audit?range=24h&action=write#audit-filters')
   assert.match(buildQueryPrefillPath({ range: '1h' }), /range=1h/)
   assert.doesNotMatch(buildQueryPrefillPath({ range: '1h' }), /execute|auto/)
+})
+
+test('write prefill path and parse', () => {
+  assert.equal(
+    buildWritePrefillPath({ database: 'metrics', measurement: 'cpu' }),
+    '/write?database=metrics&measurement=cpu#write-mode-typed',
+  )
+  assert.deepEqual(parseWritePrefill({ database: 'metrics', measurement: 'cpu' }), {
+    database: 'metrics',
+    measurement: 'cpu',
+  })
 })

@@ -98,3 +98,29 @@ function firstQueryValue(v: unknown): string | undefined {
   if (typeof v === 'string' && v.trim()) return v.trim()
   return undefined
 }
+
+/** 从 route.query 解析写入页预填（database/measurement；不自动提交） */
+export function parseWritePrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): { database?: string; measurement?: string } {
+  const out: { database?: string; measurement?: string } = {}
+  const database = firstQueryValue(query.database ?? query.db)
+  if (database) out.database = database
+  const measurement = firstQueryValue(query.measurement ?? query.meas)
+  if (measurement) out.measurement = measurement
+  return out
+}
+
+export function buildWritePrefillPath(opts: {
+  database?: string
+  measurement?: string
+  hash?: string
+}): string {
+  const params = new URLSearchParams()
+  if (opts.database) params.set('database', opts.database)
+  if (opts.measurement) params.set('measurement', opts.measurement)
+  const qs = params.toString()
+  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#write-mode-typed'
+  return qs ? `/write?${qs}${hash}` : `/write${hash}`
+}
+
