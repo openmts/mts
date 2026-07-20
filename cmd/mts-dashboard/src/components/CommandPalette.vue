@@ -42,7 +42,7 @@ const router = useRouter()
 const { isAdmin } = useAuth()
 const { t, toggleLocale } = useI18n()
 const { toggleTheme } = useTheme()
-const { toggleDensity } = useDensity()
+const { density, toggleDensity } = useDensity()
 const { success, error: notifyError } = useNotify()
 
 const focusSidebarFilter = inject<(() => void) | undefined>('focusSidebarFilter', undefined)
@@ -72,6 +72,7 @@ const navDeepLinkCount = computed(() => collapsedView.value.navDeepLinkCount)
 
 /** 键盘/选中索引用的扁平列表：导航在前、动作在后 */
 const items = computed(() => flattenCommandGroups(itemGroups.value))
+const matchedCount = computed(() => items.value.length)
 
 function groupCountLabel(count: number): string {
   return String(count)
@@ -273,6 +274,8 @@ defineExpose({ openPalette, closePalette, open })
         aria-modal="true"
         :aria-label="t('commandPaletteTitle')"
         class="w-full max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        :data-density="density"
+        data-testid="command-palette-panel"
       >
         <div class="flex items-center gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
           <Search class="h-4 w-4 mts-muted" />
@@ -294,10 +297,16 @@ defineExpose({ openPalette, closePalette, open })
             Esc
           </kbd>
         </div>
-        <ul id="command-palette-listbox" class="max-h-80 overflow-auto p-1" role="listbox" data-testid="command-palette-listbox">
+        <ul
+          id="command-palette-listbox"
+          class="max-h-[min(28rem,55vh)] overflow-auto p-1"
+          role="listbox"
+          data-testid="command-palette-listbox"
+          :data-density="density"
+        >
           <li
             v-if="recentItems.length"
-            class="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide mts-muted"
+            class="sticky top-0 z-10 bg-white/95 px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide mts-muted backdrop-blur dark:bg-slate-900/95"
             data-testid="command-palette-recent-label"
           >
             <span class="inline-flex items-center gap-1">
@@ -309,24 +318,25 @@ defineExpose({ openPalette, closePalette, open })
             v-for="r in recentItems"
             :key="r.id"
             role="option"
-            class="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+            class="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2.5 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+            :class="density === 'compact' ? 'py-1 text-xs' : 'py-1.5 text-sm'"
             :data-testid="`command-recent-${r.path}`"
             :data-pinned="r.pinned ? 'true' : 'false'"
             @click="goRecent(r.path)"
           >
-            <span class="inline-flex items-center gap-1 font-medium">
+            <span class="inline-flex min-w-0 items-center gap-1 font-medium">
               <span v-if="r.pinned" class="text-sky-600 dark:text-sky-300" aria-hidden="true">★</span>
-              {{ recentLabel(r.name, r.path) }}
+              <span class="truncate">{{ recentLabel(r.name, r.path) }}</span>
             </span>
-            <span class="font-mono text-[11px] mts-muted">{{ r.path }}</span>
+            <span class="shrink-0 font-mono text-[10px] mts-muted">{{ r.path }}</span>
           </li>
-          <li v-if="recentItems.length" class="my-1 border-t border-slate-100 dark:border-slate-800" aria-hidden="true" />
-          <li v-if="!items.length" class="px-3 py-6 text-center text-sm mts-muted" data-testid="command-palette-empty">
+          <li v-if="recentItems.length" class="my-0.5 border-t border-slate-100 dark:border-slate-800" aria-hidden="true" />
+          <li v-if="!items.length" class="px-3 py-5 text-center text-sm mts-muted" data-testid="command-palette-empty">
             {{ t('commandPaletteEmpty') }}
           </li>
           <template v-for="group in itemGroups" :key="group.id">
             <li
-              class="flex items-center justify-between gap-2 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide mts-muted"
+              class="sticky top-0 z-10 flex items-center justify-between gap-2 bg-white/95 px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide mts-muted backdrop-blur dark:bg-slate-900/95"
               role="presentation"
               :data-testid="`command-palette-group-${group.id}`"
             >
@@ -348,10 +358,13 @@ defineExpose({ openPalette, closePalette, open })
               :key="item.id"
               role="option"
               :aria-selected="flatIndexOf(item) === activeIndex"
-              class="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm"
-              :class="flatIndexOf(item) === activeIndex
-                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'"
+              class="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2.5"
+              :class="[
+                density === 'compact' ? 'py-1 text-xs' : 'py-1.5 text-sm',
+                flatIndexOf(item) === activeIndex
+                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                  : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
+              ]"
               :id="`command-option-${item.id}`"
               :data-testid="`command-item-${item.id}`"
               @mouseenter="activeIndex = flatIndexOf(item)"
@@ -362,7 +375,7 @@ defineExpose({ openPalette, closePalette, open })
                 <span class="truncate">{{ t(item.labelKey as MessageKey) }}</span>
               </span>
               <span
-                class="shrink-0 font-mono text-[11px]"
+                class="shrink-0 font-mono text-[10px]"
                 :class="flatIndexOf(item) === activeIndex ? 'opacity-80' : 'mts-muted'"
               >{{ isCommandAction(item) ? t('commandPaletteActionBadge') : item.path }}</span>
             </li>
@@ -382,9 +395,13 @@ defineExpose({ openPalette, closePalette, open })
             </li>
           </template>
         </ul>
-        <div class="flex items-center gap-2 border-t border-slate-100 px-3 py-2 text-[11px] mts-muted dark:border-slate-800">
-          <Command class="h-3 w-3" />
-          <span>{{ t('commandPaletteHint') }}</span>
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800">
+          <Command class="h-3 w-3 shrink-0" />
+          <span class="min-w-0 flex-1">{{ t('commandPaletteHint') }}</span>
+          <span
+            class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="command-palette-result-count"
+          >{{ formatMessage(t('commandPaletteResultCount'), { count: matchedCount }) }}</span>
         </div>
       </div>
     </div>

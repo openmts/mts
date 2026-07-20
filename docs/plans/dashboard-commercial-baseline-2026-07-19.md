@@ -712,3 +712,8 @@
 - 商业冒烟覆盖 query-history-virtual-list（有历史时）
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P135 状态（2026-07-20）
+- 命令面板结果密度：紧凑行高 + sticky 分组 + 结果计数
+- 商业冒烟覆盖 command-palette-result-count / data-density
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

@@ -406,6 +406,9 @@ test('commercial browser smoke path', async ({ page }) => {
   // 命令面板跳转（在清空最近访问前，避免额外 goto 干扰）
   await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()
+  await expect(page.getByTestId('command-palette-panel')).toBeVisible()
+  await expect(page.getByTestId('command-palette-result-count')).toBeVisible()
+  await expect(page.getByTestId('command-palette-listbox')).toHaveAttribute('data-density', /comfortable|compact/)
   await expect(page.getByTestId('command-palette-recent-label')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('audit')
   await expect(page.getByTestId('command-item-audit')).toBeVisible()
