@@ -22,7 +22,7 @@ const navFilter = ref('')
 
 const allNavItems = computed(() => [
   { to: '/', label: t.value('overview'), icon: LayoutDashboard, adminOnly: false },
-  { to: '/databases', label: t.value('databases'), icon: Database, adminOnly: true },
+  { to: '/databases', label: t.value('databases'), icon: Database, adminOnly: false },
   { to: '/query', label: t.value('query'), icon: Search, adminOnly: false },
   { to: '/write', label: t.value('write'), icon: Send, adminOnly: false },
   { to: '/users', label: t.value('users'), icon: Users, adminOnly: false },

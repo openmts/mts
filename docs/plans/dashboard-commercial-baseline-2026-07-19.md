@@ -810,3 +810,15 @@
 - series API `limit`/`total`/`truncated`；保留字 limit/offset/page/q 不当 tag
 - 前端 `listSeriesDetailed` 消费服务端截断
 - **仍不宣称可商用目标完成**
+
+## P156 状态（2026-07-21）
+- `/databases` 侧栏/命令面板对所有登录用户可见；路由去掉 admin meta
+- **仍不宣称可商用目标完成**
+
+## P157 状态（2026-07-21）
+- 落地页允许非 admin 偏好 `/databases`；RBAC 拆分 browse/manage；冒烟路径 admin:false
+- **仍不宣称可商用目标完成**
+
+## P158 状态（2026-07-21）
+- Databases 详情 measurement 筛选/计数/空态
+- **仍不宣称可商用目标完成**

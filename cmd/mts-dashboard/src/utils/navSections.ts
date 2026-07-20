@@ -14,7 +14,7 @@ export const NAV_SECTIONS: readonly NavSectionDef[] = [
   {
     id: 'workspace',
     labelKey: 'navSectionWorkspace',
-    paths: ['/', '/query', '/write'],
+    paths: ['/', '/query', '/write', '/databases'],
   },
   {
     id: 'access',
@@ -25,7 +25,6 @@ export const NAV_SECTIONS: readonly NavSectionDef[] = [
     id: 'admin',
     labelKey: 'navSectionAdmin',
     paths: [
-      '/databases',
       '/observability/metrics',
       '/config',
       '/operations',

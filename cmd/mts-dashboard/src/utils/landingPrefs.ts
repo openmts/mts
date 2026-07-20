@@ -24,7 +24,6 @@ export const LANDING_PATH_OPTIONS: readonly string[] = [
 ]
 
 const ADMIN_ONLY = new Set([
-  '/databases',
   '/access/grants',
   '/observability/metrics',
   '/config',

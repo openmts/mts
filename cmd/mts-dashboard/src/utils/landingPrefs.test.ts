@@ -66,4 +66,16 @@ test('resolveLandingPath prefers redirect then pref', () => {
 test('isAdminOnlyLandingPath', () => {
   assert.equal(isAdminOnlyLandingPath('/audit'), true)
   assert.equal(isAdminOnlyLandingPath('/query'), false)
+  assert.equal(isAdminOnlyLandingPath('/databases'), false)
+})
+
+test('resolveLandingPath allows databases for non-admin', () => {
+  assert.equal(
+    resolveLandingPath({
+      preferredPath: '/databases',
+      isAdmin: false,
+      sanitizeRedirect,
+    }),
+    '/databases',
+  )
 })

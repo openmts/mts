@@ -133,3 +133,12 @@
 - [x] EARS-BE-P155-01/02 reserved qs + total
 - [x] EARS-FE-P155-03 listSeriesDetailed limit
 - [x] EARS-DOC-P155-04 基线
+
+## P156 — 导航开放 databases
+- [x] EARS-FE-P156 侧栏/命令面板/路由
+
+## P157 — 落地页与能力矩阵
+- [x] EARS-FE-P157 落地/RBAC/冒烟路径
+
+## P158 — measurement 筛选
+- [x] EARS-FE-P158 筛选/计数/空态

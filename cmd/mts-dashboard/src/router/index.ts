@@ -26,7 +26,7 @@ const router = createRouter({
       component: () => import('@/layouts/DashboardLayout.vue'),
       children: [
         { path: '', name: 'Overview', component: () => import('@/pages/OverviewPage.vue') },
-        { path: 'databases', name: 'Databases', component: () => import('@/pages/DatabasesPage.vue'), meta: { admin: true } },
+        { path: 'databases', name: 'Databases', component: () => import('@/pages/DatabasesPage.vue') },
         { path: 'users', name: 'Users', component: () => import('@/pages/UsersPage.vue') },
         { path: 'config', name: 'Config', component: () => import('@/pages/ConfigPage.vue'), meta: { admin: true } },
         { path: 'operations', name: 'Operations', component: () => import('@/pages/OperationsPage.vue'), meta: { admin: true } },

@@ -118,6 +118,19 @@ export const RBAC_CAPABILITY_MATRIX: CapabilityRow[] = [
     route: '/users',
   },
   {
+    id: 'databases-browse',
+    areaKey: 'data',
+    area: { zh: '数据面', en: 'Data plane' },
+    capability: { zh: '数据库元数据只读浏览', en: 'Read-only database metadata browse' },
+    admin: 'full',
+    user: 'data_scoped',
+    route: '/databases',
+    notes: {
+      zh: '非 admin 仅见有 read 权限的库；不可创建删除库或新建 RP',
+      en: 'Non-admin sees only databases with read grant; create/delete DB and new RP are admin-only',
+    },
+  },
+  {
     id: 'databases',
     areaKey: 'admin',
     area: { zh: '管理面', en: 'Admin plane' },
@@ -125,6 +138,10 @@ export const RBAC_CAPABILITY_MATRIX: CapabilityRow[] = [
     admin: 'full',
     user: 'none',
     route: '/databases',
+    notes: {
+      zh: '创建/删除库与新建 RP 仅 admin',
+      en: 'Create/delete databases and new RP are admin-only',
+    },
   },
   {
     id: 'operations',

@@ -122,7 +122,7 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
 
 export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
   { id: 'overview', path: '/', labelKey: 'overview', keywords: ['home', 'dashboard', '概览', '健康'] },
-  { id: 'databases', path: '/databases', labelKey: 'databases', keywords: ['db', '数据库', 'rp'], adminOnly: true },
+  { id: 'databases', path: '/databases', labelKey: 'databases', keywords: ['db', '数据库', 'rp', 'schema', 'measurement'] },
   { id: 'query', path: '/query', labelKey: 'query', keywords: ['select', '查询', 'history'] },
   {
     id: 'query-form',

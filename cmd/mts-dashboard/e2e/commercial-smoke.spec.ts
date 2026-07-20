@@ -259,6 +259,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('databases-page')).toBeVisible()
   await expect(page.getByTestId('databases-export-json')).toBeVisible()
   await expect(page.getByTestId('databases-export-csv')).toBeVisible()
+  // 导航对登录用户开放（admin 冒烟可见侧栏 + 创建控件）
+  await expect(page.getByTestId('sidebar-nav-row-databases')).toBeVisible()
+  await expect(page.getByTestId('databases-create-input')).toBeVisible()
+  await expect(page.getByTestId('databases-create-btn')).toBeVisible()
   // 库列表虚拟滚动（空库时仍有列表容器与 hint；有数据时 virtual-list 可见）
   const dbEmpty = page.getByTestId('databases-empty-filter')
   const dbList = page.getByTestId('databases-virtual-list')
@@ -783,6 +787,19 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('databases-sort-name')).toBeVisible()
   await page.getByTestId('databases-sort-name').click()
   await expect.poll(async () => page.evaluate(() => localStorage.getItem('mts.dashboard.databases-sort.prefs.v1'))).toBeTruthy()
+  // 展开第一个库时 measurement 筛选可见
+  const expandDb = page.locator('[data-testid^="databases-expand-"]').first()
+  if (await expandDb.count()) {
+    await expandDb.click()
+    if (await page.getByTestId('databases-detail-panel').count()) {
+      await expect(page.getByTestId('databases-detail-panel')).toBeVisible()
+      if (await page.getByTestId('databases-meas-filter').count()) {
+        await expect(page.getByTestId('databases-meas-filter')).toBeVisible()
+        await expect(page.getByTestId('databases-meas-count')).toBeVisible()
+      }
+    }
+  }
+
   await expect(page.getByRole('main').getByRole('heading', { name: /数据库|Databases/i })).toBeVisible()
 
   // P112: Access Grants 多选/排序

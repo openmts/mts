@@ -4,6 +4,7 @@ import { groupNavItems, sectionIdForPath } from './navSections.ts'
 
 test('sectionIdForPath known', () => {
   assert.equal(sectionIdForPath('/'), 'workspace')
+  assert.equal(sectionIdForPath('/databases'), 'workspace')
   assert.equal(sectionIdForPath('/audit'), 'admin')
   assert.equal(sectionIdForPath('/account'), 'system')
   assert.equal(sectionIdForPath('/nope'), null)

@@ -11,7 +11,7 @@ import {
 
 test('matrix covers core commercial surfaces', () => {
   const ids = RBAC_CAPABILITY_MATRIX.map((r) => r.id)
-  for (const need of ['query', 'write', 'operations', 'databases', 'users-grant', 'storage']) {
+  for (const need of ['query', 'write', 'operations', 'databases', 'databases-browse', 'users-grant', 'storage']) {
     assert.ok(ids.includes(need), need)
   }
   assert.ok(matrixAreas().length >= 4)
@@ -27,10 +27,14 @@ test('admin has full access on management capabilities', () => {
 test('user retains data-scoped query/write', () => {
   const q = RBAC_CAPABILITY_MATRIX.find((r) => r.id === 'query')
   const w = RBAC_CAPABILITY_MATRIX.find((r) => r.id === 'write')
+  const browse = RBAC_CAPABILITY_MATRIX.find((r) => r.id === 'databases-browse')
   assert.equal(levelForRole(q!, 'user'), 'data_scoped')
   assert.equal(levelForRole(w!, 'user'), 'data_scoped')
+  assert.equal(levelForRole(browse!, 'user'), 'data_scoped')
+  assert.equal(levelForRole(RBAC_CAPABILITY_MATRIX.find((r) => r.id === 'databases')!, 'user'), 'none')
   const userCaps = capabilitiesForRole('user')
   assert.ok(userCaps.some((r) => r.id === 'query'))
+  assert.ok(userCaps.some((r) => r.id === 'databases-browse'))
   assert.ok(!userCaps.some((r) => r.id === 'operations'))
 })
 

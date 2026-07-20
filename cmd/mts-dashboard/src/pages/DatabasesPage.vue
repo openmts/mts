@@ -59,6 +59,7 @@ const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
 const databases = ref<DatabaseEntry[]>([])
 const dbFilter = ref('')
+const measFilter = ref('')
 const DB_SORT_KEY = 'mts.dashboard.databases-sort.prefs.v1'
 const DB_SORT_KEYS = ['name'] as const
 type DbSortKey = (typeof DB_SORT_KEYS)[number]
@@ -73,6 +74,11 @@ const visibleDbIds = computed(() => filteredDatabases.value.map((d) => d.name))
 const DB_ROW_HEIGHT = 52
 const DB_LIST_HEIGHT = 416
 const activeDatabase = computed(() => databases.value.find((d) => d.expanded) ?? null)
+const filteredMeasurements = computed(() => {
+  const db = activeDatabase.value
+  if (!db) return []
+  return filterByName(db.measurements, measFilter.value)
+})
 
 function cycleDbSort() {
   dbSort.value = cycleSortState(dbSort.value, 'name')
@@ -149,8 +155,10 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
 async function toggleExpand(db: DatabaseEntry) {
   if (db.expanded) {
     db.expanded = false
+    measFilter.value = ''
     return
   }
+  measFilter.value = ''
   for (const item of databases.value) {
     if (item !== db) item.expanded = false
   }
@@ -455,9 +463,33 @@ function exportCSV() {
           </button>
         </div>
         <div class="px-6 py-3">
-          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t('databasesMeasurements') }}</p>
+          <div class="mb-2 flex flex-wrap items-end justify-between gap-2">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t('databasesMeasurements') }}</p>
+            <label v-if="activeDatabase.measurements.length" class="text-[11px] mts-muted">
+              {{ t('filter') }}
+              <input
+                v-model="measFilter"
+                type="search"
+                class="mts-input mt-0.5 min-w-[10rem] text-xs"
+                data-testid="databases-meas-filter"
+                :placeholder="t('databasesMeasFilterPh')"
+              />
+            </label>
+            <span
+              v-if="activeDatabase.measurements.length"
+              class="text-[11px] mts-muted"
+              data-testid="databases-meas-count"
+            >{{ filteredMeasurements.length }} / {{ activeDatabase.measurements.length }}</span>
+          </div>
           <EmptyState v-if="!activeDatabase.measurements.length" compact :title="t('databasesNoMeasurement')" :description="t('databasesNoMeasurementDesc')" />
-          <div v-for="meas in activeDatabase.measurements" :key="meas.name" class="mb-2 rounded border border-slate-100 dark:border-slate-800">
+          <EmptyState
+            v-else-if="!filteredMeasurements.length"
+            compact
+            data-testid="databases-meas-empty-filter"
+            :title="t('databasesMeasFilterEmpty')"
+            :description="t('databasesMeasFilterEmptyDesc')"
+          />
+          <div v-for="meas in filteredMeasurements" :key="meas.name" class="mb-2 rounded border border-slate-100 dark:border-slate-800">
             <button
               type="button"
               class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
