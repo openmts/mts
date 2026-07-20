@@ -8,6 +8,7 @@ export interface ShortcutEntry {
 
 export const DASHBOARD_SHORTCUTS: ShortcutEntry[] = [
   { id: 'palette', keys: 'Ctrl/⌘ + K', labelKey: 'shortcutPalette' },
+  { id: 'notify-history', keys: 'Ctrl/⌘ + Shift + H', labelKey: 'shortcutNotifyHistory' },
   { id: 'nav-filter', keys: '/', labelKey: 'shortcutNavFilter' },
   { id: 'help', keys: '?', labelKey: 'shortcutHelp' },
   { id: 'skip', keys: 'Tab', labelKey: 'shortcutSkip' },
@@ -26,6 +27,13 @@ export function matchSidebarFilterFocus(e: KeyboardEvent, editable: boolean): bo
   return e.key === '/'
 }
 
+/** Ctrl/⌘+Shift+H 打开通知历史（输入框内也允许，运维常用） */
+export function matchNotifyHistoryOpen(e: KeyboardEvent): boolean {
+  if (!(e.metaKey || e.ctrlKey)) return false
+  if (!e.shiftKey || e.altKey) return false
+  return e.key === 'h' || e.key === 'H'
+}
+
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (target == null || typeof target !== 'object') return false
   if (typeof HTMLElement !== 'undefined' && target instanceof HTMLElement) {
@@ -34,7 +42,6 @@ export function isEditableTarget(target: EventTarget | null): boolean {
     if (target.isContentEditable) return true
     return target.closest('[contenteditable="true"]') != null
   }
-  // Node 单测环境无 DOM：duck-type
   const el = target as { tagName?: string; isContentEditable?: boolean }
   const tag = String(el.tagName || '').toUpperCase()
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true

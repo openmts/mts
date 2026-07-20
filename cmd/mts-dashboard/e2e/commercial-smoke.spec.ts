@@ -290,10 +290,18 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('recent-route-pin-/write').click()
   await expect(page.getByTestId('recent-route-pin-/write')).toHaveAttribute('aria-pressed', 'true')
 
-  // 通知历史面板
+  // 通知历史面板 + 导出入口 + 快捷键
   await page.getByTestId('topbar-notify-history').click()
   await expect(page.getByTestId('notify-history-panel')).toBeVisible()
+  await expect(page.getByTestId('notify-history-export-json')).toBeVisible()
+  await expect(page.getByTestId('notify-history-export-csv')).toBeVisible()
+  await expect(page.getByTestId('notify-history-copy')).toBeVisible()
   await page.getByTestId('notify-history-close').click()
+  await expect(page.getByTestId('notify-history-panel')).toHaveCount(0)
+  await page.locator('#main-content').focus()
+  await page.keyboard.press('Control+Shift+KeyH')
+  await expect(page.getByTestId('notify-history-panel')).toBeVisible()
+  await page.keyboard.press('Escape')
   await expect(page.getByTestId('notify-history-panel')).toHaveCount(0)
 
   // 12) 跳过链接 + 运维操作历史导出入口

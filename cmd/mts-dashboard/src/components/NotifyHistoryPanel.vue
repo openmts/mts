@@ -3,12 +3,19 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
-import { Bell, X } from 'lucide-vue-next'
+import { Bell, X, Download, Copy } from 'lucide-vue-next'
 import type { NotifyHistoryEntry } from '@/utils/notifyHistory'
+import {
+  buildNotifyHistoryExport,
+  formatNotifyHistoryExportPretty,
+  notifyHistoryToCSV,
+} from '@/utils/notifyHistoryExport'
+import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { copyText } from '@/utils/clipboard'
 
 const open = defineModel<boolean>('open', { default: false })
 const { t, locale } = useI18n()
-const { history, clearHistory, reloadHistory } = useNotify()
+const { history, clearHistory, reloadHistory, success, error: notifyError } = useNotify()
 const panelRef = ref<HTMLElement | null>(null)
 let trap: FocusTrapHandle | null = null
 
@@ -20,6 +27,41 @@ function close() {
 
 function onClear() {
   clearHistory()
+}
+
+function onExportJSON() {
+  if (!entries.value.length) {
+    notifyError(t.value('notifyHistoryExportEmpty'))
+    return
+  }
+  downloadJSON(
+    stampFilename('mts-notify-history', 'json'),
+    buildNotifyHistoryExport(entries.value),
+  )
+  success(t.value('notifyHistoryExported'))
+}
+
+function onExportCSV() {
+  if (!entries.value.length) {
+    notifyError(t.value('notifyHistoryExportEmpty'))
+    return
+  }
+  downloadText(
+    stampFilename('mts-notify-history', 'csv'),
+    notifyHistoryToCSV(entries.value),
+    'text/csv;charset=utf-8',
+  )
+  success(t.value('notifyHistoryExported'))
+}
+
+async function onCopy() {
+  if (!entries.value.length) {
+    notifyError(t.value('notifyHistoryExportEmpty'))
+    return
+  }
+  const res = await copyText(formatNotifyHistoryExportPretty(entries.value))
+  if (res.ok) success(t.value('notifyHistoryCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 function kindLabel(kind: NotifyHistoryEntry['kind']): string {
@@ -76,7 +118,40 @@ onBeforeUnmount(() => {
           <Bell class="h-4 w-4" aria-hidden="true" />
           {{ t('notifyHistoryTitle') }}
         </h2>
-        <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring"
+            data-testid="notify-history-export-json"
+            :disabled="!entries.length"
+            :title="t('notifyHistoryExportJSON')"
+            @click="onExportJSON"
+          >
+            <Download class="h-3.5 w-3.5" aria-hidden="true" />
+            JSON
+          </button>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring"
+            data-testid="notify-history-export-csv"
+            :disabled="!entries.length"
+            :title="t('notifyHistoryExportCSV')"
+            @click="onExportCSV"
+          >
+            <Download class="h-3.5 w-3.5" aria-hidden="true" />
+            CSV
+          </button>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring"
+            data-testid="notify-history-copy"
+            :disabled="!entries.length"
+            :title="t('notifyHistoryCopy')"
+            @click="onCopy"
+          >
+            <Copy class="h-3.5 w-3.5" aria-hidden="true" />
+            {{ t('notifyHistoryCopy') }}
+          </button>
           <button
             type="button"
             class="mts-btn mts-focus-ring"

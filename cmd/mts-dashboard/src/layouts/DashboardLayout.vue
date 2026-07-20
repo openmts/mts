@@ -13,6 +13,7 @@ import type { MessageKey } from '@/i18n/messages'
 import { resolveRouteTitleKey } from '@/utils/pageTitle'
 import {
   isEditableTarget,
+  matchNotifyHistoryOpen,
   matchShortcutHelpOpen,
   matchSidebarFilterFocus,
 } from '@/utils/keyboardShortcuts'
@@ -86,6 +87,16 @@ function onGlobalKey(e: KeyboardEvent) {
   if (shortcutsOpen.value && e.key === 'Escape') {
     e.preventDefault()
     shortcutsOpen.value = false
+    return
+  }
+  if (notifyHistoryOpen.value && e.key === 'Escape') {
+    e.preventDefault()
+    notifyHistoryOpen.value = false
+    return
+  }
+  if (matchNotifyHistoryOpen(e)) {
+    e.preventDefault()
+    notifyHistoryOpen.value = !notifyHistoryOpen.value
     return
   }
   if (matchShortcutHelpOpen(e, isEditableTarget(e.target))) {

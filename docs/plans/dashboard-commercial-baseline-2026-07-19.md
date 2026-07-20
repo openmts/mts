@@ -466,3 +466,9 @@
 - 最近访问固定；通知历史面板（session）
 - 商业冒烟覆盖 recent pin / notify-history
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P92 状态（2026-07-20）
+- 通知历史 JSON/CSV 导出与复制；Ctrl/⌘+Shift+H 切换面板
+- 商业冒烟覆盖 notify-history-export / 快捷键
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
