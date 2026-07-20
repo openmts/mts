@@ -316,3 +316,11 @@
 - 命令面板 combobox/listbox 键盘语义
 - 商业冒烟覆盖命令面板、快捷键帮助、skip-link 焦点
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P68 状态（2026-07-20）
+- 登录/强制改密错误 live 区与 aria-invalid
+- prefers-reduced-motion 全局减弱动画
+- 浏览器离线顶栏提示（navigator.onLine）
+- 商业冒烟覆盖登录校验与在线时无离线条
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

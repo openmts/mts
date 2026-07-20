@@ -4,21 +4,31 @@ const NEW_PASSWORD = 'AdminChanged!2026'
 
 async function login(page: Page, user: string, password: string) {
   await page.goto('/login')
-  await page.locator('#username').fill(user)
-  await page.locator('#password').fill(password)
-  await page.locator('button[type="submit"]').click()
+  await expect(page.getByTestId('login-panel')).toBeVisible()
+  await page.getByTestId('login-username').fill(user)
+  await page.getByTestId('login-password').fill(password)
+  await page.getByTestId('login-submit').click()
 }
 
 test.describe.configure({ mode: 'serial' })
 
 test('commercial browser smoke path', async ({ page }) => {
+  // 0) 登录表单校验：空密码 -> alert 错误区
+  await page.goto('/login')
+  await page.getByTestId('login-username').fill('admin')
+  await page.getByTestId('login-password').fill('')
+  await page.getByTestId('login-submit').click()
+  await expect(page.getByTestId('login-error')).toBeVisible()
+  await expect(page.getByTestId('login-error')).toHaveAttribute('role', 'alert')
+  await expect(page.getByTestId('login-password')).toHaveAttribute('aria-invalid', 'true')
+
   // 1) bootstrap 默认密码 -> 强制改密
   await login(page, 'admin', 'admin')
   await expect(page).toHaveURL(/force-change-password/)
-  await page.locator('#old').fill('admin')
-  await page.locator('#new').fill(NEW_PASSWORD)
-  await page.locator('#confirm').fill(NEW_PASSWORD)
-  await page.getByRole('button', { name: '修改密码并重新登录' }).click()
+  await page.getByTestId('force-old').fill('admin')
+  await page.getByTestId('force-new').fill(NEW_PASSWORD)
+  await page.getByTestId('force-confirm').fill(NEW_PASSWORD)
+  await page.getByTestId('force-password-submit').click()
   await expect(page).toHaveURL(/login/)
   await expect(page.getByText(/密码已更新|new password/i)).toBeVisible()
 
@@ -27,6 +37,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page).not.toHaveURL(/login|force-change/)
   await expect(page.getByText(/概览|健康|Healthy|Ready/i).first()).toBeVisible()
   await expect(page.getByTestId('overview-summary')).toBeVisible()
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0)
   await expect(page.getByTestId('topbar-account')).toBeVisible()
   await expect(page.getByTestId('skip-to-main')).toHaveCount(1)
   await expect(page).toHaveTitle(/仪表盘|概览|Overview/)

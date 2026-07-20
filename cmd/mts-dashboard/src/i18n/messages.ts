@@ -786,6 +786,10 @@ export const messages = {
     topbarMenu: '打开导航',
     topbarCloseNav: '关闭导航',
     topbarTheme: '切换主题',
+    offlineBanner: '当前浏览器处于离线状态，写操作与实时数据可能失败。',
+    offlineBannerTitle: '网络离线',
+    loginErrorRegion: '登录错误',
+    forcePasswordErrorRegion: '改密错误',
     unsavedLeaveConfirm: '有未保存的表单更改，确定离开当前页面？',
   },
   en: {
@@ -1573,6 +1577,10 @@ export const messages = {
     topbarMenu: 'Open navigation',
     topbarCloseNav: 'Close navigation',
     topbarTheme: 'Toggle theme',
+    offlineBanner: 'Your browser is offline. Writes and live data may fail.',
+    offlineBannerTitle: 'Offline',
+    loginErrorRegion: 'Login error',
+    forcePasswordErrorRegion: 'Password change error',
     unsavedLeaveConfirm: 'You have unsaved form changes. Leave this page?',
   },
 } as const

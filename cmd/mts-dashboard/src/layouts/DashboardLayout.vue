@@ -18,8 +18,10 @@ import {
   recordRecentRoute,
   type RecentRouteEntry,
 } from '@/utils/recentRoutes'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 const { t } = useI18n()
+const { offline } = useNetworkStatus()
 const route = useRoute()
 const router = useRouter()
 const sidebarOpen = ref(false)
@@ -105,6 +107,16 @@ function onSkipToMain(e: Event) {
         @open-command-palette="openCommandPalette"
         @open-shortcuts="openShortcuts"
       />
+      <div
+        v-if="offline"
+        class="border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100 sm:px-6"
+        role="status"
+        aria-live="polite"
+        data-testid="offline-banner"
+      >
+        <span class="font-semibold">{{ t('offlineBannerTitle') }}</span>
+        <span class="ml-1">{{ t('offlineBanner') }}</span>
+      </div>
       <div
         v-if="recent.length"
         class="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5 dark:border-slate-700 dark:bg-slate-900 sm:px-6"
