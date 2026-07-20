@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -7,13 +7,15 @@ import {
   LayoutDashboard, Database, Users, Settings, Wrench,
   ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-vue-next'
+import { filterNavItems } from '@/utils/navFilter'
 
-defineProps<{ visible: boolean; collapsed: boolean }>()
+const props = defineProps<{ visible: boolean; collapsed: boolean }>()
 const emit = defineEmits<{ close: []; 'toggle-collapse': [] }>()
 const route = useRoute()
 const router = useRouter()
 const { isAdmin } = useAuth()
 const { t } = useI18n()
+const navFilter = ref('')
 
 const allNavItems = computed(() => [
   { to: '/', label: t.value('overview'), icon: LayoutDashboard, adminOnly: false },
@@ -35,7 +37,19 @@ const allNavItems = computed(() => [
   { to: '/account', label: t.value('account'), icon: UserRound, adminOnly: false },
 ])
 
-const navItems = computed(() => allNavItems.value.filter((i) => !i.adminOnly || isAdmin.value))
+const roleNavItems = computed(() => allNavItems.value.filter((i) => !i.adminOnly || isAdmin.value))
+
+const navItems = computed(() => {
+  if (props.collapsed) return roleNavItems.value
+  return filterNavItems(roleNavItems.value, navFilter.value)
+})
+
+watch(
+  () => props.collapsed,
+  (c) => {
+    if (c) navFilter.value = ''
+  },
+)
 
 function isActive(to: string) {
   if (to === '/') return route.path === '/'
@@ -51,6 +65,10 @@ function navTestId(to: string): string {
 function go(to: string) {
   void router.push(to)
   emit('close')
+}
+
+function clearFilter() {
+  navFilter.value = ''
 }
 </script>
 
@@ -100,7 +118,43 @@ function go(to: string) {
           <PanelLeftClose v-else class="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
+      <div
+        v-if="!collapsed"
+        class="border-b border-slate-200 p-2 dark:border-slate-700"
+        data-testid="sidebar-filter-wrap"
+      >
+        <label class="sr-only" for="sidebar-filter-input">{{ t('sidebarFilterPlaceholder') }}</label>
+        <div class="relative">
+          <input
+            id="sidebar-filter-input"
+            v-model="navFilter"
+            type="search"
+            class="mts-focus-ring w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-2 pr-7 text-xs text-slate-800 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+            :placeholder="t('sidebarFilterPlaceholder')"
+            data-testid="sidebar-filter"
+            autocomplete="off"
+          />
+          <button
+            v-if="navFilter"
+            type="button"
+            class="mts-focus-ring absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            :aria-label="t('sidebarFilterClear')"
+            :title="t('sidebarFilterClear')"
+            data-testid="sidebar-filter-clear"
+            @click="clearFilter"
+          >
+            <X class="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
       <nav class="flex-1 space-y-0.5 overflow-auto p-2" :aria-label="t('appName')" data-testid="sidebar-nav">
+        <p
+          v-if="!collapsed && navFilter.trim() && navItems.length === 0"
+          class="px-2 py-3 text-center text-xs text-slate-400 dark:text-slate-500"
+          data-testid="sidebar-filter-empty"
+        >
+          {{ t('sidebarFilterEmpty') }}
+        </p>
         <button
           v-for="item in navItems"
           :key="item.to"

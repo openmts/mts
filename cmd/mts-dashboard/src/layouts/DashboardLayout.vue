@@ -15,6 +15,7 @@ import {
   matchShortcutHelpOpen,
 } from '@/utils/keyboardShortcuts'
 import {
+  clearRecentRoutes,
   loadRecentRoutes,
   recordRecentRoute,
   type RecentRouteEntry,
@@ -56,6 +57,12 @@ function recentLabel(entry: RecentRouteEntry): string {
 
 function goRecent(path: string) {
   void router.push(path)
+}
+
+function clearRecent() {
+  clearRecentRoutes()
+  // 当前页立即再记入，避免清空后条整行消失且失去上下文
+  recent.value = recordRecentRoute(route.fullPath, route.name)
 }
 
 function onGlobalKey(e: KeyboardEvent) {
@@ -177,6 +184,17 @@ function onSkipToMain(e: Event) {
           @click="goRecent(r.path)"
         >
           {{ recentLabel(r) }}
+        </button>
+        <button
+          v-if="recent.length > 1"
+          type="button"
+          class="ml-auto rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          data-testid="recent-routes-clear"
+          :aria-label="t('recentRoutesClear')"
+          :title="t('recentRoutesClear')"
+          @click="clearRecent"
+        >
+          {{ t('recentRoutesClear') }}
         </button>
       </div>
       <main id="main-content" class="mts-focus-ring flex-1 overflow-auto p-4 sm:p-6 outline-none" tabindex="-1">

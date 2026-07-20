@@ -223,10 +223,23 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('topbar-shortcuts').click()
   await expect(page.getByTestId('shortcuts-help')).toBeVisible()
   await page.getByTestId('shortcuts-help-close').click()
-  await expect(page.getByTestId('recent-routes')).toBeVisible()
   await page.keyboard.press('Control+KeyK')
   await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  await expect(page.getByTestId('recent-routes')).toBeVisible()
+  // 侧栏导航过滤（展开态）
+  await expect(page.getByTestId('sidebar-filter')).toBeVisible()
+  await page.getByTestId('sidebar-filter').fill('audit')
+  await expect(page.getByTestId('sidebar-nav-audit')).toBeVisible()
+  await expect(page.getByTestId('sidebar-nav-home')).toHaveCount(0)
+  await page.getByTestId('sidebar-filter-clear').click()
+  await expect(page.getByTestId('sidebar-nav-home')).toBeVisible()
+  // 命令面板跳转（在清空最近访问前，避免额外 goto 干扰）
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('audit')
+  await expect(page.getByTestId('command-item-audit')).toBeVisible()
   await page.getByTestId('command-item-audit').click()
   await expect(page).toHaveURL(/\/audit/)
   await expect(page.getByTestId('audit-quick-ranges')).toBeVisible()
@@ -236,17 +249,25 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-merged-hint')).toBeVisible()
 
   // 命令面板运维深链：签核备注 / 部署材料
-  await page.keyboard.press('Control+KeyK')
+  await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('signoff')
   await page.getByTestId('command-item-readiness-signoff').click()
   await expect(page).toHaveURL(/ops\/readiness/)
   await expect(page.getByTestId('readiness-signoff-notes')).toBeVisible()
-  await page.keyboard.press('Control+KeyK')
+  await page.getByTestId('topbar-command-palette').click()
   await page.getByTestId('command-palette-input').fill('deploy kit')
   await page.getByTestId('command-item-readiness-deploy-kit').click()
   await expect(page).toHaveURL(/ops\/readiness/)
   await expect(page.getByTestId('readiness-deploy-kit')).toBeVisible()
+
+  // 最近访问清空：多页后 clear，仅剩当前页（>1 才显示清空）
+  await page.goto('/write')
+  await page.goto('/query')
+  await expect(page.getByTestId('recent-routes')).toBeVisible()
+  await expect(page.getByTestId('recent-routes-clear')).toBeVisible()
+  await page.getByTestId('recent-routes-clear').click()
+  await expect(page.getByTestId('recent-routes-clear')).toHaveCount(0)
 
   // 12) 跳过链接 + 运维操作历史导出入口
   await page.goto('/operations')

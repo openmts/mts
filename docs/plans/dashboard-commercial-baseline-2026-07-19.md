@@ -436,3 +436,9 @@
 - 登录密码显隐、记住用户名；面包屑复制路径
 - 商业冒烟覆盖 login-toggle/remember 与 breadcrumb-copy
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P87 状态（2026-07-20）
+- 最近访问清空；侧栏展开态导航过滤（折叠隐藏）
+- 商业冒烟覆盖 sidebar-filter / recent-routes-clear
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  clearRecentRoutes,
   loadRecentRoutes,
   pushRecentRoute,
   recordRecentRoute,
@@ -12,6 +13,7 @@ function mem() {
   return {
     getItem: (k: string) => m.get(k) ?? null,
     setItem: (k: string, v: string) => { m.set(k, v) },
+    removeItem: (k: string) => { m.delete(k) },
   }
 }
 
@@ -37,5 +39,14 @@ test('recordRecentRoute roundtrip storage', () => {
   assert.equal(loaded[0]?.path, '/downsample')
   assert.equal(loaded[1]?.path, '/ops/readiness')
   saveRecentRoutes([], s)
+  assert.equal(loadRecentRoutes(s).length, 0)
+})
+
+test('clearRecentRoutes wipes storage', () => {
+  const s = mem()
+  recordRecentRoute('/query', 'Query', s)
+  recordRecentRoute('/write', 'Write', s)
+  assert.equal(loadRecentRoutes(s).length, 2)
+  clearRecentRoutes(s)
   assert.equal(loadRecentRoutes(s).length, 0)
 })

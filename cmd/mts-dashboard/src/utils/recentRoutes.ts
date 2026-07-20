@@ -70,6 +70,27 @@ export function recordRecentRoute(
   return items
 }
 
+
+export function clearRecentRoutes(
+  storage: Pick<Storage, 'removeItem' | 'setItem'> | null = typeof sessionStorage !== 'undefined' ? sessionStorage : null,
+  key = RECENT_ROUTES_KEY,
+): void {
+  if (!storage) return
+  try {
+    if ('removeItem' in storage && typeof storage.removeItem === 'function') {
+      storage.removeItem(key)
+      return
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    storage.setItem(key, JSON.stringify({ version: 1, items: [] }))
+  } catch {
+    /* quota */
+  }
+}
+
 function normalizeEntry(raw: unknown): RecentRouteEntry | null {
   if (raw == null || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
