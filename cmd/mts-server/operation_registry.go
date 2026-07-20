@@ -168,7 +168,7 @@ func operationCatalog() []operation {
 		{
 			Name:         "data_database_metadata",
 			Namespace:    "data",
-			Description:  "list measurements/fields/series under database prefix",
+			Description:  "list measurements/fields/series/retention-policies under database prefix",
 			Auth:         authDataToken,
 			HTTPMethods:  []string{http.MethodGet},
 			HTTPPaths:    []string{routeDataDatabasesPrefix},

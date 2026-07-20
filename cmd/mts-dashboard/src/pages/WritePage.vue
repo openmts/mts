@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
-import { listDatabasesDetailed, listRetentionPolicies } from '@/api/meta'
+import { listDatabasesDetailed, listRetentionPoliciesDetailed } from '@/api/meta'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
@@ -186,15 +186,14 @@ watch(selectedDb, async (db) => {
   rpMetaHint.value = ''
   if (!db) return
   try {
-    const rps = await listRetentionPolicies(db)
-    retentionPolicies.value = rps.map((p) => p.name)
+    const rpResult = await listRetentionPoliciesDetailed(db)
+    retentionPolicies.value = rpResult.policies.map((p) => p.name)
     if (retentionPolicies.value.length) {
       retentionPolicy.value = retentionPolicies.value[0]
       rpMetaHint.value = ''
-    } else if (metaSource.value === 'manual') {
+    } else if (rpResult.source === 'manual') {
       rpMetaHint.value = t.value('writeRpManualHint')
     } else {
-      // admin 路径空列表或 403 降级为空
       rpMetaHint.value = t.value('writeRpEmptyHint')
     }
   } catch {

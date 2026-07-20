@@ -163,8 +163,8 @@ timeout 180s env GOSUMDB=sum.golang.org go test -count=1 -timeout 120s ./...
 | FE-FULL-P1-01 ApiSpec VT | **已修复**（P137） |
 | FE-FULL-P1-02 Overview lists VT | **已修复**（P137） |
 | FE-FULL-P1-03 Readiness doctor VT | **已修复**（P137） |
-| FE-FULL-P1-04 非 admin RP | **UX 已缓解**（手填提示；服务端 data RP 仍 open） |
+| FE-FULL-P1-04 非 admin RP | **已修复**（P140 data 面只读 RP + 前端优先） |
 | FE-FULL-P2-01 predicates | open（P139 deferred） |
 | FE-FULL-P2-02 Write 行上限 | **已修复**（P138 上限 50） |
-| FE-FULL-P2-03 VITE_BASE | open |
+| FE-FULL-P2-03 VITE_BASE | **已对齐说明**（P141；代码本已支持 dashboard_base） |
 | 部署侧三项 | open 不计分 |

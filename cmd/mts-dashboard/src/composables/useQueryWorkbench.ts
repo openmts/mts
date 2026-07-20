@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { formatCaughtError } from '@/utils/apiError'
 import { apiPost, apiPostNDJSONStream } from '@/api/client'
-import { listDatabasesDetailed, listMeasurements, listRetentionPolicies } from '@/api/meta'
+import { listDatabasesDetailed, listMeasurements, listRetentionPoliciesDetailed } from '@/api/meta'
 import { makeFormErrorT } from '@/utils/formErrors'
 import { buildQueryFromForm } from '@/utils/queryFormBuild'
 import { useI18n } from '@/composables/useI18n'
@@ -72,10 +72,16 @@ export function useQueryWorkbench() {
         queryForm.value.measurement = meas[0]
       }
       try {
-        const rps = await listRetentionPolicies(db)
-        retentionPolicies.value = rps.map((p) => p.name)
+        const rpResult = await listRetentionPoliciesDetailed(db)
+        retentionPolicies.value = rpResult.policies.map((p) => p.name)
         if (retentionPolicies.value.length && !retentionPolicies.value.includes(queryForm.value.retention_policy)) {
           queryForm.value.retention_policy = retentionPolicies.value[0]
+        }
+        // partial: 库列表可能 admin，RP 走 data
+        if (rpResult.source === 'data' && metaSource.value === 'admin') {
+          // keep admin for db list
+        } else if (rpResult.source === 'manual' && metaSource.value === 'admin') {
+          metaSource.value = 'partial'
         }
       } catch {
         // RP 列表失败时允许手填

@@ -576,7 +576,7 @@ const columnRows = computed(() => {
         <datalist id="rp-list">
           <option v-for="rp in (retentionPolicies.length ? retentionPolicies : ['autogen'])" :key="rp" :value="rp" />
         </datalist>
-        <p v-if="metaSource === 'manual' || !retentionPolicies.length" class="mt-1 text-[11px] text-amber-700 dark:text-amber-200" data-testid="query-rp-meta-hint">{{ t('writeRpManualHint') }}</p>
+        <p v-if="metaSource === 'manual' || metaSource === 'partial'" class="mt-1 text-[11px] text-amber-700 dark:text-amber-200" data-testid="query-rp-meta-hint">{{ t('writeRpManualHint') }}</p>
       </label>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('queryStartMs') }}
         <div class="mt-1 flex gap-1">

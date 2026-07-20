@@ -51,20 +51,53 @@ export async function listMeasurements(database: string, init: RequestInit = {})
   return [...(data.measurements ?? [])].sort()
 }
 
+export type RetentionPolicyMeta = { name: string; duration?: number }
+
+export interface ListRetentionPoliciesResult {
+  policies: RetentionPolicyMeta[]
+  /** data 面优先；admin 回退；均失败则为 manual */
+  source: 'data' | 'admin' | 'manual'
+  error?: string
+}
+
+/**
+ * 列出 RP：优先 data 面只读路径（有 database read 即可），
+ * 再回退 admin 路径；均失败返回空并标记 manual。
+ */
+export async function listRetentionPoliciesDetailed(
+  database: string,
+  init: RequestInit = {},
+): Promise<ListRetentionPoliciesResult> {
+  if (!database.trim()) return { policies: [], source: 'manual' }
+  const dataPath = `/api/v1/data/databases/${encodeURIComponent(database)}/retention-policies`
+  const adminPath = `/api/v1/admin/databases/${encodeURIComponent(database)}/retention-policies`
+  try {
+    const data = await apiGet<{ policies?: RetentionPolicyMeta[] }>(dataPath, init)
+    return { policies: data.policies ?? [], source: 'data' }
+  } catch (e) {
+    const denied = e instanceof APIClientError && (e.status === 403 || e.code === 'permission_denied')
+    // 继续尝试 admin（admin token 且 data 路径异常时）
+    try {
+      const data = await apiGet<{ policies?: RetentionPolicyMeta[] }>(adminPath, init)
+      return { policies: data.policies ?? [], source: 'admin' }
+    } catch (e2) {
+      const denied2 = e2 instanceof APIClientError && (e2.status === 403 || e2.code === 'permission_denied')
+      if (denied || denied2) {
+        return {
+          policies: [],
+          source: 'manual',
+          error: formatCaughtError(denied2 ? e2 : e),
+        }
+      }
+      return { policies: [], source: 'manual', error: formatCaughtError(e2) }
+    }
+  }
+}
+
 export async function listRetentionPolicies(
   database: string,
   init: RequestInit = {},
-): Promise<{ name: string; duration?: number }[]> {
-  if (!database.trim()) return []
-  try {
-    const data = await apiGet<{ policies: { name: string; duration?: number }[] }>(
-      `/api/v1/admin/databases/${encodeURIComponent(database)}/retention-policies`,
-      init,
-    )
-    return data.policies ?? []
-  } catch (e) {
-    const denied = e instanceof APIClientError && (e.status === 403 || e.code === 'permission_denied')
-    if (denied) return []
-    throw e
-  }
+): Promise<RetentionPolicyMeta[]> {
+  const result = await listRetentionPoliciesDetailed(database, init)
+  return result.policies
 }

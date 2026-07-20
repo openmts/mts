@@ -125,6 +125,16 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 		writeHTTPJSON(writer, http.StatusOK, measurementsResponse{Measurements: measurements})
 		return
 	}
+	// data 面只读 RP：有 database read 权限即可，避免非 admin 只能手填
+	if len(parts) == 2 && parts[1] == "retention-policies" {
+		policies, err := r.engine.ListRetentionPolicies(request.Context(), database)
+		if err != nil {
+			writeAPIError(writer, err)
+			return
+		}
+		writeHTTPJSON(writer, http.StatusOK, retentionPoliciesResponse{Policies: policies})
+		return
+	}
 	if len(parts) >= 4 && parts[1] == "measurements" {
 		measurement := parts[2]
 		switch parts[3] {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -116,4 +117,55 @@ func TestHTTPDownsampleEnableDisableActions(t *testing.T) {
 
 	postJSON(t, server.URL+"/api/v1/admin/downsample/policies/align-ds/disable", emptyRequest{}, http.StatusOK, &okResponse{})
 	postJSON(t, server.URL+"/api/v1/admin/downsample/policies/align-ds/enable", emptyRequest{}, http.StatusOK, &okResponse{})
+}
+
+func TestHTTPDataListRetentionPoliciesForReadUser(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	postJSON(t, server.URL+"/api/v1/admin/databases", databaseRequest{Name: "rpdb"}, http.StatusOK, &okResponse{})
+	postJSON(t, server.URL+"/api/v1/admin/databases/rpdb/retention-policies", retentionPolicyRequest{
+		Policy: mts.RetentionPolicy{Name: "short", Duration: time.Hour},
+	}, http.StatusOK, &okResponse{})
+
+	seedUserWithPassword(t, runtime, mts.User{Name: "rp-reader", Role: mts.UserRoleUser}, "secret")
+	if err := runtime.engine.GrantDatabasePermission(context.Background(), "rp-reader", "rpdb", mts.DatabasePermissionRead); err != nil {
+		t.Fatalf("grant read: %v", err)
+	}
+	token := loginHTTPUser(t, server.URL, "rp-reader", "secret")
+	headers := map[string]string{"Authorization": "Bearer " + token}
+
+	// admin path should be forbidden for non-admin
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/databases/rpdb/retention-policies", headers, http.StatusForbidden, &errorResponse{})
+
+	var policies retentionPoliciesResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/data/databases/rpdb/retention-policies", headers, http.StatusOK, &policies)
+	names := make([]string, 0, len(policies.Policies))
+	for _, p := range policies.Policies {
+		names = append(names, p.Name)
+	}
+	if !containsString(names, "short") && !containsString(names, "autogen") {
+		// at least one policy should exist; short was created
+		t.Fatalf("data retention policies = %#v, want short (or autogen)", policies.Policies)
+	}
+	foundShort := false
+	for _, p := range policies.Policies {
+		if p.Name == "short" {
+			foundShort = true
+			break
+		}
+	}
+	if !foundShort {
+		t.Fatalf("data retention policies = %#v, want short", policies.Policies)
+	}
+}
+
+func containsString(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }

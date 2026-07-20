@@ -735,3 +735,12 @@
 - Query predicates/expr UI：**deferred**（不在本轮实现；内核能力保留 API）
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P140 状态（2026-07-21）
+- Data 面只读 RP：`GET /api/v1/data/databases/{db}/retention-policies`
+- Dashboard 优先 data 路径，回退 admin；闭环非 admin 元数据缺口
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+## P141 状态（2026-07-21）
+- 子路径部署：`VITE_BASE` 与 `http.dashboard_base` 对齐说明（代码侧已支持）
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

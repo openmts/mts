@@ -35,3 +35,16 @@
 - [ ] OPS-CRON-SYSTEMD 目标环境实装
 - [ ] OPS-OFFSITE-ALERT 跨主机备份+告警演练
 
+## P140 — Data 面只读 RP（服务端 + 前端）
+- [x] EARS-BE-P140-01 data 面 GET retention-policies（read 权限）
+- [x] EARS-FE-P140-03 listRetentionPolicies 优先 data 回退 admin
+- [x] EARS-DOC-P140-04 基线记录
+
+## P141 — 子路径部署对齐
+- [x] EARS-DOC-P141-01 VITE_BASE 与 dashboard_base 文档对齐
+- [x] 服务端/Vite 已支持；默认 `/`
+
+## 部署侧（open，不计分）
+- [ ] OPS-EDGE-HTTPS 生产证书/HSTS 人工验收
+- [ ] OPS-CRON-SYSTEMD 目标环境实装
+- [ ] OPS-OFFSITE-ALERT 跨主机备份+告警演练
