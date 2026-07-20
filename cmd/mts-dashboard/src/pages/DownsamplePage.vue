@@ -7,6 +7,7 @@ import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
@@ -489,21 +490,25 @@ function exportCSV() {
         </select>
       </label>
       <span class="text-xs mts-muted" data-testid="downsample-filter-count">{{ filteredPolicies.length }} / {{ policies.length }}</span>
-      <span v-if="selectedNames.length" class="text-xs mts-muted" data-testid="downsample-selected-count">
-        {{ t('downsampleSelectedCount') }} {{ selectedNames.length }}
-      </span>
-      <div class="flex flex-wrap gap-2">
-        <button type="button" class="mts-btn" data-testid="downsample-select-all" :disabled="!filteredPolicies.length" @click="toggleSelectAllFiltered(true)">{{ t('downsampleSelectAll') }}</button>
-        <button type="button" class="mts-btn" data-testid="downsample-clear-select" :disabled="!selectedNames.length" @click="clearSelection">{{ t('downsampleClearSelect') }}</button>
-        <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
-        <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
-        <button type="button" class="mts-btn" data-testid="downsample-export-json" :disabled="!filteredPolicies.length" @click="exportJSON">
-          <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
-        </button>
-        <button type="button" class="mts-btn" data-testid="downsample-export-csv" :disabled="!filteredPolicies.length" @click="exportCSV">
-          <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
-        </button>
-      </div>
+      <ListSelectionToolbar
+        prefix="downsample"
+        :selected-count="selectedNames.length"
+        :has-visible="!!filteredPolicies.length"
+        clear-test-id="downsample-clear-select"
+        @select-all="toggleSelectAllFiltered(true)"
+        @clear="clearSelection"
+      >
+        <template #actions>
+          <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-export-json" :disabled="!filteredPolicies.length" @click="exportJSON">
+            <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
+          </button>
+          <button type="button" class="mts-btn" data-testid="downsample-export-csv" :disabled="!filteredPolicies.length" @click="exportCSV">
+            <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
+          </button>
+        </template>
+      </ListSelectionToolbar>
     </div>
 
     <div v-if="!policies.length" class="mts-card">

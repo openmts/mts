@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useHashScroll } from '@/composables/useHashScroll'
 import EmptyState from '@/components/EmptyState.vue'
+import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
@@ -300,17 +301,24 @@ function exportCSV() {
     </div>
 
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 dark:border-slate-800" data-testid="audit-selection-toolbar">
-        <button type="button" class="mts-btn" data-testid="audit-select-all" :disabled="!displayedEvents.length" @click="toggleAllVisible(true)">{{ t('listSelectAll') }}</button>
-        <button type="button" class="mts-btn" data-testid="audit-clear-selection" :disabled="!selectedCount" @click="clearSelection">{{ t('listClearSelection') }}</button>
-        <button type="button" class="mts-btn" data-testid="audit-sort-time" :title="t('listSortBy')" @click="cycleAuditSort('time')">{{ t('auditColTime') }} {{ auditSortIndicator('time') }}</button>
-        <button type="button" class="mts-btn" data-testid="audit-sort-user" :title="t('listSortBy')" @click="cycleAuditSort('user')">{{ t('user') }} {{ auditSortIndicator('user') }}</button>
+      <div class="border-b border-slate-100 px-4 py-2 dark:border-slate-800">
+        <ListSelectionToolbar
+          prefix="audit"
+          :selected-count="selectedCount"
+          :has-visible="!!displayedEvents.length"
+          @select-all="toggleAllVisible(true)"
+          @clear="clearSelection"
+        >
+          <template #actions>
+            <button type="button" class="mts-btn" data-testid="audit-sort-time" :title="t('listSortBy')" @click="cycleAuditSort('time')">{{ t('auditColTime') }} {{ auditSortIndicator('time') }}</button>
+            <button type="button" class="mts-btn" data-testid="audit-sort-user" :title="t('listSortBy')" @click="cycleAuditSort('user')">{{ t('user') }} {{ auditSortIndicator('user') }}</button>
+          </template>
+        </ListSelectionToolbar>
       </div>
       <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs mts-muted dark:border-slate-800">
         <span class="inline-flex items-center gap-1"><ScrollText class="h-3.5 w-3.5" /> {{ t('auditEvents') }}</span>
         <span class="inline-flex flex-wrap items-center gap-2">
           <span data-testid="audit-count">{{ filteredCount }} / {{ auditEvents.length }}</span>
-          <span v-if="selectedCount" class="text-sky-700 dark:text-sky-300" data-testid="audit-selected-count">{{ formatMessage(t('listSelectedCount'), { count: selectedCount }) }}</span>
           <span v-if="serverTotal != null" class="text-[11px]" data-testid="audit-total">{{ t('auditTotal') }}: {{ serverTotal }}</span>
           <span class="text-[11px]" data-testid="audit-merged-hint">{{ t('auditMergedHint') }}</span>
         </span>

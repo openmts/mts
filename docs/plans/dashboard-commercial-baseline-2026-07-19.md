@@ -612,3 +612,9 @@
 - 商业冒烟既有 selection testid 兼容
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+
+## P116 状态（2026-07-20）
+- Audit / Downsample 接入 ListSelectionToolbar；Downsample 兼容 clear-select testid
+- 商业冒烟覆盖 downsample-selection-toolbar
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

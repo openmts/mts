@@ -571,6 +571,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/downsample')
   await expect(page.getByTestId('downsample-filter-bar')).toBeVisible()
   await expect(page.getByTestId('downsample-filter')).toBeVisible()
+  await expect(page.getByTestId('downsample-selection-toolbar')).toBeVisible()
+  await expect(page.getByTestId('downsample-select-all')).toBeVisible()
+  await expect(page.getByTestId('downsample-clear-select')).toBeVisible()
   await expect(page.getByTestId('downsample-batch-enable')).toBeVisible()
   await expect(page.getByTestId('downsample-status-panel')).toBeVisible()
 
