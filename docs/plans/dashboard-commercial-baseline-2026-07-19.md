@@ -888,3 +888,9 @@
 
 ## P178 状态（2026-07-21）
 - Downsample 策略筛选深链（q/enabled）与复制筛选链接
+
+## P179 状态（2026-07-21）
+- Operations 筛选深链（maint_q/action_kind/status/q）与复制筛选链接
+
+## P180 状态（2026-07-21）
+- Storage 区块分享深链（backup-drill/edge-https/data-restore/snapshots）

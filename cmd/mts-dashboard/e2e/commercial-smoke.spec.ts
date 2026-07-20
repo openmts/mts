@@ -199,6 +199,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // 5) 运维 Flush（确认按钮文案为「执行」）
   await page.goto('/operations')
   await expect(page.getByTestId('ops-page')).toBeVisible()
+  await expect(page.getByTestId('ops-share-link')).toBeVisible()
 
   await expect(page.getByTestId('ops-status-strip')).toBeVisible()
   await expect(page.getByTestId('ops-status-connectivity')).toBeVisible()
@@ -310,6 +311,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // 7) 存储与 data-snapshot 入口
   await page.goto('/storage')
   await expect(page.getByTestId('storage-page')).toBeVisible()
+  await expect(page.getByTestId('storage-share-link')).toBeVisible()
   await expect(page.getByTestId('storage-export-fetch')).toBeVisible()
   await expect(page.getByTestId('storage-drill-source')).toBeVisible()
   await expect(page.getByTestId('storage-drill-source-select')).toBeVisible()
@@ -1007,6 +1009,18 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('downsample-page')).toBeVisible()
   await expect(page.getByTestId('downsample-enabled-filter')).toHaveValue('enabled')
   await expect(page.getByTestId('downsample-share-link')).toBeVisible()
+
+
+  // P179: 运维筛选深链
+  await page.goto('/operations?action_kind=flush&action_status=ok#ops-action-filter-bar')
+  await expect(page.getByTestId('ops-page')).toBeVisible()
+  await expect(page.getByTestId('ops-action-filter-kind')).toHaveValue('flush')
+  await expect(page.getByTestId('ops-action-filter-status')).toHaveValue('ok')
+  await expect(page.getByTestId('ops-share-link')).toBeVisible()
+  // P180: 存储区块深链
+  await page.goto('/storage#data-restore')
+  await expect(page.getByTestId('storage-page')).toBeVisible()
+  await expect(page.getByTestId('storage-share-link')).toBeVisible()
 
   // 17) 非 admin 端到端：创建 reader、授权 default 读、只读库浏览
   await page.goto('/users')

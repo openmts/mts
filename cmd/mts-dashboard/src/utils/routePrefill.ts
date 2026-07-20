@@ -463,3 +463,90 @@ export function downsampleFormToPrefill(form: {
     hash: opts?.hash,
   })
 }
+
+export type OperationsPrefill = {
+  maint_q?: string
+  action_kind?: string
+  action_status?: string
+  action_q?: string
+}
+
+/** 运维页筛选预填：维护错误搜索 + 动作日志 kind/status/q（不自动执行 flush/compact） */
+export function parseOperationsPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): OperationsPrefill {
+  const out: OperationsPrefill = {}
+  const maint_q = firstQueryValue(query.maint_q ?? query.maint)
+  if (maint_q) out.maint_q = maint_q
+  const action_kind = firstQueryValue(query.action_kind ?? query.kind)
+  if (action_kind === 'flush' || action_kind === 'compact' || action_kind === 'retention' || action_kind === 'other' || action_kind === 'all') {
+    out.action_kind = action_kind
+  }
+  const action_status = firstQueryValue(query.action_status ?? query.status)
+  if (action_status === 'ok' || action_status === 'error' || action_status === 'all') {
+    out.action_status = action_status
+  }
+  const action_q = firstQueryValue(query.action_q ?? query.q)
+  if (action_q) out.action_q = action_q
+  return out
+}
+
+export function buildOperationsPrefillPath(opts: OperationsPrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.maint_q) params.set('maint_q', opts.maint_q)
+  if (opts.action_kind && opts.action_kind !== 'all') params.set('action_kind', opts.action_kind)
+  if (opts.action_status && opts.action_status !== 'all') params.set('action_status', opts.action_status)
+  if (opts.action_q) params.set('action_q', opts.action_q)
+  const qs = params.toString()
+  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#ops-action-log'
+  return qs ? `/operations?${qs}${hash}` : `/operations${hash}`
+}
+
+export function operationsFormToPrefill(form: {
+  maint_q?: string
+  action_kind?: string
+  action_status?: string
+  action_q?: string
+}, opts?: { hash?: string }): string {
+  return buildOperationsPrefillPath({
+    maint_q: form.maint_q?.trim() || undefined,
+    action_kind: form.action_kind?.trim() || undefined,
+    action_status: form.action_status?.trim() || undefined,
+    action_q: form.action_q?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
+
+export type StoragePrefill = {
+  section?: string
+}
+
+const STORAGE_SECTIONS = new Set(['backup-drill', 'edge-https', 'data-restore', 'snapshots'])
+
+/** 存储页 section 深链（仅 hash；query.section 兼容） */
+export function parseStoragePrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+  hash?: string,
+): StoragePrefill {
+  const out: StoragePrefill = {}
+  const fromQuery = firstQueryValue(query.section)
+  if (fromQuery && STORAGE_SECTIONS.has(fromQuery)) out.section = fromQuery
+  const h = (hash || '').replace(/^#/, '')
+  if (!out.section && h && STORAGE_SECTIONS.has(h)) out.section = h
+  return out
+}
+
+export function buildStoragePrefillPath(opts: StoragePrefill & { hash?: string }): string {
+  const section = opts.section && STORAGE_SECTIONS.has(opts.section) ? opts.section : undefined
+  const hashRaw = opts.hash || (section ? `#${section}` : '#backup-drill')
+  const hash = hashRaw.startsWith('#') ? hashRaw : `#${hashRaw}`
+  // section 仅走 hash，避免与静态资源混淆
+  return `/storage${hash}`
+}
+
+export function storageFormToPrefill(form: { section?: string }, opts?: { hash?: string }): string {
+  return buildStoragePrefillPath({
+    section: form.section?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}

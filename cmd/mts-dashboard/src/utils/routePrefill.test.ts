@@ -19,6 +19,10 @@ import {
   accessGrantsFormToPrefill,
   parseDownsamplePrefill,
   downsampleFormToPrefill,
+  parseOperationsPrefill,
+  operationsFormToPrefill,
+  parseStoragePrefill,
+  storageFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -189,4 +193,17 @@ test('access grants and downsample prefill helpers', () => {
     downsampleFormToPrefill({ q: 'roll', enabled: 'disabled' }),
     '/downsample?q=roll&enabled=disabled#downsample-filters',
   )
+})
+
+test('operations and storage prefill helpers', () => {
+  assert.deepEqual(
+    parseOperationsPrefill({ maint_q: 'disk', action_kind: 'flush', action_status: 'error', action_q: 'fail' }),
+    { maint_q: 'disk', action_kind: 'flush', action_status: 'error', action_q: 'fail' },
+  )
+  assert.equal(
+    operationsFormToPrefill({ action_kind: 'compact', action_status: 'ok' }),
+    '/operations?action_kind=compact&action_status=ok#ops-action-log',
+  )
+  assert.deepEqual(parseStoragePrefill({}, '#data-restore'), { section: 'data-restore' })
+  assert.equal(storageFormToPrefill({ section: 'edge-https' }), '/storage#edge-https')
 })

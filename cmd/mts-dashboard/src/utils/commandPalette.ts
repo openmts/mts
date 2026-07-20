@@ -298,6 +298,13 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     adminOnly: true,
   },
   {
+    id: 'operations-filters',
+    path: '/operations#ops-action-filter-bar',
+    labelKey: 'cmdOpsFilters',
+    keywords: ['ops filters', '运维筛选', 'action filter'],
+    adminOnly: true,
+  },
+  {
     id: 'operations-action-log',
     path: '/operations#ops-action-log',
     labelKey: 'cmdOpsActionLog',

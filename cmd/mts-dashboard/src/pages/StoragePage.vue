@@ -19,6 +19,7 @@ import { formatBytes } from '@/utils/formatBytes'
 import { downloadJSON, stampFilename } from '@/utils/download'
 import { buildStorageConfigExport, formatStorageExportPretty } from '@/utils/storageExport'
 import { copyText } from '@/utils/clipboard'
+import { storageFormToPrefill, parseStoragePrefill } from '@/utils/routePrefill'
 import {
   defaultSelectedSnapshotPath,
   selectableDataSnapshots,
@@ -296,6 +297,21 @@ async function confirmDelete() {
   }
 }
 
+
+function currentStorageSection(): string {
+  const h = (route.hash || '').replace(/^#/, '')
+  if (h === 'backup-drill' || h === 'edge-https' || h === 'data-restore' || h === 'snapshots') return h
+  const pre = parseStoragePrefill(route.query as Record<string, unknown>, route.hash)
+  return pre.section || 'backup-drill'
+}
+
+async function copyStorageShareLink() {
+  const path = storageFormToPrefill({ section: currentStorageSection() })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('storageShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
 </script>
 
 <template>
@@ -306,9 +322,14 @@ async function confirmDelete() {
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('storage') }}</h1>
         <p class="text-xs mts-muted">{{ t('storageSubtitle') }}</p>
       </div>
-      <button class="mts-btn" :disabled="listLoading" @click="() => { void loadSnapshots(); void loadDataSnapshots() }">
-        <RefreshCw class="h-3.5 w-3.5" /> {{ t('storageRefreshSnapshots') }}
-      </button>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="storage-share-link" @click="copyStorageShareLink">
+          {{ t('storageShareLink') }}
+        </button>
+        <button class="mts-btn" :disabled="listLoading" @click="() => { void loadSnapshots(); void loadDataSnapshots() }">
+          <RefreshCw class="h-3.5 w-3.5" /> {{ t('storageRefreshSnapshots') }}
+        </button>
+      </div>
     </div>
 
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
@@ -436,7 +457,7 @@ async function confirmDelete() {
           <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot'" @click="doSnapshot">{{ t('createSnapshot') }}</button>
         </template>
       </EmptyState>
-      <div v-else data-testid="storage-snapshots-table">
+      <div id="snapshots" class="scroll-mt-20" data-testid="storage-snapshots-table">
         <div
           class="grid grid-cols-[minmax(10rem,1.4fr)_minmax(5rem,0.6fr)_minmax(8rem,1fr)_3rem] border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700"
           data-testid="storage-snapshots-header"

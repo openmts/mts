@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { apiGet, apiPost } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -28,12 +29,14 @@ import type { CompactionStats, MaintenanceStats } from '@/api/types'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { formatMessage } from '@/utils/formatMessage'
+import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
 interface CompactionStatsResponse { stats: CompactionStats }
 interface MaintenanceStatsResponse { stats: MaintenanceStats }
 interface MaintenanceErrorsResponse { errors: string[] }
 
 const { isAdmin } = useAuth()
+const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
 const { success, error: notifyError, warn, info } = useNotify()
@@ -298,7 +301,56 @@ const filteredActionLog = computed(() => {
   })
 })
 
-onMounted(() => { void loadStats() })
+function applyOperationsPrefillFromRoute() {
+  if (!isAdmin.value) return
+  const pre = parseOperationsPrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.maint_q != null && maintErrorFilter.value !== pre.maint_q) {
+    maintErrorFilter.value = pre.maint_q
+    changed = true
+  }
+  if (pre.action_kind && pre.action_kind !== 'all' && actionKindFilter.value !== pre.action_kind) {
+    actionKindFilter.value = pre.action_kind as typeof actionKindFilter.value
+    changed = true
+  }
+  if (pre.action_status && pre.action_status !== 'all' && actionStatusFilter.value !== pre.action_status) {
+    actionStatusFilter.value = pre.action_status as typeof actionStatusFilter.value
+    changed = true
+  }
+  if (pre.action_q != null && actionTextFilter.value !== pre.action_q) {
+    actionTextFilter.value = pre.action_q
+    changed = true
+  }
+  if (changed) success(t.value('opsPrefillApplied'))
+}
+
+async function copyOperationsShareLink() {
+  const path = operationsFormToPrefill({
+    maint_q: maintErrorFilter.value,
+    action_kind: actionKindFilter.value,
+    action_status: actionStatusFilter.value,
+    action_q: actionTextFilter.value,
+  }, {
+    hash: maintErrorFilter.value ? '#ops-maint-errors' : '#ops-action-log',
+  })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('opsShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
+onMounted(() => {
+  void loadStats()
+  applyOperationsPrefillFromRoute()
+})
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (!isAdmin.value) return
+    if (prev != null && path !== prev) applyOperationsPrefillFromRoute()
+  },
+)
 </script>
 
 <template>
@@ -315,6 +367,9 @@ onMounted(() => { void loadStats() })
         </button>
         <button type="button" class="mts-btn" data-testid="ops-export-stats" @click="exportStats">
           <Download class="h-3.5 w-3.5" /> {{ t('opsExportStats') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="ops-share-link" @click="copyOperationsShareLink">
+          {{ t('opsShareLink') }}
         </button>
         <button type="button" class="mts-btn" data-testid="ops-copy-stats" @click="copyStats">
           <Copy class="h-3.5 w-3.5" /> {{ t('opsCopyStats') }}
@@ -481,7 +536,7 @@ onMounted(() => { void loadStats() })
         </div>
       </div>
       <p class="mb-2 text-xs mts-muted">{{ t('opsActionLogHint') }}</p>
-      <div class="mb-3 flex flex-wrap items-end gap-2" data-testid="ops-action-filter-bar">
+      <div id="ops-action-filter-bar" class="mb-3 flex flex-wrap items-end gap-2 scroll-mt-20" data-testid="ops-action-filter-bar">
         <label class="text-xs mts-muted">{{ t('opsActionFilterKind') }}
           <select v-model="actionKindFilter" class="mts-input mt-1" data-testid="ops-action-filter-kind">
             <option value="all">{{ t('opsActionFilterAll') }}</option>
