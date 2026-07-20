@@ -9,6 +9,7 @@ import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
 import { scheduleScrollToHash } from '@/utils/hashScroll'
+import { readinessFormToPrefill, parseReadinessPrefill } from '@/utils/routePrefill'
 import { buildExportPreflight, formatExportPreflightText } from '@/utils/exportPreflight'
 import { buildOpsNextSteps } from '@/utils/opsNextSteps'
 import { copyText } from '@/utils/clipboard'
@@ -514,6 +515,22 @@ function scrollToCurrentHash() {
   scheduleScrollToHash(window.location.hash || route.hash)
 }
 
+function currentReadinessSection(): string {
+  const h = (route.hash || (typeof window !== 'undefined' ? window.location.hash : '') || '').replace(/^#/, '')
+  const known = new Set(['export-preflight', 'deploy-kit', 'signoff-notes', 'deploy-runbook-drill', 'readiness-action'])
+  if (known.has(h)) return h
+  const pre = parseReadinessPrefill(route.query as Record<string, unknown>, route.hash)
+  return pre.section || 'export-preflight'
+}
+
+async function copyReadinessShareLink() {
+  const path = readinessFormToPrefill({ section: currentReadinessSection() })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('readinessShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 function jumpPreflight(target?: string) {
   if (!target) return
   if (target.startsWith('/')) {
@@ -582,6 +599,9 @@ watch(
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <button type="button" class="mts-btn" data-testid="readiness-share-link" @click="copyReadinessShareLink">
+          {{ t('readinessShareLink') }}
+        </button>
         <button type="button" class="mts-btn" data-testid="readiness-export" @click="exportState">
           <Download class="h-3.5 w-3.5" />
           {{ t('readinessExport') }}
@@ -708,13 +728,15 @@ watch(
       :message="doctorError"
       @dismiss="doctorError = ''"
     />
-    <ActionResultBanner
-      v-if="actionMsg"
-      :kind="actionKind"
-      :message="actionMsg"
-      data-testid="readiness-action"
-      @dismiss="actionMsg = ''"
-    />
+    <div id="readiness-action" class="scroll-mt-20" data-testid="readiness-action-anchor">
+      <ActionResultBanner
+        v-if="actionMsg"
+        :kind="actionKind"
+        :message="actionMsg"
+        data-testid="readiness-action"
+        @dismiss="actionMsg = ''"
+      />
+    </div>
 
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="mts-card p-4">

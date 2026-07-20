@@ -23,6 +23,12 @@ import {
   operationsFormToPrefill,
   parseStoragePrefill,
   storageFormToPrefill,
+  parseReadinessPrefill,
+  readinessFormToPrefill,
+  parseConfigPrefill,
+  configFormToPrefill,
+  parseMetricsPrefill,
+  metricsFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -206,4 +212,26 @@ test('operations and storage prefill helpers', () => {
   )
   assert.deepEqual(parseStoragePrefill({}, '#data-restore'), { section: 'data-restore' })
   assert.equal(storageFormToPrefill({ section: 'edge-https' }), '/storage#edge-https')
+})
+
+test('readiness config metrics prefill helpers', () => {
+  assert.deepEqual(parseReadinessPrefill({}, '#deploy-kit'), { section: 'deploy-kit' })
+  assert.equal(readinessFormToPrefill({ section: 'signoff-notes' }), '/ops/readiness#signoff-notes')
+  assert.deepEqual(parseConfigPrefill({ schema_q: 'http', error_q: 'auth' }, '#config-schema'), {
+    schema_q: 'http',
+    error_q: 'auth',
+    section: 'config-schema',
+  })
+  assert.equal(
+    configFormToPrefill({ schema_q: 'engine', section: 'config-schema' }),
+    '/config?schema_q=engine#config-schema',
+  )
+  assert.deepEqual(parseMetricsPrefill({ q: 'http', family: 'go_goroutines' }), {
+    q: 'http',
+    family: 'go_goroutines',
+  })
+  assert.equal(
+    metricsFormToPrefill({ q: 'prom', family: 'go_threads' }),
+    '/observability/metrics?q=prom&family=go_threads#metrics-detail',
+  )
 })

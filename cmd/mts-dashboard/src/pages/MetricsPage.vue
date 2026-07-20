@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
+import { parseMetricsPrefill, metricsFormToPrefill } from '@/utils/routePrefill'
+import { copyText } from '@/utils/clipboard'
 import { apiGetText } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
@@ -23,6 +26,7 @@ import { useNotify } from '@/composables/useNotify'
 import { Activity, RefreshCw, Download } from 'lucide-vue-next'
 
 const { isAdmin } = useAuth()
+const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
@@ -119,7 +123,44 @@ watch(filtered, (list) => {
   }
 })
 
+function applyMetricsPrefillFromRoute() {
+  if (!isAdmin.value) return
+  const pre = parseMetricsPrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.q != null && q.value !== pre.q) {
+    q.value = pre.q
+    changed = true
+  }
+  if (pre.family) {
+    if (activeFamilyName.value !== pre.family) {
+      activeFamilyName.value = pre.family
+      changed = true
+    }
+  }
+  if (changed) success(t.value('metricsPrefillApplied'))
+}
+
+async function copyMetricsShareLink() {
+  const path = metricsFormToPrefill({
+    q: q.value,
+    family: activeFamilyName.value || undefined,
+  }, { hash: activeFamilyName.value ? '#metrics-detail' : '#metrics-list' })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('metricsShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (!isAdmin.value) return
+    if (prev != null && path !== prev) applyMetricsPrefillFromRoute()
+  },
+)
+
 onMounted(() => {
+  applyMetricsPrefillFromRoute()
   void load()
   setupAutoRefresh()
 })
@@ -152,6 +193,9 @@ onBeforeUnmount(() => {
             </option>
           </select>
         </label>
+        <button type="button" class="mts-btn" data-testid="metrics-share-link" @click="copyMetricsShareLink">
+          {{ t('metricsShareLink') }}
+        </button>
         <button type="button" class="mts-btn" data-testid="metrics-export-raw" :disabled="!raw" @click="exportRaw">
           <Download class="h-3.5 w-3.5" /> {{ t('metricsExportRaw') }}
         </button>
@@ -229,7 +273,8 @@ onBeforeUnmount(() => {
 
       <div
         v-if="activeFamily"
-        class="mts-card overflow-hidden"
+        id="metrics-detail"
+        class="mts-card scroll-mt-20 overflow-hidden"
         data-testid="metrics-detail-panel"
       >
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">

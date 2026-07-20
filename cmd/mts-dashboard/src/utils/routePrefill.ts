@@ -550,3 +550,128 @@ export function storageFormToPrefill(form: { section?: string }, opts?: { hash?:
     hash: opts?.hash,
   })
 }
+
+export type ReadinessPrefill = {
+  section?: string
+}
+
+const READINESS_SECTIONS = new Set([
+  'export-preflight',
+  'deploy-kit',
+  'signoff-notes',
+  'deploy-runbook-drill',
+  'readiness-action',
+])
+
+/** 就绪中心区块深链（hash / section query） */
+export function parseReadinessPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+  hash?: string,
+): ReadinessPrefill {
+  const out: ReadinessPrefill = {}
+  const fromQuery = firstQueryValue(query.section)
+  if (fromQuery && READINESS_SECTIONS.has(fromQuery)) out.section = fromQuery
+  const h = (hash || '').replace(/^#/, '')
+  if (!out.section && h && READINESS_SECTIONS.has(h)) out.section = h
+  return out
+}
+
+export function buildReadinessPrefillPath(opts: ReadinessPrefill & { hash?: string }): string {
+  const section = opts.section && READINESS_SECTIONS.has(opts.section) ? opts.section : undefined
+  const hashRaw = opts.hash || (section ? `#${section}` : '#export-preflight')
+  const hash = hashRaw.startsWith('#') ? hashRaw : `#${hashRaw}`
+  return `/ops/readiness${hash}`
+}
+
+export function readinessFormToPrefill(form: { section?: string }, opts?: { hash?: string }): string {
+  return buildReadinessPrefillPath({
+    section: form.section?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
+
+export type ConfigPrefill = {
+  schema_q?: string
+  error_q?: string
+  section?: string
+}
+
+const CONFIG_SECTIONS = new Set(['config-effective', 'config-schema', 'config-error-codes'])
+
+/** 配置页筛选/区块预填（不自动 reload） */
+export function parseConfigPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+  hash?: string,
+): ConfigPrefill {
+  const out: ConfigPrefill = {}
+  const schema_q = firstQueryValue(query.schema_q ?? query.schema)
+  if (schema_q) out.schema_q = schema_q
+  const error_q = firstQueryValue(query.error_q ?? query.error)
+  if (error_q) out.error_q = error_q
+  const section = firstQueryValue(query.section)
+  if (section && CONFIG_SECTIONS.has(section)) out.section = section
+  const h = (hash || '').replace(/^#/, '')
+  if (!out.section && h && CONFIG_SECTIONS.has(h)) out.section = h
+  return out
+}
+
+export function buildConfigPrefillPath(opts: ConfigPrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.schema_q) params.set('schema_q', opts.schema_q)
+  if (opts.error_q) params.set('error_q', opts.error_q)
+  const qs = params.toString()
+  const section = opts.section && CONFIG_SECTIONS.has(opts.section) ? opts.section : undefined
+  const hashRaw = opts.hash || (section ? `#${section}` : (opts.schema_q ? '#config-schema' : opts.error_q ? '#config-error-codes' : '#config-effective'))
+  const hash = hashRaw.startsWith('#') ? hashRaw : `#${hashRaw}`
+  return qs ? `/config?${qs}${hash}` : `/config${hash}`
+}
+
+export function configFormToPrefill(form: {
+  schema_q?: string
+  error_q?: string
+  section?: string
+}, opts?: { hash?: string }): string {
+  return buildConfigPrefillPath({
+    schema_q: form.schema_q?.trim() || undefined,
+    error_q: form.error_q?.trim() || undefined,
+    section: form.section?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}
+
+export type MetricsPrefill = {
+  q?: string
+  family?: string
+}
+
+/** 指标页搜索/展开 family 预填 */
+export function parseMetricsPrefill(
+  query: Record<string, unknown> | { [key: string]: unknown },
+): MetricsPrefill {
+  const out: MetricsPrefill = {}
+  const q = firstQueryValue(query.q ?? query.filter)
+  if (q) out.q = q
+  const family = firstQueryValue(query.family ?? query.name)
+  if (family) out.family = family
+  return out
+}
+
+export function buildMetricsPrefillPath(opts: MetricsPrefill & { hash?: string }): string {
+  const params = new URLSearchParams()
+  if (opts.q) params.set('q', opts.q)
+  if (opts.family) params.set('family', opts.family)
+  const qs = params.toString()
+  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : (opts.family ? '#metrics-detail' : '#metrics-list')
+  return qs ? `/observability/metrics?${qs}${hash}` : `/observability/metrics${hash}`
+}
+
+export function metricsFormToPrefill(form: {
+  q?: string
+  family?: string
+}, opts?: { hash?: string }): string {
+  return buildMetricsPrefillPath({
+    q: form.q?.trim() || undefined,
+    family: form.family?.trim() || undefined,
+    hash: opts?.hash,
+  })
+}

@@ -894,3 +894,9 @@
 
 ## P180 状态（2026-07-21）
 - Storage 区块分享深链（backup-drill/edge-https/data-restore/snapshots）
+
+## P181 状态（2026-07-21）
+- Readiness 区块分享深链（export-preflight/deploy-kit/signoff-notes/deploy-runbook-drill/readiness-action）
+
+## P182 状态（2026-07-21）
+- Config 筛选/区块深链（schema_q/error_q）与 Metrics 筛选深链（q/family）

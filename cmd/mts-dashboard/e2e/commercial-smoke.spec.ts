@@ -248,6 +248,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('api-spec-export-md')).toBeVisible()
   await page.goto('/observability/metrics')
   await expect(page.getByTestId('metrics-page')).toBeVisible()
+  await expect(page.getByTestId('metrics-share-link')).toBeVisible()
   await expect(page.getByTestId('metrics-filter')).toBeVisible()
   await expect(page.getByTestId('metrics-export-raw')).toBeVisible()
   await expect(page.getByTestId('metrics-auto-refresh')).toBeVisible()
@@ -330,6 +331,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // Config 表头 i18n（表头在空数据时仍可见；a11y 树中 th 可能暴露为 cell）
   await page.goto('/config')
   await expect(page.getByTestId('config-page')).toBeVisible()
+  await expect(page.getByTestId('config-share-link')).toBeVisible()
   await expect(page.getByTestId('config-export-effective')).toBeVisible()
   await expect(page.getByTestId('config-copy-effective')).toBeVisible()
   await expect(page.getByTestId('config-export-schema')).toBeVisible()
@@ -379,6 +381,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('deploy-runbook-links')).toBeVisible()
   await expect(page.getByTestId('deploy-accept-step-1')).toBeVisible()
   await expect(page.getByTestId('readiness-export')).toBeVisible()
+  await expect(page.getByTestId('readiness-share-link')).toBeVisible()
   await expect(page.getByTestId('readiness-archive')).toBeVisible()
   await expect(page.getByTestId('readiness-acceptance-pack')).toBeVisible()
   await expect(page.getByTestId('readiness-deploy-kit')).toBeVisible()
@@ -1021,6 +1024,21 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/storage#data-restore')
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-share-link')).toBeVisible()
+
+
+  // P181: 就绪区块分享
+  await page.goto('/ops/readiness#deploy-kit')
+  await expect(page.getByTestId('readiness-deploy-kit')).toBeVisible()
+  await expect(page.getByTestId('readiness-share-link')).toBeVisible()
+  // P182: 配置/指标筛选深链
+  await page.goto('/config?schema_q=http#config-schema')
+  await expect(page.getByTestId('config-page')).toBeVisible()
+  await expect(page.getByTestId('config-schema-filter')).toHaveValue('http')
+  await expect(page.getByTestId('config-share-link')).toBeVisible()
+  await page.goto('/observability/metrics?q=go_#metrics-list')
+  await expect(page.getByTestId('metrics-page')).toBeVisible()
+  await expect(page.getByTestId('metrics-filter')).toHaveValue('go_')
+  await expect(page.getByTestId('metrics-share-link')).toBeVisible()
 
   // 17) 非 admin 端到端：创建 reader、授权 default 读、只读库浏览
   await page.goto('/users')

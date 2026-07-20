@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
+import { parseConfigPrefill, configFormToPrefill } from '@/utils/routePrefill'
 import { apiGet, apiPost, getAdminToken, setAdminToken, getDataToken, setDataToken } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
@@ -30,6 +32,7 @@ interface SchemaField { name: string; description: string }
 interface SchemaResponse { fields: SchemaField[] }
 
 useHashScroll()
+const route = useRoute()
 const { isAdmin } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
@@ -78,6 +81,33 @@ async function loadConfig() {
   schemaFields.value = schemaData.fields ?? []
 }
 
+function applyConfigPrefillFromRoute() {
+  if (!isAdmin.value) return
+  const pre = parseConfigPrefill(route.query as Record<string, unknown>, route.hash)
+  let changed = false
+  if (pre.schema_q != null && schemaFilter.value !== pre.schema_q) {
+    schemaFilter.value = pre.schema_q
+    changed = true
+  }
+  if (pre.error_q != null && errorCodeFilter.value !== pre.error_q) {
+    errorCodeFilter.value = pre.error_q
+    changed = true
+  }
+  if (changed) success(t.value('configPrefillApplied'))
+}
+
+async function copyConfigShareLink() {
+  const path = configFormToPrefill({
+    schema_q: schemaFilter.value,
+    error_q: errorCodeFilter.value,
+    section: schemaFilter.value ? 'config-schema' : errorCodeFilter.value ? 'config-error-codes' : 'config-effective',
+  })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('configShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 onMounted(async () => {
   if (!isAdmin.value) return
   try {
@@ -85,7 +115,16 @@ onMounted(async () => {
   } catch (e) {
     loadError.value = formatCaughtError(e)
   }
+  applyConfigPrefillFromRoute()
 })
+
+watch(
+  () => route.fullPath,
+  (path, prev) => {
+    if (!isAdmin.value) return
+    if (prev != null && path !== prev) applyConfigPrefillFromRoute()
+  },
+)
 
 async function handleValidate() {
   actionResult.value = null
@@ -191,6 +230,9 @@ function statusLabel(httpStatus: number): string {
         <p class="text-xs mts-muted">{{ t('configDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="config-share-link" @click="copyConfigShareLink">
+          {{ t('configShareLink') }}
+        </button>
         <button type="button" class="mts-btn" data-testid="config-export-effective" :disabled="!config" @click="exportEffective">
           <Download class="h-3.5 w-3.5" /> {{ t('configExportEffective') }}
         </button>
