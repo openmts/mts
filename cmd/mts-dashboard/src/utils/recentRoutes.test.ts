@@ -6,6 +6,8 @@ import {
   pushRecentRoute,
   recordRecentRoute,
   saveRecentRoutes,
+  setRecentRoutePinned,
+  sortRecentRoutes,
 } from './recentRoutes.ts'
 
 function mem() {
@@ -23,13 +25,8 @@ test('pushRecentRoute dedupes and caps', () => {
   items = pushRecentRoute(items, { path: '/query', name: 'Query', at: 3 })
   assert.equal(items[0]?.path, '/query')
   assert.equal(items.length, 2)
-  assert.equal(normalizeLoginSkipped(), true)
+  assert.equal(pushRecentRoute([], { path: '/login', name: 'Login', at: 1 }).length, 0)
 })
-
-function normalizeLoginSkipped() {
-  const items = pushRecentRoute([], { path: '/login', name: 'Login', at: 1 })
-  return items.length === 0
-}
 
 test('recordRecentRoute roundtrip storage', () => {
   const s = mem()
@@ -42,11 +39,35 @@ test('recordRecentRoute roundtrip storage', () => {
   assert.equal(loadRecentRoutes(s).length, 0)
 })
 
-test('clearRecentRoutes wipes storage', () => {
+test('pin survives re-visit and sorts first', () => {
   const s = mem()
   recordRecentRoute('/query', 'Query', s)
   recordRecentRoute('/write', 'Write', s)
-  assert.equal(loadRecentRoutes(s).length, 2)
-  clearRecentRoutes(s)
-  assert.equal(loadRecentRoutes(s).length, 0)
+  setRecentRoutePinned('/query', true, s)
+  recordRecentRoute('/write', 'Write', s)
+  const items = loadRecentRoutes(s)
+  assert.equal(items[0]?.path, '/query')
+  assert.equal(items[0]?.pinned, true)
+})
+
+test('clearRecentRoutes keeps pinned by default', () => {
+  const s = mem()
+  recordRecentRoute('/query', 'Query', s)
+  recordRecentRoute('/write', 'Write', s)
+  setRecentRoutePinned('/query', true, s)
+  const kept = clearRecentRoutes(s)
+  assert.equal(kept.length, 1)
+  assert.equal(kept[0]?.path, '/query')
+  assert.equal(clearRecentRoutes(s, { all: true }).length, 0)
+})
+
+test('sortRecentRoutes pins first', () => {
+  const items = sortRecentRoutes([
+    { path: '/a', name: '', at: 2 },
+    { path: '/b', name: '', at: 3, pinned: true },
+    { path: '/c', name: '', at: 1, pinned: true },
+  ])
+  assert.equal(items[0]?.path, '/b')
+  assert.equal(items[1]?.path, '/c')
+  assert.equal(items[2]?.path, '/a')
 })

@@ -6,6 +6,7 @@ import TopBar from '@/components/TopBar.vue'
 import PageSkeleton from '@/components/PageSkeleton.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ShortcutsHelp from '@/components/ShortcutsHelp.vue'
+import NotifyHistoryPanel from '@/components/NotifyHistoryPanel.vue'
 import BreadcrumbBar from '@/components/BreadcrumbBar.vue'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
@@ -19,6 +20,7 @@ import {
   clearRecentRoutes,
   loadRecentRoutes,
   recordRecentRoute,
+  setRecentRoutePinned,
   type RecentRouteEntry,
 } from '@/utils/recentRoutes'
 import { loadSidebarPrefs, saveSidebarPrefs } from '@/utils/sidebarPrefs'
@@ -37,6 +39,7 @@ const sidebarCollapsed = ref(
 const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
 const sidebarNavRef = ref<InstanceType<typeof SidebarNav> | null>(null)
 const shortcutsOpen = ref(false)
+const notifyHistoryOpen = ref(false)
 const recent = ref<RecentRouteEntry[]>(loadRecentRoutes())
 const showBreadcrumb = computed(() => route.path !== '/')
 
@@ -62,9 +65,21 @@ function goRecent(path: string) {
 }
 
 function clearRecent() {
-  clearRecentRoutes()
-  // 当前页立即再记入，避免清空后条整行消失且失去上下文
+  // 默认保留固定项
+  recent.value = clearRecentRoutes()
+  // 当前页立即再记入
   recent.value = recordRecentRoute(route.fullPath, route.name)
+}
+
+function togglePinRecent(path: string, e?: Event) {
+  e?.stopPropagation()
+  e?.preventDefault()
+  const cur = recent.value.find((x) => x.path === path)
+  recent.value = setRecentRoutePinned(path, !cur?.pinned)
+}
+
+function openNotifyHistory() {
+  notifyHistoryOpen.value = true
 }
 
 function onGlobalKey(e: KeyboardEvent) {
@@ -107,6 +122,7 @@ provide('toggleSidebar', toggleSidebar)
 provide('closeSidebar', closeSidebar)
 provide('openCommandPalette', openCommandPalette)
 provide('openShortcutsHelp', openShortcuts)
+provide('openNotifyHistory', openNotifyHistory)
 
 function onSkipToMain(e: Event) {
   e.preventDefault()
@@ -147,6 +163,7 @@ function onSkipToMain(e: Event) {
           @toggle-sidebar="toggleSidebar"
           @open-command-palette="openCommandPalette"
           @open-shortcuts="openShortcuts"
+          @open-notify-history="openNotifyHistory"
         />
       </div>
       <BreadcrumbBar v-if="showBreadcrumb" />
@@ -187,18 +204,37 @@ function onSkipToMain(e: Event) {
         data-testid="recent-routes"
       >
         <span class="text-[11px] mts-muted">{{ t('recentRoutes') }}</span>
-        <button
+        <span
           v-for="r in recent.slice(0, 6)"
           :key="r.path + r.at"
-          type="button"
-          class="rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          :data-testid="`recent-route-${r.path}`"
-          @click="goRecent(r.path)"
+          class="inline-flex items-center gap-0.5 rounded-full border px-1 py-0.5 text-[11px]"
+          :class="r.pinned
+            ? 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100'
+            : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'"
+          :data-testid="`recent-route-chip-${r.path}`"
         >
-          {{ recentLabel(r) }}
-        </button>
+          <button
+            type="button"
+            class="rounded-full px-1.5 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+            :data-testid="`recent-route-${r.path}`"
+            @click="goRecent(r.path)"
+          >
+            {{ recentLabel(r) }}
+          </button>
+          <button
+            type="button"
+            class="mts-focus-ring rounded-full px-1 text-[10px] opacity-70 hover:opacity-100"
+            :data-testid="`recent-route-pin-${r.path}`"
+            :aria-label="r.pinned ? t('recentRoutesUnpin') : t('recentRoutesPin')"
+            :title="r.pinned ? t('recentRoutesUnpin') : t('recentRoutesPin')"
+            :aria-pressed="r.pinned ? 'true' : 'false'"
+            @click="togglePinRecent(r.path, $event)"
+          >
+            {{ r.pinned ? '★' : '☆' }}
+          </button>
+        </span>
         <button
-          v-if="recent.length > 1"
+          v-if="recent.filter((x) => !x.pinned).length > 0 && recent.length > 1"
           type="button"
           class="ml-auto rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
           data-testid="recent-routes-clear"
@@ -222,5 +258,6 @@ function onSkipToMain(e: Event) {
     </div>
     <CommandPalette ref="commandPaletteRef" />
     <ShortcutsHelp v-model:open="shortcutsOpen" />
+    <NotifyHistoryPanel v-model:open="notifyHistoryOpen" />
   </div>
 </template>

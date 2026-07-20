@@ -1,0 +1,137 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from '@/composables/useI18n'
+import { useNotify } from '@/composables/useNotify'
+import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
+import { Bell, X } from 'lucide-vue-next'
+import type { NotifyHistoryEntry } from '@/utils/notifyHistory'
+
+const open = defineModel<boolean>('open', { default: false })
+const { t, locale } = useI18n()
+const { history, clearHistory, reloadHistory } = useNotify()
+const panelRef = ref<HTMLElement | null>(null)
+let trap: FocusTrapHandle | null = null
+
+const entries = computed(() => history.value)
+
+function close() {
+  open.value = false
+}
+
+function onClear() {
+  clearHistory()
+}
+
+function kindLabel(kind: NotifyHistoryEntry['kind']): string {
+  if (kind === 'success') return t.value('notifyKindSuccess')
+  if (kind === 'error') return t.value('notifyKindError')
+  if (kind === 'warn') return t.value('notifyKindWarn')
+  return t.value('notifyKindInfo')
+}
+
+function formatAt(at: number): string {
+  try {
+    return new Date(at).toLocaleString(locale.value === 'en' ? 'en' : 'zh-CN')
+  } catch {
+    return String(at)
+  }
+}
+
+watch(open, async (v) => {
+  trap?.release()
+  trap = null
+  if (!v) return
+  reloadHistory()
+  await nextTick()
+  if (panelRef.value) {
+    trap = createFocusTrap(panelRef.value)
+    trap.focusFirst()
+  }
+})
+
+onBeforeUnmount(() => {
+  trap?.release()
+  trap = null
+})
+</script>
+
+<template>
+  <div
+    v-if="open"
+    class="fixed inset-0 z-[125] flex justify-end bg-black/30"
+    data-testid="notify-history-overlay"
+    @click.self="close"
+    @keydown.esc.prevent="close"
+  >
+    <div
+      ref="panelRef"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('notifyHistoryTitle')"
+      class="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900"
+      data-testid="notify-history-panel"
+    >
+      <div class="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+        <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <Bell class="h-4 w-4" aria-hidden="true" />
+          {{ t('notifyHistoryTitle') }}
+        </h2>
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring"
+            data-testid="notify-history-clear"
+            :disabled="!entries.length"
+            @click="onClear"
+          >
+            {{ t('notifyHistoryClear') }}
+          </button>
+          <button
+            type="button"
+            class="mts-focus-ring rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            data-testid="notify-history-close"
+            :aria-label="t('close')"
+            :title="t('close')"
+            @click="close"
+          >
+            <X class="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+      <p class="border-b border-slate-100 px-4 py-2 text-xs mts-muted dark:border-slate-800">
+        {{ t('notifyHistoryHint') }}
+      </p>
+      <ul class="flex-1 space-y-2 overflow-auto p-3" data-testid="notify-history-list">
+        <li
+          v-if="!entries.length"
+          class="px-2 py-8 text-center text-sm mts-muted"
+          data-testid="notify-history-empty"
+        >
+          {{ t('notifyHistoryEmpty') }}
+        </li>
+        <li
+          v-for="e in entries"
+          :key="e.id"
+          class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700"
+          :data-testid="`notify-history-item-${e.kind}`"
+        >
+          <div class="mb-1 flex items-center justify-between gap-2">
+            <span
+              class="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+              :class="{
+                'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200': e.kind === 'success',
+                'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200': e.kind === 'error',
+                'bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100': e.kind === 'warn',
+                'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200': e.kind === 'info',
+              }"
+            >{{ kindLabel(e.kind) }}</span>
+            <time class="text-[10px] mts-muted" :datetime="new Date(e.at).toISOString()">{{ formatAt(e.at) }}</time>
+          </div>
+          <p class="break-words text-slate-700 dark:text-slate-200">
+            {{ e.message }}<span v-if="e.count > 1" class="mts-muted"> (×{{ e.count }})</span>
+          </p>
+        </li>
+      </ul>
+    </div>
+  </div>
+</template>

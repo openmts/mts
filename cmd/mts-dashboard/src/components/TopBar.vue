@@ -5,7 +5,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Menu, Moon, Sun, Languages, Search, Keyboard } from 'lucide-vue-next'
+import { Menu, Moon, Sun, Languages, Search, Keyboard, Bell } from 'lucide-vue-next'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
 import { useServerReachability } from '@/composables/useServerReachability'
 import {
@@ -29,7 +29,7 @@ let timer: ReturnType<typeof setInterval> | null = null
 const guardState = ref<SessionGuardState>(emptySessionGuardState())
 let expireInFlight = false
 
-const emit = defineEmits<{ 'toggle-sidebar': []; 'open-command-palette': []; 'open-shortcuts': [] }>()
+const emit = defineEmits<{ 'toggle-sidebar': []; 'open-command-palette': []; 'open-shortcuts': []; 'open-notify-history': [] }>()
 
 const pageTitle = computed(() => {
   const key = resolveRouteTitleKey(route.name)
@@ -200,6 +200,16 @@ onBeforeUnmount(() => {
         role="status"
         aria-live="polite"
       >{{ t('sessionLeft') }} {{ sessionView.label }}</span>
+      <button
+        type="button"
+        class="mts-focus-ring rounded p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+        :title="t('notifyHistoryTitle')"
+        :aria-label="t('notifyHistoryTitle')"
+        data-testid="topbar-notify-history"
+        @click="emit('open-notify-history')"
+      >
+        <Bell class="h-4 w-4" aria-hidden="true" />
+      </button>
       <button type="button" class="mts-focus-ring rounded p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800" :title="t('lang')" :aria-label="t('lang')" data-testid="topbar-lang" @click="toggleLocale">
         <Languages class="h-4 w-4" />
         <span class="sr-only">{{ locale }}</span>

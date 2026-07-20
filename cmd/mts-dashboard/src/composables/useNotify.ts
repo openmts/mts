@@ -8,8 +8,15 @@ import {
   type NotifyItem,
   type NotifyKind,
 } from '@/utils/notifyQueue'
+import {
+  clearNotifyHistory,
+  loadNotifyHistory,
+  recordNotifyHistory,
+  type NotifyHistoryEntry,
+} from '@/utils/notifyHistory'
 
 const items = ref<NotifyItem[]>([])
+const history = ref<NotifyHistoryEntry[]>(loadNotifyHistory())
 let seq = 1
 const timers = new Map<number, ReturnType<typeof setTimeout>>()
 
@@ -31,6 +38,10 @@ function scheduleDismiss(id: number, ttlMs: number) {
   timers.set(id, handle)
 }
 
+function refreshHistory() {
+  history.value = loadNotifyHistory()
+}
+
 export function useNotify() {
   function push(kind: NotifyKind, message: string, ttlMs = defaultTtlMs(kind)) {
     const result = pushNotifyItem(items.value, {
@@ -42,6 +53,16 @@ export function useNotify() {
     })
     seq = result.nextId
     items.value = result.items
+    const saved = items.value.find((x) => x.id === result.id)
+    // 新建 toast 记入历史；窗口内合并不重复刷历史
+    if (saved && !result.merged) {
+      history.value = recordNotifyHistory({
+        kind: saved.kind,
+        message: saved.message,
+        count: saved.count,
+        at: saved.updatedAt,
+      })
+    }
     scheduleDismiss(result.id, ttlMs)
     return result.id
   }
@@ -63,7 +84,27 @@ export function useNotify() {
     items.value = dismissNotifyItem(items.value, id)
   }
 
-  return { items, success, error, warn, info, dismiss, push }
+  function clearHistory() {
+    clearNotifyHistory()
+    history.value = []
+  }
+
+  function reloadHistory() {
+    refreshHistory()
+  }
+
+  return {
+    items,
+    history,
+    success,
+    error,
+    warn,
+    info,
+    dismiss,
+    push,
+    clearHistory,
+    reloadHistory,
+  }
 }
 
 // 兼容旧类型导出

@@ -228,6 +228,7 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // 11) 命令面板跳转 + 快捷键帮助 + 最近访问
   await expect(page.getByTestId('topbar-shortcuts')).toBeVisible()
+  await expect(page.getByTestId('topbar-notify-history')).toBeVisible()
   await page.getByTestId('topbar-shortcuts').click()
   await expect(page.getByTestId('shortcuts-help')).toBeVisible()
   await page.getByTestId('shortcuts-help-close').click()
@@ -281,6 +282,19 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('recent-routes-clear')).toBeVisible()
   await page.getByTestId('recent-routes-clear').click()
   await expect(page.getByTestId('recent-routes-clear')).toHaveCount(0)
+
+  // 固定最近访问
+  await page.goto('/write')
+  await page.goto('/query')
+  await expect(page.getByTestId('recent-route-pin-/write')).toBeVisible()
+  await page.getByTestId('recent-route-pin-/write').click()
+  await expect(page.getByTestId('recent-route-pin-/write')).toHaveAttribute('aria-pressed', 'true')
+
+  // 通知历史面板
+  await page.getByTestId('topbar-notify-history').click()
+  await expect(page.getByTestId('notify-history-panel')).toBeVisible()
+  await page.getByTestId('notify-history-close').click()
+  await expect(page.getByTestId('notify-history-panel')).toHaveCount(0)
 
   // 12) 跳过链接 + 运维操作历史导出入口
   await page.goto('/operations')
