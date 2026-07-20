@@ -66,9 +66,11 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // 4) 查询页可达 + 表单标签 i18n
   await page.goto('/query')
+  await expect(page.getByTestId('query-page')).toBeVisible()
   await expect(page.getByRole('main').getByText(/查询|Query/i).first()).toBeVisible()
   await expect(page.getByRole('main').getByText(/数据库|Database/).first()).toBeVisible()
   await expect(page.getByRole('main').getByText(/开始时间|Start/).first()).toBeVisible()
+  await expect(page.getByTestId('query-export-csv')).toBeVisible()
 
   // 5) 运维 Flush（确认按钮文案为「执行」）
   await page.goto('/operations')
@@ -119,6 +121,8 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // 7) 存储与 data-snapshot 入口
   await page.goto('/storage')
+  await expect(page.getByTestId('storage-page')).toBeVisible()
+  await expect(page.getByTestId('storage-export-fetch')).toBeVisible()
   await expect(page.getByTestId('storage-drill-source')).toBeVisible()
   await expect(page.getByTestId('storage-drill-source-select')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /^(存储|Storage)$/ })).toBeVisible()
@@ -305,6 +309,9 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // About 字段标签
   await page.goto('/about')
+  await expect(page.getByTestId('about-page')).toBeVisible()
+  await expect(page.getByTestId('about-export-json')).toBeVisible()
+  await expect(page.getByTestId('about-copy')).toBeVisible()
   await expect(page.getByRole('main').getByText(/BASE_URL|API/).first()).toBeVisible()
 
   // 16) 权限矩阵 / 实时授权 / 指标 / 404（含矩阵行双语）

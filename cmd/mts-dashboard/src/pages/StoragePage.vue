@@ -16,6 +16,7 @@ import { textForLocale, type LocaleCode } from '@/utils/localizedText'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { formatBytes } from '@/utils/formatBytes'
 import { downloadJSON, stampFilename } from '@/utils/download'
+import { buildStorageConfigExport, formatStorageExportPretty } from '@/utils/storageExport'
 import { copyText } from '@/utils/clipboard'
 import {
   defaultSelectedSnapshotPath,
@@ -232,10 +233,26 @@ async function doExport() {
 }
 
 function downloadExport() {
-  if (!exportData.value) return
-  downloadJSON(stampFilename('mts-export', 'json'), exportData.value)
+  if (!exportData.value) {
+    notifyError(t.value('storageExportEmpty'))
+    return
+  }
+  downloadJSON(
+    stampFilename('mts-storage-export', 'json'),
+    buildStorageConfigExport(exportData.value),
+  )
   actionResult.value = makeActionResult('ok', t.value('storageDownloadStarted'))
   success(t.value('storageDownloadToast'))
+}
+
+async function copyExport() {
+  if (!exportData.value) {
+    notifyError(t.value('storageExportEmpty'))
+    return
+  }
+  const res = await copyText(formatStorageExportPretty(exportData.value))
+  if (res.ok) success(t.value('storageExportCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 const drillSourceOptions = computed(() => selectableDataSnapshots(dataSnapshots.value))
@@ -279,7 +296,7 @@ async function confirmDelete() {
 
 <template>
   <PermissionDenied v-if="!isAdmin" />
-  <div v-else class="space-y-6">
+  <div v-else class="space-y-6" data-testid="storage-page">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('storage') }}</h1>
@@ -389,8 +406,9 @@ async function confirmDelete() {
       </div>
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('export') }}</h3></div>
-        <button :disabled="loading === 'export'" class="mts-btn-primary w-full justify-center py-2" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
-        <button v-if="exportData" class="mts-btn mt-2 w-full justify-center" @click="downloadExport">{{ t('storageDownloadJson') }}</button>
+        <button data-testid="storage-export-fetch" :disabled="loading === 'export'" class="mts-btn-primary w-full justify-center py-2" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
+        <button v-if="exportData" type="button" class="mts-btn mt-2 w-full justify-center" data-testid="storage-export-download" @click="downloadExport">{{ t('storageDownloadJson') }}</button>
+        <button v-if="exportData" type="button" class="mts-btn mt-2 w-full justify-center" data-testid="storage-export-copy" @click="copyExport">{{ t('storageCopyExport') }}</button>
       </div>
     </div>
 

@@ -4,9 +4,13 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
+import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { clientBuildInfo } from '@/utils/buildInfo'
-import { Info } from 'lucide-vue-next'
+import { buildAboutExport, formatAboutExportPretty } from '@/utils/aboutExport'
+import { downloadJSON, stampFilename } from '@/utils/download'
+import { copyText } from '@/utils/clipboard'
+import { Download, Copy, Info } from 'lucide-vue-next'
 
 interface VersionResponse {
   version: string
@@ -16,6 +20,7 @@ interface VersionResponse {
 
 const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
+const { success, error: notifyError } = useNotify()
 const client = clientBuildInfo()
 const server = ref<VersionResponse | null>(null)
 const loadError = ref('')
@@ -38,25 +43,59 @@ async function loadVersion() {
   }
 }
 
+function exportAbout() {
+  downloadJSON(
+    stampFilename('mts-about', 'json'),
+    buildAboutExport({
+      client,
+      server: server.value,
+      user: currentUser.value || '',
+    }),
+  )
+  success(t.value('aboutExported'))
+}
+
+async function copyAbout() {
+  const res = await copyText(
+    formatAboutExportPretty({
+      client,
+      server: server.value,
+      user: currentUser.value || '',
+    }),
+  )
+  if (res.ok) success(t.value('aboutCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 onMounted(() => {
   void loadVersion()
 })
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div>
-      <h1 class="mts-title flex items-center gap-2">
-        <Info class="h-5 w-5" />
-        {{ t('aboutTitle') }}
-      </h1>
-      <p class="text-xs mts-muted">{{ t('aboutDesc') }}</p>
+  <div class="space-y-6" data-testid="about-page">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="mts-title flex items-center gap-2">
+          <Info class="h-5 w-5" />
+          {{ t('aboutTitle') }}
+        </h1>
+        <p class="text-xs mts-muted">{{ t('aboutDesc') }}</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="mts-btn" data-testid="about-export-json" @click="exportAbout">
+          <Download class="h-3.5 w-3.5" /> {{ t('aboutExportJSON') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="about-copy" @click="copyAbout">
+          <Copy class="h-3.5 w-3.5" /> {{ t('aboutCopy') }}
+        </button>
+      </div>
     </div>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
 
     <div class="grid gap-4 md:grid-cols-2">
-      <div class="mts-card p-4">
+      <div class="mts-card p-4" data-testid="about-client">
         <h2 class="mb-3 text-sm font-semibold">{{ t('aboutClient') }}</h2>
         <dl class="space-y-2 text-sm">
           <div class="flex justify-between gap-3">
@@ -86,10 +125,17 @@ onMounted(() => {
         </dl>
       </div>
 
-      <div class="mts-card p-4">
+      <div class="mts-card p-4" data-testid="about-server">
         <div class="mb-3 flex items-center justify-between gap-2">
           <h2 class="text-sm font-semibold">{{ t('aboutServer') }}</h2>
-          <button v-if="isAdmin" type="button" class="mts-btn" :disabled="loading" @click="loadVersion">
+          <button
+            v-if="isAdmin"
+            type="button"
+            class="mts-btn"
+            data-testid="about-server-refresh"
+            :disabled="loading"
+            @click="loadVersion"
+          >
             {{ loading ? t('loading') : t('refresh') }}
           </button>
         </div>

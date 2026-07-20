@@ -406,3 +406,9 @@
 - 数据库/用户/降采样筛选清单 JSON+CSV 导出
 - 商业冒烟覆盖 databases/users/downsample 导出 testid
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P82 状态（2026-07-20）
+- Storage 导出拉取/下载/复制；Query 导出 testid；About 构建信息导出复制
+- 商业冒烟覆盖 storage-export / query-export / about-export
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

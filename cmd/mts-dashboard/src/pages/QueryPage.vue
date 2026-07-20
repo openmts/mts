@@ -353,7 +353,7 @@ const columnRows = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4" data-testid="query-page">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <div class="flex flex-wrap items-center gap-2">
         <button
@@ -386,6 +386,7 @@ const columnRows = computed(() => {
           <button
             type="button"
             class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            data-testid="query-export-history"
             @click="exportHistory"
           ><Download class="h-3 w-3" />{{ t('queryExport') }}</button>
           <button
@@ -525,7 +526,7 @@ const columnRows = computed(() => {
         <component :is="copyState === 'ok' ? Check : Copy" class="h-4 w-4" />
         {{ streamMeta.previewOnly ? t('copyPreview') : t('copy') }}
       </button>
-        <button class="mts-btn" :disabled="!rows.length" @click="exportCSV">
+        <button class="mts-btn" data-testid="query-export-csv" :disabled="!rows.length" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> CSV
         </button>
     </div>
