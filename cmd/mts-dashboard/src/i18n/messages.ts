@@ -738,6 +738,10 @@ export const messages = {
     aboutBuiltAt: '构建时间',
     downsampleRunTitle: '运行',
     downsampleResetTitle: '重置',
+    permRead: '读',
+    permWrite: '写',
+    permAdmin: '管理',
+    storageInDashboard: '控制台内',
     unsavedLeaveConfirm: '有未保存的表单更改，确定离开当前页面？',
   },
   en: {
@@ -1477,6 +1481,10 @@ export const messages = {
     aboutBuiltAt: 'Built at',
     downsampleRunTitle: 'Run',
     downsampleResetTitle: 'Reset',
+    permRead: 'Read',
+    permWrite: 'Write',
+    permAdmin: 'Admin',
+    storageInDashboard: 'In dashboard',
     unsavedLeaveConfirm: 'You have unsaved form changes. Leave this page?',
   },
 } as const

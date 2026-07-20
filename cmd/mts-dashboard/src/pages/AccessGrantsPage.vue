@@ -4,6 +4,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
+import { permissionLabel } from '@/utils/permissionLabel'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -26,12 +27,15 @@ interface UsersResponse { users: User[] }
 interface PermissionsResponse { grants: Array<{ database: string; permission: string }> }
 
 const { isAdmin } = useAuth()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 function roleLabel(role?: string): string {
   if (!role) return t.value('emptyValue')
   if (role === 'admin') return t.value('roleAdmin')
   if (role === 'user') return t.value('roleUser')
   return role
+}
+function permText(p: string): string {
+  return permissionLabel(p, locale.value === 'en' ? 'en' : 'zh')
 }
 const loading = ref(false)
 const loadError = ref('')
@@ -160,7 +164,7 @@ onMounted(() => { void load() })
       <label class="text-xs mts-muted">{{ t('accessGrantsPermission') }}
         <select v-model="permFilter" class="mts-input mt-1 w-auto min-w-[8rem] text-sm">
           <option value="">{{ t('accessGrantsAll') }}</option>
-          <option v-for="p in permissions" :key="p" :value="p">{{ p }}</option>
+          <option v-for="p in permissions" :key="p" :value="p">{{ permText(p) }}</option>
         </select>
       </label>
       <label class="text-xs mts-muted grow">{{ t('accessGrantsSearch') }}
@@ -206,7 +210,7 @@ onMounted(() => { void load() })
             <td class="px-3 py-2 font-mono text-xs">{{ row.database }}</td>
             <td class="px-3 py-2">
               <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                {{ row.permission }}
+                {{ permText(row.permission) }}
               </span>
             </td>
           </tr>

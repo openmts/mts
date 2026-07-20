@@ -312,7 +312,7 @@ async function confirmDelete() {
             <p class="font-medium text-slate-800 dark:text-slate-100">
               {{ textForLocale(step.title, uiLocale) }}
               <span class="ml-1 text-[11px] font-normal mts-muted">{{ step.severity === 'required' ? t('storageRequired') : t('storageRecommended') }}</span>
-              <span v-if="step.inDashboard" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">Dashboard</span>
+              <span v-if="step.inDashboard" class="ml-1 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">{{ t('storageInDashboard') }}</span>
             </p>
             <p class="text-xs mts-muted">{{ textForLocale(step.detail, uiLocale) }}</p>
           </div>

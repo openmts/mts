@@ -54,6 +54,11 @@ function levelClass(level: AccessLevel): string {
 function levelLabel(level: AccessLevel): string {
   return textForLocale(ACCESS_LEVEL_LABEL[level], uiLocale.value)
 }
+function roleLabel(role: string): string {
+  if (role === 'admin') return t.value('roleAdmin')
+  if (role === 'user') return t.value('roleUser')
+  return role
+}
 </script>
 
 <template>
@@ -66,7 +71,7 @@ function levelLabel(level: AccessLevel): string {
         </h1>
         <p class="text-xs mts-muted">
           {{ t('accessMatrixDesc') }}
-          <span class="font-medium text-slate-800 dark:text-slate-100">{{ displayRole }}</span>
+          <span class="font-medium text-slate-800 dark:text-slate-100">{{ roleLabel(displayRole) }}</span>
         </p>
       </div>
     </div>
@@ -106,8 +111,8 @@ function levelLabel(level: AccessLevel): string {
           <tr>
             <th class="px-3 py-2 font-medium">{{ t('accessMatrixColArea') }}</th>
             <th class="px-3 py-2 font-medium">{{ t('accessMatrixColCapability') }}</th>
-            <th class="px-3 py-2 font-medium">admin</th>
-            <th class="px-3 py-2 font-medium">user</th>
+            <th class="px-3 py-2 font-medium">{{ t('roleAdmin') }}</th>
+            <th class="px-3 py-2 font-medium">{{ t('roleUser') }}</th>
             <th class="px-3 py-2 font-medium">{{ t('accessMatrixColRoute') }}</th>
             <th class="px-3 py-2 font-medium">{{ t('accessMatrixColNote') }}</th>
           </tr>

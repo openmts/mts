@@ -54,6 +54,8 @@ test('commercial browser smoke path', async ({ page }) => {
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')
   await expect(page.getByRole('main').getByRole('heading', { name: /权限能力矩阵|Capability matrix/ })).toBeVisible()
+  // a11y 树中 th 可能暴露为 cell
+  await expect(page.getByRole('main').getByText(/管理员|Admin/).first()).toBeVisible()
   await page.goto('/access/grants')
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
   await page.goto('/observability/metrics')
