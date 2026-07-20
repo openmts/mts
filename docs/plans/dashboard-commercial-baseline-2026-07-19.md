@@ -412,3 +412,9 @@
 - Storage 导出拉取/下载/复制；Query 导出 testid；About 构建信息导出复制
 - 商业冒烟覆盖 storage-export / query-export / about-export
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P83 状态（2026-07-20）
+- Overview 运维快照导出/复制；Write 结果与草稿导出
+- 商业冒烟覆盖 overview-export / write-export testid
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

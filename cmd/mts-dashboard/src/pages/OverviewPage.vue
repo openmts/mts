@@ -24,7 +24,11 @@ import { buildExportPreflight } from '@/utils/exportPreflight'
 import { buildOpsNextSteps } from '@/utils/opsNextSteps'
 import { formatMessage } from '@/utils/formatMessage'
 import type { LocaleCode } from '@/utils/localizedText'
-import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3, FileCode2 } from 'lucide-vue-next'
+import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3, FileCode2, Download, Copy } from 'lucide-vue-next'
+import { useNotify } from '@/composables/useNotify'
+import { buildOverviewExport, formatOverviewExportPretty } from '@/utils/overviewExport'
+import { downloadJSON, stampFilename } from '@/utils/download'
+import { copyText } from '@/utils/clipboard'
 
 interface HealthResponse extends HealthSnapshot {}
 interface StorageMemorySnapshot {
@@ -45,6 +49,7 @@ interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: Doc
 const { isAdmin, getTokenExpiresAt } = useAuth()
 const router = useRouter()
 const { t, locale } = useI18n()
+const { success, error: notifyError } = useNotify()
 const {
   kind: connectivityKind,
   showUnreachableBanner,
@@ -361,10 +366,59 @@ function formatHealthStatus(status?: string) {
 }
 
 const showAdminPanels = computed(() => isAdmin.value)
+
+function buildOverviewSnapshotPayload() {
+  return buildOverviewExport({
+    connectivity: connectivityKind.value,
+    healthy: healthy.value,
+    ready: ready.value,
+    health_reasons: healthReasons.value,
+    health_checks: healthChecks.value,
+    maintenance_errors: maintenanceErrors.value,
+    memory: memorySnapshot.value as object | null,
+    compaction: compactionStats.value as object | null,
+    maintenance: maintenanceStats.value as object | null,
+    doctor_tls: doctorTLS.value,
+    doctor_checks: doctorChecks.value,
+    readiness_total: localReadinessScore.value.total,
+    readiness_level: localReadinessLevel.value,
+    server_version: serverVersion.value,
+    client: clientInfo as unknown as object,
+    last_refreshed: lastRefreshed.value,
+  })
+}
+
+function exportOverview() {
+  downloadJSON(stampFilename('mts-overview', 'json'), buildOverviewSnapshotPayload())
+  success(t.value('overviewExported'))
+}
+
+async function copyOverview() {
+  const res = await copyText(formatOverviewExportPretty({
+    connectivity: connectivityKind.value,
+    healthy: healthy.value,
+    ready: ready.value,
+    health_reasons: healthReasons.value,
+    health_checks: healthChecks.value,
+    maintenance_errors: maintenanceErrors.value,
+    memory: memorySnapshot.value as object | null,
+    compaction: compactionStats.value as object | null,
+    maintenance: maintenanceStats.value as object | null,
+    doctor_tls: doctorTLS.value,
+    doctor_checks: doctorChecks.value,
+    readiness_total: localReadinessScore.value.total,
+    readiness_level: localReadinessLevel.value,
+    server_version: serverVersion.value,
+    client: clientInfo as unknown as object,
+    last_refreshed: lastRefreshed.value,
+  }))
+  if (res.ok) success(t.value('overviewCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6" data-testid="overview-page">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="mts-title">{{ t('overviewTitle') }}</h1>
@@ -429,6 +483,12 @@ const showAdminPanels = computed(() => isAdmin.value)
           <span class="font-mono text-xs">{{ serverVersion?.version || t('emptyValue') }}</span>
           <span v-if="serverVersion?.commit" class="font-mono text-[11px] mts-muted">{{ serverVersion.commit.slice(0, 8) }}</span>
         </div>
+        <button type="button" class="mts-btn" data-testid="overview-export-json" @click="exportOverview">
+          <Download class="h-3.5 w-3.5" /> {{ t('overviewExportJSON') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-copy-snapshot" @click="copyOverview">
+          <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopySnapshot') }}
+        </button>
         <button type="button" class="mts-btn ml-auto" data-testid="overview-about" @click="router.push('/about')">
           <Info class="h-3.5 w-3.5" />
           {{ t('about') }}

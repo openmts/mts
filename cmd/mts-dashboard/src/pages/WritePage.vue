@@ -10,7 +10,7 @@ import { formatCaughtError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
-import { Send, Plus, Trash2 } from 'lucide-vue-next'
+import { Send, Plus, Trash2, Download } from 'lucide-vue-next'
 import EmptyState from '@/components/EmptyState.vue'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
 import { registerDirtyChecker } from '@/utils/routeDirty'
@@ -18,6 +18,8 @@ import {
   fieldTypes, buildFormPoints, parseLineProtocolDetailed, parsePrometheusText, type FormRow,
 } from '@/composables/usePointParsers'
 import { loadWritePrefs, saveWritePrefs, type WriteModePref } from '@/utils/writePrefs'
+import { buildWriteDraftExport, buildWriteResultExport } from '@/utils/writeExport'
+import { downloadJSON, stampFilename } from '@/utils/download'
 import { makeFormErrorT } from '@/utils/formErrors'
 
 type WriteMode = 'form' | 'line' | 'prometheus' | 'typed'
@@ -36,7 +38,7 @@ const result = ref<{ ok: boolean; message: string } | null>(null)
 const loading = ref(false)
 const actionError = ref('')
 const metaHint = ref('')
-const { success, error: notifyError } = useNotify()
+const { success, error: notifyError, warn } = useNotify()
 const { t } = useI18n()
 function fieldTypeLabel(value: string): string {
   switch (value) {
@@ -313,10 +315,50 @@ const modeLabel = computed(() => ({
   prometheus: t.value('prometheus'),
   typed: t.value('typedBatch'),
 }[writeMode.value]))
+
+function exportWriteResult() {
+  if (!result.value) {
+    warn(t.value('writeResultExportEmpty'))
+    return
+  }
+  downloadJSON(
+    stampFilename('mts-write-result', 'json'),
+    buildWriteResultExport({
+      ok: result.value.ok,
+      message: result.value.message,
+      mode: writeMode.value,
+      database: selectedDb.value,
+      retention_policy: retentionPolicy.value,
+      sync: syncWrite.value,
+      use_points_typed: usePointsTyped.value,
+    }),
+  )
+  success(t.value('writeResultExported'))
+}
+
+function exportWriteDraft() {
+  downloadJSON(
+    stampFilename('mts-write-draft', 'json'),
+    buildWriteDraftExport({
+      mode: writeMode.value,
+      database: selectedDb.value,
+      retention_policy: retentionPolicy.value,
+      line_input: lineInput.value,
+      form_rows: formRows.value,
+      typed: {
+        measurement: typedMeasurement.value,
+        timestamps: typedTimestamps.value,
+        tags: typedTagCols.value,
+        fields: typedFieldCols.value,
+      },
+    }),
+  )
+  success(t.value('writeDraftExported'))
+}
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4" data-testid="write-page">
     <div class="space-y-2">
       <div class="flex flex-wrap gap-2" data-testid="write-mode-tabs">
         <button
@@ -426,8 +468,14 @@ const modeLabel = computed(() => ({
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" :disabled="loading" @click="submit">
+      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" data-testid="write-submit" :disabled="loading" @click="submit">
         <Send class="h-4 w-4" /> {{ loading ? t('loading') : t('writeSubmit') }}
+      </button>
+      <button type="button" class="mts-btn" data-testid="write-export-result" :disabled="!result" @click="exportWriteResult">
+        <Download class="h-3.5 w-3.5" /> {{ t('writeExportResult') }}
+      </button>
+      <button type="button" class="mts-btn" data-testid="write-export-draft" @click="exportWriteDraft">
+        <Download class="h-3.5 w-3.5" /> {{ t('writeExportDraft') }}
       </button>
       <span
         v-if="formDirty"
@@ -435,7 +483,7 @@ const modeLabel = computed(() => ({
       >{{ t('writeDirtyBadge') }}</span>
     </div>
     <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
-    <p v-if="result?.ok" class="mts-alert-ok">{{ result.message }}</p>
+    <p v-if="result?.ok" class="mts-alert-ok" data-testid="write-result-ok">{{ result.message }}</p>
     <div v-else-if="!loading && !actionError && !result" class="mts-card">
       <EmptyState
         compact
