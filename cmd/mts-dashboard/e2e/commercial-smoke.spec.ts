@@ -272,6 +272,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('downsample-page')).toBeVisible()
   await expect(page.getByTestId('downsample-export-json')).toBeVisible()
   await expect(page.getByTestId('downsample-export-csv')).toBeVisible()
+  await page.getByTestId('downsample-open-create').click()
+  await expect(page.getByTestId('downsample-create-dialog')).toBeVisible()
+  await expect(page.getByTestId('downsample-source-db')).toBeVisible()
+  await expect(page.getByTestId('downsample-create-meta')).toBeVisible()
+  await page.keyboard.press('Escape')
   if (await page.getByTestId('downsample-virtual-list').count()) {
     await expect(page.getByTestId('downsample-virtual-list')).toBeVisible()
     await expect(page.getByTestId('downsample-virtual-hint')).toBeVisible()

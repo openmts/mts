@@ -171,4 +171,5 @@ timeout 180s env GOSUMDB=sum.golang.org go test -count=1 -timeout 120s ./...
 | FE-FULL-P3-02 Account landing | **已修复**（P144） |
 | FE series filter | **部分完成**（P146 客户端筛选；无服务端分页） |
 | FE write meta | **已修复**（P147 measurement/field 建议） |
+| FE downsample meta | **已修复**（P148 创建表单 datalist） |
 | 部署侧三项 | open 不计分 |

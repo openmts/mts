@@ -90,3 +90,9 @@
 - [x] EARS-FE-P147-03 芯片填充 form/Typed
 - [x] EARS-FE-P147-04 商业冒烟 write-meta-panel
 - [x] EARS-DOC-P147-05 基线记录
+
+## P148 — Downsample create meta
+- [x] EARS-FE-P148-01 打开创建面板加载库建议
+- [x] EARS-FE-P148-02 source db/measurement 驱动 measurement/field 建议
+- [x] EARS-FE-P148-03 商业冒烟 create meta
+- [x] EARS-DOC-P148-04 基线记录

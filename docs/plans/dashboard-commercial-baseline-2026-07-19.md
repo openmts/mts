@@ -775,3 +775,8 @@
 - 失败可手填；与 Query meta 共用 data 面 API
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P148 状态（2026-07-21）
+- Downsample 创建策略：source/target db·measurement·field 元数据 datalist
+- 打开创建面板加载建议；失败可手填
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
+import { listDatabases, listFields, listMeasurements } from '@/api/meta'
+import { fieldNames } from '@/utils/seriesMeta'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -11,6 +13,7 @@ import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
+import { formatMessage } from '@/utils/formatMessage'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
@@ -70,6 +73,11 @@ const newPolicy = ref<DownsamplePolicy>({
   interval: 60_000_000_000, functions: [{ function: 'mean', field: 'value', as: 'mean_value' }],
   group_by_tags: [], enabled: true,
 })
+const createDatabases = ref<string[]>([])
+const createSourceMeasurements = ref<string[]>([])
+const createSourceFields = ref<string[]>([])
+const createMetaLoading = ref(false)
+const createMetaError = ref('')
 
 const rangePanelRef = ref<HTMLElement | null>(null)
 const createPanelRef = ref<HTMLElement | null>(null)
@@ -118,6 +126,73 @@ onBeforeUnmount(() => {
   releaseCreateTrap()
   document.body.style.overflow = ''
 })
+
+async function loadCreateMetaDatabases() {
+  createMetaError.value = ''
+  try {
+    createDatabases.value = await listDatabases()
+  } catch (e) {
+    createDatabases.value = []
+    createMetaError.value = formatCaughtError(e)
+  }
+}
+
+async function loadCreateSourceMeasurements(db: string) {
+  createSourceMeasurements.value = []
+  createSourceFields.value = []
+  if (!db.trim()) return
+  createMetaLoading.value = true
+  createMetaError.value = ''
+  try {
+    createSourceMeasurements.value = await listMeasurements(db)
+  } catch (e) {
+    createSourceMeasurements.value = []
+    createMetaError.value = formatCaughtError(e)
+  } finally {
+    createMetaLoading.value = false
+  }
+}
+
+async function loadCreateSourceFields(db: string, measurement: string) {
+  createSourceFields.value = []
+  if (!db.trim() || !measurement.trim()) return
+  createMetaLoading.value = true
+  try {
+    createSourceFields.value = fieldNames(await listFields(db, measurement))
+  } catch (e) {
+    createSourceFields.value = []
+    createMetaError.value = formatCaughtError(e)
+  } finally {
+    createMetaLoading.value = false
+  }
+}
+
+watch(showCreate, async (open) => {
+  if (!open) return
+  await loadCreateMetaDatabases()
+  if (newPolicy.value.source_database) {
+    await loadCreateSourceMeasurements(newPolicy.value.source_database)
+  }
+  if (newPolicy.value.source_database && newPolicy.value.source_measurement) {
+    await loadCreateSourceFields(newPolicy.value.source_database, newPolicy.value.source_measurement)
+  }
+})
+
+watch(
+  () => newPolicy.value.source_database,
+  async (db) => {
+    if (!showCreate.value) return
+    await loadCreateSourceMeasurements(db)
+  },
+)
+
+watch(
+  () => [newPolicy.value.source_database, newPolicy.value.source_measurement] as const,
+  async ([db, m]) => {
+    if (!showCreate.value) return
+    await loadCreateSourceFields(db, m)
+  },
+)
 
 onMounted(loadData)
 
@@ -474,7 +549,12 @@ function exportCSV() {
         <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900" @click="loadData">
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
         </button>
-        <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white" @click="showCreate = true">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white"
+          data-testid="downsample-open-create"
+          @click="showCreate = true"
+        >
           <Plus class="h-3.5 w-3.5" /> {{ t('downsampleCreate') }}
         </button>
       </div>
@@ -690,21 +770,59 @@ function exportCSV() {
           </div>
           <div>
             <label class="mb-1 block text-xs mts-muted">{{ t('downsampleSourceDb') }}</label>
-            <input v-model="newPolicy.source_database" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
+            <input
+              v-model="newPolicy.source_database"
+              list="downsample-db-list"
+              data-testid="downsample-source-db"
+              class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
+            />
           </div>
           <div>
             <label class="mb-1 block text-xs mts-muted">{{ t('downsampleSourceMsmt') }}</label>
-            <input v-model="newPolicy.source_measurement" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
+            <input
+              v-model="newPolicy.source_measurement"
+              list="downsample-source-meas-list"
+              data-testid="downsample-source-measurement"
+              class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
+            />
           </div>
           <div>
             <label class="mb-1 block text-xs mts-muted">{{ t('downsampleTargetDb') }}</label>
-            <input v-model="newPolicy.target_database" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
+            <input
+              v-model="newPolicy.target_database"
+              list="downsample-db-list"
+              data-testid="downsample-target-db"
+              class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
+            />
           </div>
           <div>
             <label class="mb-1 block text-xs mts-muted">{{ t('downsampleTargetMsmt') }}</label>
-            <input v-model="newPolicy.target_measurement" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
+            <input
+              v-model="newPolicy.target_measurement"
+              list="downsample-source-meas-list"
+              data-testid="downsample-target-measurement"
+              class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
+            />
           </div>
         </div>
+        <datalist id="downsample-db-list">
+          <option v-for="db in createDatabases" :key="db" :value="db" />
+        </datalist>
+        <datalist id="downsample-source-meas-list">
+          <option v-for="m in createSourceMeasurements" :key="m" :value="m" />
+        </datalist>
+        <datalist id="downsample-source-field-list">
+          <option v-for="f in createSourceFields" :key="f" :value="f" />
+        </datalist>
+        <p
+          v-if="createMetaLoading || createMetaError || createDatabases.length || createSourceMeasurements.length"
+          class="mt-2 text-[11px] mts-muted"
+          data-testid="downsample-create-meta"
+        >
+          <span v-if="createMetaLoading">{{ t('loading') }}</span>
+          <span v-else-if="createMetaError" class="text-rose-600">{{ createMetaError }}</span>
+          <span v-else>{{ formatMessage(t('downsampleMetaHint'), { dbs: createDatabases.length, meas: createSourceMeasurements.length, fields: createSourceFields.length }) }}</span>
+        </p>
         <div class="mt-3">
           <label class="mb-1 block text-xs mts-muted">{{ t('downsampleFunctions') }}</label>
           <div class="space-y-1.5">
@@ -712,7 +830,13 @@ function exportCSV() {
               <select v-model="fn.function" class="rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600">
                 <option v-for="opt in ['mean','sum','min','max','first','last','count']" :key="opt" :value="opt">{{ opt }}</option>
               </select>
-              <input v-model="fn.field" :placeholder="t('downsamplePhField')" class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600" />
+              <input
+                v-model="fn.field"
+                list="downsample-source-field-list"
+                data-testid="downsample-fn-field"
+                :placeholder="t('downsamplePhField')"
+                class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600"
+              />
               <input v-model="fn.as" :placeholder="t('downsamplePhAs')" class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600" />
               <button class="rounded p-0.5 text-slate-400 hover:text-red-600" @click="removePolicyFunction(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
             </div>
