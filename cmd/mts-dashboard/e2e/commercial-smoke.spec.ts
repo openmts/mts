@@ -289,6 +289,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('recent-route-pin-/write')).toBeVisible()
   await page.getByTestId('recent-route-pin-/write').click()
   await expect(page.getByTestId('recent-route-pin-/write')).toHaveAttribute('aria-pressed', 'true')
+  // 命令面板最近访问展示固定
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await expect(page.getByTestId('command-recent-/write')).toHaveAttribute('data-pinned', 'true')
+  await page.keyboard.press('Escape')
 
   // 通知历史面板 + 导出入口 + 快捷键
   await page.getByTestId('topbar-notify-history').click()

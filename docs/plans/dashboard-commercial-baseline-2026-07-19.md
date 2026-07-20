@@ -472,3 +472,9 @@
 - 通知历史 JSON/CSV 导出与复制；Ctrl/⌘+Shift+H 切换面板
 - 商业冒烟覆盖 notify-history-export / 快捷键
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
+
+## P93 状态（2026-07-20）
+- 命令面板最近访问固定优先；账户快照含本机偏好
+- 商业冒烟覆盖 command-recent data-pinned
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警

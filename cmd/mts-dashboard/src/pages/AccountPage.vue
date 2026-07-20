@@ -22,6 +22,8 @@ import {
 import type { MessageKey } from '@/i18n/messages'
 import { useDensity } from '@/composables/useDensity'
 import type { UiDensity } from '@/utils/densityPrefs'
+import { loadSidebarPrefs } from '@/utils/sidebarPrefs'
+import { useTheme } from '@/composables/useTheme'
 
 const router = useRouter()
 const { currentUser, currentRole, changePassword, isAdmin } = useAuth()
@@ -92,6 +94,7 @@ function onLandingChange() {
 }
 
 const { density, setDensity } = useDensity()
+const { theme } = useTheme()
 function onDensityChange(e: Event) {
   const v = (e.target as HTMLSelectElement).value as UiDensity
   setDensity(v)
@@ -108,6 +111,7 @@ const invalid = computed(() => !!error.value)
 
 
 function accountSnapshotInput() {
+  const side = loadSidebarPrefs(storage)
   return {
     username: currentUser.value || '',
     role: currentRole.value || '',
@@ -115,6 +119,13 @@ function accountSnapshotInput() {
       expires_at: expiresAtText.value,
       remaining: remainingText.value,
       urgency: sessionView.value.urgency,
+    },
+    prefs: {
+      landing_path: landingPath.value,
+      density: density.value,
+      sidebar_collapsed: side.collapsed,
+      locale: locale.value,
+      theme: theme.value,
     },
   }
 }

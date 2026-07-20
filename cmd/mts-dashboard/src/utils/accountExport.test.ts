@@ -20,3 +20,14 @@ test('buildAccountExport omits secrets', () => {
 test('formatAccountExportPretty', () => {
   assert.match(formatAccountExportPretty({ username: 'u' }), /mts.account.snapshot/)
 })
+
+test('buildAccountExport includes prefs', () => {
+  const out = buildAccountExport({
+    username: 'a',
+    role: 'admin',
+    prefs: { landing_path: '/query', density: 'compact', sidebar_collapsed: true, locale: 'en', theme: 'dark' },
+  })
+  assert.equal(out.prefs.landing_path, '/query')
+  assert.equal(out.prefs.density, 'compact')
+  assert.equal(out.prefs.sidebar_collapsed, true)
+})

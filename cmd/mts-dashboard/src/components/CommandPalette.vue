@@ -187,9 +187,13 @@ defineExpose({ openPalette, closePalette, open })
             role="option"
             class="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
             :data-testid="`command-recent-${r.path}`"
+            :data-pinned="r.pinned ? 'true' : 'false'"
             @click="goRecent(r.path)"
           >
-            <span class="font-medium">{{ recentLabel(r.name, r.path) }}</span>
+            <span class="inline-flex items-center gap-1 font-medium">
+              <span v-if="r.pinned" class="text-sky-600 dark:text-sky-300" aria-hidden="true">★</span>
+              {{ recentLabel(r.name, r.path) }}
+            </span>
             <span class="font-mono text-[11px] mts-muted">{{ r.path }}</span>
           </li>
           <li v-if="recentItems.length" class="my-1 border-t border-slate-100 dark:border-slate-800" aria-hidden="true" />

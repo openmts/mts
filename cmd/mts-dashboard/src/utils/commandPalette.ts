@@ -138,16 +138,31 @@ export function filterAuditEvents<T extends { action?: string; detail?: string; 
 export interface RecentCommandSource {
   path: string
   name?: string
+  pinned?: boolean
+  at?: number
 }
 
-/** 命令面板空查询时展示的最近访问（最多 max） */
+export interface RecentCommandItem {
+  id: string
+  path: string
+  name: string
+  pinned: boolean
+}
+
+/** 命令面板空查询时展示的最近访问（固定优先，最多 max） */
 export function recentCommandItems(
   recent: readonly RecentCommandSource[],
   max = 5,
-): Array<{ id: string; path: string; name: string }> {
-  const out: Array<{ id: string; path: string; name: string }> = []
+): RecentCommandItem[] {
+  const sorted = [...recent].sort((a, b) => {
+    const ap = a.pinned ? 1 : 0
+    const bp = b.pinned ? 1 : 0
+    if (ap !== bp) return bp - ap
+    return (b.at ?? 0) - (a.at ?? 0)
+  })
+  const out: RecentCommandItem[] = []
   const seen = new Set<string>()
-  for (const r of recent) {
+  for (const r of sorted) {
     const path = String(r.path || '').trim()
     if (!path || path.startsWith('/login')) continue
     if (seen.has(path)) continue
@@ -156,6 +171,7 @@ export function recentCommandItems(
       id: `recent-${path}`,
       path,
       name: r.name ? String(r.name) : '',
+      pinned: !!r.pinned,
     })
     if (out.length >= max) break
   }

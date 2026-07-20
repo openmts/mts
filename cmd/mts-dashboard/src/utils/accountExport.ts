@@ -1,5 +1,13 @@
 /** 账户会话与资料导出（纯函数，不含密钥） */
 
+export interface AccountPrefsSnapshot {
+  landing_path?: string
+  density?: string
+  sidebar_collapsed?: boolean
+  locale?: string
+  theme?: string
+}
+
 export function buildAccountExport(
   input: {
     username?: string
@@ -9,6 +17,7 @@ export function buildAccountExport(
       remaining?: string
       urgency?: string
     } | null
+    prefs?: AccountPrefsSnapshot | null
   },
   at = new Date(),
 ): {
@@ -22,8 +31,16 @@ export function buildAccountExport(
     remaining: string
     urgency: string
   }
+  prefs: {
+    landing_path: string
+    density: string
+    sidebar_collapsed: boolean
+    locale: string
+    theme: string
+  }
 } {
   const session = input.session || {}
+  const prefs = input.prefs || {}
   return {
     kind: 'mts.account.snapshot',
     version: 1,
@@ -34,6 +51,13 @@ export function buildAccountExport(
       expires_at: session.expires_at || '',
       remaining: session.remaining || '',
       urgency: session.urgency || '',
+    },
+    prefs: {
+      landing_path: prefs.landing_path || '/',
+      density: prefs.density || 'comfortable',
+      sidebar_collapsed: !!prefs.sidebar_collapsed,
+      locale: prefs.locale || 'zh',
+      theme: prefs.theme || 'light',
     },
   }
 }
