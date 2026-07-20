@@ -3,7 +3,7 @@
 import type { NotifyKind } from './notifyQueue.ts'
 
 export const NOTIFY_HISTORY_KEY = 'mts.dashboard.notify-history.v1'
-export const NOTIFY_HISTORY_MAX = 40
+export const NOTIFY_HISTORY_MAX = 200
 
 export interface NotifyHistoryEntry {
   id: string

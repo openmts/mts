@@ -571,6 +571,14 @@ test('commercial browser smoke path', async ({ page }) => {
   // 通知历史面板 + 导出入口 + 快捷键
   await page.getByTestId('topbar-notify-history').click()
   await expect(page.getByTestId('notify-history-panel')).toBeVisible()
+  await expect(page.getByTestId('notify-history-list')).toBeVisible()
+  // 空历史时仅 empty；有条目时 virtual-list 可见
+  if (await page.getByTestId('notify-history-virtual-list').count()) {
+    await expect(page.getByTestId('notify-history-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('notify-history-virtual-hint')).toBeVisible()
+  } else {
+    await expect(page.getByTestId('notify-history-empty')).toBeVisible()
+  }
   await expect(page.getByTestId('notify-history-export-json')).toBeVisible()
   await expect(page.getByTestId('notify-history-export-csv')).toBeVisible()
   await expect(page.getByTestId('notify-history-copy')).toBeVisible()
@@ -603,6 +611,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('ops-copy-stats')).toBeVisible()
   await expect(page.getByTestId('ops-export-maint-errors')).toBeVisible()
   await expect(page.getByTestId('ops-copy-maint-errors')).toBeVisible()
+  await expect(page.getByTestId('ops-maint-errors-panel')).toBeVisible()
+  if (await page.getByTestId('ops-maint-errors-virtual-list').count()) {
+    await expect(page.getByTestId('ops-maint-errors-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('ops-maint-errors-virtual-hint')).toBeVisible()
+    await expect(page.getByTestId('ops-maint-errors-filter')).toBeVisible()
+  }
   // P113: Retention 需输入口令；清空日志需确认
   await page.getByTestId('ops-retention').click()
   await expect(page.getByTestId('confirm-dialog')).toBeVisible()

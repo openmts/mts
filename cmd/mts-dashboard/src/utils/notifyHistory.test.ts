@@ -29,7 +29,7 @@ test('appendNotifyHistory newest first and caps', () => {
   for (let i = 0; i < 50; i++) {
     items = appendNotifyHistory(items, { kind: 'info', message: `m${i}`, at: 10 + i })
   }
-  assert.ok(items.length <= 40)
+  assert.ok(items.length <= 200)
 })
 
 test('record/clear notify history storage', () => {

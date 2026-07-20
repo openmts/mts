@@ -45,6 +45,9 @@ const loading = ref(false)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceErrors = ref<string[]>([])
+const maintErrorFilter = ref('')
+const MAINT_ROW_HEIGHT = 36
+const MAINT_LIST_HEIGHT = 160
 const confirmKind = ref<'flush' | 'compact' | 'retention' | null>(null)
 const confirmLoading = ref(false)
 const clearLogOpen = ref(false)
@@ -221,23 +224,23 @@ async function copyStats() {
 }
 
 function exportMaintErrors() {
-  if (!maintenanceErrors.value.length) {
+  if (!filteredMaintenanceErrors.value.length) {
     warn(t.value('opsMaintErrorsEmpty'))
     return
   }
   downloadJSON(
     stampFilename('mts-ops-maintenance-errors', 'json'),
-    buildMaintenanceErrorsExport(maintenanceErrors.value),
+    buildMaintenanceErrorsExport(filteredMaintenanceErrors.value),
   )
   success(t.value('opsMaintErrorsExported'))
 }
 
 async function copyMaintErrors() {
-  if (!maintenanceErrors.value.length) {
+  if (!filteredMaintenanceErrors.value.length) {
     warn(t.value('opsMaintErrorsEmpty'))
     return
   }
-  const res = await copyText(maintenanceErrorsToText(maintenanceErrors.value))
+  const res = await copyText(maintenanceErrorsToText(filteredMaintenanceErrors.value))
   if (res.ok) success(t.value('opsMaintErrorsCopied'))
   else notifyError(res.error || t.value('failed'))
 }
@@ -274,6 +277,12 @@ function formatAt(at: number): string {
     return String(at)
   }
 }
+
+const filteredMaintenanceErrors = computed(() => {
+  const q = maintErrorFilter.value.trim().toLowerCase()
+  if (!q) return maintenanceErrors.value
+  return maintenanceErrors.value.filter((e) => e.toLowerCase().includes(q))
+})
 
 const filteredActionLog = computed(() => {
   const q = actionTextFilter.value.trim().toLowerCase()
@@ -360,11 +369,19 @@ onMounted(() => { void loadStats() })
         <div class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <AlertTriangle class="h-4 w-4" /> {{ t('maintenanceErrors') }} ({{ maintenanceErrors.length }})
         </div>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" class="mts-btn" data-testid="ops-export-maint-errors" :disabled="!maintenanceErrors.length" @click="exportMaintErrors">
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            v-if="maintenanceErrors.length"
+            v-model="maintErrorFilter"
+            type="search"
+            class="mts-input max-w-xs text-xs"
+            data-testid="ops-maint-errors-filter"
+            :placeholder="t('opsMaintErrorsFilter')"
+          />
+          <button type="button" class="mts-btn" data-testid="ops-export-maint-errors" :disabled="!filteredMaintenanceErrors.length" @click="exportMaintErrors">
             <Download class="h-3.5 w-3.5" /> {{ t('opsExportMaintErrors') }}
           </button>
-          <button type="button" class="mts-btn" data-testid="ops-copy-maint-errors" :disabled="!maintenanceErrors.length" @click="copyMaintErrors">
+          <button type="button" class="mts-btn" data-testid="ops-copy-maint-errors" :disabled="!filteredMaintenanceErrors.length" @click="copyMaintErrors">
             <Copy class="h-3.5 w-3.5" /> {{ t('opsCopyMaintErrors') }}
           </button>
         </div>
@@ -375,9 +392,33 @@ onMounted(() => { void loadStats() })
         :title="t('noMaintenanceErrors')"
         :description="t('opsNoMaintErrorsDesc')"
       />
-      <ul v-else class="max-h-40 space-y-1 overflow-auto text-xs text-red-700 dark:text-red-200" data-testid="ops-maint-errors">
-        <li v-for="(e, i) in maintenanceErrors" :key="i" class="rounded bg-red-50 px-2 py-1 dark:bg-red-950/40">{{ e }}</li>
-      </ul>
+      <EmptyState
+        v-else-if="!filteredMaintenanceErrors.length"
+        compact
+        data-testid="ops-maint-errors-filter-empty"
+        :title="t('opsMaintErrorsFilterEmpty')"
+        :description="t('opsNoMaintErrorsDesc')"
+      />
+      <div v-else class="overflow-hidden rounded-lg border border-red-100 dark:border-red-900/40" data-testid="ops-maint-errors">
+        <VirtualTable
+          :items="filteredMaintenanceErrors"
+          :row-height="MAINT_ROW_HEIGHT"
+          :height="Math.min(MAINT_LIST_HEIGHT, Math.max(108, filteredMaintenanceErrors.length * MAINT_ROW_HEIGHT))"
+          data-testid="ops-maint-errors-virtual-list"
+        >
+          <template #default="{ item: e, index }">
+            <div
+              class="h-full border-b border-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-950/40 dark:text-red-200"
+              :data-testid="`ops-maint-error-row-${index}`"
+            >
+              <div class="truncate rounded bg-red-50 px-2 py-1 dark:bg-red-950/40" :title="e">{{ e }}</div>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-red-100 px-3 py-1.5 text-[11px] mts-muted dark:border-red-900/40" data-testid="ops-maint-errors-virtual-hint">
+          {{ t('opsMaintErrorsVirtualHint') }}
+        </p>
+      </div>
     </div>
 
     <div id="ops-actions" class="grid gap-4 scroll-mt-20 sm:grid-cols-3">

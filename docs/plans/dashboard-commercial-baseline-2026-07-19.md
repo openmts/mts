@@ -697,3 +697,8 @@
 - 商业冒烟 sessionStorage 种子与 virtual-list 断言
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P132 状态（2026-07-20）
+- 通知历史 VirtualTable + 上限 200；维护错误筛选/虚拟滚动
+- 商业冒烟覆盖 notify-history-virtual-list / ops-maint-errors-virtual-list（有数据时）
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+
