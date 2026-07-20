@@ -32,7 +32,7 @@ const allNavItems = computed(() => [
   { to: '/config', label: t.value('config'), icon: Settings, adminOnly: true },
   { to: '/operations', label: t.value('operations'), icon: Wrench, adminOnly: true },
   { to: '/downsample', label: t.value('downsample'), icon: ArrowDownUp, adminOnly: true },
-  { to: '/audit', label: t.value('audit'), icon: ScrollText, adminOnly: true },
+  { to: '/audit', label: t.value('audit'), icon: ScrollText, adminOnly: false },
   { to: '/api-spec', label: t.value('apiSpec'), icon: BookOpen, adminOnly: true },
   { to: '/storage', label: t.value('storage'), icon: HardDrive, adminOnly: true },
   { to: '/ops/readiness', label: t.value('readiness'), icon: ClipboardCheck, adminOnly: true },

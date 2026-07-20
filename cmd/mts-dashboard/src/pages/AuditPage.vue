@@ -8,7 +8,6 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
-import PermissionDenied from '@/components/PermissionDenied.vue'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
@@ -48,7 +47,7 @@ interface AuditResponse { events: AuditEvent[]; total?: number }
 
 useHashScroll()
 const route = useRoute()
-const { isAdmin } = useAuth()
+const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
 const users = ref<User[]>([])
@@ -136,21 +135,31 @@ const quickRanges: { id: AuditQuickRange; labelKey: MessageKey }[] = [
 ]
 
 onMounted(async () => {
-  if (!isAdmin.value) return
-  try {
-    const data = await apiGet<UsersResponse>('/api/v1/users')
-    users.value = data.users ?? []
-  } catch (e) {
-    loadError.value = formatCaughtError(e)
+  if (isAdmin.value) {
+    try {
+      const data = await apiGet<UsersResponse>('/api/v1/users')
+      users.value = data.users ?? []
+    } catch (e) {
+      loadError.value = formatCaughtError(e)
+    }
+  } else if (currentUser.value) {
+    selectedUser.value = currentUser.value
   }
   applyAuditPrefillFromRoute({ reload: false })
   await loadAudit()
 })
 
 watch(limit, () => {
-  if (!isAdmin.value) return
   void loadAudit()
 })
+
+function auditEventUnix(e: AuditEvent): number | undefined {
+  const raw = e.time
+  if (!raw) return undefined
+  const ms = Date.parse(String(raw))
+  if (Number.isNaN(ms)) return undefined
+  return Math.floor(ms / 1000)
+}
 
 function toUnix(local: string): number | undefined {
   if (!local) return undefined
@@ -163,6 +172,36 @@ async function loadAudit() {
   loading.value = true
   loadError.value = ''
   try {
+    if (!isAdmin.value) {
+      const name = (currentUser.value || selectedUser.value || '').trim()
+      if (!name) {
+        auditEvents.value = []
+        serverTotal.value = null
+        loadError.value = t.value('auditSelfNeedUser')
+        return
+      }
+      selectedUser.value = name
+      const data = await apiGet<AuditResponse>(`/api/v1/users/${encodeURIComponent(name)}/audit`)
+      let events = data.events ?? []
+      // 客户端按 action / 时间粗过滤（user audit 端点无 qs）
+      const action = actionFilter.value.trim().toLowerCase()
+      if (action) events = events.filter((e) => String(e.action || '').toLowerCase().includes(action))
+      const since = toUnix(sinceLocal.value)
+      const until = toUnix(untilLocal.value)
+      if (since != null) events = events.filter((e) => {
+        const ts = auditEventUnix(e)
+        return ts != null && ts >= since
+      })
+      if (until != null) events = events.filter((e) => {
+        const ts = auditEventUnix(e)
+        return ts != null && ts <= until
+      })
+      if (limit.value > 0) events = events.slice(0, limit.value)
+      auditEvents.value = events
+      serverTotal.value = events.length
+      clearSelection()
+      return
+    }
     const since = toUnix(sinceLocal.value)
     const until = toUnix(untilLocal.value)
     const qs = buildAuditQueryString({
@@ -177,19 +216,7 @@ async function loadAudit() {
     serverTotal.value = typeof data.total === 'number' ? data.total : (data.events ?? []).length
     clearSelection()
   } catch (e) {
-    if (selectedUser.value) {
-      try {
-        const data = await apiGet<AuditResponse>(`/api/v1/users/${encodeURIComponent(selectedUser.value)}/audit`)
-        auditEvents.value = data.events ?? []
-        clearSelection()
-        loadError.value = ''
-        return
-      } catch (e2) {
-        loadError.value = formatCaughtError(e2)
-      }
-    } else {
-      loadError.value = formatCaughtError(e)
-    }
+    loadError.value = formatCaughtError(e)
     auditEvents.value = []
     serverTotal.value = null
     notifyError(loadError.value)
@@ -225,18 +252,21 @@ function applyAuditPrefillFromRoute(opts?: { reload?: boolean }) {
     clientQuery.value = pre.q
     changed = true
   }
-  if (pre.user != null && selectedUser.value !== pre.user) {
-    selectedUser.value = pre.user
-    changed = true
+  if (pre.user != null) {
+    const nextUser = isAdmin.value ? pre.user : (currentUser.value || selectedUser.value || pre.user)
+    if (selectedUser.value !== nextUser) {
+      selectedUser.value = nextUser
+      changed = true
+    }
   }
   if (changed) {
     success(t.value('auditPrefillApplied'))
-    if (opts?.reload !== false && isAdmin.value) void loadAudit()
+    if (opts?.reload !== false) void loadAudit()
   }
 }
 
 function clearFilters() {
-  selectedUser.value = ''
+  selectedUser.value = isAdmin.value ? '' : (currentUser.value || selectedUser.value || '')
   actionFilter.value = ''
   sinceLocal.value = ''
   untilLocal.value = ''
@@ -276,15 +306,19 @@ watch(
 </script>
 
 <template>
-  <PermissionDenied v-if="!isAdmin" />
-  <div v-else class="space-y-6">
+  <div class="space-y-6" data-testid="audit-page">
     <div>
       <h1 class="mts-title flex items-center gap-2">
         <ScrollText class="h-5 w-5" />
         {{ t('auditTitle') }}
       </h1>
-      <p class="text-xs mts-muted">{{ t('auditDesc') }}</p>
+      <p class="text-xs mts-muted">{{ isAdmin ? t('auditDesc') : t('auditSelfDesc') }}</p>
     </div>
+    <p
+      v-if="!isAdmin"
+      class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+      data-testid="audit-self-hint"
+    >{{ t('auditSelfHint') }}</p>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
     <p class="mts-alert-warn">{{ t('auditHint') }}</p>
@@ -308,8 +342,9 @@ watch(
 
     <div class="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-6">
       <label class="text-xs mts-muted">{{ t('user') }}
-        <select v-model="selectedUser" class="mts-input mt-1" data-testid="audit-user">
-          <option value="">{{ t('auditAllUsers') }}</option>
+        <select v-model="selectedUser" class="mts-input mt-1" data-testid="audit-user" :disabled="!isAdmin">
+          <option v-if="isAdmin" value="">{{ t('auditAllUsers') }}</option>
+          <option v-if="!isAdmin && currentUser" :value="currentUser">{{ currentUser }}</option>
           <option v-for="user in users" :key="user.name" :value="user.name">{{ user.display_name || user.name }}</option>
         </select>
       </label>

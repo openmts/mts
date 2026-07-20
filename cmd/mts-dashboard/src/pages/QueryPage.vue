@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import {
   parseQueryPrefill,
   timeRangeToQueryFormTimes,
+  queryFormToPrefill,
 } from '@/utils/routePrefill'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
@@ -14,6 +15,7 @@ import { filterQueryHistory } from '@/utils/queryHistory'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
+import { copyText } from '@/utils/clipboard'
 import { useI18n } from '@/composables/useI18n'
 import { formatEpoch, nowUnixMsString } from '@/utils/time'
 import { formatFieldsMap } from '@/utils/fieldValue'
@@ -84,7 +86,7 @@ function applyQueryHash(hash?: string | null) {
   })
 }
 
-/** 深链只读预填：改时间/库表，不自动执行查询 */
+/** 深链只读预填：改时间/库表/筛选，不自动执行查询 */
 function applyQueryPrefillFromRoute() {
   const pre = parseQueryPrefill(route.query as Record<string, unknown>)
   let changed = false
@@ -96,18 +98,41 @@ function applyQueryPrefillFromRoute() {
       changed = true
     }
   }
-  if (pre.database && queryForm.value.database !== pre.database) {
-    queryForm.value.database = pre.database
-    changed = true
+  const assignStr = (key: 'database' | 'measurement' | 'retention_policy' | 'fields' | 'tags' | 'limit' | 'window' | 'aggregates' | 'group_tags' | 'predicates', val?: string) => {
+    if (val == null || val === '') return
+    if (queryForm.value[key] !== val) {
+      queryForm.value[key] = val
+      changed = true
+    }
   }
-  if (pre.measurement && queryForm.value.measurement !== pre.measurement) {
-    queryForm.value.measurement = pre.measurement
-    changed = true
+  assignStr('database', pre.database)
+  assignStr('measurement', pre.measurement)
+  assignStr('retention_policy', pre.retention_policy)
+  assignStr('fields', pre.fields)
+  assignStr('tags', pre.tags)
+  assignStr('limit', pre.limit)
+  if (pre.order === 'asc' || pre.order === 'desc' || pre.order === '') {
+    if (queryForm.value.order !== pre.order) {
+      queryForm.value.order = pre.order
+      changed = true
+    }
   }
+  assignStr('window', pre.window)
+  assignStr('aggregates', pre.aggregates)
+  assignStr('group_tags', pre.group_tags)
+  assignStr('predicates', pre.predicates)
   if (changed) {
     formBaseline.value = snapshotForm({ mode: queryMode.value, form: queryForm.value })
     success(t.value('queryPrefillApplied'))
   }
+}
+
+async function copyShareLink() {
+  const path = queryFormToPrefill(queryForm.value, { hash: '#query-form' })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('queryShareCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 watch(
@@ -782,7 +807,10 @@ const columnRows = computed(() => {
         <component :is="copyState === 'ok' ? Check : Copy" class="h-4 w-4" />
         {{ streamMeta.previewOnly ? t('copyPreview') : t('copy') }}
       </button>
-        <button class="mts-btn" data-testid="query-export-csv" :disabled="!rows.length" @click="exportCSV">
+      <button type="button" class="mts-btn" data-testid="query-share-link" @click="copyShareLink">
+        {{ t('queryShareLink') }}
+      </button>
+      <button class="mts-btn" data-testid="query-export-csv" :disabled="!rows.length" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> CSV
         </button>
     </div>

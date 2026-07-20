@@ -183,13 +183,30 @@ export const RBAC_CAPABILITY_MATRIX: CapabilityRow[] = [
     route: '/config',
   },
   {
+    id: 'audit-self',
+    areaKey: 'access',
+    area: { zh: '访问控制', en: 'Access' },
+    capability: { zh: '自身审计事件', en: 'Own audit events' },
+    admin: 'full',
+    user: 'self',
+    route: '/audit',
+    notes: {
+      zh: '非 admin 仅可读自己的审计记录',
+      en: 'Non-admin may only read own audit events',
+    },
+  },
+  {
     id: 'audit',
     areaKey: 'admin',
     area: { zh: '管理面', en: 'Admin plane' },
-    capability: { zh: '审计日志浏览', en: 'Audit log browse' },
+    capability: { zh: '全站审计日志', en: 'Global audit browse' },
     admin: 'full',
     user: 'none',
     route: '/audit',
+    notes: {
+      zh: 'admin 可浏览全部用户；非 admin 见 audit-self',
+      en: 'Admin global browse; non-admin uses audit-self',
+    },
   },
   {
     id: 'api-spec',

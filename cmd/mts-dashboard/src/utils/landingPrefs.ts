@@ -29,7 +29,6 @@ const ADMIN_ONLY = new Set([
   '/config',
   '/operations',
   '/downsample',
-  '/audit',
   '/api-spec',
   '/storage',
   '/ops/readiness',

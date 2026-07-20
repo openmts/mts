@@ -167,6 +167,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByRole('main').getByText(/数据库|Database/).first()).toBeVisible()
   await expect(page.getByRole('main').getByText(/开始时间|Start/).first()).toBeVisible()
   await expect(page.getByTestId('query-export-csv')).toBeVisible()
+  await expect(page.getByTestId('query-share-link')).toBeVisible()
   await expect(page.getByTestId('query-predicates')).toBeVisible()
   await expect(page.getByTestId('query-series-meta')).toBeVisible()
   await expect(page.getByTestId('query-series-refresh')).toBeVisible()
@@ -1014,4 +1015,15 @@ test('commercial browser smoke path', async ({ page }) => {
   // 管理页应权限空态
   await page.goto('/operations')
   await expect(page.getByText(/无权限访问|权限不足|Permission denied|没有权限/i).first()).toBeVisible()
+  // 非 admin 自身审计
+  await expect(page.getByTestId('sidebar-nav-row-audit')).toBeVisible()
+  await page.goto('/audit')
+  await expect(page.getByTestId('audit-page')).toBeVisible()
+  await expect(page.getByTestId('audit-self-hint')).toBeVisible()
+  await expect(page.getByTestId('audit-user')).toBeDisabled()
+  await expect(page.getByTestId('audit-reload')).toBeVisible()
+  // 查询分享链接
+  await page.goto('/query')
+  await expect(page.getByTestId('query-page')).toBeVisible()
+  await expect(page.getByTestId('query-share-link')).toBeVisible()
 })

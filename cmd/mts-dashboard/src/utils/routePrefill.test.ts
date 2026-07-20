@@ -5,6 +5,7 @@ import {
   buildQueryPrefillPath,
   buildWritePrefillPath,
   parseWritePrefill,
+  queryFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
   parseQueryPrefill,
@@ -65,4 +66,29 @@ test('write prefill path and parse', () => {
     database: 'metrics',
     measurement: 'cpu',
   })
+})
+
+test('query prefill supports tags/fields and share helper', () => {
+  const path = buildQueryPrefillPath({
+    database: 'metrics',
+    measurement: 'cpu',
+    tags: 'host=a',
+    fields: 'usage',
+    range: '1h',
+  })
+  assert.match(path, /database=metrics/)
+  assert.match(path, /tags=host%3Da|tags=host=a/)
+  const parsed = parseQueryPrefill({
+    database: 'metrics',
+    measurement: 'cpu',
+    tags: 'host=a',
+    fields: 'usage',
+    range: '1h',
+  })
+  assert.equal(parsed.tags, 'host=a')
+  assert.equal(parsed.fields, 'usage')
+  assert.equal(
+    queryFormToPrefill({ database: 'm', measurement: 'cpu', tags: 'host=a' }),
+    '/query?database=m&measurement=cpu&tags=host%3Da#query-form',
+  )
 })

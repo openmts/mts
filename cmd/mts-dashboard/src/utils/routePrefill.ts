@@ -28,17 +28,50 @@ export function timeRangeToQueryFormTimes(
   return { start_time: String(b.startMs), end_time: String(b.endMs) }
 }
 
-/** 从 route.query 解析查询页预填（仅 range；不自动点「执行查询」） */
+export type QueryPrefill = {
+  range?: PrefillTimeRange
+  database?: string
+  measurement?: string
+  retention_policy?: string
+  fields?: string
+  tags?: string
+  limit?: string
+  order?: string
+  window?: string
+  aggregates?: string
+  group_tags?: string
+  predicates?: string
+}
+
+/** 从 route.query 解析查询页预填（不自动点「执行查询」） */
 export function parseQueryPrefill(
   query: Record<string, unknown> | { [key: string]: unknown },
-): { range?: PrefillTimeRange; database?: string; measurement?: string } {
+): QueryPrefill {
+  const out: QueryPrefill = {}
   const rangeRaw = firstQueryValue(query.range)
-  const out: { range?: PrefillTimeRange; database?: string; measurement?: string } = {}
   if (isPrefillTimeRange(rangeRaw)) out.range = rangeRaw
   const database = firstQueryValue(query.database ?? query.db)
   if (database) out.database = database
   const measurement = firstQueryValue(query.measurement ?? query.meas)
   if (measurement) out.measurement = measurement
+  const rp = firstQueryValue(query.retention_policy ?? query.rp)
+  if (rp) out.retention_policy = rp
+  const fields = firstQueryValue(query.fields)
+  if (fields) out.fields = fields
+  const tags = firstQueryValue(query.tags)
+  if (tags) out.tags = tags
+  const limit = firstQueryValue(query.limit)
+  if (limit) out.limit = limit
+  const order = firstQueryValue(query.order)
+  if (order) out.order = order
+  const window = firstQueryValue(query.window)
+  if (window) out.window = window
+  const aggregates = firstQueryValue(query.aggregates)
+  if (aggregates) out.aggregates = aggregates
+  const group_tags = firstQueryValue(query.group_tags ?? query.groupTags)
+  if (group_tags) out.group_tags = group_tags
+  const predicates = firstQueryValue(query.predicates)
+  if (predicates) out.predicates = predicates
   return out
 }
 
@@ -58,19 +91,56 @@ export function parseAuditPrefill(
   return out
 }
 
-export function buildQueryPrefillPath(opts: {
-  range?: PrefillTimeRange
-  database?: string
-  measurement?: string
-  hash?: string
-}): string {
+export function buildQueryPrefillPath(opts: QueryPrefill & { hash?: string }): string {
   const params = new URLSearchParams()
   if (opts.range) params.set('range', opts.range)
   if (opts.database) params.set('database', opts.database)
   if (opts.measurement) params.set('measurement', opts.measurement)
+  if (opts.retention_policy) params.set('retention_policy', opts.retention_policy)
+  if (opts.fields) params.set('fields', opts.fields)
+  if (opts.tags) params.set('tags', opts.tags)
+  if (opts.limit) params.set('limit', opts.limit)
+  if (opts.order) params.set('order', opts.order)
+  if (opts.window) params.set('window', opts.window)
+  if (opts.aggregates) params.set('aggregates', opts.aggregates)
+  if (opts.group_tags) params.set('group_tags', opts.group_tags)
+  if (opts.predicates) params.set('predicates', opts.predicates)
   const qs = params.toString()
   const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#query-form'
   return qs ? `/query?${qs}${hash}` : `/query${hash}`
+}
+
+/** 从表单快照构造分享预填（省略空字段；时间用显式 start/end 时不写 range） */
+export function queryFormToPrefill(form: {
+  database?: string
+  measurement?: string
+  retention_policy?: string
+  fields?: string
+  tags?: string
+  limit?: string
+  order?: string
+  window?: string
+  aggregates?: string
+  group_tags?: string
+  predicates?: string
+  start_time?: string
+  end_time?: string
+}, opts?: { range?: PrefillTimeRange; hash?: string }): string {
+  return buildQueryPrefillPath({
+    range: opts?.range,
+    database: form.database?.trim() || undefined,
+    measurement: form.measurement?.trim() || undefined,
+    retention_policy: form.retention_policy?.trim() || undefined,
+    fields: form.fields?.trim() || undefined,
+    tags: form.tags?.trim() || undefined,
+    limit: form.limit?.trim() || undefined,
+    order: form.order?.trim() || undefined,
+    window: form.window?.trim() || undefined,
+    aggregates: form.aggregates?.trim() || undefined,
+    group_tags: form.group_tags?.trim() || undefined,
+    predicates: form.predicates?.trim() || undefined,
+    hash: opts?.hash,
+  })
 }
 
 export function buildAuditPrefillPath(opts: {

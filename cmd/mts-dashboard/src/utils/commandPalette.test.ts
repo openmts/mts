@@ -219,7 +219,7 @@ test('command palette prefill deep links are read-only paths', () => {
   const a1 = admin.find((i) => i.id === 'audit-range-24h')
   assert.ok(a1)
   assert.match(a1!.path, /\/audit\?range=24h/)
-  assert.equal(a1!.adminOnly, true)
+  assert.equal(a1!.adminOnly, undefined)
   const login = admin.find((i) => i.id === 'audit-action-login')
   assert.ok(login)
   assert.match(login!.path, /action=login/)

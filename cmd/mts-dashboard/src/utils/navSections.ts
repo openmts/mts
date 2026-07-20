@@ -19,7 +19,7 @@ export const NAV_SECTIONS: readonly NavSectionDef[] = [
   {
     id: 'access',
     labelKey: 'navSectionAccess',
-    paths: ['/users', '/access', '/access/grants'],
+    paths: ['/users', '/access', '/access/grants', '/audit'],
   },
   {
     id: 'admin',
@@ -29,7 +29,6 @@ export const NAV_SECTIONS: readonly NavSectionDef[] = [
       '/config',
       '/operations',
       '/downsample',
-      '/audit',
       '/api-spec',
       '/storage',
       '/ops/readiness',

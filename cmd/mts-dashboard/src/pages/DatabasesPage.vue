@@ -283,11 +283,15 @@ function formatDuration(ns: number): string {
   return formatRPDuration(ns)
 }
 
-function openQueryFor(db: string, measurement?: string) {
+function openQueryFor(db: string, measurement?: string, tags?: Record<string, string> | string) {
+  let tagsExpr: string | undefined
+  if (typeof tags === 'string') tagsExpr = tags.trim() || undefined
+  else if (tags && Object.keys(tags).length) tagsExpr = seriesLabel({ tags })
   void router.push(
     buildQueryPrefillPath({
       database: db,
       measurement: measurement || undefined,
+      tags: tagsExpr,
       range: '1h',
       hash: '#query-form',
     }),
@@ -565,9 +569,15 @@ function exportCSV() {
                 </div>
                 <p class="mb-1 font-medium text-slate-500 dark:text-slate-400">{{ t('databasesSeries') }}</p>
                 <div class="space-y-1" data-testid="databases-series-list">
-                  <div v-for="s in meas.series" :key="s.id" class="flex items-center gap-1">
-                    <Tag class="h-3 w-3 text-slate-400 dark:text-slate-500" />
-                    <span class="font-mono">{{ seriesLabel(s) }}</span>
+                  <div v-for="s in meas.series" :key="s.id" class="flex flex-wrap items-center gap-1">
+                    <Tag class="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" />
+                    <span class="min-w-0 flex-1 font-mono">{{ seriesLabel(s) }}</span>
+                    <button
+                      type="button"
+                      class="mts-btn px-1.5 py-0.5 text-[11px]"
+                      :data-testid="`databases-series-query-${s.id}`"
+                      @click="openQueryFor(activeDatabase.name, meas.name, s.tags)"
+                    >{{ t('query') }}</button>
                   </div>
                   <span v-if="!meas.series.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
                   <p

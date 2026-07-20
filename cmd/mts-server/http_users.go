@@ -57,16 +57,21 @@ func (r *serverRuntime) createUserWithInitialPassword(ctx context.Context, req c
 }
 
 func (r *serverRuntime) handleUserResource(writer http.ResponseWriter, request *http.Request) {
-	if err := r.requireHTTPAdmin(request); err != nil {
-		writeAPIError(writer, err)
-		return
-	}
 	parts := splitPath(request.URL.Path, routeUsersPrefix)
 	if len(parts) == 0 || parts[0] == "" {
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, "user name is required", nil))
 		return
 	}
 	userName := parts[0]
+	// 自身审计：登录用户可读自己的 audit；其它用户资源仍需 admin。
+	if len(parts) == 2 && parts[1] == "audit" {
+		r.handleUserAudit(writer, request, userName)
+		return
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
 	if len(parts) == 1 {
 		r.handleSingleUser(writer, request, userName)
 		return
@@ -77,10 +82,6 @@ func (r *serverRuntime) handleUserResource(writer http.ResponseWriter, request *
 	}
 	if len(parts) == 2 && parts[1] == "password" {
 		r.handleUserPassword(writer, request, userName)
-		return
-	}
-	if len(parts) == 2 && parts[1] == "audit" {
-		r.handleUserAudit(writer, request, userName)
 		return
 	}
 	writeAPIError(writer, newAPIError(errorCodeNotFound, "user resource not found", nil))
@@ -201,6 +202,17 @@ func (r *serverRuntime) handleDatabasePermissionResource(
 func (r *serverRuntime) handleUserAudit(writer http.ResponseWriter, request *http.Request, userName string) {
 	if !requireHTTPMethod(writer, request, http.MethodGet) {
 		return
+	}
+	if err := r.requireHTTPAdmin(request); err != nil {
+		self, authErr := r.authenticateHTTPDataUser(request.Context(), request)
+		if authErr != nil || strings.TrimSpace(self) == "" {
+			writeAPIError(writer, err)
+			return
+		}
+		if strings.TrimSpace(userName) != strings.TrimSpace(self) {
+			writeAPIError(writer, mts.ErrPermissionDenied)
+			return
+		}
 	}
 	writeHTTPJSON(writer, http.StatusOK, userAuditResponse{Events: r.audit.list(userName)})
 }

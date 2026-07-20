@@ -245,3 +245,24 @@ func TestDataSeriesLimitAndReservedQuery(t *testing.T) {
 		t.Fatalf("tags = %#v", filtered.Series[0].Tags)
 	}
 }
+
+func TestHTTPUserSelfAudit(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	seedUserWithPassword(t, runtime, mts.User{Name: "audit-self", Role: mts.UserRoleUser}, "secret")
+	token := loginHTTPUser(t, server.URL, "audit-self", "secret")
+	headers := map[string]string{"Authorization": "Bearer " + token}
+
+	var mine userAuditResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/users/audit-self/audit", headers, http.StatusOK, &mine)
+	// 登录会产生 audit 事件
+	if len(mine.Events) == 0 {
+		t.Fatalf("self audit events empty")
+	}
+
+	// 不能读他人
+	seedUserWithPassword(t, runtime, mts.User{Name: "audit-other", Role: mts.UserRoleUser}, "secret")
+	getJSONWithHeaders(t, server.URL+"/api/v1/users/audit-other/audit", headers, http.StatusForbidden, &errorResponse{})
+}
