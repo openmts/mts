@@ -2,6 +2,7 @@
 
 import type { LocaleCode, LocalizedText } from './localizedText.ts'
 import { textForLocale } from './localizedText.ts'
+import { appendDrillToDeployKitMarkdown } from './deployRunbookDrill.ts'
 
 export interface DeployTemplate {
   id: string
@@ -204,7 +205,11 @@ export function formatDeployTemplateLabel(tpl: DeployTemplate, locale: LocaleCod
   return textForLocale(tpl.title, locale)
 }
 
-export function formatDeployKitMarkdown(locale: LocaleCode = 'zh', templates = DEPLOY_TEMPLATES): string {
+export function formatDeployKitMarkdown(
+  locale: LocaleCode = 'zh',
+  templates = DEPLOY_TEMPLATES,
+  opts?: { includeDrill?: boolean },
+): string {
   const head =
     locale === 'en'
       ? [
@@ -246,7 +251,9 @@ export function formatDeployKitMarkdown(locale: LocaleCode = 'zh', templates = D
       : '_由 Dashboard 就绪中心生成；部署侧人工签核仍为必做项。_',
   )
   lines.push('')
-  return lines.join('\n')
+  const md = lines.join('\n')
+  if (opts?.includeDrill === false) return md
+  return appendDrillToDeployKitMarkdown(md, locale)
 }
 
 export function deployKitFilename(at = new Date()): string {

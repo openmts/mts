@@ -18,6 +18,13 @@ import {
   formatDeployKitMarkdown,
   formatDeployTemplateLabel,
 } from '@/utils/deployTemplates'
+import {
+  DEPLOY_DRILL_STEPS,
+  deployRunbookDrillFilename,
+  formatDeployDrillAreaLabel,
+  formatDeployRunbookDrillMarkdown,
+  type DeployDrillArea,
+} from '@/utils/deployRunbookDrill'
 import { textForLocale, type LocaleCode } from '@/utils/localizedText'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -391,6 +398,37 @@ function downloadDeployKit() {
   flash('ok', t.value('readinessDeployKitDownloaded'))
 }
 
+const deployDrillSteps = DEPLOY_DRILL_STEPS
+const deployDrillAreas: DeployDrillArea[] = ['edge_https', 'scheduler', 'offsite_backup']
+
+function drillStepsForArea(area: DeployDrillArea) {
+  return deployDrillSteps.filter((s) => s.area === area)
+}
+
+function areaLabel(area: DeployDrillArea) {
+  return formatDeployDrillAreaLabel(area, uiLocale.value)
+}
+
+function downloadDeployDrill() {
+  const md = formatDeployRunbookDrillMarkdown(uiLocale.value)
+  downloadText(deployRunbookDrillFilename(), md, 'text/markdown')
+  markDeployKitHint('reviewed')
+  success(t.value('readinessDeployDrillDownloaded'))
+  flash('ok', t.value('readinessDeployDrillDownloaded'))
+}
+
+async function copyDeployDrill() {
+  const md = formatDeployRunbookDrillMarkdown(uiLocale.value)
+  const r = await copyText(md)
+  if (r.ok) {
+    markDeployKitHint('copied')
+    markDeployKitHint('reviewed')
+    success(t.value('readinessDeployDrillCopied'))
+  } else {
+    notifyError(t.value('readinessCopyFailed'))
+  }
+}
+
 
 function scrollToCurrentHash() {
   if (typeof window === 'undefined') return
@@ -719,6 +757,56 @@ watch(
                   <span class="mts-muted">{{ t('readinessDeployRunbookBackup') }}:</span>
                   docs/ops/backup-orchestration.md
                 </p>
+              </div>
+              <div
+                class="mt-3 space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-950/40"
+                data-testid="deploy-runbook-drill"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-100">{{ t('readinessDeployDrillTitle') }}</p>
+                    <p class="mt-1 text-[11px] mts-muted">{{ t('readinessDeployDrillHint') }}</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="mts-btn mts-focus-ring"
+                      data-testid="deploy-drill-copy"
+                      @click="copyDeployDrill"
+                    >{{ t('readinessDeployDrillCopy') }}</button>
+                    <button
+                      type="button"
+                      class="mts-btn mts-focus-ring"
+                      data-testid="deploy-drill-download"
+                      @click="downloadDeployDrill"
+                    >{{ t('readinessDeployDrillDownload') }}</button>
+                  </div>
+                </div>
+                <div
+                  v-for="area in deployDrillAreas"
+                  :key="area"
+                  class="rounded-md border border-slate-100 p-2 dark:border-slate-800"
+                  :data-testid="`deploy-drill-area-${area}`"
+                >
+                  <p class="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">{{ areaLabel(area) }}</p>
+                  <ol class="list-decimal space-y-2 pl-4 text-[11px] text-slate-700 dark:text-slate-200">
+                    <li
+                      v-for="step in drillStepsForArea(area)"
+                      :key="step.id"
+                      :data-testid="`deploy-drill-step-${step.id}`"
+                    >
+                      <span class="font-medium">{{ textForLocale(step.title, uiLocale) }}</span>
+                      <p class="mts-muted">{{ t('readinessDeployDrillAction') }}: {{ textForLocale(step.action, uiLocale) }}</p>
+                      <p class="mts-muted">{{ t('readinessDeployDrillEvidence') }}: {{ textForLocale(step.evidence, uiLocale) }}</p>
+                      <p v-if="step.runbookPaths.length" class="font-mono text-[10px] mts-muted">
+                        {{ t('readinessDeployDrillRunbooks') }}: {{ step.runbookPaths.join(uiLocale === 'en' ? ', ' : '、') }}
+                      </p>
+                      <p v-if="step.templateIds?.length" class="font-mono text-[10px] mts-muted">
+                        {{ t('readinessDeployDrillTemplates') }}: {{ step.templateIds.join(uiLocale === 'en' ? ', ' : '、') }}
+                      </p>
+                    </li>
+                  </ol>
+                </div>
               </div>
             </div>
           </div>

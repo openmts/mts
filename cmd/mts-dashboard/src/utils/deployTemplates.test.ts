@@ -32,6 +32,8 @@ test('formatDeployKitMarkdown is bilingual and includes sample bodies', () => {
   assert.match(en, /Nginx HTTPS \+ HSTS sample/)
   assert.match(en, /does \*\*not\*\* mark edge HTTPS/)
   assert.match(zh, /mts-backup.service/)
+  assert.match(zh, /联调清单|附录/)
+  assert.match(en, /runbook drill|Appendix/i)
   assert.match(deployKitFilename(new Date('2026-07-20T12:34:56.000Z')), /mts-deploy-kit-2026-07-20T12-34-56\.md/)
 })
 
@@ -55,4 +57,9 @@ test('deploy kit includes offsite rsync and alert hook samples', () => {
   assert.match(md, /rsync/)
   assert.match(md, /mts-backup-alert/)
   assert.match(md, /不代表/)
+})
+
+test('formatDeployKitMarkdown can omit drill appendix', () => {
+  const zh = formatDeployKitMarkdown('zh', undefined, { includeDrill: false })
+  assert.doesNotMatch(zh, /附录：Runbook 联调清单/)
 })

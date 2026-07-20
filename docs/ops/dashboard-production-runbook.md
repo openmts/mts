@@ -54,6 +54,9 @@ make test && make e2e && make lint
 
 打开 Dashboard `/ops/readiness`：聚合生产清单、边缘 HTTPS 验收、备份编排指引与 doctor 状态；勾选状态保存在浏览器 localStorage。就绪评分融合清单完成度与 doctor warn/TLS。Overview 提供入口。支持就绪状态 JSON 导出/导入与演练归档（JSON/Markdown）下载；版本信息见 `/about` 与 `GET /api/v1/admin/version`。
 
+
+Dashboard 就绪中心提供「部署 Runbook 联调清单」导出（Markdown），覆盖边缘 HTTPS/HSTS、cron/systemd、异地备份与告警的人工步骤与证据占位；**不计就绪评分**，本地勾选/下载不代表生产验收完成。
+
 ## 2.1 边缘 HTTPS / HSTS 验收（人工）
 
 1. 反向代理/LB 配置有效证书并对浏览器暴露 HTTPS。
