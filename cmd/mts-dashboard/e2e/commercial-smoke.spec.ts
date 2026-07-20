@@ -731,6 +731,7 @@ test('commercial browser smoke path', async ({ page }) => {
   } else {
     await expect(page.getByTestId('notify-history-empty')).toBeVisible()
   }
+  await expect(page.getByTestId('notify-history-share-link')).toBeVisible()
   await expect(page.getByTestId('notify-history-export-json')).toBeVisible()
   await expect(page.getByTestId('notify-history-export-csv')).toBeVisible()
   await expect(page.getByTestId('notify-history-copy')).toBeVisible()
@@ -748,6 +749,25 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('notify-history-filter').selectOption('all')
   await page.getByTestId('notify-history-close').click()
   await expect(page.getByTestId('notify-history-panel')).toHaveCount(0)
+
+  // P193–P194: 通知历史筛选深链自动打开并预填
+  await page.goto('/?notify=1&nh_kind=error&nh_q=fail&nh_range=24h#notify-history')
+  await expect(page.getByTestId('notify-history-panel')).toBeVisible()
+  await expect(page.getByTestId('notify-history-share-link')).toBeVisible()
+  await expect(page.getByTestId('notify-history-filter')).toHaveValue('error')
+  await expect(page.getByTestId('notify-history-search')).toHaveValue('fail')
+  await expect(page.getByTestId('notify-history-time-range')).toHaveValue('24h')
+  await page.getByTestId('notify-history-close').click()
+  await expect(page.getByTestId('notify-history-panel')).toHaveCount(0)
+  // 命令面板跳转错误通知深链
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('错误通知')
+  await expect(page.getByTestId('command-item-notify-history-errors')).toBeVisible()
+  await page.getByTestId('command-item-notify-history-errors').click()
+  await expect(page.getByTestId('notify-history-panel')).toBeVisible()
+  await expect(page.getByTestId('notify-history-filter')).toHaveValue('error')
+  await page.getByTestId('notify-history-close').click()
   await page.locator('#main-content').focus()
   await page.keyboard.press('Control+Shift+KeyH')
   await expect(page.getByTestId('notify-history-panel')).toBeVisible()

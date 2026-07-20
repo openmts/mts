@@ -114,6 +114,13 @@ test('command palette includes ops deep links for admin', () => {
   assert.ok(user.every((i) => !i.adminOnly))
 })
 
+test('notify history command deep links', () => {
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'notify-history'))
+  assert.ok(all.some((i) => i.id === 'notify-history-errors'))
+  assert.ok(all.find((i) => i.id === 'notify-history-errors')?.path.includes('nh_kind=error'))
+})
+
 test('non-admin query write deep links visible', () => {
   const user = visibleCommandItems(COMMAND_NAV_ITEMS, false)
   for (const id of ['query-history', 'write-mode-typed', 'write-actions']) {

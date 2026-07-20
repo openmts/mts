@@ -7,6 +7,7 @@ import PageSkeleton from '@/components/PageSkeleton.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ShortcutsHelp from '@/components/ShortcutsHelp.vue'
 import NotifyHistoryPanel from '@/components/NotifyHistoryPanel.vue'
+import { parseNotifyHistoryPrefill, type NotifyHistoryPrefill } from '@/utils/notifyHistoryPrefill'
 import BreadcrumbBar from '@/components/BreadcrumbBar.vue'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
@@ -46,6 +47,7 @@ const mainContentRef = ref<HTMLElement | null>(null)
 const showBackToTop = ref(false)
 const shortcutsOpen = ref(false)
 const notifyHistoryOpen = ref(false)
+const notifyHistoryPrefill = ref<NotifyHistoryPrefill | null>(null)
 const recent = ref<RecentRouteEntry[]>(loadRecentRoutes())
 const showBreadcrumb = computed(() => route.path !== '/')
 
@@ -87,6 +89,23 @@ function togglePinRecent(path: string, e?: Event) {
 function openNotifyHistory() {
   notifyHistoryOpen.value = true
 }
+
+function applyNotifyHistoryFromRoute() {
+  const pre = parseNotifyHistoryPrefill(
+    route.query as Record<string, unknown>,
+    route.hash,
+  )
+  notifyHistoryPrefill.value = pre
+  if (pre.open) notifyHistoryOpen.value = true
+}
+
+watch(
+  () => route.fullPath,
+  () => {
+    applyNotifyHistoryFromRoute()
+  },
+  { immediate: true },
+)
 
 function onMainScroll() {
   const el = mainContentRef.value
@@ -322,6 +341,6 @@ function onSkipToMain(e: Event) {
     </button>
     <CommandPalette ref="commandPaletteRef" />
     <ShortcutsHelp v-model:open="shortcutsOpen" />
-    <NotifyHistoryPanel v-model:open="notifyHistoryOpen" />
+    <NotifyHistoryPanel v-model:open="notifyHistoryOpen" :prefill="notifyHistoryPrefill" />
   </div>
 </template>

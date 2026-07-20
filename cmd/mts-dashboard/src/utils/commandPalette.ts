@@ -1,6 +1,7 @@
 /** 命令面板导航项与过滤（纯函数） */
 
 import { buildAuditPrefillPath, buildQueryPrefillPath } from './routePrefill.ts'
+import { notifyHistoryFormToPrefill } from './notifyHistoryPrefill.ts'
 
 
 export interface CommandNavItem {
@@ -451,6 +452,18 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     labelKey: 'cmdReadinessDeployDrill',
     keywords: ['runbook drill', '联调清单', 'deploy drill', '演练清单'],
     adminOnly: true,
+  },
+  {
+    id: 'notify-history',
+    path: notifyHistoryFormToPrefill({ kind: 'all', range: 'all' }, { path: '/' }),
+    labelKey: 'cmdNotifyHistory',
+    keywords: ['notify history', '通知历史', 'toast history', 'notifications'],
+  },
+  {
+    id: 'notify-history-errors',
+    path: notifyHistoryFormToPrefill({ kind: 'error', range: '24h' }, { path: '/' }),
+    labelKey: 'cmdNotifyHistoryErrors',
+    keywords: ['notify errors', '错误通知', 'error toast', 'nh_kind error'],
   },
   { id: 'about', path: '/about', labelKey: 'about', keywords: ['version', '关于', 'build'] },
   {

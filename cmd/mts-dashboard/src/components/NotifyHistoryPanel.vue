@@ -21,8 +21,18 @@ import {
 } from '@/utils/notifyHistoryExport'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 import { copyText } from '@/utils/clipboard'
+import {
+  notifyHistoryFormToPrefill,
+  type NotifyHistoryPrefill,
+} from '@/utils/notifyHistoryPrefill'
+import { useRoute } from 'vue-router'
 
 const open = defineModel<boolean>('open', { default: false })
+const props = defineProps<{
+  /** 路由驱动的筛选预填（打开时应用） */
+  prefill?: NotifyHistoryPrefill | null
+}>()
+const route = useRoute()
 const { t, locale } = useI18n()
 const { history, clearHistory, reloadHistory, success, error: notifyError } = useNotify()
 const panelRef = ref<HTMLElement | null>(null)
@@ -89,6 +99,40 @@ const hasActiveFilter = computed(
     !!untilLocal.value,
 )
 
+
+function applyNotifyPrefill(pre: NotifyHistoryPrefill | null | undefined) {
+  if (!pre) return
+  if (pre.kind) kindFilter.value = pre.kind
+  if (pre.q != null) searchQuery.value = pre.q
+  if (pre.range) {
+    timeRange.value = pre.range
+    onTimeRangeChange()
+  }
+}
+
+async function copyNotifyShareLink() {
+  const path = notifyHistoryFormToPrefill(
+    {
+      kind: kindFilter.value,
+      q: searchQuery.value,
+      range: timeRange.value,
+    },
+    { path: route.path || '/' },
+  )
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('notifyHistoryShareCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
+watch(
+  () => props.prefill,
+  (pre) => {
+    if (pre) applyNotifyPrefill(pre)
+  },
+  { immediate: true, deep: true },
+)
+
 function close() {
   open.value = false
 }
@@ -151,6 +195,7 @@ watch(open, async (v) => {
   trap?.release()
   trap = null
   if (!v) return
+  applyNotifyPrefill(props.prefill)
   reloadHistory()
   await nextTick()
   if (panelRef.value) {
@@ -190,6 +235,16 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="mts-btn mts-focus-ring"
+            data-testid="notify-history-share-link"
+            :title="t('notifyHistoryShareLink')"
+            :aria-label="t('notifyHistoryShareLink')"
+            @click="copyNotifyShareLink"
+          >
+            {{ t('notifyHistoryShareLink') }}
+          </button>
+          <button
+            type="button"
+            class="mts-btn"
             data-testid="notify-history-export-json"
             :disabled="!entries.length"
             :title="t('notifyHistoryExportJSON')"
