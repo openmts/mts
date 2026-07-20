@@ -17,6 +17,7 @@ import {
   deployKitFilename,
   formatDeployKitMarkdown,
   formatDeployTemplateLabel,
+  templatesForSignoffField,
 } from '@/utils/deployTemplates'
 import {
   DEPLOY_DRILL_STEPS,
@@ -232,6 +233,25 @@ function focusSignoffField(field: SignoffNoteField) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     el.focus()
   }
+}
+
+function jumpDeployTemplate(tplId: string) {
+  jumpPreflight(`#deploy-tpl-${tplId}`)
+}
+
+function jumpRelatedSignoff(field?: SignoffNoteField | null) {
+  if (!field) return
+  jumpPreflight('#signoff-notes')
+  // next frame focus field
+  if (typeof window !== 'undefined') {
+    window.setTimeout(() => focusSignoffField(field), 50)
+  } else {
+    focusSignoffField(field)
+  }
+}
+
+function relatedTemplatesFor(field: SignoffNoteField) {
+  return templatesForSignoffField(field)
 }
 
 async function copySignoffMissing() {
@@ -789,7 +809,8 @@ watch(
                 </p>
               </div>
               <div
-                class="mt-3 space-y-2 rounded-lg border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-950/40"
+                id="deploy-runbook-drill"
+                class="mt-3 space-y-2 scroll-mt-20 rounded-lg border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-950/40"
                 data-testid="deploy-runbook-drill"
               >
                 <div class="flex flex-wrap items-start justify-between gap-2">
@@ -853,7 +874,8 @@ watch(
         <div
           v-for="tpl in deployTemplates"
           :key="tpl.id"
-          class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+          :id="`deploy-tpl-${tpl.id}`"
+          class="scroll-mt-20 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
           :data-testid="`deploy-tpl-${tpl.id}`"
         >
           <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
@@ -861,12 +883,21 @@ watch(
               <p class="text-xs font-medium text-slate-800 dark:text-slate-100">{{ formatDeployTemplateLabel(tpl, uiLocale) }}</p>
               <p class="text-[11px] mts-muted">{{ textForLocale(tpl.description, uiLocale) }} · <span class="font-mono">{{ tpl.filename }}</span></p>
             </div>
-            <button
-              type="button"
-              class="mts-btn"
-              :data-testid="`deploy-copy-${tpl.id}`"
-              @click="copyDeployBody(tpl.body)"
-            >{{ t('readinessCopy') }}</button>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-if="tpl.relatedSignoff"
+                type="button"
+                class="mts-btn"
+                :data-testid="`deploy-jump-signoff-${tpl.id}`"
+                @click="jumpRelatedSignoff(tpl.relatedSignoff)"
+              >{{ t('readinessDeployRelatedSignoff') }}</button>
+              <button
+                type="button"
+                class="mts-btn"
+                :data-testid="`deploy-copy-${tpl.id}`"
+                @click="copyDeployBody(tpl.body)"
+              >{{ t('readinessCopy') }}</button>
+            </div>
           </div>
           <pre class="max-h-40 overflow-auto rounded bg-slate-950 p-3 text-[11px] text-emerald-300">{{ tpl.body }}</pre>
         </div>
@@ -955,6 +986,17 @@ watch(
             maxlength="2000"
             @input="saveSignoff('edgeHttps', ($event.target as HTMLTextAreaElement).value)"
           />
+          <div class="mt-1 flex flex-wrap items-center gap-2" data-testid="signoff-related-edgeHttps">
+            <span class="text-[10px] mts-muted">{{ t('readinessSignoffRelatedTemplates') }}:</span>
+            <button
+              v-for="tpl in relatedTemplatesFor('edgeHttps')"
+              :key="tpl.id"
+              type="button"
+              class="mts-btn !px-2 !py-0.5 text-[10px]"
+              :data-testid="`signoff-open-tpl-${tpl.id}`"
+              @click="jumpDeployTemplate(tpl.id)"
+            >{{ t('readinessSignoffJumpTemplate') }}: {{ formatDeployTemplateLabel(tpl, uiLocale) }}</button>
+          </div>
         </label>
         <label class="block text-xs text-slate-700 dark:text-slate-200">
           <span class="mb-1 flex items-center justify-between gap-2 font-medium">
@@ -974,6 +1016,17 @@ watch(
             maxlength="2000"
             @input="saveSignoff('backupOffsite', ($event.target as HTMLTextAreaElement).value)"
           />
+          <div class="mt-1 flex flex-wrap items-center gap-2" data-testid="signoff-related-backupOffsite">
+            <span class="text-[10px] mts-muted">{{ t('readinessSignoffRelatedTemplates') }}:</span>
+            <button
+              v-for="tpl in relatedTemplatesFor('backupOffsite').slice(0, 3)"
+              :key="tpl.id"
+              type="button"
+              class="mts-btn !px-2 !py-0.5 text-[10px]"
+              :data-testid="`signoff-open-tpl-${tpl.id}`"
+              @click="jumpDeployTemplate(tpl.id)"
+            >{{ t('readinessSignoffJumpTemplate') }}: {{ formatDeployTemplateLabel(tpl, uiLocale) }}</button>
+          </div>
         </label>
         <label class="block text-xs text-slate-700 dark:text-slate-200">
           <span class="mb-1 flex items-center justify-between gap-2 font-medium">
@@ -993,6 +1046,17 @@ watch(
             maxlength="2000"
             @input="saveSignoff('backupAlert', ($event.target as HTMLTextAreaElement).value)"
           />
+          <div class="mt-1 flex flex-wrap items-center gap-2" data-testid="signoff-related-backupAlert">
+            <span class="text-[10px] mts-muted">{{ t('readinessSignoffRelatedTemplates') }}:</span>
+            <button
+              v-for="tpl in relatedTemplatesFor('backupAlert')"
+              :key="tpl.id"
+              type="button"
+              class="mts-btn !px-2 !py-0.5 text-[10px]"
+              :data-testid="`signoff-open-tpl-${tpl.id}`"
+              @click="jumpDeployTemplate(tpl.id)"
+            >{{ t('readinessSignoffJumpTemplate') }}: {{ formatDeployTemplateLabel(tpl, uiLocale) }}</button>
+          </div>
         </label>
       </div>
     </div>

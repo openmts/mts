@@ -3,6 +3,7 @@
 import type { LocaleCode, LocalizedText } from './localizedText.ts'
 import { textForLocale } from './localizedText.ts'
 import { appendDrillToDeployKitMarkdown } from './deployRunbookDrill.ts'
+import type { SignoffNoteField } from './signoffExport.ts'
 
 export interface DeployTemplate {
   id: string
@@ -12,11 +13,14 @@ export interface DeployTemplate {
   language: 'nginx' | 'ini' | 'shell' | 'cron' | 'env' | 'markdown'
   /** 部署侧人工步骤，Dashboard 仅提供样例 */
   body: string
+  /** 复制/执行后建议填写的签核备注字段（只读引导，不自动勾选完成） */
+  relatedSignoff?: SignoffNoteField
 }
 
 export const DEPLOY_TEMPLATES: DeployTemplate[] = [
   {
     id: 'nginx-https',
+    relatedSignoff: 'edgeHttps',
     title: { zh: 'Nginx HTTPS + HSTS 样例', en: 'Nginx HTTPS + HSTS sample' },
     description: {
       zh: '边缘 TLS 终止与 HSTS 响应头样例；证书路径与上游地址请按环境替换。',
@@ -50,6 +54,7 @@ server {
   },
   {
     id: 'cert-acceptance-checks',
+    relatedSignoff: 'edgeHttps',
     title: { zh: '证书/HSTS 人工验收命令', en: 'Certificate / HSTS manual check commands' },
     description: {
       zh: '浏览器外的命令行核验样例；通过不代表生产人工验收已签字完成。',
@@ -78,6 +83,7 @@ echo
   },
   {
     id: 'backup-env',
+    relatedSignoff: 'backupOffsite',
     title: { zh: '备份脚本环境变量样例', en: 'Backup script environment sample' },
     description: {
       zh: '供 systemd EnvironmentFile 或 cron 前缀使用；密钥勿提交仓库。',
@@ -95,6 +101,7 @@ MTS_BACKUP_REMOTE=backup@host:/var/backups/mts
   },
   {
     id: 'cron-backup',
+    relatedSignoff: 'backupOffsite',
     title: { zh: 'cron 定时备份样例', en: 'cron scheduled backup sample' },
     description: {
       zh: '主机 crontab 条目；日志与告警通道由部署侧接入。',
@@ -107,6 +114,7 @@ MTS_BACKUP_REMOTE=backup@host:/var/backups/mts
   },
   {
     id: 'systemd-backup-service',
+    relatedSignoff: 'backupOffsite',
     title: { zh: 'systemd oneshot 服务样例', en: 'systemd oneshot service sample' },
     description: {
       zh: '写入 /etc/systemd/system/mts-backup.service 后 systemctl daemon-reload。',
@@ -130,6 +138,7 @@ Nice=10
   },
   {
     id: 'systemd-backup-timer',
+    relatedSignoff: 'backupOffsite',
     title: { zh: 'systemd timer 样例', en: 'systemd timer sample' },
     description: {
       zh: '写入 /etc/systemd/system/mts-backup.timer 后 enable --now。',
@@ -151,6 +160,7 @@ WantedBy=timers.target
   },
   {
     id: 'rsync-offsite',
+    relatedSignoff: 'backupOffsite',
     title: { zh: '异地 rsync 拷贝样例', en: 'Off-host rsync copy sample' },
     description: {
       zh: '跨主机/跨盘同步 data-snapshot；需预先配置 SSH 密钥或受限账号。',
@@ -172,6 +182,7 @@ echo "offsite ok: $BASE -> $REMOTE"
   },
   {
     id: 'backup-alert-hook',
+    relatedSignoff: 'backupAlert',
     title: { zh: '备份失败告警钩子样例', en: 'Backup failure alert hook sample' },
     description: {
       zh: '供 systemd ExecStopPost 或 cron 包装脚本调用；需替换 webhook/邮件通道。',
@@ -199,6 +210,22 @@ exit 0
 
 export function deployTemplateById(id: string, templates = DEPLOY_TEMPLATES): DeployTemplate | undefined {
   return templates.find((t) => t.id === id)
+}
+
+
+/** 模板与签核字段映射（纯函数） */
+export function relatedSignoffForTemplate(
+  id: string,
+  templates = DEPLOY_TEMPLATES,
+): SignoffNoteField | undefined {
+  return deployTemplateById(id, templates)?.relatedSignoff
+}
+
+export function templatesForSignoffField(
+  field: SignoffNoteField,
+  templates = DEPLOY_TEMPLATES,
+): DeployTemplate[] {
+  return templates.filter((t) => t.relatedSignoff === field)
 }
 
 export function formatDeployTemplateLabel(tpl: DeployTemplate, locale: LocaleCode = 'zh'): string {

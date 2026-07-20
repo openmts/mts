@@ -320,6 +320,20 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['signoff', '签核', 'evidence', '备注', 'offsite', 'alert'],
     adminOnly: true,
   },
+  {
+    id: 'readiness-export-preflight',
+    path: '/ops/readiness#export-preflight',
+    labelKey: 'cmdReadinessExportPreflight',
+    keywords: ['preflight', 'export preflight', '导出预检', '预检'],
+    adminOnly: true,
+  },
+  {
+    id: 'readiness-deploy-drill',
+    path: '/ops/readiness#deploy-runbook-drill',
+    labelKey: 'cmdReadinessDeployDrill',
+    keywords: ['runbook drill', '联调清单', 'deploy drill', '演练清单'],
+    adminOnly: true,
+  },
   { id: 'about', path: '/about', labelKey: 'about', keywords: ['version', '关于', 'build'] },
   { id: 'account', path: '/account', labelKey: 'account', keywords: ['password', '账户', 'profile'] },
 ]

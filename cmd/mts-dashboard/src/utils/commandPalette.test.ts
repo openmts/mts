@@ -65,6 +65,8 @@ test('command palette includes ops deep links for admin', () => {
     'storage-edge-https',
     'readiness-deploy-kit',
     'readiness-signoff',
+    'readiness-export-preflight',
+    'readiness-deploy-drill',
     'operations-flush',
     'operations-compact',
     'operations-retention',

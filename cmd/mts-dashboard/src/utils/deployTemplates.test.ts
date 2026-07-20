@@ -6,6 +6,8 @@ import {
   deployTemplateById,
   formatDeployKitMarkdown,
   buildDeployKitSummary,
+  relatedSignoffForTemplate,
+  templatesForSignoffField,
 } from './deployTemplates.ts'
 
 test('deploy templates cover cert and scheduler surfaces', () => {
@@ -62,4 +64,15 @@ test('deploy kit includes offsite rsync and alert hook samples', () => {
 test('formatDeployKitMarkdown can omit drill appendix', () => {
   const zh = formatDeployKitMarkdown('zh', undefined, { includeDrill: false })
   assert.doesNotMatch(zh, /附录：Runbook 联调清单/)
+})
+
+test('relatedSignoff maps templates to signoff fields', () => {
+  assert.equal(relatedSignoffForTemplate('nginx-https'), 'edgeHttps')
+  assert.equal(relatedSignoffForTemplate('cert-acceptance-checks'), 'edgeHttps')
+  assert.equal(relatedSignoffForTemplate('rsync-offsite'), 'backupOffsite')
+  assert.equal(relatedSignoffForTemplate('backup-alert-hook'), 'backupAlert')
+  assert.equal(relatedSignoffForTemplate('missing'), undefined)
+  const edge = templatesForSignoffField('edgeHttps')
+  assert.ok(edge.some((t) => t.id === 'nginx-https'))
+  assert.ok(templatesForSignoffField('backupAlert').some((t) => t.id === 'backup-alert-hook'))
 })
