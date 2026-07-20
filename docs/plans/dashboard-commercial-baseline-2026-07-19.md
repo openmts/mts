@@ -687,3 +687,8 @@
 - 商业冒烟覆盖 config-*-virtual-list
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P130 状态（2026-07-20）
+- Metrics family 列表虚拟滚动；样本单展开详情面板
+- 商业冒烟覆盖 metrics-virtual-list
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

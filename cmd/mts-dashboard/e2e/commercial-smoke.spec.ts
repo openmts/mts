@@ -177,6 +177,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('metrics-filter')).toBeVisible()
   await expect(page.getByTestId('metrics-export-raw')).toBeVisible()
   await expect(page.getByTestId('metrics-auto-refresh')).toBeVisible()
+  if (await page.getByTestId('metrics-virtual-list').count()) {
+    await expect(page.getByTestId('metrics-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('metrics-virtual-hint')).toBeVisible()
+  }
   await expect(page.getByRole('main').getByRole('heading', { name: /指标浏览|Metrics explorer/ })).toBeVisible()
   await expect(page.getByRole('main').getByText(/指标族|Families|样本|Samples/i).first()).toBeVisible()
 

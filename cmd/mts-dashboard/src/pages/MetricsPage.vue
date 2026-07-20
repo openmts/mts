@@ -9,6 +9,7 @@ import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
 import {
   filterPrometheusFamilies,
   formatSampleLabels,
@@ -30,14 +31,18 @@ const loadError = ref('')
 const raw = ref('')
 const families = ref<PrometheusFamily[]>([])
 const q = ref('')
-const expanded = ref<Record<string, boolean>>({})
+const activeFamilyName = ref('')
 const lastRefreshed = ref('')
 const autoRefreshMs = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
 
+const FAMILY_ROW_HEIGHT = 64
+const METRICS_LIST_HEIGHT = 480
+
 const filtered = computed(() => filterPrometheusFamilies(families.value, q.value))
 const summary = computed(() => summarizeFamilies(filtered.value))
 const refreshOptions = metricsRefreshIntervalsMs()
+const activeFamily = computed(() => filtered.value.find((f) => f.name === activeFamilyName.value) ?? null)
 
 async function load() {
   if (!isAdmin.value) return
@@ -59,17 +64,16 @@ async function load() {
 }
 
 function toggle(name: string) {
-  expanded.value = { ...expanded.value, [name]: !expanded.value[name] }
+  activeFamilyName.value = activeFamilyName.value === name ? '' : name
 }
 
 function expandAll() {
-  const next: Record<string, boolean> = {}
-  for (const f of filtered.value) next[f.name] = true
-  expanded.value = next
+  // 单展开面板：全选展开时定位到筛选列表首项
+  activeFamilyName.value = filtered.value[0]?.name ?? ''
 }
 
 function collapseAll() {
-  expanded.value = {}
+  activeFamilyName.value = ''
 }
 
 function exportRaw() {
@@ -107,6 +111,12 @@ function setupAutoRefresh() {
 
 watch(autoRefreshMs, () => {
   setupAutoRefresh()
+})
+
+watch(filtered, (list) => {
+  if (activeFamilyName.value && !list.some((f) => f.name === activeFamilyName.value)) {
+    activeFamilyName.value = ''
+  }
 })
 
 onMounted(() => {
@@ -184,29 +194,57 @@ onBeforeUnmount(() => {
     <div v-if="!loading && !filtered.length" class="mts-card" data-testid="metrics-empty">
       <EmptyState :title="t('metricsEmpty')" :description="t('metricsEmptyDesc')" />
     </div>
-    <div class="space-y-2 scroll-mt-20" v-else id="metrics-list" data-testid="metrics-list">
-      <div
-        v-for="fam in filtered"
-        :key="fam.name"
-        class="mts-card overflow-hidden"
-        :data-testid="`metrics-family-${fam.name}`"
-      >
-        <button
-          type="button"
-          class="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50"
-          :aria-expanded="expanded[fam.name] ? 'true' : 'false'"
-          @click="toggle(fam.name)"
+    <div class="space-y-3 scroll-mt-20" v-else id="metrics-list" data-testid="metrics-list">
+      <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <VirtualTable
+          :items="filtered"
+          :row-height="FAMILY_ROW_HEIGHT"
+          :height="METRICS_LIST_HEIGHT"
+          data-testid="metrics-virtual-list"
         >
-          <div>
-            <p class="font-mono text-sm font-medium text-slate-800 dark:text-slate-100">{{ fam.name }}</p>
+          <template #default="{ item: fam }">
+            <button
+              type="button"
+              class="flex h-full w-full items-start justify-between gap-3 border-b border-slate-100 px-3 py-2 text-left hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
+              :class="activeFamilyName === fam.name ? 'bg-slate-50 dark:bg-slate-800/40' : ''"
+              :data-testid="`metrics-family-${fam.name}`"
+              :aria-expanded="activeFamilyName === fam.name ? 'true' : 'false'"
+              @click="toggle(fam.name)"
+            >
+              <div class="min-w-0">
+                <p class="truncate font-mono text-sm font-medium text-slate-800 dark:text-slate-100" :title="fam.name">{{ fam.name }}</p>
+                <p class="truncate text-xs mts-muted" :title="fam.help || ''">
+                  <span v-if="fam.type" class="mr-2 uppercase">{{ fam.type }}</span>
+                  {{ fam.help || t('emptyValue') }}
+                </p>
+              </div>
+              <span class="shrink-0 text-xs mts-muted whitespace-nowrap">{{ formatMessage(t('metricsSampleCount'), { count: fam.samples.length }) }}</span>
+            </button>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="metrics-virtual-hint">
+          {{ t('metricsVirtualHint') }}
+        </p>
+      </div>
+
+      <div
+        v-if="activeFamily"
+        class="mts-card overflow-hidden"
+        data-testid="metrics-detail-panel"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
+          <div class="min-w-0">
+            <p class="truncate font-mono text-sm font-medium text-slate-800 dark:text-slate-100" data-testid="metrics-detail-name">{{ activeFamily.name }}</p>
             <p class="text-xs mts-muted">
-              <span v-if="fam.type" class="mr-2 uppercase">{{ fam.type }}</span>
-              {{ fam.help || t('emptyValue') }}
+              <span v-if="activeFamily.type" class="mr-2 uppercase">{{ activeFamily.type }}</span>
+              {{ activeFamily.help || t('emptyValue') }}
             </p>
           </div>
-          <span class="text-xs mts-muted whitespace-nowrap">{{ formatMessage(t('metricsSampleCount'), { count: fam.samples.length }) }}</span>
-        </button>
-        <div v-if="expanded[fam.name]" class="mts-table-wrap border-t border-slate-100 dark:border-slate-800">
+          <button type="button" class="mts-btn" data-testid="metrics-detail-collapse" @click="collapseAll">
+            {{ t('metricsDetailCollapse') }}
+          </button>
+        </div>
+        <div class="mts-table-wrap">
           <table class="min-w-full text-left text-xs">
             <thead class="bg-slate-50 text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">
               <tr>
@@ -216,7 +254,7 @@ onBeforeUnmount(() => {
             </thead>
             <tbody>
               <tr
-                v-for="(s, i) in fam.samples"
+                v-for="(s, i) in activeFamily.samples"
                 :key="i"
                 class="border-t border-slate-100 dark:border-slate-800"
               >
@@ -224,6 +262,9 @@ onBeforeUnmount(() => {
                   {{ formatSampleLabels(s.labels) || t('emptyValue') }}
                 </td>
                 <td class="px-3 py-1.5 font-mono text-slate-800 dark:text-slate-100">{{ s.value }}</td>
+              </tr>
+              <tr v-if="!activeFamily.samples.length">
+                <td colspan="2" class="px-3 py-2 text-xs mts-muted">{{ t('emptyValue') }}</td>
               </tr>
             </tbody>
           </table>
