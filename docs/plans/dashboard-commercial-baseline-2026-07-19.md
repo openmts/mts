@@ -722,3 +722,8 @@
 - 商业冒烟覆盖 signoff-guide-* 与 backupOffsite 示例
 - **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
 
+## P137 状态（2026-07-21）
+- ApiSpec / Overview health·doctor·maint / Readiness doctor 虚拟滚动
+- 全量检视报告：docs/review/code-review-2026-07-21-0002-mts-dashboard-full.md
+- **仍不宣称可商用目标完成**：边缘证书验收、cron/systemd 实装、跨主机备份告警
+

@@ -8,6 +8,8 @@ import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { Download, RefreshCw, Search } from 'lucide-vue-next'
+import VirtualTable from '@/components/VirtualTable.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { apiSpecToMarkdown, buildApiSpecExport } from '@/utils/apiSpecExport'
 import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
 
@@ -36,6 +38,8 @@ const version = ref('')
 const namespaces = ref<APINamespace[]>([])
 const q = ref('')
 const nsFilter = ref('')
+const EP_ROW_HEIGHT = 40
+const EP_LIST_HEIGHT = 360
 
 async function load() {
   if (!isAdmin.value) return
@@ -157,31 +161,47 @@ function exportMarkdown() {
       </label>
     </div>
 
+    <EmptyState
+      v-if="!loading && !loadError && !filtered.length"
+      data-testid="api-spec-empty"
+      :title="t('apiSpecFilterEmpty')"
+      :description="t('apiSpecFilterEmptyDesc')"
+    />
     <div v-for="ns in filtered" :key="ns.name" class="mts-panel" :data-testid="`api-spec-ns-${ns.name}`">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ ns.name }}</h2>
         <span class="text-xs mts-muted">{{ ns.base_path || t('emptyValue') }} · {{ formatMessage(t('apiSpecEndpoints'), { count: ns.endpoints.length }) }}</span>
       </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">{{ t('apiSpecColMethod') }}</th>
-              <th class="px-2 py-2">{{ t('apiSpecColPath') }}</th>
-              <th class="px-2 py-2">{{ t('apiSpecColAuth') }}</th>
-              <th class="px-2 py-2">{{ t('apiSpecColDescription') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(ep, i) in ns.endpoints" :key="i" class="border-b border-slate-100 dark:border-slate-800">
-              <td class="px-2 py-2 font-mono text-xs font-semibold">{{ ep.method }}</td>
-              <td class="px-2 py-2 font-mono text-xs">{{ ep.path }}</td>
-              <td class="px-2 py-2 text-xs mts-muted">{{ ep.auth || t('emptyValue') }}</td>
-              <td class="px-2 py-2 text-xs">{{ ep.description || t('emptyValue') }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-if="ns.endpoints.length" class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800" :data-testid="`api-spec-ep-table-${ns.name}`">
+        <div class="grid grid-cols-[5rem_minmax(8rem,1.2fr)_minmax(5rem,0.7fr)_minmax(8rem,1.2fr)] border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
+          <span>{{ t('apiSpecColMethod') }}</span>
+          <span>{{ t('apiSpecColPath') }}</span>
+          <span>{{ t('apiSpecColAuth') }}</span>
+          <span>{{ t('apiSpecColDescription') }}</span>
+        </div>
+        <VirtualTable
+          :items="ns.endpoints"
+          :row-height="EP_ROW_HEIGHT"
+          :height="Math.min(EP_LIST_HEIGHT, Math.max(160, ns.endpoints.length * EP_ROW_HEIGHT))"
+          :data-testid="`api-spec-ep-virtual-list-${ns.name}`"
+        >
+          <template #default="{ item: ep, index }">
+            <div
+              class="grid h-full grid-cols-[5rem_minmax(8rem,1.2fr)_minmax(5rem,0.7fr)_minmax(8rem,1.2fr)] items-center border-b border-slate-100 px-2 text-xs dark:border-slate-800"
+              :data-testid="`api-spec-ep-row-${ns.name}-${index}`"
+            >
+              <span class="font-mono font-semibold">{{ ep.method }}</span>
+              <span class="truncate font-mono" :title="ep.path">{{ ep.path }}</span>
+              <span class="mts-muted truncate">{{ ep.auth || t('emptyValue') }}</span>
+              <span class="truncate" :title="ep.description || ''">{{ ep.description || t('emptyValue') }}</span>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" :data-testid="`api-spec-ep-virtual-hint-${ns.name}`">
+          {{ t('apiSpecEpVirtualHint') }}
+        </p>
       </div>
+      <EmptyState v-else compact :title="t('apiSpecEpEmpty')" :description="t('apiSpecEpEmptyDesc')" />
     </div>
   </div>
 </template>

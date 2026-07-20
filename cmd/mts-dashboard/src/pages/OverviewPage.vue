@@ -30,8 +30,14 @@ import { useNotify } from '@/composables/useNotify'
 import { buildOverviewExport, formatOverviewExportPretty } from '@/utils/overviewExport'
 import { downloadJSON, stampFilename } from '@/utils/download'
 import { copyText } from '@/utils/clipboard'
+import VirtualTable from '@/components/VirtualTable.vue'
 
 interface HealthResponse extends HealthSnapshot {}
+
+const CHECK_ROW_HEIGHT = 40
+const CHECK_LIST_HEIGHT = 280
+const MAINT_ROW_HEIGHT = 36
+const MAINT_LIST_HEIGHT = 240
 interface StorageMemorySnapshot {
   heap_alloc_bytes?: number
   heap_inuse_bytes?: number
@@ -679,30 +685,34 @@ async function copyOverview() {
       </div>
     </div>
 
-    <div v-if="healthChecks.length" class="mts-panel">
+    <div v-if="healthChecks.length" class="mts-panel" data-testid="overview-health-checks">
       <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('healthChecks') }}</h2>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">{{ t('healthCheckColName') }}</th>
-              <th class="px-2 py-2">{{ t('healthCheckColStatus') }}</th>
-              <th class="px-2 py-2">{{ t('healthCheckColReason') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(c, i) in healthChecks" :key="i" class="border-b border-slate-100 dark:border-slate-800">
-              <td class="px-2 py-2 font-mono text-xs">{{ c.name }}</td>
-              <td class="px-2 py-2 text-xs" :class="healthStatusToneClass(c.status)">{{ formatHealthStatus(c.status) }}</td>
-              <td class="px-2 py-2 text-xs mts-muted">{{ c.reason || t('emptyValue') }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
+        <div class="grid grid-cols-[minmax(7rem,1fr)_minmax(5rem,0.6fr)_minmax(8rem,1.2fr)] border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
+          <span>{{ t('healthCheckColName') }}</span>
+          <span>{{ t('healthCheckColStatus') }}</span>
+          <span>{{ t('healthCheckColReason') }}</span>
+        </div>
+        <VirtualTable
+          :items="healthChecks"
+          :row-height="CHECK_ROW_HEIGHT"
+          :height="Math.min(CHECK_LIST_HEIGHT, Math.max(120, healthChecks.length * CHECK_ROW_HEIGHT))"
+          data-testid="overview-health-virtual-list"
+        >
+          <template #default="{ item: c, index }">
+            <div class="grid h-full grid-cols-[minmax(7rem,1fr)_minmax(5rem,0.6fr)_minmax(8rem,1.2fr)] items-center border-b border-slate-100 px-2 text-xs dark:border-slate-800" :data-testid="`overview-health-row-${index}`">
+              <span class="truncate font-mono" :title="c.name">{{ c.name }}</span>
+              <span :class="healthStatusToneClass(c.status)">{{ formatHealthStatus(c.status) }}</span>
+              <span class="truncate mts-muted" :title="c.reason || ''">{{ c.reason || t('emptyValue') }}</span>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="overview-health-virtual-hint">{{ t('overviewChecksVirtualHint') }}</p>
       </div>
     </div>
 
 
-    <div v-if="showAdminPanels && doctorChecks.length" class="mts-panel">
+        <div v-if="showAdminPanels && doctorChecks.length" class="mts-panel" data-testid="overview-doctor-checks">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2">
           <ShieldCheck class="h-4 w-4 text-slate-500" />
@@ -717,23 +727,27 @@ async function copyOverview() {
         </span>
       </div>
       <p class="mb-3 text-xs mts-muted">{{ t('doctorDesc') }}</p>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">{{ t('readinessDoctorColLevel') }}</th>
-              <th class="px-2 py-2">{{ t('readinessDoctorColCode') }}</th>
-              <th class="px-2 py-2">{{ t('readinessDoctorColMessage') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(c, i) in doctorChecks" :key="i" class="border-b border-slate-100 dark:border-slate-800">
-              <td class="px-2 py-2 text-xs" :class="healthStatusToneClass(c.level)">{{ formatHealthStatus(c.level) }}</td>
-              <td class="px-2 py-2 font-mono text-xs">{{ c.code }}</td>
-              <td class="px-2 py-2 text-xs mts-muted">{{ c.message }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
+        <div class="grid grid-cols-[minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(8rem,1.3fr)] border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
+          <span>{{ t('readinessDoctorColLevel') }}</span>
+          <span>{{ t('readinessDoctorColCode') }}</span>
+          <span>{{ t('readinessDoctorColMessage') }}</span>
+        </div>
+        <VirtualTable
+          :items="doctorChecks"
+          :row-height="CHECK_ROW_HEIGHT"
+          :height="Math.min(CHECK_LIST_HEIGHT, Math.max(120, doctorChecks.length * CHECK_ROW_HEIGHT))"
+          data-testid="overview-doctor-virtual-list"
+        >
+          <template #default="{ item: c, index }">
+            <div class="grid h-full grid-cols-[minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(8rem,1.3fr)] items-center border-b border-slate-100 px-2 text-xs dark:border-slate-800" :data-testid="`overview-doctor-row-${index}`">
+              <span :class="healthStatusToneClass(c.level)">{{ formatHealthStatus(c.level) }}</span>
+              <span class="truncate font-mono" :title="c.code">{{ c.code }}</span>
+              <span class="truncate mts-muted" :title="c.message">{{ c.message }}</span>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="overview-doctor-virtual-hint">{{ t('overviewChecksVirtualHint') }}</p>
       </div>
     </div>
 
@@ -748,10 +762,22 @@ async function copyOverview() {
           <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceErrors') }}</h2>
           <span class="text-xs mts-muted">({{ maintenanceErrors.length }})</span>
         </div>
-        <p v-if="!maintenanceErrors.length" class="text-sm mts-muted">{{ t('noMaintenanceErrors') }}</p>
-        <ul v-else class="max-h-48 space-y-1 overflow-auto text-xs text-red-700 dark:text-red-200">
-          <li v-for="(e, i) in maintenanceErrors" :key="i" class="rounded bg-red-50 px-2 py-1 dark:bg-red-950/40">{{ e }}</li>
-        </ul>
+        <p v-if="!maintenanceErrors.length" class="text-sm mts-muted" data-testid="overview-maint-empty">{{ t('noMaintenanceErrors') }}</p>
+        <div v-else class="overflow-hidden rounded-lg border border-red-100 dark:border-red-900/40" data-testid="overview-maint-errors">
+          <VirtualTable
+            :items="maintenanceErrors"
+            :row-height="MAINT_ROW_HEIGHT"
+            :height="Math.min(MAINT_LIST_HEIGHT, Math.max(108, maintenanceErrors.length * MAINT_ROW_HEIGHT))"
+            data-testid="overview-maint-virtual-list"
+          >
+            <template #default="{ item: e, index }">
+              <div class="flex h-full items-center border-b border-red-50 px-2 font-mono text-xs text-red-700 dark:border-red-950/40 dark:text-red-200" :data-testid="`overview-maint-row-${index}`">
+                <span class="truncate" :title="e">{{ e }}</span>
+              </div>
+            </template>
+          </VirtualTable>
+          <p class="border-t border-red-50 px-3 py-1.5 text-[11px] mts-muted dark:border-red-950/40" data-testid="overview-maint-virtual-hint">{{ t('overviewMaintVirtualHint') }}</p>
+        </div>
       </div>
 
       <div class="mts-panel">

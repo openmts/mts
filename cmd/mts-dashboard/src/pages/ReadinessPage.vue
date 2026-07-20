@@ -28,6 +28,8 @@ import {
 } from '@/utils/deployRunbookDrill'
 import { textForLocale, type LocaleCode } from '@/utils/localizedText'
 import PermissionDenied from '@/components/PermissionDenied.vue'
+import VirtualTable from '@/components/VirtualTable.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import {
   PRODUCTION_CHECKLIST,
@@ -117,6 +119,8 @@ const route = useRoute()
 const { success, error: notifyError } = useNotify()
 
 const state = ref<ReadinessState>(loadReadinessState())
+const DOC_ROW_HEIGHT = 40
+const DOC_LIST_HEIGHT = 280
 const doctor = ref<DoctorResponse | null>(null)
 const doctorError = ref('')
 const loadingDoctor = ref(false)
@@ -1160,25 +1164,36 @@ watch(
           }) }}
         </span>
       </div>
-      <div v-if="doctor" class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
-              <th class="px-2 py-2">{{ t('readinessDoctorColLevel') }}</th>
-              <th class="px-2 py-2">{{ t('readinessDoctorColCode') }}</th>
-              <th class="px-2 py-2">{{ t('readinessDoctorColMessage') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(c, i) in doctor.checks ?? []" :key="i" class="border-b border-slate-100 dark:border-slate-800">
-              <td class="px-2 py-2 text-xs" :class="healthStatusToneClass(c.level)">{{ formatDoctorLevel(c.level) }}</td>
-              <td class="px-2 py-2 font-mono text-xs">{{ c.code }}</td>
-              <td class="px-2 py-2 text-xs mts-muted">{{ c.message }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-if="doctor && (doctor.checks ?? []).length" class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800" data-testid="readiness-doctor-checks">
+        <div class="grid grid-cols-[minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(8rem,1.3fr)] border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
+          <span>{{ t('readinessDoctorColLevel') }}</span>
+          <span>{{ t('readinessDoctorColCode') }}</span>
+          <span>{{ t('readinessDoctorColMessage') }}</span>
+        </div>
+        <VirtualTable
+          :items="doctor.checks ?? []"
+          :row-height="DOC_ROW_HEIGHT"
+          :height="Math.min(DOC_LIST_HEIGHT, Math.max(120, (doctor.checks ?? []).length * DOC_ROW_HEIGHT))"
+          data-testid="readiness-doctor-virtual-list"
+        >
+          <template #default="{ item: c, index }">
+            <div class="grid h-full grid-cols-[minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(8rem,1.3fr)] items-center border-b border-slate-100 px-2 text-xs dark:border-slate-800" :data-testid="`readiness-doctor-row-${index}`">
+              <span :class="healthStatusToneClass(c.level)">{{ formatDoctorLevel(c.level) }}</span>
+              <span class="truncate font-mono" :title="c.code">{{ c.code }}</span>
+              <span class="truncate mts-muted" :title="c.message">{{ c.message }}</span>
+            </div>
+          </template>
+        </VirtualTable>
+        <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="readiness-doctor-virtual-hint">{{ t('readinessDoctorVirtualHint') }}</p>
       </div>
-      <p v-else class="text-xs mts-muted">{{ loadingDoctor ? t('loading') : t('emptyValue') }}</p>
+      <EmptyState
+        v-else-if="!loadingDoctor"
+        compact
+        data-testid="readiness-doctor-empty"
+        :title="t('readinessDoctorEmpty')"
+        :description="t('readinessDoctorEmptyDesc')"
+      />
+      <p v-else class="text-xs mts-muted">{{ t('loading') }}</p>
       <p v-if="doctorOKs.length" class="mt-2 text-[11px] mts-muted">
         {{ formatMessage(t('readinessDoctorOkChecks'), { count: doctorOKs.length }) }}
       </p>

@@ -45,6 +45,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page).not.toHaveURL(/login|force-change/)
   await expect(page.getByText(/概览|健康|Healthy|Ready/i).first()).toBeVisible()
   await expect(page.getByTestId('overview-page')).toBeVisible()
+  if (await page.getByTestId('overview-health-virtual-list').count()) {
+    await expect(page.getByTestId('overview-health-virtual-list')).toBeVisible()
+  }
+  if (await page.getByTestId('overview-doctor-virtual-list').count()) {
+    await expect(page.getByTestId('overview-doctor-virtual-list')).toBeVisible()
+  }
   await expect(page.getByTestId('overview-summary')).toBeVisible()
   await expect(page.getByTestId('sidebar')).toBeVisible()
   await expect(page.getByTestId('sidebar-collapse-toggle')).toBeVisible()
@@ -205,6 +211,11 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('access-grants-virtual-hint')).toBeVisible()
   }
   await page.goto('/api-spec')
+  await expect(page.getByTestId('api-spec-page').or(page.getByRole('main')).first()).toBeVisible()
+  // P137: 任一 namespace 有端点时校验 virtual-list
+  if (await page.locator('[data-testid^="api-spec-ep-virtual-list-"]').count()) {
+    await expect(page.locator('[data-testid^="api-spec-ep-virtual-list-"]').first()).toBeVisible()
+  }
   await expect(page.getByTestId('api-spec-page')).toBeVisible()
   await expect(page.getByTestId('api-spec-export-json')).toBeVisible()
   await expect(page.getByTestId('api-spec-export-md')).toBeVisible()
@@ -303,6 +314,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-next-steps')).toBeVisible()
   await expect(page.locator('[data-testid^="next-step-"]').first()).toBeVisible()
   await expect(page.getByTestId('readiness-doctor-panel')).toBeVisible()
+  if (await page.getByTestId('readiness-doctor-virtual-list').count()) {
+    await expect(page.getByTestId('readiness-doctor-virtual-list')).toBeVisible()
+    await expect(page.getByTestId('readiness-doctor-virtual-hint')).toBeVisible()
+  }
   await expect(page.getByTestId('preflight-item-signoff')).toBeVisible()
   await expect(page.getByTestId('preflight-jump-signoff')).toBeVisible()
   await page.getByTestId('preflight-jump-signoff').click()
