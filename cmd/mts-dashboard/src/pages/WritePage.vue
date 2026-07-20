@@ -17,6 +17,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import {
   fieldTypes, buildFormPoints, parseLineProtocolDetailed, parsePrometheusText, type FormRow,
 } from '@/composables/usePointParsers'
+import { makeFormErrorT } from '@/utils/formErrors'
 
 type WriteMode = 'form' | 'line' | 'prometheus' | 'typed'
 
@@ -51,6 +52,25 @@ function fieldTypeLabel(value: string): string {
 }
 function trErr(key: MessageKey, vars: Record<string, string | number> = {}) {
   return formatMessage(t.value(key), vars)
+}
+function writeFormT() {
+  return makeFormErrorT({
+    writeFormErrBadFieldType: t.value('writeFormErrBadFieldType'),
+    writeFormErrBadInt: t.value('writeFormErrBadInt'),
+    writeFormErrIntOverflow: t.value('writeFormErrIntOverflow'),
+    writeFormErrBadFloat: t.value('writeFormErrBadFloat'),
+    writeFormErrNoFields: t.value('writeFormErrNoFields'),
+    writeFormErrTsNotInt: t.value('writeFormErrTsNotInt'),
+    writeFormErrTsOverflow: t.value('writeFormErrTsOverflow'),
+    writeLineErrBadFormat: t.value('writeLineErrBadFormat'),
+    writeLineErrBadTag: t.value('writeLineErrBadTag'),
+    writeLineErrFieldNoEq: t.value('writeLineErrFieldNoEq'),
+    writeLineErrFieldNameEmpty: t.value('writeLineErrFieldNameEmpty'),
+    writeLineErrFieldValue: t.value('writeLineErrFieldValue'),
+    writeLineErrNoFields: t.value('writeLineErrNoFields'),
+    writeLineErrTsOverflow: t.value('writeLineErrTsOverflow'),
+    writeLineErrSummaryMore: t.value('writeLineErrSummaryMore'),
+  })
 }
 const { currentUser, isAdmin } = useAuth()
 const authzHint = ref('')
@@ -237,9 +257,9 @@ async function submit() {
     }
     let points: Record<string, unknown>[] = []
     if (writeMode.value === 'form') {
-      points = buildFormPoints(formRows.value)
+      points = buildFormPoints(formRows.value, writeFormT())
     } else if (writeMode.value === 'line') {
-      const parsed = parseLineProtocolDetailed(lineInput.value)
+      const parsed = parseLineProtocolDetailed(lineInput.value, writeFormT())
       if (parsed.errors.length) {
         const summary = parsed.errors.slice(0, 5).join('; ') + (parsed.errors.length > 5 ? formatMessage(t.value('writeLineMoreErrors'), { count: parsed.errors.length }) : '')
         if (!parsed.points.length) throw new Error(summary)

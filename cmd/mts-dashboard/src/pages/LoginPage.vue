@@ -5,6 +5,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { sanitizeRedirect } from '@/router'
 import { loginReasonMessage } from '@/utils/authReason'
+import { parseLoginTTLSeconds } from '@/utils/loginTTL'
 import { Server } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -13,6 +14,7 @@ const { t, locale } = useI18n()
 
 const username = ref('admin')
 const password = ref('')
+const ttlSeconds = ref('')
 const loading = ref(false)
 const error = ref('')
 const reasonHint = computed(() =>
@@ -25,10 +27,19 @@ async function handleLogin() {
     error.value = t.value('loginNeedCredentials')
     return
   }
+  const ttl = parseLoginTTLSeconds(ttlSeconds.value)
+  if (!ttl.ok) {
+    error.value = t.value('loginTTLInvalid')
+    return
+  }
   error.value = ''
   loading.value = true
   try {
-    const err = await login(username.value.trim(), password.value)
+    const err = await login(
+      username.value.trim(),
+      password.value,
+      ttl.seconds != null ? { ttlSeconds: ttl.seconds } : undefined,
+    )
     if (err) {
       error.value = err
     } else {
@@ -96,6 +107,23 @@ async function handleLogin() {
             :aria-invalid="invalid ? 'true' : undefined"
             :aria-describedby="error ? 'login-error' : undefined"
           />
+        </div>
+
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="ttl">{{ t('loginTTLLabel') }}</label>
+          <input
+            id="ttl"
+            v-model="ttlSeconds"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            class="mts-input mts-focus-ring"
+            data-testid="login-ttl"
+            :placeholder="t('loginTTLPlaceholder')"
+            :aria-invalid="error === t('loginTTLInvalid') ? 'true' : undefined"
+            :aria-describedby="error ? 'login-error login-ttl-hint' : 'login-ttl-hint'"
+          />
+          <p id="login-ttl-hint" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{{ t('loginTTLHint') }}</p>
         </div>
 
         <p

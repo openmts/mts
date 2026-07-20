@@ -2,8 +2,10 @@ import { ref } from 'vue'
 import { formatCaughtError } from '@/utils/apiError'
 import { apiPost, apiPostNDJSONStream } from '@/api/client'
 import { listDatabasesDetailed, listMeasurements, listRetentionPolicies } from '@/api/meta'
-import { parseTimeInt } from '@/utils/time'
-import { parseHumanDurationToNs } from '@/utils/duration'
+import { makeFormErrorT } from '@/utils/formErrors'
+import { buildQueryFromForm } from '@/utils/queryFormBuild'
+import { useI18n } from '@/composables/useI18n'
+import type { MessageKey } from '@/i18n/messages'
 import type { QueryResultRow, QueryStatsData } from '@/api/types'
 
 export type { QueryResultRow, QueryStatsData }
@@ -83,94 +85,23 @@ export function useQueryWorkbench() {
     }
   }
 
-  function parseAggregates(text: string): { function: string; field: string }[] {
-    const out: { function: string; field: string }[] = []
-    for (const part of text.split(',')) {
-      const s = part.trim()
-      if (!s) continue
-      const colon = s.indexOf(':')
-      if (colon <= 0) throw new Error(`聚合格式无效: ${s}（需要 func:field，如 mean:usage）`)
-      const fn = s.slice(0, colon).trim().toLowerCase()
-      const field = s.slice(colon + 1).trim()
-      if (!fn || !field) throw new Error(`聚合格式无效: ${s}`)
-      out.push({ function: fn, field })
-    }
-    return out
-  }
-
-  function parseTags(text: string): Record<string, string> {
-    const tags: Record<string, string> = {}
-    for (const part of text.split(',')) {
-      const s = part.trim()
-      if (!s) continue
-      const eq = s.indexOf('=')
-      if (eq <= 0) throw new Error(`tag 格式无效: ${s}（需要 key=value）`)
-      const k = s.slice(0, eq).trim()
-      const v = s.slice(eq + 1).trim()
-      if (!k) throw new Error(`tag key 为空: ${s}`)
-      tags[k] = v
-    }
-    return tags
-  }
+  const { t: tMsg } = useI18n()
+  const formT = () =>
+    makeFormErrorT({
+      queryErrAggFormat: tMsg.value('queryErrAggFormat' as MessageKey),
+      queryErrAggEmpty: tMsg.value('queryErrAggEmpty' as MessageKey),
+      queryErrTagFormat: tMsg.value('queryErrTagFormat' as MessageKey),
+      queryErrTagKeyEmpty: tMsg.value('queryErrTagKeyEmpty' as MessageKey),
+      queryErrStartTime: tMsg.value('queryErrStartTime' as MessageKey),
+      queryErrEndTime: tMsg.value('queryErrEndTime' as MessageKey),
+      queryErrOffset: tMsg.value('queryErrOffset' as MessageKey),
+      queryErrLimit: tMsg.value('queryErrLimit' as MessageKey),
+    })
 
   function buildQuery(): Record<string, unknown> {
-    const query: Record<string, unknown> = {
-      precision: 'ms',
-    }
-    if (queryForm.value.database) query.database = queryForm.value.database
-    if (queryForm.value.retention_policy) query.retention_policy = queryForm.value.retention_policy
-    if (queryForm.value.measurement) query.measurement = queryForm.value.measurement
-    if (queryForm.value.start_time) {
-      const v = parseTimeInt(queryForm.value.start_time)
-      if (v === null) throw new Error('start_time 必须是安全整数（推荐毫秒）')
-      query.start_time = v
-    }
-    if (queryForm.value.end_time) {
-      const v = parseTimeInt(queryForm.value.end_time)
-      if (v === null) throw new Error('end_time 必须是安全整数（推荐毫秒）')
-      query.end_time = v
-    }
-    if (queryForm.value.fields) {
-      query.fields = queryForm.value.fields.split(',').map((s) => s.trim()).filter(Boolean)
-    }
-    if (queryForm.value.tags.trim()) {
-      query.tags = parseTags(queryForm.value.tags)
-    }
-    if (queryForm.value.order === 'asc' || queryForm.value.order === 'desc') {
-      // QueryOrder: by=1(time), direction=1(asc)/2(desc)
-      query.order = {
-        by: 1,
-        direction: queryForm.value.order === 'desc' ? 2 : 1,
-      }
-    }
-    if (queryForm.value.offset) {
-      const off = parseTimeInt(queryForm.value.offset)
-      if (off === null || off < 0) throw new Error('offset 必须是非负整数')
-      query.offset = off
-    }
-    if (queryForm.value.limit) {
-      const lim = parseTimeInt(queryForm.value.limit)
-      if (lim === null || lim <= 0) throw new Error('limit 必须是正整数')
-      query.limit = lim
-    }
-    if (queryForm.value.aggregates.trim()) {
-      query.aggregates = parseAggregates(queryForm.value.aggregates)
-    }
-    if (queryForm.value.window.trim()) {
-      const ns = parseHumanDurationToNs(queryForm.value.window)
-      query.window = ns
-      const groupTags = queryForm.value.group_tags
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-      query.group = { tags: groupTags, window: ns }
-    } else if (queryForm.value.group_tags.trim()) {
-      query.group = {
-        tags: queryForm.value.group_tags.split(',').map((s) => s.trim()).filter(Boolean),
-      }
-    }
-    return query
+    return buildQueryFromForm(queryForm.value, formT())
   }
+
 
   function cancelQuery() {
     if (queryAbort) {

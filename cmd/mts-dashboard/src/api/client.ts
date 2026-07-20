@@ -447,11 +447,19 @@ export interface LoginResponse {
   must_change_password?: boolean
 }
 
-export async function apiLogin(userName: string, password: string): Promise<LoginResponse> {
-  return apiPost<LoginResponse>('/api/v1/auth/login', {
+export async function apiLogin(
+  userName: string,
+  password: string,
+  opts?: { ttlSeconds?: number },
+): Promise<LoginResponse> {
+  const body: Record<string, unknown> = {
     user_name: userName,
     password,
-  })
+  }
+  if (opts?.ttlSeconds != null && opts.ttlSeconds > 0) {
+    body.ttl_seconds = opts.ttlSeconds
+  }
+  return apiPost<LoginResponse>('/api/v1/auth/login', body)
 }
 
 export async function apiChangePassword(userName: string, oldPassword: string, newPassword: string): Promise<void> {

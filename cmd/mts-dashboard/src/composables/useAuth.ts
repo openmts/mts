@@ -35,9 +35,9 @@ export function useAuth() {
     isAuthenticated.value = !!getBearerToken() && !isTokenExpired()
   }
 
-  async function login(username: string, password: string): Promise<string | null> {
+  async function login(username: string, password: string, opts?: { ttlSeconds?: number }): Promise<string | null> {
     try {
-      const data = await apiLogin(username, password)
+      const data = await apiLogin(username, password, opts)
       if (!data.token?.token) {
         return formatCaughtError({ code: 'internal', message: 'missing token' })
       }

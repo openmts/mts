@@ -1,5 +1,25 @@
 // 数据点解析相关类型与函数，从 WritePage 抽取以控制单文件行数
 
+import { makeFormErrorT, type FormErrorT } from '@/utils/formErrors'
+
+const defaultWriteT: FormErrorT = makeFormErrorT({
+  writeFormErrBadFieldType: '第 {row} 行字段类型无效: {type}',
+  writeFormErrBadInt: '第 {row} 行字段 {key} 不是合法整数',
+  writeFormErrIntOverflow: '第 {row} 行字段 {key} 超出安全整数范围',
+  writeFormErrBadFloat: '第 {row} 行字段 {key} 不是合法浮点数',
+  writeFormErrNoFields: '第 {row} 行没有有效字段',
+  writeFormErrTsNotInt: '第 {row} 行时间戳必须是整数（毫秒）',
+  writeFormErrTsOverflow: '第 {row} 行时间戳超出安全整数范围，请使用毫秒',
+  writeLineErrBadFormat: '第 {line} 行：格式非法',
+  writeLineErrBadTag: '第 {line} 行：标签无效 "{tag}"',
+  writeLineErrFieldNoEq: '第 {line} 行：字段缺少 "=" ({field})',
+  writeLineErrFieldNameEmpty: '第 {line} 行：字段名为空',
+  writeLineErrFieldValue: '第 {line} 行：字段 {key} 值非法 ({value})',
+  writeLineErrNoFields: '第 {line} 行：无有效字段',
+  writeLineErrTsOverflow: '第 {line} 行：时间戳超出 JS 安全整数 ({value})',
+  writeLineErrSummaryMore: ' 等共 {count} 处',
+})
+
 export interface TagRow { key: string; value: string }
 export interface FieldRow { key: string; value: string; type: string }
 export interface FormRow {
@@ -24,27 +44,27 @@ export const fieldTypes: FieldTypeOption[] = [
 ]
 
 // 将表单行转换为服务端 Points 格式（毫秒 precision，拒绝 NaN）
-export function buildFormPoints(rows: FormRow[]): Record<string, unknown>[] {
+export function buildFormPoints(rows: FormRow[], t: FormErrorT = defaultWriteT): Record<string, unknown>[] {
   const points: Record<string, unknown>[] = []
   rows.forEach((row, rowIdx) => {
     const tags: Record<string, string> = {}
-    for (const t of row.tags) {
-      if (t.key.trim()) tags[t.key.trim()] = t.value
+    for (const tag of row.tags) {
+      if (tag.key.trim()) tags[tag.key.trim()] = tag.value
     }
     const fields: Record<string, Record<string, unknown>> = {}
     for (const f of row.fields) {
       if (!f.key.trim() || f.value === '') continue
-      const ft = fieldTypes.find((t) => t.value === f.type)
-      if (!ft) throw new Error(`第 ${rowIdx + 1} 行字段类型无效: ${f.type}`)
+      const ft = fieldTypes.find((opt) => opt.value === f.type)
+      if (!ft) throw new Error(t('writeFormErrBadFieldType', { row: rowIdx + 1, type: f.type }))
       const key = f.key.trim()
       switch (f.type) {
         case 'int': {
           if (!/^-?\d+$/.test(f.value.trim())) {
-            throw new Error(`第 ${rowIdx + 1} 行字段 ${key} 不是合法整数`)
+            throw new Error(t('writeFormErrBadInt', { row: rowIdx + 1, key }))
           }
           const intVal = Number(f.value)
           if (!Number.isSafeInteger(intVal)) {
-            throw new Error(`第 ${rowIdx + 1} 行字段 ${key} 超出安全整数范围`)
+            throw new Error(t('writeFormErrIntOverflow', { row: rowIdx + 1, key }))
           }
           fields[key] = { type: ft.goType, int64: intVal }
           break
@@ -52,7 +72,7 @@ export function buildFormPoints(rows: FormRow[]): Record<string, unknown>[] {
         case 'float': {
           const floatVal = Number(f.value)
           if (!Number.isFinite(floatVal)) {
-            throw new Error(`第 ${rowIdx + 1} 行字段 ${key} 不是合法浮点数`)
+            throw new Error(t('writeFormErrBadFloat', { row: rowIdx + 1, key }))
           }
           fields[key] = { type: ft.goType, float64: floatVal }
           break
@@ -65,16 +85,16 @@ export function buildFormPoints(rows: FormRow[]): Record<string, unknown>[] {
       }
     }
     if (!Object.keys(fields).length) {
-      throw new Error(`第 ${rowIdx + 1} 行没有有效字段`)
+      throw new Error(t('writeFormErrNoFields', { row: rowIdx + 1 }))
     }
     let timestamp = Date.now()
     if (row.timestamp.trim()) {
       if (!/^-?\d+$/.test(row.timestamp.trim())) {
-        throw new Error(`第 ${rowIdx + 1} 行时间戳必须是整数（毫秒）`)
+        throw new Error(t('writeFormErrTsNotInt', { row: rowIdx + 1 }))
       }
       timestamp = Number(row.timestamp)
       if (!Number.isSafeInteger(timestamp)) {
-        throw new Error(`第 ${rowIdx + 1} 行时间戳超出安全整数范围，请使用毫秒`)
+        throw new Error(t('writeFormErrTsOverflow', { row: rowIdx + 1 }))
       }
     }
     points.push({
@@ -164,7 +184,7 @@ function parseFieldValue(val: string): Record<string, unknown> | null {
 }
 
 // 解析 InfluxDB line protocol 文本为 Points（带行级诊断）
-export function parseLineProtocolDetailed(text: string): LineProtocolDiagnostics {
+export function parseLineProtocolDetailed(text: string, t: FormErrorT = defaultWriteT): LineProtocolDiagnostics {
   const points: Record<string, unknown>[] = []
   const errors: string[] = []
   let skippedLines = 0
@@ -178,18 +198,18 @@ export function parseLineProtocolDetailed(text: string): LineProtocolDiagnostics
     }
     const parts = parseLine(line)
     if (!parts) {
-      errors.push(`第 ${lineNo} 行：格式非法`)
+      errors.push(t('writeLineErrBadFormat', { line: lineNo }))
       continue
     }
     const tags: Record<string, string> = {}
     if (parts.tags) {
-      for (const t of parts.tags.split(',')) {
-        const eq = t.indexOf('=')
+      for (const tagPart of parts.tags.split(',')) {
+        const eq = tagPart.indexOf('=')
         if (eq <= 0) {
-          errors.push(`第 ${lineNo} 行：标签无效 "${t}"`)
+          errors.push(t('writeLineErrBadTag', { line: lineNo, tag: tagPart }))
           continue
         }
-        tags[t.slice(0, eq)] = t.slice(eq + 1)
+        tags[tagPart.slice(0, eq)] = tagPart.slice(eq + 1)
       }
     }
     const fields: Record<string, Record<string, unknown>> = {}
@@ -198,27 +218,27 @@ export function parseLineProtocolDetailed(text: string): LineProtocolDiagnostics
       if (!f) continue
       const eqIdx = f.indexOf('=')
       if (eqIdx < 0) {
-        errors.push(`第 ${lineNo} 行：字段缺少 "=" (${f})`)
+        errors.push(t('writeLineErrFieldNoEq', { line: lineNo, field: f }))
         fieldErrors++
         continue
       }
       const key = f.slice(0, eqIdx).trim()
       const val = f.slice(eqIdx + 1).trim()
       if (!key) {
-        errors.push(`第 ${lineNo} 行：字段名为空`)
+        errors.push(t('writeLineErrFieldNameEmpty', { line: lineNo }))
         fieldErrors++
         continue
       }
       const parsed = parseFieldValue(val)
       if (!parsed) {
-        errors.push(`第 ${lineNo} 行：字段 ${key} 值非法 (${val})`)
+        errors.push(t('writeLineErrFieldValue', { line: lineNo, key, value: val }))
         fieldErrors++
         continue
       }
       fields[key] = parsed
     }
     if (!Object.keys(fields).length) {
-      errors.push(`第 ${lineNo} 行：无有效字段`)
+      errors.push(t('writeLineErrNoFields', { line: lineNo }))
       continue
     }
     let ts = parts.timestamp ? Number(parts.timestamp) : Date.now()
@@ -226,7 +246,7 @@ export function parseLineProtocolDetailed(text: string): LineProtocolDiagnostics
     if (!parts.timestamp) {
       precision = 'ms'
     } else if (!Number.isSafeInteger(ts)) {
-      errors.push(`第 ${lineNo} 行：时间戳超出 JS 安全整数 (${parts.timestamp})`)
+      errors.push(t('writeLineErrTsOverflow', { line: lineNo, value: parts.timestamp }))
       continue
     } else if (Math.abs(ts) < 1e15) {
       precision = 'ms'
@@ -246,10 +266,13 @@ export function parseLineProtocolDetailed(text: string): LineProtocolDiagnostics
 }
 
 // 兼容旧接口：仅返回 points；坏行会抛出汇总错误
-export function parseLineProtocol(text: string): Record<string, unknown>[] {
-  const { points, errors } = parseLineProtocolDetailed(text)
+export function parseLineProtocol(text: string, t: FormErrorT = defaultWriteT): Record<string, unknown>[] {
+  const { points, errors } = parseLineProtocolDetailed(text, t)
   if (!points.length && errors.length) {
-    throw new Error(errors.slice(0, 5).join('; ') + (errors.length > 5 ? ` 等共 ${errors.length} 处` : ''))
+    throw new Error(
+      errors.slice(0, 5).join('; ') +
+        (errors.length > 5 ? t('writeLineErrSummaryMore', { count: errors.length }) : ''),
+    )
   }
   return points
 }

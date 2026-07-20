@@ -21,6 +21,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('login-error')).toBeVisible()
   await expect(page.getByTestId('login-error')).toHaveAttribute('role', 'alert')
   await expect(page.getByTestId('login-password')).toHaveAttribute('aria-invalid', 'true')
+  await expect(page.getByTestId('login-ttl')).toBeVisible()
 
   // 1) bootstrap 默认密码 -> 强制改密
   await login(page, 'admin', 'admin')
