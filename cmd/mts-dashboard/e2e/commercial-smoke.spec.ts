@@ -795,6 +795,14 @@ test('commercial browser smoke path', async ({ page }) => {
       await expect(page.getByTestId('databases-detail-panel')).toBeVisible()
       await expect(page.getByTestId('databases-open-query')).toBeVisible()
       await expect(page.getByTestId('databases-open-write')).toBeVisible()
+      // RP 列表或空态
+      const rpList = page.getByTestId('databases-rp-list')
+      const rpEmpty = page.getByTestId('databases-rp-empty')
+      if (await rpList.count()) {
+        await expect(rpList).toBeVisible()
+      } else {
+        await expect(rpEmpty).toBeVisible()
+      }
       if (await page.getByTestId('databases-meas-filter').count()) {
         await expect(page.getByTestId('databases-meas-filter')).toBeVisible()
         await expect(page.getByTestId('databases-meas-count')).toBeVisible()
@@ -991,6 +999,13 @@ test('commercial browser smoke path', async ({ page }) => {
   // 侧栏可见 databases，不可见 operations
   await expect(page.getByTestId('sidebar-nav-row-databases')).toBeVisible()
   await expect(page.getByTestId('sidebar-nav-row-operations')).toHaveCount(0)
+  // 非 admin Overview 工作区入口
+  await page.goto('/')
+  await expect(page.getByTestId('overview-workspace-panel')).toBeVisible()
+  await expect(page.getByTestId('overview-go-query')).toBeVisible()
+  await expect(page.getByTestId('overview-go-databases')).toBeVisible()
+  await page.getByTestId('overview-go-databases').click()
+  await expect(page).toHaveURL(/\/databases/)
   await page.goto('/databases')
   await expect(page.getByTestId('databases-page')).toBeVisible()
   await expect(page.getByTestId('databases-readonly-hint')).toBeVisible()

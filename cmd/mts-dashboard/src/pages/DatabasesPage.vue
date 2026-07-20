@@ -582,18 +582,26 @@ function exportCSV() {
         </div>
         <div class="border-t border-slate-200 px-6 py-3 dark:border-slate-700">
           <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t('databasesRetention') }}</p>
-          <div v-if="activeDatabase.retentionPolicies.length" class="mb-3 space-y-1">
+          <div v-if="activeDatabase.retentionPolicies.length" class="mb-3 space-y-1" data-testid="databases-rp-list">
             <div
               v-for="rp in activeDatabase.retentionPolicies"
               :key="rp.name"
               class="flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-1.5 dark:border-slate-700 dark:bg-slate-900"
+              :data-testid="`databases-rp-row-${rp.name}`"
             >
               <Clock class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
               <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ rp.name }}</span>
               <span class="text-xs text-slate-500 dark:text-slate-400">{{ formatDuration(rp.duration) }}</span>
             </div>
           </div>
-          <div v-if="isAdmin" class="flex flex-wrap items-center gap-2" data-testid="databases-rp-create">
+          <EmptyState
+            v-else
+            compact
+            data-testid="databases-rp-empty"
+            :title="t('databasesRpEmpty')"
+            :description="isAdmin ? t('databasesRpEmptyAdminDesc') : t('databasesRpEmptyReadOnlyDesc')"
+          />
+          <div v-if="isAdmin" class="mt-2 flex flex-wrap items-center gap-2" data-testid="databases-rp-create">
             <input v-model="activeDatabase.newRpName" type="text" :placeholder="t('databasesRpNamePlaceholder')" class="w-28 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-name" />
             <input v-model="activeDatabase.newRpDuration" type="text" :placeholder="t('databasesRpDurationPlaceholder')" class="w-24 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-duration" />
             <button type="button" class="inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" data-testid="databases-rp-add" @click="createRetentionPolicy(activeDatabase)">

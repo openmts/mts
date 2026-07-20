@@ -131,35 +131,6 @@ type TypedFieldCol = { name: string; type: 'float' | 'int' | 'string' | 'bool'; 
 const typedTagCols = ref<TypedTagCol[]>([{ name: 'host', values: 'server01\nserver02' }])
 const typedFieldCols = ref<TypedFieldCol[]>([{ name: 'usage', type: 'float', values: '0.7\n0.8' }])
 
-function applyWritePrefillFromRoute() {
-  const pre = parseWritePrefill(route.query as Record<string, unknown>)
-  let changed = false
-  if (pre.database && selectedDb.value !== pre.database) {
-    selectedDb.value = pre.database
-    changed = true
-  }
-  if (pre.measurement) {
-    if (typedMeasurement.value !== pre.measurement) {
-      typedMeasurement.value = pre.measurement
-      changed = true
-    }
-    if (formRows.value[0] && formRows.value[0].measurement !== pre.measurement) {
-      formRows.value[0].measurement = pre.measurement
-      changed = true
-    }
-  }
-  if (changed) {
-    success(t.value('writePrefillApplied'))
-  }
-}
-
-watch(
-  () => route.fullPath,
-  () => {
-    applyWritePrefillFromRoute()
-  },
-  { immediate: true },
-)
 
 function writeSnapshot() {
   return {
@@ -286,6 +257,44 @@ function onFormMeasurementBlur(row: FormRow) {
 function onTypedMeasurementBlur() {
   void loadWriteFields(typedMeasurement.value)
 }
+
+// 预填或切换库/表后自动拉 field 建议（不依赖 blur）
+watch(
+  () => [selectedDb.value, typedMeasurement.value] as const,
+  ([db, m]) => {
+    if (db.trim() && m.trim()) void loadWriteFields(m)
+  },
+)
+
+function applyWritePrefillFromRoute() {
+  const pre = parseWritePrefill(route.query as Record<string, unknown>)
+  let changed = false
+  if (pre.database && selectedDb.value !== pre.database) {
+    selectedDb.value = pre.database
+    changed = true
+  }
+  if (pre.measurement) {
+    if (typedMeasurement.value !== pre.measurement) {
+      typedMeasurement.value = pre.measurement
+      changed = true
+    }
+    if (formRows.value[0] && formRows.value[0].measurement !== pre.measurement) {
+      formRows.value[0].measurement = pre.measurement
+      changed = true
+    }
+  }
+  if (changed) {
+    success(t.value('writePrefillApplied'))
+  }
+}
+
+watch(
+  () => route.fullPath,
+  () => {
+    applyWritePrefillFromRoute()
+  },
+  { immediate: true },
+)
 
 function applyFieldSuggestion(name: string, row: FormRow) {
   const token = name.trim()

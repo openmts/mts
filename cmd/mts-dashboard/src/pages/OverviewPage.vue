@@ -751,8 +751,30 @@ async function copyOverview() {
       </div>
     </div>
 
-    <div v-if="!showAdminPanels" class="mts-card bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
-      {{ t('nonAdminOverview') }}
+    <div
+      v-if="!showAdminPanels"
+      class="mts-card space-y-3 bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900/60 dark:text-slate-300"
+      data-testid="overview-workspace-panel"
+    >
+      <p data-testid="overview-nonadmin-hint">{{ t('nonAdminOverview') }}</p>
+      <p class="text-xs mts-muted">{{ t('nonAdminWorkspaceHint') }}</p>
+      <div class="flex flex-wrap gap-2" data-testid="overview-workspace-links">
+        <button type="button" class="mts-btn-primary" data-testid="overview-go-query" @click="router.push('/query')">
+          {{ t('query') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-go-write" @click="router.push('/write')">
+          {{ t('write') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-go-databases" @click="router.push('/databases')">
+          {{ t('databases') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-go-access" @click="router.push('/access')">
+          {{ t('accessMatrix') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-go-account" @click="router.push('/account')">
+          {{ t('account') }}
+        </button>
+      </div>
     </div>
 
     <template v-if="showAdminPanels">
