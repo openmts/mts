@@ -28,6 +28,12 @@ import { useDensity } from '@/composables/useDensity'
 import { useNotify } from '@/composables/useNotify'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
+import {
+  clickShareLinkButton,
+  pickShareLinkButton,
+  resolveShareDeepLinkAction,
+  stripSensitiveUrlParams,
+} from '@/utils/shareDeepLink'
 import { Search, Command, History, Zap } from 'lucide-vue-next'
 
 const open = ref(false)
@@ -170,11 +176,35 @@ function runAction(action: CommandActionId) {
       scrollMainToTop?.()
       break
     case 'copy-page-url': {
-      const href = typeof window !== 'undefined' ? window.location.href : ''
+      const href = typeof window !== 'undefined' ? stripSensitiveUrlParams(window.location.href) : ''
       void copyText(href).then((r) => {
         if (r.ok) success(t.value('cmdActionUrlCopied'))
         else notifyError(t.value('cmdActionUrlCopyFailed'))
       })
+      break
+    }
+    case 'click-share-deep-link': {
+      const href = typeof window !== 'undefined' ? window.location.href : ''
+      const root = typeof document !== 'undefined' ? document : null
+      const decision = resolveShareDeepLinkAction({ root, href })
+      if (decision.kind === 'clicked') {
+        const btn = pickShareLinkButton(root)
+        if (btn) {
+          // 页内 share 按钮自行 toast，避免重复提示
+          clickShareLinkButton(btn)
+        } else {
+          notifyError(t.value('cmdActionShareDeepLinkFailed'))
+        }
+        break
+      }
+      if (decision.kind === 'fallback-url') {
+        void copyText(decision.href).then((r) => {
+          if (r.ok) success(t.value('cmdActionShareDeepLinkFallback'))
+          else notifyError(t.value('cmdActionUrlCopyFailed'))
+        })
+        break
+      }
+      notifyError(t.value('cmdActionShareDeepLinkFailed'))
       break
     }
     case 'focus-main': {

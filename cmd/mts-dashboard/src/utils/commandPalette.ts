@@ -25,6 +25,7 @@ export type CommandActionId =
   | 'toggle-sidebar-collapse'
   | 'scroll-main-to-top'
   | 'copy-page-url'
+  | 'click-share-deep-link'
   | 'focus-main'
   | 'reload-page'
 
@@ -101,6 +102,22 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
     keywords: ['copy url', 'copy link', '复制链接', '复制地址', 'url'],
     kind: 'action',
     action: 'copy-page-url',
+  },
+  {
+    id: 'action-click-share-deep-link',
+    path: 'action:click-share-deep-link',
+    labelKey: 'cmdActionShareDeepLink',
+    keywords: [
+      'share deep link',
+      'copy share link',
+      'copy filter link',
+      '复制筛选链接',
+      '复制分享链接',
+      '复制深链',
+      'share link',
+    ],
+    kind: 'action',
+    action: 'click-share-deep-link',
   },
   {
     id: 'action-focus-main',

@@ -125,6 +125,7 @@ test('command actions catalog and filter', () => {
   assert.ok(COMMAND_ACTION_ITEMS.length >= 10)
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-scroll-main-to-top'))
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-copy-page-url'))
+  assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-click-share-deep-link'))
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-focus-main'))
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-reload-page'))
   assert.ok(COMMAND_ACTION_ITEMS.every((i) => isCommandAction(i)))
@@ -138,6 +139,8 @@ test('command actions catalog and filter', () => {
   assert.ok(densityHits.some((i) => i.id === 'action-toggle-density'))
   assert.ok(filterCommandItems(all, '返回顶部', resolve).some((i) => i.id === 'action-scroll-main-to-top'))
   assert.ok(filterCommandItems(all, '复制链接', resolve).some((i) => i.id === 'action-copy-page-url'))
+  assert.ok(filterCommandItems(all, '复制筛选链接', resolve).some((i) => i.id === 'action-click-share-deep-link'))
+  assert.ok(filterCommandItems(all, 'share deep link', resolve).some((i) => i.id === 'action-click-share-deep-link'))
   assert.ok(filterCommandItems(all, 'reload', resolve).some((i) => i.id === 'action-reload-page'))
 })
 

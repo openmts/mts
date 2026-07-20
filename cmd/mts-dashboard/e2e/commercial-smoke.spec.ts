@@ -1093,6 +1093,17 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('not-found-go-overview').click()
   await expect(page.getByTestId('overview-page')).toBeVisible()
 
+  // P189: 命令面板「复制当前筛选深链」
+  await page.goto('/audit?range=1h')
+  await expect(page.getByTestId('audit-page')).toBeVisible()
+  await expect(page.getByTestId('audit-share-link')).toBeVisible()
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('复制筛选链接')
+  await expect(page.getByTestId('command-item-action-click-share-deep-link')).toBeVisible()
+  await page.getByTestId('command-item-action-click-share-deep-link').click()
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+
   // 17) 非 admin 端到端：创建 reader、授权 default 读、只读库浏览
   await page.goto('/users')
   await expect(page.getByTestId('users-page')).toBeVisible()
@@ -1153,4 +1164,43 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
   await expect(page.getByTestId('query-share-link')).toBeVisible()
+
+  // P190: 非 admin 深链预填 + 分享 + 登录 redirect 回跳
+  await page.goto('/query?database=default&range=1h')
+  await expect(page.getByTestId('query-page')).toBeVisible()
+  await expect(page.getByTestId('query-share-link')).toBeVisible()
+  await page.goto('/write?database=default')
+  await expect(page.getByTestId('write-page')).toBeVisible()
+  await expect(page.getByTestId('write-share-link')).toBeVisible()
+  await page.goto('/databases?q=def')
+  await expect(page.getByTestId('databases-page')).toBeVisible()
+  await expect(page.getByTestId('databases-share-link')).toBeVisible()
+  // 筛选输入若存在则应被预填
+  const dbFilter = page.getByTestId('databases-filter')
+  if (await dbFilter.count()) {
+    await expect(dbFilter).toHaveValue(/def/i)
+  }
+  await page.goto('/access?q=read')
+  await expect(page.getByTestId('access-matrix-page').or(page.getByTestId('access-page')).first()).toBeVisible()
+  // 非 admin 也可复制页面筛选深链（命令面板）
+  await page.goto('/audit')
+  await expect(page.getByTestId('audit-share-link')).toBeVisible()
+  await page.getByTestId('topbar-command-palette').click()
+  await page.getByTestId('command-palette-input').fill('share deep link')
+  await expect(page.getByTestId('command-item-action-click-share-deep-link')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  // 登出后访问 query 深链，登录 reader 应回到 query
+  await page.getByTestId('topbar-logout').click()
+  await expect(page).toHaveURL(/login/)
+  await page.goto('/query?database=default')
+  await expect(page).toHaveURL(/login/)
+  await expect(page.getByTestId('login-redirect-hint')).toBeVisible()
+  await expect(page.getByTestId('login-redirect-path')).toContainText('/query')
+  await page.getByTestId('login-username').fill('reader-e2e')
+  await page.getByTestId('login-password').fill('ReaderPass!2026')
+  await page.getByTestId('login-submit').click()
+  await expect(page).toHaveURL(/\/query(?:\?|$)/)
+  await expect(page).not.toHaveURL(/login/)
+  await expect(page.getByTestId('query-page')).toBeVisible()
 })
