@@ -134,24 +134,27 @@ async function loadStats() {
     const partials: string[] = []
     if (results[0].status === 'fulfilled') maintenanceStats.value = results[0].value.stats ?? null
     else {
-      maintenanceStats.value = null
+      // soft-keep：已有维护统计则保留快照
       partials.push(`${labels[0]}: ${formatCaughtError(results[0].reason)}`)
     }
     if (results[1].status === 'fulfilled') compactionStats.value = results[1].value.stats
     else {
-      compactionStats.value = null
       partials.push(`${labels[1]}: ${formatCaughtError(results[1].reason)}`)
     }
     if (results[2].status === 'fulfilled') maintenanceErrors.value = results[2].value.errors ?? []
     else {
-      maintenanceErrors.value = []
       partials.push(`${labels[2]}: ${formatCaughtError(results[2].reason)}`)
     }
-    if (partials.length === 3) {
+    const hasAnySnapshot = !!(
+      maintenanceStats.value
+      || compactionStats.value
+      || (maintenanceErrors.value && maintenanceErrors.value.length)
+    )
+    if (partials.length === 3 && !hasAnySnapshot) {
       loadError.value = partials.join('；')
     } else if (partials.length) {
       partialStatsError.value = partials.join('；')
-      statsLoadedAt.value = Date.now()
+      if (hasAnySnapshot || partials.length < 3) statsLoadedAt.value = Date.now()
     } else {
       statsLoadedAt.value = Date.now()
     }

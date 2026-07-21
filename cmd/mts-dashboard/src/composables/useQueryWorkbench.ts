@@ -19,6 +19,7 @@ import type { MessageKey } from '@/i18n/messages'
 import { formatMessage } from '@/utils/formatMessage'
 import { fetchEngineQueryStats } from '@/api/queryMeta'
 import type { QueryResultRow, QueryStatsData } from '@/api/types'
+import { hasQueryResultSnapshot } from '@/utils/querySnapshot'
 
 export type { QueryResultRow, QueryStatsData }
 
@@ -244,12 +245,12 @@ export function useQueryWorkbench() {
   }
 
   function hasQuerySnapshot(): boolean {
-    return (
-      rows.value.length > 0
-      || columnSeries.value.length > 0
-      || !!rawOutput.value
-      || !!queryStats.value
-    )
+    return hasQueryResultSnapshot({
+      rows: rows.value.length,
+      columns: columnSeries.value.length,
+      rawOutput: rawOutput.value,
+      stats: !!queryStats.value,
+    })
   }
 
   function clearQuerySnapshot() {
