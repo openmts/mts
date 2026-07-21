@@ -1308,3 +1308,7 @@
 - Downsample：删除/批量/创建/范围修复 Abort + 横幅 + 取消/超时；range 弹窗加载中可取消
 - i18n：`adminInFlightTitle` / `adminActionCancelled` / `adminActionTimedOut`
 
+## P306（2026-07-22）
+- Server：`POST /api/v1/users/batch-disabled` 与 `POST /api/v1/admin/downsample/policies/batch`（单项结果汇总 + gRPC）
+- Dashboard：Users/Downsample 批量操作改为单次 batch API，保留 Abort + InFlightBanner
+

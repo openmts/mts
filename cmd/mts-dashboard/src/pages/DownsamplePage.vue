@@ -477,25 +477,26 @@ async function confirmBatch() {
   dsActionStartedAt.value = Date.now()
   const signal = dsActionAbort.begin()
   clearActionResult()
-  let ok = 0
-  const errors: string[] = []
   const action = batchMode.value === 'enable' ? 'enable' : 'disable'
   try {
-    for (const name of names) {
-      if (signal.aborted) {
-        throw new DOMException('Aborted', 'AbortError')
-      }
-      try {
-        await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/${action}`, undefined, { signal })
-        ok += 1
-      } catch (e) {
-        if (isCanceledError(e) || isTimeoutError(e) || signal.aborted) throw e
-        errors.push(`${name}: ${formatCaughtError(e)}`)
-      }
-    }
+    const data = await apiPost<{
+      ok: boolean
+      ok_count: number
+      skip_count: number
+      fail_count: number
+      items?: Array<{ name: string; status: string; message?: string }>
+    }>('/api/v1/admin/downsample/policies/batch', {
+      names,
+      action,
+    }, { signal })
     await loadData()
     selectedNames.value = []
     batchOpen.value = false
+    const ok = data.ok_count ?? 0
+    const fail = data.fail_count ?? 0
+    const errors = (data.items ?? [])
+      .filter((it) => it.status === 'error')
+      .map((it) => `${it.name}: ${it.message || it.status}`)
     if (errors.length === 0) {
       const msg = batchMode.value === 'enable'
         ? `${t.value('downsampleBatchEnable')}: ${ok}`

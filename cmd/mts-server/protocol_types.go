@@ -103,6 +103,34 @@ type usersResponse struct {
 	Users []mts.User `json:"users"`
 }
 
+// batchUserDisabledRequest 批量设置用户 disabled 状态。
+type batchUserDisabledRequest struct {
+	Names    []string `json:"names"`
+	Disabled bool     `json:"disabled"`
+}
+
+// batchItemResult 单项批处理结果。
+type batchItemResult struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"` // ok | skip | error
+	Message string `json:"message,omitempty"`
+}
+
+// batchMutationResponse 批量写操作汇总。
+type batchMutationResponse struct {
+	OK      bool              `json:"ok"`
+	OKCount int               `json:"ok_count"`
+	Skip    int               `json:"skip_count"`
+	Fail    int               `json:"fail_count"`
+	Items   []batchItemResult `json:"items"`
+}
+
+// batchDownsampleRequest 批量启用/禁用降采样策略。
+type batchDownsampleRequest struct {
+	Names  []string `json:"names"`
+	Action string   `json:"action"` // enable | disable
+}
+
 type createUserRequest struct {
 	mts.User
 	Password string `json:"password,omitempty"`

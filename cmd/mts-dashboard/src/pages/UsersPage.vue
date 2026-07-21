@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
-import { apiGet, apiPost, apiPut, apiDelete } from '@/api/client'
+import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { useMutationGuard } from '@/composables/useMutationGuard'
@@ -601,42 +601,25 @@ async function confirmBatch() {
   batchLoading.value = true
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
-  let ok = 0
-  let skip = 0
-  let fail = 0
-  const failNames: string[] = []
   const wantDisabled = batchMode.value === 'disable'
   try {
-    for (const name of names) {
-      if (signal.aborted) {
-        throw new DOMException('Aborted', 'AbortError')
-      }
-      const user = users.value.find((u) => u.name === name)
-      if (!user) {
-        skip += 1
-        continue
-      }
-      if (wantDisabled && name === currentUser.value) {
-        skip += 1
-        continue
-      }
-      if (Boolean(user.disabled) === wantDisabled) {
-        skip += 1
-        continue
-      }
-      try {
-        await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, {
-          ...user,
-          disabled: wantDisabled,
-        }, { signal })
-        ok += 1
-      } catch (e) {
-        if (isCanceledError(e) || isTimeoutError(e) || signal.aborted) throw e
-        fail += 1
-        failNames.push(name)
-      }
-    }
+    const data = await apiPost<{
+      ok: boolean
+      ok_count: number
+      skip_count: number
+      fail_count: number
+      items?: Array<{ name: string; status: string; message?: string }>
+    }>('/api/v1/users/batch-disabled', {
+      names,
+      disabled: wantDisabled,
+    }, { signal })
     await loadUsers()
+    const ok = data.ok_count ?? 0
+    const skip = data.skip_count ?? 0
+    const fail = data.fail_count ?? 0
+    const failNames = (data.items ?? [])
+      .filter((it) => it.status === 'error')
+      .map((it) => it.name)
     const key = fail ? 'listBatchPartial' : 'listBatchDone'
     let msg = formatMessage(t.value(key), { ok, skip, fail })
     if (failNames.length) {
