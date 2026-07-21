@@ -34,7 +34,7 @@ import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, formatAdminOpElapsed } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
@@ -47,20 +47,50 @@ const { sync: syncNetworkStatus } = useNetworkStatus()
 const { logout, isAdmin } = useAuth()
 const { adminOpBusy, adminOpKind, adminOpStartedAtUnix, refreshAdminOpBusy } = useAdminOpBusy()
 
-const adminOpBusyDetail = computed(() => {
+/** busy 期间 1s tick，让横幅 elapsed 实时跳动 */
+const adminOpNowMs = ref(Date.now())
+let adminOpTickTimer: ReturnType<typeof setInterval> | null = null
+function armAdminOpTick() {
+  if (adminOpTickTimer) return
+  adminOpNowMs.value = Date.now()
+  adminOpTickTimer = setInterval(() => {
+    adminOpNowMs.value = Date.now()
+  }, 1000)
+}
+function disarmAdminOpTick() {
+  if (adminOpTickTimer) clearInterval(adminOpTickTimer)
+  adminOpTickTimer = null
+}
+watch(
+  adminOpBusy,
+  (busy) => {
+    if (busy) armAdminOpTick()
+    else disarmAdminOpTick()
+  },
+  { immediate: true },
+)
+
+const adminOpKindLabel = computed(() => {
   if (!adminOpBusy.value) return ''
   const opKey = adminOpKindLabelKey(adminOpKind.value) as MessageKey
-  const opLabel = t.value(opKey) || t.value('adminOpKindGeneric')
-  const started = adminOpStartedAtUnix.value
-  let elapsed = '—'
-  if (started && started > 0) {
-    const sec = Math.max(0, Math.floor(Date.now() / 1000) - started)
-    if (sec < 60) elapsed = `${sec}s`
-    else if (sec < 3600) elapsed = `${Math.floor(sec / 60)}m${sec % 60}s`
-    else elapsed = `${Math.floor(sec / 3600)}h${Math.floor((sec % 3600) / 60)}m`
-  }
-  return formatMessage(t.value('adminOpBusyBannerDetail'), { op: String(opLabel), elapsed })
+  return t.value(opKey) || t.value('adminOpKindGeneric')
 })
+
+const adminOpBusyDetail = computed(() => {
+  if (!adminOpBusy.value) return ''
+  const elapsed = formatAdminOpElapsed(adminOpStartedAtUnix.value, adminOpNowMs.value)
+  return formatMessage(t.value('adminOpBusyBannerDetail'), {
+    op: String(adminOpKindLabel.value || t.value('adminOpKindGeneric')),
+    elapsed,
+  })
+})
+
+provide('adminOpBusySummary', computed(() => ({
+  busy: adminOpBusy.value,
+  op: adminOpKind.value,
+  opLabel: adminOpKindLabel.value,
+  detail: adminOpBusyDetail.value,
+})))
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 
 function retryNetworkStatus() {
@@ -241,6 +271,7 @@ onMounted(() => {
   unregisterNotifyHistoryBridge = registerOpenNotifyHistory(openNotifyHistory)
 })
 onBeforeUnmount(() => {
+  disarmAdminOpTick()
   document.removeEventListener('visibilitychange', onVisibilitySync)
   window.removeEventListener('keydown', onGlobalKey)
   window.removeEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)

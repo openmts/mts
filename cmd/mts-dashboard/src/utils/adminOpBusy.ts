@@ -1,5 +1,7 @@
 /** admin_op_busy 轮询辅助（纯函数） */
 
+import { formatElapsedSeconds } from './inFlightStatus.ts'
+
 export type AdminOpKind =
   | 'flush'
   | 'compact'
@@ -63,4 +65,21 @@ export function adminOpKindLabelKey(op: string | null | undefined): string {
     default:
       return 'adminOpKindGeneric'
   }
+}
+
+/** started_at_unix（秒）→ 人类可读耗时；无效返回 em dash */
+export function formatAdminOpElapsed(
+  startedAtUnix: number | null | undefined,
+  nowMs: number = Date.now(),
+): string {
+  if (startedAtUnix == null || !Number.isFinite(startedAtUnix) || startedAtUnix <= 0) return '—'
+  const ms = Math.max(0, nowMs - Math.floor(startedAtUnix) * 1000)
+  return formatElapsedSeconds(ms)
+}
+
+/** chip 文案：base 或 base: opLabel */
+export function joinAdminOpChip(base: string, opLabel?: string | null): string {
+  const label = (opLabel || '').trim()
+  if (!label) return base
+  return `${base}: ${label}`
 }

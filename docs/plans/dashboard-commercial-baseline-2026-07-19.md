@@ -1370,3 +1370,7 @@
 ## P318（2026-07-22）
 - Server：`tryBeginAdminHeavy(op)` 记录 `op` + `started_at_unix`；`ops-status`/`stats/maintenance` 同步返回
 - Dashboard：共享态携带 kind/开始时间；Layout 横幅详情、Ops/Overview chip 展示当前操作类型
+
+## P319（2026-07-22）
+- Dashboard：admin busy 期间 Layout 1s tick 实时刷新 elapsed；抽取 formatAdminOpElapsed/joinAdminOpChip
+- Storage/Readiness/Ops/Overview chip 展示当前 op 类型；命令面板运维状态项 busy 时动态标签

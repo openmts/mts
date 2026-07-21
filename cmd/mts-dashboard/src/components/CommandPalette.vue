@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { adminOpKindLabelKey, joinAdminOpChip } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
@@ -48,6 +50,8 @@ let trap: FocusTrapHandle | null = null
 
 const router = useRouter()
 const { isAdmin } = useAuth()
+const { adminOpBusy, adminOpKind } = useAdminOpBusy()
+const injectedAdminOpSummary = inject<ComputedRef<{ busy: boolean; op: string; opLabel: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
 const { t, toggleLocale } = useI18n()
 const { toggleTheme } = useTheme()
 const { density, toggleDensity } = useDensity()
@@ -63,6 +67,19 @@ const filteredItems = computed(() => {
   const base = allVisibleCommandItems(isAdmin.value)
   return filterCommandItems(base, query.value, (key) => t.value(key as MessageKey) || key)
 })
+
+function commandItemLabel(item: CommandNavItem): string {
+  const base = t.value(item.labelKey as MessageKey) || item.labelKey
+  if (item.id !== 'operations-status') return base
+  const summary = injectedAdminOpSummary?.value
+  const busy = summary?.busy ?? adminOpBusy.value
+  if (!busy) return base
+  const busyBase = t.value('cmdOpsStatusBusy') || base
+  const opLabel = summary?.opLabel
+    || t.value(adminOpKindLabelKey(adminOpKind.value) as MessageKey)
+    || t.value('adminOpKindGeneric')
+  return joinAdminOpChip(busyBase, opLabel)
+}
 
 const emptyQuery = computed(() => !query.value.trim())
 
@@ -445,7 +462,7 @@ defineExpose({ openPalette, closePalette, open })
             >
               <span class="inline-flex min-w-0 items-center gap-1.5 font-medium">
                 <Zap v-if="isCommandAction(item)" class="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden="true" />
-                <span class="truncate">{{ t(item.labelKey as MessageKey) }}</span>
+                <span class="truncate">{{ commandItemLabel(item) }}</span>
               </span>
               <span
                 class="shrink-0 font-mono text-[10px]"

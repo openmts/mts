@@ -7,7 +7,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
@@ -63,16 +63,16 @@ interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: Doc
 
 const { isAdmin, getTokenExpiresAt } = useAuth()
 const { adminOpBusy, adminOpKind, setAdminOpBusy, applyAdminOpStatus } = useAdminOpBusy()
-const adminOpBusyChipLabel = computed(() => {
-  if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
-  const key = adminOpKindLabelKey(adminOpKind.value) as import('@/i18n/messages').MessageKey
-  const kind = t.value(key) || t.value('adminOpKindGeneric')
-  return `${t.value('opsAdminBusyChip')}: ${kind}`
-})
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
 const { t, locale } = useI18n()
+const adminOpBusyChipLabel = computed(() => {
+  if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
+  const key = adminOpKindLabelKey(adminOpKind.value) as import('@/i18n/messages').MessageKey
+  const kind = t.value(key) || t.value('adminOpKindGeneric')
+  return joinAdminOpChip(t.value('opsAdminBusyChip'), kind)
+})
 const { success, info, error: notifyError } = useNotify()
 const {
   exportJob,

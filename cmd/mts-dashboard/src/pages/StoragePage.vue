@@ -5,6 +5,8 @@ import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { adminOpKindLabelKey, joinAdminOpChip } from '@/utils/adminOpBusy'
+import type { MessageKey } from '@/i18n/messages'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -59,7 +61,7 @@ interface ExportResponse { export: ExportData }
 
 const route = useRoute()
 const { isAdmin } = useAuth()
-const { adminOpBusy, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, info, error: notifyError } = useNotify()
 const {
@@ -72,6 +74,11 @@ const {
   runJSONExport,
 } = useExportJob()
 const { t , locale } = useI18n()
+const storageAdminBusyChipLabel = computed(() => {
+  if (!adminOpBusy.value) return t.value('storageAdminBusyChip')
+  const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
+  return joinAdminOpChip(t.value('storageAdminBusyChip'), t.value(key) || t.value('adminOpKindGeneric'))
+})
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const validateResult = ref<ValidateResponse | null>(null)
 const snapshotResult = ref<SnapshotResponse | null>(null)
@@ -833,7 +840,7 @@ async function copyStorageShareLink() {
       class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
       data-testid="storage-admin-busy"
       role="status"
-    >{{ t('storageAdminBusyChip') }} · {{ t('storageAdminBusy') }}</div>
+    >{{ storageAdminBusyChipLabel }} · {{ t('storageAdminBusy') }}</div>
     <InFlightBanner
       :active="!!loading"
       :started-at-ms="actionStartedAt"

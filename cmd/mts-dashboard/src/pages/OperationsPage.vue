@@ -36,7 +36,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -66,7 +66,7 @@ const adminOpBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
   const key = adminOpKindLabelKey(adminOpKind.value) as import('@/i18n/messages').MessageKey
   const kind = t.value(key) || t.value('adminOpKindGeneric')
-  return `${t.value('opsAdminBusyChip')}: ${kind}`
+  return joinAdminOpChip(t.value('opsAdminBusyChip'), kind)
 })
 const statsLoadedAt = ref<number | null>(null)
 const loadError = ref('')

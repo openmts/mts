@@ -7,6 +7,8 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { adminOpKindLabelKey, joinAdminOpChip } from '@/utils/adminOpBusy'
+import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { useExportJob } from '@/composables/useExportJob'
@@ -113,9 +115,14 @@ interface VersionResponse {
   built_at: string
 }
 
-const { adminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind } = useAdminOpBusy()
 const { isAdmin, currentUser } = useAuth()
 const { t, locale } = useI18n()
+const readinessAdminBusyChipLabel = computed(() => {
+  if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
+  const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
+  return joinAdminOpChip(t.value('opsAdminBusyChip'), t.value(key) || t.value('adminOpKindGeneric'))
+})
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 
 function formatDoctorLevel(level?: string) {
@@ -945,7 +952,7 @@ watch(
           class="mt-1 inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
           data-testid="readiness-admin-busy"
           :title="t('opsAdminBusy')"
-        >{{ t('opsAdminBusyChip') }}</span>
+        >{{ readinessAdminBusyChipLabel }}</span>
         <p
           class="mt-1 text-3xl font-semibold"
           :class="scoreLevel === 'good' ? 'text-green-600' : scoreLevel === 'warn' ? 'text-amber-600' : 'text-red-600'"
