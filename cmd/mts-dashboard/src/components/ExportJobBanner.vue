@@ -33,18 +33,47 @@ const title = computed(() => {
   }
   return ''
 })
+
+/** 完成/取消/失败视觉分流，避免全部同色灰条 */
+const toneClass = computed(() => {
+  switch (props.job.status) {
+    case 'done':
+      return 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/40'
+    case 'cancelled':
+      return 'border-slate-300 bg-slate-100 dark:border-slate-600 dark:bg-slate-800/70'
+    case 'error':
+      return 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40'
+    default:
+      return 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60'
+  }
+})
+
+const titleToneClass = computed(() => {
+  switch (props.job.status) {
+    case 'done':
+      return 'text-emerald-900 dark:text-emerald-100'
+    case 'error':
+      return 'text-red-800 dark:text-red-100'
+    case 'cancelled':
+      return 'text-slate-700 dark:text-slate-200'
+    default:
+      return 'text-slate-800 dark:text-slate-100'
+  }
+})
 </script>
 
 <template>
   <div
     v-if="visible"
-    class="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900/60"
+    class="flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm"
+    :class="toneClass"
     data-testid="export-job-banner"
+    :data-export-status="job.status"
     role="status"
     aria-live="polite"
   >
     <div class="min-w-0 flex-1">
-      <div class="font-medium text-slate-800 dark:text-slate-100">{{ title }}</div>
+      <div class="font-medium" :class="titleToneClass" data-testid="export-job-title">{{ title }}</div>
       <div
         v-if="busy || job.total > 0"
         class="mt-1 h-1.5 overflow-hidden rounded bg-slate-200 dark:bg-slate-700"

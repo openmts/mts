@@ -1057,3 +1057,6 @@
 
 ## P229（2026-07-21）
 - Write 取消态 info 样式 + `write-action-error`
+
+## P230（2026-07-21）
+- ExportJobBanner 状态色分流 + `data-export-status`

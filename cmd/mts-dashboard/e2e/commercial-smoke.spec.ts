@@ -830,6 +830,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-page')).toBeVisible()
   await page.getByTestId('audit-export-json').click()
   await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
+  // P230: banner 暴露 status 属性（done/cancelled/error/running）
+  await expect(page.getByTestId('export-job-banner')).toHaveAttribute(
+    'data-export-status',
+    /^(running|done|cancelled|error)$/,
+  )
   // 小数据通常瞬间完成，dismiss 完成态
   const dismiss = page.getByTestId('export-job-dismiss')
   if (await dismiss.count()) {
