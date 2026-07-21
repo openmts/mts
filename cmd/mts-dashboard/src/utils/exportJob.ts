@@ -68,6 +68,11 @@ export function failExportJob(state: ExportJobState, error: string): ExportJobSt
   return { ...state, status: 'error', error: error || 'error' }
 }
 
+/** 仅 error 态可一键重试；cancelled/done 需用户重新发起 */
+export function canRetryExportJob(state: ExportJobState | null | undefined): boolean {
+  return state?.status === 'error'
+}
+
 export function resetExportJob(label = ''): ExportJobState {
   return createExportJobState(label)
 }

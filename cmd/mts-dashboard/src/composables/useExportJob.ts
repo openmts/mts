@@ -22,9 +22,10 @@ export type ExportBundleFile =
   | { kind: 'json'; filename: string; payload: unknown }
   | { kind: 'text'; filename: string; text: string; mime?: string }
 
+export type ExportOutcome = 'done' | 'cancelled' | 'error'
+
 /**
- * 页面级导出任务：协作式构建 + 统一进度/取消状态。
- * 同步小导出也可走同一路径，便于 UI 一致。
+ * 页面级导出任务：协作式构建 + 统一进度/取消/失败重试。
  */
 
 function readE2ESlowExportMs(): number {
@@ -35,6 +36,15 @@ function readE2ESlowExportMs(): number {
     return Math.min(Math.trunc(n), 10_000)
   } catch {
     return 0
+  }
+}
+
+function shouldE2EFailExport(): boolean {
+  try {
+    const w = window as unknown as { __MTS_E2E_FAIL_EXPORT?: unknown }
+    return w.__MTS_E2E_FAIL_EXPORT === true || w.__MTS_E2E_FAIL_EXPORT === 1
+  } catch {
+    return false
   }
 }
 
@@ -55,9 +65,11 @@ export function useExportJob() {
   const state = ref<ExportJobState>(createExportJobState())
   let token = 0
   let cancelled = false
+  let lastRetry: (() => Promise<ExportOutcome>) | null = null
 
   const busy = computed(() => isExportJobBusy(state.value))
   const percent = computed(() => exportProgressPercent(state.value))
+  const canRetry = computed(() => state.value.status === 'error' && !!lastRetry)
 
   function cancelExport() {
     if (!isExportJobBusy(state.value)) return
@@ -70,28 +82,55 @@ export function useExportJob() {
     state.value = createExportJobState()
   }
 
+  async function retryLastExport(): Promise<ExportOutcome> {
+    if (!lastRetry || isExportJobBusy(state.value)) return 'error'
+    return lastRetry()
+  }
+
+  async function runGuarded(
+    label: string,
+    total: number | undefined,
+    work: (h: ExportBuildHelpers, my: number) => Promise<ExportOutcome>,
+  ): Promise<ExportOutcome> {
+    const my = ++token
+    cancelled = false
+    state.value = beginExportJob(label, total ?? 0)
+    try {
+      if (await maybeSlowExport(() => cancelled || my !== token)) {
+        state.value = cancelExportJob(state.value)
+        return 'cancelled'
+      }
+      if (shouldE2EFailExport()) {
+        throw new Error('e2e export fail')
+      }
+      return await work(
+        {
+          isCancelled: () => cancelled || my !== token,
+          progress: (done, tot) => {
+            if (my !== token) return
+            state.value = progressExportJob(state.value, done, tot)
+          },
+        },
+        my,
+      )
+    } catch (e) {
+      if (my !== token) return 'cancelled'
+      const msg = formatCaughtError(e)
+      state.value = failExportJob(state.value, msg)
+      return 'error'
+    }
+  }
+
   async function runTextExport(input: {
     label: string
     filename: string
     mime?: string
     total?: number
     build: (h: ExportBuildHelpers) => Promise<string | null>
-  }): Promise<'done' | 'cancelled' | 'error'> {
-    const my = ++token
-    cancelled = false
-    state.value = beginExportJob(input.label, input.total ?? 0)
-    try {
-      if (await maybeSlowExport(() => cancelled || my !== token)) {
-        state.value = cancelExportJob(state.value)
-        return 'cancelled'
-      }
-      const text = await input.build({
-        isCancelled: () => cancelled || my !== token,
-        progress: (done, total) => {
-          if (my !== token) return
-          state.value = progressExportJob(state.value, done, total)
-        },
-      })
+  }): Promise<ExportOutcome> {
+    lastRetry = () => runTextExport(input)
+    return runGuarded(input.label, input.total, async (h, my) => {
+      const text = await input.build(h)
       if (my !== token) return 'cancelled'
       if (text == null || cancelled) {
         state.value = cancelExportJob(state.value)
@@ -100,12 +139,7 @@ export function useExportJob() {
       downloadText(input.filename, text, input.mime)
       state.value = finishExportJob(state.value)
       return 'done'
-    } catch (e) {
-      if (my !== token) return 'cancelled'
-      const msg = formatCaughtError(e)
-      state.value = failExportJob(state.value, msg)
-      return 'error'
-    }
+    })
   }
 
   async function runJSONExport(input: {
@@ -113,22 +147,10 @@ export function useExportJob() {
     filename: string
     total?: number
     build: (h: ExportBuildHelpers) => Promise<unknown | null>
-  }): Promise<'done' | 'cancelled' | 'error'> {
-    const my = ++token
-    cancelled = false
-    state.value = beginExportJob(input.label, input.total ?? 0)
-    try {
-      if (await maybeSlowExport(() => cancelled || my !== token)) {
-        state.value = cancelExportJob(state.value)
-        return 'cancelled'
-      }
-      const payload = await input.build({
-        isCancelled: () => cancelled || my !== token,
-        progress: (done, total) => {
-          if (my !== token) return
-          state.value = progressExportJob(state.value, done, total)
-        },
-      })
+  }): Promise<ExportOutcome> {
+    lastRetry = () => runJSONExport(input)
+    return runGuarded(input.label, input.total, async (h, my) => {
+      const payload = await input.build(h)
       if (my !== token) return 'cancelled'
       if (payload == null || cancelled) {
         state.value = cancelExportJob(state.value)
@@ -137,44 +159,24 @@ export function useExportJob() {
       downloadJSON(input.filename, payload)
       state.value = finishExportJob(state.value)
       return 'done'
-    } catch (e) {
-      if (my !== token) return 'cancelled'
-      const msg = formatCaughtError(e)
-      state.value = failExportJob(state.value, msg)
-      return 'error'
-    }
+    })
   }
 
-  /** 多文件导出：构建后按序触发下载（每步可取消） */
   async function runBundleExport(input: {
     label: string
     total?: number
     build: (h: ExportBuildHelpers) => Promise<ExportBundleFile[] | null>
-  }): Promise<'done' | 'cancelled' | 'error'> {
-    const my = ++token
-    cancelled = false
-    state.value = beginExportJob(input.label, input.total ?? 0)
-    try {
-      if (await maybeSlowExport(() => cancelled || my !== token)) {
-        state.value = cancelExportJob(state.value)
-        return 'cancelled'
-      }
-      const files = await input.build({
-        isCancelled: () => cancelled || my !== token,
-        progress: (done, total) => {
-          if (my !== token) return
-          state.value = progressExportJob(state.value, done, total)
-        },
-      })
+  }): Promise<ExportOutcome> {
+    lastRetry = () => runBundleExport(input)
+    return runGuarded(input.label, input.total, async (h, my) => {
+      const files = await input.build(h)
       if (my !== token) return 'cancelled'
       if (files == null || cancelled) {
         state.value = cancelExportJob(state.value)
         return 'cancelled'
       }
       const total = files.length
-      if (total > 0) {
-        state.value = progressExportJob(state.value, 0, total)
-      }
+      if (total > 0) state.value = progressExportJob(state.value, 0, total)
       for (let i = 0; i < files.length; i++) {
         if (cancelled || my !== token) {
           state.value = cancelExportJob(state.value)
@@ -192,20 +194,17 @@ export function useExportJob() {
       }
       state.value = finishExportJob(state.value)
       return 'done'
-    } catch (e) {
-      if (my !== token) return 'cancelled'
-      const msg = formatCaughtError(e)
-      state.value = failExportJob(state.value, msg)
-      return 'error'
-    }
+    })
   }
 
   return {
     exportJob: state,
     exportBusy: busy,
     exportPercent: percent,
+    canRetryExport: canRetry,
     cancelExport,
     resetExport,
+    retryLastExport,
     runTextExport,
     runJSONExport,
     runBundleExport,

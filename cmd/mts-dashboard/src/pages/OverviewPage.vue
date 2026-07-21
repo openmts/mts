@@ -69,6 +69,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runJSONExport,
   runTextExport,
 } = useExportJob()
@@ -705,7 +707,7 @@ async function copyOverview() {
           <span class="font-mono text-xs">{{ serverVersion?.version || t('emptyValue') }}</span>
           <span v-if="serverVersion?.commit" class="font-mono text-[11px] mts-muted">{{ serverVersion.commit.slice(0, 8) }}</span>
         </div>
-        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <button type="button" class="mts-btn" data-testid="overview-export-json" :disabled="exportBusy" @click="exportOverview">
           <Download class="h-3.5 w-3.5" /> {{ t('overviewExportJSON') }}
         </button>

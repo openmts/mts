@@ -51,6 +51,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runJSONExport,
 } = useExportJob()
 const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz } = useServerReachability()
@@ -680,7 +682,7 @@ watch(
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">{{ t('opsActionLog') }}</h2>
         <div class="flex flex-wrap gap-2">
-          <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+          <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <button type="button" class="mts-btn" data-testid="ops-export-log" :disabled="exportBusy || !filteredActionLog.length" @click="exportActionLog">
             <Download class="h-3.5 w-3.5" />
             {{ t('opsExportLog') }}

@@ -60,6 +60,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runTextExport,
   runJSONExport,
 } = useExportJob()
@@ -480,7 +482,7 @@ watch(
         </select>
       </label>
       <div class="md:col-span-6 space-y-2">
-        <ExportJobBanner :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <ExportJobBanner :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <div class="flex flex-wrap items-end gap-2">
           <button type="button" :disabled="loading" class="mts-btn-primary" data-testid="audit-reload" @click="loadAudit">
             <RefreshCw class="h-3.5 w-3.5" />

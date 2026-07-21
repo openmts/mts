@@ -72,6 +72,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runTextExport,
   runJSONExport,
 } = useExportJob()
@@ -924,7 +926,9 @@ const columnRows = computed(() => {
 
     <ExportJobBanner
       :job="exportJob"
+      :retryable="canRetryExport"
       @cancel="cancelExport"
+      @retry="retryLastExport"
       @dismiss="resetExport"
     />
     <ActionResultBanner

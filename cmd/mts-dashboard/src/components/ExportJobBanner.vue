@@ -1,24 +1,31 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ExportJobState } from '@/utils/exportJob'
-import { exportProgressPercent, isExportJobBusy } from '@/utils/exportJob'
+import { canRetryExportJob, exportProgressPercent, isExportJobBusy } from '@/utils/exportJob'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { X } from 'lucide-vue-next'
 
-const props = defineProps<{
-  job: ExportJobState
-}>()
+const props = withDefaults(
+  defineProps<{
+    job: ExportJobState
+    /** 父级提供 lastRetry 时显示失败重试 */
+    retryable?: boolean
+  }>(),
+  { retryable: false },
+)
 
 const emit = defineEmits<{
   cancel: []
   dismiss: []
+  retry: []
 }>()
 
 const { t } = useI18n()
 const busy = computed(() => isExportJobBusy(props.job))
 const percent = computed(() => exportProgressPercent(props.job))
 const visible = computed(() => props.job.status !== 'idle')
+const showRetry = computed(() => props.retryable && canRetryExportJob(props.job))
 const title = computed(() => {
   if (props.job.status === 'running') {
     return formatMessage(t.value('exportJobRunning'), {
@@ -34,7 +41,6 @@ const title = computed(() => {
   return ''
 })
 
-/** 完成/取消/失败视觉分流，避免全部同色灰条 */
 const toneClass = computed(() => {
   switch (props.job.status) {
     case 'done':
@@ -99,16 +105,24 @@ const titleToneClass = computed(() => {
       data-testid="export-job-cancel"
       @click="emit('cancel')"
     >{{ t('exportJobCancel') }}</button>
-    <button
-      v-else
-      type="button"
-      class="mts-focus-ring rounded p-1 opacity-60 hover:opacity-100"
-      data-testid="export-job-dismiss"
-      :title="t('dismiss')"
-      :aria-label="t('dismiss')"
-      @click="emit('dismiss')"
-    >
-      <X class="h-3.5 w-3.5" />
-    </button>
+    <template v-else>
+      <button
+        v-if="showRetry"
+        type="button"
+        class="mts-btn"
+        data-testid="export-job-retry"
+        @click="emit('retry')"
+      >{{ t('exportJobRetry') }}</button>
+      <button
+        type="button"
+        class="mts-focus-ring rounded p-1 opacity-60 hover:opacity-100"
+        data-testid="export-job-dismiss"
+        :title="t('dismiss')"
+        :aria-label="t('dismiss')"
+        @click="emit('dismiss')"
+      >
+        <X class="h-3.5 w-3.5" />
+      </button>
+    </template>
   </div>
 </template>

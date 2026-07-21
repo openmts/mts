@@ -6,6 +6,7 @@ import {
   createExportJobState,
   exportProgressPercent,
   failExportJob,
+  canRetryExportJob,
   finishExportJob,
   isExportJobBusy,
   joinTextWithExportProgress,
@@ -67,4 +68,12 @@ test('exportYieldMs resolves', async () => {
   await exportYieldMs(0)
   await exportYieldMs(5)
   assert.ok(Date.now() - t0 >= 0)
+})
+
+test('canRetryExportJob only on error', () => {
+  assert.equal(canRetryExportJob(createExportJobState()), false)
+  assert.equal(canRetryExportJob(beginExportJob('x')), false)
+  assert.equal(canRetryExportJob(finishExportJob(beginExportJob('x'))), false)
+  assert.equal(canRetryExportJob(cancelExportJob(beginExportJob('x'))), false)
+  assert.equal(canRetryExportJob(failExportJob(beginExportJob('x'), 'boom')), true)
 })

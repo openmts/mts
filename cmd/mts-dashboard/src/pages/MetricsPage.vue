@@ -38,6 +38,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runTextExport,
   runJSONExport,
 } = useExportJob()
@@ -260,7 +262,7 @@ onBeforeUnmount(() => {
         <button type="button" class="mts-btn" data-testid="metrics-share-link" @click="copyMetricsShareLink">
           {{ t('metricsShareLink') }}
         </button>
-        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <button type="button" class="mts-btn" data-testid="metrics-export-raw" :disabled="exportBusy || (!raw)" @click="exportRaw">
           <Download class="h-3.5 w-3.5" /> {{ t('metricsExportRaw') }}
         </button>

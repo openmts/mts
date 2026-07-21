@@ -1099,6 +1099,32 @@ test('commercial browser smoke path', async ({ page }) => {
     delete (window as unknown as { __MTS_E2E_SLOW_EXPORT_MS?: number }).__MTS_E2E_SLOW_EXPORT_MS
   })
 
+  // P287: 导出失败可重试
+  await page.evaluate(() => {
+    ;(window as unknown as { __MTS_E2E_FAIL_EXPORT?: boolean }).__MTS_E2E_FAIL_EXPORT = true
+  })
+  await page.getByTestId('query-export-history').click()
+  await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('export-job-banner')).toHaveAttribute('data-export-status', 'error')
+  await expect(page.getByTestId('export-job-retry')).toBeVisible()
+  await page.evaluate(() => {
+    delete (window as unknown as { __MTS_E2E_FAIL_EXPORT?: boolean }).__MTS_E2E_FAIL_EXPORT
+  })
+  await page.getByTestId('export-job-retry').click()
+  await expect(page.getByTestId('export-job-banner')).toHaveAttribute(
+    'data-export-status',
+    /^(done|running|error)$/,
+    { timeout: 10_000 },
+  )
+  // 清除失败注入后重试应成功（允许短暂 running）
+  await expect.poll(async () => page.getByTestId('export-job-banner').getAttribute('data-export-status'), {
+    timeout: 10_000,
+  }).toMatch(/^(done|cancelled)$/)
+  {
+    const dismiss = page.getByTestId('export-job-dismiss')
+    if (await dismiss.count()) await dismiss.click()
+  }
+
   // P203: Databases 导出进度 banner
   await page.goto('/databases')
   await expect(page.getByTestId('databases-export-json')).toBeVisible()

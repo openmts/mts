@@ -108,6 +108,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runJSONExport,
 } = useExportJob()
 const renewPassword = ref('')
@@ -475,7 +477,7 @@ async function submit() {
         <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <button type="button" class="mts-btn" data-testid="account-share-link" @click="copyAccountShareLink">
           {{ t('accountShareLink') }}
         </button>

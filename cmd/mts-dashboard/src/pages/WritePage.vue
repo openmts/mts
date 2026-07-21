@@ -96,6 +96,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runJSONExport,
 } = useExportJob()
 
@@ -853,7 +855,7 @@ async function exportWriteDraft() {
       <button type="button" class="mts-btn" data-testid="write-cancel" :disabled="!loading" @click="cancelWrite">
         {{ t('writeCancel') }}
       </button>
-      <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+      <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
       <button type="button" class="mts-btn" data-testid="write-export-result" :disabled="!result || exportBusy" @click="exportWriteResult">
         <Download class="h-3.5 w-3.5" /> {{ t('writeExportResult') }}
       </button>

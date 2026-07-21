@@ -107,6 +107,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runTextExport,
   runJSONExport,
 } = useExportJob()
@@ -636,7 +638,7 @@ onBeforeUnmount(() => {
         <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('usersDesc') }}</p>
       </div>
       <div class="flex gap-2">
-        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <button type="button" class="mts-btn" data-testid="users-export-json" :disabled="exportBusy || !filteredUsers.length" @click="exportJSON">
           <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
         </button>

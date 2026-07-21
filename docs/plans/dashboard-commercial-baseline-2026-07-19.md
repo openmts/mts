@@ -1236,3 +1236,6 @@
 ## P286（2026-07-21）
 - 会话 warn 非阻断横幅与续期入口
 
+## P287（2026-07-22）
+- 导出失败一键重试（ExportJobBanner + useExportJob lastRetry）
+

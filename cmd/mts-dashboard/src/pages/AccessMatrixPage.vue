@@ -48,6 +48,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runTextExport,
   runJSONExport,
 } = useExportJob()
@@ -261,7 +263,7 @@ async function exportMatrixCSV() {
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <button
           type="button"
           class="mts-btn"

@@ -48,6 +48,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runTextExport,
   runJSONExport,
 } = useExportJob()
@@ -418,7 +420,7 @@ onBeforeUnmount(() => {
         <button type="button" class="mts-btn" data-testid="config-share-link" @click="copyConfigShareLink">
           {{ t('configShareLink') }}
         </button>
-        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <button type="button" class="mts-btn" data-testid="config-export-effective" :disabled="exportBusy || (!config)" @click="exportEffective">
           <Download class="h-3.5 w-3.5" /> {{ t('configExportEffective') }}
         </button>

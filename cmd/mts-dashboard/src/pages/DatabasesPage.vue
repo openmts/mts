@@ -88,6 +88,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runTextExport,
   runJSONExport,
 } = useExportJob()
@@ -628,7 +630,7 @@ onBeforeUnmount(() => {
         <p class="text-xs mts-muted">{{ isAdmin ? t('databasesDesc') : t('databasesReadOnlyDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <button type="button" class="mts-btn" data-testid="databases-export-json" :disabled="exportBusy || !filteredDatabases.length" @click="exportJSON">
           <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
         </button>

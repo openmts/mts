@@ -64,6 +64,8 @@ const {
   exportBusy,
   cancelExport,
   resetExport,
+  retryLastExport,
+  canRetryExport,
   runTextExport,
   runJSONExport,
 } = useExportJob()
@@ -891,7 +893,7 @@ onBeforeUnmount(() => {
         <template #actions>
           <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
           <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
-          <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+          <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
           <button type="button" class="mts-btn" data-testid="downsample-export-json" :disabled="exportBusy || !filteredPolicies.length" @click="exportJSON">
             <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
           </button>
