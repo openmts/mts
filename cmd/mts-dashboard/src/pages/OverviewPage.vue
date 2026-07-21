@@ -62,7 +62,7 @@ const router = useRouter()
 const route = useRoute()
 useHashScroll()
 const { t, locale } = useI18n()
-const { success, error: notifyError } = useNotify()
+const { success, info, error: notifyError } = useNotify()
 const {
   exportJob,
   exportBusy,
@@ -450,7 +450,7 @@ async function exportOverview() {
     },
   })
   if (outcome === 'done') success(t.value('overviewExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 

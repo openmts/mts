@@ -31,7 +31,7 @@ const { isAdmin } = useAuth()
 const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
-const { success, error: notifyError } = useNotify()
+const { success, info, error: notifyError } = useNotify()
 const {
   exportJob,
   exportBusy,
@@ -110,7 +110,7 @@ async function exportRaw() {
     },
   })
   if (outcome === 'done') success(t.value('metricsExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -140,7 +140,7 @@ async function exportJSON() {
     },
   })
   if (outcome === 'done') success(t.value('metricsExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 

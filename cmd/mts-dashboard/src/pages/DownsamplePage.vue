@@ -56,7 +56,7 @@ const route = useRoute()
 const { isAdmin } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t, locale } = useI18n()
-const { success, error: notifyError, warn } = useNotify()
+const { success, info, error: notifyError, warn } = useNotify()
 const {
   exportJob,
   exportBusy,
@@ -679,7 +679,7 @@ async function exportJSON() {
     },
   })
   if (outcome === 'done') success(t.value('inventoryExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -710,7 +710,7 @@ async function exportCSV() {
     },
   })
   if (outcome === 'done') success(t.value('inventoryExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 

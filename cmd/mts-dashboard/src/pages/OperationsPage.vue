@@ -241,7 +241,7 @@ async function exportStats() {
     },
   })
   if (outcome === 'done') success(t.value('opsStatsExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -283,7 +283,7 @@ async function exportMaintErrors() {
     },
   })
   if (outcome === 'done') success(t.value('opsMaintErrorsExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -322,7 +322,7 @@ async function exportActionLog() {
     },
   })
   if (outcome === 'done') success(t.value('opsLogExportOk'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 

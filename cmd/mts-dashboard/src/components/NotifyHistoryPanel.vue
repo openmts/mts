@@ -36,7 +36,7 @@ const props = defineProps<{
 }>()
 const route = useRoute()
 const { t, locale } = useI18n()
-const { history, clearHistory, reloadHistory, success, error: notifyError } = useNotify()
+const { history, clearHistory, reloadHistory, success, info, error: notifyError } = useNotify()
 
 const {
   exportJob,
@@ -173,7 +173,7 @@ async function onExportJSON() {
     },
   })
   if (outcome === 'done') success(t.value('notifyHistoryExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -198,7 +198,7 @@ async function onExportCSV() {
     },
   })
   if (outcome === 'done') success(t.value('notifyHistoryExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 

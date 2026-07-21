@@ -41,7 +41,7 @@ const route = useRoute()
 useHashScroll()
 const { currentRole } = useAuth()
 const { t, locale } = useI18n()
-const { success, warn, error: notifyError } = useNotify()
+const { success, info, warn, error: notifyError } = useNotify()
 const {
   exportJob,
   exportBusy,
@@ -210,7 +210,7 @@ async function exportMatrix() {
     },
   })
   if (outcome === 'done') success(t.value('accessMatrixExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -241,7 +241,7 @@ async function exportMatrixCSV() {
     },
   })
   if (outcome === 'done') success(t.value('accessMatrixExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 </script>

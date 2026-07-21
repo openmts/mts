@@ -55,7 +55,7 @@ interface ExportResponse { export: ExportData }
 const route = useRoute()
 const { isAdmin } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
-const { success, error: notifyError } = useNotify()
+const { success, info, error: notifyError } = useNotify()
 const {
   exportJob,
   exportBusy,
@@ -300,7 +300,7 @@ async function downloadExport() {
     actionResult.value = makeActionResult('ok', t.value('storageDownloadStarted'))
     success(t.value('storageDownloadToast'))
   } else if (outcome === 'cancelled') {
-    success(t.value('exportCancelledToast'))
+    info(t.value('exportCancelledToast'))
   } else if (outcome === 'error') {
     notifyError(exportJob.value.error || t.value('failed'))
   }

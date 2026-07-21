@@ -88,7 +88,7 @@ const metaHint = ref('')
 const rpMetaHint = ref('')
 const metaSource = ref<MetaLoadSource>('admin')
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
-const { success, error: notifyError, warn } = useNotify()
+const { success, info, error: notifyError, warn } = useNotify()
 
 const {
   exportJob,
@@ -522,7 +522,7 @@ async function submit() {
       writeWasCanceled.value = true
       actionError.value = t.value('writeCancelled')
       result.value = { ok: false, message: actionError.value }
-      success(actionError.value)
+      info(actionError.value)
     } else {
       writeWasCanceled.value = false
       actionError.value = formatCaughtError(e)
@@ -581,7 +581,7 @@ async function exportWriteResult() {
     },
   })
   if (outcome === 'done') success(t.value('writeResultExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -612,7 +612,7 @@ async function exportWriteDraft() {
     },
   })
   if (outcome === 'done') success(t.value('writeDraftExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 </script>

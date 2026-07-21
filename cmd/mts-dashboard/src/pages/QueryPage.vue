@@ -65,7 +65,7 @@ const seriesFilter = ref('')
 const route = useRoute()
 useHashScroll()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
-const { success, error: notifyError } = useNotify()
+const { success, info, error: notifyError } = useNotify()
 const {
   exportJob,
   exportBusy,
@@ -366,7 +366,7 @@ async function runQuery() {
   }
   if (lastQueryErrorCode.value === 'canceled') {
     actionError.value = t.value('queryCancelled')
-    success(actionError.value)
+    info(actionError.value)
     return
   }
   notifyError(actionError.value)
@@ -432,7 +432,7 @@ async function exportHistory() {
     },
   })
   if (outcome === 'done') success(formatMessage(t.value('queryHistoryExported'), { count }))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -572,7 +572,7 @@ async function exportCSV() {
     },
   })
   if (outcome === 'done') success(t.value('queryCsvExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 

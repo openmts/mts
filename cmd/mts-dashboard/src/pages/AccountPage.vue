@@ -90,7 +90,7 @@ function roleLabel(role?: string | null): string {
   if (role === 'user') return t.value('roleUser')
   return role
 }
-const { success, error: notifyError } = useNotify()
+const { success, info: notifyInfo, error: notifyError } = useNotify()
 const {
   exportJob,
   exportBusy,
@@ -348,7 +348,7 @@ async function exportAccount() {
     },
   })
   if (outcome === 'done') success(t.value('accountExported') || t.value('inventoryExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') notifyInfo(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -386,7 +386,7 @@ async function exportClientPrefsOnly() {
     },
   })
   if (outcome === 'done') success(t.value('accountPrefsExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') notifyInfo(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 

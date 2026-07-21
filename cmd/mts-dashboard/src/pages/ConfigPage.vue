@@ -40,7 +40,7 @@ const route = useRoute()
 const { isAdmin } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
-const { success, error: notifyError } = useNotify()
+const { success, info, error: notifyError } = useNotify()
 const {
   exportJob,
   exportBusy,
@@ -238,7 +238,7 @@ async function exportEffective() {
     },
   })
   if (outcome === 'done') success(t.value('configExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -278,7 +278,7 @@ async function exportSchema() {
     },
   })
   if (outcome === 'done') success(t.value('configExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
@@ -308,7 +308,7 @@ async function exportErrorCodes() {
     },
   })
   if (outcome === 'done') success(t.value('configExported'))
-  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
