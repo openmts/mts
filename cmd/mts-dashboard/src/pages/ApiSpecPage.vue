@@ -238,7 +238,7 @@ async function exportMarkdown() {
       </div>
     </div>
 
-    <p v-if="loadError" class="mts-alert-error" data-testid="api-spec-error">{{ loadError }}</p>
+    <p v-if="loadError" class="mts-alert-error" data-testid="api-spec-error" role="alert" aria-live="assertive">{{ loadError }}</p>
 
     <div id="api-spec-filters" class="grid gap-3 scroll-mt-20 md:grid-cols-3" data-testid="api-spec-filters">
       <label class="text-xs mts-muted md:col-span-1">{{ t('apiSpecNamespace') }}

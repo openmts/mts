@@ -142,6 +142,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByRole('main').locator('textarea').first().fill('cpu,host=e2e-playwright usage=0.42 1000')
   await page.getByTestId('write-submit').click()
   await expect(page.getByTestId('write-result-ok')).toBeVisible({ timeout: 20_000 })
+  // P236: 成功结果 live region
+  await expect(page.getByTestId('write-result-ok')).toHaveAttribute('role', 'status')
   await expect(page.getByRole('main').getByText(/写入成功/).first()).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('main').getByRole('button', { name: /表单写入|Form write/i })).toBeVisible()
   await expect(page.getByTestId('write-mode-tabs')).toBeVisible()

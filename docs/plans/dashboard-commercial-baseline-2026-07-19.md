@@ -1078,3 +1078,6 @@
 ## P235（2026-07-21）
 - Query/Write actionError live region（alert/status）
 - clipboard 错误友好化
+
+## P236（2026-07-21）
+- 扩展结果条 live region（Query/Write/ApiSpec/Config/Audit）

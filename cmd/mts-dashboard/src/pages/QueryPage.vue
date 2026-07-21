@@ -911,7 +911,7 @@ const columnRows = computed(() => {
       :role="lastQueryErrorCode === 'canceled' ? 'status' : 'alert'"
       :aria-live="lastQueryErrorCode === 'canceled' ? 'polite' : 'assertive'"
     >{{ actionError }}</p>
-    <p v-if="deleteResult" class="mts-alert-ok">{{ deleteResult }}</p>
+    <p v-if="deleteResult" class="mts-alert-ok" role="status" aria-live="polite" data-testid="query-delete-result">{{ deleteResult }}</p>
 
     <div id="query-stats" class="scroll-mt-20 space-y-2" data-testid="query-stats-panel">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -939,7 +939,7 @@ const columnRows = computed(() => {
           @click="loadEngineStats"
         >{{ engineStatsLoading ? t('loading') : t('queryEngineStatsBtn') }}</button>
       </div>
-      <p v-if="engineStatsError" class="mts-alert-error text-xs" data-testid="query-engine-stats-error">{{ engineStatsError }}</p>
+      <p v-if="engineStatsError" class="mts-alert-error text-xs" data-testid="query-engine-stats-error" role="alert" aria-live="assertive">{{ engineStatsError }}</p>
       <template v-if="queryStats">
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-5" data-testid="query-stats-primary">
           <div

@@ -383,7 +383,7 @@ watch(
     >{{ t('auditSelfHint') }}</p>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
-    <p class="mts-alert-warn">{{ t('auditHint') }}</p>
+    <p class="mts-alert-warn" role="note">{{ t('auditHint') }}</p>
 
     <div id="audit-filters" class="scroll-mt-20 flex flex-wrap gap-2" data-testid="audit-quick-ranges">
       <button

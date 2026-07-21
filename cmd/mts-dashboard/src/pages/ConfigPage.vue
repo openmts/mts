@@ -399,11 +399,11 @@ onBeforeUnmount(() => {
       <button class="mts-btn-primary" data-testid="config-validate" @click="handleValidate" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined"><CheckCircle class="h-4 w-4" />{{ t('configValidate') }}</button>
       <button class="mts-btn-primary" data-testid="config-reload" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="handleReload"><RefreshCw class="h-4 w-4" />{{ t('configReload') }}</button>
     </div>
-    <div v-if="validateResult" :class="validateResult.ok ? 'mts-alert-ok' : 'mts-alert-error'">
+    <div v-if="validateResult" :class="validateResult.ok ? 'mts-alert-ok' : 'mts-alert-error'" :role="validateResult.ok ? 'status' : 'alert'" :aria-live="validateResult.ok ? 'polite' : 'assertive'" data-testid="config-validate-result">
       <p v-if="validateResult.ok">{{ t('configValidateOk') }}</p>
       <p v-else>{{ formatMessage(t('configValidateFail'), { error: validateResult.error || '' }) }}</p>
     </div>
-    <div v-if="reloadResult" class="mts-alert-ok">
+    <div v-if="reloadResult" class="mts-alert-ok" role="status" aria-live="polite" data-testid="config-reload-result">
       <p>{{ reloadResult.fields?.length ? formatMessage(t('configReloadOkFields'), { fields: reloadResult.fields.join(', ') }) : t('configReloadOk') }}</p>
     </div>
 
