@@ -449,6 +449,7 @@ function reportDbCatch(key: DbActionKey, e: unknown, ctx?: Record<string, string
 }
 
 async function createDatabase() {
+  if (createDbLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -496,6 +497,7 @@ function requestDeleteDatabase(name: string) {
   confirmOpen.value = true
 }
 async function confirmDeleteDatabase() {
+  if (confirmLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -526,6 +528,7 @@ async function confirmDeleteDatabase() {
   }
 }
 async function createRetentionPolicy(db: DatabaseEntry) {
+  if (rpLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)

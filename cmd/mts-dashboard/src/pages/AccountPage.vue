@@ -190,6 +190,7 @@ function mapAccountActionError(err: string): { message: string; retryable: boole
 }
 
 async function renewSessionWithPassword() {
+  if (renewLoading.value) return
   renewError.value = ''
   renewRetryable.value = false
   if (shouldBlockOfflineMutation(offline.value)) {
@@ -512,6 +513,7 @@ async function copyClientPrefsOnly() {
 }
 
 async function submit() {
+  if (loading.value) return
   error.value = ''
   info.value = ''
   passwordRetryable.value = false

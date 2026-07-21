@@ -63,6 +63,7 @@ function cancelForceAction() {
 }
 
 async function submit() {
+  if (loading.value) return
   error.value = ''
   errorRetryable.value = false
   if (shouldBlockOfflineMutation(offline.value)) {

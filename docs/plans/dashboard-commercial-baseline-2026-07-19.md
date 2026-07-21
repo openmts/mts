@@ -1327,3 +1327,8 @@
 - apiLogin / apiChangePassword / useAuth 支持 AbortSignal
 - UserModals：loading 态禁用提交；InFlightBanner 取消按钮 a11y
 
+## P310（2026-07-22）
+- Login：Abort + InFlightBanner(login) + 取消/超时文案 + 双提交防护
+- Write/Query 删除/Account/Users 写路径双提交 early-return
+- InFlightBanner 支持 kind=login
+

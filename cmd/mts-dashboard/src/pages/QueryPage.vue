@@ -531,6 +531,7 @@ const deleteScopeMessage = computed(() => {
 })
 
 function openRangeDelete() {
+  if (deleteLoading.value) return
   if (writeBlocked.value) {
     notifyError(t.value(blockedMessageKey('offlineDeleteBlocked')))
     return
@@ -546,6 +547,7 @@ function cancelRangeDelete() {
 }
 
 async function doRangeDelete() {
+  if (deleteLoading.value) return
   if (writeBlocked.value) {
     deleteResult.value = t.value(blockedMessageKey('offlineDeleteBlocked'))
     notifyError(deleteResult.value)
@@ -988,7 +990,7 @@ const columnRows = computed(() => {
         type="button"
         class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-200"
         data-testid="query-range-delete"
-        :disabled="writeBlocked"
+        :disabled="writeBlocked || deleteLoading"
         :title="writeBlocked ? t(blockedMessageKey('offlineDeleteBlocked')) : undefined"
         @click="openRangeDelete"
       ><Trash2 class="h-4 w-4" />{{ t('queryRangeDelete') }}</button>

@@ -523,6 +523,7 @@ function cancelWrite() {
 }
 
 async function submit() {
+  if (loading.value) return
   if (writeBlocked.value) {
     actionError.value = t.value(blockedMessageKey('offlineWriteBlocked'))
     notifyError(actionError.value)

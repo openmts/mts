@@ -273,6 +273,7 @@ watch(
 )
 
 async function handleValidate() {
+  if (configActionLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -304,6 +305,7 @@ async function handleValidate() {
 }
 
 async function handleReload() {
+  if (configActionLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)

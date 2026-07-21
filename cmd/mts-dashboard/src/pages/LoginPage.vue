@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -16,8 +16,11 @@ import {
 } from '@/utils/loginUsernamePrefs'
 import { Server } from 'lucide-vue-next'
 import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import { createActionAbort } from '@/utils/actionAbort'
+import { isCanceledError, isTimeoutError } from '@/utils/apiError'
 
 const router = useRouter()
 const { login, mustChangePassword, isAdmin } = useAuth()
@@ -31,6 +34,8 @@ const password = ref('')
 const rememberUsername = ref(!!remembered)
 const ttlSeconds = ref(loadLoginTTLPref(storage))
 const loading = ref(false)
+const loginStartedAt = ref<number | null>(null)
+const loginAbort = createActionAbort()
 const error = ref('')
 const errorRetryable = ref(false)
 const reasonHint = computed(() =>
@@ -44,7 +49,22 @@ const pendingRedirectLabel = computed(() =>
 )
 const invalid = computed(() => !!error.value)
 
+function cancelLogin() {
+  loginAbort.cancel()
+}
+
+function mapLoginError(err: string): { message: string; retryable: boolean } {
+  if (isCanceledError(err)) {
+    return { message: t.value('loginCancelled'), retryable: false }
+  }
+  if (isTimeoutError(err)) {
+    return { message: t.value('loginTimedOut'), retryable: true }
+  }
+  return { message: err, retryable: true }
+}
+
 async function handleLogin() {
+  if (loading.value) return
   if (shouldBlockOfflineMutation(offline.value)) {
     error.value = t.value('offlineLoginBlocked')
     errorRetryable.value = true
@@ -64,40 +84,52 @@ async function handleLogin() {
   error.value = ''
   errorRetryable.value = false
   loading.value = true
+  loginStartedAt.value = Date.now()
+  const signal = loginAbort.begin()
   try {
     const err = await login(
       username.value.trim(),
       password.value,
-      ttl.seconds != null ? { ttlSeconds: ttl.seconds } : undefined,
+      {
+        ...(ttl.seconds != null ? { ttlSeconds: ttl.seconds } : {}),
+        signal,
+      },
     )
     if (err) {
-      error.value = err
-      errorRetryable.value = true
-    } else {
-      saveLoginTTLPref(storage, ttlSeconds.value)
-      if (rememberUsername.value) {
-        saveLoginUsernamePref(storage, username.value)
-      } else {
-        clearLoginUsernamePref(storage)
-      }
-      if (mustChangePassword.value) {
-        const q: Record<string, string> = {}
-        if (pendingRedirect.value) q.redirect = pendingRedirect.value
-        await router.push({ name: 'ForceChangePassword', query: q })
-        return
-      }
-      const redirect = resolveLandingPath({
-        redirectRaw: router.currentRoute.value.query.redirect,
-        preferredPath: loadLandingPath(storage),
-        isAdmin: isAdmin.value,
-        sanitizeRedirect,
-      })
-      await router.push(redirect)
+      const mapped = mapLoginError(err)
+      error.value = mapped.message
+      errorRetryable.value = mapped.retryable
+      return
     }
+    saveLoginTTLPref(storage, ttlSeconds.value)
+    if (rememberUsername.value) {
+      saveLoginUsernamePref(storage, username.value)
+    } else {
+      clearLoginUsernamePref(storage)
+    }
+    if (mustChangePassword.value) {
+      const q: Record<string, string> = {}
+      if (pendingRedirect.value) q.redirect = pendingRedirect.value
+      await router.push({ name: 'ForceChangePassword', query: q })
+      return
+    }
+    const redirect = resolveLandingPath({
+      redirectRaw: router.currentRoute.value.query.redirect,
+      preferredPath: loadLandingPath(storage),
+      isAdmin: isAdmin.value,
+      sanitizeRedirect,
+    })
+    await router.push(redirect)
   } finally {
+    loginAbort.end()
     loading.value = false
+    loginStartedAt.value = null
   }
 }
+
+onBeforeUnmount(() => {
+  cancelLogin()
+})
 </script>
 
 <template>
@@ -131,6 +163,14 @@ async function handleLogin() {
         <span class="mt-0.5 block break-all font-mono text-[11px]" data-testid="login-redirect-path">{{ pendingRedirectLabel }}</span>
       </p>
 
+      <InFlightBanner
+        class="mb-4"
+        :active="loading"
+        :started-at-ms="loginStartedAt"
+        kind="login"
+        @cancel="cancelLogin"
+      />
+
       <form class="space-y-4" data-testid="login-form" @submit.prevent="handleLogin">
         <div>
           <label class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200" for="username">{{ t('username') }}</label>
@@ -143,6 +183,7 @@ async function handleLogin() {
             class="mts-input mts-focus-ring"
             data-testid="login-username"
             :placeholder="t('loginUsernamePlaceholder')"
+            :disabled="loading"
             :aria-invalid="invalid ? 'true' : undefined"
             :aria-describedby="error ? 'login-error' : undefined"
           />
@@ -158,6 +199,7 @@ async function handleLogin() {
             name="password"
             :placeholder="t('loginPasswordPlaceholder')"
             :invalid="invalid"
+            :disabled="loading"
             :described-by="error ? 'login-error' : undefined"
           />
         </div>
@@ -168,6 +210,7 @@ async function handleLogin() {
             type="checkbox"
             class="rounded border-slate-300"
             data-testid="login-remember-user"
+            :disabled="loading"
           />
           {{ t('loginRememberUser') }}
         </label>
@@ -183,6 +226,7 @@ async function handleLogin() {
             class="mts-input mts-focus-ring"
             data-testid="login-ttl"
             :placeholder="t('loginTTLPlaceholder')"
+            :disabled="loading"
             :aria-invalid="error === t('loginTTLInvalid') ? 'true' : undefined"
             :aria-describedby="error ? 'login-error login-ttl-hint' : 'login-ttl-hint'"
           />
@@ -212,21 +256,32 @@ async function handleLogin() {
               type="button"
               class="mts-btn text-xs"
               data-testid="login-error-dismiss"
+              :disabled="loading"
               @click="error = ''; errorRetryable = false"
             >{{ t('dismiss') }}</button>
           </div>
         </div>
 
-        <button
-          type="submit"
-          class="mts-focus-ring w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
-          data-testid="login-submit"
-          :disabled="loading || offline"
-          :title="offline ? t('offlineLoginBlocked') : undefined"
-          :aria-busy="loading ? 'true' : undefined"
-        >
-          {{ loading ? t('loggingIn') : t('login') }}
-        </button>
+        <div class="flex gap-2">
+          <button
+            type="submit"
+            class="mts-focus-ring flex-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+            data-testid="login-submit"
+            :disabled="loading || offline"
+            :title="offline ? t('offlineLoginBlocked') : (loading ? t('loggingIn') : undefined)"
+            :aria-busy="loading ? 'true' : undefined"
+          >
+            {{ loading ? t('loggingIn') : t('login') }}
+          </button>
+          <button
+            v-if="loading"
+            type="button"
+            class="mts-btn shrink-0"
+            data-testid="login-cancel"
+            :aria-label="t('cancel')"
+            @click="cancelLogin"
+          >{{ t('cancel') }}</button>
+        </div>
       </form>
 
       <div class="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">

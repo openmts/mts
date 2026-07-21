@@ -286,6 +286,7 @@ function onUsersBeforeUnload(e: BeforeUnloadEvent) {
 let unregisterUsersDirty: (() => void) | null = null
 
 async function createUser() {
+  if (usersWriteLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -319,6 +320,7 @@ async function createUser() {
 }
 
 async function doSetPassword() {
+  if (usersWriteLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -346,6 +348,7 @@ async function doSetPassword() {
 }
 
 async function doChangeSelfPassword() {
+  if (usersWriteLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -485,6 +488,7 @@ function toggleGrantPerm(perm: string) {
 }
 
 async function grantPermission() {
+  if (usersWriteLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -523,6 +527,7 @@ async function grantPermission() {
 }
 
 async function revokeGrant(g: DatabaseGrant) {
+  if (usersWriteLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
