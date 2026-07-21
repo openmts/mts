@@ -5,7 +5,7 @@ import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -288,7 +288,7 @@ function cancelStorageAction() {
 
 function reportStorageCatch(key: StorageActionKey, e: unknown) {
   if (isAdminHeavyBusyError(e)) {
-    setAdminOpBusy(true)
+    setAdminOpBusy(true, adminHeavyBusyOpFromError(e) || undefined)
     void refreshAdminOpBusy()
   }
   if (isCanceledError(e)) {

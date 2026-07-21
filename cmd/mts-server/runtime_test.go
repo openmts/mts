@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -304,11 +305,13 @@ func TestRuntimeAdminHeavySharedMutex(t *testing.T) {
 	// storage snapshot should fail while held
 	if _, err := runtime.storageSnapshot(context.Background()); err == nil {
 		t.Fatal("storageSnapshot during heavy want error")
-	} else if !errors.Is(err, mts.ErrEngineBusy) {
-		// apiError unwraps to ErrEngineBusy
+	} else {
 		var apiErr apiError
 		if !errors.As(err, &apiErr) || apiErr.Code != errorCodeResourceExhausted {
 			t.Fatalf("storageSnapshot err = %v", err)
+		}
+		if !strings.Contains(apiErr.Message, "test") {
+			t.Fatalf("busy message want current op, got %q", apiErr.Message)
 		}
 	}
 	// flush also busy

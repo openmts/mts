@@ -1402,3 +1402,7 @@
 ## P326（2026-07-22）
 - Dashboard：`resource_exhausted` + admin heavy 文案映射为「管理重操作占用中」
 - Ops/Storage：捕获互斥错误时乐观置 busy 并刷新 ops-status
+
+## P327（2026-07-22）
+- Server：admin heavy 互斥冲突 message 附带当前 `op`
+- Dashboard：错误文案/乐观 busy 解析并展示占用 op

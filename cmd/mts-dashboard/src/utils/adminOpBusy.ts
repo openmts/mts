@@ -104,3 +104,25 @@ export function isAdminHeavyBusyError(err: unknown): boolean {
   if (code !== 'resource_exhausted' && e.status !== 429) return false
   return isAdminHeavyBusyMessage(e.message)
 }
+
+/** 从互斥错误 message 解析当前占用 op（如 "... in progress: flush"） */
+export function parseAdminHeavyBusyOp(message: string | null | undefined): string {
+  const m = String(message || '').trim()
+  if (!m) return ''
+  const idx = m.toLowerCase().lastIndexOf('in progress:')
+  if (idx >= 0) {
+    return m.slice(idx + 'in progress:'.length).trim()
+  }
+  const colon = m.lastIndexOf(':')
+  if (colon >= 0 && /admin heavy|already in progress/i.test(m)) {
+    const tail = m.slice(colon + 1).trim()
+    if (tail && !/\s/.test(tail) && tail.length < 40) return tail
+  }
+  return ''
+}
+
+export function adminHeavyBusyOpFromError(err: unknown): string {
+  if (!isAdminHeavyBusyError(err)) return ''
+  const e = err as { message?: string }
+  return parseAdminHeavyBusyOp(e.message)
+}

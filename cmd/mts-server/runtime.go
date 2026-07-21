@@ -319,7 +319,15 @@ func (r *serverRuntime) queryStats() mts.QueryStats {
 // tryBeginAdminHeavy 串行化 flush/compact/retention 与 storage 重操作，避免 Dashboard 并发压垮引擎/磁盘。
 func (r *serverRuntime) tryBeginAdminHeavy(op string) error {
 	if !r.maintenanceBusy.CompareAndSwap(false, true) {
-		return newAPIError(errorCodeResourceExhausted, "admin heavy operation already in progress", mts.ErrEngineBusy)
+		cur := ""
+		if v := r.maintenanceOp.Load(); v != nil {
+			cur, _ = v.(string)
+		}
+		msg := "admin heavy operation already in progress"
+		if cur != "" {
+			msg = "admin heavy operation already in progress: " + cur
+		}
+		return newAPIError(errorCodeResourceExhausted, msg, mts.ErrEngineBusy)
 	}
 	if op == "" {
 		op = "admin_heavy"

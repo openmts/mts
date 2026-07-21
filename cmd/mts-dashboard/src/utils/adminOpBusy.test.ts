@@ -3,8 +3,10 @@ import test from 'node:test'
 import {
   adminOpKindLabelKey,
   formatAdminOpElapsed,
+  adminHeavyBusyOpFromError,
   isAdminHeavyBusyError,
   isAdminHeavyBusyMessage,
+  parseAdminHeavyBusyOp,
   joinAdminOpChip,
   parseAdminOpBusyPayload,
   parseAdminOpStatusPayload,
@@ -68,5 +70,18 @@ test('isAdminHeavyBusyMessage and error', () => {
   assert.equal(
     isAdminHeavyBusyError({ code: 'resource_exhausted', message: 'query limit' }),
     false,
+  )
+})
+
+test('parseAdminHeavyBusyOp', () => {
+  assert.equal(parseAdminHeavyBusyOp('admin heavy operation already in progress: flush'), 'flush')
+  assert.equal(parseAdminHeavyBusyOp('admin heavy operation already in progress'), '')
+  assert.equal(
+    adminHeavyBusyOpFromError({
+      code: 'resource_exhausted',
+      status: 429,
+      message: 'admin heavy operation already in progress: data_snapshot',
+    }),
+    'data_snapshot',
   )
 })

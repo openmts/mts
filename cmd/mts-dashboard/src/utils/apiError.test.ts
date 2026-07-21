@@ -108,6 +108,11 @@ test('friendlyApiError admin heavy resource_exhausted', () => {
   )
   assert.match(e.display, /管理重操作/)
   assert.doesNotMatch(e.display, /请求超过限制/)
+  const withOp = friendlyApiError(
+    { code: 'resource_exhausted', status: 429, message: 'admin heavy operation already in progress: flush' },
+    'zh',
+  )
+  assert.match(withOp.display, /flush/)
   const en = friendlyApiError(
     { code: 'resource_exhausted', status: 429, message: 'admin heavy operation already in progress' },
     'en',
