@@ -83,3 +83,24 @@ export function joinAdminOpChip(base: string, opLabel?: string | null): string {
   if (!label) return base
   return `${base}: ${label}`
 }
+
+/** 服务端 admin heavy 互斥错误文案识别（resource_exhausted） */
+export function isAdminHeavyBusyMessage(message: string | null | undefined): boolean {
+  const m = String(message || '').toLowerCase()
+  if (!m) return false
+  return (
+    m.includes('admin heavy') ||
+    m.includes('already in progress') ||
+    m.includes('engine busy') ||
+    m.includes('管理重操作') ||
+    m.includes('运维占用')
+  )
+}
+
+export function isAdminHeavyBusyError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const e = err as { code?: string; message?: string; status?: number; name?: string }
+  const code = String(e.code || '').toLowerCase()
+  if (code !== 'resource_exhausted' && e.status !== 429) return false
+  return isAdminHeavyBusyMessage(e.message)
+}

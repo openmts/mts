@@ -101,3 +101,16 @@ test('resolveCaughtErrorCode maps localized cancel and timeout strings', () => {
   assert.equal(isTimeoutError('request timed out'), true)
 })
 
+test('friendlyApiError admin heavy resource_exhausted', () => {
+  const e = friendlyApiError(
+    { code: 'resource_exhausted', status: 429, message: 'admin heavy operation already in progress' },
+    'zh',
+  )
+  assert.match(e.display, /管理重操作/)
+  assert.doesNotMatch(e.display, /请求超过限制/)
+  const en = friendlyApiError(
+    { code: 'resource_exhausted', status: 429, message: 'admin heavy operation already in progress' },
+    'en',
+  )
+  assert.match(en.display, /Admin operation busy/i)
+})

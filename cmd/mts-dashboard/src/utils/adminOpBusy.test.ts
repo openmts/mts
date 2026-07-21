@@ -3,6 +3,8 @@ import test from 'node:test'
 import {
   adminOpKindLabelKey,
   formatAdminOpElapsed,
+  isAdminHeavyBusyError,
+  isAdminHeavyBusyMessage,
   joinAdminOpChip,
   parseAdminOpBusyPayload,
   parseAdminOpStatusPayload,
@@ -49,4 +51,22 @@ test('formatAdminOpElapsed', () => {
 test('joinAdminOpChip', () => {
   assert.equal(joinAdminOpChip('busy'), 'busy')
   assert.equal(joinAdminOpChip('busy', 'Flush'), 'busy: Flush')
+})
+
+test('isAdminHeavyBusyMessage and error', () => {
+  assert.equal(isAdminHeavyBusyMessage('admin heavy operation already in progress'), true)
+  assert.equal(isAdminHeavyBusyMessage('rate limit'), false)
+  assert.equal(
+    isAdminHeavyBusyError({
+      name: 'APIClientError',
+      code: 'resource_exhausted',
+      status: 429,
+      message: 'admin heavy operation already in progress',
+    }),
+    true,
+  )
+  assert.equal(
+    isAdminHeavyBusyError({ code: 'resource_exhausted', message: 'query limit' }),
+    false,
+  )
 })

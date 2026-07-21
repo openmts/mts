@@ -1,5 +1,7 @@
 /** API 错误码友好映射（与服务端 error-codes 主码对齐） */
 
+import { isAdminHeavyBusyMessage } from './adminOpBusy.ts'
+
 export type ApiErrorLocale = 'zh' | 'en'
 
 export interface FriendlyApiError {
@@ -98,9 +100,17 @@ export function friendlyApiError(
   const code = resolveErrorCode(input?.code, input?.status)
   const titleMap = TITLES[code] ?? TITLES.internal
   const hintMap = HINTS[code] ?? HINTS.internal
-  const title = titleMap[locale]
-  const hint = hintMap[locale]
+  let title = titleMap[locale]
+  let hint = hintMap[locale]
   const raw = String(input?.message || '').trim()
+  // 管理重操作互斥：resource_exhausted 但语义是 admin busy，文案对齐运维占用
+  if (code === 'resource_exhausted' && isAdminHeavyBusyMessage(raw)) {
+    title = locale === 'en' ? 'Admin operation busy' : '管理重操作占用中'
+    hint =
+      locale === 'en'
+        ? 'Another admin heavy op (flush/compact/snapshot/restore) is running; wait or open Operations'
+        : '另一管理重操作（flush/compact/快照/恢复）进行中，请等待或到运维页查看状态'
+  }
   // 服务端 message 若仅为 code/snake 或与 title 重复，则不拼入主文案
   let message = hint
   if (raw && raw !== hint && !raw.includes(hint)) {

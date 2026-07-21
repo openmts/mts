@@ -36,7 +36,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -329,6 +329,10 @@ function openConfirm(kind: 'flush' | 'compact' | 'retention') {
 }
 
 function reportActionError(kind: OpsActionKey, e: unknown) {
+  if (isAdminHeavyBusyError(e)) {
+    setAdminOpBusy(true)
+    void refreshAdminOpBusy()
+  }
   reportRetryError(kind, e)
   const msg = actionResult.value?.message || formatCaughtError(e)
   notifyError(msg)
