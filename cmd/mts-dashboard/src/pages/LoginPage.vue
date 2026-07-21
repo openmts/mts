@@ -14,7 +14,8 @@ import {
   loadLoginUsernamePref,
   saveLoginUsernamePref,
 } from '@/utils/loginUsernamePrefs'
-import { Eye, EyeOff, Server } from 'lucide-vue-next'
+import { Server } from 'lucide-vue-next'
+import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 
@@ -27,7 +28,6 @@ const storage = typeof localStorage !== 'undefined' ? localStorage : null
 const remembered = loadLoginUsernamePref(storage)
 const username = ref(remembered || 'admin')
 const password = ref('')
-const showPassword = ref(false)
 const rememberUsername = ref(!!remembered)
 const ttlSeconds = ref(loadLoginTTLPref(storage))
 const loading = ref(false)
@@ -149,32 +149,17 @@ async function handleLogin() {
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200" for="password">{{ t('password') }}</label>
-          <div class="relative">
-            <input
-              id="password"
-              v-model="password"
-              :type="showPassword ? 'text' : 'password'"
-              name="password"
-              autocomplete="current-password"
-              class="mts-input mts-focus-ring pr-10"
-              data-testid="login-password"
-              :placeholder="t('loginPasswordPlaceholder')"
-              :aria-invalid="invalid ? 'true' : undefined"
-              :aria-describedby="error ? 'login-error' : undefined"
-            />
-            <button
-              type="button"
-              class="mts-focus-ring absolute inset-y-0 right-1 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              data-testid="login-toggle-password"
-              :aria-label="showPassword ? t('loginHidePassword') : t('loginShowPassword')"
-              :title="showPassword ? t('loginHidePassword') : t('loginShowPassword')"
-              :aria-pressed="showPassword ? 'true' : 'false'"
-              @click="showPassword = !showPassword"
-            >
-              <EyeOff v-if="showPassword" class="h-4 w-4" aria-hidden="true" />
-              <Eye v-else class="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
+          <PasswordInputWithToggle
+            id="password"
+            v-model="password"
+            autocomplete="current-password"
+            test-id="login-password"
+            toggle-test-id="login-toggle-password"
+            name="password"
+            :placeholder="t('loginPasswordPlaceholder')"
+            :invalid="invalid"
+            :described-by="error ? 'login-error' : undefined"
+          />
         </div>
 
         <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">

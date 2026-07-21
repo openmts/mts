@@ -15,6 +15,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { validateNewPassword } from '@/utils/passwordPolicy'
 import { KeyRound, UserRound, Download, Copy } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
+import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
 import { buildAccountExport, formatAccountExportPretty } from '@/utils/accountExport'
 import { buildClientPrefsExport, formatClientPrefsExportPretty } from '@/utils/clientPrefsExport'
 import { stampFilename } from '@/utils/download'
@@ -682,12 +683,12 @@ async function submit() {
         <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ t('accountSessionRenewWithPassword') }}</p>
         <label class="block text-xs mts-muted">
           {{ t('accountSessionRenewPasswordPlaceholder') }}
-          <input
+          <PasswordInputWithToggle
             v-model="renewPassword"
-            type="password"
             autocomplete="current-password"
-            class="mts-input mt-1"
-            data-testid="account-session-renew-password"
+            input-class="mts-input mt-1 pr-10"
+            test-id="account-session-renew-password"
+            toggle-test-id="account-session-renew-toggle"
             :disabled="renewLoading"
           />
         </label>
@@ -756,41 +757,38 @@ async function submit() {
       <form id="account-password" class="space-y-3 scroll-mt-20" data-testid="account-password-form" @submit.prevent="submit">
         <div>
           <label class="mb-1 block text-sm font-medium" for="acct-old">{{ t('accountOldPassword') }}</label>
-          <input
+          <PasswordInputWithToggle
             id="acct-old"
             v-model="oldPassword"
-            type="password"
             autocomplete="current-password"
-            class="mts-input mts-focus-ring"
-            data-testid="account-old-password"
-            :aria-invalid="invalid ? 'true' : undefined"
-            :aria-describedby="error ? 'account-password-error-desc' : undefined"
+            test-id="account-old-password"
+            toggle-test-id="account-toggle-old"
+            :invalid="invalid"
+            :described-by="error ? 'account-password-error-desc' : undefined"
           />
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium" for="acct-new">{{ t('accountNewPassword') }}</label>
-          <input
+          <PasswordInputWithToggle
             id="acct-new"
             v-model="newPassword"
-            type="password"
             autocomplete="new-password"
-            class="mts-input mts-focus-ring"
-            data-testid="account-new-password"
-            :aria-invalid="invalid ? 'true' : undefined"
-            :aria-describedby="error ? 'account-password-error-desc' : undefined"
+            test-id="account-new-password"
+            toggle-test-id="account-toggle-new"
+            :invalid="invalid"
+            :described-by="error ? 'account-password-error-desc' : undefined"
           />
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium" for="acct-confirm">{{ t('accountConfirmPassword') }}</label>
-          <input
+          <PasswordInputWithToggle
             id="acct-confirm"
             v-model="confirmPassword"
-            type="password"
             autocomplete="new-password"
-            class="mts-input mts-focus-ring"
-            data-testid="account-confirm-password"
-            :aria-invalid="invalid ? 'true' : undefined"
-            :aria-describedby="error ? 'account-password-error-desc' : undefined"
+            test-id="account-confirm-password"
+            toggle-test-id="account-toggle-confirm"
+            :invalid="invalid"
+            :described-by="error ? 'account-password-error-desc' : undefined"
           />
         </div>
         <p v-if="error" id="account-password-error-desc" class="sr-only">{{ error }}</p>

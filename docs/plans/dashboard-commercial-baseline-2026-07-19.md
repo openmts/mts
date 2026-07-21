@@ -1221,3 +1221,6 @@
 ## P281（2026-07-21）
 - 会话临界倒计时 1s 自适应刷新
 
+## P282（2026-07-21）
+- PasswordInputWithToggle 统一密码可见性；Account/Login/Force 接入
+
