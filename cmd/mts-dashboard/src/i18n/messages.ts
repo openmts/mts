@@ -1345,6 +1345,7 @@ export const messages = {
     writeLineErrTsOverflow: '第 {line} 行：时间戳超出 JS 安全整数 ({value})',
     writeLineErrSummaryMore: ' 等共 {count} 处',
     unsavedLeaveConfirm: '有未保存的表单更改，确定离开当前页面？',
+    localDirtyLeaveConfirm: '本页有相对进入时的清单/签核变更（已自动保存到本机），确定离开？',
   },
   en: {
     appName: 'MTS Dashboard',
@@ -2690,6 +2691,7 @@ export const messages = {
     writeLineErrTsOverflow: 'Line {line}: timestamp exceeds JS safe integer ({value})',
     writeLineErrSummaryMore: ' … total {count} issues',
     unsavedLeaveConfirm: 'You have unsaved form changes. Leave this page?',
+    localDirtyLeaveConfirm: 'This page has checklist/sign-off changes since you opened it (already saved locally). Leave anyway?',
   },
 } as const
 

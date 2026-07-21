@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { setRouteLoading } from '@/composables/useGlobalLoading'
-import { allowNavigationWhenDirty, anyRouteDirty } from '@/utils/routeDirty'
+import { allowNavigationWhenDirty, anyRouteDirty, leaveDirtyMessage } from '@/utils/routeDirty'
 import { messages, type Locale } from '@/i18n/messages'
 import { loadLandingPath, resolveLandingPath } from '@/utils/landingPrefs'
 import { sanitizeRedirect } from '@/utils/redirect'
@@ -62,7 +62,7 @@ router.beforeEach((to, from) => {
     } catch { /* ignore */ }
     const leave = allowNavigationWhenDirty(
       true,
-      messages[loc].unsavedLeaveConfirm,
+      leaveDirtyMessage(messages[loc]),
     )
     if (!leave) {
       setRouteLoading(false)

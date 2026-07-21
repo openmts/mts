@@ -680,7 +680,7 @@ async function copyPreflightSummary() {
 }
 
 onMounted(() => {
-  unregisterDirty = registerDirtyChecker('readiness', () => formDirty.value)
+  unregisterDirty = registerDirtyChecker('readiness', () => formDirty.value, 'local')
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', onBeforeUnload)
   }

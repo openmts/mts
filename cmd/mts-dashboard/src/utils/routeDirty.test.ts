@@ -2,9 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   allowNavigationWhenDirty,
+  anyFormRouteDirty,
+  anyLocalRouteDirty,
   anyRouteDirty,
   clearDirtyCheckers,
   dirtyCheckerCount,
+  leaveDirtyMessage,
   registerDirtyChecker,
 } from './routeDirty.ts'
 
@@ -46,4 +49,23 @@ test('allowNavigationWhenDirty confirms only when dirty', () => {
     }),
     true,
   )
+})
+
+test('leaveDirtyMessage prefers form over local', () => {
+  clearDirtyCheckers()
+  const msgs = {
+    unsavedLeaveConfirm: 'FORM',
+    localDirtyLeaveConfirm: 'LOCAL',
+  }
+  assert.equal(leaveDirtyMessage(msgs), 'FORM')
+  let localDirty = true
+  let formDirty = false
+  registerDirtyChecker('readiness', () => localDirty, 'local')
+  registerDirtyChecker('write', () => formDirty, 'form')
+  assert.equal(anyLocalRouteDirty(), true)
+  assert.equal(anyFormRouteDirty(), false)
+  assert.equal(leaveDirtyMessage(msgs), 'LOCAL')
+  formDirty = true
+  assert.equal(leaveDirtyMessage(msgs), 'FORM')
+  clearDirtyCheckers()
 })

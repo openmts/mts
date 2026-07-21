@@ -2,12 +2,25 @@
 
 export type DirtyChecker = () => boolean
 
-const checkers = new Map<string, DirtyChecker>()
+/** form=未提交服务端草稿；local=本地已自动落盘的会话变更 */
+export type DirtyKind = 'form' | 'local'
 
-export function registerDirtyChecker(id: string, checker: DirtyChecker): () => void {
-  checkers.set(id, checker)
+interface DirtyRegistration {
+  checker: DirtyChecker
+  kind: DirtyKind
+}
+
+const checkers = new Map<string, DirtyRegistration>()
+
+export function registerDirtyChecker(
+  id: string,
+  checker: DirtyChecker,
+  kind: DirtyKind = 'form',
+): () => void {
+  checkers.set(id, { checker, kind })
   return () => {
-    if (checkers.get(id) === checker) checkers.delete(id)
+    const cur = checkers.get(id)
+    if (cur?.checker === checker) checkers.delete(id)
   }
 }
 
@@ -16,14 +29,51 @@ export function clearDirtyCheckers(): void {
 }
 
 export function anyRouteDirty(): boolean {
-  for (const check of checkers.values()) {
+  for (const { checker } of checkers.values()) {
     try {
-      if (check()) return true
+      if (checker()) return true
     } catch {
       /* ignore faulty checker */
     }
   }
   return false
+}
+
+/** 当前脏源中是否包含 local 类（用于离开文案分流） */
+export function anyLocalRouteDirty(): boolean {
+  for (const { checker, kind } of checkers.values()) {
+    if (kind !== 'local') continue
+    try {
+      if (checker()) return true
+    } catch {
+      /* ignore */
+    }
+  }
+  return false
+}
+
+/** 当前脏源中是否包含 form 类 */
+export function anyFormRouteDirty(): boolean {
+  for (const { checker, kind } of checkers.values()) {
+    if (kind !== 'form') continue
+    try {
+      if (checker()) return true
+    } catch {
+      /* ignore */
+    }
+  }
+  return false
+}
+
+/**
+ * 选择离开确认文案：有 form 脏优先「未保存」；仅 local 脏用本地落盘提示。
+ */
+export function leaveDirtyMessage(
+  messages: { unsavedLeaveConfirm: string; localDirtyLeaveConfirm: string },
+): string {
+  if (anyFormRouteDirty()) return messages.unsavedLeaveConfirm
+  if (anyLocalRouteDirty()) return messages.localDirtyLeaveConfirm
+  return messages.unsavedLeaveConfirm
 }
 
 export function dirtyCheckerCount(): number {

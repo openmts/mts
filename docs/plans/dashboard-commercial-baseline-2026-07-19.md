@@ -1018,3 +1018,6 @@
 
 ## P218（2026-07-21）
 - Users 弹窗/授权面板：`writeBlocked` + `blockReason`，会话 critical 不再误提示离线
+
+## P219（2026-07-21）
+- 路由离开确认：form（未提交）与 local（本机已自动落盘）文案分流；Readiness 使用 local
