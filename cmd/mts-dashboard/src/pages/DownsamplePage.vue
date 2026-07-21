@@ -917,7 +917,11 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else-if="!filteredPolicies.length" class="mts-card">
-      <EmptyState data-testid="downsample-empty-filter" :title="t('downsampleFilterEmpty')" :description="t('downsampleFilterEmptyDesc')" />
+      <EmptyState data-testid="downsample-empty-filter" :title="t('downsampleFilterEmpty')" :description="t('downsampleFilterEmptyDesc')">
+        <template #action>
+          <button type="button" class="mts-btn-primary" data-testid="downsample-clear-filters" @click="policyFilter = ''; enabledFilter = ''">{{ t('clearFilters') }}</button>
+        </template>
+      </EmptyState>
     </div>
 
     <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900" data-testid="downsample-policies-table">

@@ -736,7 +736,10 @@ onBeforeUnmount(() => {
         :title="users.length ? t('usersFilterEmpty') : t('usersEmpty')"
         :description="users.length ? t('usersFilterEmptyDesc') : t('usersEmptyDesc')"
       >
-        <template v-if="!users.length" #action>
+        <template v-if="users.length" #action>
+          <button type="button" class="mts-btn-primary" data-testid="users-clear-filters" @click="userFilter = ''; roleFilter = ''">{{ t('clearFilters') }}</button>
+        </template>
+        <template v-else #action>
           <button type="button" class="mts-btn-primary" data-testid="users-empty-create" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="showCreate = true">{{ t('usersCreate') }}</button>
         </template>
       </EmptyState>

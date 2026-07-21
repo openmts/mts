@@ -582,7 +582,10 @@ watch(
               :description="t('auditEmptyDesc')"
             >
               <template #action>
-                <button type="button" class="mts-btn-primary" :disabled="loading" @click="loadAudit">{{ t('refresh') }}</button>
+                <div class="flex flex-wrap justify-center gap-2">
+                  <button type="button" class="mts-btn-primary" data-testid="audit-empty-refresh" :disabled="loading" @click="loadAudit">{{ t('refresh') }}</button>
+                  <button type="button" class="mts-btn" data-testid="audit-empty-clear-filters" @click="clearFilters">{{ t('clearFilters') }}</button>
+                </div>
               </template>
             </EmptyState>
           </div>

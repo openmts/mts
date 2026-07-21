@@ -1246,3 +1246,12 @@
 - Server：`GET /api/v1/auth/session` + gRPC `GetSession`（role/expires/must_change/remaining）
 - Principal 扩展 Role/ExpiresAt；series 列表落实 offset/q
 - Dashboard：visibility/storage 同步调用 session；Account 服务端校验；Ops 接入 storage-memory
+
+## P290（2026-07-22）
+- 筛选空态统一「清除筛选」CTA：Users / Metrics / ApiSpec / AccessMatrix / Downsample / Query history / Audit
+
+## P291（2026-07-22）
+- 命令面板无匹配：说明文案 + 清空搜索 / 跳转 Query / Overview
+
+## P292（2026-07-22）
+- Series 服务端分页：Query 加载更多 + 服务端筛选 q；Databases 加载更多；对齐 offset/q 契约

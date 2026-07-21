@@ -36,6 +36,8 @@ export function useQueryWorkbench() {
   const seriesTruncated = ref(false)
   const seriesLoading = ref(false)
   const seriesError = ref('')
+  const seriesOffset = ref(0)
+  const seriesHasMore = ref(false)
   const SERIES_CAP = 200
   const metaSource = ref<MetaLoadSource>('admin')
   const metaHint = ref('')
@@ -92,6 +94,8 @@ export function useQueryWorkbench() {
     seriesOptions.value = []
     seriesTotal.value = 0
     seriesTruncated.value = false
+    seriesOffset.value = 0
+    seriesHasMore.value = false
     seriesError.value = ''
     if (!queryForm.value.measurement) queryForm.value.measurement = ''
     if (!db) return
@@ -149,11 +153,42 @@ export function useQueryWorkbench() {
     }
   }
 
+  function seriesLabelKey(s: SeriesMeta): string {
+    const tags = s.tags || {}
+    return `${s.measurement || ''}|${Object.keys(tags).sort().map((k) => `${k}=${tags[k]}`).join(',')}`
+  }
+
+  function applySeriesPage(
+    result: { series: SeriesMeta[]; total: number; truncated: boolean; offset?: number },
+    append: boolean,
+  ) {
+    if (append) {
+      const seen = new Set(seriesOptions.value.map((s) => String(s.id ?? seriesLabelKey(s))))
+      for (const s of result.series) {
+        const key = String(s.id ?? seriesLabelKey(s))
+        if (!seen.has(key)) {
+          seriesOptions.value.push(s)
+          seen.add(key)
+        }
+      }
+    } else {
+      seriesOptions.value = result.series
+    }
+    seriesTotal.value = result.total
+    seriesTruncated.value = result.truncated
+    const base = result.offset ?? (append ? seriesOffset.value : 0)
+    const nextOffset = base + result.series.length
+    seriesOffset.value = nextOffset
+    seriesHasMore.value = nextOffset < result.total
+  }
+
   async function loadMeasurementMeta(db: string, measurement: string, opts?: { useFormTags?: boolean }) {
     fieldOptions.value = []
     seriesOptions.value = []
     seriesTotal.value = 0
     seriesTruncated.value = false
+    seriesOffset.value = 0
+    seriesHasMore.value = false
     seriesError.value = ''
     if (!db.trim() || !measurement.trim()) return
     seriesLoading.value = true
@@ -169,15 +204,13 @@ export function useQueryWorkbench() {
       }
       const [fields, seriesResult] = await Promise.all([
         listFields(db, measurement).catch(() => [] as FieldMeta[]),
-        listSeriesDetailed(db, measurement, { tags: tagFilter, limit: SERIES_CAP }).catch((e) => {
+        listSeriesDetailed(db, measurement, { tags: tagFilter, limit: SERIES_CAP, offset: 0 }).catch((e) => {
           seriesError.value = seriesError.value || formatCaughtError(e)
-          return { series: [] as SeriesMeta[], total: 0, truncated: false, limit: SERIES_CAP }
+          return { series: [] as SeriesMeta[], total: 0, truncated: false, limit: SERIES_CAP, offset: 0 }
         }),
       ])
       fieldOptions.value = fieldNames(fields)
-      seriesOptions.value = seriesResult.series
-      seriesTotal.value = seriesResult.total
-      seriesTruncated.value = seriesResult.truncated
+      applySeriesPage(seriesResult, false)
     } finally {
       seriesLoading.value = false
     }
@@ -196,13 +229,66 @@ export function useQueryWorkbench() {
         seriesError.value = parsed.error
         return
       }
+      seriesOffset.value = 0
       const seriesResult = await listSeriesDetailed(db, measurement, {
         tags: parsed.tags,
         limit: SERIES_CAP,
+        offset: 0,
       })
-      seriesOptions.value = seriesResult.series
-      seriesTotal.value = seriesResult.total
-      seriesTruncated.value = seriesResult.truncated
+      applySeriesPage(seriesResult, false)
+    } catch (e) {
+      seriesError.value = formatCaughtError(e)
+    } finally {
+      seriesLoading.value = false
+    }
+  }
+
+  async function loadMoreSeries(opts?: { q?: string }) {
+    const db = queryForm.value.database
+    const measurement = queryForm.value.measurement
+    if (!db.trim() || !measurement.trim() || !seriesHasMore.value || seriesLoading.value) return
+    seriesLoading.value = true
+    seriesError.value = ''
+    try {
+      const parsed = parseTagsSafe(queryForm.value.tags)
+      if (parsed.error) {
+        seriesError.value = parsed.error
+        return
+      }
+      const seriesResult = await listSeriesDetailed(db, measurement, {
+        tags: parsed.tags,
+        limit: SERIES_CAP,
+        offset: seriesOffset.value,
+        q: opts?.q,
+      })
+      applySeriesPage(seriesResult, true)
+    } catch (e) {
+      seriesError.value = formatCaughtError(e)
+    } finally {
+      seriesLoading.value = false
+    }
+  }
+
+  async function refreshSeriesWithServerQuery(q: string) {
+    const db = queryForm.value.database
+    const measurement = queryForm.value.measurement
+    if (!db.trim() || !measurement.trim()) return
+    seriesLoading.value = true
+    seriesError.value = ''
+    try {
+      const parsed = parseTagsSafe(queryForm.value.tags)
+      if (parsed.error) {
+        seriesError.value = parsed.error
+        return
+      }
+      seriesOffset.value = 0
+      const seriesResult = await listSeriesDetailed(db, measurement, {
+        tags: parsed.tags,
+        limit: SERIES_CAP,
+        offset: 0,
+        q: q.trim() || undefined,
+      })
+      applySeriesPage(seriesResult, false)
     } catch (e) {
       seriesError.value = formatCaughtError(e)
     } finally {
@@ -428,8 +514,13 @@ export function useQueryWorkbench() {
     seriesTruncated,
     seriesLoading,
     seriesError,
+    seriesOffset,
+    seriesHasMore,
+    SERIES_CAP,
     loadMeasurementMeta,
     refreshSeriesWithTags,
+    loadMoreSeries,
+    refreshSeriesWithServerQuery,
     applySeriesTags,
     metaSource,
     metaHint,

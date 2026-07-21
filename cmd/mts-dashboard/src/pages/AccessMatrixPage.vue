@@ -16,6 +16,7 @@ import {
 } from '@/utils/rbacMatrix'
 import { Download, Shield } from 'lucide-vue-next'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
@@ -389,8 +390,21 @@ async function exportMatrixCSV() {
           </div>
           <div class="px-3 py-2">{{ t('accessMatrixColNote') }}</div>
         </div>
-        <div v-if="!filteredRows.length" class="px-3 py-8 text-center text-sm mts-muted" data-testid="access-matrix-empty">
-          {{ t('accessMatrixFilterEmpty') }}
+        <div v-if="!filteredRows.length" data-testid="access-matrix-empty">
+          <EmptyState
+            compact
+            :title="t('accessMatrixEmpty')"
+            :description="t('accessMatrixFilterEmpty')"
+          >
+            <template #action>
+              <button
+                type="button"
+                class="mts-btn-primary"
+                data-testid="access-matrix-clear-filters"
+                @click="roleFilter = 'all'; areaFilter = ''; textFilter = ''"
+              >{{ t('clearFilters') }}</button>
+            </template>
+          </EmptyState>
         </div>
         <VirtualTable
           v-else

@@ -310,7 +310,11 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="!loading && !filtered.length" class="mts-card" data-testid="metrics-empty">
-      <EmptyState :title="t('metricsEmpty')" :description="t('metricsEmptyDesc')" />
+      <EmptyState :title="t('metricsEmpty')" :description="t('metricsEmptyDesc')">
+        <template v-if="q.trim()" #action>
+          <button type="button" class="mts-btn-primary" data-testid="metrics-clear-filters" @click="q = ''">{{ t('clearFilters') }}</button>
+        </template>
+      </EmptyState>
     </div>
     <div class="space-y-3 scroll-mt-20" v-else id="metrics-list" data-testid="metrics-list">
       <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">

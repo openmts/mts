@@ -55,7 +55,7 @@ import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star
 
 const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
-  fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError,
+  fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError, seriesHasMore, SERIES_CAP, loadMoreSeries, refreshSeriesWithServerQuery,
   loadMeasurementMeta, refreshSeriesWithTags, applySeriesTags,
   queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, lastQueryErrorCode, loading,
   engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, loadEngineStats,
@@ -747,7 +747,11 @@ const columnRows = computed(() => {
         data-testid="query-history-empty"
         :title="historyFilter.trim() ? t('queryHistoryFilterEmpty') : t('queryHistoryEmpty')"
         :description="historyFilter.trim() ? t('queryHistoryFilterEmptyDesc') : t('queryHistoryEmptyDesc')"
-      />
+      >
+        <template v-if="historyFilter.trim()" #action>
+          <button type="button" class="mts-btn-primary" data-testid="query-history-clear-filters" @click="historyFilter = ''">{{ t('clearFilters') }}</button>
+        </template>
+      </EmptyState>
     </div>
 
     <div id="query-form" class="scroll-mt-20 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
@@ -809,15 +813,33 @@ const columnRows = computed(() => {
           class="mt-1 w-full rounded border px-2 py-1.5 text-xs dark:border-slate-600 dark:bg-slate-800"
           data-testid="query-series-filter"
           :placeholder="t('querySeriesFilterPh')"
-          :disabled="seriesLoading || !seriesOptions.length"
-        />
-        <button
-          type="button"
-          class="mts-btn mt-1 text-xs"
-          data-testid="query-series-refresh"
           :disabled="seriesLoading || !queryForm.measurement"
-          @click="refreshSeriesWithTags"
-        >{{ t('querySeriesRefreshByTags') }}</button>
+          @keydown.enter.prevent="refreshSeriesWithServerQuery(seriesFilter)"
+        />
+        <div class="mt-1 flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="mts-btn text-xs"
+            data-testid="query-series-refresh"
+            :disabled="seriesLoading || !queryForm.measurement"
+            @click="refreshSeriesWithTags"
+          >{{ t('querySeriesRefreshByTags') }}</button>
+          <button
+            type="button"
+            class="mts-btn text-xs"
+            data-testid="query-series-server-filter"
+            :disabled="seriesLoading || !queryForm.measurement"
+            @click="refreshSeriesWithServerQuery(seriesFilter)"
+          >{{ t('querySeriesServerFilter') }}</button>
+          <button
+            v-if="seriesHasMore"
+            type="button"
+            class="mts-btn text-xs"
+            data-testid="query-series-load-more"
+            :disabled="seriesLoading"
+            @click="loadMoreSeries({ q: seriesFilter.trim() || undefined })"
+          >{{ t('querySeriesLoadMore') }}</button>
+        </div>
 
         <select
           class="mt-1 w-full rounded border px-2 py-1.5 font-mono text-xs dark:border-slate-600 dark:bg-slate-800"
@@ -831,7 +853,7 @@ const columnRows = computed(() => {
           </option>
         </select>
         <p v-if="seriesTruncated" class="mt-1 text-[11px] text-amber-700 dark:text-amber-200" data-testid="query-series-truncated">
-          {{ formatMessage(t('querySeriesTruncated'), { max: 200, total: seriesTotal }) }}
+          {{ formatMessage(t('querySeriesTruncated'), { max: SERIES_CAP, total: seriesTotal }) }}
         </p>
         <div v-if="seriesError" class="mt-1 flex flex-wrap items-center gap-2" data-testid="query-series-error">
           <p class="text-[11px] text-rose-600" role="alert" aria-live="assertive">{{ seriesError }}</p>

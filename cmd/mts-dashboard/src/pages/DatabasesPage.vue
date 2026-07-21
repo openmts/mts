@@ -63,6 +63,9 @@ interface MeasurementEntry {
   series: Series[]
   seriesTotal: number
   seriesTruncated: boolean
+  seriesOffset: number
+  seriesHasMore: boolean
+  seriesLoadingMore: boolean
 }
 interface DatabaseEntry {
   name: string
@@ -246,6 +249,9 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
       series: [],
       seriesTotal: 0,
       seriesTruncated: false,
+      seriesOffset: 0,
+      seriesHasMore: false,
+      seriesLoadingMore: false,
     }))
     db.retentionPolicies = rps.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
     db.loaded = true
@@ -280,7 +286,7 @@ async function loadMeasurementDetails(meas: MeasurementEntry, dbName: string) {
   try {
     const [fieldsData, seriesResult] = await Promise.all([
       apiGet<FieldsResponse>(`/api/v1/data/databases/${encodeURIComponent(dbName)}/measurements/${encodeURIComponent(meas.name)}/fields`),
-      listSeriesDetailed(dbName, meas.name, { limit: SERIES_CAP }),
+      listSeriesDetailed(dbName, meas.name, { limit: SERIES_CAP, offset: 0 }),
     ])
     meas.fields = fieldsData.fields ?? []
     meas.series = (seriesResult.series as Series[]).map((s) => ({
@@ -290,6 +296,8 @@ async function loadMeasurementDetails(meas: MeasurementEntry, dbName: string) {
     }))
     meas.seriesTotal = seriesResult.total
     meas.seriesTruncated = seriesResult.truncated
+    meas.seriesOffset = seriesResult.series.length
+    meas.seriesHasMore = seriesResult.series.length < seriesResult.total
     meas.loadError = ''
   } catch (e) {
     // 就地 soft-fail，避免与顶层 action banner 双重 toast
@@ -298,6 +306,39 @@ async function loadMeasurementDetails(meas: MeasurementEntry, dbName: string) {
     lastFailedMeasName.value = meas.name
   } finally {
     meas.loading = false
+  }
+}
+
+
+async function loadMoreSeries(meas: MeasurementEntry, dbName: string) {
+  if (!meas.seriesHasMore || meas.seriesLoadingMore) return
+  meas.seriesLoadingMore = true
+  try {
+    const seriesResult = await listSeriesDetailed(dbName, meas.name, {
+      limit: SERIES_CAP,
+      offset: meas.seriesOffset,
+    })
+    const mapped = (seriesResult.series as Series[]).map((s) => ({
+      id: s.id ?? 0,
+      measurement: s.measurement ?? meas.name,
+      tags: s.tags ?? {},
+    }))
+    const seen = new Set(meas.series.map((s) => s.id))
+    for (const s of mapped) {
+      if (!seen.has(s.id)) {
+        meas.series.push(s)
+        seen.add(s.id)
+      }
+    }
+    meas.seriesTotal = seriesResult.total
+    meas.seriesOffset += seriesResult.series.length
+    meas.seriesHasMore = meas.seriesOffset < seriesResult.total
+    meas.seriesTruncated = meas.seriesHasMore
+    meas.loadError = ''
+  } catch (e) {
+    meas.loadError = formatCaughtError(e)
+  } finally {
+    meas.seriesLoadingMore = false
   }
 }
 
@@ -863,10 +904,19 @@ onBeforeUnmount(() => {
                   </div>
                   <span v-if="!meas.series.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
                   <p
-                    v-if="meas.seriesTruncated"
+                    v-if="meas.seriesTruncated || meas.seriesHasMore"
                     class="text-[11px] text-amber-700 dark:text-amber-200"
                     data-testid="databases-series-truncated"
                   >{{ formatMessage(t('databasesSeriesTruncated'), { max: SERIES_CAP, total: meas.seriesTotal }) }}</p>
+                  <button
+                    v-if="meas.seriesHasMore"
+                    type="button"
+                    class="mts-btn mt-1 text-[11px]"
+                    :data-testid="`databases-series-load-more-${meas.name}`"
+                    :disabled="meas.seriesLoadingMore"
+                    :aria-busy="meas.seriesLoadingMore ? 'true' : undefined"
+                    @click="loadMoreSeries(meas, activeDatabase.name)"
+                  >{{ meas.seriesLoadingMore ? t('loading') : t('databasesSeriesLoadMore') }}</button>
                 </div>
               </template>
             </div>

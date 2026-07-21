@@ -366,8 +366,29 @@ defineExpose({ openPalette, closePalette, open })
             <span class="shrink-0 font-mono text-[10px] mts-muted">{{ r.path }}</span>
           </li>
           <li v-if="recentItems.length" class="my-0.5 border-t border-slate-100 dark:border-slate-800" aria-hidden="true" />
-          <li v-if="!items.length" class="px-3 py-5 text-center text-sm mts-muted" data-testid="command-palette-empty">
-            {{ t('commandPaletteEmpty') }}
+          <li v-if="!items.length" class="px-3 py-5 text-center" data-testid="command-palette-empty">
+            <p class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ t('commandPaletteEmpty') }}</p>
+            <p class="mt-1 text-xs mts-muted">{{ t('commandPaletteEmptyDesc') }}</p>
+            <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                class="mts-btn-primary text-xs"
+                data-testid="command-palette-clear-search"
+                @click="query = ''; activeIndex = 0; navExpanded = false"
+              >{{ t('commandPaletteClearSearch') }}</button>
+              <button
+                type="button"
+                class="mts-btn text-xs"
+                data-testid="command-palette-jump-query"
+                @click="closePalette(); void router.push('/query')"
+              >{{ t('commandPaletteJumpQuery') }}</button>
+              <button
+                type="button"
+                class="mts-btn text-xs"
+                data-testid="command-palette-jump-overview"
+                @click="closePalette(); void router.push('/')"
+              >{{ t('commandPaletteJumpOverview') }}</button>
+            </div>
           </li>
           <template v-for="group in itemGroups" :key="group.id">
             <li

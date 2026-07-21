@@ -284,7 +284,11 @@ async function exportMarkdown() {
       data-testid="api-spec-empty"
       :title="t('apiSpecFilterEmpty')"
       :description="t('apiSpecFilterEmptyDesc')"
-    />
+    >
+      <template #action>
+        <button type="button" class="mts-btn-primary" data-testid="api-spec-clear-filters" @click="q = ''; nsFilter = ''">{{ t('clearFilters') }}</button>
+      </template>
+    </EmptyState>
     <div v-for="ns in filtered" :key="ns.name" class="mts-panel" :data-testid="`api-spec-ns-${ns.name}`">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ ns.name }}</h2>
