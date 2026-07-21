@@ -21,7 +21,9 @@ import {
   buildErrorCodesExport,
   formatConfigPretty,
 } from '@/utils/configExport'
-import { downloadJSON, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { RefreshCw, CheckCircle, Download, Copy } from 'lucide-vue-next'
 
@@ -39,6 +41,14 @@ const { isAdmin } = useAuth()
 const { offline } = useNetworkStatus()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+  runJSONExport,
+} = useExportJob()
 const config = ref<Record<string, unknown> | null>(null)
 const validateResult = ref<ValidateResponse | null>(null)
 const reloadResult = ref<ReloadResponse | null>(null)
@@ -191,13 +201,27 @@ function clearServiceTokens() {
   success(t.value('configTokenCleared'))
 }
 
-function exportEffective() {
+async function exportEffective() {
   if (!config.value) {
     notifyError(t.value('configExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-config-effective', 'json'), buildEffectiveConfigExport(config.value))
-  success(t.value('configExported'))
+  if (exportBusy.value) return
+  const cfg = config.value
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-config-effective', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return buildEffectiveConfigExport(cfg)
+    },
+  })
+  if (outcome === 'done') success(t.value('configExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 async function copyEffective() {
@@ -210,22 +234,64 @@ async function copyEffective() {
   else notifyError(res.error || t.value('failed'))
 }
 
-function exportSchema() {
+async function exportSchema() {
   if (!filteredSchema.value.length) {
     notifyError(t.value('configExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-config-schema', 'json'), buildConfigSchemaExport(filteredSchema.value))
-  success(t.value('configExported'))
+  if (exportBusy.value) return
+  const list = filteredSchema.value.slice()
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-config-schema', 'json'),
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 100
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildConfigSchemaExport(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('configExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function exportErrorCodes() {
+async function exportErrorCodes() {
   if (!filteredErrorCodes.value.length) {
     notifyError(t.value('configExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-error-codes', 'json'), buildErrorCodesExport(filteredErrorCodes.value))
-  success(t.value('configExported'))
+  if (exportBusy.value) return
+  const list = filteredErrorCodes.value.slice()
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-error-codes', 'json'),
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 100
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildErrorCodesExport(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('configExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 function statusLabel(httpStatus: number): string {
@@ -248,7 +314,8 @@ function statusLabel(httpStatus: number): string {
         <button type="button" class="mts-btn" data-testid="config-share-link" @click="copyConfigShareLink">
           {{ t('configShareLink') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="config-export-effective" :disabled="!config" @click="exportEffective">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button type="button" class="mts-btn" data-testid="config-export-effective" :disabled="exportBusy || (!config)" @click="exportEffective">
           <Download class="h-3.5 w-3.5" /> {{ t('configExportEffective') }}
         </button>
         <button type="button" class="mts-btn" data-testid="config-copy-effective" :disabled="!config" @click="copyEffective">
@@ -305,7 +372,7 @@ function statusLabel(httpStatus: number): string {
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configSchema') }}</h2>
         <div class="flex flex-wrap items-center gap-2">
           <input v-model="schemaFilter" class="mts-input max-w-xs text-xs" data-testid="config-schema-filter" :placeholder="t('configSchemaFilter')" />
-          <button type="button" class="mts-btn" data-testid="config-export-schema" :disabled="!filteredSchema.length" @click="exportSchema">
+          <button type="button" class="mts-btn" data-testid="config-export-schema" :disabled="exportBusy || (!filteredSchema.length)" @click="exportSchema">
             <Download class="h-3.5 w-3.5" /> {{ t('configExportSchema') }}
           </button>
         </div>
@@ -358,7 +425,7 @@ function statusLabel(httpStatus: number): string {
             data-testid="config-error-codes-filter"
             :placeholder="t('configErrorCodesFilter')"
           />
-          <button type="button" class="mts-btn" data-testid="config-export-error-codes" :disabled="!filteredErrorCodes.length" @click="exportErrorCodes">
+          <button type="button" class="mts-btn" data-testid="config-export-error-codes" :disabled="exportBusy || (!filteredErrorCodes.length)" @click="exportErrorCodes">
             <Download class="h-3.5 w-3.5" /> {{ t('configExportErrorCodes') }}
           </button>
         </div>

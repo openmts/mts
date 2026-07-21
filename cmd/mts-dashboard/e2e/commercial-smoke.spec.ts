@@ -854,6 +854,18 @@ test('commercial browser smoke path', async ({ page }) => {
     const dismiss = page.getByTestId('export-job-dismiss')
     if (await dismiss.count()) await dismiss.click()
   }
+  // P204: Access matrix 导出进度 banner（有行时）
+  await page.goto('/access')
+  await expect(page.getByTestId('access-matrix-page')).toBeVisible()
+  const matrixExport = page.getByTestId('access-matrix-export')
+  await expect(matrixExport).toBeVisible()
+  if (await matrixExport.isEnabled()) {
+    await matrixExport.click()
+    await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
+    const dismiss = page.getByTestId('export-job-dismiss')
+    if (await dismiss.count()) await dismiss.click()
+  }
+
 
   // P199: Config offline 时 validate/reload disabled
   await page.goto('/config')

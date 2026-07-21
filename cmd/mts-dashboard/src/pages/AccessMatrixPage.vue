@@ -23,7 +23,9 @@ import { useNotify } from '@/composables/useNotify'
 import { accessMatrixToCSV, buildAccessMatrixExport } from '@/utils/accessMatrixExport'
 import { parseAccessPrefill, accessFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { filterAccessMatrixRows } from '@/utils/listFilter'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
@@ -40,6 +42,14 @@ useHashScroll()
 const { currentRole } = useAuth()
 const { t, locale } = useI18n()
 const { success, warn, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+  runJSONExport,
+} = useExportJob()
 const roleFilter = ref<'all' | RoleName>('all')
 const areaFilter = ref('')
 const textFilter = ref('')
@@ -174,31 +184,65 @@ watch(
   },
 )
 
-function exportMatrix() {
+async function exportMatrix() {
   const list = rowsForExport()
   if (!list.length) {
     warn(t.value('accessExportEmpty'))
     return
   }
-  downloadJSON(
-    stampFilename('mts-access-matrix', 'json'),
-    buildAccessMatrixExport(list, uiLocale.value),
-  )
-  success(t.value('accessMatrixExported'))
+  if (exportBusy.value) return
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-access-matrix', 'json'),
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 200
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildAccessMatrixExport(list, uiLocale.value)
+    },
+  })
+  if (outcome === 'done') success(t.value('accessMatrixExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function exportMatrixCSV() {
+async function exportMatrixCSV() {
   const list = rowsForExport()
   if (!list.length) {
     warn(t.value('accessExportEmpty'))
     return
   }
-  downloadText(
-    stampFilename('mts-access-matrix', 'csv'),
-    accessMatrixToCSV(list, uiLocale.value),
-    'text/csv;charset=utf-8',
-  )
-  success(t.value('accessMatrixExported'))
+  if (exportBusy.value) return
+  const outcome = await runTextExport({
+    label: 'CSV',
+    filename: stampFilename('mts-access-matrix', 'csv'),
+    mime: 'text/csv;charset=utf-8',
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 200
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return accessMatrixToCSV(list, uiLocale.value)
+    },
+  })
+  if (outcome === 'done') success(t.value('accessMatrixExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 </script>
 
@@ -216,11 +260,12 @@ function exportMatrixCSV() {
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
         <button
           type="button"
           class="mts-btn"
           data-testid="access-matrix-export"
-          :disabled="!filteredRows.length"
+          :disabled="exportBusy || (!filteredRows.length)"
           @click="exportMatrix"
         >
           <Download class="h-3.5 w-3.5" /> {{ t('accessMatrixExport') }}
@@ -229,7 +274,7 @@ function exportMatrixCSV() {
           type="button"
           class="mts-btn"
           data-testid="access-matrix-export-csv"
-          :disabled="!filteredRows.length"
+          :disabled="exportBusy || (!filteredRows.length)"
           @click="exportMatrixCSV"
         >
           <Download class="h-3.5 w-3.5" /> {{ t('accessMatrixExportCSV') }}

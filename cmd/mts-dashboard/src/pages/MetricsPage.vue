@@ -21,7 +21,9 @@ import {
   type PrometheusFamily,
 } from '@/utils/prometheus'
 import { metricsFamiliesToJSON, metricsRefreshIntervalsMs } from '@/utils/metricsExport'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { useNotify } from '@/composables/useNotify'
 import { Activity, RefreshCw, Download } from 'lucide-vue-next'
 
@@ -30,6 +32,14 @@ const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+  runJSONExport,
+} = useExportJob()
 const loading = ref(false)
 const loadError = ref('')
 const raw = ref('')
@@ -80,22 +90,58 @@ function collapseAll() {
   activeFamilyName.value = ''
 }
 
-function exportRaw() {
+async function exportRaw() {
   if (!raw.value) {
     notifyError(t.value('metricsEmpty'))
     return
   }
-  downloadText(stampFilename('mts-metrics', 'txt'), raw.value, 'text/plain;charset=utf-8')
-  success(t.value('metricsExported'))
+  if (exportBusy.value) return
+  const text = raw.value
+  const outcome = await runTextExport({
+    label: 'TXT',
+    filename: stampFilename('mts-metrics', 'txt'),
+    mime: 'text/plain;charset=utf-8',
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return text
+    },
+  })
+  if (outcome === 'done') success(t.value('metricsExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function exportJSON() {
+async function exportJSON() {
   if (!filtered.value.length) {
     notifyError(t.value('metricsEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-metrics', 'json'), metricsFamiliesToJSON(filtered.value))
-  success(t.value('metricsExported'))
+  if (exportBusy.value) return
+  const list = filtered.value.slice()
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-metrics', 'json'),
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 50
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return metricsFamiliesToJSON(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('metricsExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 function clearTimer() {
@@ -196,10 +242,11 @@ onBeforeUnmount(() => {
         <button type="button" class="mts-btn" data-testid="metrics-share-link" @click="copyMetricsShareLink">
           {{ t('metricsShareLink') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="metrics-export-raw" :disabled="!raw" @click="exportRaw">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button type="button" class="mts-btn" data-testid="metrics-export-raw" :disabled="exportBusy || (!raw)" @click="exportRaw">
           <Download class="h-3.5 w-3.5" /> {{ t('metricsExportRaw') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="metrics-export-json" :disabled="!filtered.length" @click="exportJSON">
+        <button type="button" class="mts-btn" data-testid="metrics-export-json" :disabled="exportBusy || (!filtered.length)" @click="exportJSON">
           <Download class="h-3.5 w-3.5" /> {{ t('metricsExportJSON') }}
         </button>
         <button type="button" class="mts-btn" data-testid="metrics-refresh" :disabled="loading" :aria-busy="loading ? 'true' : undefined" @click="load">

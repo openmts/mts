@@ -14,7 +14,9 @@ import { Download, RefreshCw, Search } from 'lucide-vue-next'
 import VirtualTable from '@/components/VirtualTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { apiSpecToMarkdown, buildApiSpecExport } from '@/utils/apiSpecExport'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 
 interface APIEndpoint {
@@ -37,6 +39,14 @@ const { isAdmin } = useAuth()
 const route = useRoute()
 useHashScroll()
 const { success, error: notifyError, warn } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+  runJSONExport,
+} = useExportJob()
 const { t, locale } = useI18n()
 const loading = ref(false)
 const loadError = ref('')
@@ -131,29 +141,63 @@ const totalEndpoints = computed(() =>
 
 const exportLocale = computed(() => (locale.value === 'en' ? 'en' : 'zh') as 'zh' | 'en')
 
-function exportJSON() {
+async function exportJSON() {
   if (!namespaces.value.length) {
     warn(t.value('apiSpecExportEmpty'))
     return
   }
-  downloadJSON(
-    stampFilename('mts-api-spec', 'json'),
-    buildApiSpecExport({ version: version.value, namespaces: namespaces.value }),
-  )
-  success(t.value('apiSpecExported'))
+  if (exportBusy.value) return
+  const ns = namespaces.value.slice()
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-api-spec', 'json'),
+    total: ns.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, ns.length)
+      for (let i = 0; i < ns.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === ns.length || done % 20 === 0) {
+          progress(done, ns.length)
+          if (done < ns.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildApiSpecExport({ version: version.value, namespaces: ns })
+    },
+  })
+  if (outcome === 'done') success(t.value('apiSpecExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function exportMarkdown() {
+async function exportMarkdown() {
   if (!namespaces.value.length) {
     warn(t.value('apiSpecExportEmpty'))
     return
   }
-  downloadText(
-    stampFilename('mts-api-spec', 'md'),
-    apiSpecToMarkdown({ version: version.value, namespaces: namespaces.value }, exportLocale.value),
-    'text/markdown;charset=utf-8',
-  )
-  success(t.value('apiSpecExported'))
+  if (exportBusy.value) return
+  const ns = namespaces.value.slice()
+  const outcome = await runTextExport({
+    label: 'Markdown',
+    filename: stampFilename('mts-api-spec', 'md'),
+    mime: 'text/markdown;charset=utf-8',
+    total: ns.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, ns.length)
+      for (let i = 0; i < ns.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === ns.length || done % 20 === 0) {
+          progress(done, ns.length)
+          if (done < ns.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return apiSpecToMarkdown({ version: version.value, namespaces: ns }, exportLocale.value)
+    },
+  })
+  if (outcome === 'done') success(t.value('apiSpecExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 </script>
 
@@ -166,11 +210,12 @@ function exportMarkdown() {
         <p class="text-xs mts-muted">{{ formatMessage(t('apiSpecDesc'), { version: version || t('emptyValue'), count: totalEndpoints }) }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
         <button
           type="button"
           class="mts-btn"
           data-testid="api-spec-export-json"
-          :disabled="!namespaces.length"
+          :disabled="exportBusy || (!namespaces.length)"
           @click="exportJSON"
         >
           <Download class="h-3.5 w-3.5" /> {{ t('apiSpecExportJSON') }}
@@ -179,7 +224,7 @@ function exportMarkdown() {
           type="button"
           class="mts-btn"
           data-testid="api-spec-export-md"
-          :disabled="!namespaces.length"
+          :disabled="exportBusy || (!namespaces.length)"
           @click="exportMarkdown"
         >
           <Download class="h-3.5 w-3.5" /> {{ t('apiSpecExportMarkdown') }}

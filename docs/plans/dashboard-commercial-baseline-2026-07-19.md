@@ -962,3 +962,6 @@
 
 ## P203 状态（2026-07-21）
 - Databases/Downsample/AccessGrants/Operations 导出接入 ExportJob
+
+## P204 状态（2026-07-21）
+- AccessMatrix/Metrics/Config/ApiSpec 导出接入 ExportJob
