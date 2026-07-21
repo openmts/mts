@@ -27,6 +27,7 @@ import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { RefreshCw, CheckCircle, Download, Copy } from 'lucide-vue-next'
+import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
 
 interface ConfigResponse { config: Record<string, unknown> }
 interface ValidateResponse { ok: boolean; error?: string }
@@ -463,23 +464,25 @@ onBeforeUnmount(() => {
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="mb-1 block text-xs mts-muted" for="config-admin-token">{{ t('configAdminTokenLabel') }}</label>
-          <input
+          <PasswordInputWithToggle
             id="config-admin-token"
             v-model="adminTokenInput"
-            type="password"
-            class="mts-input"
-            data-testid="config-token-admin"
+            input-class="mts-input pr-10"
+            test-id="config-token-admin"
+            toggle-test-id="config-token-admin-toggle"
+            autocomplete="off"
             :placeholder="t('optional')"
           />
         </div>
         <div>
           <label class="mb-1 block text-xs mts-muted" for="config-data-token">{{ t('configDataTokenLabel') }}</label>
-          <input
+          <PasswordInputWithToggle
             id="config-data-token"
             v-model="dataTokenInput"
-            type="password"
-            class="mts-input"
-            data-testid="config-token-data"
+            input-class="mts-input pr-10"
+            test-id="config-token-data"
+            toggle-test-id="config-token-data-toggle"
+            autocomplete="off"
             :placeholder="t('optional')"
           />
         </div>

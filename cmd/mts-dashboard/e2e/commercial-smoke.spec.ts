@@ -887,6 +887,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/users')
   await expect(page.getByTestId('users-create-open')).toBeVisible()
   await page.getByTestId('users-create-open').click()
+  await expect(page.getByTestId('users-create-password-toggle')).toBeVisible()
   await page.getByTestId('users-create-name').fill('draft-user-e2e')
   await expect(page.getByTestId('users-dirty-badge')).toBeVisible()
   await page.getByTestId('users-create-cancel').click()
@@ -1186,6 +1187,8 @@ test('commercial browser smoke path', async ({ page }) => {
   // P210: Config Token 脏标记
   await page.goto('/config')
   await expect(page.getByTestId('config-token-panel')).toBeVisible()
+  await expect(page.getByTestId('config-token-admin-toggle')).toBeVisible()
+  await expect(page.getByTestId('config-token-data-toggle')).toBeVisible()
   await page.getByTestId('config-token-admin').fill('draft-token-e2e')
   await expect(page.getByTestId('config-token-dirty-badge')).toBeVisible()
   await page.getByTestId('config-token-clear').click()

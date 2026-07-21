@@ -3,6 +3,7 @@ import { nextTick, onBeforeUnmount, watch } from 'vue'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
+import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -123,7 +124,15 @@ onBeforeUnmount(() => {
           <option value="user">{{ t('roleUser') }}</option>
           <option value="admin">{{ t('roleAdmin') }}</option>
         </select>
-        <input data-testid="users-create-password" :value="newUser.password" @input="emit('update:newUser', { ...newUser, password: ($event.target as HTMLInputElement).value })" type="password" :placeholder="t('passwordOptional')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
+        <PasswordInputWithToggle
+          :model-value="newUser.password"
+          test-id="users-create-password"
+          toggle-test-id="users-create-password-toggle"
+          :placeholder="t('passwordOptional')"
+          input-class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 pr-10"
+          autocomplete="new-password"
+          @update:model-value="emit('update:newUser', { ...newUser, password: $event })"
+        />
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" data-testid="users-create-cancel" @click="emit('update:showCreate', false)">{{ t('cancel') }}</button>
@@ -147,7 +156,16 @@ onBeforeUnmount(() => {
       data-dialog-panel
     >
       <h3 id="set-password-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ formatMessage(t('usersSetPasswordTitle'), { name: setPasswordUser }) }}</h3>
-      <input :value="setPasswordValue" @input="emit('update:setPasswordValue', ($event.target as HTMLInputElement).value)" type="password" :placeholder="t('usersNewPasswordPlaceholder')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="emit('set-password')" />
+      <PasswordInputWithToggle
+        :model-value="setPasswordValue"
+        test-id="users-set-password-input"
+        toggle-test-id="users-set-password-toggle"
+        :placeholder="t('usersNewPasswordPlaceholder')"
+        input-class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 pr-10"
+        autocomplete="new-password"
+        @update:model-value="emit('update:setPasswordValue', $event)"
+        @enter="emit('set-password')"
+      />
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showSetPassword', false)">{{ t('cancel') }}</button>
         <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-set-password-submit" :disabled="blocked()" :title="blockedTitle()" @click="emit('set-password')">{{ t('usersSetAction') }}</button>
@@ -171,8 +189,25 @@ onBeforeUnmount(() => {
     >
       <h3 id="change-password-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('usersChangeMyPassword') }}</h3>
       <div class="space-y-2">
-        <input :value="selfOldPassword" @input="emit('update:selfOldPassword', ($event.target as HTMLInputElement).value)" type="password" :placeholder="t('accountOldPassword')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" />
-        <input :value="selfNewPassword" @input="emit('update:selfNewPassword', ($event.target as HTMLInputElement).value)" type="password" :placeholder="t('accountNewPassword')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="emit('change-password')" />
+        <PasswordInputWithToggle
+          :model-value="selfOldPassword"
+          test-id="users-self-old-password"
+          toggle-test-id="users-self-old-toggle"
+          :placeholder="t('accountOldPassword')"
+          input-class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 pr-10"
+          autocomplete="current-password"
+          @update:model-value="emit('update:selfOldPassword', $event)"
+        />
+        <PasswordInputWithToggle
+          :model-value="selfNewPassword"
+          test-id="users-self-new-password"
+          toggle-test-id="users-self-new-toggle"
+          :placeholder="t('accountNewPassword')"
+          input-class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 pr-10"
+          autocomplete="new-password"
+          @update:model-value="emit('update:selfNewPassword', $event)"
+          @enter="emit('change-password')"
+        />
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showChangeSelfPassword', false)">{{ t('cancel') }}</button>

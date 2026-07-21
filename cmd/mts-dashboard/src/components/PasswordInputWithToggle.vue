@@ -4,6 +4,7 @@ import { Eye, EyeOff } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
 
 const model = defineModel<string>({ default: '' })
+const emit = defineEmits<{ enter: [] }>()
 
 withDefaults(
   defineProps<{
@@ -44,6 +45,7 @@ const show = ref(false)
       :aria-describedby="describedBy"
       :placeholder="placeholder"
       :name="name"
+      @keyup.enter="emit('enter')"
     />
     <button
       type="button"

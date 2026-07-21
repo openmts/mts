@@ -1224,3 +1224,6 @@
 ## P282（2026-07-21）
 - PasswordInputWithToggle 统一密码可见性；Account/Login/Force 接入
 
+## P283（2026-07-21）
+- Users 弹窗与 Config token 密码可见性统一
+
