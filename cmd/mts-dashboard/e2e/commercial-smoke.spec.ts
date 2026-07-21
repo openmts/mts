@@ -119,6 +119,8 @@ test('commercial browser smoke path', async ({ page }) => {
     // account session card + P191/P192 续期引导
   await page.goto('/account')
   await expect(page.getByTestId('account-page')).toBeVisible()
+  await expect(page.getByTestId('account-password-error')).toHaveCount(0)
+  await expect(page.getByTestId('account-session-renew-error')).toHaveCount(0)
   await expect(page.getByTestId('account-share-link')).toBeVisible()
   await expect(page.getByTestId('account-session')).toBeVisible()
   await expect(page.getByTestId('account-session-remaining')).toBeVisible()

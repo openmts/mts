@@ -1139,3 +1139,9 @@
 
 ## P254（2026-07-21）
 - 抽取 createActionRetry / useActionRetry 公共失败重试状态机
+
+## P255（2026-07-21）
+- Ops/Storage/Databases/Downsample 迁移 createActionRetry
+
+## P256（2026-07-21）
+- Account 改密/会话续期失败可重试 banner

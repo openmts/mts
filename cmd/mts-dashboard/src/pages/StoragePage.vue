@@ -15,7 +15,8 @@ import { formatMessage } from '@/utils/formatMessage'
 import { scheduleScrollToHash } from '@/utils/hashScroll'
 import { useI18n } from '@/composables/useI18n'
 import { textForLocale, type LocaleCode } from '@/utils/localizedText'
-import { makeActionResult, type ActionResult } from '@/utils/actionResult'
+import { makeActionResult } from '@/utils/actionResult'
+import { useActionRetry } from '@/composables/useActionRetry'
 import { formatBytes } from '@/utils/formatBytes'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
@@ -73,10 +74,17 @@ const dataSnapshots = ref<DataSnapshotInfo[]>([])
 const selectedDataSnapshotPath = ref('')
 const snapshots = ref<SnapshotInfo[]>([])
 const exportData = ref<ExportData | null>(null)
-const actionResult = ref<ActionResult | null>(null)
-/** 最近一次失败写操作，供 ActionResultBanner 重试 */
 type StorageActionKey = 'validate' | 'snapshot' | 'data-snapshot' | 'restore-side' | 'export-config' | 'delete'
-const lastFailedAction = ref<StorageActionKey | null>(null)
+const {
+  lastFailedAction,
+  actionResult,
+  canRetryAction,
+  clearActionResult,
+  setActionOk,
+  setActionError,
+  setActionResult,
+  reportActionError: reportRetryError,
+} = useActionRetry<StorageActionKey>()
 const listError = ref('')
 const loading = ref('')
 const listLoading = ref(false)
@@ -145,19 +153,13 @@ async function reloadStorageLists() {
 }
 
 function reportActionError(key: StorageActionKey, e: unknown) {
-  lastFailedAction.value = key
-  const msg = formatCaughtError(e)
-  actionResult.value = makeActionResult('error', msg)
+  reportRetryError(key, e)
+  const msg = actionResult.value?.message || formatCaughtError(e)
   notifyError(msg)
 }
 
-function clearActionResult() {
-  actionResult.value = null
-  lastFailedAction.value = null
-}
-
 async function retryLastStorageAction() {
-  const key = lastFailedAction.value
+  const key = lastFailedAction.value as StorageActionKey | null
   if (!key) return
   if (key === 'validate') return doValidate()
   if (key === 'snapshot') return doSnapshot()
@@ -202,7 +204,7 @@ watch(
 async function doValidate() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -212,7 +214,7 @@ async function doValidate() {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/storage/validate')
     drillDone.value = { ...drillDone.value, validate: true }
     const msg = validateResult.value.ok ? t.value('storageValidateOk') : t.value('storageValidateDone')
-    actionResult.value = makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg)
+    setActionResult(makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg))
     success(msg)
   } catch (e) {
     reportActionError('validate', e)
@@ -222,7 +224,7 @@ async function doValidate() {
 async function doSnapshot() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -232,7 +234,7 @@ async function doSnapshot() {
     snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot')
     drillDone.value = { ...drillDone.value, snapshot: true }
     const msg = `${t.value('createSnapshot')}：${snapshotResult.value.path || 'ok'}`
-    actionResult.value = makeActionResult('ok', msg)
+    setActionOk(msg)
     success(t.value('createSnapshot'))
     await loadSnapshots()
   } catch (e) {
@@ -243,7 +245,7 @@ async function doSnapshot() {
 async function doDataSnapshot() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -254,7 +256,7 @@ async function doDataSnapshot() {
     if (dataSnapshotResult.value.path) selectedDataSnapshotPath.value = dataSnapshotResult.value.path
     drillDone.value = { ...drillDone.value, 'data-snapshot': true }
     const msg = formatMessage(t.value('storageDataSnapshotMsg'), { path: dataSnapshotResult.value.path || 'ok', files: dataSnapshotResult.value.files ?? 0 })
-    actionResult.value = makeActionResult('ok', msg)
+    setActionOk(msg)
     success(t.value('storageDataSnapshotOk'))
     await loadDataSnapshots()
   } catch (e) {
@@ -265,7 +267,7 @@ async function doDataSnapshot() {
 async function doRestoreDrill() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -280,7 +282,7 @@ async function doRestoreDrill() {
     const msg = ok
       ? formatMessage(t.value('storageRestoreDone'), { target: restoreDrillResult.value.target })
       : formatMessage(t.value('storageRestoreFatal'), { fatals: restoreDrillResult.value.check_fatals ?? '?' })
-    actionResult.value = makeActionResult(ok ? 'ok' : 'warn', msg)
+    setActionResult(makeActionResult(ok ? 'ok' : 'warn', msg))
     if (ok) success(t.value('storageRestoreOk'))
     else notifyError(msg)
     await loadDataSnapshots()
@@ -292,7 +294,7 @@ async function doRestoreDrill() {
 async function doExport() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -302,7 +304,7 @@ async function doExport() {
     const data = await apiGet<ExportResponse>('/api/v1/admin/storage/export')
     exportData.value = data.export
     drillDone.value = { ...drillDone.value, 'export-config': true }
-    actionResult.value = makeActionResult('ok', t.value('storageConfigExported'))
+    setActionOk(t.value('storageConfigExported'))
     success(t.value('storageConfigExportToast'))
   } catch (e) {
     reportActionError('export-config', e)
@@ -328,7 +330,7 @@ async function downloadExport() {
     },
   })
   if (outcome === 'done') {
-    actionResult.value = makeActionResult('ok', t.value('storageDownloadStarted'))
+    setActionOk(t.value('storageDownloadStarted'))
     success(t.value('storageDownloadToast'))
   } else if (outcome === 'cancelled') {
     info(t.value('exportCancelledToast'))
@@ -365,7 +367,7 @@ async function copySnapshotPath(path: string) {
 function requestDelete(name: string) {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -376,7 +378,7 @@ function requestDelete(name: string) {
 async function confirmDelete() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -384,8 +386,7 @@ async function confirmDelete() {
   try {
     await apiDelete(`/api/v1/admin/storage/snapshots?name=${encodeURIComponent(deleteName.value)}`)
     deleteOpen.value = false
-    lastFailedAction.value = null
-    actionResult.value = makeActionResult('ok', formatMessage(t.value('storageSnapshotDeleted'), { name: deleteName.value }))
+    setActionOk(formatMessage(t.value('storageSnapshotDeleted'), { name: deleteName.value }))
     success(t.value('storageSnapshotDeletedToast'))
     await loadSnapshots()
   } catch (e) {
@@ -441,7 +442,7 @@ async function copyStorageShareLink() {
     />
     <ActionResultBanner
       :result="actionResult"
-      :retryable="!!(actionResult && actionResult.kind === 'error' && lastFailedAction)"
+      :retryable="canRetryAction"
       data-testid="storage-action-result"
       @retry="retryLastStorageAction"
       @dismiss="clearActionResult"

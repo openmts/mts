@@ -30,7 +30,8 @@ import { buildDownsampleExport, downsampleToCSV } from '@/utils/downsampleExport
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
-import { makeActionResult, type ActionResult } from '@/utils/actionResult'
+import { makeActionResult } from '@/utils/actionResult'
+import { useActionRetry } from '@/composables/useActionRetry'
 import { parseHumanDurationToNs, formatNsDuration } from '@/utils/duration'
 import {
   buildDownsampleRangeBody,
@@ -68,9 +69,17 @@ const {
 const policies = ref<DownsamplePolicy[]>([])
 const statuses = ref<DownsampleStatus[]>([])
 const loadError = ref('')
-const actionResult = ref<ActionResult | null>(null)
 type DsActionKey = 'create' | 'delete' | 'toggle' | 'batch' | 'range'
-const lastFailedAction = ref<DsActionKey | null>(null)
+const {
+  lastFailedAction,
+  actionResult,
+  canRetryAction,
+  clearActionResult,
+  setActionOk,
+  setActionError,
+  setActionResult,
+  reportActionError: reportRetryError,
+} = useActionRetry<DsActionKey>()
 const lastToggleName = ref('')
 const lastToggleWantEnabled = ref(false)
 const policyFilter = ref('')
@@ -338,20 +347,14 @@ function openBatch(mode: 'enable' | 'disable') {
 }
 
 
-function clearActionResult() {
-  actionResult.value = null
-  lastFailedAction.value = null
-}
-
 function reportActionError(key: DsActionKey, e: unknown) {
-  lastFailedAction.value = key
-  const msg = formatCaughtError(e)
-  actionResult.value = makeActionResult('error', msg)
+  reportRetryError(key, e)
+  const msg = actionResult.value?.message || formatCaughtError(e)
   notifyError(msg)
 }
 
 async function retryLastDownsampleAction() {
-  const key = lastFailedAction.value
+  const key = lastFailedAction.value as DsActionKey | null
   if (!key) return
   if (key === 'create') return createPolicy()
   if (key === 'delete' && deleteName.value) {
@@ -375,7 +378,7 @@ async function retryLastDownsampleAction() {
 async function confirmBatch() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -405,7 +408,7 @@ async function confirmBatch() {
       const msg = batchMode.value === 'enable'
         ? `${t.value('downsampleBatchEnable')}: ${ok}`
         : `${t.value('downsampleBatchDisable')}: ${ok}`
-      actionResult.value = makeActionResult('ok', msg)
+      setActionOk(msg)
       success(msg)
     } else {
       const msg = `${ok}/${names.length}; ${errors.slice(0, 3).join('; ')}`
@@ -414,7 +417,7 @@ async function confirmBatch() {
         actionResult.value = makeActionResult('error', msg)
         notifyError(msg)
       } else {
-        actionResult.value = makeActionResult('info', msg)
+        setActionResult(makeActionResult('info', msg))
         success(msg)
       }
     }
@@ -457,7 +460,7 @@ let unregisterDownsampleDirty: (() => void) | null = null
 async function createPolicy() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -467,13 +470,13 @@ async function createPolicy() {
     newPolicy.value.interval = parseHumanDurationToNs(intervalHuman.value)
   } catch (e) {
     const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
   if (!newPolicy.value.source_database || !newPolicy.value.source_measurement) {
     const msg = t.value('downsampleNeedSource')
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -488,8 +491,7 @@ async function createPolicy() {
     }
     intervalHuman.value = '1m'
     await loadData()
-    lastFailedAction.value = null
-    actionResult.value = makeActionResult('ok', t.value('downsampleCreated'))
+    setActionOk(t.value('downsampleCreated'))
     success(t.value('downsampleCreated'))
   } catch (e) {
     reportActionError('create', e)
@@ -508,7 +510,7 @@ function requestDelete(name: string) {
 async function confirmDelete() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -517,8 +519,7 @@ async function confirmDelete() {
     await apiDelete(`/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`)
     deleteOpen.value = false
     await loadData()
-    lastFailedAction.value = null
-    actionResult.value = makeActionResult('ok', t.value('downsampleDeleted'))
+    setActionOk(t.value('downsampleDeleted'))
     success(t.value('downsampleDeleted'))
   } catch (e) {
     reportActionError('delete', e)
@@ -530,7 +531,7 @@ async function confirmDelete() {
 async function togglePolicy(policy: DownsamplePolicy) {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -542,7 +543,7 @@ async function togglePolicy(policy: DownsamplePolicy) {
     await loadData()
     lastFailedAction.value = null
     const msg = policy.enabled ? t.value('downsampleDisabledOk') : t.value('downsampleEnabledOk')
-    actionResult.value = makeActionResult('ok', msg)
+    setActionOk(msg)
     success(msg)
   } catch (e) {
     reportActionError('toggle', e)
@@ -569,7 +570,7 @@ function formatDuration(ns: number) {
 async function runPolicy(name: string) {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -579,12 +580,12 @@ async function runPolicy(name: string) {
       {},
     )
     const msg = formatRunResultMessage('run', name, data.result)
-    actionResult.value = makeActionResult('ok', msg)
+    setActionOk(msg)
     await loadData()
     success(msg)
   } catch (e) {
     const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
   }
 }
@@ -592,7 +593,7 @@ async function runPolicy(name: string) {
 async function resetPolicy(name: string) {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -602,11 +603,11 @@ async function resetPolicy(name: string) {
     })
     await loadData()
     const msg = `${t.value('downsampleResetOk')}: ${name}`
-    actionResult.value = makeActionResult('ok', msg)
+    setActionOk(msg)
     success(msg)
   } catch (e) {
     const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
   }
 }
@@ -647,7 +648,7 @@ const rangeConfirmLabel = computed(() => {
 async function confirmRange() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -660,7 +661,7 @@ async function confirmRange() {
   })
   if (!check.ok) {
     const msg = rangeErrorMessage(check.error, loc)
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -677,8 +678,7 @@ async function confirmRange() {
       const data = await apiPost<{ result: DownsampleDryRunResult }>(path, body)
       const msg = formatRunResultMessage('dry-run', rangeName.value, data.result)
       rangeOpen.value = false
-      lastFailedAction.value = null
-      actionResult.value = makeActionResult('info', msg)
+      setActionResult(makeActionResult('info', msg))
       success(msg)
     } else {
       const data = await apiPost<{ result: DownsampleRunResult }>(path, body)
@@ -686,7 +686,7 @@ async function confirmRange() {
       rangeOpen.value = false
       await loadData()
       lastFailedAction.value = null
-      actionResult.value = makeActionResult('ok', msg)
+      setActionOk(msg)
       success(msg)
     }
   } catch (e) {
@@ -792,7 +792,7 @@ onBeforeUnmount(() => {
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="downsample-load-error" @retry="loadData" @dismiss="loadError = ''" />
     <ActionResultBanner
       :result="actionResult"
-      :retryable="!!(actionResult && actionResult.kind === 'error' && lastFailedAction)"
+      :retryable="canRetryAction"
       data-testid="downsample-action-result"
       @retry="retryLastDownsampleAction"
       @dismiss="clearActionResult"

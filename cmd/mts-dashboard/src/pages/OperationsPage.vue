@@ -12,7 +12,8 @@ import EmptyState from '@/components/EmptyState.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
-import { makeActionResult, type ActionResult } from '@/utils/actionResult'
+import { makeActionResult } from '@/utils/actionResult'
+import { useActionRetry } from '@/composables/useActionRetry'
 import {
   appendOpsAction,
   buildOpsActionExport,
@@ -55,9 +56,15 @@ const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz 
 const statsLoadedAt = ref<number | null>(null)
 const loadError = ref('')
 const partialStatsError = ref('')
-const actionResult = ref<ActionResult | null>(null)
 type OpsActionKey = 'flush' | 'compact' | 'retention'
-const lastFailedAction = ref<OpsActionKey | null>(null)
+const {
+  lastFailedAction,
+  actionResult,
+  canRetryAction,
+  clearActionResult,
+  setActionOk,
+  reportActionError: reportRetryError,
+} = useActionRetry<OpsActionKey>()
 const loading = ref(false)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
@@ -207,15 +214,9 @@ function openConfirm(kind: 'flush' | 'compact' | 'retention') {
   confirmKind.value = kind
 }
 
-function clearActionResult() {
-  actionResult.value = null
-  lastFailedAction.value = null
-}
-
 function reportActionError(kind: OpsActionKey, e: unknown) {
-  lastFailedAction.value = kind
-  const msg = formatCaughtError(e)
-  actionResult.value = makeActionResult('error', msg)
+  reportRetryError(kind, e)
+  const msg = actionResult.value?.message || formatCaughtError(e)
   notifyError(msg)
   recordAction(kind, 'error', msg)
 }
@@ -227,7 +228,7 @@ async function retryLastOpsAction() {
     notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
     return
   }
-  confirmKind.value = kind
+  confirmKind.value = kind as OpsActionKey
   await runConfirmed()
 }
 
@@ -253,8 +254,7 @@ async function runConfirmed() {
       await apiPost('/api/v1/admin/retention/apply', {})
       msg = t.value('opsRetentionDone')
     }
-    lastFailedAction.value = null
-    actionResult.value = makeActionResult('ok', msg)
+    setActionOk(msg)
     success(msg)
     recordAction(kind, 'ok', msg)
     confirmKind.value = null
@@ -511,7 +511,7 @@ watch(
     />
     <ActionResultBanner
       :result="actionResult"
-      :retryable="!!(actionResult && actionResult.kind === 'error' && lastFailedAction)"
+      :retryable="canRetryAction"
       data-testid="ops-action-result"
       @retry="retryLastOpsAction"
       @dismiss="clearActionResult"

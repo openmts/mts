@@ -21,7 +21,8 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
-import { makeActionResult, type ActionResult } from '@/utils/actionResult'
+import { makeActionResult } from '@/utils/actionResult'
+import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
@@ -132,9 +133,17 @@ const {
 } = useListSelection(visibleDbIds)
 const newDbName = ref('')
 const loadError = ref('')
-const actionResult = ref<ActionResult | null>(null)
 type DbActionKey = 'create-db' | 'delete-db' | 'create-rp' | 'load-detail' | 'load-meas'
-const lastFailedAction = ref<DbActionKey | null>(null)
+const {
+  lastFailedAction,
+  actionResult,
+  actionContext,
+  canRetryAction,
+  clearActionResult,
+  setActionOk,
+  setActionError,
+  reportActionError: reportRetryError,
+} = useActionRetry<DbActionKey>()
 const lastFailedDbName = ref('')
 const lastFailedMeasName = ref('')
 const confirmOpen = ref(false)
@@ -143,13 +152,6 @@ const confirmLoading = ref(false)
 
 async function loadDatabasesList() {
   loadError.value = ''
-  await loadDatabasesList()
-}
-
-onMounted(async () => {
-  unregisterDatabasesDirty = registerDirtyChecker('databases', () => databasesFormDirty.value)
-  window.addEventListener('beforeunload', onDatabasesBeforeUnload)
-
   try {
     const names = await listDatabases()
     databases.value = names.map((name) => ({
@@ -163,10 +165,17 @@ onMounted(async () => {
       newRpDuration: '',
     }))
     pruneTo(names)
-    await applyDatabasesPrefillFromRoute()
   } catch (e) {
+    databases.value = []
     loadError.value = formatCaughtError(e)
   }
+}
+
+onMounted(async () => {
+  unregisterDatabasesDirty = registerDirtyChecker('databases', () => databasesFormDirty.value)
+  window.addEventListener('beforeunload', onDatabasesBeforeUnload)
+  await loadDatabasesList()
+  if (!loadError.value) await applyDatabasesPrefillFromRoute()
 })
 
 watch(
@@ -284,22 +293,19 @@ function onDatabasesBeforeUnload(e: BeforeUnloadEvent) {
 let unregisterDatabasesDirty: (() => void) | null = null
 
 
-function clearActionResult() {
-  actionResult.value = null
-  lastFailedAction.value = null
-}
-
 function reportActionError(key: DbActionKey, e: unknown, ctx?: { db?: string; meas?: string }) {
-  lastFailedAction.value = key
   if (ctx?.db) lastFailedDbName.value = ctx.db
   if (ctx?.meas) lastFailedMeasName.value = ctx.meas
-  const msg = formatCaughtError(e)
-  actionResult.value = makeActionResult('error', msg)
+  reportRetryError(key, e, {
+    ...(ctx?.db ? { db: ctx.db } : {}),
+    ...(ctx?.meas ? { meas: ctx.meas } : {}),
+  })
+  const msg = actionResult.value?.message || formatCaughtError(e)
   notifyError(msg)
 }
 
 async function retryLastDatabaseAction() {
-  const key = lastFailedAction.value
+  const key = lastFailedAction.value as DbActionKey | null
   if (!key) return
   if (key === 'create-db') return createDatabase()
   if (key === 'delete-db' && confirmDbName.value) {
@@ -329,7 +335,7 @@ async function retryLastDatabaseAction() {
 async function createDatabase() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -349,8 +355,7 @@ async function createDatabase() {
       newRpDuration: '',
     })
     newDbName.value = ''
-    lastFailedAction.value = null
-    actionResult.value = makeActionResult('ok', t.value('databasesCreated'))
+    setActionOk(t.value('databasesCreated'))
     success(t.value('databasesCreated'))
   } catch (e) {
     reportActionError('create-db', e)
@@ -368,7 +373,7 @@ function requestDeleteDatabase(name: string) {
 async function confirmDeleteDatabase() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -392,7 +397,7 @@ async function confirmDeleteDatabase() {
 async function createRetentionPolicy(db: DatabaseEntry) {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -406,7 +411,7 @@ async function createRetentionPolicy(db: DatabaseEntry) {
     durationNs = parseDuration(dur)
   } catch {
     const msg = t.value('databasesInvalidDuration')
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -419,8 +424,7 @@ async function createRetentionPolicy(db: DatabaseEntry) {
     db.retentionPolicies.push({ name, duration: durationNs })
     db.newRpName = ''
     db.newRpDuration = ''
-    lastFailedAction.value = null
-    actionResult.value = makeActionResult('ok', t.value('databasesRpCreated'))
+    setActionOk(t.value('databasesRpCreated'))
     success(t.value('databasesRpCreated'))
   } catch (e) {
     reportActionError('create-rp', e, { db: db.name })
@@ -565,7 +569,7 @@ onBeforeUnmount(() => {
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="databases-load-error" @retry="loadDatabasesList" @dismiss="loadError = ''" />
     <ActionResultBanner
       :result="actionResult"
-      :retryable="!!(actionResult && actionResult.kind === 'error' && lastFailedAction)"
+      :retryable="canRetryAction"
       data-testid="databases-action-result"
       @retry="retryLastDatabaseAction"
       @dismiss="clearActionResult"

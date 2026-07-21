@@ -102,9 +102,11 @@ const renewPassword = ref('')
 const renewTtlSeconds = ref(12 * 3600)
 const renewLoading = ref(false)
 const renewError = ref('')
+const renewRetryable = ref(false)
 
 async function renewSessionWithPassword() {
   renewError.value = ''
+  renewRetryable.value = false
   if (shouldBlockOfflineMutation(offline.value)) {
     renewError.value = t.value('offlineAccountBlocked')
     notifyError(renewError.value)
@@ -125,6 +127,7 @@ async function renewSessionWithPassword() {
     const err = await login(user, renewPassword.value, { ttlSeconds: renewTtlSeconds.value })
     if (err) {
       renewError.value = err
+      renewRetryable.value = true
       notifyError(err)
       return
     }
@@ -297,6 +300,7 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
+const passwordRetryable = ref(false)
 const info = ref('')
 const invalid = computed(() => !!error.value)
 const passwordFormDirty = computed(
@@ -399,6 +403,7 @@ async function copyClientPrefsOnly() {
 async function submit() {
   error.value = ''
   info.value = ''
+  passwordRetryable.value = false
   if (shouldBlockOfflineMutation(offline.value)) {
     error.value = t.value('offlineAccountBlocked')
     notifyError(error.value)
@@ -416,6 +421,8 @@ async function submit() {
     const err = await changePassword(oldPassword.value, newPassword.value)
     if (err) {
       error.value = err
+      passwordRetryable.value = true
+      notifyError(err)
       return
     }
     success(t.value('accountPasswordChanged'))
@@ -667,7 +674,22 @@ async function submit() {
             <option :value="7 * 24 * 3600">{{ t('accountSessionRenewTtl7d') }}</option>
           </select>
         </label>
-        <p v-if="renewError" class="text-xs text-red-600 dark:text-red-300" data-testid="account-session-renew-error">{{ renewError }}</p>
+        <div
+          v-if="renewError"
+          role="alert"
+          aria-live="assertive"
+          class="mb-1"
+          data-testid="account-session-renew-error"
+        >
+          <ActionResultBanner
+            kind="error"
+            :message="renewError"
+            :retryable="renewRetryable"
+            data-testid="account-session-renew-error-banner"
+            @retry="renewSessionWithPassword"
+            @dismiss="renewError = ''; renewRetryable = false"
+          />
+        </div>
         <button
           type="submit"
           class="mts-btn-primary"
@@ -695,7 +717,14 @@ async function submit() {
         data-testid="account-password-error"
         class="mb-3"
       >
-        <ActionResultBanner kind="error" :message="error" @dismiss="error = ''" />
+        <ActionResultBanner
+          kind="error"
+          :message="error"
+          :retryable="passwordRetryable"
+          data-testid="account-password-error-banner"
+          @retry="submit"
+          @dismiss="error = ''; passwordRetryable = false"
+        />
       </div>
       <ActionResultBanner v-if="info" kind="info" :message="info" @dismiss="info = ''" />
 
