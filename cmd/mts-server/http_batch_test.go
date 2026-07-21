@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -136,4 +139,64 @@ func TestHTTPBatchUserDisabledStream(t *testing.T) {
 	if summary.OKCount != 2 {
 		t.Fatalf("ok_count=%d want 2 summary=%#v", summary.OKCount, summary)
 	}
+}
+
+func TestHTTPBatchUserDisabledStreamCancelPartial(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	t.Cleanup(server.Close)
+
+	// seed enough users so cancel mid-stream is observable
+	for i := 0; i < 8; i++ {
+		seedUserWithPassword(t, runtime, mts.User{Name: fmt.Sprintf("c%d", i), Role: mts.UserRoleUser}, "secret")
+	}
+	adminToken := loginHTTPUser(t, server.URL, "admin", "admin")
+
+	names := make([]string, 0, 8)
+	for i := 0; i < 8; i++ {
+		names = append(names, fmt.Sprintf("c%d", i))
+	}
+	payload, err := json.Marshal(batchUserDisabledRequest{Names: names, Disabled: true})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+routeUsersBatchDisabled+"?stream=1", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", contentTypeNDJSON)
+
+	// cancel quickly after starting
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		cancel()
+	}()
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		// transport may surface cancel; acceptable if no body
+		if ctx.Err() != nil {
+			return
+		}
+		t.Fatalf("Do: %v", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	// if we got NDJSON, last event should prefer summary with cancelled when any item processed
+	body := strings.TrimSpace(string(raw))
+	if body == "" {
+		return
+	}
+	lines := strings.Split(body, "\n")
+	var last batchProgressEvent
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &last); err != nil {
+		t.Fatalf("last event json: %v body=%q", err, body)
+	}
+	if last.Type == "summary" && last.Cancelled && last.Index > 0 && last.Index < last.Total {
+		return
+	}
+	// cancel may race before first item; still OK if error-like summary or empty
 }

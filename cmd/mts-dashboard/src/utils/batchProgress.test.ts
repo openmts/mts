@@ -34,3 +34,22 @@ test('applyBatchProgressEvent error', () => {
   const r = applyBatchProgressEvent(emptyBatchProgress(), { type: 'error', message: 'boom' })
   assert.equal(r.error, 'boom')
 })
+
+test('applyBatchProgressEvent cancelled summary', () => {
+  let state = emptyBatchProgress()
+  state = applyBatchProgressEvent(state, { type: 'item', index: 1, total: 3, name: 'a', status: 'ok' }).next
+  const r = applyBatchProgressEvent(state, {
+    type: 'summary',
+    ok: true,
+    ok_count: 1,
+    skip_count: 0,
+    fail_count: 0,
+    total: 3,
+    cancelled: true,
+    message: 'context canceled',
+    items: [{ name: 'a', status: 'ok' }],
+  })
+  assert.equal(r.summary?.cancelled, true)
+  assert.equal(r.next.ok, 1)
+  assert.equal(r.next.done, 3)
+})

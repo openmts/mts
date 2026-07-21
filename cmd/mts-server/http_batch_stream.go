@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -21,45 +22,8 @@ func (r *serverRuntime) streamBatchUserDisabled(
 	if !ok {
 		return
 	}
-	out := batchMutationResponse{OK: true, Items: make([]batchItemResult, 0, len(names))}
-	total := len(names)
-	for index, name := range names {
-		if err := request.Context().Err(); err != nil {
-			_ = writeBatchProgressEvent(enc, flusher, batchProgressEvent{
-				Type:    "error",
-				Message: err.Error(),
-			})
-			return
-		}
-		item := r.applyUserDisabled(request.Context(), name, req.Disabled, actor)
-		out.Items = append(out.Items, item)
-		switch item.Status {
-		case batchStatusOK:
-			out.OKCount++
-		case batchStatusSkip:
-			out.Skip++
-		default:
-			out.Fail++
-			out.OK = false
-		}
-		_ = writeBatchProgressEvent(enc, flusher, batchProgressEvent{
-			Type:    "item",
-			Index:   index + 1,
-			Total:   total,
-			Name:    item.Name,
-			Status:  item.Status,
-			Message: item.Message,
-		})
-	}
-	_ = writeBatchProgressEvent(enc, flusher, batchProgressEvent{
-		Type:    "summary",
-		OK:      out.OK,
-		OKCount: out.OKCount,
-		Skip:    out.Skip,
-		Fail:    out.Fail,
-		Items:   out.Items,
-		Index:   total,
-		Total:   total,
+	streamBatchItems(request.Context(), enc, flusher, names, func(ctx context.Context, name string) batchItemResult {
+		return r.applyUserDisabled(ctx, name, req.Disabled, actor)
 	})
 }
 
@@ -83,17 +47,38 @@ func (r *serverRuntime) streamBatchDownsamplePolicies(
 	if !ok {
 		return
 	}
+	streamBatchItems(request.Context(), enc, flusher, names, func(ctx context.Context, name string) batchItemResult {
+		return r.applyDownsampleAction(ctx, name, action, actor)
+	})
+}
+
+func streamBatchItems(
+	ctx context.Context,
+	enc *json.Encoder,
+	flusher http.Flusher,
+	names []string,
+	apply func(context.Context, string) batchItemResult,
+) {
 	out := batchMutationResponse{OK: true, Items: make([]batchItemResult, 0, len(names))}
 	total := len(names)
 	for index, name := range names {
-		if err := request.Context().Err(); err != nil {
+		if err := ctx.Err(); err != nil {
+			// 客户端取消/服务端超时：立即停止后续写，并推送已处理部分 summary。
 			_ = writeBatchProgressEvent(enc, flusher, batchProgressEvent{
-				Type:    "error",
-				Message: err.Error(),
+				Type:      "summary",
+				OK:        out.OK && out.Fail == 0,
+				OKCount:   out.OKCount,
+				Skip:      out.Skip,
+				Fail:      out.Fail,
+				Items:     out.Items,
+				Index:     len(out.Items),
+				Total:     total,
+				Cancelled: true,
+				Message:   err.Error(),
 			})
 			return
 		}
-		item := r.applyDownsampleAction(request.Context(), name, action, actor)
+		item := apply(ctx, name)
 		out.Items = append(out.Items, item)
 		switch item.Status {
 		case batchStatusOK:
@@ -145,17 +130,18 @@ func wantsBatchProgressStream(request *http.Request) bool {
 
 // batchProgressEvent 批量写进度 NDJSON 事件（item/summary/error）。
 type batchProgressEvent struct {
-	Type    string            `json:"type"`
-	Index   int               `json:"index,omitempty"`
-	Total   int               `json:"total,omitempty"`
-	Name    string            `json:"name,omitempty"`
-	Status  string            `json:"status,omitempty"`
-	Message string            `json:"message,omitempty"`
-	OK      bool              `json:"ok,omitempty"`
-	OKCount int               `json:"ok_count,omitempty"`
-	Skip    int               `json:"skip_count,omitempty"`
-	Fail    int               `json:"fail_count,omitempty"`
-	Items   []batchItemResult `json:"items,omitempty"`
+	Type      string            `json:"type"`
+	Index     int               `json:"index,omitempty"`
+	Total     int               `json:"total,omitempty"`
+	Name      string            `json:"name,omitempty"`
+	Status    string            `json:"status,omitempty"`
+	Message   string            `json:"message,omitempty"`
+	OK        bool              `json:"ok,omitempty"`
+	OKCount   int               `json:"ok_count,omitempty"`
+	Skip      int               `json:"skip_count,omitempty"`
+	Fail      int               `json:"fail_count,omitempty"`
+	Items     []batchItemResult `json:"items,omitempty"`
+	Cancelled bool              `json:"cancelled,omitempty"`
 }
 
 func beginBatchProgressStream(writer http.ResponseWriter) (*json.Encoder, http.Flusher, bool) {

@@ -333,10 +333,17 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
   },
   { id: 'operations', path: '/operations', labelKey: 'operations', keywords: ['flush', 'compact', '运维'], adminOnly: true },
   {
+    id: 'operations-status',
+    path: '/operations#ops-status-strip',
+    labelKey: 'cmdOpsStatus',
+    keywords: ['ops status', 'admin busy', '运维状态', 'maintenance busy', '占用'],
+    adminOnly: true,
+  },
+  {
     id: 'operations-flush',
     path: '/operations#ops-flush',
     labelKey: 'cmdOpsFlush',
-    keywords: ['flush', 'memtable', '刷盘', '刷新'],
+    keywords: ['flush', 'memtable', '刷盘', '刷新', 'admin busy', '运维占用', 'heavy'],
     adminOnly: true,
   },
   {
@@ -433,7 +440,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'storage-data-restore',
     path: '/storage#data-restore',
     labelKey: 'cmdStorageDataRestore',
-    keywords: ['data_dir', 'restore-drill', '旁路恢复', 'snapshot'],
+    keywords: ['data_dir', 'restore-drill', '旁路恢复', 'snapshot', 'admin busy', '重操作'],
     adminOnly: true,
   },
   {

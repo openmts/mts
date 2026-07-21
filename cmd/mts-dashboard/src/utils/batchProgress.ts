@@ -18,6 +18,8 @@ export interface BatchMutationSummary {
   skip_count: number
   fail_count: number
   items: Array<{ name: string; status: string; message?: string }>
+  cancelled?: boolean
+  message?: string
 }
 
 export function emptyBatchProgress(): BatchProgressState {
@@ -59,6 +61,8 @@ export function applyBatchProgressEvent(
       skip_count: Number(r.skip_count) || 0,
       fail_count: Number(r.fail_count) || 0,
       items,
+      cancelled: Boolean(r.cancelled),
+      message: r.message != null ? String(r.message) : undefined,
     }
     const next: BatchProgressState = {
       done: Number(r.total) || summary.ok_count + summary.skip_count + summary.fail_count,

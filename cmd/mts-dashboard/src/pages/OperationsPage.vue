@@ -679,7 +679,8 @@ watch(
     />
 
     <div
-      class="mts-panel flex flex-wrap items-center justify-between gap-3"
+      id="ops-status-strip"
+      class="mts-panel flex flex-wrap items-center justify-between gap-3 scroll-mt-20"
       data-testid="ops-status-strip"
     >
       <div class="min-w-0 space-y-1">

@@ -496,6 +496,7 @@ async function confirmBatch() {
   clearActionResult()
   const action = batchMode.value === 'enable' ? 'enable' : 'disable'
   let data: BatchMutationSummary | null = null
+  const cancelledBox: { summary: BatchMutationSummary | null } = { summary: null }
   try {
     await apiPostNDJSONStream(
       '/api/v1/admin/downsample/policies/batch?stream=1',
@@ -504,11 +505,32 @@ async function confirmBatch() {
         if (parseError || record == null) return
         const applied = applyBatchProgressEvent(batchProgress.value, record)
         batchProgress.value = applied.next
-        if (applied.summary) data = applied.summary
+        if (applied.summary) {
+          data = applied.summary
+          if (applied.summary.cancelled) cancelledBox.summary = applied.summary
+        }
         if (applied.error) throw new Error(applied.error)
       },
       { signal, headers: { Accept: 'application/x-ndjson' } },
     )
+    const cancelledSummary = cancelledBox.summary
+    if (cancelledSummary) {
+      const processed = cancelledSummary.ok_count + cancelledSummary.skip_count + cancelledSummary.fail_count
+      const msg = formatMessage(t.value('listBatchCancelledPartial'), {
+        done: processed || batchProgress.value.done,
+        total: batchProgress.value.total || processed,
+        ok: cancelledSummary.ok_count,
+        skip: cancelledSummary.skip_count,
+        fail: cancelledSummary.fail_count,
+      })
+      setActionResult(makeActionResult('info', msg))
+      info(msg)
+      try { await loadData() } catch { /* soft */ }
+      selectedNames.value = []
+
+      batchOpen.value = false
+      return
+    }
     if (!data) {
       data = {
         ok: batchProgress.value.fail === 0,

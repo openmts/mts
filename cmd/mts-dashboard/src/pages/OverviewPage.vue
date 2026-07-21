@@ -53,7 +53,7 @@ interface StorageMemorySnapshot {
 }
 interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
 interface CompactionStatsResponse { stats: CompactionStats }
-interface MaintenanceStatsResponse { stats: MaintenanceStats }
+interface MaintenanceStatsResponse { stats: MaintenanceStats; admin_op_busy?: boolean }
 interface MaintenanceErrorsResponse { errors: string[] }
 interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks'] }
 interface DoctorCheck { level: string; code: string; message: string }
@@ -90,6 +90,7 @@ const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
+const adminOpBusy = ref(false)
 const doctorChecks = ref<DoctorCheck[]>([])
 const doctorTLS = ref<boolean | null>(null)
 const loadError = ref('')
@@ -307,6 +308,7 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
     case 'maintenance': {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
+      adminOpBusy.value = Boolean(v.admin_op_busy)
       return
     }
     case 'maintErrors': {
@@ -359,7 +361,7 @@ function clearNonAdminSnapshots() {
 function nullAdminSectionData(key: AdminSectionKey) {
   if (key === 'memory') memorySnapshot.value = null
   else if (key === 'compaction') compactionStats.value = null
-  else if (key === 'maintenance') maintenanceStats.value = null
+  else if (key === 'maintenance') { maintenanceStats.value = null; adminOpBusy.value = false }
   else if (key === 'maintErrors') maintenanceErrors.value = []
   else if (key === 'doctor') {
     doctorChecks.value = []
@@ -1111,6 +1113,12 @@ async function copyOverview() {
         <div class="mb-4 flex items-center gap-2">
           <Wrench class="h-4 w-4 text-slate-500" />
           <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceStats') }}</h2>
+          <span
+            v-if="adminOpBusy"
+            class="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
+            data-testid="overview-admin-busy"
+            :title="t('opsAdminBusy')"
+          >{{ t('opsAdminBusyChip') }}</span>
         </div>
         <EmptyState
           v-if="!maintenanceStats"

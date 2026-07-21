@@ -1351,3 +1351,8 @@
 - Users/Downsample：批量取消时若已有进度，展示部分结果摘要并刷新列表
 - Server：admin heavy 互斥覆盖 flush/compact/retention + data-snapshot/restore-drill/config-snapshot（避免 reentry）
 - Storage：拉取 `admin_op_busy`，重操作门禁/禁用/chip；API 错误码透传
+
+## P315（2026-07-22）
+- Server：批量 NDJSON 取消时推送 partial `summary`（`cancelled=true`），立即停止后续写
+- Overview：维护统计区展示 `admin_op_busy` chip
+- 命令面板：运维状态条入口 + busy 关键词；契约文案对齐管理重操作互斥

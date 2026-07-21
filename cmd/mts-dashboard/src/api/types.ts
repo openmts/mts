@@ -114,7 +114,7 @@ export interface MaintenanceStats {
   maintenance_error_count: number
 }
 
-/** GET /api/v1/admin/stats/maintenance 响应；admin_op_busy 表示服务端 flush/compact/retention 互斥占用中 */
+/** GET /api/v1/admin/stats/maintenance 响应；admin_op_busy 表示服务端管理重操作（运维/快照/恢复）互斥占用中 */
 export interface MaintenanceStatsResponse {
   stats: MaintenanceStats
   admin_op_busy?: boolean
