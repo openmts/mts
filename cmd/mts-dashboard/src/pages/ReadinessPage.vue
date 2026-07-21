@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, inject, onMounted, onBeforeUnmount, ref, watch, type ComputedRef } from 'vue'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { snapshotForm } from '@/utils/formDirty'
 import { useRoute, useRouter } from 'vue-router'
@@ -118,10 +118,18 @@ interface VersionResponse {
 const { adminOpBusy, adminOpKind } = useAdminOpBusy()
 const { isAdmin, currentUser } = useAuth()
 const { t, locale } = useI18n()
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
+const adminOpKindDisplay = computed(() => {
+  if (!adminOpBusy.value) return ''
+  const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
+  return adminOpBusySummary?.value?.opLabel || t.value(key) || t.value('adminOpKindGeneric')
+})
 const readinessAdminBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
-  const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
-  return joinAdminOpChip(t.value('opsAdminBusyChip'), t.value(key) || t.value('adminOpKindGeneric'))
+  const kind = adminOpKindDisplay.value
+  const base = joinAdminOpChip(t.value('opsAdminBusyChip'), kind)
+  const elapsed = adminOpBusySummary?.value?.elapsed
+  return elapsed ? `${base} · ${elapsed}` : base
 })
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 
@@ -238,6 +246,7 @@ const exportPreflight = computed(() => {
     doctorWarnCount: doctorWarns.value.length,
     httpTlsEnabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
     adminOpBusy: adminOpBusy.value,
+    adminOpKindLabel: adminOpKindDisplay.value || '',
     signoffNotes: state.value.signoffNotes,
     deployKitReviewed: !!state.value.deployKit?.reviewed,
   })

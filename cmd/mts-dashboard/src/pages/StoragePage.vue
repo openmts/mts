@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, inject, ref, onMounted, onBeforeUnmount, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
@@ -74,11 +74,16 @@ const {
   runJSONExport,
 } = useExportJob()
 const { t , locale } = useI18n()
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
 const storageAdminBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('storageAdminBusyChip')
   const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
-  return joinAdminOpChip(t.value('storageAdminBusyChip'), t.value(key) || t.value('adminOpKindGeneric'))
+  const kind = adminOpBusySummary?.value?.opLabel || t.value(key) || t.value('adminOpKindGeneric')
+  const base = joinAdminOpChip(t.value('storageAdminBusyChip'), kind)
+  const elapsed = adminOpBusySummary?.value?.elapsed
+  return elapsed ? `${base} · ${elapsed}` : base
 })
+const storageAdminBusyTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('storageAdminBusy'))
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const validateResult = ref<ValidateResponse | null>(null)
 const snapshotResult = ref<SnapshotResponse | null>(null)
@@ -643,7 +648,7 @@ async function copyStorageShareLink() {
       </div>
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Camera class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('createSnapshot') }}</h3></div>
-        <button data-testid="storage-snapshot" :disabled="loading === 'snapshot' || writeBlocked || adminOpBusy" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? t('storageAdminBusy') : undefined)" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
+        <button data-testid="storage-snapshot" :disabled="loading === 'snapshot' || writeBlocked || adminOpBusy" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? storageAdminBusyTitle : undefined)" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
         <p v-if="snapshotResult?.path" class="mt-2 break-all font-mono text-[11px] mts-muted">{{ snapshotResult.path }}</p>
       </div>
       <div class="mts-panel">
@@ -672,7 +677,7 @@ async function copyStorageShareLink() {
         :description="t('storageNoSnapshotsDesc')"
       >
         <template #action>
-          <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot' || writeBlocked || adminOpBusy" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? t('storageAdminBusy') : undefined)" @click="doSnapshot">{{ t('createSnapshot') }}</button>
+          <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot' || writeBlocked || adminOpBusy" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? storageAdminBusyTitle : undefined)" @click="doSnapshot">{{ t('createSnapshot') }}</button>
         </template>
       </EmptyState>
       <div id="snapshots" class="scroll-mt-20" data-testid="storage-snapshots-table">
@@ -748,7 +753,7 @@ async function copyStorageShareLink() {
           type="button"
           class="mts-btn-primary justify-center py-2"
           :disabled="loading === 'data-snapshot' || writeBlocked || adminOpBusy"
-          :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? t('storageAdminBusy') : undefined)"
+          :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? storageAdminBusyTitle : undefined)"
           @click="doDataSnapshot"
         >
           {{ loading === 'data-snapshot' ? t('loading') : t('storageCreateDataSnapshot') }}
@@ -758,7 +763,7 @@ async function copyStorageShareLink() {
           class="mts-btn justify-center py-2"
           data-testid="storage-restore-drill"
           :disabled="loading === 'restore-drill' || writeBlocked || adminOpBusy"
-          :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? t('storageAdminBusy') : undefined)"
+          :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? storageAdminBusyTitle : undefined)"
           @click="doRestoreDrill"
         >
           {{ loading === 'restore-drill' ? t('loading') : t('storageRunRestoreDrill') }}
@@ -840,6 +845,7 @@ async function copyStorageShareLink() {
       class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
       data-testid="storage-admin-busy"
       role="status"
+      :title="storageAdminBusyTitle"
     >{{ storageAdminBusyChipLabel }} · {{ t('storageAdminBusy') }}</div>
     <InFlightBanner
       :active="!!loading"

@@ -1378,3 +1378,7 @@
 ## P320（2026-07-22）
 - Dashboard：admin busy 时 ops-status 轮询加速至 ~3s（空闲 15s）
 - Ops 状态条 chip / 命令面板展示实时 elapsed（复用 Layout tick 注入摘要）
+
+## P321（2026-07-22）
+- Dashboard：admin ops-status 轮询失败软提示（Layout 横幅/独立条）；Storage/Readiness chip 展示 elapsed
+- 就绪导出预检：busy 时文案带当前 op 类型

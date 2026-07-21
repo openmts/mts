@@ -118,10 +118,13 @@ test('buildExportPreflight admin op busy info', () => {
     doctorWarnCount: 0,
     httpTlsEnabled: true,
     adminOpBusy: true,
+    adminOpKindLabel: '刷盘 (flush)',
     signoffNotes: { edgeHttps: 'a', backupOffsite: 'b', backupAlert: 'c' },
     deployKitReviewed: true,
   })
-  assert.ok(busy.items.some((i) => i.id === 'admin-op-busy' && i.level === 'info'))
+  const busyItem = busy.items.find((i) => i.id === 'admin-op-busy')
+  assert.ok(busyItem && busyItem.level === 'info')
+  assert.match(busyItem!.message, /刷盘/)
   assert.equal(preflightItemTarget('admin-op-busy')?.target, '/operations#ops-status-strip')
 
   const idle = buildExportPreflight({

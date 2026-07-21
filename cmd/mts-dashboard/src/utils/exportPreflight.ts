@@ -32,6 +32,8 @@ export interface ExportPreflightInput {
   httpTlsEnabled?: boolean | null
   /** 服务端管理重操作占用（建议项） */
   adminOpBusy?: boolean | null
+  /** 当前管理重操作类型展示名（可选，仅 busy 时用于文案） */
+  adminOpKindLabel?: string | null
   signoffNotes?: SignoffNotes | null
   deployKitReviewed?: boolean
 }
@@ -62,6 +64,7 @@ const copy = {
     deployReviewed: '部署材料包本地已查阅',
     deployNotReviewed: '部署材料包本地尚未勾选「已查阅」',
     adminBusy: '服务端管理重操作占用中（运维/快照/恢复）；建议空闲后再做验收导出',
+    adminBusyWithOp: '服务端管理重操作占用中：{op}；建议空闲后再做验收导出',
     adminIdle: '服务端无管理重操作占用',
     footer: '预检不阻止导出；完成项不代表生产人工验收已签字',
   },
@@ -82,6 +85,7 @@ const copy = {
     deployReviewed: 'Deployment kit marked reviewed locally',
     deployNotReviewed: 'Deployment kit not marked reviewed locally',
     adminBusy: 'Server admin heavy op busy (ops/snapshot/restore); prefer idle before acceptance export',
+    adminBusyWithOp: 'Server admin heavy op busy: {op}; prefer idle before acceptance export',
     adminIdle: 'No server admin heavy op in progress',
     footer: 'Preflight does not block export; done items do not mean production acceptance is signed',
   },
@@ -196,10 +200,11 @@ export function buildExportPreflight(input: ExportPreflightInput): ExportPreflig
   })
 
   if (input.adminOpBusy) {
+    const opLabel = (input.adminOpKindLabel || '').trim()
     items.push({
       id: 'admin-op-busy',
       level: 'info',
-      message: t.adminBusy,
+      message: opLabel ? fill(t.adminBusyWithOp, { op: opLabel }) : t.adminBusy,
       target: '/operations#ops-status-strip',
       actionKey: 'preflightJumpLocal',
     })

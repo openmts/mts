@@ -45,7 +45,13 @@ const { t } = useI18n()
 const { offline, sessionWriteBlocked, sessionRemainingLabel, sessionUrgency } = useMutationGuard()
 const { sync: syncNetworkStatus } = useNetworkStatus()
 const { logout, isAdmin } = useAuth()
-const { adminOpBusy, adminOpKind, adminOpStartedAtUnix, refreshAdminOpBusy } = useAdminOpBusy()
+const {
+  adminOpBusy,
+  adminOpKind,
+  adminOpStartedAtUnix,
+  adminOpBusyError,
+  refreshAdminOpBusy,
+} = useAdminOpBusy()
 
 /** busy 期间 1s tick，让横幅 elapsed 实时跳动 */
 const adminOpNowMs = ref(Date.now())
@@ -89,12 +95,19 @@ const adminOpBusyDetail = computed(() => {
   })
 })
 
+const adminOpBusyPollErrorLabel = computed(() => {
+  const err = (adminOpBusyError.value || '').trim()
+  if (!err) return ''
+  return formatMessage(t.value('adminOpBusyPollError'), { error: err })
+})
+
 provide('adminOpBusySummary', computed(() => ({
   busy: adminOpBusy.value,
   op: adminOpKind.value,
   opLabel: adminOpKindLabel.value,
   elapsed: adminOpElapsedLabel.value,
   detail: adminOpBusyDetail.value,
+  pollError: adminOpBusyPollErrorLabel.value,
 })))
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 
@@ -426,6 +439,11 @@ function onSkipToMain(e: Event) {
           <span class="font-semibold">{{ t('adminOpBusyBannerTitle') }}</span>
           <span class="ml-1">{{ t('adminOpBusyBanner') }}</span>
           <span v-if="adminOpBusyDetail" class="ml-1 font-medium" data-testid="admin-op-busy-detail">{{ adminOpBusyDetail }}</span>
+          <span
+            v-if="adminOpBusyPollErrorLabel"
+            class="ml-1 text-amber-800 dark:text-amber-200"
+            data-testid="admin-op-busy-poll-error"
+          >{{ adminOpBusyPollErrorLabel }}</span>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-2">
           <button
@@ -440,6 +458,26 @@ function onSkipToMain(e: Event) {
             data-testid="admin-op-busy-open-ops"
             @click="goAdminOpBusyOps"
           >{{ t('adminOpBusyOpenOps') }}</button>
+        </div>
+      </div>
+      <div
+        v-if="isAdmin && adminOpBusyPollErrorLabel && !adminOpBusy && !offline"
+        class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100 sm:px-6"
+        role="status"
+        aria-live="polite"
+        data-testid="admin-op-busy-poll-error-banner"
+      >
+        <div class="min-w-0">
+          <span class="font-semibold">{{ t('adminOpBusyBannerTitle') }}</span>
+          <span class="ml-1" data-testid="admin-op-busy-poll-error">{{ adminOpBusyPollErrorLabel }}</span>
+        </div>
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring !border-amber-300 !bg-white !text-amber-900 dark:!border-amber-800 dark:!bg-amber-950 dark:!text-amber-100"
+            data-testid="admin-op-busy-refresh"
+            @click="refreshAdminOpBusy"
+          >{{ t('adminOpBusyRefresh') }}</button>
         </div>
       </div>
       <div
