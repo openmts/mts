@@ -20,10 +20,13 @@ export function useMutationGuard(opts?: { tickMs?: number }) {
   const tickMs = opts?.tickMs ?? 15_000
   let timer: ReturnType<typeof setInterval> | null = null
 
-  const sessionUrgency = computed<SessionUrgency>(() => {
+  const sessionView = computed(() => {
     const exp = parseExpiresAt(getTokenExpiresAt())
-    return sessionExpiryView(exp, nowMs.value).urgency
+    return sessionExpiryView(exp, nowMs.value)
   })
+
+  const sessionUrgency = computed<SessionUrgency>(() => sessionView.value.urgency)
+  const sessionRemainingLabel = computed(() => sessionView.value.label || '')
 
   const writeBlocked = computed(() => shouldBlockMutation(offline.value, sessionUrgency.value))
   const blockReason = computed<MutationBlockReason>(() =>
@@ -51,7 +54,9 @@ export function useMutationGuard(opts?: { tickMs?: number }) {
 
   return {
     offline,
+    sessionView,
     sessionUrgency,
+    sessionRemainingLabel,
     sessionWriteBlocked,
     writeBlocked,
     blockReason,

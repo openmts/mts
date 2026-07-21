@@ -37,7 +37,7 @@ import { useServerReachability } from '@/composables/useServerReachability'
 import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
 
 const { t } = useI18n()
-const { offline, sessionWriteBlocked } = useMutationGuard()
+const { offline, sessionWriteBlocked, sessionRemainingLabel } = useMutationGuard()
 const { logout } = useAuth()
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 const route = useRoute()
@@ -285,6 +285,11 @@ function onSkipToMain(e: Event) {
       >
         <div class="min-w-0">
           <span class="font-semibold">{{ t('sessionCriticalBannerTitle') }}</span>
+          <span
+            v-if="sessionRemainingLabel"
+            class="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 font-mono text-[11px] text-red-900 dark:bg-red-900/50 dark:text-red-100"
+            data-testid="session-critical-remaining"
+          >{{ sessionRemainingLabel }}</span>
           <span class="ml-1">{{ t('sessionCriticalBanner') }}</span>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-2">

@@ -858,6 +858,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('offline-banner')).toBeVisible()
   await expect(page.getByTestId('users-create-open')).toBeDisabled()
   await expect(page.getByTestId('users-grant-db-error')).toHaveCount(0)
+  await expect(page.getByTestId('users-refresh-error')).toHaveCount(0)
+  await expect(page.getByTestId('users-load-error')).toHaveCount(0)
   await expect(page.getByTestId('users-batch-enable')).toBeDisabled()
   await page.evaluate(() => {
     Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
@@ -1782,6 +1784,7 @@ test('commercial browser smoke path', async ({ page }) => {
   })
   await page.goto('/query')
   await expect(page.getByTestId('session-critical-banner')).toHaveCount(0)
+  await expect(page.getByTestId('session-critical-remaining')).toHaveCount(0)
 
   // P190: 非 admin 深链预填 + 分享 + 登录 redirect 回跳
   await page.goto('/query?database=default&range=1h')

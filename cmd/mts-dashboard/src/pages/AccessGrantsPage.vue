@@ -180,8 +180,15 @@ async function load() {
     partialErrors.value = errs
     pruneTo(rows.value.map((r) => grantRowId(r)))
   } catch (e) {
-    loadError.value = formatCaughtError(e)
-    rows.value = []
+    const msg = formatCaughtError(e)
+    if (rows.value.length) {
+      // soft-keep：用户列表/授权全量刷新失败时保留上次表
+      loadError.value = ''
+      partialErrors.value = [msg]
+    } else {
+      loadError.value = msg
+      rows.value = []
+    }
   } finally {
     loading.value = false
   }

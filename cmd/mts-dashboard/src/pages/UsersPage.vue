@@ -224,13 +224,17 @@ async function copyUsersShareLink() {
 }
 
 async function loadGrantDatabases() {
-  grantDbError.value = ''
   try {
     const { listDatabases } = await import('@/api/meta')
     databases.value = await listDatabases()
+    grantDbError.value = ''
   } catch (e) {
-    databases.value = []
-    grantDbError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (databases.value.length) grantDbError.value = msg
+    else {
+      databases.value = []
+      grantDbError.value = msg
+    }
   }
 }
 
@@ -239,8 +243,16 @@ async function loadUsers() {
     const data = await apiGet<UsersResponse>('/api/v1/users')
     users.value = data.users ?? []
     pruneTo(users.value.map((u) => u.name))
+    loadError.value = ''
   } catch (e) {
-    loadError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (users.value.length) {
+      // soft-keep：刷新失败保留用户列表
+      loadError.value = msg
+    } else {
+      users.value = []
+      loadError.value = msg
+    }
   }
 }
 
@@ -649,11 +661,18 @@ onBeforeUnmount(() => {
     </div>
 
     <ActionResultBanner
-      v-if="loadError"
+      v-if="loadError && !users.length"
       kind="error"
       data-testid="users-load-error"
       :message="loadError"
       retryable
+      @retry="loadUsers"
+      @dismiss="loadError = ''"
+    />
+    <PartialErrorBanner
+      v-else-if="loadError && users.length"
+      :message="`${t('usersRefreshFailed')}：${loadError}`"
+      test-id="users-refresh-error"
       @retry="loadUsers"
       @dismiss="loadError = ''"
     />
