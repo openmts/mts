@@ -965,3 +965,9 @@
 
 ## P204 状态（2026-07-21）
 - AccessMatrix/Metrics/Config/ApiSpec 导出接入 ExportJob
+
+## P205 状态（2026-07-21）
+- Readiness 导出统一进度/取消（含双文件 bundle）
+
+## P206 状态（2026-07-21）
+- Account 密码+TTL 会话续期（无独立 refresh token）

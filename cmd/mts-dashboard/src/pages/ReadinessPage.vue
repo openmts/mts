@@ -6,6 +6,8 @@ import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { formatMessage } from '@/utils/formatMessage'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
 import { scheduleScrollToHash } from '@/utils/hashScroll'
@@ -65,8 +67,6 @@ import {
 import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import {
   buildReadinessExport,
-  downloadJSON,
-  downloadText,
   parseReadinessImport,
   persistImportedReadiness,
 } from '@/utils/readinessIO'
@@ -118,6 +118,15 @@ function formatDoctorLevel(level?: string) {
 const router = useRouter()
 const route = useRoute()
 const { success, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runJSONExport,
+  runTextExport,
+  runBundleExport,
+} = useExportJob()
 
 const state = ref<ReadinessState>(loadReadinessState())
 const DOC_ROW_HEIGHT = 40
@@ -321,11 +330,24 @@ function go(path: string) {
   void router.push(path)
 }
 
-function exportState() {
+async function exportState() {
+  if (exportBusy.value) return
   const payload = buildReadinessExport(state.value)
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  downloadJSON(`mts-readiness-${stamp}.json`, payload)
-  flash('ok', t.value('readinessExportOk'))
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: `mts-readiness-${stamp}.json`,
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') flash('ok', t.value('readinessExportOk'))
+  else if (outcome === 'cancelled') flash('info', t.value('exportCancelledToast'))
+  else if (outcome === 'error') flash('error', exportJob.value.error || t.value('failed'))
 }
 
 function openImport() {
@@ -370,7 +392,8 @@ function confirmMissingSignoffExport(): boolean {
   return confirmExportWithMissingSignoff(signoffCompleteness.value, uiLocale.value)
 }
 
-function downloadArchive() {
+async function downloadArchive() {
+  if (exportBusy.value) return
   if (!confirmMissingSignoffExport()) {
     flash('info', t.value('readinessExportCancelled'))
     return
@@ -384,13 +407,36 @@ function downloadArchive() {
     locale: uiLocale.value,
   })
   const names = archiveFilenames()
-  downloadJSON(names.json, archive)
-  downloadText(names.md, formatReadinessArchiveMarkdown(archive), 'text/markdown')
+  const md = formatReadinessArchiveMarkdown(archive)
+  const outcome = await runBundleExport({
+    label: t.value('readinessArchive') || 'Archive',
+    total: 2,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 2)
+      if (isCancelled()) return null
+      progress(1, 2)
+      await new Promise((r) => setTimeout(r, 0))
+      if (isCancelled()) return null
+      progress(2, 2)
+      return [
+        { kind: 'json', filename: names.json, payload: archive },
+        { kind: 'text', filename: names.md, text: md, mime: 'text/markdown' },
+      ]
+    },
+  })
   const preflightToast = formatMessage(t.value('readinessExportPreflightToast'), {
     warn: exportPreflight.value.warnCount,
     info: exportPreflight.value.infoCount,
     ok: exportPreflight.value.okCount,
   })
+  if (outcome === 'cancelled') {
+    flash('info', t.value('exportCancelledToast'))
+    return
+  }
+  if (outcome === 'error') {
+    flash('error', exportJob.value.error || t.value('failed'))
+    return
+  }
   if (!signoffCompleteness.value.complete) {
     flash('info', `${t.value('readinessArchiveOkWithGaps')} · ${preflightToast}`)
     success(`${t.value('readinessArchiveOkWithGaps')} · ${preflightToast}`)
@@ -400,7 +446,8 @@ function downloadArchive() {
   }
 }
 
-function downloadAcceptancePack() {
+async function downloadAcceptancePack() {
+  if (exportBusy.value) return
   if (!confirmMissingSignoffExport()) {
     flash('info', t.value('readinessExportCancelled'))
     return
@@ -423,13 +470,36 @@ function downloadAcceptancePack() {
     locale: uiLocale.value,
   })
   const names = acceptancePackFilenames()
-  downloadJSON(names.json, pack)
-  downloadText(names.md, formatAcceptancePackMarkdown(pack), 'text/markdown')
+  const md = formatAcceptancePackMarkdown(pack)
+  const outcome = await runBundleExport({
+    label: t.value('readinessAcceptancePack') || 'Acceptance pack',
+    total: 2,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 2)
+      if (isCancelled()) return null
+      progress(1, 2)
+      await new Promise((r) => setTimeout(r, 0))
+      if (isCancelled()) return null
+      progress(2, 2)
+      return [
+        { kind: 'json', filename: names.json, payload: pack },
+        { kind: 'text', filename: names.md, text: md, mime: 'text/markdown' },
+      ]
+    },
+  })
   const preflightToast = formatMessage(t.value('readinessExportPreflightToast'), {
     warn: exportPreflight.value.warnCount,
     info: exportPreflight.value.infoCount,
     ok: exportPreflight.value.okCount,
   })
+  if (outcome === 'cancelled') {
+    flash('info', t.value('exportCancelledToast'))
+    return
+  }
+  if (outcome === 'error') {
+    flash('error', exportJob.value.error || t.value('failed'))
+    return
+  }
   if (!signoffCompleteness.value.complete) {
     flash('info', `${t.value('readinessAcceptancePackOkWithGaps')} · ${preflightToast}`)
     success(`${t.value('readinessAcceptancePackOkWithGaps')} · ${preflightToast}`)
@@ -438,6 +508,7 @@ function downloadAcceptancePack() {
     success(`${t.value('readinessAcceptancePackOk')} · ${preflightToast}`)
   }
 }
+
 
 const quickActions = [
   { id: 'data-restore', labelKey: 'readinessGoDataRestore', path: '/storage#data-restore' },
@@ -469,13 +540,28 @@ async function copyDeployBody(body: string) {
   }
 }
 
-function downloadDeployKit() {
+async function downloadDeployKit() {
+  if (exportBusy.value) return
   const md = formatDeployKitMarkdown(uiLocale.value)
-  downloadText(deployKitFilename(), md, 'text/markdown')
-  markDeployKitHint('downloaded')
-  markDeployKitHint('reviewed')
-  success(t.value('readinessDeployKitDownloaded'))
-  flash('ok', t.value('readinessDeployKitDownloaded'))
+  const outcome = await runTextExport({
+    label: 'Markdown',
+    filename: deployKitFilename(),
+    mime: 'text/markdown',
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return md
+    },
+  })
+  if (outcome === 'done') {
+    markDeployKitHint('downloaded')
+    markDeployKitHint('reviewed')
+    success(t.value('readinessDeployKitDownloaded'))
+    flash('ok', t.value('readinessDeployKitDownloaded'))
+  } else if (outcome === 'cancelled') flash('info', t.value('exportCancelledToast'))
+  else if (outcome === 'error') flash('error', exportJob.value.error || t.value('failed'))
 }
 
 const deployDrillSteps = DEPLOY_DRILL_STEPS
@@ -489,12 +575,27 @@ function areaLabel(area: DeployDrillArea) {
   return formatDeployDrillAreaLabel(area, uiLocale.value)
 }
 
-function downloadDeployDrill() {
+async function downloadDeployDrill() {
+  if (exportBusy.value) return
   const md = formatDeployRunbookDrillMarkdown(uiLocale.value)
-  downloadText(deployRunbookDrillFilename(), md, 'text/markdown')
-  markDeployKitHint('reviewed')
-  success(t.value('readinessDeployDrillDownloaded'))
-  flash('ok', t.value('readinessDeployDrillDownloaded'))
+  const outcome = await runTextExport({
+    label: 'Markdown',
+    filename: deployRunbookDrillFilename(),
+    mime: 'text/markdown',
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return md
+    },
+  })
+  if (outcome === 'done') {
+    markDeployKitHint('reviewed')
+    success(t.value('readinessDeployDrillDownloaded'))
+    flash('ok', t.value('readinessDeployDrillDownloaded'))
+  } else if (outcome === 'cancelled') flash('info', t.value('exportCancelledToast'))
+  else if (outcome === 'error') flash('error', exportJob.value.error || t.value('failed'))
 }
 
 async function copyDeployDrill() {
@@ -602,7 +703,8 @@ watch(
         <button type="button" class="mts-btn" data-testid="readiness-share-link" @click="copyReadinessShareLink">
           {{ t('readinessShareLink') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="readiness-export" @click="exportState">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button type="button" class="mts-btn" data-testid="readiness-export" :disabled="exportBusy" @click="exportState">
           <Download class="h-3.5 w-3.5" />
           {{ t('readinessExport') }}
         </button>
@@ -610,11 +712,11 @@ watch(
           <Upload class="h-3.5 w-3.5" />
           {{ t('readinessImport') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="readiness-archive" @click="downloadArchive">
+        <button type="button" class="mts-btn" data-testid="readiness-archive" :disabled="exportBusy" @click="downloadArchive">
           <FileCode2 class="h-3.5 w-3.5" />
           {{ t('readinessArchive') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="readiness-acceptance-pack" @click="downloadAcceptancePack">
+        <button type="button" class="mts-btn" data-testid="readiness-acceptance-pack" :disabled="exportBusy" @click="downloadAcceptancePack">
           <Package class="h-3.5 w-3.5" />
           {{ t('readinessAcceptancePack') }}
         </button>
@@ -879,7 +981,7 @@ watch(
                     <button
                       type="button"
                       class="mts-btn mts-focus-ring"
-                      data-testid="deploy-drill-download"
+                      data-testid="deploy-drill-download" :disabled="exportBusy"
                       @click="downloadDeployDrill"
                     >{{ t('readinessDeployDrillDownload') }}</button>
                   </div>
@@ -915,7 +1017,7 @@ watch(
           <button
             type="button"
             class="mts-btn"
-            data-testid="readiness-deploy-kit-download"
+            data-testid="readiness-deploy-kit-download" :disabled="exportBusy"
             @click="downloadDeployKit"
           >
             <Download class="h-3.5 w-3.5" />

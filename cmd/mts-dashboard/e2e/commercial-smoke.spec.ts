@@ -865,6 +865,20 @@ test('commercial browser smoke path', async ({ page }) => {
     const dismiss = page.getByTestId('export-job-dismiss')
     if (await dismiss.count()) await dismiss.click()
   }
+  // P205: Readiness 导出 banner
+  await page.goto('/ops/readiness')
+  await expect(page.getByTestId('readiness-export')).toBeVisible()
+  await page.getByTestId('readiness-export').click()
+  await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
+  const readinessDismiss = page.getByTestId('export-job-dismiss')
+  if (await readinessDismiss.count()) await readinessDismiss.click()
+
+  // P206: 账户会话续期表单
+  await page.goto('/account#account-session')
+  await expect(page.getByTestId('account-session')).toBeVisible()
+  await expect(page.getByTestId('account-session-renew-form')).toBeVisible()
+  await expect(page.getByTestId('account-session-renew-submit')).toBeDisabled()
+
 
 
   // P199: Config offline 时 validate/reload disabled

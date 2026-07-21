@@ -47,7 +47,7 @@ import { loadNavOrderPrefs, saveNavOrderMap } from '@/utils/navOrder'
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
-const { currentUser, currentRole, changePassword, isAdmin, logout } = useAuth()
+const { currentUser, currentRole, changePassword, isAdmin, logout, login } = useAuth()
 const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
 const expiresAt = computed(() => parseExpiresAt(getTokenExpiresAt()))
@@ -86,6 +86,38 @@ function roleLabel(role?: string | null): string {
   return role
 }
 const { success, error: notifyError } = useNotify()
+const renewPassword = ref('')
+const renewTtlSeconds = ref(12 * 3600)
+const renewLoading = ref(false)
+const renewError = ref('')
+
+async function renewSessionWithPassword() {
+  renewError.value = ''
+  const user = currentUser.value || ''
+  if (!user) {
+    renewError.value = t.value('accountSessionRenewNeedUser')
+    notifyError(renewError.value)
+    return
+  }
+  if (!renewPassword.value) {
+    renewError.value = t.value('accountSessionRenewPasswordPlaceholder')
+    return
+  }
+  renewLoading.value = true
+  try {
+    const err = await login(user, renewPassword.value, { ttlSeconds: renewTtlSeconds.value })
+    if (err) {
+      renewError.value = err
+      notifyError(err)
+      return
+    }
+    renewPassword.value = ''
+    success(t.value('accountSessionRenewOk'))
+  } finally {
+    renewLoading.value = false
+  }
+}
+
 const storage = typeof localStorage !== 'undefined' ? localStorage : null
 const landingPath = ref(loadLandingPath(storage))
 const landingFilter = ref('')
@@ -540,6 +572,37 @@ async function submit() {
           {{ t('accountSessionRelogin') }}
         </button>
       </div>
+      <form class="mt-4 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-700" data-testid="account-session-renew-form" @submit.prevent="renewSessionWithPassword">
+        <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ t('accountSessionRenewWithPassword') }}</p>
+        <label class="block text-xs mts-muted">
+          {{ t('accountSessionRenewPasswordPlaceholder') }}
+          <input
+            v-model="renewPassword"
+            type="password"
+            autocomplete="current-password"
+            class="mts-input mt-1"
+            data-testid="account-session-renew-password"
+            :disabled="renewLoading"
+          />
+        </label>
+        <label class="block text-xs mts-muted">
+          {{ t('accountSessionRenewTtlLabel') }}
+          <select v-model.number="renewTtlSeconds" class="mts-input mt-1" data-testid="account-session-renew-ttl" :disabled="renewLoading">
+            <option :value="12 * 3600">{{ t('accountSessionRenewTtl12h') }}</option>
+            <option :value="24 * 3600">{{ t('accountSessionRenewTtl24h') }}</option>
+            <option :value="7 * 24 * 3600">{{ t('accountSessionRenewTtl7d') }}</option>
+          </select>
+        </label>
+        <p v-if="renewError" class="text-xs text-red-600 dark:text-red-300" data-testid="account-session-renew-error">{{ renewError }}</p>
+        <button
+          type="submit"
+          class="mts-btn-primary"
+          data-testid="account-session-renew-submit"
+          :disabled="renewLoading || !renewPassword"
+        >
+          {{ renewLoading ? t('accountSessionRenewBusy') : t('accountSessionRenewSubmit') }}
+        </button>
+      </form>
     </div>
 
     <div class="mts-card p-4">
