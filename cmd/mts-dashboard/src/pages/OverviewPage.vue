@@ -7,6 +7,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { adminOpKindLabelKey, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
@@ -61,7 +62,13 @@ interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[] }
 
 const { isAdmin, getTokenExpiresAt } = useAuth()
-const { adminOpBusy, setAdminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, setAdminOpBusy, applyAdminOpStatus } = useAdminOpBusy()
+const adminOpBusyChipLabel = computed(() => {
+  if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
+  const key = adminOpKindLabelKey(adminOpKind.value) as import('@/i18n/messages').MessageKey
+  const kind = t.value(key) || t.value('adminOpKindGeneric')
+  return `${t.value('opsAdminBusyChip')}: ${kind}`
+})
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
@@ -309,7 +316,7 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
     case 'maintenance': {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
-      setAdminOpBusy(Boolean(v.admin_op_busy))
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'maintErrors': {
@@ -1119,7 +1126,7 @@ async function copyOverview() {
             class="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
             data-testid="overview-admin-busy"
             :title="t('opsAdminBusy')"
-          >{{ t('opsAdminBusyChip') }}</span>
+          >{{ adminOpBusyChipLabel }}</span>
         </div>
         <EmptyState
           v-if="!maintenanceStats"

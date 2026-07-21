@@ -118,11 +118,15 @@ export interface MaintenanceStats {
 export interface MaintenanceStatsResponse {
   stats: MaintenanceStats
   admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
 }
 
 /** GET /api/v1/admin/ops-status 轻量互斥状态，供 Dashboard 高频轮询 */
 export interface OpsStatusResponse {
   admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
 }
 
 export interface StorageMemorySnapshot {

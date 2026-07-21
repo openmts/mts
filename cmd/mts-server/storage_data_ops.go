@@ -37,7 +37,7 @@ func (r *serverRuntime) storageDataSnapshot(ctx context.Context, flush bool) (st
 	if err := ctx.Err(); err != nil {
 		return storageDataSnapshotResponse{}, err
 	}
-	if err := r.tryBeginAdminHeavy(); err != nil {
+	if err := r.tryBeginAdminHeavy("data_snapshot"); err != nil {
 		return storageDataSnapshotResponse{}, err
 	}
 	defer r.endAdminHeavy()
@@ -71,7 +71,7 @@ func (r *serverRuntime) storageRestoreDrill(ctx context.Context, sourcePath stri
 	if err := ctx.Err(); err != nil {
 		return storageRestoreDrillResponse{}, err
 	}
-	if err := r.tryBeginAdminHeavy(); err != nil {
+	if err := r.tryBeginAdminHeavy("restore_drill"); err != nil {
 		return storageRestoreDrillResponse{}, err
 	}
 	defer r.endAdminHeavy()

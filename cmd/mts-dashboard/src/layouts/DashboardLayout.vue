@@ -34,6 +34,8 @@ import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { adminOpKindLabelKey } from '@/utils/adminOpBusy'
+import { formatMessage } from '@/utils/formatMessage'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { shouldSyncOnVisibility } from '@/utils/pageVisibilitySync'
@@ -43,7 +45,22 @@ const { t } = useI18n()
 const { offline, sessionWriteBlocked, sessionRemainingLabel, sessionUrgency } = useMutationGuard()
 const { sync: syncNetworkStatus } = useNetworkStatus()
 const { logout, isAdmin } = useAuth()
-const { adminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, adminOpStartedAtUnix, refreshAdminOpBusy } = useAdminOpBusy()
+
+const adminOpBusyDetail = computed(() => {
+  if (!adminOpBusy.value) return ''
+  const opKey = adminOpKindLabelKey(adminOpKind.value) as MessageKey
+  const opLabel = t.value(opKey) || t.value('adminOpKindGeneric')
+  const started = adminOpStartedAtUnix.value
+  let elapsed = '—'
+  if (started && started > 0) {
+    const sec = Math.max(0, Math.floor(Date.now() / 1000) - started)
+    if (sec < 60) elapsed = `${sec}s`
+    else if (sec < 3600) elapsed = `${Math.floor(sec / 60)}m${sec % 60}s`
+    else elapsed = `${Math.floor(sec / 3600)}h${Math.floor((sec % 3600) / 60)}m`
+  }
+  return formatMessage(t.value('adminOpBusyBannerDetail'), { op: String(opLabel), elapsed })
+})
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 
 function retryNetworkStatus() {
@@ -372,6 +389,7 @@ function onSkipToMain(e: Event) {
         <div class="min-w-0">
           <span class="font-semibold">{{ t('adminOpBusyBannerTitle') }}</span>
           <span class="ml-1">{{ t('adminOpBusyBanner') }}</span>
+          <span v-if="adminOpBusyDetail" class="ml-1 font-medium" data-testid="admin-op-busy-detail">{{ adminOpBusyDetail }}</span>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-2">
           <button

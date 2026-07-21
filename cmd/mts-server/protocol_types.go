@@ -88,13 +88,17 @@ type deleteRequest struct {
 }
 
 type maintenanceStatsResponse struct {
-	Stats       mts.MaintenanceStats `json:"stats"`
-	AdminOpBusy bool                 `json:"admin_op_busy"`
+	Stats         mts.MaintenanceStats `json:"stats"`
+	AdminOpBusy   bool                 `json:"admin_op_busy"`
+	Op            string               `json:"op,omitempty"`
+	StartedAtUnix int64                `json:"started_at_unix,omitempty"`
 }
 
 // opsStatusResponse 轻量运维互斥状态，供 Dashboard 高频轮询。
 type opsStatusResponse struct {
-	AdminOpBusy bool `json:"admin_op_busy"`
+	AdminOpBusy   bool   `json:"admin_op_busy"`
+	Op            string `json:"op,omitempty"`
+	StartedAtUnix int64  `json:"started_at_unix,omitempty"`
 }
 
 type userResponse struct {

@@ -1366,3 +1366,7 @@
 - Dashboard：`useAdminOpBusy` 增加 `setAdminOpBusy` / `markAdminOpBusyAndRefresh`；轮询改走 ops-status
 - Ops/Storage/Overview：去掉本地 busy ref 与重复 maintenance 拉取；乐观置位写共享态
 - e2e：运维页空闲时确认无 `admin-op-busy-banner`
+
+## P318（2026-07-22）
+- Server：`tryBeginAdminHeavy(op)` 记录 `op` + `started_at_unix`；`ops-status`/`stats/maintenance` 同步返回
+- Dashboard：共享态携带 kind/开始时间；Layout 横幅详情、Ops/Overview chip 展示当前操作类型

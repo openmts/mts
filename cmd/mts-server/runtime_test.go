@@ -268,6 +268,9 @@ func TestRuntimeMaintenanceStatsPayloadBusy(t *testing.T) {
 	if !runtime.opsStatusPayload().AdminOpBusy {
 		t.Fatal("opsStatus AdminOpBusy want true while held")
 	}
+	if st := runtime.opsStatusPayload(); st.Op != "maintenance" || st.StartedAtUnix <= 0 {
+		t.Fatalf("opsStatus while held = %+v", st)
+	}
 	runtime.endMaintenance()
 	payload = runtime.maintenanceStatsPayload()
 	if payload.AdminOpBusy {
@@ -275,6 +278,9 @@ func TestRuntimeMaintenanceStatsPayloadBusy(t *testing.T) {
 	}
 	if runtime.opsStatusPayload().AdminOpBusy {
 		t.Fatal("opsStatus AdminOpBusy want false after end")
+	}
+	if st := runtime.opsStatusPayload(); st.Op != "" || st.StartedAtUnix != 0 {
+		t.Fatalf("opsStatus after end = %+v", st)
 	}
 }
 
@@ -292,7 +298,7 @@ func TestRuntimeAdminHeavySharedMutex(t *testing.T) {
 		_ = runtime.engine.Close(context.Background())
 	})
 
-	if err := runtime.tryBeginAdminHeavy(); err != nil {
+	if err := runtime.tryBeginAdminHeavy("test"); err != nil {
 		t.Fatalf("hold heavy: %v", err)
 	}
 	// storage snapshot should fail while held

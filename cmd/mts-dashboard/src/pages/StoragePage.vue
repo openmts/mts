@@ -302,7 +302,7 @@ async function doValidate() {
 
 async function doSnapshot() {
   if (!guardAdminHeavy()) return
-  setAdminOpBusy(true)
+  setAdminOpBusy(true, 'config_snapshot')
   const signal = beginStorageAction('snapshot')
   try {
     snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot', undefined, { signal })
@@ -318,7 +318,7 @@ async function doSnapshot() {
 
 async function doDataSnapshot() {
   if (!guardAdminHeavy()) return
-  setAdminOpBusy(true)
+  setAdminOpBusy(true, 'data_snapshot')
   const signal = beginStorageAction('data-snapshot')
   try {
     dataSnapshotResult.value = await apiPost<DataSnapshotResponse>('/api/v1/admin/storage/data-snapshot', { flush: true }, { signal })
@@ -335,7 +335,7 @@ async function doDataSnapshot() {
 
 async function doRestoreDrill() {
   if (!guardAdminHeavy()) return
-  setAdminOpBusy(true)
+  setAdminOpBusy(true, 'restore_drill')
   const signal = beginStorageAction('restore-drill')
   try {
     const source = selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || ''

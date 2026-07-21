@@ -36,6 +36,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { adminOpKindLabelKey, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -59,7 +60,14 @@ const {
   runJSONExport,
 } = useExportJob()
 const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz } = useServerReachability()
-const { adminOpBusy, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, setAdminOpBusy, refreshAdminOpBusy, applyAdminOpStatus } = useAdminOpBusy()
+const adminOpBusyChipLabel = computed(() => {
+  if (confirmLoading.value) return t.value('opsAdminBusyChip')
+  if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
+  const key = adminOpKindLabelKey(adminOpKind.value) as import('@/i18n/messages').MessageKey
+  const kind = t.value(key) || t.value('adminOpKindGeneric')
+  return `${t.value('opsAdminBusyChip')}: ${kind}`
+})
 const statsLoadedAt = ref<number | null>(null)
 const loadError = ref('')
 const partialStatsError = ref('')
@@ -153,7 +161,7 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
     case 'maintenance': {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
-      setAdminOpBusy(Boolean(v.admin_op_busy))
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'compaction': {
@@ -340,7 +348,7 @@ async function runConfirmed() {
   }
   const kind = confirmKind.value
   confirmLoading.value = true
-  setAdminOpBusy(true)
+  setAdminOpBusy(true, kind)
   opsActionStartedAt.value = Date.now()
   clearActionResult()
   const signal = opsActionAbort.begin()
@@ -698,7 +706,7 @@ watch(
             class="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
             data-testid="ops-admin-busy"
             :title="t('opsAdminBusy')"
-          >{{ t('opsAdminBusyChip') }}</span>
+          >{{ adminOpBusyChipLabel }}</span>
           <span class="text-xs mts-muted" data-testid="ops-status-stats-at">{{ statsLoadedLabel }}</span>
           <span
             v-if="loading || reachChecking"

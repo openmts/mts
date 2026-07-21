@@ -17,21 +17,23 @@ import (
 )
 
 type serverRuntime struct {
-	mu              sync.RWMutex
-	config          config
-	logger          *slog.Logger
-	metrics         *serverMetrics
-	audit           *auditLog
-	httpSem         chan struct{}
-	grpcSem         chan struct{}
-	requestSeq      atomic.Uint64
-	maintenanceBusy atomic.Bool
-	engine          *mts.Engine
-	httpServer      *http.Server
-	grpcServer      *grpc.Server
-	httpLn          net.Listener
-	grpcLn          net.Listener
-	serveErr        chan error
+	mu                     sync.RWMutex
+	config                 config
+	logger                 *slog.Logger
+	metrics                *serverMetrics
+	audit                  *auditLog
+	httpSem                chan struct{}
+	grpcSem                chan struct{}
+	requestSeq             atomic.Uint64
+	maintenanceBusy        atomic.Bool
+	maintenanceOp          atomic.Value // string
+	maintenanceStartedUnix atomic.Int64
+	engine                 *mts.Engine
+	httpServer             *http.Server
+	grpcServer             *grpc.Server
+	httpLn                 net.Listener
+	grpcLn                 net.Listener
+	serveErr               chan error
 }
 
 func openRuntime(ctx context.Context, cfg config) (*serverRuntime, error) {
@@ -315,19 +317,26 @@ func (r *serverRuntime) queryStats() mts.QueryStats {
 }
 
 // tryBeginAdminHeavy 串行化 flush/compact/retention 与 storage 重操作，避免 Dashboard 并发压垮引擎/磁盘。
-func (r *serverRuntime) tryBeginAdminHeavy() error {
+func (r *serverRuntime) tryBeginAdminHeavy(op string) error {
 	if !r.maintenanceBusy.CompareAndSwap(false, true) {
 		return newAPIError(errorCodeResourceExhausted, "admin heavy operation already in progress", mts.ErrEngineBusy)
 	}
+	if op == "" {
+		op = "admin_heavy"
+	}
+	r.maintenanceOp.Store(op)
+	r.maintenanceStartedUnix.Store(time.Now().Unix())
 	return nil
 }
 
 func (r *serverRuntime) endAdminHeavy() {
 	r.maintenanceBusy.Store(false)
+	r.maintenanceOp.Store("")
+	r.maintenanceStartedUnix.Store(0)
 }
 
 // 兼容旧名（运维路径）。
-func (r *serverRuntime) tryBeginMaintenance() error { return r.tryBeginAdminHeavy() }
+func (r *serverRuntime) tryBeginMaintenance() error { return r.tryBeginAdminHeavy("maintenance") }
 
 func (r *serverRuntime) endMaintenance() { r.endAdminHeavy() }
 
@@ -335,7 +344,7 @@ func (r *serverRuntime) flush(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := r.tryBeginAdminHeavy(); err != nil {
+	if err := r.tryBeginAdminHeavy("flush"); err != nil {
 		return err
 	}
 	defer r.endAdminHeavy()
@@ -346,7 +355,7 @@ func (r *serverRuntime) compact(ctx context.Context) (mts.CompactionResult, erro
 	if err := ctx.Err(); err != nil {
 		return mts.CompactionResult{}, err
 	}
-	if err := r.tryBeginAdminHeavy(); err != nil {
+	if err := r.tryBeginAdminHeavy("compact"); err != nil {
 		return mts.CompactionResult{}, err
 	}
 	defer r.endAdminHeavy()
@@ -357,7 +366,7 @@ func (r *serverRuntime) applyRetention(ctx context.Context, req retentionApplyRe
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := r.tryBeginAdminHeavy(); err != nil {
+	if err := r.tryBeginAdminHeavy("retention"); err != nil {
 		return err
 	}
 	defer r.endAdminHeavy()
@@ -386,14 +395,31 @@ func (r *serverRuntime) maintenanceStats() mts.MaintenanceStats {
 }
 
 func (r *serverRuntime) maintenanceStatsPayload() maintenanceStatsResponse {
+	busy, op, started := r.adminHeavyState()
 	return maintenanceStatsResponse{
-		Stats:       r.maintenanceStats(),
-		AdminOpBusy: r.maintenanceBusy.Load(),
+		Stats:         r.maintenanceStats(),
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
 	}
 }
 
 func (r *serverRuntime) opsStatusPayload() opsStatusResponse {
-	return opsStatusResponse{AdminOpBusy: r.maintenanceBusy.Load()}
+	busy, op, started := r.adminHeavyState()
+	return opsStatusResponse{AdminOpBusy: busy, Op: op, StartedAtUnix: started}
+}
+
+func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
+	busy = r.maintenanceBusy.Load()
+	if v := r.maintenanceOp.Load(); v != nil {
+		op, _ = v.(string)
+	}
+	startedAtUnix = r.maintenanceStartedUnix.Load()
+	if !busy {
+		op = ""
+		startedAtUnix = 0
+	}
+	return busy, op, startedAtUnix
 }
 
 func (r *serverRuntime) health() mts.HealthSnapshot {

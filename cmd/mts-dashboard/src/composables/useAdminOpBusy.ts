@@ -2,26 +2,35 @@ import { computed, onBeforeUnmount, onMounted, ref, type ComputedRef, type Ref }
 import { apiGetSilent } from '@/api/client'
 import type { OpsStatusResponse } from '@/api/types'
 import { useAuth } from '@/composables/useAuth'
-import { parseAdminOpBusyPayload, shouldPollAdminOpBusy } from '@/utils/adminOpBusy'
+import {
+  parseAdminOpStatusPayload,
+  shouldPollAdminOpBusy,
+  type AdminOpStatus,
+} from '@/utils/adminOpBusy'
 
 const DEFAULT_INTERVAL_MS = 15_000
 
 interface SharedAdminOpBusy {
-  busy: Ref<boolean>
+  status: Ref<AdminOpStatus>
   lastCheckedAt: Ref<number | null>
   checking: Ref<boolean>
   error: Ref<string>
   refresh: () => Promise<void>
-  setBusy: (v: boolean) => void
-  markBusyAndRefresh: () => void
+  setBusy: (v: boolean, op?: string) => void
+  markBusyAndRefresh: (op?: string) => void
+  applyStatus: (s: AdminOpStatus) => void
   retain: () => void
   release: () => void
 }
 
 let shared: SharedAdminOpBusy | null = null
 
+function emptyStatus(): AdminOpStatus {
+  return { busy: false, op: '', startedAtUnix: null }
+}
+
 function createShared(intervalMs: number): SharedAdminOpBusy {
-  const busy = ref(false)
+  const status = ref<AdminOpStatus>(emptyStatus())
   const lastCheckedAt = ref<number | null>(null)
   const checking = ref(false)
   const error = ref('')
@@ -30,13 +39,29 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
   let abort: AbortController | null = null
   const { isAdmin, isAuthenticated } = useAuth()
 
-  function setBusy(v: boolean) {
-    busy.value = Boolean(v)
+  function applyStatus(s: AdminOpStatus) {
+    status.value = {
+      busy: Boolean(s.busy),
+      op: s.busy ? (s.op || '') : '',
+      startedAtUnix: s.busy ? s.startedAtUnix : null,
+    }
+  }
+
+  function setBusy(v: boolean, op?: string) {
+    if (!v) {
+      applyStatus(emptyStatus())
+      return
+    }
+    applyStatus({
+      busy: true,
+      op: (op || status.value.op || '').trim(),
+      startedAtUnix: status.value.startedAtUnix ?? Math.floor(Date.now() / 1000),
+    })
   }
 
   async function refresh() {
     if (!shouldPollAdminOpBusy(isAuthenticated.value, isAdmin.value)) {
-      busy.value = false
+      applyStatus(emptyStatus())
       error.value = ''
       return
     }
@@ -50,7 +75,7 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
         signal,
       })
       if (signal.aborted) return
-      busy.value = parseAdminOpBusyPayload(v)
+      applyStatus(parseAdminOpStatusPayload(v))
       lastCheckedAt.value = Date.now()
       error.value = ''
     } catch (e) {
@@ -62,8 +87,8 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
     }
   }
 
-  function markBusyAndRefresh() {
-    setBusy(true)
+  function markBusyAndRefresh(op?: string) {
+    setBusy(true, op)
     void refresh()
   }
 
@@ -95,13 +120,14 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
   }
 
   return {
-    busy,
+    status,
     lastCheckedAt,
     checking,
     error,
     refresh,
     setBusy,
     markBusyAndRefresh,
+    applyStatus,
     retain,
     release,
   }
@@ -117,24 +143,30 @@ function getShared(intervalMs?: number): SharedAdminOpBusy {
 /** 管理员会话内静默轮询 admin_op_busy（不触发全局 loading）。 */
 export function useAdminOpBusy(opts?: { intervalMs?: number }): {
   adminOpBusy: ComputedRef<boolean>
+  adminOpKind: ComputedRef<string>
+  adminOpStartedAtUnix: ComputedRef<number | null>
   adminOpBusyChecking: Ref<boolean>
   adminOpBusyError: Ref<string>
   adminOpBusyCheckedAt: Ref<number | null>
   refreshAdminOpBusy: () => Promise<void>
-  setAdminOpBusy: (v: boolean) => void
-  markAdminOpBusyAndRefresh: () => void
+  setAdminOpBusy: (v: boolean, op?: string) => void
+  markAdminOpBusyAndRefresh: (op?: string) => void
+  applyAdminOpStatus: (s: AdminOpStatus) => void
 } {
   const s = getShared(opts?.intervalMs)
   onMounted(() => s.retain())
   onBeforeUnmount(() => s.release())
   return {
-    adminOpBusy: computed(() => s.busy.value),
+    adminOpBusy: computed(() => s.status.value.busy),
+    adminOpKind: computed(() => s.status.value.op),
+    adminOpStartedAtUnix: computed(() => s.status.value.startedAtUnix),
     adminOpBusyChecking: s.checking,
     adminOpBusyError: s.error,
     adminOpBusyCheckedAt: s.lastCheckedAt,
     refreshAdminOpBusy: s.refresh,
     setAdminOpBusy: s.setBusy,
     markAdminOpBusyAndRefresh: s.markBusyAndRefresh,
+    applyAdminOpStatus: s.applyStatus,
   }
 }
 
