@@ -209,13 +209,19 @@ defineExpose({ focusFilter, clearFilter })
         </button>
       </div>
       <nav class="flex-1 space-y-0.5 overflow-auto p-2" :aria-label="t('appName')" data-testid="sidebar-nav">
-        <p
+        <div
           v-if="!collapsed && navFilter.trim() && !filteredNavItems.length"
-          class="px-2 py-3 text-center text-xs text-slate-400 dark:text-slate-500"
+          class="px-2 py-3 text-center"
           data-testid="sidebar-filter-empty"
         >
-          {{ t('sidebarFilterEmpty') }}
-        </p>
+          <p class="text-xs text-slate-400 dark:text-slate-500">{{ t('sidebarFilterEmpty') }}</p>
+          <button
+            type="button"
+            class="mts-btn mt-2 w-full justify-center text-[11px]"
+            data-testid="sidebar-clear-filter"
+            @click="clearFilter"
+          >{{ t('sidebarClearFilter') }}</button>
+        </div>
         <div
           v-for="group in navGroups"
           :key="group.id"

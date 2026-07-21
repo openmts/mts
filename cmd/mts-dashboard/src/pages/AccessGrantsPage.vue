@@ -399,9 +399,19 @@ watch(
 
     <div v-if="!loading && !filtered.length" class="mts-card">
       <EmptyState
-        :title="t('accessGrantsEmpty')"
-        :description="t('accessGrantsEmptyDesc')"
-      />
+        data-testid="access-grants-empty"
+        :title="rows.length ? t('accessGrantsFilterEmpty') : t('accessGrantsEmpty')"
+        :description="rows.length ? t('accessGrantsFilterEmptyDesc') : t('accessGrantsEmptyDesc')"
+      >
+        <template v-if="rows.length" #action>
+          <button
+            type="button"
+            class="mts-btn-primary"
+            data-testid="access-grants-clear-filters"
+            @click="userFilter = ''; dbFilter = ''; permFilter = ''; q = ''"
+          >{{ t('clearFilters') }}</button>
+        </template>
+      </EmptyState>
     </div>
         <div v-else class="mts-card overflow-hidden p-0" data-testid="access-grants-table-wrap">
       <div

@@ -597,7 +597,11 @@ watch(
         data-testid="ops-maint-errors-filter-empty"
         :title="t('opsMaintErrorsFilterEmpty')"
         :description="t('opsNoMaintErrorsDesc')"
-      />
+      >
+        <template #action>
+          <button type="button" class="mts-btn-primary" data-testid="ops-maint-errors-clear-filters" @click="maintErrorFilter = ''">{{ t('clearFilters') }}</button>
+        </template>
+      </EmptyState>
       <div v-else class="overflow-hidden rounded-lg border border-red-100 dark:border-red-900/40" data-testid="ops-maint-errors">
         <VirtualTable
           :items="filteredMaintenanceErrors"
@@ -756,7 +760,16 @@ watch(
         data-testid="ops-action-filter-empty"
         :title="t('opsActionFilterEmpty')"
         :description="t('opsLogEmptyDesc')"
-      />
+      >
+        <template #action>
+          <button
+            type="button"
+            class="mts-btn-primary"
+            data-testid="ops-action-clear-filters"
+            @click="actionKindFilter = 'all'; actionStatusFilter = 'all'; actionTextFilter = ''"
+          >{{ t('clearFilters') }}</button>
+        </template>
+      </EmptyState>
       <div v-else class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
         <VirtualTable
           :items="filteredActionLog"

@@ -103,7 +103,11 @@ const canGrant = computed(() => props.grantDbs.length > 0 && props.grantPerms.le
             data-testid="user-grant-db-empty"
             :title="t('grantDbFilterEmpty')"
             :description="t('grantDbFilterEmptyDesc')"
-          />
+          >
+            <template v-if="databases.length" #action>
+              <button type="button" class="mts-btn-primary" data-testid="user-grant-db-clear-filters" @click="dbFilter = ''">{{ t('clearFilters') }}</button>
+            </template>
+          </EmptyState>
           <label v-for="db in filteredDatabases" :key="db" class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
             <input type="checkbox" :checked="grantDbs.includes(db)" :data-testid="`user-grant-db-${db}`" @change="emit('toggle-db', db)" />
             {{ db }}

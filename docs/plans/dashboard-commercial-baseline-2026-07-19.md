@@ -1255,3 +1255,9 @@
 
 ## P292（2026-07-22）
 - Series 服务端分页：Query 加载更多 + 服务端筛选 q；Databases 加载更多；对齐 offset/q 契约
+
+## P293（2026-07-22）
+- 剩余筛选空态清除 CTA：Databases / AccessGrants / UserGrant / Ops / NotifyHistory / Sidebar
+
+## P294（2026-07-22）
+- Databases series：本地筛选 + 服务端 q + 空态清除；抽取 `seriesFilter` 可测工具

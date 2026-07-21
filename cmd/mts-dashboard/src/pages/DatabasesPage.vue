@@ -11,6 +11,7 @@ import {
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { listDatabases, listMeasurements, listRetentionPolicies, listSeriesDetailed } from '@/api/meta'
 import { seriesLabel } from '@/utils/seriesMeta'
+import { filterSeriesListLocal } from '@/utils/seriesFilter'
 import { formatMessage } from '@/utils/formatMessage'
 import {
   Plus, Trash2, ChevronDown, ChevronRight, Table2, Tag, Clock, Download,
@@ -66,6 +67,8 @@ interface MeasurementEntry {
   seriesOffset: number
   seriesHasMore: boolean
   seriesLoadingMore: boolean
+  seriesQuery: string
+  seriesLocalFilter: string
 }
 interface DatabaseEntry {
   name: string
@@ -252,6 +255,8 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
       seriesOffset: 0,
       seriesHasMore: false,
       seriesLoadingMore: false,
+      seriesQuery: '',
+      seriesLocalFilter: '',
     }))
     db.retentionPolicies = rps.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
     db.loaded = true
@@ -286,7 +291,7 @@ async function loadMeasurementDetails(meas: MeasurementEntry, dbName: string) {
   try {
     const [fieldsData, seriesResult] = await Promise.all([
       apiGet<FieldsResponse>(`/api/v1/data/databases/${encodeURIComponent(dbName)}/measurements/${encodeURIComponent(meas.name)}/fields`),
-      listSeriesDetailed(dbName, meas.name, { limit: SERIES_CAP, offset: 0 }),
+      listSeriesDetailed(dbName, meas.name, { limit: SERIES_CAP, offset: 0, q: meas.seriesQuery || undefined }),
     ])
     meas.fields = fieldsData.fields ?? []
     meas.series = (seriesResult.series as Series[]).map((s) => ({
@@ -317,6 +322,7 @@ async function loadMoreSeries(meas: MeasurementEntry, dbName: string) {
     const seriesResult = await listSeriesDetailed(dbName, meas.name, {
       limit: SERIES_CAP,
       offset: meas.seriesOffset,
+      q: meas.seriesQuery || undefined,
     })
     const mapped = (seriesResult.series as Series[]).map((s) => ({
       id: s.id ?? 0,
@@ -340,6 +346,18 @@ async function loadMoreSeries(meas: MeasurementEntry, dbName: string) {
   } finally {
     meas.seriesLoadingMore = false
   }
+}
+
+
+function filteredSeriesOf(meas: MeasurementEntry): Series[] {
+  return filterSeriesListLocal(meas.series, meas.seriesLocalFilter)
+}
+
+async function applySeriesServerFilter(meas: MeasurementEntry, dbName: string) {
+  meas.seriesQuery = (meas.seriesLocalFilter || '').trim()
+  meas.seriesOffset = 0
+  meas.seriesHasMore = false
+  await loadMeasurementDetails(meas, dbName)
 }
 
 async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
@@ -725,7 +743,10 @@ onBeforeUnmount(() => {
         :title="databases.length ? t('databasesFilterEmpty') : t('databasesEmpty')"
         :description="databases.length ? t('databasesFilterEmptyDesc') : t('databasesEmptyDesc')"
       >
-        <template v-if="!databases.length && isAdmin" #action>
+        <template v-if="databases.length" #action>
+          <button type="button" class="mts-btn-primary" data-testid="databases-clear-filters" @click="dbFilter = ''">{{ t('clearFilters') }}</button>
+        </template>
+        <template v-else-if="isAdmin" #action>
           <button type="button" class="mts-btn-primary" data-testid="databases-empty-create" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="createDatabase">{{ t('databasesCreate') }}</button>
         </template>
       </EmptyState>
@@ -846,7 +867,11 @@ onBeforeUnmount(() => {
             data-testid="databases-meas-empty-filter"
             :title="t('databasesMeasFilterEmpty')"
             :description="t('databasesMeasFilterEmptyDesc')"
-          />
+          >
+            <template #action>
+              <button type="button" class="mts-btn-primary" data-testid="databases-meas-clear-filters" @click="measFilter = ''">{{ t('clearFilters') }}</button>
+            </template>
+          </EmptyState>
           <div v-for="meas in filteredMeasurements" :key="meas.name" class="mb-2 rounded border border-slate-100 dark:border-slate-800">
             <div class="flex flex-wrap items-center justify-between gap-1">
               <button
@@ -891,8 +916,26 @@ onBeforeUnmount(() => {
                   <span v-if="!meas.fields.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
                 </div>
                 <p class="mb-1 font-medium text-slate-500 dark:text-slate-400">{{ t('databasesSeries') }}</p>
+                <div class="mb-1 flex flex-wrap items-center gap-1">
+                  <input
+                    v-model="meas.seriesLocalFilter"
+                    type="search"
+                    class="mts-input min-w-[10rem] flex-1 text-[11px]"
+                    :data-testid="`databases-series-filter-${meas.name}`"
+                    :placeholder="t('databasesSeriesFilterPh')"
+                    :disabled="meas.loading || meas.seriesLoadingMore"
+                    @keydown.enter.prevent="applySeriesServerFilter(meas, activeDatabase.name)"
+                  />
+                  <button
+                    type="button"
+                    class="mts-btn text-[11px]"
+                    :data-testid="`databases-series-server-filter-${meas.name}`"
+                    :disabled="meas.loading || meas.seriesLoadingMore"
+                    @click="applySeriesServerFilter(meas, activeDatabase.name)"
+                  >{{ t('databasesSeriesServerFilter') }}</button>
+                </div>
                 <div class="space-y-1" data-testid="databases-series-list">
-                  <div v-for="s in meas.series" :key="s.id" class="flex flex-wrap items-center gap-1">
+                  <div v-for="s in filteredSeriesOf(meas)" :key="s.id" class="flex flex-wrap items-center gap-1">
                     <Tag class="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" />
                     <span class="min-w-0 flex-1 font-mono">{{ seriesLabel(s) }}</span>
                     <button
@@ -903,6 +946,19 @@ onBeforeUnmount(() => {
                     >{{ t('query') }}</button>
                   </div>
                   <span v-if="!meas.series.length" class="text-slate-400 dark:text-slate-500">{{ t('databasesNone') }}</span>
+                  <div
+                    v-else-if="!filteredSeriesOf(meas).length"
+                    class="space-y-1"
+                    :data-testid="`databases-series-filter-empty-${meas.name}`"
+                  >
+                    <span class="text-slate-400 dark:text-slate-500">{{ t('databasesSeriesFilterEmpty') }}</span>
+                    <button
+                      type="button"
+                      class="mts-btn block text-[11px]"
+                      :data-testid="`databases-series-clear-filters-${meas.name}`"
+                      @click="meas.seriesLocalFilter = ''; meas.seriesQuery = ''; loadMeasurementDetails(meas, activeDatabase.name)"
+                    >{{ t('clearFilters') }}</button>
+                  </div>
                   <p
                     v-if="meas.seriesTruncated || meas.seriesHasMore"
                     class="text-[11px] text-amber-700 dark:text-amber-200"

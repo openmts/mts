@@ -421,14 +421,23 @@ onBeforeUnmount(() => {
       <div class="flex min-h-0 flex-1 flex-col" data-testid="notify-history-list">
         <div
           v-if="!entries.length"
-          class="px-2 py-8 text-center text-sm mts-muted"
+          class="px-2 py-8 text-center"
           data-testid="notify-history-empty"
         >
-          {{
-            history.length && hasActiveFilter
-              ? t('notifyHistoryFilterEmpty')
-              : t('notifyHistoryEmpty')
-          }}
+          <p class="text-sm font-medium text-slate-700 dark:text-slate-200">
+            {{
+              history.length && hasActiveFilter
+                ? t('notifyHistoryFilterEmpty')
+                : t('notifyHistoryEmpty')
+            }}
+          </p>
+          <button
+            v-if="history.length && hasActiveFilter"
+            type="button"
+            class="mts-btn-primary mt-3 text-xs"
+            data-testid="notify-history-empty-clear-filters"
+            @click="clearTimeFilter(); kindFilter = 'all'; searchQuery = ''"
+          >{{ t('clearFilters') }}</button>
         </div>
         <template v-else>
           <VirtualTable
