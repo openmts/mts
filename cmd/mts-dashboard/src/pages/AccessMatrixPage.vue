@@ -35,6 +35,7 @@ import {
   saveSortState,
   sortByAccessor,
   type SortState,
+  ariaSortValue,
 } from '@/utils/listSort'
 
 const route = useRoute()
@@ -332,8 +333,8 @@ async function exportMatrixCSV() {
         @clear="clearSelection"
       >
         <template #actions>
-          <button type="button" class="mts-btn" data-testid="access-matrix-sort-area" :title="t('listSortBy')" @click="cycleMatrixSort('area')">{{ t('accessMatrixColArea') }} {{ sortIndicator('area') }}</button>
-          <button type="button" class="mts-btn" data-testid="access-matrix-sort-capability" :title="t('listSortBy')" @click="cycleMatrixSort('capability')">{{ t('accessMatrixColCapability') }} {{ sortIndicator('capability') }}</button>
+          <button type="button" class="mts-btn" data-testid="access-matrix-sort-area" :title="t('listSortBy')" @click="cycleMatrixSort('area')" :aria-sort="ariaSortValue(matrixSort, 'area')">{{ t('accessMatrixColArea') }} {{ sortIndicator('area') }}</button>
+          <button type="button" class="mts-btn" data-testid="access-matrix-sort-capability" :title="t('listSortBy')" @click="cycleMatrixSort('capability')" :aria-sort="ariaSortValue(matrixSort, 'capability')">{{ t('accessMatrixColCapability') }} {{ sortIndicator('capability') }}</button>
         </template>
       </ListSelectionToolbar>
     </div>
@@ -360,27 +361,27 @@ async function exportMatrixCSV() {
             />
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-area-col" @click="cycleMatrixSort('area')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-area-col" @click="cycleMatrixSort('area')" :aria-sort="ariaSortValue(matrixSort, 'area')">
               {{ t('accessMatrixColArea') }} <span aria-hidden="true">{{ sortIndicator('area') }}</span>
             </button>
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-capability-col" @click="cycleMatrixSort('capability')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-capability-col" @click="cycleMatrixSort('capability')" :aria-sort="ariaSortValue(matrixSort, 'capability')">
               {{ t('accessMatrixColCapability') }} <span aria-hidden="true">{{ sortIndicator('capability') }}</span>
             </button>
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-admin-col" @click="cycleMatrixSort('admin')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-admin-col" @click="cycleMatrixSort('admin')" :aria-sort="ariaSortValue(matrixSort, 'admin')">
               {{ t('roleAdmin') }} <span aria-hidden="true">{{ sortIndicator('admin') }}</span>
             </button>
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-user-col" @click="cycleMatrixSort('user')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-user-col" @click="cycleMatrixSort('user')" :aria-sort="ariaSortValue(matrixSort, 'user')">
               {{ t('roleUser') }} <span aria-hidden="true">{{ sortIndicator('user') }}</span>
             </button>
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-route-col" @click="cycleMatrixSort('route')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-matrix-sort-route-col" @click="cycleMatrixSort('route')" :aria-sort="ariaSortValue(matrixSort, 'route')">
               {{ t('accessMatrixColRoute') }} <span aria-hidden="true">{{ sortIndicator('route') }}</span>
             </button>
           </div>

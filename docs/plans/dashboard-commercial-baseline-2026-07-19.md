@@ -1164,3 +1164,5 @@
 ## P262（2026-07-21）
 - Overview 自动/手动刷新 a11y：`aria-pressed` / `aria-busy` + testid
 
+## P263（2026-07-21）
+- 列表排序 `aria-sort` + Ops/About 刷新 `aria-busy`

@@ -35,6 +35,7 @@ import {
   saveSortState,
   sortByAccessor,
   type SortState,
+  ariaSortValue,
 } from '@/utils/listSort'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
@@ -628,7 +629,7 @@ onBeforeUnmount(() => {
         @clear="clearSelection"
       >
         <template #actions>
-          <button type="button" class="mts-btn" data-testid="databases-sort-name" :title="t('listSortBy')" @click="cycleDbSort">{{ t('listSortBy') }} {{ dbSortIndicator() }}</button>
+          <button type="button" class="mts-btn" data-testid="databases-sort-name" :title="t('listSortBy')" @click="cycleDbSort" :aria-sort="ariaSortValue(dbSort, 'name')">{{ t('listSortBy') }} {{ dbSortIndicator() }}</button>
         </template>
       </ListSelectionToolbar>
     </div>

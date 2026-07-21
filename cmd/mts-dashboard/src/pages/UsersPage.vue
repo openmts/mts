@@ -35,6 +35,7 @@ import {
   saveSortState,
   sortByAccessor,
   type SortState,
+  ariaSortValue,
 } from '@/utils/listSort'
 import { USERS_CSV_HEADER, buildUsersExport, userToCSVLine, usersToCSV } from '@/utils/usersExport'
 import { parseUsersPrefill, usersFormToPrefill } from '@/utils/routePrefill'
@@ -743,17 +744,17 @@ onBeforeUnmount(() => {
             />
           </div>
           <div class="px-4 py-2.5">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-name" @click="cycleUserSort('name')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-name" @click="cycleUserSort('name')" :aria-sort="ariaSortValue(userSort, 'name')">
               {{ t('usersColUser') }} <span aria-hidden="true">{{ userSortIndicator('name') }}</span>
             </button>
           </div>
           <div class="px-4 py-2.5">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-role" @click="cycleUserSort('role')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-role" @click="cycleUserSort('role')" :aria-sort="ariaSortValue(userSort, 'role')">
               {{ t('usersColRole') }} <span aria-hidden="true">{{ userSortIndicator('role') }}</span>
             </button>
           </div>
           <div class="px-4 py-2.5">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-status" @click="cycleUserSort('status')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-status" @click="cycleUserSort('status')" :aria-sort="ariaSortValue(userSort, 'status')">
               {{ t('usersColStatus') }} <span aria-hidden="true">{{ userSortIndicator('status') }}</span>
             </button>
           </div>

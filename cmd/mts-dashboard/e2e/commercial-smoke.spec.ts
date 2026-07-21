@@ -570,6 +570,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-selection-toolbar')).toBeVisible()
   await expect(page.getByTestId('audit-select-all')).toBeVisible()
   await expect(page.getByTestId('audit-table')).toBeVisible()
+  await expect(page.getByTestId('audit-sort-time-col')).toHaveAttribute('aria-sort', /none|ascending|descending/)
   await expect(page.getByTestId('audit-table-header')).toBeVisible()
   // 空结果时空状态；有事件时虚拟列表
   const emptyBody = page.getByTestId('audit-empty-body')

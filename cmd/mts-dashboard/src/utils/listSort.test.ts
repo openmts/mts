@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   compareStrings,
+  ariaSortValue,
   cycleSortState,
   emptySortState,
   loadSortState,
@@ -62,3 +63,11 @@ test('parse/load/save sort prefs', () => {
   saveSortState(storage, 'k', emptySortState())
   assert.deepEqual(loadSortState(storage, 'k', allowed), emptySortState())
 })
+
+test('ariaSortValue maps sort state', () => {
+  assert.equal(ariaSortValue(emptySortState(), 'name'), 'none')
+  assert.equal(ariaSortValue({ key: 'name', dir: 'asc' }, 'name'), 'ascending')
+  assert.equal(ariaSortValue({ key: 'name', dir: 'desc' }, 'name'), 'descending')
+  assert.equal(ariaSortValue({ key: 'name', dir: 'asc' }, 'role'), 'none')
+})
+

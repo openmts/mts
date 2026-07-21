@@ -180,6 +180,7 @@ onMounted(() => {
             class="mts-btn"
             data-testid="about-server-refresh"
             :disabled="loading"
+            :aria-busy="loading ? 'true' : undefined"
             @click="loadVersion"
           >
             {{ loading ? t('loading') : t('refresh') }}

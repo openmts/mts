@@ -477,7 +477,7 @@ watch(
         <p class="text-xs mts-muted">{{ t('opsDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button type="button" class="mts-btn" :disabled="loading" data-testid="ops-refresh" @click="loadStats">
+        <button type="button" class="mts-btn" :disabled="loading" data-testid="ops-refresh" @click="loadStats" :aria-busy="loading ? 'true' : undefined">
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
         </button>
         <button type="button" class="mts-btn" data-testid="ops-export-stats" :disabled="exportBusy" @click="exportStats">
@@ -541,7 +541,7 @@ watch(
         <button type="button" class="mts-btn" data-testid="ops-status-retry-readyz" :disabled="reachChecking" @click="retryReadyz">
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('connectivityTitle') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="ops-status-refresh-stats" :disabled="loading" @click="loadStats">
+        <button type="button" class="mts-btn" data-testid="ops-status-refresh-stats" :disabled="loading" @click="loadStats" :aria-busy="loading ? 'true' : undefined">
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
         </button>
       </div>

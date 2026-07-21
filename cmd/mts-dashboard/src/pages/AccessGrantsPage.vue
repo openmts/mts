@@ -37,6 +37,7 @@ import {
   saveSortState,
   sortByAccessor,
   type SortState,
+  ariaSortValue,
 } from '@/utils/listSort'
 import { grantRowId } from '@/utils/rowIds'
 
@@ -381,8 +382,8 @@ watch(
         @clear="clearSelection"
       >
         <template #actions>
-          <button type="button" class="mts-btn" data-testid="access-grants-sort-user" :title="t('listSortBy')" @click="cycleGrantSort('user')">{{ t('accessGrantsColUser') }} {{ grantSortIndicator('user') }}</button>
-          <button type="button" class="mts-btn" data-testid="access-grants-sort-database" :title="t('listSortBy')" @click="cycleGrantSort('database')">{{ t('accessGrantsColDatabase') }} {{ grantSortIndicator('database') }}</button>
+          <button type="button" class="mts-btn" data-testid="access-grants-sort-user" :title="t('listSortBy')" @click="cycleGrantSort('user')" :aria-sort="ariaSortValue(grantSort, 'user')">{{ t('accessGrantsColUser') }} {{ grantSortIndicator('user') }}</button>
+          <button type="button" class="mts-btn" data-testid="access-grants-sort-database" :title="t('listSortBy')" @click="cycleGrantSort('database')" :aria-sort="ariaSortValue(grantSort, 'database')">{{ t('accessGrantsColDatabase') }} {{ grantSortIndicator('database') }}</button>
         </template>
       </ListSelectionToolbar>
     </div>
@@ -415,27 +416,27 @@ watch(
             />
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-user-col" @click="cycleGrantSort('user')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-user-col" @click="cycleGrantSort('user')" :aria-sort="ariaSortValue(grantSort, 'user')">
               {{ t('accessGrantsColUser') }} <span aria-hidden="true">{{ grantSortIndicator('user') }}</span>
             </button>
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-role-col" @click="cycleGrantSort('role')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-role-col" @click="cycleGrantSort('role')" :aria-sort="ariaSortValue(grantSort, 'role')">
               {{ t('accessGrantsColRole') }} <span aria-hidden="true">{{ grantSortIndicator('role') }}</span>
             </button>
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-status-col" @click="cycleGrantSort('status')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-status-col" @click="cycleGrantSort('status')" :aria-sort="ariaSortValue(grantSort, 'status')">
               {{ t('accessGrantsColStatus') }} <span aria-hidden="true">{{ grantSortIndicator('status') }}</span>
             </button>
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-database-col" @click="cycleGrantSort('database')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-database-col" @click="cycleGrantSort('database')" :aria-sort="ariaSortValue(grantSort, 'database')">
               {{ t('accessGrantsColDatabase') }} <span aria-hidden="true">{{ grantSortIndicator('database') }}</span>
             </button>
           </div>
           <div class="px-3 py-2">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-permission-col" @click="cycleGrantSort('permission')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="access-grants-sort-permission-col" @click="cycleGrantSort('permission')" :aria-sort="ariaSortValue(grantSort, 'permission')">
               {{ t('accessGrantsColPermission') }} <span aria-hidden="true">{{ grantSortIndicator('permission') }}</span>
             </button>
           </div>

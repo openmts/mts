@@ -30,6 +30,7 @@ import {
   saveSortState,
   sortByAccessor,
   type SortState,
+  ariaSortValue,
 } from '@/utils/listSort'
 import { auditRowId } from '@/utils/rowIds'
 import { formatMessage } from '@/utils/formatMessage'
@@ -485,8 +486,8 @@ watch(
           @clear="clearSelection"
         >
           <template #actions>
-            <button type="button" class="mts-btn" data-testid="audit-sort-time" :title="t('listSortBy')" @click="cycleAuditSort('time')">{{ t('auditColTime') }} {{ auditSortIndicator('time') }}</button>
-            <button type="button" class="mts-btn" data-testid="audit-sort-user" :title="t('listSortBy')" @click="cycleAuditSort('user')">{{ t('user') }} {{ auditSortIndicator('user') }}</button>
+            <button type="button" class="mts-btn" data-testid="audit-sort-time" :title="t('listSortBy')" @click="cycleAuditSort('time')" :aria-sort="ariaSortValue(auditSort, 'time')">{{ t('auditColTime') }} {{ auditSortIndicator('time') }}</button>
+            <button type="button" class="mts-btn" data-testid="audit-sort-user" :title="t('listSortBy')" @click="cycleAuditSort('user')" :aria-sort="ariaSortValue(auditSort, 'user')">{{ t('user') }} {{ auditSortIndicator('user') }}</button>
           </template>
         </ListSelectionToolbar>
       </div>
@@ -520,22 +521,22 @@ watch(
               />
             </div>
             <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-time-col" @click="cycleAuditSort('time')">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-time-col" @click="cycleAuditSort('time')" :aria-sort="ariaSortValue(auditSort, 'time')">
                 {{ t('auditColTime') }} <span aria-hidden="true">{{ auditSortIndicator('time') }}</span>
               </button>
             </div>
             <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-user-col" @click="cycleAuditSort('user')">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-user-col" @click="cycleAuditSort('user')" :aria-sort="ariaSortValue(auditSort, 'user')">
                 {{ t('user') }} <span aria-hidden="true">{{ auditSortIndicator('user') }}</span>
               </button>
             </div>
             <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-action-col" @click="cycleAuditSort('action')">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-action-col" @click="cycleAuditSort('action')" :aria-sort="ariaSortValue(auditSort, 'action')">
                 {{ t('action') }} <span aria-hidden="true">{{ auditSortIndicator('action') }}</span>
               </button>
             </div>
             <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-database-col" @click="cycleAuditSort('database')">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-database-col" @click="cycleAuditSort('database')" :aria-sort="ariaSortValue(auditSort, 'database')">
                 {{ t('database') }} <span aria-hidden="true">{{ auditSortIndicator('database') }}</span>
               </button>
             </div>

@@ -101,3 +101,13 @@ export function saveSortState(
     /* ignore */
   }
 }
+
+/** HTML aria-sort 值：仅当前排序列非 none */
+export function ariaSortValue(
+  state: SortState,
+  key: string,
+): 'ascending' | 'descending' | 'none' {
+  if (!state.key || state.key !== key) return 'none'
+  return state.dir === 'desc' ? 'descending' : 'ascending'
+}
+
