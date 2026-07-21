@@ -46,7 +46,9 @@ import {
   databasesFormToPrefill,
 } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 interface FieldSchema { measurement: string; name: string; type: number }
 interface FieldsResponse { fields: FieldSchema[] }
 interface Series { id: number; measurement: string; tags: Record<string, string> }
@@ -77,6 +79,14 @@ useHashScroll()
 const SERIES_CAP = 200
 const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+  runJSONExport,
+} = useExportJob()
 const databases = ref<DatabaseEntry[]>([])
 const dbFilter = ref('')
 const measFilter = ref('')
@@ -417,40 +427,77 @@ function rowsForExport() {
   return filterRowsByIds(filteredDatabases.value, exportIds.value, (d) => d.name)
 }
 
-function exportJSON() {
+async function exportJSON() {
   const list = rowsForExport()
   if (!list.length) {
     warn(t.value('inventoryExportEmpty'))
     return
   }
-  downloadJSON(
-    stampFilename('mts-databases', 'json'),
-    buildDatabasesExport(
-      list.map((db) => ({
-        name: db.name,
-        measurement_count: db.loaded ? db.measurements.length : undefined,
-        retention_policy_count: db.loaded ? db.retentionPolicies.length : undefined,
-        loaded: db.loaded,
-      })),
-    ),
-  )
-  success(t.value('inventoryExported'))
-}
-
-function exportCSV() {
-  const list = rowsForExport()
-  if (!list.length) {
-    warn(t.value('inventoryExportEmpty'))
-    return
-  }
+  if (exportBusy.value) return
   const rows = list.map((db) => ({
     name: db.name,
     measurement_count: db.loaded ? db.measurements.length : undefined,
     retention_policy_count: db.loaded ? db.retentionPolicies.length : undefined,
     loaded: db.loaded,
   }))
-  downloadText(stampFilename('mts-databases', 'csv'), databasesToCSV(rows), 'text/csv;charset=utf-8')
-  success(t.value('inventoryExported'))
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-databases', 'json'),
+    total: rows.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, rows.length)
+      const chunk = 200
+      for (let i = 0; i < rows.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === rows.length || done % chunk === 0) {
+          progress(done, rows.length)
+          if (done < rows.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildDatabasesExport(rows)
+    },
+  })
+  if (outcome === 'done') success(t.value('inventoryExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
+}
+
+async function exportCSV() {
+  const list = rowsForExport()
+  if (!list.length) {
+    warn(t.value('inventoryExportEmpty'))
+    return
+  }
+  if (exportBusy.value) return
+  const rows = list.map((db) => ({
+    name: db.name,
+    measurement_count: db.loaded ? db.measurements.length : undefined,
+    retention_policy_count: db.loaded ? db.retentionPolicies.length : undefined,
+    loaded: db.loaded,
+  }))
+  const outcome = await runTextExport({
+    label: 'CSV',
+    filename: stampFilename('mts-databases', 'csv'),
+    mime: 'text/csv;charset=utf-8',
+    total: rows.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, rows.length)
+      const chunk = 200
+      for (let i = 0; i < rows.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === rows.length || done % chunk === 0) {
+          progress(done, rows.length)
+          if (done < rows.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return databasesToCSV(rows)
+    },
+  })
+  if (outcome === 'done') success(t.value('inventoryExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 onBeforeUnmount(() => {
@@ -474,10 +521,11 @@ onBeforeUnmount(() => {
         <p class="text-xs mts-muted">{{ isAdmin ? t('databasesDesc') : t('databasesReadOnlyDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button type="button" class="mts-btn" data-testid="databases-export-json" :disabled="!filteredDatabases.length" @click="exportJSON">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button type="button" class="mts-btn" data-testid="databases-export-json" :disabled="exportBusy || !filteredDatabases.length" @click="exportJSON">
           <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="databases-export-csv" :disabled="!filteredDatabases.length" @click="exportCSV">
+        <button type="button" class="mts-btn" data-testid="databases-export-csv" :disabled="exportBusy || !filteredDatabases.length" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
         </button>
         <button type="button" class="mts-btn" data-testid="databases-share-link" @click="copyDatabasesShareLink">

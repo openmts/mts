@@ -25,7 +25,9 @@ import { useNotify } from '@/composables/useNotify'
 import { buildGrantsExport, grantsToCSV } from '@/utils/grantsExport'
 import { parseAccessGrantsPrefill, accessGrantsFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
 import {
@@ -50,6 +52,14 @@ useHashScroll()
 const { isAdmin } = useAuth()
 const { t, locale } = useI18n()
 const { success, warn, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+  runJSONExport,
+} = useExportJob()
 function roleLabel(role?: string): string {
   if (!role) return t.value('emptyValue')
   if (role === 'admin') return t.value('roleAdmin')
@@ -175,24 +185,65 @@ async function load() {
   }
 }
 
-function exportJSON() {
+async function exportJSON() {
   const list = rowsForExport()
   if (!list.length) {
     warn(t.value('accessExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-access-grants', 'json'), buildGrantsExport(list))
-  success(t.value('accessExported'))
+  if (exportBusy.value) return
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-access-grants', 'json'),
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 200
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildGrantsExport(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('accessExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function exportCSV() {
+async function exportCSV() {
   const list = rowsForExport()
   if (!list.length) {
     warn(t.value('accessExportEmpty'))
     return
   }
-  downloadText(stampFilename('mts-access-grants', 'csv'), grantsToCSV(list), 'text/csv;charset=utf-8')
-  success(t.value('accessExported'))
+  if (exportBusy.value) return
+  const outcome = await runTextExport({
+    label: 'CSV',
+    filename: stampFilename('mts-access-grants', 'csv'),
+    mime: 'text/csv;charset=utf-8',
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 200
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return grantsToCSV(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('accessExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 function applyAccessGrantsPrefillFromRoute() {
@@ -259,10 +310,11 @@ watch(
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button type="button" class="mts-btn" data-testid="access-grants-export-json" :disabled="!filtered.length" @click="exportJSON">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button type="button" class="mts-btn" data-testid="access-grants-export-json" :disabled="exportBusy || !filtered.length" @click="exportJSON">
           <Download class="h-3.5 w-3.5" /> {{ t('accessExportJSON') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="access-grants-export-csv" :disabled="!filtered.length" @click="exportCSV">
+        <button type="button" class="mts-btn" data-testid="access-grants-export-csv" :disabled="exportBusy || !filtered.length" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> {{ t('accessExportCSV') }}
         </button>
         <button type="button" class="mts-btn" data-testid="access-grants-refresh" :disabled="loading" :aria-busy="loading ? 'true' : undefined" @click="load">

@@ -28,7 +28,9 @@ import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
 import { buildDownsampleExport, downsampleToCSV } from '@/utils/downsampleExport'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { parseHumanDurationToNs, formatNsDuration } from '@/utils/duration'
 import {
@@ -56,6 +58,14 @@ const { isAdmin } = useAuth()
 const { offline } = useNetworkStatus()
 const { t, locale } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+  runJSONExport,
+} = useExportJob()
 const policies = ref<DownsamplePolicy[]>([])
 const statuses = ref<DownsampleStatus[]>([])
 const loadError = ref('')
@@ -632,26 +642,65 @@ async function confirmRange() {
   }
 }
 
-function exportJSON() {
+async function exportJSON() {
   if (!filteredPolicies.value.length) {
     warn(t.value('inventoryExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-downsample-policies', 'json'), buildDownsampleExport(filteredPolicies.value))
-  success(t.value('inventoryExported'))
+  if (exportBusy.value) return
+  const list = filteredPolicies.value.slice()
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-downsample-policies', 'json'),
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 100
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildDownsampleExport(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('inventoryExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function exportCSV() {
+async function exportCSV() {
   if (!filteredPolicies.value.length) {
     warn(t.value('inventoryExportEmpty'))
     return
   }
-  downloadText(
-    stampFilename('mts-downsample-policies', 'csv'),
-    downsampleToCSV(filteredPolicies.value),
-    'text/csv;charset=utf-8',
-  )
-  success(t.value('inventoryExported'))
+  if (exportBusy.value) return
+  const list = filteredPolicies.value.slice()
+  const outcome = await runTextExport({
+    label: 'CSV',
+    filename: stampFilename('mts-downsample-policies', 'csv'),
+    mime: 'text/csv;charset=utf-8',
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 100
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return downsampleToCSV(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('inventoryExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 onBeforeUnmount(() => {
@@ -716,10 +765,11 @@ onBeforeUnmount(() => {
         <template #actions>
           <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
           <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
-          <button type="button" class="mts-btn" data-testid="downsample-export-json" :disabled="!filteredPolicies.length" @click="exportJSON">
+          <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+          <button type="button" class="mts-btn" data-testid="downsample-export-json" :disabled="exportBusy || !filteredPolicies.length" @click="exportJSON">
             <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
           </button>
-          <button type="button" class="mts-btn" data-testid="downsample-export-csv" :disabled="!filteredPolicies.length" @click="exportCSV">
+          <button type="button" class="mts-btn" data-testid="downsample-export-csv" :disabled="exportBusy || !filteredPolicies.length" @click="exportCSV">
             <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
           </button>
           <button type="button" class="mts-btn" data-testid="downsample-share-link" @click="copyDownsampleShareLink">

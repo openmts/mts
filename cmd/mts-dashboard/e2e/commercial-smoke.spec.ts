@@ -844,6 +844,17 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('write-page')).toBeVisible()
   await expect(page.getByTestId('write-cancel')).toBeDisabled()
 
+  // P203: Databases 导出进度 banner
+  await page.goto('/databases')
+  await expect(page.getByTestId('databases-export-json')).toBeVisible()
+  // 可能无库数据时 disabled；有数据则点导出
+  if (await page.getByTestId('databases-export-json').isEnabled()) {
+    await page.getByTestId('databases-export-json').click()
+    await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
+    const dismiss = page.getByTestId('export-job-dismiss')
+    if (await dismiss.count()) await dismiss.click()
+  }
+
   // P199: Config offline 时 validate/reload disabled
   await page.goto('/config')
   await expect(page.getByTestId('config-page')).toBeVisible()

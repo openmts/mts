@@ -959,3 +959,6 @@
 
 ## P202 状态（2026-07-21）
 - Write 提交 Abort 取消
+
+## P203 状态（2026-07-21）
+- Databases/Downsample/AccessGrants/Operations 导出接入 ExportJob

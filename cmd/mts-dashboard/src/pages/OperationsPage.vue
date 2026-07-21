@@ -24,6 +24,8 @@ import {
   type OpsActionKind,
 } from '@/utils/opsActionLog'
 import { downloadJSON, stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { buildMaintenanceErrorsExport, buildOpsStatsExport, formatOpsStatsPretty, maintenanceErrorsToText } from '@/utils/opsExport'
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser, Copy } from 'lucide-vue-next'
@@ -43,6 +45,13 @@ useHashScroll()
 const { t } = useI18n()
 const { offline } = useNetworkStatus()
 const { success, error: notifyError, warn, info } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runJSONExport,
+} = useExportJob()
 const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz } = useServerReachability()
 const statsLoadedAt = ref<number | null>(null)
 const loadError = ref('')
@@ -260,13 +269,33 @@ async function copyMaintErrors() {
   else notifyError(res.error || t.value('failed'))
 }
 
-function exportActionLog() {
+async function exportActionLog() {
   if (!filteredActionLog.value.length) {
     warn(t.value('opsLogExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-ops-actions', 'json'), buildOpsActionExport(filteredActionLog.value))
-  success(t.value('opsLogExportOk'))
+  if (exportBusy.value) return
+  const list = filteredActionLog.value.slice()
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-ops-actions', 'json'),
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % 100 === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildOpsActionExport(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('opsLogExportOk'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 function openClearLog() {
@@ -537,7 +566,8 @@ watch(
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">{{ t('opsActionLog') }}</h2>
         <div class="flex flex-wrap gap-2">
-          <button type="button" class="mts-btn" data-testid="ops-export-log" :disabled="!filteredActionLog.length" @click="exportActionLog">
+          <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button type="button" class="mts-btn" data-testid="ops-export-log" :disabled="exportBusy || !filteredActionLog.length" @click="exportActionLog">
             <Download class="h-3.5 w-3.5" />
             {{ t('opsExportLog') }}
           </button>
