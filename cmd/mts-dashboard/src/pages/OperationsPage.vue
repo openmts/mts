@@ -547,17 +547,41 @@ watch(
     </div>
 
     <div id="ops-actions" class="grid gap-4 scroll-mt-20 sm:grid-cols-3">
-      <button type="button" id="ops-flush" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" data-testid="ops-flush" @click="openConfirm('flush')">
+      <button
+        type="button"
+        id="ops-flush"
+        class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+        data-testid="ops-flush"
+        :disabled="offline"
+        :title="offline ? t('offlineOpsBlocked') : undefined"
+        @click="openConfirm('flush')"
+      >
         <DatabaseBackup class="mb-2 h-5 w-5 mts-muted" />
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionFlush') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsFlushHint') }}</p>
       </button>
-      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" id="ops-compact" data-testid="ops-compact" @click="openConfirm('compact')">
+      <button
+        type="button"
+        class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+        id="ops-compact"
+        data-testid="ops-compact"
+        :disabled="offline"
+        :title="offline ? t('offlineOpsBlocked') : undefined"
+        @click="openConfirm('compact')"
+      >
         <Layers class="mb-2 h-5 w-5 mts-muted" />
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionCompact') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsCompactHint') }}</p>
       </button>
-      <button type="button" class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500" id="ops-retention" data-testid="ops-retention" @click="openConfirm('retention')">
+      <button
+        type="button"
+        class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+        id="ops-retention"
+        data-testid="ops-retention"
+        :disabled="offline"
+        :title="offline ? t('offlineOpsBlocked') : undefined"
+        @click="openConfirm('retention')"
+      >
         <Timer class="mb-2 h-5 w-5 mts-muted" />
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionRetention') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsRetentionHint') }}</p>

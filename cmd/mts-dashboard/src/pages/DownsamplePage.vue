@@ -325,6 +325,10 @@ function clearSelection() {
 }
 
 function openBatch(mode: 'enable' | 'disable') {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineAdminBlocked'))
+    return
+  }
   if (!selectedNames.value.length) return
   batchMode.value = mode
   batchOpen.value = true
@@ -763,8 +767,8 @@ onBeforeUnmount(() => {
         @clear="clearSelection"
       >
         <template #actions>
-          <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
-          <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length || offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length || offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
           <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
           <button type="button" class="mts-btn" data-testid="downsample-export-json" :disabled="exportBusy || !filteredPolicies.length" @click="exportJSON">
             <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}

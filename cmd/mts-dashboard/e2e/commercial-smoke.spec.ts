@@ -951,6 +951,22 @@ test('commercial browser smoke path', async ({ page }) => {
     window.dispatchEvent(new Event('online'))
   })
 
+  // P212: Operations 卡片离线禁用
+  await page.goto('/operations')
+  await expect(page.getByTestId('ops-flush')).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('offline-banner')).toBeVisible()
+  await expect(page.getByTestId('ops-flush')).toBeDisabled()
+  await expect(page.getByTestId('ops-compact')).toBeDisabled()
+  await expect(page.getByTestId('ops-retention')).toBeDisabled()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+
   // P209: 登录离线门禁
   await page.getByTestId('topbar-logout').click()
   await expect(page.getByTestId('login-panel')).toBeVisible()
