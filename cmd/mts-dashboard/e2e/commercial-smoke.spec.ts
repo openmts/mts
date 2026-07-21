@@ -194,6 +194,7 @@ test('commercial browser smoke path', async ({ page }) => {
   expect(Number(endV) - Number(startV)).toBeGreaterThanOrEqual(3500_000)
 
   await expect(page.getByTestId('breadcrumb-bar')).toBeVisible()
+  await expect(page.getByTestId('global-progress')).toBeAttached()
   await expect(page.getByTestId('breadcrumb-current')).toBeVisible()
   await expect(page.getByTestId('breadcrumb-copy-path')).toBeVisible()
   await expect(page.getByRole('main').getByText(/查询|Query/i).first()).toBeVisible()
@@ -1554,6 +1555,27 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
   await expect(page.getByTestId('query-share-link')).toBeVisible()
+
+  // P225: 非 admin 会话 critical — 写禁用 + 横幅续期入口（账户续期仍可用）
+  await page.evaluate(() => {
+    const soon = new Date(Date.now() + 30_000).toISOString()
+    localStorage.setItem('mts_token_expires_at', soon)
+  })
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible()
+  await expect(page.getByTestId('session-critical-banner')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('session-critical-renew')).toBeVisible()
+  await expect(page.getByTestId('write-submit')).toBeDisabled()
+  await page.getByTestId('session-critical-renew').click()
+  await expect(page).toHaveURL(/\/account/)
+  await expect(page.getByTestId('account-session-renew-form')).toBeVisible({ timeout: 10000 })
+  // 恢复 TTL 以免后续 reader 路径被强制登出
+  await page.evaluate(() => {
+    const later = new Date(Date.now() + 12 * 3600_000).toISOString()
+    localStorage.setItem('mts_token_expires_at', later)
+  })
+  await page.goto('/query')
+  await expect(page.getByTestId('session-critical-banner')).toHaveCount(0)
 
   // P190: 非 admin 深链预填 + 分享 + 登录 redirect 回跳
   await page.goto('/query?database=default&range=1h')
