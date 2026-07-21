@@ -83,6 +83,7 @@ const result = ref<{ ok: boolean; message: string } | null>(null)
 const loading = ref(false)
 let writeAbort: AbortController | null = null
 const actionError = ref('')
+const writeWasCanceled = ref(false)
 const metaHint = ref('')
 const rpMetaHint = ref('')
 const metaSource = ref<MetaLoadSource>('admin')
@@ -481,6 +482,7 @@ async function submit() {
   const signal = writeAbort.signal
   loading.value = true
   actionError.value = ''
+  writeWasCanceled.value = false
   result.value = null
   try {
     if (writeMode.value === 'typed') {
@@ -517,10 +519,12 @@ async function submit() {
     markWriteClean()
   } catch (e) {
     if (isCanceledError(e)) {
+      writeWasCanceled.value = true
       actionError.value = t.value('writeCancelled')
       result.value = { ok: false, message: actionError.value }
       success(actionError.value)
     } else {
+      writeWasCanceled.value = false
       actionError.value = formatCaughtError(e)
       notifyError(actionError.value)
       result.value = { ok: false, message: actionError.value }
@@ -822,7 +826,11 @@ async function exportWriteDraft() {
         class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
       >{{ t('writeDirtyBadge') }}</span>
     </div>
-    <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
+    <p
+      v-if="actionError"
+      :class="writeWasCanceled ? 'mts-alert-info' : 'mts-alert-error'"
+      data-testid="write-action-error"
+    >{{ actionError }}</p>
     <p v-if="result?.ok" class="mts-alert-ok" data-testid="write-result-ok">{{ result.message }}</p>
     <div v-else-if="!loading && !actionError && !result" class="mts-card">
       <EmptyState

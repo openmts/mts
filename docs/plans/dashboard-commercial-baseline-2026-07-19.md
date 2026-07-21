@@ -1054,3 +1054,6 @@
 ## P228（2026-07-21）
 - Readiness 导入错误 `formatCaughtError`
 - Query 取消态 info 样式 + `query-cancel` 空闲 disabled e2e
+
+## P229（2026-07-21）
+- Write 取消态 info 样式 + `write-action-error`
