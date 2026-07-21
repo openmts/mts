@@ -35,6 +35,7 @@ import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuth } from '@/composables/useAuth'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
+import { shouldSyncOnVisibility } from '@/utils/pageVisibilitySync'
 import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
 
 const { t } = useI18n()
@@ -44,6 +45,12 @@ const { logout } = useAuth()
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 
 function retryNetworkStatus() {
+  syncNetworkStatus()
+  void retryReadyz()
+}
+
+function onVisibilitySync() {
+  if (!shouldSyncOnVisibility(document.visibilityState, document.hidden)) return
   syncNetworkStatus()
   void retryReadyz()
 }
@@ -205,11 +212,13 @@ function onPrefsChanged() {
 }
 
 onMounted(() => {
+  document.addEventListener('visibilitychange', onVisibilitySync)
   window.addEventListener('keydown', onGlobalKey)
   window.addEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
   unregisterNotifyHistoryBridge = registerOpenNotifyHistory(openNotifyHistory)
 })
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilitySync)
   window.removeEventListener('keydown', onGlobalKey)
   window.removeEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
   unregisterNotifyHistoryBridge?.()

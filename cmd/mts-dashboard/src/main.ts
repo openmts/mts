@@ -6,6 +6,7 @@ import { useAuth } from './composables/useAuth'
 import { useNotify } from './composables/useNotify'
 import { loginReasonMessage } from './utils/authReason'
 import { isAuthStorageKey } from './utils/authStorageSync'
+import { shouldSyncOnVisibility } from './utils/pageVisibilitySync'
 import './index.css'
 
 function currentLocale(): 'zh' | 'en' {
@@ -53,3 +54,21 @@ window.addEventListener('storage', (ev) => {
     void router.replace({ name: 'Login', query: { reason: 'storage' } })
   }
 })
+
+// 标签页重新可见：重载会话内存（他页可能已续期/登出）
+document.addEventListener('visibilitychange', () => {
+  if (!shouldSyncOnVisibility(document.visibilityState, document.hidden)) return
+  const { syncFromStorage, ensureSession } = useAuth()
+  syncFromStorage()
+  if (!ensureSession() && router.currentRoute.value.name !== 'Login') {
+    try {
+      const { error } = useNotify()
+      error(loginReasonMessage('session', currentLocale()))
+    } catch { /* ignore */ }
+    void router.replace({
+      name: 'Login',
+      query: { redirect: router.currentRoute.value.fullPath, reason: 'session' },
+    })
+  }
+})
+

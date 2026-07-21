@@ -145,6 +145,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('overview-share-link')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
+  // P285: 标签页可见性恢复不打断会话
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect(page.getByTestId('overview-page').or(page.getByTestId('topbar-account')).first()).toBeVisible()
   await expect(page.getByTestId('server-unreachable-banner')).toHaveCount(0)
   await expect(page.getByTestId('overview-connectivity')).toBeVisible()
   await expect(page.getByTestId('overview-connectivity-kind')).toBeVisible()
