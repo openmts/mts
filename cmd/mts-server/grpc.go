@@ -331,6 +331,7 @@ func grpcGetSession(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 		ExpiresAt:          principal.ExpiresAt,
 		MustChangePassword: mustChange,
 		RemainingSeconds:   remaining,
+		ServerTimeUnix:     time.Now().Unix(),
 	}, nil
 }
 

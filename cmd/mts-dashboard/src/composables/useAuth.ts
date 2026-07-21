@@ -28,6 +28,7 @@ const mustChangePassword = ref(getMustChangePassword())
 const loggingOut = ref(false)
 const lastSessionRemainingSeconds = ref<number | null>(null)
 const lastSessionCheckedAt = ref<number | null>(null)
+const lastSessionServerTimeUnix = ref<number | null>(null)
 
 export function useAuth() {
   const isAdmin = computed(() => currentRole.value === 'admin')
@@ -97,6 +98,7 @@ export function useAuth() {
       isAuthenticated.value = false
       lastSessionRemainingSeconds.value = null
       lastSessionCheckedAt.value = null
+      lastSessionServerTimeUnix.value = null
       loggingOut.value = false
     }
   }
@@ -112,6 +114,7 @@ export function useAuth() {
       mustChangePassword.value = false
       lastSessionRemainingSeconds.value = null
       lastSessionCheckedAt.value = null
+      lastSessionServerTimeUnix.value = null
       return false
     }
     try {
@@ -137,6 +140,11 @@ export function useAuth() {
           : null
       } else {
         lastSessionRemainingSeconds.value = null
+      }
+      if (typeof session.server_time_unix === 'number' && Number.isFinite(session.server_time_unix)) {
+        lastSessionServerTimeUnix.value = Math.floor(session.server_time_unix)
+      } else {
+        lastSessionServerTimeUnix.value = null
       }
       lastSessionCheckedAt.value = Date.now()
       setMustChangePassword(!!session.must_change_password)
@@ -179,6 +187,7 @@ export function useAuth() {
     refreshSession,
     lastSessionRemainingSeconds,
     lastSessionCheckedAt,
+    lastSessionServerTimeUnix,
     getTokenExpiresAt,
   }
 }

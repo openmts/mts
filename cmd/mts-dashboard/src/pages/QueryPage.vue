@@ -1058,11 +1058,46 @@ const columnRows = computed(() => {
         data-testid="query-stats-empty"
         :title="t('queryStatsEmptyTitle')"
         :description="t('queryStatsEmptyDesc')"
-      />
+      >
+        <template #action>
+          <button
+            type="button"
+            class="mts-btn-primary text-xs"
+            data-testid="query-stats-empty-load"
+            :disabled="engineStatsLoading || loading"
+            @click="loadEngineStats"
+          >{{ engineStatsLoading ? t('loading') : t('queryEngineStatsBtn') }}</button>
+        </template>
+      </EmptyState>
     </div>
 
-    <div id="query-chart" class="scroll-mt-20">
+    <div id="query-chart" class="scroll-mt-20" data-testid="query-chart-section">
       <QueryChart v-if="showChart && rows.length" :rows="rows" />
+      <EmptyState
+        v-else-if="showChart && !rows.length"
+        compact
+        data-testid="query-chart-empty"
+        :title="t('queryChartEmptyTitle')"
+        :description="t('queryChartEmptyDesc')"
+      >
+        <template #action>
+          <div class="flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              class="mts-btn-primary text-xs"
+              data-testid="query-chart-empty-run"
+              :disabled="loading"
+              @click="runQuery"
+            >{{ loading ? t('querySubmitting') : t('runQuery') }}</button>
+            <button
+              type="button"
+              class="mts-btn text-xs"
+              data-testid="query-chart-empty-hide"
+              @click="showChart = false"
+            >{{ t('queryChartHide') }}</button>
+          </div>
+        </template>
+      </EmptyState>
     </div>
 
     <div

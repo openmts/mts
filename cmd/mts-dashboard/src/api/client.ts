@@ -567,6 +567,7 @@ export interface SessionResponse {
   expires_at: string
   must_change_password?: boolean
   remaining_seconds?: number
+  server_time_unix?: number
 }
 
 /** 服务端会话检视：校验 token 并回填 role/expires/must_change */

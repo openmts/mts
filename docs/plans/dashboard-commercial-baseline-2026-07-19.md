@@ -1270,3 +1270,10 @@
 
 ## P297（2026-07-22）
 - Account 展示服务端会话 remaining_seconds 与最近校验时间（refreshSession 回填）
+
+## P298（2026-07-22）
+- Server：`GET /api/v1/auth/session` / gRPC GetSession 增加 `server_time_unix`
+- TopBar 会话 badge：接入服务端 `remaining_seconds` / 校验时间，title 与副文案提示偏差
+- Overview：memory / compaction / maintenance 空态 EmptyState + 分区块刷新
+- Query：stats 空态一键拉取引擎 stats；chart 展开无 rows 时 EmptyState + 执行/收起
+- Config：schema / error-codes 筛选空态「清除筛选」与无数据文案区分

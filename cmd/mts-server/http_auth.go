@@ -147,5 +147,6 @@ func (r *serverRuntime) handleSession(writer http.ResponseWriter, request *http.
 		ExpiresAt:          principal.ExpiresAt,
 		MustChangePassword: mustChange,
 		RemainingSeconds:   remaining,
+		ServerTimeUnix:     time.Now().Unix(),
 	})
 }

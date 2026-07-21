@@ -8,6 +8,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Menu, Moon, Sun, Languages, Search, Keyboard, Bell } from 'lucide-vue-next'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
 import { sessionClockTickMs } from '@/utils/sessionClock'
+import { buildSessionBadgeMeta, sessionBadgeTitleText, sessionBadgeAriaText } from '@/utils/sessionBadgeTitle'
+import { connectivityBadgeClass as connClass, connectivityBadgeLabelKey, sessionUrgencyBadgeClass } from '@/utils/connectivityBadge'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
 import {
@@ -21,7 +23,7 @@ import type { MessageKey } from '@/i18n/messages'
 
 const route = useRoute()
 const router = useRouter()
-const { currentUser, currentRole, logout, loggingOut, getTokenExpiresAt, ensureSession } = useAuth()
+const { currentUser, currentRole, logout, loggingOut, getTokenExpiresAt, ensureSession, lastSessionRemainingSeconds, lastSessionCheckedAt } = useAuth()
 const { theme, toggleTheme } = useTheme()
 const { t, locale, toggleLocale } = useI18n()
 const { kind: connectivityKind } = useServerReachability()
@@ -44,6 +46,32 @@ const sessionView = computed(() => {
   return sessionExpiryView(exp, nowMs.value, undefined, undefined, locale.value === 'en' ? 'en' : 'zh')
 })
 
+const sessionBadgeMeta = computed(() =>
+  buildSessionBadgeMeta({
+    localLabel: sessionView.value.label,
+    localRemainingMs: sessionView.value.remainingMs,
+    urgency: sessionView.value.urgency,
+    serverRemainingSec: lastSessionRemainingSeconds.value,
+    checkedAtMs: lastSessionCheckedAt.value,
+    nowMs: nowMs.value,
+    locale: locale.value === 'en' ? 'en' : 'zh',
+  }),
+)
+
+const sessionBadgeTitle = computed(() =>
+  sessionBadgeTitleText(t.value('sessionBadgeHint'), sessionBadgeMeta.value.title),
+)
+
+const sessionBadgeAria = computed(() =>
+  sessionBadgeAriaText(
+    t.value('sessionExpiry'),
+    sessionView.value.label,
+    t.value('sessionUnknown'),
+    t.value('sessionBadgeAriaServer'),
+    sessionBadgeMeta.value,
+  ),
+)
+
 function roleLabel(role?: string | null): string {
   if (role === 'admin') return t.value('roleAdmin')
   if (role === 'user') return t.value('roleUser')
@@ -51,47 +79,10 @@ function roleLabel(role?: string | null): string {
 }
 
 
-const connectivityBadgeClass = computed(() => {
-  switch (connectivityKind.value) {
-    case 'ok':
-      return 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
-    case 'unreachable':
-      return 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200'
-    case 'offline':
-      return 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100'
-    default:
-      return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-  }
-})
-const connectivityBadgeLabel = computed(() => {
-  switch (connectivityKind.value) {
-    case 'ok':
-      return t.value('connectivityOk')
-    case 'unreachable':
-      return t.value('connectivityUnreachable')
-    case 'offline':
-      return t.value('connectivityOffline')
-    default:
-      return t.value('connectivityUnknown')
-  }
-})
-
+const connectivityBadgeClass = computed(() => connClass(connectivityKind.value))
+const connectivityBadgeLabel = computed(() => t.value(connectivityBadgeLabelKey(connectivityKind.value)))
 const showSessionBadge = computed(() => shouldShowSessionBadge(sessionView.value.urgency))
-
-const sessionBadgeClass = computed(() => {
-  switch (sessionView.value.urgency) {
-    case 'critical':
-      return 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200'
-    case 'warn':
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200'
-    case 'expired':
-      return 'bg-red-200 text-red-900 dark:bg-red-900 dark:text-red-100'
-    case 'ok':
-      return 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
-    default:
-      return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-  }
-})
+const sessionBadgeClass = computed(() => sessionUrgencyBadgeClass(sessionView.value.urgency))
 
 async function handleExpire() {
   if (expireInFlight) return
@@ -220,13 +211,20 @@ onBeforeUnmount(() => {
       <button
         v-if="showSessionBadge && sessionView.label"
         type="button"
-        class="hidden rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline"
+        class="hidden items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline-flex"
         :class="sessionBadgeClass"
-        :title="t('sessionBadgeHint')"
-        :aria-label="`${t('sessionExpiry')}: ${sessionView.label}`"
+        :title="sessionBadgeTitle"
+        :aria-label="sessionBadgeAria"
         data-testid="session-badge"
         @click="goAccountSession"
-      >{{ t('sessionLeft') }} {{ sessionView.label }}</button>
+      >
+        <span>{{ t('sessionLeft') }} {{ sessionView.label }}</span>
+        <span
+          v-if="sessionBadgeMeta.showServerHint"
+          class="font-normal opacity-80"
+          data-testid="session-badge-server"
+        >{{ sessionBadgeMeta.hint }}</span>
+      </button>
       <button
         type="button"
         class="mts-focus-ring rounded p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"

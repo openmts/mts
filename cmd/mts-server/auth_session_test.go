@@ -36,6 +36,13 @@ func TestHTTPAuthSession(t *testing.T) {
 	if session.RemainingSeconds <= 0 {
 		t.Fatalf("remaining_seconds = %d", session.RemainingSeconds)
 	}
+	if session.ServerTimeUnix <= 0 {
+		t.Fatalf("server_time_unix = %d", session.ServerTimeUnix)
+	}
+	skew := time.Now().Unix() - session.ServerTimeUnix
+	if skew < -2 || skew > 2 {
+		t.Fatalf("server_time_unix skew = %d", skew)
+	}
 
 	getJSONWithHeaders(t, server.URL+"/api/v1/auth/session", nil, http.StatusUnauthorized, &errorResponse{})
 	getJSONWithHeaders(t, server.URL+"/api/v1/auth/session", map[string]string{

@@ -130,6 +130,7 @@ type sessionResponse struct {
 	ExpiresAt          time.Time    `json:"expires_at"`
 	MustChangePassword bool         `json:"must_change_password,omitempty"`
 	RemainingSeconds   int64        `json:"remaining_seconds"`
+	ServerTimeUnix     int64        `json:"server_time_unix"`
 }
 
 type logoutRequest struct {

@@ -36,6 +36,7 @@ import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import VirtualTable from '@/components/VirtualTable.vue'
+import EmptyState from '@/components/EmptyState.vue'
 
 interface HealthResponse extends HealthSnapshot {}
 
@@ -1032,8 +1033,24 @@ async function copyOverview() {
           <Cpu class="h-4 w-4 text-slate-500" />
           <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('memoryStats') }}</h2>
         </div>
-        <div v-if="!memorySnapshot" class="text-sm mts-muted">{{ t('emptyValue') }}</div>
-        <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+        <EmptyState
+          v-if="!memorySnapshot"
+          compact
+          data-testid="overview-memory-empty"
+          :title="t('overviewMemoryEmptyTitle')"
+          :description="t('overviewMemoryEmptyDesc')"
+        >
+          <template #action>
+            <button
+              type="button"
+              class="mts-btn-primary text-xs"
+              data-testid="overview-memory-retry"
+              :disabled="!!adminSectionRetrying.memory"
+              @click="retryAdminSection('memory')"
+            >{{ adminSectionRetrying.memory ? t('loading') : t('overviewSectionRetry') }}</button>
+          </template>
+        </EmptyState>
+        <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4" data-testid="overview-memory-grid">
           <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50" v-for="(v, k) in memorySnapshot" :key="String(k)">
             <span class="mts-muted">{{ memoryLabel(String(k)) }}</span>
             <p class="font-semibold text-slate-800 dark:text-slate-100">{{ typeof v === 'number' && String(k).includes('bytes') ? formatBytes(v) : v }}</p>
@@ -1046,8 +1063,24 @@ async function copyOverview() {
           <Layers class="h-4 w-4 text-slate-500" />
           <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('compactionStats') }}</h2>
         </div>
-        <div v-if="!compactionStats" class="text-sm mts-muted">{{ t('emptyValue') }}</div>
-        <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <EmptyState
+          v-if="!compactionStats"
+          compact
+          data-testid="overview-compaction-empty"
+          :title="t('overviewCompactionEmptyTitle')"
+          :description="t('overviewCompactionEmptyDesc')"
+        >
+          <template #action>
+            <button
+              type="button"
+              class="mts-btn-primary text-xs"
+              data-testid="overview-compaction-retry"
+              :disabled="!!adminSectionRetrying.compaction"
+              @click="retryAdminSection('compaction')"
+            >{{ adminSectionRetrying.compaction ? t('loading') : t('overviewSectionRetry') }}</button>
+          </template>
+        </EmptyState>
+        <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5" data-testid="overview-compaction-grid">
           <div><span class="text-xs mts-muted">{{ t('opsStatTotal') }}</span><p class="text-sm font-medium">{{ compactionStats.total }}</p></div>
           <div><span class="text-xs mts-muted">{{ t('opsStatSuccess') }}</span><p class="text-sm font-medium text-green-600">{{ compactionStats.success }}</p></div>
           <div><span class="text-xs mts-muted">{{ t('opsStatFailure') }}</span><p class="text-sm font-medium text-red-600">{{ compactionStats.failure }}</p></div>
@@ -1062,8 +1095,24 @@ async function copyOverview() {
           <Wrench class="h-4 w-4 text-slate-500" />
           <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceStats') }}</h2>
         </div>
-        <div v-if="!maintenanceStats" class="text-sm mts-muted">{{ t('emptyValue') }}</div>
-        <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-4">
+        <EmptyState
+          v-if="!maintenanceStats"
+          compact
+          data-testid="overview-maintenance-empty"
+          :title="t('overviewMaintenanceEmptyTitle')"
+          :description="t('overviewMaintenanceEmptyDesc')"
+        >
+          <template #action>
+            <button
+              type="button"
+              class="mts-btn-primary text-xs"
+              data-testid="overview-maintenance-retry"
+              :disabled="!!adminSectionRetrying.maintenance"
+              @click="retryAdminSection('maintenance')"
+            >{{ adminSectionRetrying.maintenance ? t('loading') : t('overviewSectionRetry') }}</button>
+          </template>
+        </EmptyState>
+        <div v-else class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-4" data-testid="overview-maintenance-grid">
           <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatCompactActive') }}: <span class="font-semibold">{{ maintenanceStats.compaction_active }}</span></div>
           <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatCompactBacklog') }}: <span class="font-semibold">{{ maintenanceStats.compaction_backlog }}</span></div>
           <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatCompactSkipped') }}: <span class="font-semibold">{{ maintenanceStats.compaction_skipped }}</span></div>

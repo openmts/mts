@@ -28,6 +28,7 @@ import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { RefreshCw, CheckCircle, Download, Copy } from 'lucide-vue-next'
 import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
+import EmptyState from '@/components/EmptyState.vue'
 
 interface ConfigResponse { config: Record<string, unknown> }
 interface ValidateResponse { ok: boolean; error?: string }
@@ -101,6 +102,14 @@ function onConfigBeforeUnload(e: BeforeUnloadEvent) {
 }
 
 let unregisterConfigDirty: (() => void) | null = null
+
+function clearSchemaFilter() {
+  schemaFilter.value = ''
+}
+
+function clearErrorCodeFilter() {
+  errorCodeFilter.value = ''
+}
 
 const filteredSchema = computed(() => {
   const q = schemaFilter.value.trim().toLowerCase()
@@ -530,9 +539,19 @@ onBeforeUnmount(() => {
           <div class="px-2 py-2">{{ t('configColName') }}</div>
           <div class="px-2 py-2">{{ t('configColDescription') }}</div>
         </div>
-        <div v-if="!filteredSchema.length" class="px-2 py-3 text-xs mts-muted" data-testid="config-schema-empty">
-          {{ t('configSchemaEmpty') }}
-        </div>
+        <EmptyState
+          v-if="!filteredSchema.length"
+          compact
+          data-testid="config-schema-empty"
+          :title="t('configSchemaEmpty')"
+          :description="schemaFilter.trim() ? t('configSchemaEmptyDesc') : t('configSchemaEmptyNoData')"
+        >
+          <template v-if="schemaFilter.trim()" #action>
+            <button type="button" class="mts-btn-primary text-xs" data-testid="config-schema-clear-filter" @click="clearSchemaFilter">
+              {{ t('clearFilters') }}
+            </button>
+          </template>
+        </EmptyState>
         <VirtualTable
           v-else
           :items="filteredSchema"
@@ -585,9 +604,19 @@ onBeforeUnmount(() => {
           <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColGRPC') }}</div>
           <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColDescription') }}</div>
         </div>
-        <div v-if="!filteredErrorCodes.length" class="px-2 py-3 text-xs mts-muted" data-testid="config-error-codes-empty">
-          {{ t('configErrorCodesEmpty') }}
-        </div>
+        <EmptyState
+          v-if="!filteredErrorCodes.length"
+          compact
+          data-testid="config-error-codes-empty"
+          :title="t('configErrorCodesEmpty')"
+          :description="errorCodeFilter.trim() ? t('configErrorCodesEmptyDesc') : t('configErrorCodesEmptyNoData')"
+        >
+          <template v-if="errorCodeFilter.trim()" #action>
+            <button type="button" class="mts-btn-primary text-xs" data-testid="config-error-codes-clear-filter" @click="clearErrorCodeFilter">
+              {{ t('clearFilters') }}
+            </button>
+          </template>
+        </EmptyState>
         <VirtualTable
           v-else
           :items="filteredErrorCodes"
