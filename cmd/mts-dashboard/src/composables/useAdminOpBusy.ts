@@ -8,13 +8,16 @@ import {
   type AdminOpStatus,
 } from '@/utils/adminOpBusy'
 
-const DEFAULT_INTERVAL_MS = 15_000
+const IDLE_INTERVAL_MS = 15_000
+const BUSY_INTERVAL_MS = 3_000
+const MIN_INTERVAL_MS = 2_000
 
 interface SharedAdminOpBusy {
   status: Ref<AdminOpStatus>
   lastCheckedAt: Ref<number | null>
   checking: Ref<boolean>
   error: Ref<string>
+  pollIntervalMs: Ref<number>
   refresh: () => Promise<void>
   setBusy: (v: boolean, op?: string) => void
   markBusyAndRefresh: (op?: string) => void
@@ -29,15 +32,39 @@ function emptyStatus(): AdminOpStatus {
   return { busy: false, op: '', startedAtUnix: null }
 }
 
-function createShared(intervalMs: number): SharedAdminOpBusy {
+function createShared(idleIntervalMs: number): SharedAdminOpBusy {
+  const idleMs = Math.max(MIN_INTERVAL_MS, idleIntervalMs)
+  const busyMs = Math.max(MIN_INTERVAL_MS, Math.min(BUSY_INTERVAL_MS, idleMs))
   const status = ref<AdminOpStatus>(emptyStatus())
   const lastCheckedAt = ref<number | null>(null)
   const checking = ref(false)
   const error = ref('')
+  const pollIntervalMs = ref(idleMs)
   let timer: ReturnType<typeof setInterval> | null = null
   let subscribers = 0
   let abort: AbortController | null = null
   const { isAdmin, isAuthenticated } = useAuth()
+
+  function desiredInterval(): number {
+    return status.value.busy ? busyMs : idleMs
+  }
+
+  function arm() {
+    const next = desiredInterval()
+    pollIntervalMs.value = next
+    if (timer) {
+      clearInterval(timer)
+      timer = null
+    }
+    timer = setInterval(() => {
+      void refresh()
+    }, next)
+  }
+
+  function rearmIfNeeded() {
+    if (subscribers === 0) return
+    if (pollIntervalMs.value !== desiredInterval() || !timer) arm()
+  }
 
   function applyStatus(s: AdminOpStatus) {
     status.value = {
@@ -45,6 +72,7 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
       op: s.busy ? (s.op || '') : '',
       startedAtUnix: s.busy ? s.startedAtUnix : null,
     }
+    rearmIfNeeded()
   }
 
   function setBusy(v: boolean, op?: string) {
@@ -92,13 +120,6 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
     void refresh()
   }
 
-  function arm() {
-    if (timer) return
-    timer = setInterval(() => {
-      void refresh()
-    }, intervalMs)
-  }
-
   function disarm() {
     if (timer) clearInterval(timer)
     timer = null
@@ -124,6 +145,7 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
     lastCheckedAt,
     checking,
     error,
+    pollIntervalMs,
     refresh,
     setBusy,
     markBusyAndRefresh,
@@ -135,12 +157,12 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
 
 function getShared(intervalMs?: number): SharedAdminOpBusy {
   if (!shared) {
-    shared = createShared(Math.max(5_000, intervalMs ?? DEFAULT_INTERVAL_MS))
+    shared = createShared(intervalMs ?? IDLE_INTERVAL_MS)
   }
   return shared
 }
 
-/** 管理员会话内静默轮询 admin_op_busy（不触发全局 loading）。 */
+/** 管理员会话内静默轮询 admin_op_busy（不触发全局 loading）。busy 时自动加速到 ~3s。 */
 export function useAdminOpBusy(opts?: { intervalMs?: number }): {
   adminOpBusy: ComputedRef<boolean>
   adminOpKind: ComputedRef<string>
@@ -148,6 +170,7 @@ export function useAdminOpBusy(opts?: { intervalMs?: number }): {
   adminOpBusyChecking: Ref<boolean>
   adminOpBusyError: Ref<string>
   adminOpBusyCheckedAt: Ref<number | null>
+  adminOpPollIntervalMs: Ref<number>
   refreshAdminOpBusy: () => Promise<void>
   setAdminOpBusy: (v: boolean, op?: string) => void
   markAdminOpBusyAndRefresh: (op?: string) => void
@@ -163,6 +186,7 @@ export function useAdminOpBusy(opts?: { intervalMs?: number }): {
     adminOpBusyChecking: s.checking,
     adminOpBusyError: s.error,
     adminOpBusyCheckedAt: s.lastCheckedAt,
+    adminOpPollIntervalMs: s.pollIntervalMs,
     refreshAdminOpBusy: s.refresh,
     setAdminOpBusy: s.setBusy,
     markAdminOpBusyAndRefresh: s.markBusyAndRefresh,

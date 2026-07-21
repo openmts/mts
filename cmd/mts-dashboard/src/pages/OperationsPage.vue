@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, inject, onMounted, onBeforeUnmount, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiGet, apiPost } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
@@ -61,12 +61,16 @@ const {
 } = useExportJob()
 const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz } = useServerReachability()
 const { adminOpBusy, adminOpKind, setAdminOpBusy, refreshAdminOpBusy, applyAdminOpStatus } = useAdminOpBusy()
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusyDetailTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('opsAdminBusy'))
 const adminOpBusyChipLabel = computed(() => {
   if (confirmLoading.value) return t.value('opsAdminBusyChip')
   if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
   const key = adminOpKindLabelKey(adminOpKind.value) as import('@/i18n/messages').MessageKey
-  const kind = t.value(key) || t.value('adminOpKindGeneric')
-  return joinAdminOpChip(t.value('opsAdminBusyChip'), kind)
+  const kind = adminOpBusySummary?.value?.opLabel || t.value(key) || t.value('adminOpKindGeneric')
+  const base = joinAdminOpChip(t.value('opsAdminBusyChip'), kind)
+  const elapsed = adminOpBusySummary?.value?.elapsed
+  return elapsed ? `${base} · ${elapsed}` : base
 })
 const statsLoadedAt = ref<number | null>(null)
 const loadError = ref('')
@@ -705,7 +709,7 @@ watch(
             v-if="adminOpBusy || confirmLoading"
             class="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
             data-testid="ops-admin-busy"
-            :title="t('opsAdminBusy')"
+            :title="adminOpBusyDetailTitle"
           >{{ adminOpBusyChipLabel }}</span>
           <span class="text-xs mts-muted" data-testid="ops-status-stats-at">{{ statsLoadedLabel }}</span>
           <span

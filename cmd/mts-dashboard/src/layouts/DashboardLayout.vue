@@ -76,12 +76,16 @@ const adminOpKindLabel = computed(() => {
   return t.value(opKey) || t.value('adminOpKindGeneric')
 })
 
+const adminOpElapsedLabel = computed(() => {
+  if (!adminOpBusy.value) return ''
+  return formatAdminOpElapsed(adminOpStartedAtUnix.value, adminOpNowMs.value)
+})
+
 const adminOpBusyDetail = computed(() => {
   if (!adminOpBusy.value) return ''
-  const elapsed = formatAdminOpElapsed(adminOpStartedAtUnix.value, adminOpNowMs.value)
   return formatMessage(t.value('adminOpBusyBannerDetail'), {
     op: String(adminOpKindLabel.value || t.value('adminOpKindGeneric')),
-    elapsed,
+    elapsed: adminOpElapsedLabel.value || '—',
   })
 })
 
@@ -89,6 +93,7 @@ provide('adminOpBusySummary', computed(() => ({
   busy: adminOpBusy.value,
   op: adminOpKind.value,
   opLabel: adminOpKindLabel.value,
+  elapsed: adminOpElapsedLabel.value,
   detail: adminOpBusyDetail.value,
 })))
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()

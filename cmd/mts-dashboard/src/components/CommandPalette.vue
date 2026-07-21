@@ -51,7 +51,7 @@ let trap: FocusTrapHandle | null = null
 const router = useRouter()
 const { isAdmin } = useAuth()
 const { adminOpBusy, adminOpKind } = useAdminOpBusy()
-const injectedAdminOpSummary = inject<ComputedRef<{ busy: boolean; op: string; opLabel: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
+const injectedAdminOpSummary = inject<ComputedRef<{ busy: boolean; op: string; opLabel: string; elapsed?: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
 const { t, toggleLocale } = useI18n()
 const { toggleTheme } = useTheme()
 const { density, toggleDensity } = useDensity()
@@ -78,7 +78,8 @@ function commandItemLabel(item: CommandNavItem): string {
   const opLabel = summary?.opLabel
     || t.value(adminOpKindLabelKey(adminOpKind.value) as MessageKey)
     || t.value('adminOpKindGeneric')
-  return joinAdminOpChip(busyBase, opLabel)
+  const joined = joinAdminOpChip(busyBase, opLabel)
+  return summary?.elapsed ? `${joined} · ${summary.elapsed}` : joined
 }
 
 const emptyQuery = computed(() => !query.value.trim())

@@ -1374,3 +1374,7 @@
 ## P319（2026-07-22）
 - Dashboard：admin busy 期间 Layout 1s tick 实时刷新 elapsed；抽取 formatAdminOpElapsed/joinAdminOpChip
 - Storage/Readiness/Ops/Overview chip 展示当前 op 类型；命令面板运维状态项 busy 时动态标签
+
+## P320（2026-07-22）
+- Dashboard：admin busy 时 ops-status 轮询加速至 ~3s（空闲 15s）
+- Ops 状态条 chip / 命令面板展示实时 elapsed（复用 Layout tick 注入摘要）
