@@ -358,6 +358,9 @@ onBeforeUnmount(() => {
       v-if="loadError"
       kind="error"
       :message="loadError"
+      retryable
+      data-testid="config-load-error"
+      @retry="loadConfig"
       @dismiss="loadError = ''"
     />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />

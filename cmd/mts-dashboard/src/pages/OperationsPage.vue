@@ -450,6 +450,9 @@ watch(
       v-if="loadError"
       kind="error"
       :message="loadError"
+      retryable
+      data-testid="ops-load-error"
+      @retry="loadStats"
       @dismiss="loadError = ''"
     />
     <ActionResultBanner

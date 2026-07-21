@@ -1085,3 +1085,6 @@
 ## P237（2026-07-21）
 - ActionResultBanner 可选重试
 - 关键页 loadError 一键重试
+
+## P238（2026-07-21）
+- Config/Operations/Readiness doctor 加载失败重试

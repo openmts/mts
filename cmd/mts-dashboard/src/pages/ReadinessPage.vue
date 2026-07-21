@@ -861,6 +861,9 @@ watch(
       v-if="doctorError"
       kind="error"
       :message="doctorError"
+      retryable
+      data-testid="readiness-doctor-error"
+      @retry="loadDoctor"
       @dismiss="doctorError = ''"
     />
     <div id="readiness-action" class="scroll-mt-20" data-testid="readiness-action-anchor">
