@@ -367,6 +367,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/downsample')
   await expect(page.getByTestId('downsample-page')).toBeVisible()
   await expect(page.getByTestId('downsample-load-error')).toHaveCount(0)
+  await expect(page.getByTestId('downsample-policies-error')).toHaveCount(0)
+  await expect(page.getByTestId('downsample-statuses-error')).toHaveCount(0)
   await expect(page.getByTestId('downsample-export-json')).toBeVisible()
   await expect(page.getByTestId('downsample-export-csv')).toBeVisible()
   await page.getByTestId('downsample-open-create').click()

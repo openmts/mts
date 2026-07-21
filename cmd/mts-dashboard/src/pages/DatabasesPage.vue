@@ -280,11 +280,10 @@ async function loadMeasurementDetails(meas: MeasurementEntry, dbName: string) {
     meas.seriesTruncated = seriesResult.truncated
     meas.loadError = ''
   } catch (e) {
-    const msg = formatCaughtError(e)
-    meas.loadError = msg
-    if (!hasMeasurementSnapshot(meas)) {
-      reportActionError('load-meas', e, { db: dbName, meas: meas.name })
-    }
+    // 就地 soft-fail，避免与顶层 action banner 双重 toast
+    meas.loadError = formatCaughtError(e)
+    lastFailedDbName.value = dbName
+    lastFailedMeasName.value = meas.name
   } finally {
     meas.loading = false
   }

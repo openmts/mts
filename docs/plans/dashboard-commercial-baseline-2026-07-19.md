@@ -1178,3 +1178,6 @@
 
 ## P267（2026-07-21）
 - Config error-codes/schema 分项 soft-fail，不阻断 effective
+
+## P268（2026-07-21）
+- Downsample 策略/状态分项 soft-fail

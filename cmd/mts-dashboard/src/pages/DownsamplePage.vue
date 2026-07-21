@@ -17,6 +17,7 @@ import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
@@ -69,6 +70,8 @@ const {
 const policies = ref<DownsamplePolicy[]>([])
 const statuses = ref<DownsampleStatus[]>([])
 const loadError = ref('')
+const policiesError = ref('')
+const statusesError = ref('')
 type DsActionKey = 'create' | 'delete' | 'toggle' | 'batch' | 'range'
 const {
   lastFailedAction,
@@ -272,15 +275,43 @@ watch(
 
 async function loadData() {
   if (!isAdmin.value) return
-  try {
-    const [polData, statData] = await Promise.all([
-      apiGet<PoliciesResponse>('/api/v1/admin/downsample/policies'),
-      apiGet<StatusesResponse>('/api/v1/admin/downsample/statuses'),
-    ])
-    policies.value = polData.policies ?? []
-    statuses.value = statData.statuses ?? []
-  } catch (e) {
-    loadError.value = formatCaughtError(e)
+  loadError.value = ''
+  const results = await Promise.allSettled([
+    apiGet<PoliciesResponse>('/api/v1/admin/downsample/policies'),
+    apiGet<StatusesResponse>('/api/v1/admin/downsample/statuses'),
+  ])
+  if (results[0].status === 'fulfilled') {
+    policies.value = results[0].value.policies ?? []
+    policiesError.value = ''
+  } else {
+    const msg = formatCaughtError(results[0].reason)
+    if (policies.value.length) policiesError.value = msg
+    else {
+      policies.value = []
+      policiesError.value = msg
+    }
+  }
+  if (results[1].status === 'fulfilled') {
+    statuses.value = results[1].value.statuses ?? []
+    statusesError.value = ''
+  } else {
+    const msg = formatCaughtError(results[1].reason)
+    if (statuses.value.length) statusesError.value = msg
+    else {
+      statuses.value = []
+      statusesError.value = msg
+    }
+  }
+  // 两项皆失败且无任何快照时，使用整页 loadError（兼容旧 e2e）
+  if (
+    results[0].status === 'rejected'
+    && results[1].status === 'rejected'
+    && !policies.value.length
+    && !statuses.value.length
+  ) {
+    loadError.value = policiesError.value || statusesError.value || formatCaughtError(results[0].reason)
+    policiesError.value = ''
+    statusesError.value = ''
   }
 }
 
@@ -790,6 +821,20 @@ onBeforeUnmount(() => {
     </div>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="downsample-load-error" @retry="loadData" @dismiss="loadError = ''" />
+    <PartialErrorBanner
+      v-if="!loadError && policiesError"
+      :message="`${t('downsamplePoliciesLoadFailed')}：${policiesError}`"
+      test-id="downsample-policies-error"
+      @retry="loadData"
+      @dismiss="policiesError = ''"
+    />
+    <PartialErrorBanner
+      v-if="!loadError && statusesError"
+      :message="`${t('downsampleStatusesLoadFailed')}：${statusesError}`"
+      test-id="downsample-statuses-error"
+      @retry="loadData"
+      @dismiss="statusesError = ''"
+    />
     <ActionResultBanner
       :result="actionResult"
       :retryable="canRetryAction"
