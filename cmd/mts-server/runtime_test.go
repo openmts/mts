@@ -188,3 +188,54 @@ type testAddr string
 func (a testAddr) Network() string { return "tcp" }
 
 func (a testAddr) String() string { return string(a) }
+
+func TestRuntimeMaintenanceBusy(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.HTTP.Addr = "127.0.0.1:0"
+	cfg.HTTP.Enabled = true
+	cfg.GRPC.Enabled = false
+	runtime, err := openRuntime(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("openRuntime() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = runtime.engine.Close(context.Background())
+	})
+
+	if err := runtime.tryBeginMaintenance(); err != nil {
+		t.Fatalf("tryBeginMaintenance() first error = %v", err)
+	}
+	err = runtime.tryBeginMaintenance()
+	if err == nil {
+		t.Fatal("tryBeginMaintenance() second call want error")
+	}
+	var apiErr apiError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error type = %T, want apiError", err)
+	}
+	if apiErr.Code != errorCodeResourceExhausted {
+		t.Fatalf("code = %q, want %q", apiErr.Code, errorCodeResourceExhausted)
+	}
+	if !errors.Is(err, mts.ErrEngineBusy) {
+		t.Fatalf("unwrap = %v, want ErrEngineBusy", err)
+	}
+	runtime.endMaintenance()
+	if err := runtime.tryBeginMaintenance(); err != nil {
+		t.Fatalf("tryBeginMaintenance() after end error = %v", err)
+	}
+	runtime.endMaintenance()
+
+	// concurrent flush while holding maintenance should fail
+	if err := runtime.tryBeginMaintenance(); err != nil {
+		t.Fatalf("hold maintenance: %v", err)
+	}
+	err = runtime.flush(context.Background())
+	if err == nil {
+		t.Fatal("flush during maintenance want error")
+	}
+	if !errors.Is(err, mts.ErrEngineBusy) {
+		t.Fatalf("flush busy err = %v", err)
+	}
+	runtime.endMaintenance()
+}

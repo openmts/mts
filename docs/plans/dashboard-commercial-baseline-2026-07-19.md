@@ -1332,3 +1332,8 @@
 - Write/Query 删除/Account/Users 写路径双提交 early-return
 - InFlightBanner 支持 kind=login
 
+## P311（2026-07-22）
+- Operations：危险操作确认双提交防护（confirmLoading early-return）；入口按钮 loading 中禁用
+- Operations：clear-log Confirm 对齐 writeBlocked / blockReason / 加载中可取消
+- Server：flush/compact/retention 进程内互斥（resource_exhausted + ErrEngineBusy），防并发运维叠加
+- 会话 critical 横幅文案明确写/运维/管理变更已阻断

@@ -17,20 +17,21 @@ import (
 )
 
 type serverRuntime struct {
-	mu         sync.RWMutex
-	config     config
-	logger     *slog.Logger
-	metrics    *serverMetrics
-	audit      *auditLog
-	httpSem    chan struct{}
-	grpcSem    chan struct{}
-	requestSeq atomic.Uint64
-	engine     *mts.Engine
-	httpServer *http.Server
-	grpcServer *grpc.Server
-	httpLn     net.Listener
-	grpcLn     net.Listener
-	serveErr   chan error
+	mu              sync.RWMutex
+	config          config
+	logger          *slog.Logger
+	metrics         *serverMetrics
+	audit           *auditLog
+	httpSem         chan struct{}
+	grpcSem         chan struct{}
+	requestSeq      atomic.Uint64
+	maintenanceBusy atomic.Bool
+	engine          *mts.Engine
+	httpServer      *http.Server
+	grpcServer      *grpc.Server
+	httpLn          net.Listener
+	grpcLn          net.Listener
+	serveErr        chan error
 }
 
 func openRuntime(ctx context.Context, cfg config) (*serverRuntime, error) {
@@ -313,10 +314,26 @@ func (r *serverRuntime) queryStats() mts.QueryStats {
 	return r.engine.QueryStatsSnapshot()
 }
 
+// tryBeginMaintenance 串行化 flush/compact/retention，避免 Dashboard 连点或并发请求叠加压垮引擎。
+func (r *serverRuntime) tryBeginMaintenance() error {
+	if !r.maintenanceBusy.CompareAndSwap(false, true) {
+		return newAPIError(errorCodeResourceExhausted, "maintenance operation already in progress", mts.ErrEngineBusy)
+	}
+	return nil
+}
+
+func (r *serverRuntime) endMaintenance() {
+	r.maintenanceBusy.Store(false)
+}
+
 func (r *serverRuntime) flush(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := r.tryBeginMaintenance(); err != nil {
+		return err
+	}
+	defer r.endMaintenance()
 	return r.engine.Flush(ctx)
 }
 
@@ -324,6 +341,10 @@ func (r *serverRuntime) compact(ctx context.Context) (mts.CompactionResult, erro
 	if err := ctx.Err(); err != nil {
 		return mts.CompactionResult{}, err
 	}
+	if err := r.tryBeginMaintenance(); err != nil {
+		return mts.CompactionResult{}, err
+	}
+	defer r.endMaintenance()
 	return r.engine.CompactWithResult(ctx)
 }
 
@@ -331,6 +352,10 @@ func (r *serverRuntime) applyRetention(ctx context.Context, req retentionApplyRe
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := r.tryBeginMaintenance(); err != nil {
+		return err
+	}
+	defer r.endMaintenance()
 	return r.engine.ApplyRetention(ctx, unixNanosOrNow(req.NowUnixNanos))
 }
 

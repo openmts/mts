@@ -285,6 +285,7 @@ const statsLoadedLabel = computed(() => {
 })
 
 function openConfirm(kind: 'flush' | 'compact' | 'retention') {
+  if (confirmLoading.value) return
   if (writeBlocked.value) {
     notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
     return
@@ -302,6 +303,7 @@ function reportActionError(kind: OpsActionKey, e: unknown) {
 async function retryLastOpsAction() {
   const kind = lastFailedAction.value
   if (!kind) return
+  if (confirmLoading.value) return
   if (writeBlocked.value) {
     notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
     return
@@ -316,6 +318,7 @@ function cancelOpsAction() {
 
 async function runConfirmed() {
   if (!confirmKind.value) return
+  if (confirmLoading.value) return
   if (writeBlocked.value) {
     notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
     confirmKind.value = null
@@ -472,10 +475,21 @@ async function exportActionLog() {
 }
 
 function openClearLog() {
+  if (clearLogLoading.value) return
+  if (writeBlocked.value) {
+    notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
+    return
+  }
   clearLogOpen.value = true
 }
 
 function confirmClearLog() {
+  if (clearLogLoading.value) return
+  if (writeBlocked.value) {
+    notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
+    clearLogOpen.value = false
+    return
+  }
   clearLogLoading.value = true
   try {
     actionLog.value = []
@@ -754,7 +768,7 @@ watch(
         id="ops-flush"
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         data-testid="ops-flush"
-        :disabled="writeBlocked"
+        :disabled="writeBlocked || confirmLoading"
         :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined"
         @click="openConfirm('flush')"
       >
@@ -767,7 +781,7 @@ watch(
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         id="ops-compact"
         data-testid="ops-compact"
-        :disabled="writeBlocked"
+        :disabled="writeBlocked || confirmLoading"
         :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined"
         @click="openConfirm('compact')"
       >
@@ -780,7 +794,7 @@ watch(
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         id="ops-retention"
         data-testid="ops-retention"
-        :disabled="writeBlocked"
+        :disabled="writeBlocked || confirmLoading"
         :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined"
         @click="openConfirm('retention')"
       >
@@ -871,7 +885,7 @@ watch(
             <Download class="h-3.5 w-3.5" />
             {{ t('opsExportLog') }}
           </button>
-          <button type="button" class="mts-btn" data-testid="ops-clear-log" :disabled="!actionLog.length" @click="openClearLog">
+          <button type="button" class="mts-btn" data-testid="ops-clear-log" :disabled="!actionLog.length || writeBlocked || clearLogLoading" :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined" @click="openClearLog">
             <Eraser class="h-3.5 w-3.5" />
             {{ t('opsClearLog') }}
           </button>
@@ -978,11 +992,15 @@ watch(
     />
     <ConfirmDialog
       v-model:open="clearLogOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineOpsBlocked'"
       :title="t('opsClearLogTitle')"
       :message="t('opsClearLogMsg')"
       :confirm-label="t('opsClearLog')"
       danger
       :loading="clearLogLoading"
+      allow-cancel-while-loading
       data-testid="ops-clear-log-confirm"
       @confirm="confirmClearLog"
     />
