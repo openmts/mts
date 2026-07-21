@@ -1239,3 +1239,6 @@
 ## P287（2026-07-22）
 - 导出失败一键重试（ExportJobBanner + useExportJob lastRetry）
 
+## P288（2026-07-22）
+- 写入/查询进行中状态与取消按钮可访问性
+

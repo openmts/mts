@@ -1047,6 +1047,17 @@ test('commercial browser smoke path', async ({ page }) => {
     await page.unroute('**/api/v1/data/write/**', fulfillTimeout).catch(() => {})
   }
 
+  // P288: 写入取消按钮 idle 可访问性
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible()
+  await expect(page.getByTestId('write-cancel')).toBeDisabled()
+  const cancelTitle = await page.getByTestId('write-cancel').getAttribute('title')
+  if (cancelTitle && !/无进行中|No write|idle|当前无/i.test(cancelTitle)) {
+    // title 应提示无进行中写入
+    throw new Error(`unexpected write-cancel idle title: ${cancelTitle}`)
+  }
+  await expect(page.getByTestId('write-submit')).toHaveAttribute('aria-busy', 'false')
+
   // P234b: 导出取消 — 慢导出窗口 + export-job-cancel
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()

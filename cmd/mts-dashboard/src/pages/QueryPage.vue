@@ -886,15 +886,19 @@ const columnRows = computed(() => {
         class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900"
         data-testid="query-run"
         :disabled="loading"
+        :aria-busy="loading ? 'true' : 'false'"
+        :title="loading ? t('querySubmitting') : undefined"
         @click="runQuery"
       >
-        <Search class="h-4 w-4" /> {{ loading ? t('loading') : t('query') }}
+        <Search class="h-4 w-4" /> {{ loading ? t('querySubmitting') : t('query') }}
       </button>
       <button
         type="button"
         class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700"
         data-testid="query-cancel"
         :disabled="!loading"
+        :title="loading ? t('queryCancelHint') : t('queryCancelIdle')"
+        :aria-label="loading ? t('queryCancelHint') : t('queryCancelIdle')"
         @click="cancelQuery"
       ><Square class="h-4 w-4" />{{ t('queryCancel') }}</button>
       <button
