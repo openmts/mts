@@ -1,4 +1,9 @@
 import { beginRequest, endRequest } from '@/composables/useGlobalLoading'
+import {
+  createTimeoutSignal,
+  DEFAULT_API_TIMEOUT_MS,
+  isAbortError,
+} from '@/utils/requestTimeout'
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 const TOKEN_KEY = 'mts_bearer_token'
 const USER_KEY = 'mts_user_name'
@@ -227,6 +232,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   const method = (options.method || 'GET').toUpperCase()
   const headers = authHeaders(options.headers as Record<string, string> | undefined, method)
+  const timeoutHandle = createTimeoutSignal(options.signal, DEFAULT_API_TIMEOUT_MS)
   beginRequest()
   try {
     let response: Response
@@ -235,9 +241,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         ...options,
         method,
         headers,
+        signal: timeoutHandle.signal,
       })
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (isAbortError(err)) {
+        if (timeoutHandle.didTimeout()) {
+          throw new APIClientError(408, 'timeout', 'request timeout')
+        }
         throw new APIClientError(499, 'canceled', 'request canceled')
       }
       throw err
@@ -260,6 +270,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       throw new APIClientError(response.status, 'internal', 'invalid JSON response')
     }
   } finally {
+    timeoutHandle.cleanup()
     endRequest()
   }
 }
@@ -270,6 +281,7 @@ export function apiGet<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 /** 轻量可达性探测：不携带鉴权、不触发全局 loading、不因过期 token 强制登出 */
 export async function probeReadyz(init: RequestInit = {}): Promise<{ ok: boolean; status: number }> {
+  const timeoutHandle = createTimeoutSignal(init.signal, 5_000)
   try {
     const response = await fetch(`${API_BASE}/readyz`, {
       method: 'GET',
@@ -279,11 +291,14 @@ export async function probeReadyz(init: RequestInit = {}): Promise<{ ok: boolean
         Accept: 'application/json, text/plain, */*',
         ...(init.headers as Record<string, string> | undefined),
       },
+      signal: timeoutHandle.signal,
     })
     const status = response.status
     return { ok: status >= 200 && status < 300, status }
   } catch {
     return { ok: false, status: 0 }
+  } finally {
+    timeoutHandle.cleanup()
   }
 }
 
@@ -295,13 +310,22 @@ export async function apiGetText(path: string, init: RequestInit = {}): Promise<
   }
   const method = 'GET'
   const headers = authHeaders(init.headers as Record<string, string> | undefined, method)
+  const timeoutHandle = createTimeoutSignal(init.signal, DEFAULT_API_TIMEOUT_MS)
   beginRequest()
   try {
     let response: Response
     try {
-      response = await fetch(`${API_BASE}${path}`, { ...init, method, headers })
+      response = await fetch(`${API_BASE}${path}`, {
+        ...init,
+        method,
+        headers,
+        signal: timeoutHandle.signal,
+      })
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (isAbortError(err)) {
+        if (timeoutHandle.didTimeout()) {
+          throw new APIClientError(408, 'timeout', 'request timeout')
+        }
         throw new APIClientError(499, 'canceled', 'request canceled')
       }
       throw err
@@ -313,6 +337,7 @@ export async function apiGetText(path: string, init: RequestInit = {}): Promise<
     }
     return await response.text()
   } finally {
+    timeoutHandle.cleanup()
     endRequest()
   }
 }
@@ -362,7 +387,7 @@ export async function apiPostNDJSONStream(
         body: JSON.stringify(body),
       })
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (isAbortError(err)) {
         throw new APIClientError(499, 'canceled', 'request canceled')
       }
       throw err
@@ -422,7 +447,7 @@ export async function apiPostNDJSONStream(
         }
       }
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (isAbortError(err)) {
         throw new APIClientError(499, 'canceled', 'request canceled')
       }
       throw err

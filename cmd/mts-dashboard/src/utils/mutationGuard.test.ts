@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {
   isSessionWriteBlocked,
   mutationBlockReason,
+  mutationBlockedMessageKey,
+  mutationBlockedTitle,
   shouldBlockMutation,
 } from './mutationGuard.ts'
 
@@ -28,4 +30,24 @@ test('mutationBlockReason priority offline over session', () => {
   assert.equal(mutationBlockReason(true, 'critical'), 'offline')
   assert.equal(mutationBlockReason(false, 'critical'), 'session')
   assert.equal(mutationBlockReason(false, 'ok'), 'none')
+})
+
+test('mutationBlockedMessageKey session vs offline scene keys', () => {
+  assert.equal(mutationBlockedMessageKey('session', 'offlineWriteBlocked'), 'sessionMutationBlocked')
+  assert.equal(mutationBlockedMessageKey('offline', 'offlineWriteBlocked'), 'offlineWriteBlocked')
+  assert.equal(mutationBlockedMessageKey('none', 'offlineOpsBlocked'), 'offlineOpsBlocked')
+  assert.equal(mutationBlockedMessageKey(null, ''), 'offlineAdminBlocked')
+})
+
+test('mutationBlockedTitle only when blocked', () => {
+  const t = (k: string) => `T:${k}`
+  assert.equal(mutationBlockedTitle(false, 'session', 'offlineWriteBlocked', t), undefined)
+  assert.equal(
+    mutationBlockedTitle(true, 'session', 'offlineWriteBlocked', t),
+    'T:sessionMutationBlocked',
+  )
+  assert.equal(
+    mutationBlockedTitle(true, 'offline', 'offlineWriteBlocked', t),
+    'T:offlineWriteBlocked',
+  )
 })

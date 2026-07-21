@@ -92,7 +92,7 @@ const {
 } = useListSelection(visibleUserIds)
 const databases = ref<string[]>([])
 const { currentUser, isAdmin } = useAuth()
-const { offline, writeBlocked, blockReason } = useMutationGuard()
+const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
 function roleLabel(role?: string): string {
   if (role === 'admin') return t.value('roleAdmin')
@@ -215,7 +215,7 @@ let unregisterUsersDirty: (() => void) | null = null
 
 async function createUser() {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -243,7 +243,7 @@ async function createUser() {
 
 async function doSetPassword() {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -265,7 +265,7 @@ async function doSetPassword() {
 
 async function doChangeSelfPassword() {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -292,7 +292,7 @@ async function doChangeSelfPassword() {
 
 function requestDelete(name: string) {
   if (writeBlocked.value) {
-    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked'))
+    notifyError(t.value(blockedMessageKey('offlineAdminBlocked')))
     return
   }
   deleteName.value = name
@@ -301,7 +301,7 @@ function requestDelete(name: string) {
 
 async function confirmDelete() {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -328,7 +328,7 @@ async function confirmDelete() {
 
 async function toggleDisable(user: User) {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -370,7 +370,7 @@ function toggleGrantPerm(perm: string) {
 
 async function grantPermission() {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -399,7 +399,7 @@ async function grantPermission() {
 
 async function revokeGrant(g: DatabaseGrant) {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -419,7 +419,7 @@ async function revokeGrant(g: DatabaseGrant) {
 
 function openSetPassword(name: string) {
   if (writeBlocked.value) {
-    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked'))
+    notifyError(t.value(blockedMessageKey('offlineAdminBlocked')))
     return
   }
   setPasswordUser.value = name
@@ -496,7 +496,7 @@ async function exportCSV() {
 
 function openBatch(mode: 'enable' | 'disable') {
   if (writeBlocked.value) {
-    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked'))
+    notifyError(t.value(blockedMessageKey('offlineAdminBlocked')))
     return
   }
   if (!selectedIds.value.length) return
@@ -506,7 +506,7 @@ function openBatch(mode: 'enable' | 'disable') {
 
 async function confirmBatch() {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -583,10 +583,10 @@ onBeforeUnmount(() => {
         <button type="button" class="mts-btn" data-testid="users-share-link" @click="copyUsersShareLink">
           {{ t('usersShareLink') }}
         </button>
-        <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-change-self-open" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="showChangeSelfPassword = true">
+        <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-change-self-open" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="showChangeSelfPassword = true">
           <Lock class="h-3.5 w-3.5" /> {{ t('usersChangeMyPassword') }}
         </button>
-        <button v-if="isAdmin" type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-create-open" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="showCreate = true">
+        <button v-if="isAdmin" type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-create-open" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="showCreate = true">
           <Plus class="h-3.5 w-3.5" /> {{ t('usersCreate') }}
         </button>
         <span
@@ -636,8 +636,8 @@ onBeforeUnmount(() => {
         @clear="clearSelection"
       >
         <template #actions>
-          <button type="button" class="mts-btn" data-testid="users-batch-enable" :disabled="!selectedCount || writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="openBatch('enable')">{{ t('listBatchEnable') }}</button>
-          <button type="button" class="mts-btn" data-testid="users-batch-disable" :disabled="!selectedCount || writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="openBatch('disable')">{{ t('listBatchDisable') }}</button>
+          <button type="button" class="mts-btn" data-testid="users-batch-enable" :disabled="!selectedCount || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('enable')">{{ t('listBatchEnable') }}</button>
+          <button type="button" class="mts-btn" data-testid="users-batch-disable" :disabled="!selectedCount || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('disable')">{{ t('listBatchDisable') }}</button>
         </template>
       </ListSelectionToolbar>
     </div>
@@ -649,7 +649,7 @@ onBeforeUnmount(() => {
         :description="users.length ? t('usersFilterEmptyDesc') : t('usersEmptyDesc')"
       >
         <template v-if="!users.length" #action>
-          <button type="button" class="mts-btn-primary" data-testid="users-empty-create" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="showCreate = true">{{ t('usersCreate') }}</button>
+          <button type="button" class="mts-btn-primary" data-testid="users-empty-create" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="showCreate = true">{{ t('usersCreate') }}</button>
         </template>
       </EmptyState>
     </div>
@@ -727,9 +727,9 @@ onBeforeUnmount(() => {
               </div>
               <div class="px-4">
                 <div class="flex items-center gap-1">
-                  <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : t('usersSetPassword')" :disabled="writeBlocked" :data-testid="`users-set-password-${u.name}`" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
-                  <button type="button" class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" :data-testid="`users-toggle-${u.name}`" @click="toggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
-                  <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" :data-testid="`users-delete-${u.name}`" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
+                  <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : t('usersSetPassword')" :disabled="writeBlocked" :data-testid="`users-set-password-${u.name}`" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
+                  <button type="button" class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`users-toggle-${u.name}`" @click="toggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
+                  <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`users-delete-${u.name}`" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
                 </div>
               </div>
             </div>

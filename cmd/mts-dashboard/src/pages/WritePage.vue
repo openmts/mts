@@ -86,7 +86,7 @@ const actionError = ref('')
 const metaHint = ref('')
 const rpMetaHint = ref('')
 const metaSource = ref<MetaLoadSource>('admin')
-const { offline, writeBlocked, blockReason } = useMutationGuard()
+const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, error: notifyError, warn } = useNotify()
 
 const {
@@ -471,7 +471,7 @@ function cancelWrite() {
 
 async function submit() {
   if (writeBlocked.value) {
-    actionError.value = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineWriteBlocked')
+    actionError.value = t.value(blockedMessageKey('offlineWriteBlocked'))
     notifyError(actionError.value)
     result.value = { ok: false, message: actionError.value }
     return
@@ -806,7 +806,7 @@ async function exportWriteDraft() {
     </div>
 
     <div id="write-actions" class="scroll-mt-20 flex flex-wrap items-center gap-2">
-      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" data-testid="write-submit" :disabled="loading || writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineWriteBlocked') : undefined" @click="submit">
+      <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" data-testid="write-submit" :disabled="loading || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineWriteBlocked')) : undefined" @click="submit">
         <Send class="h-4 w-4" /> {{ loading ? t('loading') : t('writeSubmit') }}
       </button>
       <button type="button" class="mts-btn" data-testid="write-cancel" :disabled="!loading" @click="cancelWrite">

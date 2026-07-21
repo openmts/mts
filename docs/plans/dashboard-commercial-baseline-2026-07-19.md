@@ -1029,3 +1029,10 @@
 ## P221（2026-07-21）
 - 会话 critical 横幅：一键「去续期」「重新登录」
 - Downsample 范围对话框 writeBlocked 阻断提示条
+
+## P222（2026-07-21）
+- 写门禁文案统一：`blockedMessageKey` / `mutationBlockedMessageKey`
+
+## P223（2026-07-21）
+- API 默认超时 30s（probe 5s）；超时友好错误 `timeout`
+- NDJSON 流式查询不套默认超时

@@ -42,7 +42,7 @@ const { isAdmin } = useAuth()
 const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
-const { offline, writeBlocked, blockReason } = useMutationGuard()
+const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, error: notifyError, warn, info } = useNotify()
 const {
   exportJob,
@@ -178,7 +178,7 @@ const statsLoadedLabel = computed(() => {
 
 function openConfirm(kind: 'flush' | 'compact' | 'retention') {
   if (writeBlocked.value) {
-    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked'))
+    notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
     return
   }
   confirmKind.value = kind
@@ -187,7 +187,7 @@ function openConfirm(kind: 'flush' | 'compact' | 'retention') {
 async function runConfirmed() {
   if (!confirmKind.value) return
   if (writeBlocked.value) {
-    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked'))
+    notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
     confirmKind.value = null
     return
   }
@@ -552,7 +552,7 @@ watch(
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         data-testid="ops-flush"
         :disabled="writeBlocked"
-        :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked') : undefined"
+        :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined"
         @click="openConfirm('flush')"
       >
         <DatabaseBackup class="mb-2 h-5 w-5 mts-muted" />
@@ -565,7 +565,7 @@ watch(
         id="ops-compact"
         data-testid="ops-compact"
         :disabled="writeBlocked"
-        :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked') : undefined"
+        :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined"
         @click="openConfirm('compact')"
       >
         <Layers class="mb-2 h-5 w-5 mts-muted" />
@@ -578,7 +578,7 @@ watch(
         id="ops-retention"
         data-testid="ops-retention"
         :disabled="writeBlocked"
-        :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked') : undefined"
+        :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined"
         @click="openConfirm('retention')"
       >
         <Timer class="mb-2 h-5 w-5 mts-muted" />

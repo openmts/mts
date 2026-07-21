@@ -3,9 +3,11 @@ import { getTokenExpiresAt } from '@/api/client'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import {
   mutationBlockReason,
+  mutationBlockedMessageKey,
   shouldBlockMutation,
   type MutationBlockReason,
 } from '@/utils/mutationGuard'
+import type { MessageKey } from '@/i18n/messages'
 import { parseExpiresAt, sessionExpiryView, type SessionUrgency } from '@/utils/sessionExpiry'
 
 /**
@@ -42,12 +44,18 @@ export function useMutationGuard(opts?: { tickMs?: number }) {
     timer = null
   })
 
+  /** 当前阻断原因对应的 i18n key（需配合 writeBlocked 使用） */
+  function blockedMessageKey(offlineKey: MessageKey): MessageKey {
+    return mutationBlockedMessageKey(blockReason.value, offlineKey)
+  }
+
   return {
     offline,
     sessionUrgency,
     sessionWriteBlocked,
     writeBlocked,
     blockReason,
+    blockedMessageKey,
     shouldBlock: () => writeBlocked.value,
   }
 }

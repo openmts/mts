@@ -20,6 +20,7 @@ test('errorCodeFromStatus maps common HTTP statuses', () => {
   assert.equal(errorCodeFromStatus(404), 'not_found')
   assert.equal(errorCodeFromStatus(409), 'already_exists')
   assert.equal(errorCodeFromStatus(429), 'resource_exhausted')
+  assert.equal(errorCodeFromStatus(408), 'timeout')
   assert.equal(errorCodeFromStatus(499), 'canceled')
   assert.equal(errorCodeFromStatus(500), 'internal')
   assert.equal(errorCodeFromStatus(200), null)
@@ -55,4 +56,9 @@ test('formatCaughtError handles APIClientError-like and network', () => {
   assert.match(formatCaughtError(new Error('Failed to fetch'), 'en'), /Network|reach server/i)
   const statusOnly = { name: 'APIClientError', status: 403, message: 'no' }
   assert.match(formatCaughtError(statusOnly, 'zh'), /权限不足/)
+})
+
+test('friendlyApiError timeout', () => {
+  const e = friendlyApiError({ code: 'timeout', status: 408 }, 'zh')
+  assert.match(e.display, /超时/)
 })

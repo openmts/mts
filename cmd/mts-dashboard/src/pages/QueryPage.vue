@@ -64,7 +64,7 @@ const history = useQueryHistory()
 const seriesFilter = ref('')
 const route = useRoute()
 useHashScroll()
-const { offline, writeBlocked, blockReason } = useMutationGuard()
+const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, error: notifyError } = useNotify()
 const {
   exportJob,
@@ -498,7 +498,7 @@ const deleteScopeMessage = computed(() => {
 
 function openRangeDelete() {
   if (writeBlocked.value) {
-    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineDeleteBlocked'))
+    notifyError(t.value(blockedMessageKey('offlineDeleteBlocked')))
     return
   }
   deleteOpen.value = true
@@ -506,7 +506,7 @@ function openRangeDelete() {
 
 async function doRangeDelete() {
   if (writeBlocked.value) {
-    deleteResult.value = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineDeleteBlocked')
+    deleteResult.value = t.value(blockedMessageKey('offlineDeleteBlocked'))
     notifyError(deleteResult.value)
     return
   }
@@ -879,7 +879,7 @@ const columnRows = computed(() => {
         class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-200"
         data-testid="query-range-delete"
         :disabled="writeBlocked"
-        :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineDeleteBlocked') : undefined"
+        :title="writeBlocked ? t(blockedMessageKey('offlineDeleteBlocked')) : undefined"
         @click="openRangeDelete"
       ><Trash2 class="h-4 w-4" />{{ t('queryRangeDelete') }}</button>
       <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700" @click="copyResults">

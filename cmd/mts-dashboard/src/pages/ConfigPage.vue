@@ -38,7 +38,7 @@ interface SchemaResponse { fields: SchemaField[] }
 useHashScroll()
 const route = useRoute()
 const { isAdmin } = useAuth()
-const { offline, writeBlocked, blockReason } = useMutationGuard()
+const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
 const {
@@ -157,7 +157,7 @@ watch(
 
 async function handleValidate() {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -183,7 +183,7 @@ async function handleValidate() {
 
 async function handleReload() {
   if (writeBlocked.value) {
-    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -396,8 +396,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="flex flex-wrap gap-3">
-      <button class="mts-btn-primary" data-testid="config-validate" @click="handleValidate" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined"><CheckCircle class="h-4 w-4" />{{ t('configValidate') }}</button>
-      <button class="mts-btn-primary" data-testid="config-reload" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="handleReload"><RefreshCw class="h-4 w-4" />{{ t('configReload') }}</button>
+      <button class="mts-btn-primary" data-testid="config-validate" @click="handleValidate" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined"><CheckCircle class="h-4 w-4" />{{ t('configValidate') }}</button>
+      <button class="mts-btn-primary" data-testid="config-reload" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="handleReload"><RefreshCw class="h-4 w-4" />{{ t('configReload') }}</button>
     </div>
     <div v-if="validateResult" :class="validateResult.ok ? 'mts-alert-ok' : 'mts-alert-error'">
       <p v-if="validateResult.ok">{{ t('configValidateOk') }}</p>

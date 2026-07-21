@@ -22,6 +22,7 @@ const TITLES: Record<string, { zh: string; en: string }> = {
   already_exists: { zh: '资源已存在', en: 'Already exists' },
   internal: { zh: '服务内部错误', en: 'Internal error' },
   canceled: { zh: '请求已取消', en: 'Canceled' },
+  timeout: { zh: '请求超时', en: 'Request timeout' },
   network: { zh: '网络异常', en: 'Network error' },
 }
 
@@ -34,6 +35,7 @@ const HINTS: Record<string, { zh: string; en: string }> = {
   already_exists: { zh: '同名资源已存在', en: 'A resource with the same name already exists' },
   internal: { zh: '请稍后重试；若持续出现请查看服务日志', en: 'Retry later; check server logs if it persists' },
   canceled: { zh: '操作已取消', en: 'Operation canceled' },
+  timeout: { zh: '服务响应过慢，请缩小范围或稍后重试', en: 'Server took too long; narrow the request or retry later' },
   network: { zh: '无法连接服务，请检查网络或服务状态', en: 'Cannot reach server; check network or service status' },
 }
 
@@ -55,6 +57,7 @@ export function errorCodeFromStatus(status: number | undefined | null): string |
   if (s === 404) return 'not_found'
   if (s === 409) return 'already_exists'
   if (s === 429) return 'resource_exhausted'
+  if (s === 408) return 'timeout'
   if (s === 499) return 'canceled'
   if (s >= 500 && s < 600) return 'internal'
   return null
@@ -135,6 +138,9 @@ export function formatCaughtError(err: unknown, locale?: ApiErrorLocale | null):
     if (err instanceof Error && err.message) {
       if (/failed to fetch|network|load failed|networkerror/i.test(err.message)) {
         return friendlyApiError({ code: 'network', message: err.message }, loc).display
+      }
+      if (err.name === 'AbortError' || /timeout|timed out/i.test(err.message)) {
+        return friendlyApiError({ code: 'timeout', message: err.message }, loc).display
       }
       return friendlyApiError({ code: 'internal', message: err.message }, loc).display
     }

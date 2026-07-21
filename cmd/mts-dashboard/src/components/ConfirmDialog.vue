@@ -59,7 +59,7 @@ const blockedTitle = computed(() => {
   const key = mutationBlockedMessageKey(
     props.blockReason === 'session' || props.blockReason === 'offline' ? props.blockReason : 'offline',
     props.offlineMessageKey || 'offlineAdminBlocked',
-  ) as MessageKey
+  )
   return t.value(key)
 })
 
