@@ -58,8 +58,11 @@ test('commercial browser smoke path', async ({ page }) => {
   }
   await expect(page.getByTestId('overview-summary')).toBeVisible()
   await expect(page.getByTestId('overview-load-error')).toHaveCount(0)
+  await expect(page.getByTestId('overview-refresh-error')).toHaveCount(0)
   await expect(page.getByTestId('overview-partial-error')).toHaveCount(0)
   await expect(page.getByTestId('overview-partial-sections')).toHaveCount(0)
+  await expect(page.getByTestId('overview-auto-refresh')).toBeVisible()
+  await expect(page.getByTestId('overview-refresh')).toBeVisible()
   // P187: 登出后访问受保护深链应带 redirect 提示，登录后回到原路径
   await page.getByTestId('topbar-logout').click()
   await expect(page).toHaveURL(/login/)

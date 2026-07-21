@@ -90,6 +90,9 @@ const maintenanceStats = ref<MaintenanceStats | null>(null)
 const doctorChecks = ref<DoctorCheck[]>([])
 const doctorTLS = ref<boolean | null>(null)
 const loadError = ref('')
+/** 自动刷新失败：保留已有快照，避免整页错误态覆盖 */
+const refreshError = ref('')
+const refreshFailStreak = ref(0)
 /** 管理分项失败：key -> 错误文案；支持单项重试 */
 type AdminSectionKey = 'memory' | 'compaction' | 'maintenance' | 'maintErrors' | 'doctor' | 'version'
 const adminSectionErrors = ref<Partial<Record<AdminSectionKey, string>>>({})
@@ -336,68 +339,100 @@ async function retryAdminSection(key: AdminSectionKey) {
   }
 }
 
-async function loadOverview() {
-  loading.value = true
-  loadError.value = ''
-  adminSectionErrors.value = {}
+function hasOverviewSnapshot(): boolean {
+  return healthy.value !== null || !!lastRefreshed.value
+}
+
+function clearNonAdminSnapshots() {
+  memorySnapshot.value = null
+  compactionStats.value = null
+  maintenanceStats.value = null
+  maintenanceErrors.value = []
+  doctorChecks.value = []
+  doctorTLS.value = null
+  serverVersion.value = null
+}
+
+function nullAdminSectionData(key: AdminSectionKey) {
+  if (key === 'memory') memorySnapshot.value = null
+  else if (key === 'compaction') compactionStats.value = null
+  else if (key === 'maintenance') maintenanceStats.value = null
+  else if (key === 'maintErrors') maintenanceErrors.value = []
+  else if (key === 'doctor') {
+    doctorChecks.value = []
+    doctorTLS.value = null
+  } else if (key === 'version') serverVersion.value = null
+}
+
+function applyAdminHealthRaw(raw: AdminHealthResponse | HealthSnapshot) {
+  const h = ((raw as AdminHealthResponse).health ?? raw) as HealthSnapshot
+  if (h && typeof h.healthy === 'boolean') {
+    if (h.checks?.length) healthChecks.value = h.checks
+    if (h.reasons?.length) healthReasons.value = h.reasons
+  }
+}
+
+async function loadAdminBundle(softKeep: boolean) {
+  if (!isAdmin.value) {
+    if (!softKeep) clearNonAdminSnapshots()
+    return
+  }
+  const results = await Promise.allSettled([
+    loadAdminSection('memory'),
+    loadAdminSection('compaction'),
+    loadAdminSection('maintenance'),
+    loadAdminSection('maintErrors'),
+    apiGet<AdminHealthResponse | HealthSnapshot>('/api/v1/admin/health'),
+    loadAdminSection('doctor'),
+    loadAdminSection('version'),
+  ])
+  const keys: Array<AdminSectionKey | null> = [
+    'memory', 'compaction', 'maintenance', 'maintErrors', null, 'doctor', 'version',
+  ]
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i]
+    const key = keys[i]
+    if (r.status === 'fulfilled') {
+      if (key) clearAdminSectionError(key)
+      else applyAdminHealthRaw(r.value as AdminHealthResponse | HealthSnapshot)
+      continue
+    }
+    if (!key) continue
+    if (!softKeep) nullAdminSectionData(key)
+    setAdminSectionError(key, r.reason)
+  }
+}
+
+async function loadOverview(opts?: { background?: boolean }) {
+  const background = !!opts?.background
+  if (!background) {
+    loading.value = true
+    loadError.value = ''
+    adminSectionErrors.value = {}
+  }
   try {
     const healthData = await apiGet<HealthResponse>('/healthz')
     applyHealth(healthData)
-
-    if (isAdmin.value) {
-      const results = await Promise.allSettled([
-        loadAdminSection('memory'),
-        loadAdminSection('compaction'),
-        loadAdminSection('maintenance'),
-        loadAdminSection('maintErrors'),
-        apiGet<AdminHealthResponse | HealthSnapshot>('/api/v1/admin/health'),
-        loadAdminSection('doctor'),
-        loadAdminSection('version'),
-      ])
-      const keys: Array<AdminSectionKey | null> = [
-        'memory', 'compaction', 'maintenance', 'maintErrors', null, 'doctor', 'version',
-      ]
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i]
-        const key = keys[i]
-        if (r.status === 'fulfilled') {
-          if (key) clearAdminSectionError(key)
-          else {
-            const raw = r.value as AdminHealthResponse
-            const h = (raw.health ?? raw) as HealthSnapshot
-            if (h && typeof h.healthy === 'boolean') {
-              if (h.checks?.length) healthChecks.value = h.checks
-              if (h.reasons?.length) healthReasons.value = h.reasons
-            }
-          }
-          continue
-        }
-        if (!key) continue
-        if (key === 'memory') memorySnapshot.value = null
-        else if (key === 'compaction') compactionStats.value = null
-        else if (key === 'maintenance') maintenanceStats.value = null
-        else if (key === 'maintErrors') maintenanceErrors.value = []
-        else if (key === 'doctor') {
-          doctorChecks.value = []
-          doctorTLS.value = null
-        } else if (key === 'version') serverVersion.value = null
-        setAdminSectionError(key, r.reason)
-      }
-    } else {
-      memorySnapshot.value = null
-      compactionStats.value = null
-      maintenanceStats.value = null
-      maintenanceErrors.value = []
-      doctorChecks.value = []
-      doctorTLS.value = null
-      serverVersion.value = null
-    }
+    await loadAdminBundle(background)
     lastRefreshed.value = new Date().toLocaleTimeString()
     readinessTick.value += 1
+    loadError.value = ''
+    refreshError.value = ''
+    refreshFailStreak.value = 0
   } catch (e) {
-    loadError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (background && hasOverviewSnapshot()) {
+      refreshError.value = msg
+      refreshFailStreak.value += 1
+      if (refreshFailStreak.value === 1) {
+        notifyError(`${t.value('overviewRefreshFailed')}：${msg}`)
+      }
+    } else {
+      loadError.value = msg
+      refreshError.value = ''
+    }
   } finally {
-    loading.value = false
+    if (!background) loading.value = false
   }
 }
 
@@ -408,7 +443,7 @@ function toggleAutoRefresh() {
     timer = null
   }
   if (autoRefresh.value) {
-    timer = setInterval(() => { void loadOverview() }, 10000)
+    timer = setInterval(() => { void loadOverview({ background: true }) }, 10000)
   }
 }
 
@@ -571,7 +606,13 @@ async function copyOverview() {
       </div>
       <div class="flex items-center gap-2">
         <span v-if="lastRefreshed" class="text-xs mts-muted">{{ t('refreshedAt') }} {{ lastRefreshed }}</span>
-        <button class="mts-btn" @click="toggleAutoRefresh">
+        <button
+          type="button"
+          class="mts-btn"
+          data-testid="overview-auto-refresh"
+          :aria-pressed="autoRefresh ? 'true' : 'false'"
+          @click="toggleAutoRefresh"
+        >
           <RefreshCw class="h-3.5 w-3.5" :class="autoRefresh ? 'animate-spin' : ''" />
           {{ autoRefresh ? t('autoRefreshing') : t('autoRefresh') }}
         </button>
@@ -584,8 +625,15 @@ async function copyOverview() {
           <ClipboardCheck class="h-3.5 w-3.5" />
           {{ t('readiness') }}
         </button>
-        <button class="mts-btn-primary" :disabled="loading" @click="loadOverview">
-          <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
+        <button
+          type="button"
+          class="mts-btn-primary"
+          data-testid="overview-refresh"
+          :disabled="loading"
+          :aria-busy="loading ? 'true' : undefined"
+          @click="() => loadOverview()"
+        >
+          <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" /> {{ t('refresh') }}
         </button>
       </div>
     </div>
@@ -596,14 +644,21 @@ async function copyOverview() {
       :message="loadError"
       retryable
       data-testid="overview-load-error"
-      @retry="loadOverview"
+      @retry="() => loadOverview()"
       @dismiss="loadError = ''"
+    />
+    <PartialErrorBanner
+      v-else-if="refreshError"
+      :message="`${t('overviewRefreshFailed')}：${refreshError}`"
+      test-id="overview-refresh-error"
+      @retry="() => loadOverview({ background: true })"
+      @dismiss="refreshError = ''"
     />
     <PartialErrorBanner
       v-else-if="adminPartialError"
       :message="`${t('partialAdminStats')}：${adminPartialError}`"
       test-id="overview-partial-error"
-      @retry="loadOverview"
+      @retry="() => loadOverview()"
       @dismiss="adminSectionErrors = {}"
     />
     <div

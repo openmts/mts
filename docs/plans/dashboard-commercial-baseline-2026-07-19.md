@@ -1157,3 +1157,10 @@
 
 ## P260（2026-07-21）
 - 抽取 PartialErrorBanner，统一分项失败条
+
+## P261（2026-07-21）
+- Overview 自动刷新 soft-fail：保留快照 + `overview-refresh-error`
+
+## P262（2026-07-21）
+- Overview 自动/手动刷新 a11y：`aria-pressed` / `aria-busy` + testid
+
