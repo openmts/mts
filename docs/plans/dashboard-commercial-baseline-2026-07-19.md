@@ -1172,3 +1172,9 @@
 
 ## P265（2026-07-21）
 - Storage 双列表刷新 soft-fail 与分项错误条
+
+## P266（2026-07-21）
+- Databases measurement 详情 soft-fail + 分项可重试
+
+## P267（2026-07-21）
+- Config error-codes/schema 分项 soft-fail，不阻断 effective

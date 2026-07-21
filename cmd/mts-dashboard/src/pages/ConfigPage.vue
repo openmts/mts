@@ -62,6 +62,7 @@ const CONFIG_LIST_HEIGHT = 320
 const errorCodeFilter = ref('')
 const loadError = ref('')
 const schemaError = ref('')
+const errorCodesError = ref('')
 type ConfigActionKey = 'validate' | 'reload'
 const {
   lastFailedAction,
@@ -127,31 +128,58 @@ async function reloadAllConfig() {
 }
 
 async function reloadConfigSchema() {
-  schemaError.value = ''
   try {
     const schemaData = await apiGet<SchemaResponse>('/api/v1/admin/config/schema')
     schemaFields.value = schemaData.fields ?? []
+    schemaError.value = ''
   } catch (e) {
-    schemaFields.value = []
-    schemaError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (schemaFields.value.length) schemaError.value = msg
+    else {
+      schemaFields.value = []
+      schemaError.value = msg
+    }
+  }
+}
+
+async function reloadErrorCodes() {
+  try {
+    const data = await apiGet<ErrorCodesResponse>('/api/v1/admin/error-codes')
+    errorCodes.value = data.codes ?? []
+    errorCodesError.value = ''
+  } catch (e) {
+    const msg = formatCaughtError(e)
+    if (errorCodes.value.length) errorCodesError.value = msg
+    else {
+      errorCodes.value = []
+      errorCodesError.value = msg
+    }
   }
 }
 
 async function loadConfig() {
   schemaError.value = ''
+  errorCodesError.value = ''
   const results = await Promise.allSettled([
     apiGet<ConfigResponse>('/api/v1/admin/config/effective'),
     apiGet<ErrorCodesResponse>('/api/v1/admin/error-codes'),
     apiGet<SchemaResponse>('/api/v1/admin/config/schema'),
   ])
   if (results[0].status !== 'fulfilled') throw results[0].reason
-  if (results[1].status !== 'fulfilled') throw results[1].reason
   config.value = results[0].value.config
-  errorCodes.value = results[1].value.codes ?? []
+  if (results[1].status === 'fulfilled') {
+    errorCodes.value = results[1].value.codes ?? []
+    errorCodesError.value = ''
+  } else {
+    // 保留上次 error-codes，分项提示
+    if (!errorCodes.value.length) errorCodes.value = []
+    errorCodesError.value = formatCaughtError(results[1].reason)
+  }
   if (results[2].status === 'fulfilled') {
     schemaFields.value = results[2].value.fields ?? []
+    schemaError.value = ''
   } else {
-    schemaFields.value = []
+    if (!schemaFields.value.length) schemaFields.value = []
     schemaError.value = formatCaughtError(results[2].reason)
   }
 }
@@ -413,6 +441,13 @@ onBeforeUnmount(() => {
       test-id="config-schema-error"
       @retry="() => { void reloadConfigSchema() }"
       @dismiss="schemaError = ''"
+    />
+    <PartialErrorBanner
+      v-if="errorCodesError"
+      :message="`${t('configErrorCodesLoadFailed')}：${errorCodesError}`"
+      test-id="config-error-codes-error"
+      @retry="() => { void reloadErrorCodes() }"
+      @dismiss="errorCodesError = ''"
     />
     <ActionResultBanner
       :result="actionResult"

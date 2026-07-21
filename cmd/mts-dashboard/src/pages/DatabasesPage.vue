@@ -58,6 +58,7 @@ interface MeasurementEntry {
   name: string
   expanded: boolean
   loading: boolean
+  loadError: string
   fields: FieldSchema[]
   series: Series[]
   seriesTotal: number
@@ -228,6 +229,7 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
       name: m,
       expanded: false,
       loading: false,
+      loadError: '',
       fields: [],
       series: [],
       seriesTotal: 0,
@@ -257,29 +259,42 @@ async function toggleExpand(db: DatabaseEntry) {
   db.expanded = true
   if (!db.loaded) await loadDatabaseDetails(db)
 }
+function hasMeasurementSnapshot(meas: MeasurementEntry): boolean {
+  return meas.fields.length > 0 || meas.series.length > 0 || meas.seriesTotal > 0
+}
+
+async function loadMeasurementDetails(meas: MeasurementEntry, dbName: string) {
+  meas.loading = true
+  try {
+    const [fieldsData, seriesResult] = await Promise.all([
+      apiGet<FieldsResponse>(`/api/v1/data/databases/${encodeURIComponent(dbName)}/measurements/${encodeURIComponent(meas.name)}/fields`),
+      listSeriesDetailed(dbName, meas.name, { limit: SERIES_CAP }),
+    ])
+    meas.fields = fieldsData.fields ?? []
+    meas.series = (seriesResult.series as Series[]).map((s) => ({
+      id: s.id ?? 0,
+      measurement: s.measurement ?? meas.name,
+      tags: s.tags ?? {},
+    }))
+    meas.seriesTotal = seriesResult.total
+    meas.seriesTruncated = seriesResult.truncated
+    meas.loadError = ''
+  } catch (e) {
+    const msg = formatCaughtError(e)
+    meas.loadError = msg
+    if (!hasMeasurementSnapshot(meas)) {
+      reportActionError('load-meas', e, { db: dbName, meas: meas.name })
+    }
+  } finally {
+    meas.loading = false
+  }
+}
+
 async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
   meas.expanded = !meas.expanded
-  if (meas.expanded && !meas.fields.length && !meas.series.length && !meas.seriesTotal) {
-    meas.loading = true
-    try {
-      const [fieldsData, seriesResult] = await Promise.all([
-        apiGet<FieldsResponse>(`/api/v1/data/databases/${encodeURIComponent(dbName)}/measurements/${encodeURIComponent(meas.name)}/fields`),
-        listSeriesDetailed(dbName, meas.name, { limit: SERIES_CAP }),
-      ])
-      meas.fields = fieldsData.fields ?? []
-      meas.series = (seriesResult.series as Series[]).map((s) => ({
-        id: s.id ?? 0,
-        measurement: s.measurement ?? meas.name,
-        tags: s.tags ?? {},
-      }))
-      meas.seriesTotal = seriesResult.total
-      meas.seriesTruncated = seriesResult.truncated
-    } catch (e) {
-      reportActionError('load-meas', e, { db: dbName, meas: meas.name })
-    } finally {
-      meas.loading = false
-    }
-  }
+  if (!meas.expanded) return
+  if (hasMeasurementSnapshot(meas) && !meas.loadError) return
+  await loadMeasurementDetails(meas, dbName)
 }
 
 const databasesFormDirty = computed(() => {
@@ -329,10 +344,8 @@ async function retryLastDatabaseAction() {
     const db = databases.value.find((d) => d.name === lastFailedDbName.value)
     const meas = db?.measurements.find((m) => m.name === lastFailedMeasName.value)
     if (db && meas) {
-      meas.expanded = false
-      meas.fields = []
-      meas.series = []
-      return toggleMeasurement(meas, db.name)
+      meas.expanded = true
+      return loadMeasurementDetails(meas, db.name)
     }
   }
 }
@@ -795,8 +808,16 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <div v-if="meas.expanded" class="border-t border-slate-50 px-4 py-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-300">
-              <div v-if="meas.loading" class="text-slate-400 dark:text-slate-500">{{ t('databasesLoading') }}</div>
-              <template v-else>
+              <div v-if="meas.loading" class="text-slate-400 dark:text-slate-500" data-testid="databases-meas-loading">{{ t('databasesLoading') }}</div>
+              <PartialErrorBanner
+                v-else-if="meas.loadError"
+                class="my-1"
+                :message="`${t('databasesMeasFailed')}：${meas.loadError}`"
+                :test-id="`databases-meas-error-${meas.name}`"
+                @retry="loadMeasurementDetails(meas, activeDatabase.name)"
+                @dismiss="meas.loadError = ''"
+              />
+              <template v-if="!meas.loading && (!meas.loadError || meas.fields.length || meas.series.length || meas.seriesTotal)">
                 <p class="mb-1 font-medium text-slate-500 dark:text-slate-400">{{ t('databasesFields') }}</p>
                 <div class="mb-2 flex flex-wrap gap-1">
                   <span v-for="f in meas.fields" :key="f.name" class="rounded bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{{ f.name }}:{{ fieldTypeName(f.type) }}</span>

@@ -329,6 +329,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('databases-page')).toBeVisible()
   await expect(page.getByTestId('databases-load-error')).toHaveCount(0)
   await expect(page.getByTestId('databases-detail-error')).toHaveCount(0)
+  // measurement-level errors only appear after expand; healthy path has none mounted
+  await expect(page.locator('[data-testid^="databases-meas-error-"]')).toHaveCount(0)
   await expect(page.getByTestId('databases-export-json')).toBeVisible()
   await expect(page.getByTestId('databases-export-csv')).toBeVisible()
   await expect(page.getByTestId('databases-share-link')).toBeVisible()
@@ -400,6 +402,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/config')
   await expect(page.getByTestId('config-page')).toBeVisible()
   await expect(page.getByTestId('config-schema-error')).toHaveCount(0)
+  await expect(page.getByTestId('config-error-codes-error')).toHaveCount(0)
   await expect(page.getByTestId('config-share-link')).toBeVisible()
   await expect(page.getByTestId('config-export-effective')).toBeVisible()
   await expect(page.getByTestId('config-copy-effective')).toBeVisible()
