@@ -10,14 +10,19 @@ import { filterDatabaseNames, sortGrants } from '@/utils/grantPanelView'
 export interface GrantItem { database: string; permission: string }
 export interface UserItem { name: string; display_name?: string; role?: string; disabled?: boolean }
 
-const props = defineProps<{
-  offline?: boolean
-  selectedUser: UserItem
-  userGrants: GrantItem[]
-  databases: string[]
-  grantDbs: string[]
-  grantPerms: string[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    offline?: boolean
+    writeBlocked?: boolean
+    blockReason?: 'none' | 'offline' | 'session' | null
+    selectedUser: UserItem
+    userGrants: GrantItem[]
+    databases: string[]
+    grantDbs: string[]
+    grantPerms: string[]
+  }>(),
+  { offline: false, writeBlocked: undefined, blockReason: null },
+)
 
 const emit = defineEmits<{
   close: []
@@ -28,6 +33,14 @@ const emit = defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
+
+const blocked = () => props.writeBlocked ?? props.offline
+function blockedTitle(fallback?: string): string | undefined {
+  if (!blocked()) return fallback
+  if (props.blockReason === 'session') return t.value('sessionMutationBlocked')
+  return t.value('offlineAdminBlocked')
+}
+
 const uiLocale = computed(() => (locale.value === 'en' ? 'en' : 'zh') as 'en' | 'zh')
 function permText(p: string) { return permissionLabel(p, uiLocale.value) }
 
@@ -64,8 +77,8 @@ const canGrant = computed(() => props.grantDbs.length > 0 && props.grantPerms.le
           :key="g.database + g.permission"
           type="button"
           class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700 hover:bg-red-50 hover:text-red-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
-          :title="offline ? t('offlineAdminBlocked') : t('grantRevokeTitle')"
-          :disabled="offline"
+          :title="blockedTitle(t('grantRevokeTitle'))"
+          :disabled="blocked()"
           :data-testid="`user-grant-revoke-${g.database}-${g.permission}`"
           @click="emit('revoke', g)"
         >{{ g.database }}:{{ permText(g.permission) }}</button>
@@ -115,8 +128,8 @@ const canGrant = computed(() => props.grantDbs.length > 0 && props.grantPerms.le
         type="button"
         class="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
         data-testid="user-grant-submit"
-        :disabled="!canGrant || offline"
-        :title="offline ? t('offlineAdminBlocked') : undefined"
+        :disabled="!canGrant || blocked()"
+        :title="blockedTitle()"
         @click="emit('grant')"
       >{{ t('grantAction') }}</button>
     </div>

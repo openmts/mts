@@ -745,7 +745,8 @@ onBeforeUnmount(() => {
     </template>
 
     <UserGrantPanel
-      :offline="writeBlocked"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
       v-if="isAdmin && selectedUser"
       :selected-user="selectedUser"
       :user-grants="userGrants"
@@ -760,7 +761,8 @@ onBeforeUnmount(() => {
     />
 
     <UserModals
-      :offline="writeBlocked"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
       v-model:show-create="showCreate"
       v-model:new-user="newUser"
       v-model:show-set-password="showSetPassword"

@@ -1043,6 +1043,20 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('session-critical-banner')).toBeVisible({ timeout: 15000 })
   await page.goto('/write')
   await expect(page.getByTestId('write-submit')).toBeDisabled()
+  // P218: Users 弹窗提交按钮在会话 critical 下禁用，title 为会话文案（非离线）
+  await page.goto('/users')
+  await expect(page.getByTestId('users-create-open')).toBeDisabled()
+  // 若入口已 disabled 仍可通过 evaluate 打开的场景不测；直接校验入口 title 含会话语义
+  const createTitle = await page.getByTestId('users-create-open').getAttribute('title')
+  if (createTitle) {
+    // zh: 会话即将过期 / en: Session is critical
+    if (!/会话|Session|session|过期|expired|critical|续期|Renew/i.test(createTitle)) {
+      throw new Error(`unexpected users-create-open title under critical: ${createTitle}`)
+    }
+    if (/离线|offline/i.test(createTitle)) {
+      throw new Error(`users-create-open should not show offline title under session critical: ${createTitle}`)
+    }
+  }
   // 恢复较长 TTL 以便后续用例
   await page.evaluate(() => {
     const later = new Date(Date.now() + 12 * 3600_000).toISOString()

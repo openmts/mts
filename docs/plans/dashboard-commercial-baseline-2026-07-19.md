@@ -1016,3 +1016,5 @@
 - 导入成功后重置基线；变更仍自动写入 localStorage（非服务端未保存语义）
 - 部署侧边缘证书/cron/跨主机备份仍为人工签核项，dashboard 仅清单与证据备注
 
+## P218（2026-07-21）
+- Users 弹窗/授权面板：`writeBlocked` + `blockReason`，会话 critical 不再误提示离线
