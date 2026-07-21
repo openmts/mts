@@ -254,7 +254,7 @@ func (r *serverRuntime) handleMaintenanceStats(writer http.ResponseWriter, reque
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, maintenanceStatsResponse{Stats: r.maintenanceStats()})
+	writeHTTPJSON(writer, http.StatusOK, r.maintenanceStatsPayload())
 }
 
 func (r *serverRuntime) handleAdminDoctor(writer http.ResponseWriter, request *http.Request) {

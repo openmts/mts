@@ -239,3 +239,35 @@ func TestRuntimeMaintenanceBusy(t *testing.T) {
 	}
 	runtime.endMaintenance()
 }
+
+func TestRuntimeMaintenanceStatsPayloadBusy(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.HTTP.Addr = "127.0.0.1:0"
+	cfg.HTTP.Enabled = true
+	cfg.GRPC.Enabled = false
+	runtime, err := openRuntime(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("openRuntime() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = runtime.engine.Close(context.Background())
+	})
+
+	payload := runtime.maintenanceStatsPayload()
+	if payload.AdminOpBusy {
+		t.Fatal("AdminOpBusy want false initially")
+	}
+	if err := runtime.tryBeginMaintenance(); err != nil {
+		t.Fatalf("tryBeginMaintenance: %v", err)
+	}
+	payload = runtime.maintenanceStatsPayload()
+	if !payload.AdminOpBusy {
+		t.Fatal("AdminOpBusy want true while held")
+	}
+	runtime.endMaintenance()
+	payload = runtime.maintenanceStatsPayload()
+	if payload.AdminOpBusy {
+		t.Fatal("AdminOpBusy want false after end")
+	}
+}

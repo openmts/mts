@@ -576,7 +576,7 @@ func grpcMaintenanceStats(r *serverRuntime, ctx context.Context, _ any) (any, er
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return maintenanceStatsResponse{Stats: r.maintenanceStats()}, nil
+	return r.maintenanceStatsPayload(), nil
 }
 
 func grpcAdminHealth(r *serverRuntime, ctx context.Context, _ any) (any, error) {

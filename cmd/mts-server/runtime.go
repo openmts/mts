@@ -380,6 +380,13 @@ func (r *serverRuntime) maintenanceStats() mts.MaintenanceStats {
 	return r.engine.MaintenanceStatsSnapshot()
 }
 
+func (r *serverRuntime) maintenanceStatsPayload() maintenanceStatsResponse {
+	return maintenanceStatsResponse{
+		Stats:       r.maintenanceStats(),
+		AdminOpBusy: r.maintenanceBusy.Load(),
+	}
+}
+
 func (r *serverRuntime) health() mts.HealthSnapshot {
 	return r.engine.HealthSnapshot()
 }

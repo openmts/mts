@@ -32,14 +32,13 @@ import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { buildMaintenanceErrorsExport, buildOpsStatsExport, formatOpsStatsPretty, maintenanceErrorsToText } from '@/utils/opsExport'
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser, Copy } from 'lucide-vue-next'
-import type { CompactionStats, MaintenanceStats, StorageMemorySnapshot } from '@/api/types'
+import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, StorageMemorySnapshot } from '@/api/types'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
 interface CompactionStatsResponse { stats: CompactionStats }
-interface MaintenanceStatsResponse { stats: MaintenanceStats }
 interface MaintenanceErrorsResponse { errors: string[] }
 interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
 
@@ -74,6 +73,7 @@ const {
 } = useActionRetry<OpsActionKey>()
 const loading = ref(false)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
+const adminOpBusy = ref(false)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
@@ -152,6 +152,7 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
     case 'maintenance': {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
+      adminOpBusy.value = Boolean(v.admin_op_busy)
       return
     }
     case 'compaction': {
@@ -290,6 +291,10 @@ function openConfirm(kind: 'flush' | 'compact' | 'retention') {
     notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
     return
   }
+  if (adminOpBusy.value) {
+    notifyError(t.value('opsAdminBusy'))
+    return
+  }
   confirmKind.value = kind
 }
 
@@ -308,6 +313,10 @@ async function retryLastOpsAction() {
     notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
     return
   }
+  if (adminOpBusy.value) {
+    notifyError(t.value('opsAdminBusy'))
+    return
+  }
   confirmKind.value = kind as OpsActionKey
   await runConfirmed()
 }
@@ -324,8 +333,13 @@ async function runConfirmed() {
     confirmKind.value = null
     return
   }
+  if (adminOpBusy.value) {
+    notifyError(t.value('opsAdminBusy'))
+    return
+  }
   const kind = confirmKind.value
   confirmLoading.value = true
+  adminOpBusy.value = true
   opsActionStartedAt.value = Date.now()
   clearActionResult()
   const signal = opsActionAbort.begin()
@@ -364,6 +378,11 @@ async function runConfirmed() {
     opsActionAbort.end()
     confirmLoading.value = false
     opsActionStartedAt.value = null
+    try {
+      await loadOpsSection('maintenance')
+    } catch {
+      adminOpBusy.value = false
+    }
   }
 }
 
@@ -672,6 +691,12 @@ watch(
             data-testid="ops-status-connectivity"
             :title="connectivityHint"
           >{{ t('connectivityTitle') }}: {{ connectivityLabel }}</span>
+          <span
+            v-if="adminOpBusy || confirmLoading"
+            class="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
+            data-testid="ops-admin-busy"
+            :title="t('opsAdminBusy')"
+          >{{ t('opsAdminBusyChip') }}</span>
           <span class="text-xs mts-muted" data-testid="ops-status-stats-at">{{ statsLoadedLabel }}</span>
           <span
             v-if="loading || reachChecking"
@@ -768,8 +793,8 @@ watch(
         id="ops-flush"
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         data-testid="ops-flush"
-        :disabled="writeBlocked || confirmLoading"
-        :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined"
+        :disabled="writeBlocked || confirmLoading || adminOpBusy"
+        :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : (adminOpBusy ? t('opsAdminBusy') : undefined)"
         @click="openConfirm('flush')"
       >
         <DatabaseBackup class="mb-2 h-5 w-5 mts-muted" />
@@ -781,8 +806,8 @@ watch(
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         id="ops-compact"
         data-testid="ops-compact"
-        :disabled="writeBlocked || confirmLoading"
-        :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined"
+        :disabled="writeBlocked || confirmLoading || adminOpBusy"
+        :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : (adminOpBusy ? t('opsAdminBusy') : undefined)"
         @click="openConfirm('compact')"
       >
         <Layers class="mb-2 h-5 w-5 mts-muted" />
@@ -794,8 +819,8 @@ watch(
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         id="ops-retention"
         data-testid="ops-retention"
-        :disabled="writeBlocked || confirmLoading"
-        :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : undefined"
+        :disabled="writeBlocked || confirmLoading || adminOpBusy"
+        :title="writeBlocked ? t(blockedMessageKey('offlineOpsBlocked')) : (adminOpBusy ? t('opsAdminBusy') : undefined)"
         @click="openConfirm('retention')"
       >
         <Timer class="mb-2 h-5 w-5 mts-muted" />

@@ -114,6 +114,12 @@ export interface MaintenanceStats {
   maintenance_error_count: number
 }
 
+/** GET /api/v1/admin/stats/maintenance 响应；admin_op_busy 表示服务端 flush/compact/retention 互斥占用中 */
+export interface MaintenanceStatsResponse {
+  stats: MaintenanceStats
+  admin_op_busy?: boolean
+}
+
 export interface StorageMemorySnapshot {
   heap_alloc_bytes?: number
   heap_inuse_bytes?: number

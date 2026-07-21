@@ -88,7 +88,8 @@ type deleteRequest struct {
 }
 
 type maintenanceStatsResponse struct {
-	Stats mts.MaintenanceStats `json:"stats"`
+	Stats       mts.MaintenanceStats `json:"stats"`
+	AdminOpBusy bool                 `json:"admin_op_busy"`
 }
 
 type userResponse struct {
