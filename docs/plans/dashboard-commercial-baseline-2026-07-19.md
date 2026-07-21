@@ -1394,3 +1394,7 @@
 ## P324（2026-07-22）
 - 命令面板：管理员动作「刷新管理占用状态」
 - Storage：busy chip 旁快捷刷新 ops-status
+
+## P325（2026-07-22）
+- Readiness：admin busy chip 旁「刷新状态」；空闲 e2e 断言无 chip
+- 命令面板：可检索「刷新占用」管理员动作；非 admin 不可见（单测）

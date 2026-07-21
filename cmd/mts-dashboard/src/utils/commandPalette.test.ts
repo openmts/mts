@@ -158,6 +158,9 @@ test('command actions catalog and filter', () => {
   assert.ok(filterCommandItems(all, 'share deep link', resolve).some((i) => i.id === 'action-click-share-deep-link'))
   assert.ok(filterCommandItems(all, 'reload', resolve).some((i) => i.id === 'action-reload-page'))
   assert.ok(filterCommandItems(all, '重试失败', resolve).some((i) => i.id === 'action-retry-last-action'))
+  assert.ok(filterCommandItems(all, '刷新占用', resolve).some((i) => i.id === 'action-refresh-admin-op-busy'))
+  assert.ok(filterCommandItems(all, 'admin busy', resolve).some((i) => i.id === 'action-refresh-admin-op-busy'))
+  assert.equal(allVisibleCommandItems(false).some((i) => i.id === 'action-refresh-admin-op-busy'), false)
 })
 
 test('groupCommandItems splits nav and action', () => {

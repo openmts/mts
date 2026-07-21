@@ -115,15 +115,26 @@ interface VersionResponse {
   built_at: string
 }
 
-const { adminOpBusy, adminOpKind } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, adminOpBusyChecking, refreshAdminOpBusy } = useAdminOpBusy()
+const readinessBusyRefreshing = ref(false)
+async function refreshReadinessBusyOnly() {
+  if (readinessBusyRefreshing.value || adminOpBusyChecking.value) return
+  readinessBusyRefreshing.value = true
+  try {
+    await refreshAdminOpBusy()
+  } finally {
+    readinessBusyRefreshing.value = false
+  }
+}
 const { isAdmin, currentUser } = useAuth()
 const { t, locale } = useI18n()
-const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail?: string }> | undefined>('adminOpBusySummary', undefined)
 const adminOpKindDisplay = computed(() => {
   if (!adminOpBusy.value) return ''
   const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
   return adminOpBusySummary?.value?.opLabel || t.value(key) || t.value('adminOpKindGeneric')
 })
+const readinessAdminBusyTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('opsAdminBusy'))
 const readinessAdminBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
   const kind = adminOpKindDisplay.value
@@ -956,12 +967,32 @@ watch(
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="mts-card p-4">
         <p class="text-xs mts-muted">{{ t('readinessScore') }}</p>
-        <span
+        <div
           v-if="adminOpBusy"
-          class="mt-1 inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
-          data-testid="readiness-admin-busy"
-          :title="t('opsAdminBusy')"
-        >{{ readinessAdminBusyChipLabel }}</span>
+          class="mt-1 flex flex-wrap items-center gap-2"
+          data-testid="readiness-admin-busy-row"
+        >
+          <span
+            class="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
+            data-testid="readiness-admin-busy"
+            :title="readinessAdminBusyTitle"
+          >{{ readinessAdminBusyChipLabel }}</span>
+          <button
+            type="button"
+            class="mts-btn text-[11px] !px-2 !py-0.5"
+            data-testid="readiness-admin-busy-refresh"
+            :disabled="readinessBusyRefreshing || adminOpBusyChecking"
+            :aria-busy="readinessBusyRefreshing || adminOpBusyChecking ? 'true' : undefined"
+            :title="t('adminOpBusyRefresh')"
+            @click="refreshReadinessBusyOnly"
+          >
+            <RefreshCw
+              class="h-3 w-3"
+              :class="(readinessBusyRefreshing || adminOpBusyChecking) ? 'animate-spin' : ''"
+            />
+            {{ t('adminOpBusyRefresh') }}
+          </button>
+        </div>
         <p
           class="mt-1 text-3xl font-semibold"
           :class="scoreLevel === 'good' ? 'text-green-600' : scoreLevel === 'warn' ? 'text-amber-600' : 'text-red-600'"
