@@ -106,3 +106,36 @@ test('formatExportPreflightText includes levels and disclaimer', () => {
   const en = formatExportPreflightText(r, 'en')
   assert.match(en, /export preflight/i)
 })
+
+test('buildExportPreflight admin op busy info', () => {
+  const busy = buildExportPreflight({
+    locale: 'zh',
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    adminOpBusy: true,
+    signoffNotes: { edgeHttps: 'a', backupOffsite: 'b', backupAlert: 'c' },
+    deployKitReviewed: true,
+  })
+  assert.ok(busy.items.some((i) => i.id === 'admin-op-busy' && i.level === 'info'))
+  assert.equal(preflightItemTarget('admin-op-busy')?.target, '/operations#ops-status-strip')
+
+  const idle = buildExportPreflight({
+    locale: 'en',
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    adminOpBusy: false,
+    signoffNotes: { edgeHttps: 'a', backupOffsite: 'b', backupAlert: 'c' },
+    deployKitReviewed: true,
+  })
+  assert.ok(idle.items.some((i) => i.id === 'admin-op-busy' && i.level === 'ok'))
+})

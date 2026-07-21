@@ -33,6 +33,7 @@ import { ArrowUp } from 'lucide-vue-next'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { shouldSyncOnVisibility } from '@/utils/pageVisibilitySync'
@@ -41,7 +42,8 @@ import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
 const { t } = useI18n()
 const { offline, sessionWriteBlocked, sessionRemainingLabel, sessionUrgency } = useMutationGuard()
 const { sync: syncNetworkStatus } = useNetworkStatus()
-const { logout } = useAuth()
+const { logout, isAdmin } = useAuth()
+const { adminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 
 function retryNetworkStatus() {
@@ -53,6 +55,7 @@ function onVisibilitySync() {
   if (!shouldSyncOnVisibility(document.visibilityState, document.hidden)) return
   syncNetworkStatus()
   void retryReadyz()
+  if (isAdmin.value) void refreshAdminOpBusy()
 }
 const route = useRoute()
 const router = useRouter()
@@ -82,6 +85,9 @@ function toggleSidebarCollapse() {
 function openCommandPalette() { commandPaletteRef.value?.openPalette() }
 function goSessionRenew() {
   void router.push({ path: '/account', hash: '#account-session' })
+}
+function goAdminOpBusyOps() {
+  void router.push({ path: '/operations', hash: '#ops-status-strip' })
 }
 async function goSessionRelogin() {
   await logout()
@@ -354,6 +360,32 @@ function onSkipToMain(e: Event) {
             data-testid="session-critical-relogin"
             @click="goSessionRelogin"
           >{{ t('sessionCriticalRelogin') }}</button>
+        </div>
+      </div>
+      <div
+        v-if="isAdmin && adminOpBusy && !offline"
+        class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-sky-300 bg-sky-50 px-3 py-2 text-xs text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100 sm:px-6"
+        role="status"
+        aria-live="polite"
+        data-testid="admin-op-busy-banner"
+      >
+        <div class="min-w-0">
+          <span class="font-semibold">{{ t('adminOpBusyBannerTitle') }}</span>
+          <span class="ml-1">{{ t('adminOpBusyBanner') }}</span>
+        </div>
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring !border-sky-300 !bg-white !text-sky-900 dark:!border-sky-800 dark:!bg-sky-950 dark:!text-sky-100"
+            data-testid="admin-op-busy-refresh"
+            @click="refreshAdminOpBusy"
+          >{{ t('adminOpBusyRefresh') }}</button>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring !border-sky-300 !bg-white !text-sky-900 dark:!border-sky-800 dark:!bg-sky-950 dark:!text-sky-100"
+            data-testid="admin-op-busy-open-ops"
+            @click="goAdminOpBusyOps"
+          >{{ t('adminOpBusyOpenOps') }}</button>
         </div>
       </div>
       <div

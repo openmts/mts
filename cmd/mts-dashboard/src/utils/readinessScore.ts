@@ -15,6 +15,11 @@ export interface ReadinessScoreInput {
   doctorWarnCount?: number
   /** HTTP TLS 是否启用（doctor.http_tls_enabled） */
   httpTlsEnabled?: boolean | null
+  /**
+   * 服务端管理重操作占用（flush/compact/snapshot 等互斥）。
+   * 不直接进四维均分，仅作为建议项原因提示；为 true 时在 reasons 标记。
+   */
+  adminOpBusy?: boolean | null
 }
 
 export interface ReadinessScoreBreakdown {
@@ -68,6 +73,7 @@ export function computeReadinessScore(input: ReadinessScoreInput): ReadinessScor
   if (checklist < 1) reasons.push('checklist_incomplete')
   if (edgeHttps < 1) reasons.push('edge_https_incomplete')
   if (backupSchedule < 1) reasons.push('backup_schedule_incomplete')
+  if (input.adminOpBusy) reasons.push('admin_op_busy')
   return {
     checklist: Math.round(checklist * 100),
     edgeHttps: Math.round(edgeHttps * 100),

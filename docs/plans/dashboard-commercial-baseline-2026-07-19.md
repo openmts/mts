@@ -1356,3 +1356,7 @@
 - Server：批量 NDJSON 取消时推送 partial `summary`（`cancelled=true`），立即停止后续写
 - Overview：维护统计区展示 `admin_op_busy` chip
 - 命令面板：运维状态条入口 + busy 关键词；契约文案对齐管理重操作互斥
+
+## P316（2026-07-22）
+- Dashboard：`useAdminOpBusy` 全局静默轮询 `admin_op_busy`；Layout 管理员横幅（刷新/跳转运维）
+- Readiness：评分 reasons 标记 `admin_op_busy`（不单独扣分）；评分卡 chip；导出预检 info 项

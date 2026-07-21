@@ -30,6 +30,8 @@ export interface ExportPreflightInput {
   doctorOk?: boolean
   doctorWarnCount?: number
   httpTlsEnabled?: boolean | null
+  /** 服务端管理重操作占用（建议项） */
+  adminOpBusy?: boolean | null
   signoffNotes?: SignoffNotes | null
   deployKitReviewed?: boolean
 }
@@ -59,6 +61,8 @@ const copy = {
     signoffGap: '签核备注未齐：缺 {missing}',
     deployReviewed: '部署材料包本地已查阅',
     deployNotReviewed: '部署材料包本地尚未勾选「已查阅」',
+    adminBusy: '服务端管理重操作占用中（运维/快照/恢复）；建议空闲后再做验收导出',
+    adminIdle: '服务端无管理重操作占用',
     footer: '预检不阻止导出；完成项不代表生产人工验收已签字',
   },
   en: {
@@ -77,6 +81,8 @@ const copy = {
     signoffGap: 'Sign-off notes incomplete: missing {missing}',
     deployReviewed: 'Deployment kit marked reviewed locally',
     deployNotReviewed: 'Deployment kit not marked reviewed locally',
+    adminBusy: 'Server admin heavy op busy (ops/snapshot/restore); prefer idle before acceptance export',
+    adminIdle: 'No server admin heavy op in progress',
     footer: 'Preflight does not block export; done items do not mean production acceptance is signed',
   },
 } as const
@@ -113,6 +119,8 @@ export function preflightItemTarget(id: string): { target: string; actionKey: 'p
     // 边缘 HTTPS 细项也可去 Storage 验收区（同页已有清单时优先本地）
     case 'edge-storage':
       return { target: '/storage#edge-https', actionKey: 'preflightJumpStorage' }
+    case 'admin-op-busy':
+      return { target: '/operations#ops-status-strip', actionKey: 'preflightJumpLocal' }
     default:
       return null
   }
@@ -186,6 +194,18 @@ export function buildExportPreflight(input: ExportPreflightInput): ExportPreflig
     level: input.deployKitReviewed ? 'ok' : 'info',
     message: input.deployKitReviewed ? t.deployReviewed : t.deployNotReviewed,
   })
+
+  if (input.adminOpBusy) {
+    items.push({
+      id: 'admin-op-busy',
+      level: 'info',
+      message: t.adminBusy,
+      target: '/operations#ops-status-strip',
+      actionKey: 'preflightJumpLocal',
+    })
+  } else if (input.adminOpBusy === false) {
+    items.push({ id: 'admin-op-busy', level: 'ok', message: t.adminIdle })
+  }
 
   items.push({ id: 'footer', level: 'info', message: t.footer })
 

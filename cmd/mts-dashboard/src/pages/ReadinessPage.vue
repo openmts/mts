@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { useExportJob } from '@/composables/useExportJob'
@@ -112,6 +113,7 @@ interface VersionResponse {
   built_at: string
 }
 
+const { adminOpBusy } = useAdminOpBusy()
 const { isAdmin, currentUser } = useAuth()
 const { t, locale } = useI18n()
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
@@ -202,6 +204,7 @@ const scoreBreakdown = computed(() => {
     doctorOk: doctor.value?.ok,
     doctorWarnCount: doctorWarns.value.length,
     httpTlsEnabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
+    adminOpBusy: adminOpBusy.value,
   })
 })
 const readinessScore = computed(() => scoreBreakdown.value.total)
@@ -227,6 +230,7 @@ const exportPreflight = computed(() => {
     doctorOk: doctor.value?.ok,
     doctorWarnCount: doctorWarns.value.length,
     httpTlsEnabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
+    adminOpBusy: adminOpBusy.value,
     signoffNotes: state.value.signoffNotes,
     deployKitReviewed: !!state.value.deployKit?.reviewed,
   })
@@ -936,6 +940,12 @@ watch(
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="mts-card p-4">
         <p class="text-xs mts-muted">{{ t('readinessScore') }}</p>
+        <span
+          v-if="adminOpBusy"
+          class="mt-1 inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
+          data-testid="readiness-admin-busy"
+          :title="t('opsAdminBusy')"
+        >{{ t('opsAdminBusyChip') }}</span>
         <p
           class="mt-1 text-3xl font-semibold"
           :class="scoreLevel === 'good' ? 'text-green-600' : scoreLevel === 'warn' ? 'text-amber-600' : 'text-red-600'"

@@ -65,3 +65,19 @@ test('computeReadinessScore averages four dimensions', () => {
   assert.ok(partial.reasons.includes('http_tls_disabled'))
   assert.notEqual(readinessLevel(partial.total), 'good')
 })
+
+test('computeReadinessScore flags admin_op_busy without tanking total alone', () => {
+  const base = computeReadinessScore({
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    adminOpBusy: true,
+  })
+  assert.equal(base.total, 100)
+  assert.ok(base.reasons.includes('admin_op_busy'))
+  assert.equal(readinessLevel(base.total), 'good')
+})
