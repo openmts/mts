@@ -151,6 +151,28 @@ const typedTagCols = ref<TypedTagCol[]>([{ name: 'host', values: 'server01\nserv
 const typedFieldCols = ref<TypedFieldCol[]>([{ name: 'usage', type: 'float', values: '0.7\n0.8' }])
 
 
+
+function focusWriteForm() {
+  if (typeof document === 'undefined') return
+  const el =
+    document.getElementById('write-target') ||
+    document.getElementById('write-body') ||
+    document.querySelector('[data-testid="write-mode-typed"]') ||
+    document.querySelector('[data-testid="write-form"]')
+  if (el && 'scrollIntoView' in el) {
+    ;(el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const input = document.querySelector<HTMLInputElement>(
+    '[data-testid="write-database"], [data-testid="write-measurement"], #write-database',
+  )
+  input?.focus()
+}
+
+function preferTypedBatch() {
+  writeMode.value = 'typed'
+  focusWriteForm()
+}
+
 function writeSnapshot() {
   return {
     selectedDb: selectedDb.value,
@@ -897,12 +919,19 @@ async function exportWriteDraft() {
       @dismiss="actionError = ''; writeWasCanceled = false"
     />
     <p v-if="result?.ok" class="mts-alert-ok" data-testid="write-result-ok" role="status" aria-live="polite">{{ result.message }}</p>
-    <div v-else-if="!loading && !actionError && !result" class="mts-card">
+    <div v-else-if="!loading && !actionError && !result" class="mts-card" data-testid="write-empty">
       <EmptyState
         compact
         :title="t('writeEmptyTitle')"
         :description="t('writeEmptyDesc')"
-      />
+      >
+        <template #action>
+          <div class="flex flex-wrap justify-center gap-2">
+            <button type="button" class="mts-btn-primary" data-testid="write-empty-goto-form" @click="focusWriteForm">{{ t('writeEmptyGotoForm') }}</button>
+            <button type="button" class="mts-btn" data-testid="write-empty-prefer-typed" @click="preferTypedBatch">{{ t('writeEmptyPreferTyped') }}</button>
+          </div>
+        </template>
+      </EmptyState>
     </div>
   </div>
 </template>

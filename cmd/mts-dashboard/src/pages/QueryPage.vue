@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import {
-  parseQueryPrefill,
-  timeRangeToQueryFormTimes,
-  queryFormToPrefill,
-} from '@/utils/routePrefill'
+import { parseQueryPrefill, timeRangeToQueryFormTimes, queryFormToPrefill } from '@/utils/routePrefill'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
@@ -357,6 +353,26 @@ async function checkAuthz(perm: 'read' | 'write' = 'read') {
   } finally {
     authzChecking.value = false
   }
+}
+
+
+function widenQueryRange(range: '1h' | '24h' | '7d' | '30d') {
+  const times = timeRangeToQueryFormTimes(range)
+  queryForm.value.start_time = times.start_time
+  queryForm.value.end_time = times.end_time
+}
+
+function clearQueryTags() {
+  queryForm.value.tags = ''
+}
+
+function raiseQueryLimit() {
+  const n = Number(queryForm.value.limit || 0)
+  if (!Number.isFinite(n) || n < 1000) queryForm.value.limit = '1000'
+}
+
+async function retryNoMatchQuery() {
+  await runQuery()
 }
 
 async function runQuery() {
@@ -1052,11 +1068,23 @@ const columnRows = computed(() => {
     <div
       v-if="queryAttempted && !loading && !actionError && !rows.length && !columnRows.length && !rawOutput"
       class="mts-card"
+      data-testid="query-no-match"
     >
       <EmptyState
         :title="t('queryNoMatchTitle')"
         :description="t('queryNoMatchDesc')"
-      />
+      >
+        <template #action>
+          <div class="flex flex-wrap justify-center gap-2">
+            <button type="button" class="mts-btn" data-testid="query-no-match-1h" @click="widenQueryRange('1h')">{{ t('queryNoMatchWiden1h') }}</button>
+            <button type="button" class="mts-btn" data-testid="query-no-match-24h" @click="widenQueryRange('24h')">{{ t('queryNoMatchWiden24h') }}</button>
+            <button type="button" class="mts-btn" data-testid="query-no-match-7d" @click="widenQueryRange('7d')">{{ t('queryNoMatchWiden7d') }}</button>
+            <button type="button" class="mts-btn" data-testid="query-no-match-clear-tags" @click="clearQueryTags">{{ t('queryNoMatchClearTags') }}</button>
+            <button type="button" class="mts-btn" data-testid="query-no-match-limit" @click="raiseQueryLimit">{{ t('queryNoMatchRaiseLimit') }}</button>
+            <button type="button" class="mts-btn-primary" data-testid="query-no-match-retry" :disabled="loading" @click="retryNoMatchQuery">{{ t('queryNoMatchRetry') }}</button>
+          </div>
+        </template>
+      </EmptyState>
     </div>
 
     <div id="query-results" v-if="rows.length" class="scroll-mt-20 overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900" data-testid="query-results">

@@ -89,6 +89,7 @@ const {
   reportActionError: reportRetryError,
 } = useActionRetry<StorageActionKey>()
 const snapshotListError = ref('')
+const dataListLoading = ref(false)
 const dataListError = ref('')
 const loading = ref('')
 const listLoading = ref(false)
@@ -141,6 +142,7 @@ async function loadSnapshots(opts?: { soft?: boolean }) {
 
 async function loadDataSnapshots(opts?: { soft?: boolean }) {
   const soft = !!opts?.soft
+  dataListLoading.value = true
   try {
     const data = await apiGet<DataSnapshotsResponse>('/api/v1/admin/storage/data-snapshots')
     dataSnapshots.value = data.snapshots ?? []
@@ -158,6 +160,8 @@ async function loadDataSnapshots(opts?: { soft?: boolean }) {
       selectedDataSnapshotPath.value = ''
       dataListError.value = msg
     }
+  } finally {
+    dataListLoading.value = false
   }
 }
 
@@ -709,6 +713,25 @@ async function copyStorageShareLink() {
       </div>
       <pre v-if="dataSnapshotResult" class="mt-3 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(dataSnapshotResult, null, 2) }}</pre>
       <pre v-if="restoreDrillResult" class="mt-2 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-sky-300">{{ JSON.stringify(restoreDrillResult, null, 2) }}</pre>
+      <EmptyState
+        v-if="!dataListLoading && !dataSnapshots.length && !dataListError"
+        class="mt-4"
+        compact
+        data-testid="storage-data-empty"
+        :title="t('storageNoDataSnapshotsTitle')"
+        :description="t('storageNoDataSnapshotsDesc')"
+      >
+        <template #action>
+          <button
+            type="button"
+            class="mts-btn-primary"
+            data-testid="storage-data-empty-create"
+            :disabled="loading === 'data-snapshot' || writeBlocked"
+            :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined"
+            @click="doDataSnapshot"
+          >{{ t('storageCreateDataSnapshotCta') }}</button>
+        </template>
+      </EmptyState>
       <div v-if="dataSnapshots.length" class="mt-4 overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800" data-testid="storage-data-table">
         <div
           class="grid grid-cols-[minmax(5rem,0.7fr)_minmax(8rem,1.2fr)_minmax(5rem,0.6fr)_minmax(7rem,1fr)_minmax(10rem,1.2fr)] border-b border-slate-200 text-left text-[11px] uppercase mts-muted dark:border-slate-700"

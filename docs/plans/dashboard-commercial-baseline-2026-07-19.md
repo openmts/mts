@@ -1261,3 +1261,12 @@
 
 ## P294（2026-07-22）
 - Databases series：本地筛选 + 服务端 q + 空态清除；抽取 `seriesFilter` 可测工具
+
+## P295（2026-07-22）
+- Query 无结果：放宽时间 / 清 tags / 提高 limit / 重试引导
+
+## P296（2026-07-22）
+- Storage 数据快照空态创建；Write 空态跳转 TypedBatch；Readiness doctor 空态重试
+
+## P297（2026-07-22）
+- Account 展示服务端会话 remaining_seconds 与最近校验时间（refreshSession 回填）

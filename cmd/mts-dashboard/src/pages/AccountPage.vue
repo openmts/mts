@@ -54,7 +54,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
-const { currentUser, currentRole, changePassword, isAdmin, logout, login, refreshSession } = useAuth()
+const { currentUser, currentRole, changePassword, isAdmin, logout, login, refreshSession, lastSessionRemainingSeconds, lastSessionCheckedAt } = useAuth()
 const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
 let sessionClock: ReturnType<typeof setInterval> | null = null
@@ -134,6 +134,22 @@ async function verifyServerSession() {
     sessionVerifyLoading.value = false
   }
 }
+
+const serverRemainingText = computed(() => {
+  const sec = lastSessionRemainingSeconds.value
+  if (sec == null) return t.value('accountSessionServerNone')
+  return formatRemaining(Math.max(0, sec) * 1000)
+})
+
+const serverCheckedAtText = computed(() => {
+  const at = lastSessionCheckedAt.value
+  if (at == null) return t.value('emptyValue')
+  try {
+    return new Date(at).toLocaleString()
+  } catch {
+    return String(at)
+  }
+})
 
 async function renewSessionWithPassword() {
   renewError.value = ''
@@ -685,6 +701,14 @@ async function submit() {
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('sessionExpiry') }}</dt>
           <dd class="font-mono" data-testid="account-session-level">{{ sessionLevelLabel }}</dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="mts-muted">{{ t('accountSessionServerRemaining') }}</dt>
+          <dd class="font-mono" data-testid="account-session-server-remaining">{{ serverRemainingText }}</dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="mts-muted">{{ t('accountSessionServerCheckedAt') }}</dt>
+          <dd class="font-mono" data-testid="account-session-server-checked-at">{{ serverCheckedAtText }}</dd>
         </div>
       </dl>
       <p class="mt-3 text-xs mts-muted" data-testid="account-session-hint">{{ t('accountSessionRenewHint') }}</p>

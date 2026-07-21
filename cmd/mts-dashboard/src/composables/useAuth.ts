@@ -26,6 +26,8 @@ const currentUser = ref(getCurrentUser())
 const currentRole = ref(getCurrentUserRole())
 const mustChangePassword = ref(getMustChangePassword())
 const loggingOut = ref(false)
+const lastSessionRemainingSeconds = ref<number | null>(null)
+const lastSessionCheckedAt = ref<number | null>(null)
 
 export function useAuth() {
   const isAdmin = computed(() => currentRole.value === 'admin')
@@ -93,6 +95,8 @@ export function useAuth() {
       currentRole.value = ''
       mustChangePassword.value = false
       isAuthenticated.value = false
+      lastSessionRemainingSeconds.value = null
+      lastSessionCheckedAt.value = null
       loggingOut.value = false
     }
   }
@@ -106,6 +110,8 @@ export function useAuth() {
       currentUser.value = ''
       currentRole.value = ''
       mustChangePassword.value = false
+      lastSessionRemainingSeconds.value = null
+      lastSessionCheckedAt.value = null
       return false
     }
     try {
@@ -122,6 +128,17 @@ export function useAuth() {
       if (session.expires_at) {
         setTokenExpiresAt(session.expires_at)
       }
+      if (typeof session.remaining_seconds === 'number' && Number.isFinite(session.remaining_seconds)) {
+        lastSessionRemainingSeconds.value = Math.max(0, Math.floor(session.remaining_seconds))
+      } else if (session.expires_at) {
+        const exp = Date.parse(session.expires_at)
+        lastSessionRemainingSeconds.value = Number.isFinite(exp)
+          ? Math.max(0, Math.floor((exp - Date.now()) / 1000))
+          : null
+      } else {
+        lastSessionRemainingSeconds.value = null
+      }
+      lastSessionCheckedAt.value = Date.now()
       setMustChangePassword(!!session.must_change_password)
       mustChangePassword.value = !!session.must_change_password
       isAuthenticated.value = true
@@ -160,6 +177,8 @@ export function useAuth() {
     syncFromStorage,
     ensureSession,
     refreshSession,
+    lastSessionRemainingSeconds,
+    lastSessionCheckedAt,
     getTokenExpiresAt,
   }
 }

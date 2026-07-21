@@ -1382,7 +1382,11 @@ watch(
         data-testid="readiness-doctor-empty"
         :title="t('readinessDoctorEmpty')"
         :description="t('readinessDoctorEmptyDesc')"
-      />
+      >
+        <template #action>
+          <button type="button" class="mts-btn-primary" data-testid="readiness-doctor-empty-retry" :disabled="loadingDoctor" @click="loadDoctor">{{ t('readinessDoctorRetry') }}</button>
+        </template>
+      </EmptyState>
       <p v-else class="text-xs mts-muted">{{ t('loading') }}</p>
       <p v-if="doctorOKs.length" class="mt-2 text-[11px] mts-muted">
         {{ formatMessage(t('readinessDoctorOkChecks'), { count: doctorOKs.length }) }}
