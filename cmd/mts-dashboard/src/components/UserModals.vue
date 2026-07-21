@@ -19,8 +19,9 @@ const props = withDefaults(
     showChangeSelfPassword: boolean
     selfOldPassword: string
     selfNewPassword: string
+    loading?: boolean
   }>(),
-  { offline: false, writeBlocked: undefined, blockReason: null },
+  { offline: false, writeBlocked: undefined, blockReason: null, loading: false },
 )
 
 const emit = defineEmits<{
@@ -39,9 +40,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const blocked = () => props.writeBlocked ?? props.offline
+const blocked = () => props.loading || (props.writeBlocked ?? props.offline)
 function blockedTitle(): string | undefined {
-  if (!blocked()) return undefined
+  if (props.loading) return t.value('processing')
+  if (!(props.writeBlocked ?? props.offline)) return undefined
   if (props.blockReason === 'session') return t.value('sessionMutationBlocked')
   return t.value('offlineAdminBlocked')
 }
@@ -136,7 +138,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" data-testid="users-create-cancel" @click="emit('update:showCreate', false)">{{ t('cancel') }}</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-create-submit" :disabled="blocked()" :title="blockedTitle()" @click="emit('create-user')">{{ t('create') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-create-submit" :disabled="blocked()" :title="blockedTitle()" :aria-busy="loading ? 'true' : undefined" @click="emit('create-user')">{{ loading ? t('loading') : t('create') }}</button>
       </div>
     </div>
   </div>
@@ -168,7 +170,7 @@ onBeforeUnmount(() => {
       />
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showSetPassword', false)">{{ t('cancel') }}</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-set-password-submit" :disabled="blocked()" :title="blockedTitle()" @click="emit('set-password')">{{ t('usersSetAction') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-set-password-submit" :disabled="blocked()" :title="blockedTitle()" :aria-busy="loading ? 'true' : undefined" @click="emit('set-password')">{{ loading ? t('loading') : t('usersSetAction') }}</button>
       </div>
     </div>
   </div>
@@ -211,7 +213,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showChangeSelfPassword', false)">{{ t('cancel') }}</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-change-self-submit" :disabled="blocked()" :title="blockedTitle()" @click="emit('change-password')">{{ t('usersConfirmChange') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-change-self-submit" :disabled="blocked()" :title="blockedTitle()" :aria-busy="loading ? 'true' : undefined" @click="emit('change-password')">{{ loading ? t('loading') : t('usersConfirmChange') }}</button>
       </div>
     </div>
   </div>

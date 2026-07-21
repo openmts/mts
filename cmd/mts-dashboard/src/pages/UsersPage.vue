@@ -933,6 +933,7 @@ onBeforeUnmount(() => {
 
     <UserModals
       :write-blocked="writeBlocked"
+      :loading="usersWriteLoading"
       :block-reason="blockReason"
       v-model:show-create="showCreate"
       v-model:new-user="newUser"

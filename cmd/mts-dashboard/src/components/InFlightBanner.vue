@@ -97,9 +97,11 @@ const detail = computed(() => {
       type="button"
       class="mts-btn text-xs"
       data-testid="in-flight-cancel"
+      :aria-label="t('cancel')"
+      :title="t('cancel')"
       @click="emit('cancel')"
     >
-      <Square class="mr-1 inline h-3.5 w-3.5" />{{ t('cancel') }}
+      <Square class="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />{{ t('cancel') }}
     </button>
   </div>
 </template>

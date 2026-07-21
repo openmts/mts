@@ -539,7 +539,7 @@ export interface LoginResponse {
 export async function apiLogin(
   userName: string,
   password: string,
-  opts?: { ttlSeconds?: number },
+  opts?: { ttlSeconds?: number; signal?: AbortSignal },
 ): Promise<LoginResponse> {
   const body: Record<string, unknown> = {
     user_name: userName,
@@ -548,15 +548,20 @@ export async function apiLogin(
   if (opts?.ttlSeconds != null && opts.ttlSeconds > 0) {
     body.ttl_seconds = opts.ttlSeconds
   }
-  return apiPost<LoginResponse>('/api/v1/auth/login', body)
+  return apiPost<LoginResponse>('/api/v1/auth/login', body, opts?.signal ? { signal: opts.signal } : {})
 }
 
-export async function apiChangePassword(userName: string, oldPassword: string, newPassword: string): Promise<void> {
+export async function apiChangePassword(
+  userName: string,
+  oldPassword: string,
+  newPassword: string,
+  init: RequestInit = {},
+): Promise<void> {
   await apiPost('/api/v1/auth/password', {
     user_name: userName,
     old_password: oldPassword,
     new_password: newPassword,
-  })
+  }, init)
 }
 
 

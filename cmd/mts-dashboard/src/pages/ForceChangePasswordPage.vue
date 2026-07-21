@@ -11,6 +11,9 @@ import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 import { registerDirtyChecker } from '@/utils/routeDirty'
+import { createActionAbort } from '@/utils/actionAbort'
+import InFlightBanner from '@/components/InFlightBanner.vue'
+import { isCanceledError, isTimeoutError } from '@/utils/apiError'
 
 const router = useRouter()
 const route = useRoute()
@@ -28,6 +31,8 @@ const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
 const errorRetryable = ref(false)
+const actionStartedAt = ref<number | null>(null)
+const actionAbort = createActionAbort()
 const invalid = computed(() => !!error.value)
 const passwordFormDirty = computed(
   () => !!(oldPassword.value || newPassword.value || confirmPassword.value),
@@ -47,10 +52,15 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  actionAbort.cancel()
   unregisterForceDirty?.()
   unregisterForceDirty = null
   window.removeEventListener('beforeunload', onForceBeforeUnload)
 })
+
+function cancelForceAction() {
+  actionAbort.cancel()
+}
 
 async function submit() {
   error.value = ''
@@ -69,9 +79,21 @@ async function submit() {
     return
   }
   loading.value = true
+  actionStartedAt.value = Date.now()
+  const signal = actionAbort.begin()
   try {
-    const err = await changePassword(oldPassword.value, newPassword.value)
+    const err = await changePassword(oldPassword.value, newPassword.value, { signal })
     if (err) {
+      if (isCanceledError(err)) {
+        error.value = t.value('adminActionCancelled')
+        errorRetryable.value = false
+        return
+      }
+      if (isTimeoutError(err)) {
+        error.value = t.value('adminActionTimedOut')
+        errorRetryable.value = true
+        return
+      }
       error.value = err
       errorRetryable.value = true
       return
@@ -81,7 +103,9 @@ async function submit() {
       query: withRedirectQuery({ reason: 'password_changed' }, route.query.redirect),
     })
   } finally {
+    actionAbort.end()
     loading.value = false
+    actionStartedAt.value = null
   }
 }
 
@@ -122,6 +146,12 @@ async function doLogout() {
         </p>
       </div>
 
+      <InFlightBanner
+        :active="loading"
+        :started-at-ms="actionStartedAt"
+        kind="admin"
+        @cancel="cancelForceAction"
+      />
       <form class="space-y-4" data-testid="force-password-form" @submit.prevent="submit">
         <div>
           <label class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200" for="old">{{ t('accountOldPassword') }}</label>

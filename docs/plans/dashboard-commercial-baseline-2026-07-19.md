@@ -1322,3 +1322,8 @@
 - Users：创建/改密/授权/撤销补齐 Abort 与横幅
 - 命令面板：`retry-last-action` 触发页内 ActionResultBanner 重试
 
+## P309（2026-07-22）
+- Account / ForceChangePassword：改密与会话续期 Abort + InFlightBanner + 取消/超时文案
+- apiLogin / apiChangePassword / useAuth 支持 AbortSignal
+- UserModals：loading 态禁用提交；InFlightBanner 取消按钮 a11y
+

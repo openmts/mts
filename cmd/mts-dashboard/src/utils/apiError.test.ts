@@ -93,3 +93,11 @@ test('formatCaughtError timed-out Error message is timeout', () => {
   assert.equal(resolveCaughtErrorCode(new Error('request timed out')), 'timeout')
   assert.match(formatCaughtError(new Error('request timed out'), 'en'), /timeout/i)
 })
+
+test('resolveCaughtErrorCode maps localized cancel and timeout strings', () => {
+  assert.equal(resolveCaughtErrorCode('请求已取消'), 'canceled')
+  assert.equal(isCanceledError('admin action cancelled'), true)
+  assert.equal(resolveCaughtErrorCode('操作超时，请稍后重试'), 'timeout')
+  assert.equal(isTimeoutError('request timed out'), true)
+})
+

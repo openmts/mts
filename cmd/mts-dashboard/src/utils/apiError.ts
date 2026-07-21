@@ -131,8 +131,14 @@ export function friendlyApiError(
 
 /** 从未知错误解析主错误码（与 formatCaughtError 规则对齐） */
 export function resolveCaughtErrorCode(err: unknown): string {
+  if (typeof err === 'string') {
+    if (/cancel|abort|取消/i.test(err)) return 'canceled'
+    if (/timeout|timed out|超时/i.test(err)) return 'timeout'
+    return 'internal'
+  }
   if (err && typeof err === 'object') {
     const e = err as { code?: string; message?: string; status?: number; name?: string }
+    if (e.name === 'AbortError') return 'canceled'
     if (e.name === 'APIClientError' || e.code || e.status) {
       return resolveErrorCode(e.code, e.status)
     }
@@ -140,15 +146,18 @@ export function resolveCaughtErrorCode(err: unknown): string {
       if (/failed to fetch|network|load failed|networkerror/i.test(err.message)) {
         return 'network'
       }
-      if (e.name === 'AbortError') {
-        return 'canceled'
-      }
-      if (/timeout|timed out/i.test(err.message)) {
+      if (/timeout|timed out|超时/i.test(err.message)) {
         return 'timeout'
+      }
+      if (/cancel|abort|取消/i.test(err.message)) {
+        return 'canceled'
       }
       return 'internal'
     }
-    if (e.name === 'AbortError') return 'canceled'
+    if (e.message) {
+      if (/cancel|abort|取消/i.test(e.message)) return 'canceled'
+      if (/timeout|timed out|超时/i.test(e.message)) return 'timeout'
+    }
   }
   return 'internal'
 }

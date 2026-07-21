@@ -42,7 +42,11 @@ export function useAuth() {
     isAuthenticated.value = !!getBearerToken() && !isTokenExpired()
   }
 
-  async function login(username: string, password: string, opts?: { ttlSeconds?: number }): Promise<string | null> {
+  async function login(
+    username: string,
+    password: string,
+    opts?: { ttlSeconds?: number; signal?: AbortSignal },
+  ): Promise<string | null> {
     try {
       const data = await apiLogin(username, password, opts)
       if (!data.token?.token) {
@@ -68,11 +72,15 @@ export function useAuth() {
     }
   }
 
-  async function changePassword(oldPassword: string, newPassword: string): Promise<string | null> {
+  async function changePassword(
+    oldPassword: string,
+    newPassword: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<string | null> {
     try {
       const name = currentUser.value || getCurrentUser()
       if (!name) return formatCaughtError({ code: 'unauthenticated', message: 'not logged in' })
-      await apiChangePassword(name, oldPassword, newPassword)
+      await apiChangePassword(name, oldPassword, newPassword, opts?.signal ? { signal: opts.signal } : {})
       // ChangePassword 会撤销 token，前端清会话并要求重新登录
       clearAuth()
       currentUser.value = ''

@@ -11,6 +11,9 @@ import { sessionClockTickMs } from '@/utils/sessionClock'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
+import { createActionAbort } from '@/utils/actionAbort'
+import { isCanceledError, isTimeoutError } from '@/utils/apiError'
 import EmptyState from '@/components/EmptyState.vue'
 import { validateNewPassword } from '@/utils/passwordPolicy'
 import { KeyRound, UserRound, Download, Copy } from 'lucide-vue-next'
@@ -171,6 +174,21 @@ const serverClockSkewText = computed(() => {
   return `${sign}${skewSec}s`
 })
 
+
+function cancelAccountAction() {
+  accountActionAbort.cancel()
+}
+
+function mapAccountActionError(err: string): { message: string; retryable: boolean } {
+  if (isCanceledError(err)) {
+    return { message: t.value('adminActionCancelled'), retryable: false }
+  }
+  if (isTimeoutError(err)) {
+    return { message: t.value('adminActionTimedOut'), retryable: true }
+  }
+  return { message: err, retryable: true }
+}
+
 async function renewSessionWithPassword() {
   renewError.value = ''
   renewRetryable.value = false
@@ -190,18 +208,27 @@ async function renewSessionWithPassword() {
     return
   }
   renewLoading.value = true
+  accountActionStartedAt.value = Date.now()
+  const signal = accountActionAbort.begin()
   try {
-    const err = await login(user, renewPassword.value, { ttlSeconds: renewTtlSeconds.value })
+    const err = await login(user, renewPassword.value, {
+      ttlSeconds: renewTtlSeconds.value,
+      signal,
+    })
     if (err) {
-      renewError.value = err
-      renewRetryable.value = true
-      notifyError(err)
+      const mapped = mapAccountActionError(err)
+      renewError.value = mapped.message
+      renewRetryable.value = mapped.retryable
+      if (mapped.retryable) notifyError(mapped.message)
+      else notifyInfo(mapped.message)
       return
     }
     renewPassword.value = ''
     success(t.value('accountSessionRenewOk'))
   } finally {
+    accountActionAbort.end()
     renewLoading.value = false
+    accountActionStartedAt.value = null
   }
 }
 
@@ -250,6 +277,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  accountActionAbort.cancel()
   unregisterAccountDirty?.()
   unregisterAccountDirty = null
   window.removeEventListener('beforeunload', onAccountBeforeUnload)
@@ -380,6 +408,8 @@ const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
+const accountActionStartedAt = ref<number | null>(null)
+const accountActionAbort = createActionAbort()
 const error = ref('')
 const passwordRetryable = ref(false)
 const info = ref('')
@@ -498,18 +528,27 @@ async function submit() {
     return
   }
   loading.value = true
+  accountActionStartedAt.value = Date.now()
+  const signal = accountActionAbort.begin()
   try {
-    const err = await changePassword(oldPassword.value, newPassword.value)
+    const err = await changePassword(oldPassword.value, newPassword.value, { signal })
     if (err) {
-      error.value = err
-      passwordRetryable.value = true
-      notifyError(err)
+      const mapped = mapAccountActionError(err)
+      error.value = mapped.message
+      passwordRetryable.value = mapped.retryable
+      if (mapped.retryable) notifyError(mapped.message)
+      else {
+        info.value = mapped.message
+        notifyInfo(mapped.message)
+      }
       return
     }
     success(t.value('accountPasswordChanged'))
     await router.replace({ name: 'Login', query: { reason: 'password_changed' } })
   } finally {
+    accountActionAbort.end()
     loading.value = false
+    accountActionStartedAt.value = null
   }
 }
 </script>
@@ -810,6 +849,13 @@ async function submit() {
         </button>
       </form>
     </div>
+
+    <InFlightBanner
+      :active="loading || renewLoading"
+      :started-at-ms="accountActionStartedAt"
+      kind="admin"
+      @cancel="cancelAccountAction"
+    />
 
     <div class="mts-card p-4">
       <h2 class="mb-1 flex items-center gap-2 text-sm font-semibold">
