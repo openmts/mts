@@ -936,6 +936,39 @@ test('commercial browser smoke path', async ({ page }) => {
     window.dispatchEvent(new Event('online'))
   })
 
+  // P211: Storage 管理写/导出离线禁用
+  await page.goto('/storage')
+  await expect(page.getByTestId('storage-export-fetch')).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('offline-banner')).toBeVisible()
+  await expect(page.getByTestId('storage-export-fetch')).toBeDisabled()
+  await expect(page.getByTestId('storage-validate')).toBeDisabled()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+
+  // P209: 登录离线门禁
+  await page.getByTestId('topbar-logout').click()
+  await expect(page.getByTestId('login-panel')).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('login-submit')).toBeDisabled()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+  // 重新登录以继续后续用例
+  await page.getByTestId('login-username').fill('admin')
+  await page.getByTestId('login-password').fill(NEW_PASSWORD)
+  await page.getByTestId('login-submit').click()
+  await expect(page.getByTestId('overview-page').or(page.getByRole('main')).first()).toBeVisible({ timeout: 20000 })
+
   await page.keyboard.press('Control+Shift+KeyH')
   await expect(page.getByTestId('notify-history-panel')).toBeVisible()
   await page.keyboard.press('Escape')

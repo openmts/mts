@@ -987,3 +987,7 @@
 ## P210 状态（2026-07-21）
 - Config 服务 Token 脏离开守卫（badge / routeDirty / beforeunload）
 - 商业冒烟加深：Account dirty + Overview/About/Write 导出 banner
+
+## P211 状态（2026-07-21）
+- Storage 导出/校验等管理操作离线门禁
+- 登录离线 e2e 覆盖

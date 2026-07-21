@@ -258,6 +258,12 @@ async function doRestoreDrill() {
 }
 
 async function doExport() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    const msg = t.value('offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   loading.value = 'export'
   actionResult.value = null
   try {
@@ -478,17 +484,17 @@ async function copyStorageShareLink() {
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('storageValidateTitle') }}</h3></div>
-        <button :disabled="loading === 'validate'" class="mts-btn-primary w-full justify-center py-2" @click="doValidate">{{ loading === 'validate' ? t('loading') : t('storageValidateRun') }}</button>
+        <button data-testid="storage-validate" :disabled="loading === 'validate' || offline" :title="offline ? t('offlineAdminBlocked') : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doValidate">{{ loading === 'validate' ? t('loading') : t('storageValidateRun') }}</button>
         <pre v-if="validateResult" class="mt-3 max-h-40 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(validateResult, null, 2) }}</pre>
       </div>
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Camera class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('createSnapshot') }}</h3></div>
-        <button :disabled="loading === 'snapshot'" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
+        <button data-testid="storage-snapshot" :disabled="loading === 'snapshot' || offline" :title="offline ? t('offlineAdminBlocked') : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
         <p v-if="snapshotResult?.path" class="mt-2 break-all font-mono text-[11px] mts-muted">{{ snapshotResult.path }}</p>
       </div>
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('export') }}</h3></div>
-        <button data-testid="storage-export-fetch" :disabled="loading === 'export'" class="mts-btn-primary w-full justify-center py-2" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
+        <button data-testid="storage-export-fetch" :disabled="loading === 'export' || offline" :title="offline ? t('offlineAdminBlocked') : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
         <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
         <button v-if="exportData" type="button" class="mts-btn mt-2 w-full justify-center" data-testid="storage-export-download" :disabled="exportBusy" @click="downloadExport">{{ t('storageDownloadJson') }}</button>
         <button v-if="exportData" type="button" class="mts-btn mt-2 w-full justify-center" data-testid="storage-export-copy" @click="copyExport">{{ t('storageCopyExport') }}</button>
@@ -512,7 +518,7 @@ async function copyStorageShareLink() {
         :description="t('storageNoSnapshotsDesc')"
       >
         <template #action>
-          <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot'" @click="doSnapshot">{{ t('createSnapshot') }}</button>
+          <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot' || offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="doSnapshot">{{ t('createSnapshot') }}</button>
         </template>
       </EmptyState>
       <div id="snapshots" class="scroll-mt-20" data-testid="storage-snapshots-table">
@@ -587,7 +593,8 @@ async function copyStorageShareLink() {
         <button data-testid="storage-data-snapshot"
           type="button"
           class="mts-btn-primary justify-center py-2"
-          :disabled="loading === 'data-snapshot'"
+          :disabled="loading === 'data-snapshot' || offline"
+          :title="offline ? t('offlineAdminBlocked') : undefined"
           @click="doDataSnapshot"
         >
           {{ loading === 'data-snapshot' ? t('loading') : t('storageCreateDataSnapshot') }}
@@ -596,7 +603,8 @@ async function copyStorageShareLink() {
           type="button"
           class="mts-btn justify-center py-2"
           data-testid="storage-restore-drill"
-          :disabled="loading === 'restore-drill'"
+          :disabled="loading === 'restore-drill' || offline"
+          :title="offline ? t('offlineAdminBlocked') : undefined"
           @click="doRestoreDrill"
         >
           {{ loading === 'restore-drill' ? t('loading') : t('storageRunRestoreDrill') }}
