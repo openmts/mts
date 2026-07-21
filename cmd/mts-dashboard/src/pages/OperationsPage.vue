@@ -35,6 +35,7 @@ import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eras
 import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, StorageMemorySnapshot } from '@/api/types'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -58,6 +59,7 @@ const {
   runJSONExport,
 } = useExportJob()
 const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz } = useServerReachability()
+const { adminOpBusy, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const statsLoadedAt = ref<number | null>(null)
 const loadError = ref('')
 const partialStatsError = ref('')
@@ -73,7 +75,6 @@ const {
 } = useActionRetry<OpsActionKey>()
 const loading = ref(false)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
-const adminOpBusy = ref(false)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
@@ -152,7 +153,7 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
     case 'maintenance': {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
-      adminOpBusy.value = Boolean(v.admin_op_busy)
+      setAdminOpBusy(Boolean(v.admin_op_busy))
       return
     }
     case 'compaction': {
@@ -339,7 +340,7 @@ async function runConfirmed() {
   }
   const kind = confirmKind.value
   confirmLoading.value = true
-  adminOpBusy.value = true
+  setAdminOpBusy(true)
   opsActionStartedAt.value = Date.now()
   clearActionResult()
   const signal = opsActionAbort.begin()
@@ -381,7 +382,7 @@ async function runConfirmed() {
     try {
       await loadOpsSection('maintenance')
     } catch {
-      adminOpBusy.value = false
+      await refreshAdminOpBusy()
     }
   }
 }

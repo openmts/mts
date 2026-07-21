@@ -597,6 +597,18 @@ func operationCatalog() []operation {
 			GRPCFn:      grpcMaintenanceStats,
 		},
 		{
+			Name:        "ops_status",
+			Namespace:   "admin",
+			Description: "lightweight admin heavy-op busy flag",
+			Auth:        authAdmin,
+			HTTPMethods: []string{http.MethodGet},
+			HTTPPaths:   []string{routeAdminOpsStatus},
+			HTTPHandler: (*serverRuntime).handleOpsStatus,
+			GRPCMethod:  grpcMethodOpsStatus,
+			GRPCRequest: &emptyRequest{},
+			GRPCFn:      grpcOpsStatus,
+		},
+		{
 			Name:        "storage_memory",
 			Namespace:   "admin",
 			Description: "storage memory snapshot",

@@ -1360,3 +1360,9 @@
 ## P316（2026-07-22）
 - Dashboard：`useAdminOpBusy` 全局静默轮询 `admin_op_busy`；Layout 管理员横幅（刷新/跳转运维）
 - Readiness：评分 reasons 标记 `admin_op_busy`（不单独扣分）；评分卡 chip；导出预检 info 项
+
+## P317（2026-07-22）
+- Server：`GET /api/v1/admin/ops-status`（gRPC `OpsStatus`）轻量返回 `admin_op_busy`，供 Dashboard 高频轮询
+- Dashboard：`useAdminOpBusy` 增加 `setAdminOpBusy` / `markAdminOpBusyAndRefresh`；轮询改走 ops-status
+- Ops/Storage/Overview：去掉本地 busy ref 与重复 maintenance 拉取；乐观置位写共享态
+- e2e：运维页空闲时确认无 `admin-op-busy-banner`

@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, type ComputedRef, type Ref } from 'vue'
 import { apiGetSilent } from '@/api/client'
-import type { MaintenanceStatsResponse } from '@/api/types'
+import type { OpsStatusResponse } from '@/api/types'
 import { useAuth } from '@/composables/useAuth'
 import { parseAdminOpBusyPayload, shouldPollAdminOpBusy } from '@/utils/adminOpBusy'
 
@@ -12,6 +12,8 @@ interface SharedAdminOpBusy {
   checking: Ref<boolean>
   error: Ref<string>
   refresh: () => Promise<void>
+  setBusy: (v: boolean) => void
+  markBusyAndRefresh: () => void
   retain: () => void
   release: () => void
 }
@@ -28,6 +30,10 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
   let abort: AbortController | null = null
   const { isAdmin, isAuthenticated } = useAuth()
 
+  function setBusy(v: boolean) {
+    busy.value = Boolean(v)
+  }
+
   async function refresh() {
     if (!shouldPollAdminOpBusy(isAuthenticated.value, isAdmin.value)) {
       busy.value = false
@@ -40,7 +46,7 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
     abort = new AbortController()
     const signal = abort.signal
     try {
-      const v = await apiGetSilent<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance', {
+      const v = await apiGetSilent<OpsStatusResponse>('/api/v1/admin/ops-status', {
         signal,
       })
       if (signal.aborted) return
@@ -54,6 +60,11 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
     } finally {
       if (!signal.aborted) checking.value = false
     }
+  }
+
+  function markBusyAndRefresh() {
+    setBusy(true)
+    void refresh()
   }
 
   function arm() {
@@ -83,7 +94,17 @@ function createShared(intervalMs: number): SharedAdminOpBusy {
     if (subscribers === 0) disarm()
   }
 
-  return { busy, lastCheckedAt, checking, error, refresh, retain, release }
+  return {
+    busy,
+    lastCheckedAt,
+    checking,
+    error,
+    refresh,
+    setBusy,
+    markBusyAndRefresh,
+    retain,
+    release,
+  }
 }
 
 function getShared(intervalMs?: number): SharedAdminOpBusy {
@@ -100,6 +121,8 @@ export function useAdminOpBusy(opts?: { intervalMs?: number }): {
   adminOpBusyError: Ref<string>
   adminOpBusyCheckedAt: Ref<number | null>
   refreshAdminOpBusy: () => Promise<void>
+  setAdminOpBusy: (v: boolean) => void
+  markAdminOpBusyAndRefresh: () => void
 } {
   const s = getShared(opts?.intervalMs)
   onMounted(() => s.retain())
@@ -110,6 +133,8 @@ export function useAdminOpBusy(opts?: { intervalMs?: number }): {
     adminOpBusyError: s.error,
     adminOpBusyCheckedAt: s.lastCheckedAt,
     refreshAdminOpBusy: s.refresh,
+    setAdminOpBusy: s.setBusy,
+    markAdminOpBusyAndRefresh: s.markBusyAndRefresh,
   }
 }
 

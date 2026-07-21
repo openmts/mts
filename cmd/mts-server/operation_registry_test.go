@@ -51,6 +51,7 @@ func TestOperationRegistryCoversAllGRPCMethods(t *testing.T) {
 		grpcMethodApplyRetention:           {},
 		grpcMethodMaintenanceErrors:        {},
 		grpcMethodMaintenanceStats:         {},
+		grpcMethodOpsStatus:                {},
 		grpcMethodStorageMemory:            {},
 		grpcMethodCompactionStats:          {},
 		grpcMethodAdminHealth:              {},

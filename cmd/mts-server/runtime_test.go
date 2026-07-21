@@ -265,10 +265,16 @@ func TestRuntimeMaintenanceStatsPayloadBusy(t *testing.T) {
 	if !payload.AdminOpBusy {
 		t.Fatal("AdminOpBusy want true while held")
 	}
+	if !runtime.opsStatusPayload().AdminOpBusy {
+		t.Fatal("opsStatus AdminOpBusy want true while held")
+	}
 	runtime.endMaintenance()
 	payload = runtime.maintenanceStatsPayload()
 	if payload.AdminOpBusy {
 		t.Fatal("AdminOpBusy want false after end")
+	}
+	if runtime.opsStatusPayload().AdminOpBusy {
+		t.Fatal("opsStatus AdminOpBusy want false after end")
 	}
 }
 

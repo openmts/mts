@@ -2,9 +2,9 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiPost, apiGet, apiDelete } from '@/api/client'
-import type { MaintenanceStatsResponse } from '@/api/types'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -59,6 +59,7 @@ interface ExportResponse { export: ExportData }
 
 const route = useRoute()
 const { isAdmin } = useAuth()
+const { adminOpBusy, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, info, error: notifyError } = useNotify()
 const {
@@ -95,7 +96,6 @@ const snapshotListError = ref('')
 const dataListLoading = ref(false)
 const dataListError = ref('')
 const loading = ref('')
-const adminOpBusy = ref(false)
 const actionStartedAt = ref<number | null>(null)
 const actionAbort = createActionAbort()
 const listLoading = ref(false)
@@ -205,7 +205,7 @@ function scrollToCurrentHash() {
 
 onMounted(() => {
   if (isAdmin.value) {
-    void refreshAdminBusy()
+    void refreshAdminOpBusy()
     void loadSnapshots()
     void loadDataSnapshots()
   }
@@ -230,14 +230,6 @@ watch(
 )
 
 
-async function refreshAdminBusy() {
-  try {
-    const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
-    adminOpBusy.value = Boolean(v.admin_op_busy)
-  } catch {
-    /* soft */
-  }
-}
 
 function guardAdminHeavy(): boolean {
   if (writeBlocked.value) {
@@ -265,7 +257,7 @@ function endStorageAction() {
   actionAbort.end()
   loading.value = ''
   actionStartedAt.value = null
-  void refreshAdminBusy()
+  void refreshAdminOpBusy()
 }
 
 function cancelStorageAction() {
@@ -310,7 +302,7 @@ async function doValidate() {
 
 async function doSnapshot() {
   if (!guardAdminHeavy()) return
-  adminOpBusy.value = true
+  setAdminOpBusy(true)
   const signal = beginStorageAction('snapshot')
   try {
     snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot', undefined, { signal })
@@ -326,7 +318,7 @@ async function doSnapshot() {
 
 async function doDataSnapshot() {
   if (!guardAdminHeavy()) return
-  adminOpBusy.value = true
+  setAdminOpBusy(true)
   const signal = beginStorageAction('data-snapshot')
   try {
     dataSnapshotResult.value = await apiPost<DataSnapshotResponse>('/api/v1/admin/storage/data-snapshot', { flush: true }, { signal })
@@ -343,7 +335,7 @@ async function doDataSnapshot() {
 
 async function doRestoreDrill() {
   if (!guardAdminHeavy()) return
-  adminOpBusy.value = true
+  setAdminOpBusy(true)
   const signal = beginStorageAction('restore-drill')
   try {
     const source = selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || ''

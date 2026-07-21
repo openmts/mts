@@ -392,6 +392,10 @@ func (r *serverRuntime) maintenanceStatsPayload() maintenanceStatsResponse {
 	}
 }
 
+func (r *serverRuntime) opsStatusPayload() opsStatusResponse {
+	return opsStatusResponse{AdminOpBusy: r.maintenanceBusy.Load()}
+}
+
 func (r *serverRuntime) health() mts.HealthSnapshot {
 	return r.engine.HealthSnapshot()
 }

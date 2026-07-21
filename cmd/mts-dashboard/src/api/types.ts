@@ -120,6 +120,11 @@ export interface MaintenanceStatsResponse {
   admin_op_busy?: boolean
 }
 
+/** GET /api/v1/admin/ops-status 轻量互斥状态，供 Dashboard 高频轮询 */
+export interface OpsStatusResponse {
+  admin_op_busy?: boolean
+}
+
 export interface StorageMemorySnapshot {
   heap_alloc_bytes?: number
   heap_inuse_bytes?: number

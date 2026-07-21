@@ -92,6 +92,11 @@ type maintenanceStatsResponse struct {
 	AdminOpBusy bool                 `json:"admin_op_busy"`
 }
 
+// opsStatusResponse 轻量运维互斥状态，供 Dashboard 高频轮询。
+type opsStatusResponse struct {
+	AdminOpBusy bool `json:"admin_op_busy"`
+}
+
 type userResponse struct {
 	User mts.User `json:"user"`
 }

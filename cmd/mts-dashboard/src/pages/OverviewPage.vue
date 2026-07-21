@@ -6,6 +6,7 @@ import { overviewFormToPrefill, parseOverviewPrefill } from '@/utils/routePrefil
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
@@ -60,6 +61,7 @@ interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[] }
 
 const { isAdmin, getTokenExpiresAt } = useAuth()
+const { adminOpBusy, setAdminOpBusy } = useAdminOpBusy()
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
@@ -90,7 +92,6 @@ const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
-const adminOpBusy = ref(false)
 const doctorChecks = ref<DoctorCheck[]>([])
 const doctorTLS = ref<boolean | null>(null)
 const loadError = ref('')
@@ -308,7 +309,7 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
     case 'maintenance': {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
-      adminOpBusy.value = Boolean(v.admin_op_busy)
+      setAdminOpBusy(Boolean(v.admin_op_busy))
       return
     }
     case 'maintErrors': {
@@ -361,7 +362,7 @@ function clearNonAdminSnapshots() {
 function nullAdminSectionData(key: AdminSectionKey) {
   if (key === 'memory') memorySnapshot.value = null
   else if (key === 'compaction') compactionStats.value = null
-  else if (key === 'maintenance') { maintenanceStats.value = null; adminOpBusy.value = false }
+  else if (key === 'maintenance') { maintenanceStats.value = null }
   else if (key === 'maintErrors') maintenanceErrors.value = []
   else if (key === 'doctor') {
     doctorChecks.value = []
