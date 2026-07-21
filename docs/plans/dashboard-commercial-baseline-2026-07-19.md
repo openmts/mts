@@ -1302,3 +1302,9 @@
 ## P304（2026-07-22）
 - Storage/Ops 长操作：Abort + InFlightBanner + 取消/超时文案
 - ConfirmDialog 运维危险操作支持加载中取消；抽取 `actionAbort` 工具
+
+## P305（2026-07-22）
+- Users：删除/批量启用禁用 Abort + InFlightBanner(admin) + 取消/超时文案；ConfirmDialog 加载中可取消
+- Downsample：删除/批量/创建/范围修复 Abort + 横幅 + 取消/超时；range 弹窗加载中可取消
+- i18n：`adminInFlightTitle` / `adminActionCancelled` / `adminActionTimedOut`
+

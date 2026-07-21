@@ -16,6 +16,7 @@ import { Plus, Trash2, Key, Lock, Download } from 'lucide-vue-next'
 import UserModals from '@/components/UserModals.vue'
 import UserGrantPanel from '@/components/UserGrantPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -24,7 +25,8 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
-import { formatCaughtError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { createActionAbort } from '@/utils/actionAbort'
 import { formatMessage } from '@/utils/formatMessage'
 import { filterUsers } from '@/utils/listFilter'
 import { filterRowsByIds } from '@/utils/listSelection'
@@ -123,6 +125,7 @@ const {
   clearActionResult,
   setActionOk,
   setActionError,
+  setActionResult,
   reportActionError,
 } = useActionRetry<UsersActionKey>()
 function reportAndNotify(key: UsersActionKey, e: unknown, ctx?: Record<string, string>) {
@@ -172,6 +175,8 @@ const deleteLoading = ref(false)
 const batchOpen = ref(false)
 const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
+const usersActionStartedAt = ref<number | null>(null)
+const usersActionAbort = createActionAbort()
 
 onMounted(async () => {
   unregisterUsersDirty = registerDirtyChecker('users', () => usersFormDirty.value)
@@ -358,6 +363,26 @@ function requestDelete(name: string) {
   deleteOpen.value = true
 }
 
+function cancelUsersAction() {
+  usersActionAbort.cancel()
+}
+
+function reportUsersCatch(key: UsersActionKey, e: unknown, ctx?: Record<string, string>) {
+  if (isCanceledError(e)) {
+    const msg = t.value('adminActionCancelled')
+    setActionResult(makeActionResult('info', msg))
+    info(msg)
+    return
+  }
+  if (isTimeoutError(e)) {
+    const msg = t.value('adminActionTimedOut')
+    setActionResult(makeActionResult('error', msg))
+    notifyError(msg)
+    return
+  }
+  reportAndNotify(key, e, ctx)
+}
+
 async function confirmDelete() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
@@ -368,8 +393,10 @@ async function confirmDelete() {
   const name = deleteName.value
   if (!name) return
   deleteLoading.value = true
+  usersActionStartedAt.value = Date.now()
+  const signal = usersActionAbort.begin()
   try {
-    await apiDelete(`/api/v1/users/${encodeURIComponent(name)}`)
+    await apiDelete(`/api/v1/users/${encodeURIComponent(name)}`, { signal })
     await loadUsers()
     if (selectedUser.value?.name === name) selectedUser.value = null
     deleteOpen.value = false
@@ -377,9 +404,11 @@ async function confirmDelete() {
     setActionOk(okMsg)
     success(okMsg)
   } catch (e) {
-    reportAndNotify('delete', e)
+    reportUsersCatch('delete', e)
   } finally {
+    usersActionAbort.end()
     deleteLoading.value = false
+    usersActionStartedAt.value = null
   }
 }
 
@@ -570,6 +599,8 @@ async function confirmBatch() {
     return
   }
   batchLoading.value = true
+  usersActionStartedAt.value = Date.now()
+  const signal = usersActionAbort.begin()
   let ok = 0
   let skip = 0
   let fail = 0
@@ -577,6 +608,9 @@ async function confirmBatch() {
   const wantDisabled = batchMode.value === 'disable'
   try {
     for (const name of names) {
+      if (signal.aborted) {
+        throw new DOMException('Aborted', 'AbortError')
+      }
       const user = users.value.find((u) => u.name === name)
       if (!user) {
         skip += 1
@@ -594,9 +628,10 @@ async function confirmBatch() {
         await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, {
           ...user,
           disabled: wantDisabled,
-        })
+        }, { signal })
         ok += 1
-      } catch {
+      } catch (e) {
+        if (isCanceledError(e) || isTimeoutError(e) || signal.aborted) throw e
         fail += 1
         failNames.push(name)
       }
@@ -619,11 +654,16 @@ async function confirmBatch() {
     }
     clearSelection()
     batchOpen.value = false
+  } catch (e) {
+    reportUsersCatch('batch', e)
   } finally {
+    usersActionAbort.end()
     batchLoading.value = false
+    usersActionStartedAt.value = null
   }
 }
 onBeforeUnmount(() => {
+  cancelUsersAction()
   unregisterUsersDirty?.()
   unregisterUsersDirty = null
   window.removeEventListener('beforeunload', onUsersBeforeUnload)
@@ -684,6 +724,12 @@ onBeforeUnmount(() => {
       data-testid="users-action-result"
       @retry="retryLastUsersAction"
       @dismiss="clearActionResult"
+    />
+    <InFlightBanner
+      :active="deleteLoading || batchLoading"
+      :started-at-ms="usersActionStartedAt"
+      kind="admin"
+      @cancel="cancelUsersAction"
     />
     <PartialErrorBanner
       v-if="grantDbError"
@@ -877,7 +923,9 @@ onBeforeUnmount(() => {
       :confirm-label="batchMode === 'enable' ? t('listBatchEnable') : t('listBatchDisable')"
       :danger="batchMode === 'disable'"
       :loading="batchLoading"
+      allow-cancel-while-loading
       @confirm="confirmBatch"
+      @cancel="cancelUsersAction"
     />
     <ConfirmDialog
       v-model:open="deleteOpen"
@@ -889,7 +937,9 @@ onBeforeUnmount(() => {
       :confirm-label="t('delete')"
       danger
       :loading="deleteLoading"
+      allow-cancel-while-loading
       @confirm="confirmDelete"
+      @cancel="cancelUsersAction"
     />
   </div>
 </template>

@@ -9,7 +9,7 @@ const props = withDefaults(
   defineProps<{
     active: boolean
     startedAtMs?: number | null
-    kind?: 'query' | 'write' | 'delete' | 'ops' | 'storage'
+    kind?: 'query' | 'write' | 'delete' | 'ops' | 'storage' | 'admin'
     timeoutHintMs?: number
     longThresholdMs?: number
   }>(),
@@ -63,6 +63,7 @@ const title = computed(() => {
   if (props.kind === 'delete') return t.value('deleteInFlightTitle')
   if (props.kind === 'ops') return t.value('opsInFlightTitle')
   if (props.kind === 'storage') return t.value('storageInFlightTitle')
+  if (props.kind === 'admin') return t.value('adminInFlightTitle')
   return t.value('queryInFlightTitle')
 })
 

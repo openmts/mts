@@ -16,13 +16,15 @@ import { fieldNames } from '@/utils/seriesMeta'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
-import { formatCaughtError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { createActionAbort } from '@/utils/actionAbort'
 import { formatMessage } from '@/utils/formatMessage'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/listFilter'
@@ -93,6 +95,9 @@ const selectedNames = ref<string[]>([])
 const batchOpen = ref(false)
 const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
+const dsActionStartedAt = ref<number | null>(null)
+const dsActionAbort = createActionAbort()
+const createLoading = ref(false)
 
 const rangeOpen = ref(false)
 const rangeMode = ref<DownsampleRangeMode>('repair')
@@ -399,6 +404,35 @@ function openBatch(mode: 'enable' | 'disable') {
 }
 
 
+
+function cancelDsAction() {
+  dsActionAbort.cancel()
+}
+
+function onRangeCancel() {
+  if (rangeLoading.value) {
+    cancelDsAction()
+    return
+  }
+  rangeOpen.value = false
+}
+
+function reportDsCatch(key: DsActionKey, e: unknown) {
+  if (isCanceledError(e)) {
+    const msg = t.value('adminActionCancelled')
+    setActionResult(makeActionResult('info', msg))
+    info(msg)
+    return
+  }
+  if (isTimeoutError(e)) {
+    const msg = t.value('adminActionTimedOut')
+    setActionResult(makeActionResult('error', msg))
+    notifyError(msg)
+    return
+  }
+  reportActionError(key, e)
+}
+
 function reportActionError(key: DsActionKey, e: unknown) {
   reportRetryError(key, e)
   const msg = actionResult.value?.message || formatCaughtError(e)
@@ -440,16 +474,22 @@ async function confirmBatch() {
     return
   }
   batchLoading.value = true
+  dsActionStartedAt.value = Date.now()
+  const signal = dsActionAbort.begin()
   clearActionResult()
   let ok = 0
   const errors: string[] = []
   const action = batchMode.value === 'enable' ? 'enable' : 'disable'
   try {
     for (const name of names) {
+      if (signal.aborted) {
+        throw new DOMException('Aborted', 'AbortError')
+      }
       try {
-        await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/${action}`)
+        await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/${action}`, undefined, { signal })
         ok += 1
       } catch (e) {
+        if (isCanceledError(e) || isTimeoutError(e) || signal.aborted) throw e
         errors.push(`${name}: ${formatCaughtError(e)}`)
       }
     }
@@ -473,8 +513,12 @@ async function confirmBatch() {
         success(msg)
       }
     }
+  } catch (e) {
+    reportDsCatch('batch', e)
   } finally {
+    dsActionAbort.end()
     batchLoading.value = false
+    dsActionStartedAt.value = null
   }
 }
 
@@ -532,8 +576,11 @@ async function createPolicy() {
     notifyError(msg)
     return
   }
+  createLoading.value = true
+  dsActionStartedAt.value = Date.now()
+  const signal = dsActionAbort.begin()
   try {
-    await apiPost('/api/v1/admin/downsample/policies', newPolicy.value)
+    await apiPost('/api/v1/admin/downsample/policies', newPolicy.value, { signal })
     showCreate.value = false
     newPolicy.value = {
       name: '', source_database: '', source_measurement: '',
@@ -546,7 +593,11 @@ async function createPolicy() {
     setActionOk(t.value('downsampleCreated'))
     success(t.value('downsampleCreated'))
   } catch (e) {
-    reportActionError('create', e)
+    reportDsCatch('create', e)
+  } finally {
+    dsActionAbort.end()
+    createLoading.value = false
+    dsActionStartedAt.value = null
   }
 }
 
@@ -567,16 +618,20 @@ async function confirmDelete() {
     return
   }
   deleteLoading.value = true
+  dsActionStartedAt.value = Date.now()
+  const signal = dsActionAbort.begin()
   try {
-    await apiDelete(`/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`)
+    await apiDelete(`/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`, { signal })
     deleteOpen.value = false
     await loadData()
     setActionOk(t.value('downsampleDeleted'))
     success(t.value('downsampleDeleted'))
   } catch (e) {
-    reportActionError('delete', e)
+    reportDsCatch('delete', e)
   } finally {
+    dsActionAbort.end()
     deleteLoading.value = false
+    dsActionStartedAt.value = null
   }
 }
 
@@ -718,6 +773,8 @@ async function confirmRange() {
     return
   }
   rangeLoading.value = true
+  dsActionStartedAt.value = Date.now()
+  const signal = dsActionAbort.begin()
   clearActionResult()
   try {
     const body = buildDownsampleRangeBody({
@@ -727,13 +784,13 @@ async function confirmRange() {
     })
     const path = rangeActionPath(rangeName.value, rangeMode.value)
     if (rangeMode.value === 'dry-run') {
-      const data = await apiPost<{ result: DownsampleDryRunResult }>(path, body)
+      const data = await apiPost<{ result: DownsampleDryRunResult }>(path, body, { signal })
       const msg = formatRunResultMessage('dry-run', rangeName.value, data.result)
       rangeOpen.value = false
       setActionResult(makeActionResult('info', msg))
       success(msg)
     } else {
-      const data = await apiPost<{ result: DownsampleRunResult }>(path, body)
+      const data = await apiPost<{ result: DownsampleRunResult }>(path, body, { signal })
       const msg = formatRunResultMessage(rangeMode.value, rangeName.value, data.result)
       rangeOpen.value = false
       await loadData()
@@ -742,9 +799,11 @@ async function confirmRange() {
       success(msg)
     }
   } catch (e) {
-    reportActionError('range', e)
+    reportDsCatch('range', e)
   } finally {
+    dsActionAbort.end()
     rangeLoading.value = false
+    dsActionStartedAt.value = null
   }
 }
 
@@ -810,6 +869,7 @@ async function exportCSV() {
 }
 
 onBeforeUnmount(() => {
+  cancelDsAction()
   unregisterDownsampleDirty?.()
   unregisterDownsampleDirty = null
   window.removeEventListener('beforeunload', onDownsampleBeforeUnload)
@@ -842,6 +902,12 @@ onBeforeUnmount(() => {
     </div>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="downsample-load-error" @retry="loadData" @dismiss="loadError = ''" />
+    <InFlightBanner
+      :active="deleteLoading || batchLoading || rangeLoading || createLoading"
+      :started-at-ms="dsActionStartedAt"
+      kind="admin"
+      @cancel="cancelDsAction"
+    />
     <PartialErrorBanner
       v-if="!loadError && policiesError"
       :message="`${t('downsamplePoliciesLoadFailed')}：${policiesError}`"
@@ -1161,7 +1227,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="mt-4 flex justify-end gap-2">
           <button class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" @click="showCreate = false">{{ t('cancel') }}</button>
-          <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" data-testid="downsample-create-submit" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="createPolicy">{{ t('create') }}</button>
+          <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" data-testid="downsample-create-submit" :disabled="writeBlocked || createLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="createPolicy">{{ createLoading ? t('loading') : t('create') }}</button>
         </div>
       </div>
     </div>
@@ -1176,7 +1242,9 @@ onBeforeUnmount(() => {
       :confirm-label="t('delete')"
       danger
       :loading="deleteLoading"
+      allow-cancel-while-loading
       @confirm="confirmDelete"
+      @cancel="cancelDsAction"
     />
     <ConfirmDialog
       v-model:open="batchOpen"
@@ -1188,15 +1256,17 @@ onBeforeUnmount(() => {
       :confirm-label="batchMode === 'enable' ? t('downsampleBatchEnable') : t('downsampleBatchDisable')"
       :danger="batchMode === 'disable'"
       :loading="batchLoading"
+      allow-cancel-while-loading
       @confirm="confirmBatch"
+      @cancel="cancelDsAction"
     />
 
     <div
       v-if="rangeOpen"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
       data-testid="downsample-range-dialog"
-      @click.self="!rangeLoading && (rangeOpen = false)"
-      @keydown.esc="!rangeLoading && (rangeOpen = false)"
+      @click.self="onRangeCancel"
+      @keydown.esc="onRangeCancel"
     >
       <div ref="rangePanelRef" class="w-[440px] rounded-xl bg-white p-6 shadow-lg dark:bg-slate-900" role="dialog" aria-modal="true">
         <h3 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ rangeTitle }}</h3>
@@ -1220,7 +1290,7 @@ onBeforeUnmount(() => {
           data-testid="downsample-range-blocked"
         >{{ t(blockedMessageKey('offlineAdminBlocked')) }}</p>
         <div class="mt-4 flex justify-end gap-2">
-          <button type="button" class="mts-btn" :disabled="rangeLoading" @click="rangeOpen = false">{{ t('cancel') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-range-cancel" @click="onRangeCancel">{{ t('cancel') }}</button>
           <button
             type="button"
             class="mts-btn-primary"
