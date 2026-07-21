@@ -331,7 +331,10 @@ watch(
       v-else-if="partialErrors.length"
       kind="warn"
       :message="formatMessage(t('accessGrantsPartialFail'), { summary: partialErrors.slice(0, 3).join('; ') + (partialErrors.length > 3 ? '…' : '') })"
-      :dismissible="false"
+      retryable
+      data-testid="access-grants-partial-error"
+      @retry="load"
+      @dismiss="partialErrors = []"
     />
 
     <div class="grid gap-3 sm:grid-cols-3">

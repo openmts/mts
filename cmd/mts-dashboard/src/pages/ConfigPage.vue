@@ -14,7 +14,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
-import { makeActionResult, type ActionResult } from '@/utils/actionResult'
+import { useActionRetry } from '@/composables/useActionRetry'
 import {
   buildConfigSchemaExport,
   buildEffectiveConfigExport,
@@ -61,7 +61,25 @@ const CONFIG_LIST_HEIGHT = 320
 const errorCodeFilter = ref('')
 const loadError = ref('')
 const schemaError = ref('')
-const actionResult = ref<ActionResult | null>(null)
+type ConfigActionKey = 'validate' | 'reload'
+const {
+  lastFailedAction,
+  actionResult,
+  canRetryAction,
+  clearActionResult,
+  setActionOk,
+  setActionError,
+  reportActionError,
+} = useActionRetry<ConfigActionKey>()
+function reportAndNotify(key: ConfigActionKey, e: unknown) {
+  reportActionError(key, e)
+  if (actionResult.value?.message) notifyError(actionResult.value.message)
+}
+async function retryLastConfigAction() {
+  const key = lastFailedAction.value
+  if (key === 'validate') return handleValidate()
+  if (key === 'reload') return handleReload()
+}
 const adminTokenInput = ref(getAdminToken())
 const dataTokenInput = ref(getDataToken())
 const tokenBaseline = ref({ admin: getAdminToken(), data: getDataToken() })
@@ -187,47 +205,43 @@ watch(
 async function handleValidate() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
-  actionResult.value = null
+  clearActionResult()
   validateResult.value = null
   try {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/config/validate', { config: config.value })
     if (validateResult.value.ok) {
-      actionResult.value = makeActionResult('ok', t.value('configValidateOk'))
+      setActionOk(t.value('configValidateOk'))
       success(t.value('configValidateOk'))
     } else {
       const msg = formatMessage(t.value('configValidateFail'), { error: validateResult.value.error || '' })
-      actionResult.value = makeActionResult('error', msg)
+      setActionError(msg)
       notifyError(msg)
     }
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportAndNotify('validate', e)
   }
 }
 
 async function handleReload() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
-  actionResult.value = null
+  clearActionResult()
   reloadResult.value = null
   try {
     reloadResult.value = await apiPost<ReloadResponse>('/api/v1/admin/config/reload')
-    actionResult.value = makeActionResult('ok', reloadResult.value.fields?.length ? formatMessage(t.value('configReloadOkFields'), { fields: reloadResult.value.fields.join(', ') }) : t.value('configReloadOk'))
+    setActionOk(reloadResult.value.fields?.length ? formatMessage(t.value('configReloadOkFields'), { fields: reloadResult.value.fields.join(', ') }) : t.value('configReloadOk'))
     await loadConfig()
     success(t.value('configReloadToast'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportAndNotify('reload', e)
   }
 }
 
@@ -244,7 +258,7 @@ function clearServiceTokens() {
   setAdminToken('')
   setDataToken('')
   tokenBaseline.value = { admin: '', data: '' }
-  actionResult.value = makeActionResult('ok', t.value('configTokenCleared'))
+  setActionOk(t.value('configTokenCleared'))
   success(t.value('configTokenCleared'))
 }
 
@@ -401,7 +415,13 @@ onBeforeUnmount(() => {
       @retry="() => { void reloadConfigSchema() }"
       @dismiss="schemaError = ''"
     />
-    <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
+    <ActionResultBanner
+      :result="actionResult"
+      :retryable="canRetryAction"
+      data-testid="config-action-result"
+      @retry="retryLastConfigAction"
+      @dismiss="clearActionResult"
+    />
 
     <div class="mts-panel" data-testid="config-token-panel">
       <h2 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configTokenTitle') }}</h2>

@@ -1133,3 +1133,9 @@
 
 ## P252（2026-07-21）
 - Downsample / Databases 写与详情加载失败 ActionResult 可重试
+
+## P253（2026-07-21）
+- AccessGrants 分项失败可重试；Users/Config 写操作失败可重试
+
+## P254（2026-07-21）
+- 抽取 createActionRetry / useActionRetry 公共失败重试状态机

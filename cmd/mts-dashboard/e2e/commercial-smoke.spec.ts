@@ -278,6 +278,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('access-matrix-virtual-hint')).toBeVisible()
   await page.goto('/access/grants')
   await expect(page.getByTestId('access-grants-page')).toBeVisible()
+  await expect(page.getByTestId('access-grants-load-error')).toHaveCount(0)
+  await expect(page.getByTestId('access-grants-partial-error')).toHaveCount(0)
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
   await expect(page.getByTestId('access-grants-export-json')).toBeVisible()
   await expect(page.getByTestId('access-grants-export-csv')).toBeVisible()

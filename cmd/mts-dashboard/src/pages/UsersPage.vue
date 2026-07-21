@@ -20,7 +20,8 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
-import { makeActionResult, type ActionResult } from '@/utils/actionResult'
+import { makeActionResult } from '@/utils/actionResult'
+import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
@@ -109,7 +110,46 @@ const {
 } = useExportJob()
 const loadError = ref('')
 const grantDbError = ref('')
-const actionResult = ref<ActionResult | null>(null)
+type UsersActionKey = 'create' | 'set-password' | 'change-self-password' | 'delete' | 'toggle' | 'select-grants' | 'grant' | 'revoke' | 'batch'
+const {
+  lastFailedAction,
+  actionResult,
+  actionContext,
+  canRetryAction,
+  clearActionResult,
+  setActionOk,
+  setActionError,
+  reportActionError,
+} = useActionRetry<UsersActionKey>()
+function reportAndNotify(key: UsersActionKey, e: unknown, ctx?: Record<string, string>) {
+  reportActionError(key, e, ctx)
+  const msg = actionResult.value?.message
+  if (msg) notifyError(msg)
+}
+async function retryLastUsersAction() {
+  const key = lastFailedAction.value
+  if (!key) return
+  if (key === 'create') return createUser()
+  if (key === 'set-password') return doSetPassword()
+  if (key === 'change-self-password') return doChangeSelfPassword()
+  if (key === 'delete' && deleteName.value) {
+    deleteOpen.value = true
+    return confirmDelete()
+  }
+  if (key === 'toggle' && actionContext.value.name) {
+    const u = users.value.find((x) => x.name === actionContext.value.name)
+    if (u) return toggleDisable(u)
+  }
+  if (key === 'select-grants' && selectedUser.value) return selectUser(selectedUser.value)
+  if (key === 'grant') return grantPermission()
+  if (key === 'revoke' && actionContext.value.database && actionContext.value.permission && selectedUser.value) {
+    return revokeGrant({ database: actionContext.value.database, permission: actionContext.value.permission })
+  }
+  if (key === 'batch') {
+    batchOpen.value = true
+    return confirmBatch()
+  }
+}
 const showCreate = ref(false)
 const newUser = ref({ name: '', display_name: '', password: '', role: 'user' })
 const selectedUser = ref<User | null>(null)
@@ -225,12 +265,12 @@ let unregisterUsersDirty: (() => void) | null = null
 async function createUser() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
   if (!newUser.value.name.trim()) return
-  actionResult.value = null
+  clearActionResult()
   try {
     await apiPost('/api/v1/users', {
       name: newUser.value.name.trim(),
@@ -241,46 +281,42 @@ async function createUser() {
     showCreate.value = false
     newUser.value = { name: '', display_name: '', role: 'user', password: '' }
     await loadUsers()
-    actionResult.value = makeActionResult('ok', t.value('usersCreated'))
+    setActionOk(t.value('usersCreated'))
     success(t.value('usersCreated'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportAndNotify('create', e)
   }
 }
 
 async function doSetPassword() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
   if (!setPasswordValue.value) return
-  actionResult.value = null
+  clearActionResult()
   try {
     await apiPut(`/api/v1/users/${encodeURIComponent(setPasswordUser.value)}/password`, { password: setPasswordValue.value })
     showSetPassword.value = false
     setPasswordValue.value = ''
-    actionResult.value = makeActionResult('ok', t.value('usersPasswordSet'))
+    setActionOk(t.value('usersPasswordSet'))
     success(t.value('usersPasswordSet'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportAndNotify('set-password', e)
   }
 }
 
 async function doChangeSelfPassword() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
   if (!selfOldPassword.value || !selfNewPassword.value) return
-  actionResult.value = null
+  clearActionResult()
   try {
     await apiPost('/api/v1/auth/password', {
       user_name: currentUser.value,
@@ -290,12 +326,10 @@ async function doChangeSelfPassword() {
     showChangeSelfPassword.value = false
     selfOldPassword.value = ''
     selfNewPassword.value = ''
-    actionResult.value = makeActionResult('ok', t.value('usersPasswordChanged'))
+    setActionOk(t.value('usersPasswordChanged'))
     success(t.value('usersPasswordChanged'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportAndNotify('change-self-password', e)
   }
 }
 
@@ -311,7 +345,7 @@ function requestDelete(name: string) {
 async function confirmDelete() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -324,12 +358,10 @@ async function confirmDelete() {
     if (selectedUser.value?.name === name) selectedUser.value = null
     deleteOpen.value = false
     const okMsg = formatMessage(t.value('usersDeleted'), { name })
-    actionResult.value = makeActionResult('ok', okMsg)
+    setActionOk(okMsg)
     success(okMsg)
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportAndNotify('delete', e)
   } finally {
     deleteLoading.value = false
   }
@@ -338,20 +370,20 @@ async function confirmDelete() {
 async function toggleDisable(user: User) {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
   try {
+    // 供重试定位用户
+    // context set on failure via reportAndNotify
     await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled })
     await loadUsers()
     const okMsg = user.disabled ? t.value('usersEnabled') : t.value('usersDisabled')
-    actionResult.value = makeActionResult('ok', okMsg)
+    setActionOk(okMsg)
     success(okMsg)
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportAndNotify('toggle', e, { name: user.name })
   }
 }
 
@@ -361,7 +393,7 @@ async function selectUser(user: User) {
     const data = await apiGet<PermissionsResponse>(`/api/v1/users/${encodeURIComponent(user.name)}/database-permissions`)
     userGrants.value = data.grants ?? []
   } catch (e) {
-    const msg = formatCaughtError(e); actionResult.value = makeActionResult('error', msg)
+    reportAndNotify('select-grants', e, { name: user.name })
   }
 }
 
@@ -380,12 +412,12 @@ function toggleGrantPerm(perm: string) {
 async function grantPermission() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
   if (!grantDbs.value.length || !grantPerms.value.length || !selectedUser.value) return
-  actionResult.value = null
+  clearActionResult()
   try {
     const tasks: Promise<unknown>[] = []
     for (const db of grantDbs.value) {
@@ -397,19 +429,17 @@ async function grantPermission() {
     grantDbs.value = []
     grantPerms.value = []
     await selectUser(selectedUser.value)
-    actionResult.value = makeActionResult('ok', t.value('usersGrantOk'))
+    setActionOk(t.value('usersGrantOk'))
     success(t.value('usersGrantOk'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportAndNotify('grant', e)
   }
 }
 
 async function revokeGrant(g: DatabaseGrant) {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -417,12 +447,10 @@ async function revokeGrant(g: DatabaseGrant) {
   try {
     await apiDelete(`/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(g.database)}/${encodeURIComponent(g.permission)}`)
     await selectUser(selectedUser.value)
-    actionResult.value = makeActionResult('ok', t.value('usersRevokeOk'))
+    setActionOk(t.value('usersRevokeOk'))
     success(t.value('usersRevokeOk'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportAndNotify('revoke', e, { database: g.database, permission: g.permission })
   }
 }
 
@@ -516,7 +544,7 @@ function openBatch(mode: 'enable' | 'disable') {
 async function confirmBatch() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    actionResult.value = makeActionResult('error', msg)
+    setActionError(msg)
     notifyError(msg)
     return
   }
@@ -565,9 +593,14 @@ async function confirmBatch() {
       const more = failNames.length > 8 ? `…(+${failNames.length - 8})` : ''
       msg = `${msg}；${formatMessage(t.value('listBatchFailDetail'), { names: shown + more })}`
     }
-    actionResult.value = makeActionResult(fail ? 'error' : 'ok', msg)
-    if (fail) notifyError(msg)
-    else success(msg)
+    if (fail) {
+      lastFailedAction.value = 'batch'
+      actionResult.value = makeActionResult('error', msg)
+      notifyError(msg)
+    } else {
+      setActionOk(msg)
+      success(msg)
+    }
     clearSelection()
     batchOpen.value = false
   } finally {
@@ -622,7 +655,13 @@ onBeforeUnmount(() => {
       @retry="loadUsers"
       @dismiss="loadError = ''"
     />
-    <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
+    <ActionResultBanner
+      :result="actionResult"
+      :retryable="canRetryAction"
+      data-testid="users-action-result"
+      @retry="retryLastUsersAction"
+      @dismiss="clearActionResult"
+    />
     <ActionResultBanner
       v-if="grantDbError"
       kind="warn"
