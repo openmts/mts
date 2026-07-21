@@ -7,6 +7,7 @@ import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
@@ -85,7 +86,8 @@ const {
   setActionResult,
   reportActionError: reportRetryError,
 } = useActionRetry<StorageActionKey>()
-const listError = ref('')
+const snapshotListError = ref('')
+const dataListError = ref('')
 const loading = ref('')
 const listLoading = ref(false)
 const SNAPSHOT_ROW_HEIGHT = 44
@@ -115,21 +117,28 @@ function toggleHostDrill(id: string, checked: boolean) {
   drillDone.value = { ...drillDone.value, [id]: checked }
 }
 
-async function loadSnapshots() {
-  listLoading.value = true
-  listError.value = ''
+async function loadSnapshots(opts?: { soft?: boolean }) {
+  const soft = !!opts?.soft
+  if (!soft) listLoading.value = true
   try {
     const data = await apiGet<SnapshotsResponse>('/api/v1/admin/storage/snapshots')
     snapshots.value = data.snapshots ?? []
+    snapshotListError.value = ''
   } catch (e) {
-    snapshots.value = []
-    listError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (soft && snapshots.value.length) {
+      snapshotListError.value = msg
+    } else {
+      snapshots.value = []
+      snapshotListError.value = msg
+    }
   } finally {
-    listLoading.value = false
+    if (!soft) listLoading.value = false
   }
 }
 
-async function loadDataSnapshots() {
+async function loadDataSnapshots(opts?: { soft?: boolean }) {
+  const soft = !!opts?.soft
   try {
     const data = await apiGet<DataSnapshotsResponse>('/api/v1/admin/storage/data-snapshots')
     dataSnapshots.value = data.snapshots ?? []
@@ -137,17 +146,22 @@ async function loadDataSnapshots() {
       dataSnapshots.value,
       selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || null,
     )
+    dataListError.value = ''
   } catch (e) {
-    dataSnapshots.value = []
-    selectedDataSnapshotPath.value = ''
-    // 列表错误合并展示，避免静默空列表
     const msg = formatCaughtError(e)
-    listError.value = listError.value ? `${listError.value}；${msg}` : msg
+    if (soft && dataSnapshots.value.length) {
+      dataListError.value = msg
+    } else {
+      dataSnapshots.value = []
+      selectedDataSnapshotPath.value = ''
+      dataListError.value = msg
+    }
   }
 }
 
 async function reloadStorageLists() {
-  listError.value = ''
+  snapshotListError.value = ''
+  dataListError.value = ''
   await loadSnapshots()
   await loadDataSnapshots()
 }
@@ -425,20 +439,50 @@ async function copyStorageShareLink() {
         <button type="button" class="mts-btn" data-testid="storage-share-link" @click="copyStorageShareLink">
           {{ t('storageShareLink') }}
         </button>
-        <button class="mts-btn" :disabled="listLoading" @click="() => { void reloadStorageLists() }">
-          <RefreshCw class="h-3.5 w-3.5" /> {{ t('storageRefreshSnapshots') }}
+        <button
+          type="button"
+          class="mts-btn"
+          data-testid="storage-refresh"
+          :disabled="listLoading"
+          :aria-busy="listLoading ? 'true' : undefined"
+          @click="() => { void reloadStorageLists() }"
+        >
+          <RefreshCw class="h-3.5 w-3.5" :class="listLoading ? 'animate-spin' : ''" /> {{ t('storageRefreshSnapshots') }}
         </button>
       </div>
     </div>
 
     <ActionResultBanner
-      v-if="listError"
+      v-if="snapshotListError && !snapshots.length"
       kind="error"
-      :message="listError"
+      :message="snapshotListError"
       retryable
       data-testid="storage-list-error"
-      @retry="reloadStorageLists"
-      @dismiss="listError = ''"
+      @retry="() => loadSnapshots()"
+      @dismiss="snapshotListError = ''"
+    />
+    <PartialErrorBanner
+      v-else-if="snapshotListError"
+      :message="`${t('storageSnapshotsRefreshFailed')}：${snapshotListError}`"
+      test-id="storage-snapshots-refresh-error"
+      @retry="() => loadSnapshots({ soft: true })"
+      @dismiss="snapshotListError = ''"
+    />
+    <PartialErrorBanner
+      v-if="dataListError && dataSnapshots.length"
+      :message="`${t('storageDataSnapshotsRefreshFailed')}：${dataListError}`"
+      test-id="storage-data-refresh-error"
+      @retry="() => loadDataSnapshots({ soft: true })"
+      @dismiss="dataListError = ''"
+    />
+    <ActionResultBanner
+      v-else-if="dataListError && !dataSnapshots.length"
+      kind="error"
+      :message="dataListError"
+      retryable
+      data-testid="storage-data-list-error"
+      @retry="() => loadDataSnapshots()"
+      @dismiss="dataListError = ''"
     />
     <ActionResultBanner
       :result="actionResult"

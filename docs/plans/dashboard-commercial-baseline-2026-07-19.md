@@ -1169,3 +1169,6 @@
 
 ## P264（2026-07-21）
 - Databases 详情加载失败 soft-fail + `databases-detail-error`
+
+## P265（2026-07-21）
+- Storage 双列表刷新 soft-fail 与分项错误条

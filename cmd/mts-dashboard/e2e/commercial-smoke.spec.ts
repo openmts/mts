@@ -172,6 +172,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/storage')
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
+  await expect(page.getByTestId('storage-snapshots-refresh-error')).toHaveCount(0)
+  await expect(page.getByTestId('storage-data-refresh-error')).toHaveCount(0)
   await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
 
   // 4) 查询页可达 + 执行一次 rows 查询以验证结果虚拟列表
