@@ -497,6 +497,14 @@ const deleteScopeMessage = computed(() => {
   }
 })
 
+function openRangeDelete() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineDeleteBlocked'))
+    return
+  }
+  deleteOpen.value = true
+}
+
 async function doRangeDelete() {
   if (shouldBlockOfflineMutation(offline.value)) {
     deleteResult.value = t.value('offlineDeleteBlocked')
@@ -869,9 +877,11 @@ const columnRows = computed(() => {
       >{{ engineStatsLoading ? t('loading') : t('queryEngineStatsBtn') }}</button>
       <button
         type="button"
-        class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 dark:text-red-200"
+        class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-200"
         data-testid="query-range-delete"
-        @click="deleteOpen = true"
+        :disabled="offline"
+        :title="offline ? t('offlineDeleteBlocked') : undefined"
+        @click="openRangeDelete"
       ><Trash2 class="h-4 w-4" />{{ t('queryRangeDelete') }}</button>
       <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700" @click="copyResults">
         <component :is="copyState === 'ok' ? Check : Copy" class="h-4 w-4" />

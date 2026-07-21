@@ -978,6 +978,20 @@ test('commercial browser smoke path', async ({ page }) => {
     window.dispatchEvent(new Event('online'))
   })
 
+  // P214: Downsample 创建入口离线禁用
+  await page.goto('/downsample')
+  await expect(page.getByTestId('downsample-open-create')).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('offline-banner')).toBeVisible()
+  await expect(page.getByTestId('downsample-open-create')).toBeDisabled()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+
   // P209: 登录离线门禁
   await page.getByTestId('topbar-logout').click()
   await expect(page.getByTestId('login-panel')).toBeVisible()

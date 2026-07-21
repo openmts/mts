@@ -455,6 +455,10 @@ async function createPolicy() {
 }
 
 function requestDelete(name: string) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineAdminBlocked'))
+    return
+  }
   deleteName.value = name
   deleteOpen.value = true
 }
@@ -566,6 +570,10 @@ async function resetPolicy(name: string) {
 }
 
 function openRange(mode: DownsampleRangeMode, name: string) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineAdminBlocked'))
+    return
+  }
   rangeMode.value = mode
   rangeName.value = name
   const st = getStatus(name)
@@ -728,8 +736,10 @@ onBeforeUnmount(() => {
         </button>
         <button
           type="button"
-          class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white"
+          class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           data-testid="downsample-open-create"
+          :disabled="offline"
+          :title="offline ? t('offlineAdminBlocked') : undefined"
           @click="showCreate = true"
         >
           <Plus class="h-3.5 w-3.5" /> {{ t('downsampleCreate') }}
@@ -786,7 +796,7 @@ onBeforeUnmount(() => {
     <div v-if="!policies.length" class="mts-card">
       <EmptyState data-testid="downsample-empty" :title="t('downsampleEmpty')" :description="t('downsampleEmptyDesc')">
         <template #action>
-          <button type="button" class="mts-btn-primary" @click="showCreate = true">{{ t('downsampleCreate') }}</button>
+          <button type="button" class="mts-btn-primary" data-testid="downsample-empty-create" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="showCreate = true">{{ t('downsampleCreate') }}</button>
         <span v-if="downsampleFormDirty" data-testid="downsample-dirty-badge" class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">{{ t('adminDirtyBadge') }}</span>
         </template>
       </EmptyState>
@@ -853,25 +863,25 @@ onBeforeUnmount(() => {
             </div>
             <div class="px-2">
               <div class="flex flex-wrap items-center gap-0.5">
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleRunTitle')" :data-testid="`downsample-run-${policy.name}`" @click="runPolicy(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleRunTitle')" :data-testid="`downsample-run-${policy.name}`" @click="runPolicy(policy.name)">
                   <PlayCircle class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleDryRun')" :data-testid="`downsample-dryrun-${policy.name}`" @click="openRange('dry-run', policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleDryRun')" :data-testid="`downsample-dryrun-${policy.name}`" @click="openRange('dry-run', policy.name)">
                   <FlaskConical class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleRunRange')" :data-testid="`downsample-runrange-${policy.name}`" @click="openRange('run-range', policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleRunRange')" :data-testid="`downsample-runrange-${policy.name}`" @click="openRange('run-range', policy.name)">
                   <Timer class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleRepair')" :data-testid="`downsample-repair-${policy.name}`" @click="openRange('repair', policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleRepair')" :data-testid="`downsample-repair-${policy.name}`" @click="openRange('repair', policy.name)">
                   <Wrench class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleResetTitle')" :data-testid="`downsample-reset-${policy.name}`" @click="resetPolicy(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleResetTitle')" :data-testid="`downsample-reset-${policy.name}`" @click="resetPolicy(policy.name)">
                   <RotateCcw class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :data-testid="`downsample-toggle-${policy.name}`" @click="togglePolicy(policy)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" :data-testid="`downsample-toggle-${policy.name}`" @click="togglePolicy(policy)">
                   <component :is="policy.enabled ? Pause : Play" class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600" :data-testid="`downsample-delete-${policy.name}`" @click="requestDelete(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" :data-testid="`downsample-delete-${policy.name}`" @click="requestDelete(policy.name)">
                   <Trash2 class="h-4 w-4" />
                 </button>
               </div>
@@ -1086,7 +1096,8 @@ onBeforeUnmount(() => {
             type="button"
             class="mts-btn-primary"
             data-testid="downsample-range-confirm"
-            :disabled="rangeLoading"
+            :disabled="rangeLoading || offline"
+            :title="offline ? t('offlineAdminBlocked') : undefined"
             @click="confirmRange"
           >
             {{ rangeLoading ? t('loading') : rangeConfirmLabel }}
