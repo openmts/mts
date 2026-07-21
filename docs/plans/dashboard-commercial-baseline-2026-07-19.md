@@ -1101,3 +1101,7 @@
 
 ## P242（2026-07-21）
 - 命令面板补 storage snapshots / account session·password·density 深链
+
+## P243（2026-07-21）
+- Overview 分项失败标签化
+- Query series 失败可重试

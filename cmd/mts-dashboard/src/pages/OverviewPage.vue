@@ -236,6 +236,11 @@ function applyHealth(h: HealthSnapshot) {
   healthChecks.value = h.checks ?? []
 }
 
+
+function pushAdminPartial(errs: string[], label: string, err: unknown) {
+  errs.push(`${label}: ${formatCaughtError(err)}`)
+}
+
 async function loadOverview() {
   loading.value = true
   loadError.value = ''
@@ -258,22 +263,22 @@ async function loadOverview() {
       if (results[0].status === 'fulfilled') memorySnapshot.value = results[0].value.snapshot
       else {
         memorySnapshot.value = null
-        errs.push(formatCaughtError(results[0].reason))
+        pushAdminPartial(errs, t.value('overviewPartialMemory'), results[0].reason)
       }
       if (results[1].status === 'fulfilled') compactionStats.value = results[1].value.stats
       else {
         compactionStats.value = null
-        errs.push(formatCaughtError(results[1].reason))
+        pushAdminPartial(errs, t.value('overviewPartialCompaction'), results[1].reason)
       }
       if (results[2].status === 'fulfilled') maintenanceStats.value = results[2].value.stats ?? null
       else {
         maintenanceStats.value = null
-        errs.push(formatCaughtError(results[2].reason))
+        pushAdminPartial(errs, t.value('overviewPartialMaintenance'), results[2].reason)
       }
       if (results[3].status === 'fulfilled') maintenanceErrors.value = results[3].value.errors ?? []
       else {
         maintenanceErrors.value = []
-        errs.push(formatCaughtError(results[3].reason))
+        pushAdminPartial(errs, t.value('overviewPartialMaintErrors'), results[3].reason)
       }
       if (results[4].status === 'fulfilled') {
         const raw = results[4].value as AdminHealthResponse
@@ -290,13 +295,13 @@ async function loadOverview() {
       } else {
         doctorChecks.value = []
         doctorTLS.value = null
-        errs.push(formatCaughtError(results[5].reason))
+        pushAdminPartial(errs, t.value('overviewPartialDoctor'), results[5].reason)
       }
       if (results[6].status === 'fulfilled') {
         serverVersion.value = results[6].value
       } else {
         serverVersion.value = null
-        errs.push(formatCaughtError(results[6].reason))
+        pushAdminPartial(errs, t.value('overviewPartialVersion'), results[6].reason)
       }
       if (errs.length) adminPartialError.value = errs.join('；')
     } else {

@@ -817,7 +817,16 @@ const columnRows = computed(() => {
         <p v-if="seriesTruncated" class="mt-1 text-[11px] text-amber-700 dark:text-amber-200" data-testid="query-series-truncated">
           {{ formatMessage(t('querySeriesTruncated'), { max: 200, total: seriesTotal }) }}
         </p>
-        <p v-if="seriesError" class="mt-1 text-[11px] text-rose-600" data-testid="query-series-error">{{ seriesError }}</p>
+        <div v-if="seriesError" class="mt-1 flex flex-wrap items-center gap-2" data-testid="query-series-error">
+          <p class="text-[11px] text-rose-600" role="alert" aria-live="assertive">{{ seriesError }}</p>
+          <button
+            type="button"
+            class="mts-btn text-[11px] py-0.5"
+            data-testid="query-series-retry"
+            :disabled="seriesLoading"
+            @click="refreshSeriesWithTags"
+          >{{ t('querySeriesRetry') }}</button>
+        </div>
         <p class="mt-1 text-[11px] mts-muted">{{ t('querySeriesPickerHint') }}</p>
       </div>
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 md:col-span-2 lg:col-span-3">{{ t('queryPredicates') }}
