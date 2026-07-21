@@ -1277,3 +1277,7 @@
 - Overview：memory / compaction / maintenance 空态 EmptyState + 分区块刷新
 - Query：stats 空态一键拉取引擎 stats；chart 展开无 rows 时 EmptyState + 执行/收起
 - Config：schema / error-codes 筛选空态「清除筛选」与无数据文案区分
+
+## P299（2026-07-22）
+- Account：展示服务端时间 `server_time_unix` 与客户端时钟偏差
+- Operations：维护/compaction/memory 空态增加「刷新该区块」CTA（复用 loadStats）

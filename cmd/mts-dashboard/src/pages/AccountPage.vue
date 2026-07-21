@@ -54,7 +54,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
-const { currentUser, currentRole, changePassword, isAdmin, logout, login, refreshSession, lastSessionRemainingSeconds, lastSessionCheckedAt } = useAuth()
+const { currentUser, currentRole, changePassword, isAdmin, logout, login, refreshSession, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix } = useAuth()
 const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
 let sessionClock: ReturnType<typeof setInterval> | null = null
@@ -149,6 +149,26 @@ const serverCheckedAtText = computed(() => {
   } catch {
     return String(at)
   }
+})
+
+const serverTimeText = computed(() => {
+  const sec = lastSessionServerTimeUnix.value
+  if (sec == null) return t.value('accountSessionServerNone')
+  try {
+    return new Date(sec * 1000).toLocaleString()
+  } catch {
+    return String(sec)
+  }
+})
+
+const serverClockSkewText = computed(() => {
+  const serverUnix = lastSessionServerTimeUnix.value
+  const checkedAt = lastSessionCheckedAt.value
+  if (serverUnix == null || checkedAt == null) return t.value('accountSessionServerNone')
+  const skewSec = Math.round(checkedAt / 1000 - serverUnix)
+  if (Math.abs(skewSec) < 2) return t.value('accountSessionSkewOk')
+  const sign = skewSec > 0 ? '+' : ''
+  return `${sign}${skewSec}s`
 })
 
 async function renewSessionWithPassword() {
@@ -709,6 +729,14 @@ async function submit() {
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('accountSessionServerCheckedAt') }}</dt>
           <dd class="font-mono" data-testid="account-session-server-checked-at">{{ serverCheckedAtText }}</dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="mts-muted">{{ t('accountSessionServerTime') }}</dt>
+          <dd class="font-mono" data-testid="account-session-server-time">{{ serverTimeText }}</dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="mts-muted">{{ t('accountSessionClockSkew') }}</dt>
+          <dd class="font-mono" data-testid="account-session-clock-skew">{{ serverClockSkewText }}</dd>
         </div>
       </dl>
       <p class="mt-3 text-xs mts-muted" data-testid="account-session-hint">{{ t('accountSessionRenewHint') }}</p>

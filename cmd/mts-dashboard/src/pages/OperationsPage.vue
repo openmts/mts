@@ -669,7 +669,19 @@ watch(
     <div class="grid gap-4 lg:grid-cols-2">
       <div class="mts-card p-5" data-testid="ops-maint-stats">
         <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceStats') }}</h2>
-        <EmptyState v-if="!maintenanceStats" compact :title="t('opsNoMaintStats')" :description="t('opsStatsEmptyHint')" />
+        <EmptyState
+          v-if="!maintenanceStats"
+          compact
+          data-testid="ops-maint-stats-empty"
+          :title="t('opsNoMaintStats')"
+          :description="t('opsStatsEmptyHint')"
+        >
+          <template #action>
+            <button type="button" class="mts-btn-primary text-xs" data-testid="ops-maint-stats-retry" :disabled="loading" @click="loadStats">
+              {{ loading ? t('loading') : t('overviewSectionRetry') }}
+            </button>
+          </template>
+        </EmptyState>
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
           <div>{{ t('opsStatCompactActive') }}: <b>{{ maintenanceStats.compaction_active }}</b></div>
           <div>{{ t('opsStatCompactBacklog') }}: <b>{{ maintenanceStats.compaction_backlog }}</b></div>
@@ -681,7 +693,19 @@ watch(
       </div>
       <div class="mts-card p-5" data-testid="ops-compact-stats">
         <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('compactionStats') }}</h2>
-        <EmptyState v-if="!compactionStats" compact :title="t('opsNoCompactStats')" :description="t('opsStatsEmptyHint')" />
+        <EmptyState
+          v-if="!compactionStats"
+          compact
+          data-testid="ops-compact-stats-empty"
+          :title="t('opsNoCompactStats')"
+          :description="t('opsStatsEmptyHint')"
+        >
+          <template #action>
+            <button type="button" class="mts-btn-primary text-xs" data-testid="ops-compact-stats-retry" :disabled="loading" @click="loadStats">
+              {{ loading ? t('loading') : t('overviewSectionRetry') }}
+            </button>
+          </template>
+        </EmptyState>
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
           <div>{{ t('opsStatTotal') }}: <b>{{ compactionStats.total }}</b></div>
           <div>{{ t('opsStatSuccess') }}: <b>{{ compactionStats.success }}</b></div>
@@ -693,7 +717,19 @@ watch(
       </div>
       <div class="mts-card p-5 lg:col-span-2" data-testid="ops-memory-stats">
         <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsMemoryStats') }}</h2>
-        <EmptyState v-if="!memorySnapshot" compact :title="t('opsNoMemoryStats')" :description="t('opsStatsEmptyHint')" />
+        <EmptyState
+          v-if="!memorySnapshot"
+          compact
+          data-testid="ops-memory-stats-empty"
+          :title="t('opsNoMemoryStats')"
+          :description="t('opsStatsEmptyHint')"
+        >
+          <template #action>
+            <button type="button" class="mts-btn-primary text-xs" data-testid="ops-memory-stats-retry" :disabled="loading" @click="loadStats">
+              {{ loading ? t('loading') : t('overviewSectionRetry') }}
+            </button>
+          </template>
+        </EmptyState>
         <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300 md:grid-cols-4">
           <div v-for="(v, k) in memorySnapshot" :key="String(k)">
             <span class="mts-muted">{{ k }}</span>: <b>{{ v }}</b>
