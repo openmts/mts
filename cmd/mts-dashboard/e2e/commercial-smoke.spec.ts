@@ -303,8 +303,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('ops-share-link')).toBeVisible()
 
   await expect(page.getByTestId('ops-status-strip')).toBeVisible()
-  // P317: 空闲时无全局 admin busy 横幅（共享态）
+  // P317/P321: 空闲时无全局 admin busy / 轮询失败横幅
   await expect(page.getByTestId('admin-op-busy-banner')).toHaveCount(0)
+  await expect(page.getByTestId('admin-op-busy-poll-error-banner')).toHaveCount(0)
   await expect(page.getByTestId('ops-partial-error')).toHaveCount(0)
   await expect(page.getByTestId('ops-load-error')).toHaveCount(0)
   await expect(page.getByTestId('ops-status-connectivity')).toBeVisible()

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, inject, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { overviewFormToPrefill, parseOverviewPrefill } from '@/utils/routePrefill'
@@ -67,12 +67,16 @@ const router = useRouter()
 const route = useRoute()
 useHashScroll()
 const { t, locale } = useI18n()
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
 const adminOpBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
   const key = adminOpKindLabelKey(adminOpKind.value) as import('@/i18n/messages').MessageKey
-  const kind = t.value(key) || t.value('adminOpKindGeneric')
-  return joinAdminOpChip(t.value('opsAdminBusyChip'), kind)
+  const kind = adminOpBusySummary?.value?.opLabel || t.value(key) || t.value('adminOpKindGeneric')
+  const base = joinAdminOpChip(t.value('opsAdminBusyChip'), kind)
+  const elapsed = adminOpBusySummary?.value?.elapsed
+  return elapsed ? `${base} · ${elapsed}` : base
 })
+const adminOpBusyChipTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('opsAdminBusy'))
 const { success, info, error: notifyError } = useNotify()
 const {
   exportJob,
@@ -1125,7 +1129,7 @@ async function copyOverview() {
             v-if="adminOpBusy"
             class="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
             data-testid="overview-admin-busy"
-            :title="t('opsAdminBusy')"
+            :title="adminOpBusyChipTitle"
           >{{ adminOpBusyChipLabel }}</span>
         </div>
         <EmptyState

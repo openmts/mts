@@ -1382,3 +1382,7 @@
 ## P321（2026-07-22）
 - Dashboard：admin ops-status 轮询失败软提示（Layout 横幅/独立条）；Storage/Readiness chip 展示 elapsed
 - 就绪导出预检：busy 时文案带当前 op 类型
+
+## P322（2026-07-22）
+- Overview 维护区 admin busy chip 对齐 elapsed/detail（注入 Layout 摘要）
+- e2e：空闲时确认无 `admin-op-busy-poll-error-banner`
