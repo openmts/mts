@@ -61,7 +61,17 @@ interface ExportResponse { export: ExportData }
 
 const route = useRoute()
 const { isAdmin } = useAuth()
-const { adminOpBusy, adminOpKind, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, adminOpBusyChecking, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const storageBusyRefreshing = ref(false)
+async function refreshStorageBusyOnly() {
+  if (storageBusyRefreshing.value || adminOpBusyChecking.value) return
+  storageBusyRefreshing.value = true
+  try {
+    await refreshAdminOpBusy()
+  } finally {
+    storageBusyRefreshing.value = false
+  }
+}
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, info, error: notifyError } = useNotify()
 const {
@@ -842,11 +852,24 @@ async function copyStorageShareLink() {
 
     <div
       v-if="adminOpBusy && !loading"
-      class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
+      class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
       data-testid="storage-admin-busy"
       role="status"
       :title="storageAdminBusyTitle"
-    >{{ storageAdminBusyChipLabel }} · {{ t('storageAdminBusy') }}</div>
+    >
+      <span class="min-w-0">{{ storageAdminBusyChipLabel }} · {{ t('storageAdminBusy') }}</span>
+      <button
+        type="button"
+        class="mts-btn text-xs shrink-0"
+        data-testid="storage-admin-busy-refresh"
+        :disabled="storageBusyRefreshing || adminOpBusyChecking"
+        :aria-busy="storageBusyRefreshing || adminOpBusyChecking ? 'true' : undefined"
+        @click="refreshStorageBusyOnly"
+      >
+        <RefreshCw class="h-3.5 w-3.5" :class="(storageBusyRefreshing || adminOpBusyChecking) ? 'animate-spin' : ''" />
+        {{ t('storageAdminBusyRefresh') }}
+      </button>
+    </div>
     <InFlightBanner
       :active="!!loading"
       :started-at-ms="actionStartedAt"

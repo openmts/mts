@@ -1390,3 +1390,7 @@
 ## P323（2026-07-22）
 - Operations：状态条「刷新占用状态」快捷钮 + busy 提示文案（不拉全量 stats）
 - Overview：管理统计失败且 admin busy 时展示关联提示 + 刷新占用状态
+
+## P324（2026-07-22）
+- 命令面板：管理员动作「刷新管理占用状态」
+- Storage：busy chip 旁快捷刷新 ops-status

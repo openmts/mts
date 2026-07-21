@@ -142,6 +142,7 @@ test('command actions catalog and filter', () => {
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-focus-main'))
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-reload-page'))
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-retry-last-action'))
+  assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-refresh-admin-op-busy' && i.adminOnly))
   assert.ok(COMMAND_ACTION_ITEMS.every((i) => isCommandAction(i)))
   const all = allVisibleCommandItems(true)
   assert.ok(all.some((i) => i.id === 'action-toggle-theme'))

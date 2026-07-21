@@ -31,6 +31,7 @@ export type CommandActionId =
   | 'focus-main'
   | 'reload-page'
   | 'retry-last-action'
+  | 'refresh-admin-op-busy'
 
 /** 页内快捷动作（不离开当前路由，除非动作本身导航） */
 export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
@@ -154,6 +155,24 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
     ],
     kind: 'action',
     action: 'retry-last-action',
+  },
+  {
+    id: 'action-refresh-admin-op-busy',
+    path: 'action:refresh-admin-op-busy',
+    labelKey: 'cmdActionRefreshAdminOpBusy',
+    keywords: [
+      'admin busy',
+      'ops status',
+      'refresh busy',
+      'maintenance busy',
+      '刷新占用',
+      '运维占用',
+      '刷新状态',
+      'admin op',
+    ],
+    kind: 'action',
+    adminOnly: true,
+    action: 'refresh-admin-op-busy',
   },
 ]
 

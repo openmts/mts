@@ -50,7 +50,7 @@ let trap: FocusTrapHandle | null = null
 
 const router = useRouter()
 const { isAdmin } = useAuth()
-const { adminOpBusy, adminOpKind } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, refreshAdminOpBusy } = useAdminOpBusy()
 const injectedAdminOpSummary = inject<ComputedRef<{ busy: boolean; op: string; opLabel: string; elapsed?: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
 const { t, toggleLocale } = useI18n()
 const { toggleTheme } = useTheme()
@@ -238,6 +238,16 @@ function runAction(action: CommandActionId) {
       success(t.value('cmdActionReloading'))
       if (typeof window !== 'undefined') window.location.reload()
       break
+    case 'refresh-admin-op-busy': {
+      if (!isAdmin.value) {
+        notifyError(t.value('permissionDenied') || 'admin only')
+        break
+      }
+      void refreshAdminOpBusy().then(() => {
+        success(t.value('cmdActionRefreshAdminOpBusyDone'))
+      })
+      break
+    }
     case 'retry-last-action': {
       const root = typeof document !== 'undefined' ? document : null
       const decision = resolveActionResultRetryAction({ root })
