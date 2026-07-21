@@ -851,6 +851,28 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('query-page')).toBeVisible()
   await expect(page.getByTestId('query-cancel')).toBeDisabled()
 
+  // P231: 查询取消 — 延迟 mock 后取消，info 文案 + loading 恢复
+  await page.route('**/api/v1/data/query/**', async (route) => {
+    await new Promise((r) => setTimeout(r, 20_000))
+    await route.abort('failed')
+  })
+  try {
+    const meas = page.getByTestId('query-measurement')
+    if (!(await meas.inputValue()).trim()) {
+      await meas.fill('cpu')
+    }
+    await page.getByTestId('query-run').click()
+    await expect(page.getByTestId('query-cancel')).toBeEnabled({ timeout: 5_000 })
+    await page.getByTestId('query-cancel').click()
+    await expect(page.getByTestId('query-action-error')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('query-action-error')).toContainText(/查询已取消|Query cancelled/i)
+    await expect(page.getByTestId('query-action-error')).toHaveClass(/mts-alert-info/)
+    await expect(page.getByTestId('query-cancel')).toBeDisabled({ timeout: 5_000 })
+    await expect(page.getByTestId('query-run')).toBeEnabled({ timeout: 5_000 })
+  } finally {
+    await page.unroute('**/api/v1/data/query/**')
+  }
+
   // P203: Databases 导出进度 banner
   await page.goto('/databases')
   await expect(page.getByTestId('databases-export-json')).toBeVisible()

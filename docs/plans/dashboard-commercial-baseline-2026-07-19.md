@@ -1060,3 +1060,6 @@
 
 ## P230（2026-07-21）
 - ExportJobBanner 状态色分流 + `data-export-status`
+
+## P231（2026-07-21）
+- 查询取消 e2e（route 延迟 mock + 取消文案/样式/loading）
