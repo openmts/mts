@@ -1045,3 +1045,9 @@
 
 ## P226（2026-07-21）
 - 长请求全局进度：`longBusy` 文案条（≥1.2s）
+
+## P227（2026-07-21）
+- 导出错误路径 `formatCaughtError`
+- AbortError→canceled（不再误标超时）；Query 取消清 loading + `queryCancelled` toast
+- Write 取消统一 `isCanceledError`
+

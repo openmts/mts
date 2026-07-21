@@ -108,8 +108,12 @@ export function friendlyApiError(
     const looksLikeBareCode =
       rawLower === code ||
       rawLower === technicalCode ||
-      /^[a-z][a-z0-9_]+$/.test(rawLower) && KNOWN_CODES.has(rawLower)
-    if (!looksLikeBareCode && raw !== title) {
+      (/^[a-z][a-z0-9_]+$/.test(rawLower) && KNOWN_CODES.has(rawLower))
+    const looksLikeTransportNoise =
+      /^(request )?(canceled|cancelled|timeout|timed out)$/i.test(rawLower) ||
+      rawLower === 'the user aborted a request.' ||
+      rawLower === 'aborterror'
+    if (!looksLikeBareCode && !looksLikeTransportNoise && raw !== title) {
       message = locale === 'en' ? `${hint} (${raw})` : `${hint}（${raw}）`
     }
   }
@@ -123,6 +127,38 @@ export function friendlyApiError(
     display,
     technicalCode: technicalCode === 'internal' && code !== 'internal' ? code : technicalCode,
   }
+}
+
+/** 从未知错误解析主错误码（与 formatCaughtError 规则对齐） */
+export function resolveCaughtErrorCode(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const e = err as { code?: string; message?: string; status?: number; name?: string }
+    if (e.name === 'APIClientError' || e.code || e.status) {
+      return resolveErrorCode(e.code, e.status)
+    }
+    if (err instanceof Error && err.message) {
+      if (/failed to fetch|network|load failed|networkerror/i.test(err.message)) {
+        return 'network'
+      }
+      if (e.name === 'AbortError') {
+        return 'canceled'
+      }
+      if (/timeout|timed out/i.test(err.message)) {
+        return 'timeout'
+      }
+      return 'internal'
+    }
+    if (e.name === 'AbortError') return 'canceled'
+  }
+  return 'internal'
+}
+
+export function isCanceledError(err: unknown): boolean {
+  return resolveCaughtErrorCode(err) === 'canceled'
+}
+
+export function isTimeoutError(err: unknown): boolean {
+  return resolveCaughtErrorCode(err) === 'timeout'
 }
 
 export function formatCaughtError(err: unknown, locale?: ApiErrorLocale | null): string {
@@ -139,10 +175,16 @@ export function formatCaughtError(err: unknown, locale?: ApiErrorLocale | null):
       if (/failed to fetch|network|load failed|networkerror/i.test(err.message)) {
         return friendlyApiError({ code: 'network', message: err.message }, loc).display
       }
-      if (err.name === 'AbortError' || /timeout|timed out/i.test(err.message)) {
+      if (e.name === 'AbortError') {
+        return friendlyApiError({ code: 'canceled', message: err.message }, loc).display
+      }
+      if (/timeout|timed out/i.test(err.message)) {
         return friendlyApiError({ code: 'timeout', message: err.message }, loc).display
       }
       return friendlyApiError({ code: 'internal', message: err.message }, loc).display
+    }
+    if (e.name === 'AbortError') {
+      return friendlyApiError({ code: 'canceled', message: String(e.message || '') }, loc).display
     }
   }
   return friendlyApiError({ code: 'internal', message: String(err ?? '') }, loc).display

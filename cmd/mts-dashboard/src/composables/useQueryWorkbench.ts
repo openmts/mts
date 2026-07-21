@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { formatCaughtError } from '@/utils/apiError'
+import { formatCaughtError, resolveCaughtErrorCode } from '@/utils/apiError'
 import { apiPost, apiPostNDJSONStream } from '@/api/client'
 import {
   listDatabasesDetailed,
@@ -69,6 +69,7 @@ export function useQueryWorkbench() {
   const columnSeries = ref<unknown[]>([])
   const streamMeta = ref({ lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 })
   const actionError = ref('')
+  const lastQueryErrorCode = ref('')
   const loading = ref(false)
   let queryAbort: AbortController | null = null
   let requestSeq = 0
@@ -217,16 +218,26 @@ export function useQueryWorkbench() {
   }
 
 
-  function cancelQuery() {
+  /** 仅中止在途请求（不改 seq） */
+  function abortInFlight() {
     if (queryAbort) {
       queryAbort.abort()
       queryAbort = null
     }
-    requestSeq += 1
+  }
+
+  /**
+   * 用户取消查询：abort 后由 catch(isCanceled) 写文案、finally 清 loading。
+   * 不推进 requestSeq，避免 finally 跳过导致 loading 卡住。
+   * 卸载时同样调用：seq 仍匹配，loading 可被 finally 清掉。
+   */
+  function cancelQuery() {
+    abortInFlight()
   }
 
   function beginRequest(): { signal: AbortSignal; seq: number } {
-    cancelQuery()
+    // 新查询替换旧请求：先 abort 再推进 seq，旧请求 catch/finally 不再改 UI
+    abortInFlight()
     queryAbort = new AbortController()
     const seq = ++requestSeq
     return { signal: queryAbort.signal, seq }
@@ -234,6 +245,7 @@ export function useQueryWorkbench() {
 
   async function executeQuery() {
     actionError.value = ''
+    lastQueryErrorCode.value = ''
     loading.value = true
     rows.value = []
     columnSeries.value = []
@@ -331,6 +343,7 @@ export function useQueryWorkbench() {
       }
     } catch (e) {
       if (seq !== requestSeq) return
+      lastQueryErrorCode.value = resolveCaughtErrorCode(e)
       actionError.value = formatCaughtError(e)
     } finally {
       if (seq === requestSeq) {
@@ -390,6 +403,7 @@ export function useQueryWorkbench() {
     rawOutput,
     streamMeta,
     actionError,
+    lastQueryErrorCode,
     loading,
     loadDatabases,
     loadDbChildren,

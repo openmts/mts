@@ -5,7 +5,7 @@ import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { parseWritePrefill, writeFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { apiPost, APIClientError } from '@/api/client'
+import { apiPost } from '@/api/client'
 import {
   listDatabasesDetailed,
   listFields,
@@ -18,7 +18,7 @@ import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
-import { formatCaughtError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
@@ -516,17 +516,12 @@ async function submit() {
     success(result.value.message)
     markWriteClean()
   } catch (e) {
-    const msg = formatCaughtError(e)
-    const canceled =
-      (e instanceof APIClientError && e.code === 'canceled') ||
-      (e instanceof DOMException && e.name === 'AbortError') ||
-      /cancel/i.test(msg)
-    if (canceled) {
+    if (isCanceledError(e)) {
       actionError.value = t.value('writeCancelled')
       result.value = { ok: false, message: actionError.value }
       success(actionError.value)
     } else {
-      actionError.value = msg
+      actionError.value = formatCaughtError(e)
       notifyError(actionError.value)
       result.value = { ok: false, message: actionError.value }
     }

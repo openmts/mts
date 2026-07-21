@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { downloadJSON, downloadText } from '@/utils/download'
+import { formatCaughtError } from '@/utils/apiError'
 import {
   beginExportJob,
   cancelExportJob,
@@ -72,7 +73,7 @@ export function useExportJob() {
       return 'done'
     } catch (e) {
       if (my !== token) return 'cancelled'
-      const msg = e instanceof Error ? e.message : String(e)
+      const msg = formatCaughtError(e)
       state.value = failExportJob(state.value, msg)
       return 'error'
     }
@@ -105,7 +106,7 @@ export function useExportJob() {
       return 'done'
     } catch (e) {
       if (my !== token) return 'cancelled'
-      const msg = e instanceof Error ? e.message : String(e)
+      const msg = formatCaughtError(e)
       state.value = failExportJob(state.value, msg)
       return 'error'
     }
@@ -156,7 +157,7 @@ export function useExportJob() {
       return 'done'
     } catch (e) {
       if (my !== token) return 'cancelled'
-      const msg = e instanceof Error ? e.message : String(e)
+      const msg = formatCaughtError(e)
       state.value = failExportJob(state.value, msg)
       return 'error'
     }

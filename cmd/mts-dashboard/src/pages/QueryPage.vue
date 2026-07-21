@@ -56,7 +56,7 @@ const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
   fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError,
   loadMeasurementMeta, refreshSeriesWithTags, applySeriesTags,
-  queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, loading,
+  queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, lastQueryErrorCode, loading,
   engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, loadEngineStats,
   loadDatabases, loadDbChildren, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
@@ -362,9 +362,14 @@ async function runQuery() {
   if (!actionError.value) {
     history.push({ mode: queryMode.value, form: { ...queryForm.value } })
     formBaseline.value = snapshotForm({ mode: queryMode.value, form: queryForm.value })
-  } else {
-    notifyError(actionError.value)
+    return
   }
+  if (lastQueryErrorCode.value === 'canceled') {
+    actionError.value = t.value('queryCancelled')
+    success(actionError.value)
+    return
+  }
+  notifyError(actionError.value)
 }
 
 function markFormClean() {

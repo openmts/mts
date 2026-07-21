@@ -4,7 +4,10 @@ import {
   errorCodeFromStatus,
   formatCaughtError,
   friendlyApiError,
+  isCanceledError,
+  isTimeoutError,
   normalizeErrorCode,
+  resolveCaughtErrorCode,
   resolveErrorCode,
 } from './apiError.ts'
 
@@ -61,4 +64,32 @@ test('formatCaughtError handles APIClientError-like and network', () => {
 test('friendlyApiError timeout', () => {
   const e = friendlyApiError({ code: 'timeout', status: 408 }, 'zh')
   assert.match(e.display, /超时/)
+})
+
+test('resolveCaughtErrorCode maps AbortError to canceled not timeout', () => {
+  const abort = new Error('The user aborted a request.')
+  abort.name = 'AbortError'
+  assert.equal(resolveCaughtErrorCode(abort), 'canceled')
+  assert.equal(isCanceledError(abort), true)
+  assert.equal(isTimeoutError(abort), false)
+  assert.match(formatCaughtError(abort, 'zh'), /取消/)
+  assert.doesNotMatch(formatCaughtError(abort, 'zh'), /超时/)
+})
+
+test('resolveCaughtErrorCode maps APIClientError timeout and canceled', () => {
+  const timeout = { name: 'APIClientError', code: 'timeout', status: 408, message: 'request timeout' }
+  const canceled = { name: 'APIClientError', code: 'canceled', status: 499, message: 'request canceled' }
+  assert.equal(resolveCaughtErrorCode(timeout), 'timeout')
+  assert.equal(isTimeoutError(timeout), true)
+  assert.equal(resolveCaughtErrorCode(canceled), 'canceled')
+  assert.equal(isCanceledError(canceled), true)
+  assert.match(formatCaughtError(timeout, 'zh'), /超时/)
+  assert.match(formatCaughtError(canceled, 'zh'), /取消/)
+  // 传输层噪声 message 不拼入主文案
+  assert.doesNotMatch(formatCaughtError(canceled, 'zh'), /request canceled/i)
+})
+
+test('formatCaughtError timed-out Error message is timeout', () => {
+  assert.equal(resolveCaughtErrorCode(new Error('request timed out')), 'timeout')
+  assert.match(formatCaughtError(new Error('request timed out'), 'en'), /timeout/i)
 })
