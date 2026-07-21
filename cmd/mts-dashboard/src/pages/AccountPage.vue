@@ -574,7 +574,7 @@ async function submit() {
       </select>
     </div>
 
-    <div class="mts-card p-4" data-testid="account-prefs-tools">
+    <div id="account-prefs-tools" class="mts-card scroll-mt-20 p-4" data-testid="account-prefs-tools">
       <h2 class="mb-1 text-sm font-semibold">{{ t('accountPrefsToolsTitle') }}</h2>
       <p class="mb-3 text-xs mts-muted">{{ t('accountPrefsToolsHint') }}</p>
       <div class="mb-3 flex flex-wrap gap-2">
