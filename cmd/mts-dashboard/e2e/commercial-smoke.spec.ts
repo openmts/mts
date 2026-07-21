@@ -853,8 +853,8 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // P231: 查询取消 — 延迟 mock 后取消，info 文案 + loading 恢复
   await page.route('**/api/v1/data/query/**', async (route) => {
-    await new Promise((r) => setTimeout(r, 20_000))
-    await route.abort('failed')
+    // 挂起请求直到 unroute/abort；取消后不再 fulfill，避免 "Route is already handled"
+    await new Promise(() => {})
   })
   try {
     const meas = page.getByTestId('query-measurement')
@@ -870,7 +870,54 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('query-cancel')).toBeDisabled({ timeout: 5_000 })
     await expect(page.getByTestId('query-run')).toBeEnabled({ timeout: 5_000 })
   } finally {
-    await page.unroute('**/api/v1/data/query/**')
+    await page.unroute('**/api/v1/data/query/**').catch(() => {})
+  }
+
+  // P233: 查询超时 — mock 408 timeout 错误码友好文案
+  await page.route('**/api/v1/data/query/rows', async (route) => {
+    await route.fulfill({
+      status: 408,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, code: 'timeout', message: 'request timeout' }),
+    })
+  })
+  try {
+    await page.goto('/query')
+    await expect(page.getByTestId('query-page')).toBeVisible()
+    const meas = page.getByTestId('query-measurement')
+    if (!(await meas.inputValue()).trim()) {
+      await meas.fill('cpu')
+    }
+    await page.getByTestId('query-run').click()
+    await expect(page.getByTestId('query-action-error')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('query-action-error')).toContainText(/超时|timeout/i)
+    await expect(page.getByTestId('query-action-error')).toHaveClass(/mts-alert-error/)
+    await expect(page.getByTestId('query-run')).toBeEnabled({ timeout: 5_000 })
+  } finally {
+    await page.unroute('**/api/v1/data/query/rows').catch(() => {})
+  }
+
+  // P233b: 写入取消 — 挂起 write 后取消，info 文案
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible()
+  const hangWrite = async (route: import('@playwright/test').Route) => {
+    await new Promise(() => {})
+  }
+  await page.route('**/api/v1/data/write', hangWrite)
+  await page.route('**/api/v1/data/write/**', hangWrite)
+  try {
+    await page.getByTestId('write-mode-line').click()
+    await page.getByRole('main').locator('textarea').first().fill('cpu,host=e2e-cancel usage=1 2000')
+    await page.getByTestId('write-submit').click()
+    await expect(page.getByTestId('write-cancel')).toBeEnabled({ timeout: 10_000 })
+    await page.getByTestId('write-cancel').click()
+    await expect(page.getByTestId('write-action-error')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('write-action-error')).toContainText(/写入已取消|Write cancelled/i)
+    await expect(page.getByTestId('write-action-error')).toHaveClass(/mts-alert-info/)
+    await expect(page.getByTestId('write-cancel')).toBeDisabled({ timeout: 5_000 })
+  } finally {
+    await page.unroute('**/api/v1/data/write', hangWrite).catch(() => {})
+    await page.unroute('**/api/v1/data/write/**', hangWrite).catch(() => {})
   }
 
   // P203: Databases 导出进度 banner
