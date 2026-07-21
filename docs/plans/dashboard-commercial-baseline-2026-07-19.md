@@ -1205,3 +1205,6 @@
 
 ## P276（2026-07-21）
 - About / ApiSpec 刷新 soft-keep
+
+## P277（2026-07-21）
+- Audit/Write/Downsample 元数据与库列表 soft-keep

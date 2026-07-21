@@ -165,40 +165,59 @@ onBeforeUnmount(() => {
 })
 
 async function loadCreateMetaDatabases() {
-  createMetaError.value = ''
   try {
     createDatabases.value = await listDatabases()
+    createMetaError.value = ''
   } catch (e) {
-    createDatabases.value = []
-    createMetaError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (createDatabases.value.length) createMetaError.value = msg
+    else {
+      createDatabases.value = []
+      createMetaError.value = msg
+    }
   }
 }
 
 async function loadCreateSourceMeasurements(db: string) {
-  createSourceMeasurements.value = []
-  createSourceFields.value = []
-  if (!db.trim()) return
+  if (!db.trim()) {
+    createSourceMeasurements.value = []
+    createSourceFields.value = []
+    return
+  }
   createMetaLoading.value = true
-  createMetaError.value = ''
   try {
     createSourceMeasurements.value = await listMeasurements(db)
+    createSourceFields.value = []
+    createMetaError.value = ''
   } catch (e) {
-    createSourceMeasurements.value = []
-    createMetaError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (createSourceMeasurements.value.length) createMetaError.value = msg
+    else {
+      createSourceMeasurements.value = []
+      createSourceFields.value = []
+      createMetaError.value = msg
+    }
   } finally {
     createMetaLoading.value = false
   }
 }
 
 async function loadCreateSourceFields(db: string, measurement: string) {
-  createSourceFields.value = []
-  if (!db.trim() || !measurement.trim()) return
+  if (!db.trim() || !measurement.trim()) {
+    createSourceFields.value = []
+    return
+  }
   createMetaLoading.value = true
   try {
     createSourceFields.value = fieldNames(await listFields(db, measurement))
+    createMetaError.value = ''
   } catch (e) {
-    createSourceFields.value = []
-    createMetaError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (createSourceFields.value.length) createMetaError.value = msg
+    else {
+      createSourceFields.value = []
+      createMetaError.value = msg
+    }
   } finally {
     createMetaLoading.value = false
   }

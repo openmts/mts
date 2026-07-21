@@ -251,9 +251,14 @@ async function loadWriteDbChildren(db: string) {
     }
     try {
       measurements.value = await listMeasurements(db)
+      writeMetaError.value = ''
     } catch (e) {
-      measurements.value = []
-      writeMetaError.value = formatCaughtError(e)
+      const msg = formatCaughtError(e)
+      if (measurements.value.length) writeMetaError.value = msg
+      else {
+        measurements.value = []
+        writeMetaError.value = msg
+      }
     }
   } finally {
     measurementsLoading.value = false
@@ -275,9 +280,14 @@ async function loadWriteFields(measurement: string) {
   try {
     const fields = await listFields(db, m)
     fieldOptions.value = fieldNames(fields)
+    writeMetaError.value = ''
   } catch (e) {
-    fieldOptions.value = []
-    writeMetaError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (fieldOptions.value.length) writeMetaError.value = msg
+    else {
+      fieldOptions.value = []
+      writeMetaError.value = msg
+    }
   } finally {
     fieldsLoading.value = false
   }

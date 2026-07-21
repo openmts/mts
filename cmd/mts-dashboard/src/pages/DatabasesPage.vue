@@ -155,24 +155,34 @@ const confirmDbName = ref('')
 const confirmLoading = ref(false)
 
 async function loadDatabasesList() {
-  loadError.value = ''
   try {
     const names = await listDatabases()
-    databases.value = names.map((name) => ({
-      name,
-      expanded: false,
-      loading: false,
-      loaded: false,
-      detailError: '',
-      measurements: [],
-      retentionPolicies: [],
-      newRpName: '',
-      newRpDuration: '',
-    }))
+    // 刷新时尽量保留已展开/已加载详情，避免列表闪空后丢失上下文
+    const prev = new Map(databases.value.map((d) => [d.name, d]))
+    databases.value = names.map((name) => {
+      const oldDb = prev.get(name)
+      if (oldDb) return oldDb
+      return {
+        name,
+        expanded: false,
+        loading: false,
+        loaded: false,
+        detailError: '',
+        measurements: [],
+        retentionPolicies: [],
+        newRpName: '',
+        newRpDuration: '',
+      }
+    })
     pruneTo(names)
+    loadError.value = ''
   } catch (e) {
-    databases.value = []
-    loadError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (databases.value.length) loadError.value = msg
+    else {
+      databases.value = []
+      loadError.value = msg
+    }
   }
 }
 
@@ -584,7 +594,22 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="space-y-4" data-testid="databases-page">
-    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="databases-load-error" @retry="loadDatabasesList" @dismiss="loadError = ''" />
+    <ActionResultBanner
+      v-if="loadError && !databases.length"
+      kind="error"
+      :message="loadError"
+      retryable
+      data-testid="databases-load-error"
+      @retry="loadDatabasesList"
+      @dismiss="loadError = ''"
+    />
+    <PartialErrorBanner
+      v-else-if="loadError && databases.length"
+      :message="`${t('databasesRefreshFailed')}：${loadError}`"
+      test-id="databases-refresh-error"
+      @retry="loadDatabasesList"
+      @dismiss="loadError = ''"
+    />
     <ActionResultBanner
       :result="actionResult"
       :retryable="canRetryAction"

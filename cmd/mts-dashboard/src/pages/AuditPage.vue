@@ -151,13 +151,17 @@ const quickRanges: { id: AuditQuickRange; labelKey: MessageKey }[] = [
 
 async function loadUsersForFilter() {
   if (!isAdmin.value) return
-  usersLoadError.value = ''
   try {
     const data = await apiGet<UsersResponse>('/api/v1/users')
     users.value = data.users ?? []
+    usersLoadError.value = ''
   } catch (e) {
-    users.value = []
-    usersLoadError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (users.value.length) usersLoadError.value = msg
+    else {
+      users.value = []
+      usersLoadError.value = msg
+    }
   }
 }
 

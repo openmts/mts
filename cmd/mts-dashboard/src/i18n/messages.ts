@@ -739,6 +739,7 @@ export const messages = {
     readinessDoctorRefreshFailed: 'Doctor 刷新失败（已保留上次结果）',
     aboutVersionRefreshFailed: '服务版本刷新失败（已保留上次结果）',
     apiSpecRefreshFailed: 'API 规格刷新失败（已保留上次列表）',
+    databasesRefreshFailed: '库列表刷新失败（已保留上次列表）',
 
     writeFailedKeepLastSuccess: '写入失败（已保留上次成功结果）',
     downsamplePoliciesLoadFailed: '降采样策略加载失败（已保留上次列表）',
@@ -2132,6 +2133,7 @@ export const messages = {
     readinessDoctorRefreshFailed: 'Doctor refresh failed (kept last result)',
     aboutVersionRefreshFailed: 'Server version refresh failed (kept last result)',
     apiSpecRefreshFailed: 'API spec refresh failed (kept last list)',
+    databasesRefreshFailed: 'Database list refresh failed (kept last list)',
 
     writeFailedKeepLastSuccess: 'Write failed (kept last success)',
     downsamplePoliciesLoadFailed: 'Downsample policies load failed (kept last list)',
