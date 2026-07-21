@@ -227,6 +227,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('confirm-dialog-confirm')).toBeEnabled()
   await page.getByTestId('confirm-dialog-cancel').click()
   await page.getByTestId('query-engine-stats').click()
+  // P244: 引擎统计错误区默认不出现
+  await expect(page.getByTestId('query-engine-stats-error')).toHaveCount(0)
   await expect(page.getByTestId('query-stats-source-engine')).toBeVisible({ timeout: 15_000 })
   // 若有结果则校验虚拟列表；冷启动无结果时跳过
   if (await page.getByTestId('query-results-virtual-list').count()) {

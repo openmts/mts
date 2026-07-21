@@ -617,7 +617,20 @@ const columnRows = computed(() => {
     </div>
 
     <p v-if="authzHint" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{{ authzHint }}</p>
-    <p v-if="metaHint || metaSource === 'manual'" class="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">{{ metaHint || t('metaDbManualHint') }}（{{ t('queryMetaSource') }}: {{ metaSource }}）</p>
+    <div
+      v-if="metaHint || metaSource === 'manual' || metaSource === 'partial'"
+      class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+      data-testid="query-meta-hint"
+      role="status"
+    >
+      <p class="min-w-0 flex-1">{{ metaHint || t('metaDbManualHint') }}（{{ t('queryMetaSource') }}: {{ metaSource }}）</p>
+      <button
+        type="button"
+        class="mts-btn text-[11px] py-0.5"
+        data-testid="query-meta-reload"
+        @click="loadDatabases"
+      >{{ t('retry') }}</button>
+    </div>
 
     <div
       id="query-history"
@@ -948,7 +961,16 @@ const columnRows = computed(() => {
           @click="loadEngineStats"
         >{{ engineStatsLoading ? t('loading') : t('queryEngineStatsBtn') }}</button>
       </div>
-      <p v-if="engineStatsError" class="mts-alert-error text-xs" data-testid="query-engine-stats-error" role="alert" aria-live="assertive">{{ engineStatsError }}</p>
+      <div v-if="engineStatsError" class="flex flex-wrap items-center gap-2" data-testid="query-engine-stats-error">
+        <p class="mts-alert-error text-xs flex-1" role="alert" aria-live="assertive">{{ engineStatsError }}</p>
+        <button
+          type="button"
+          class="mts-btn text-xs"
+          data-testid="query-engine-stats-retry"
+          :disabled="engineStatsLoading || loading"
+          @click="loadEngineStats"
+        >{{ t('retry') }}</button>
+      </div>
       <template v-if="queryStats">
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-5" data-testid="query-stats-primary">
           <div
