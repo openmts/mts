@@ -1166,3 +1166,6 @@
 
 ## P263（2026-07-21）
 - 列表排序 `aria-sort` + Ops/About 刷新 `aria-busy`
+
+## P264（2026-07-21）
+- Databases 详情加载失败 soft-fail + `databases-detail-error`

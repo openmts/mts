@@ -18,6 +18,7 @@ import {
 import { useAuth } from '@/composables/useAuth'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
@@ -67,6 +68,7 @@ interface DatabaseEntry {
   expanded: boolean
   loading: boolean
   loaded: boolean
+  detailError: string
   measurements: MeasurementEntry[]
   retentionPolicies: { name: string; duration: number }[]
   newRpName: string
@@ -160,6 +162,7 @@ async function loadDatabasesList() {
       expanded: false,
       loading: false,
       loaded: false,
+      detailError: '',
       measurements: [],
       retentionPolicies: [],
       newRpName: '',
@@ -232,10 +235,11 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
     }))
     db.retentionPolicies = rps.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
     db.loaded = true
+    db.detailError = ''
   } catch (e) {
-    reportActionError('load-detail', e, { db: db.name })
     db.loaded = false
-    db.expanded = false
+    db.detailError = formatCaughtError(e)
+    reportActionError('load-detail', e, { db: db.name })
   } finally {
     db.loading = false
   }
@@ -352,6 +356,7 @@ async function createDatabase() {
       expanded: false,
       loading: false,
       loaded: false,
+      detailError: '',
       newRpName: '',
       newRpDuration: '',
     })
@@ -699,7 +704,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
-        v-if="activeDatabase && activeDatabase.expanded && activeDatabase.loaded"
+        v-if="activeDatabase && activeDatabase.expanded"
         id="databases-detail"
         class="scroll-mt-20 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
         data-testid="databases-detail-panel"
@@ -724,7 +729,18 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
-        <div class="px-6 py-3">
+        <div v-if="activeDatabase.loading" class="px-6 py-4 text-sm mts-muted" data-testid="databases-detail-loading">
+          {{ t('databasesLoading') }}
+        </div>
+        <PartialErrorBanner
+          v-else-if="activeDatabase.detailError"
+          class="mx-4 my-3"
+          :message="`${t('databasesDetailFailed')}：${activeDatabase.detailError}`"
+          test-id="databases-detail-error"
+          @retry="loadDatabaseDetails(activeDatabase)"
+          @dismiss="activeDatabase.detailError = ''"
+        />
+        <div v-else-if="activeDatabase.loaded" class="px-6 py-3">
           <div class="mb-2 flex flex-wrap items-end justify-between gap-2">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t('databasesMeasurements') }}</p>
             <label v-if="activeDatabase.measurements.length" class="text-[11px] mts-muted">
@@ -808,7 +824,6 @@ onBeforeUnmount(() => {
               </template>
             </div>
           </div>
-        </div>
         <div class="border-t border-slate-200 px-6 py-3 dark:border-slate-700">
           <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t('databasesRetention') }}</p>
           <div v-if="activeDatabase.retentionPolicies.length" class="mb-3 space-y-1" data-testid="databases-rp-list">
@@ -837,6 +852,7 @@ onBeforeUnmount(() => {
               <Plus class="h-3.5 w-3.5" /> {{ t('databasesAdd') }}
             </button>
           </div>
+        </div>
         </div>
       </div>
     </div>

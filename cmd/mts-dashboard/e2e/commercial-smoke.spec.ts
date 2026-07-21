@@ -326,6 +326,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/databases')
   await expect(page.getByTestId('databases-page')).toBeVisible()
   await expect(page.getByTestId('databases-load-error')).toHaveCount(0)
+  await expect(page.getByTestId('databases-detail-error')).toHaveCount(0)
   await expect(page.getByTestId('databases-export-json')).toBeVisible()
   await expect(page.getByTestId('databases-export-csv')).toBeVisible()
   await expect(page.getByTestId('databases-share-link')).toBeVisible()
