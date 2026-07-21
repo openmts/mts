@@ -54,7 +54,10 @@ const {
 const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz } = useServerReachability()
 const statsLoadedAt = ref<number | null>(null)
 const loadError = ref('')
+const partialStatsError = ref('')
 const actionResult = ref<ActionResult | null>(null)
+type OpsActionKey = 'flush' | 'compact' | 'retention'
+const lastFailedAction = ref<OpsActionKey | null>(null)
 const loading = ref(false)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
@@ -108,19 +111,39 @@ async function loadStats() {
   if (!isAdmin.value) return
   loading.value = true
   loadError.value = ''
+  partialStatsError.value = ''
   try {
     const results = await Promise.allSettled([
       apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance'),
       apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction'),
       apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors'),
     ])
+    const labels = [
+      t.value('overviewPartialMaintenance'),
+      t.value('overviewPartialCompaction'),
+      t.value('overviewPartialMaintErrors'),
+    ]
+    const partials: string[] = []
     if (results[0].status === 'fulfilled') maintenanceStats.value = results[0].value.stats ?? null
+    else {
+      maintenanceStats.value = null
+      partials.push(`${labels[0]}: ${formatCaughtError(results[0].reason)}`)
+    }
     if (results[1].status === 'fulfilled') compactionStats.value = results[1].value.stats
+    else {
+      compactionStats.value = null
+      partials.push(`${labels[1]}: ${formatCaughtError(results[1].reason)}`)
+    }
     if (results[2].status === 'fulfilled') maintenanceErrors.value = results[2].value.errors ?? []
-    else maintenanceErrors.value = []
-    const errs = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[]
-    if (errs.length && results.every((r) => r.status === 'rejected')) {
-      loadError.value = formatCaughtError(errs[0].reason)
+    else {
+      maintenanceErrors.value = []
+      partials.push(`${labels[2]}: ${formatCaughtError(results[2].reason)}`)
+    }
+    if (partials.length === 3) {
+      loadError.value = partials.join('；')
+    } else if (partials.length) {
+      partialStatsError.value = partials.join('；')
+      statsLoadedAt.value = Date.now()
     } else {
       statsLoadedAt.value = Date.now()
     }
@@ -184,6 +207,30 @@ function openConfirm(kind: 'flush' | 'compact' | 'retention') {
   confirmKind.value = kind
 }
 
+function clearActionResult() {
+  actionResult.value = null
+  lastFailedAction.value = null
+}
+
+function reportActionError(kind: OpsActionKey, e: unknown) {
+  lastFailedAction.value = kind
+  const msg = formatCaughtError(e)
+  actionResult.value = makeActionResult('error', msg)
+  notifyError(msg)
+  recordAction(kind, 'error', msg)
+}
+
+async function retryLastOpsAction() {
+  const kind = lastFailedAction.value
+  if (!kind) return
+  if (writeBlocked.value) {
+    notifyError(t.value(blockedMessageKey('offlineOpsBlocked')))
+    return
+  }
+  confirmKind.value = kind
+  await runConfirmed()
+}
+
 async function runConfirmed() {
   if (!confirmKind.value) return
   if (writeBlocked.value) {
@@ -193,7 +240,7 @@ async function runConfirmed() {
   }
   const kind = confirmKind.value
   confirmLoading.value = true
-  actionResult.value = null
+  clearActionResult()
   try {
     let msg = ''
     if (kind === 'flush') {
@@ -206,16 +253,14 @@ async function runConfirmed() {
       await apiPost('/api/v1/admin/retention/apply', {})
       msg = t.value('opsRetentionDone')
     }
+    lastFailedAction.value = null
     actionResult.value = makeActionResult('ok', msg)
     success(msg)
     recordAction(kind, 'ok', msg)
     confirmKind.value = null
     await loadStats()
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
-    recordAction(kind, 'error', msg)
+    reportActionError(kind, e)
   } finally {
     confirmLoading.value = false
   }
@@ -456,8 +501,20 @@ watch(
       @dismiss="loadError = ''"
     />
     <ActionResultBanner
+      v-else-if="partialStatsError"
+      kind="warn"
+      :message="`${t('partialAdminStats')}：${partialStatsError}`"
+      retryable
+      data-testid="ops-partial-error"
+      @retry="loadStats"
+      @dismiss="partialStatsError = ''"
+    />
+    <ActionResultBanner
       :result="actionResult"
-      @dismiss="actionResult = null"
+      :retryable="!!(actionResult && actionResult.kind === 'error' && lastFailedAction)"
+      data-testid="ops-action-result"
+      @retry="retryLastOpsAction"
+      @dismiss="clearActionResult"
     />
 
     <div

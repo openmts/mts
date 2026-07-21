@@ -69,6 +69,10 @@ const policies = ref<DownsamplePolicy[]>([])
 const statuses = ref<DownsampleStatus[]>([])
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
+type DsActionKey = 'create' | 'delete' | 'toggle' | 'batch' | 'range'
+const lastFailedAction = ref<DsActionKey | null>(null)
+const lastToggleName = ref('')
+const lastToggleWantEnabled = ref(false)
 const policyFilter = ref('')
 const enabledFilter = ref<DownsampleEnabledFilter>('')
 const selectedNames = ref<string[]>([])
@@ -333,6 +337,41 @@ function openBatch(mode: 'enable' | 'disable') {
   batchOpen.value = true
 }
 
+
+function clearActionResult() {
+  actionResult.value = null
+  lastFailedAction.value = null
+}
+
+function reportActionError(key: DsActionKey, e: unknown) {
+  lastFailedAction.value = key
+  const msg = formatCaughtError(e)
+  actionResult.value = makeActionResult('error', msg)
+  notifyError(msg)
+}
+
+async function retryLastDownsampleAction() {
+  const key = lastFailedAction.value
+  if (!key) return
+  if (key === 'create') return createPolicy()
+  if (key === 'delete' && deleteName.value) {
+    deleteOpen.value = true
+    return confirmDelete()
+  }
+  if (key === 'toggle' && lastToggleName.value) {
+    const pol = policies.value.find((x) => x.name === lastToggleName.value)
+    if (pol) return togglePolicy(pol)
+  }
+  if (key === 'batch') {
+    batchOpen.value = true
+    return confirmBatch()
+  }
+  if (key === 'range' && rangeName.value) {
+    rangeOpen.value = true
+    return confirmRange()
+  }
+}
+
 async function confirmBatch() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
@@ -346,7 +385,7 @@ async function confirmBatch() {
     return
   }
   batchLoading.value = true
-  actionResult.value = null
+  clearActionResult()
   let ok = 0
   const errors: string[] = []
   const action = batchMode.value === 'enable' ? 'enable' : 'disable'
@@ -370,9 +409,14 @@ async function confirmBatch() {
       success(msg)
     } else {
       const msg = `${ok}/${names.length}; ${errors.slice(0, 3).join('; ')}`
-      actionResult.value = makeActionResult(ok > 0 ? 'info' : 'error', msg)
-      if (ok === 0) notifyError(msg)
-      else success(msg)
+      if (ok === 0) {
+        lastFailedAction.value = 'batch'
+        actionResult.value = makeActionResult('error', msg)
+        notifyError(msg)
+      } else {
+        actionResult.value = makeActionResult('info', msg)
+        success(msg)
+      }
     }
   } finally {
     batchLoading.value = false
@@ -418,7 +462,7 @@ async function createPolicy() {
     return
   }
   if (!newPolicy.value.name.trim()) return
-  actionResult.value = null
+  clearActionResult()
   try {
     newPolicy.value.interval = parseHumanDurationToNs(intervalHuman.value)
   } catch (e) {
@@ -444,12 +488,11 @@ async function createPolicy() {
     }
     intervalHuman.value = '1m'
     await loadData()
+    lastFailedAction.value = null
     actionResult.value = makeActionResult('ok', t.value('downsampleCreated'))
     success(t.value('downsampleCreated'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('create', e)
   }
 }
 
@@ -474,12 +517,11 @@ async function confirmDelete() {
     await apiDelete(`/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`)
     deleteOpen.value = false
     await loadData()
+    lastFailedAction.value = null
     actionResult.value = makeActionResult('ok', t.value('downsampleDeleted'))
     success(t.value('downsampleDeleted'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('delete', e)
   } finally {
     deleteLoading.value = false
   }
@@ -493,16 +535,17 @@ async function togglePolicy(policy: DownsamplePolicy) {
     return
   }
   const action = policy.enabled ? 'disable' : 'enable'
+  lastToggleName.value = policy.name
+  lastToggleWantEnabled.value = !policy.enabled
   try {
     await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`)
     await loadData()
+    lastFailedAction.value = null
     const msg = policy.enabled ? t.value('downsampleDisabledOk') : t.value('downsampleEnabledOk')
     actionResult.value = makeActionResult('ok', msg)
     success(msg)
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('toggle', e)
   }
 }
 
@@ -622,7 +665,7 @@ async function confirmRange() {
     return
   }
   rangeLoading.value = true
-  actionResult.value = null
+  clearActionResult()
   try {
     const body = buildDownsampleRangeBody({
       startUnix: rangeStartUnix.value,
@@ -634,6 +677,7 @@ async function confirmRange() {
       const data = await apiPost<{ result: DownsampleDryRunResult }>(path, body)
       const msg = formatRunResultMessage('dry-run', rangeName.value, data.result)
       rangeOpen.value = false
+      lastFailedAction.value = null
       actionResult.value = makeActionResult('info', msg)
       success(msg)
     } else {
@@ -641,13 +685,12 @@ async function confirmRange() {
       const msg = formatRunResultMessage(rangeMode.value, rangeName.value, data.result)
       rangeOpen.value = false
       await loadData()
+      lastFailedAction.value = null
       actionResult.value = makeActionResult('ok', msg)
       success(msg)
     }
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('range', e)
   } finally {
     rangeLoading.value = false
   }
@@ -747,7 +790,13 @@ onBeforeUnmount(() => {
     </div>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="downsample-load-error" @retry="loadData" @dismiss="loadError = ''" />
-    <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
+    <ActionResultBanner
+      :result="actionResult"
+      :retryable="!!(actionResult && actionResult.kind === 'error' && lastFailedAction)"
+      data-testid="downsample-action-result"
+      @retry="retryLastDownsampleAction"
+      @dismiss="clearActionResult"
+    />
 
     <div id="downsample-filters" class="scroll-mt-20 flex flex-wrap items-end gap-3" data-testid="downsample-filter-bar">
       <label class="text-xs mts-muted">{{ t('filter') }}

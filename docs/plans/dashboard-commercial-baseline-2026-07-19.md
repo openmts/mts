@@ -1127,3 +1127,9 @@
 
 ## P250（2026-07-21）
 - Config schema / Users 授权库列表失败可见可重试
+
+## P251（2026-07-21）
+- Operations flush/compact/retention 失败可重试；统计分项失败可见
+
+## P252（2026-07-21）
+- Downsample / Databases 写与详情加载失败 ActionResult 可重试

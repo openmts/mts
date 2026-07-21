@@ -133,6 +133,10 @@ const {
 const newDbName = ref('')
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
+type DbActionKey = 'create-db' | 'delete-db' | 'create-rp' | 'load-detail' | 'load-meas'
+const lastFailedAction = ref<DbActionKey | null>(null)
+const lastFailedDbName = ref('')
+const lastFailedMeasName = ref('')
 const confirmOpen = ref(false)
 const confirmDbName = ref('')
 const confirmLoading = ref(false)
@@ -201,7 +205,7 @@ async function copyDatabasesShareLink() {
 }
 async function loadDatabaseDetails(db: DatabaseEntry) {
   db.loading = true
-  actionResult.value = null
+  clearActionResult()
   try {
     const [meas, rps] = await Promise.all([
       listMeasurements(db.name),
@@ -219,7 +223,7 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
     db.retentionPolicies = rps.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
     db.loaded = true
   } catch (e) {
-    const msg = formatCaughtError(e); actionResult.value = makeActionResult('error', msg)
+    reportActionError('load-detail', e, { db: db.name })
     db.loaded = false
     db.expanded = false
   } finally {
@@ -257,7 +261,7 @@ async function toggleMeasurement(meas: MeasurementEntry, dbName: string) {
       meas.seriesTotal = seriesResult.total
       meas.seriesTruncated = seriesResult.truncated
     } catch (e) {
-      const msg = formatCaughtError(e); actionResult.value = makeActionResult('error', msg)
+      reportActionError('load-meas', e, { db: dbName, meas: meas.name })
     } finally {
       meas.loading = false
     }
@@ -279,6 +283,49 @@ function onDatabasesBeforeUnload(e: BeforeUnloadEvent) {
 
 let unregisterDatabasesDirty: (() => void) | null = null
 
+
+function clearActionResult() {
+  actionResult.value = null
+  lastFailedAction.value = null
+}
+
+function reportActionError(key: DbActionKey, e: unknown, ctx?: { db?: string; meas?: string }) {
+  lastFailedAction.value = key
+  if (ctx?.db) lastFailedDbName.value = ctx.db
+  if (ctx?.meas) lastFailedMeasName.value = ctx.meas
+  const msg = formatCaughtError(e)
+  actionResult.value = makeActionResult('error', msg)
+  notifyError(msg)
+}
+
+async function retryLastDatabaseAction() {
+  const key = lastFailedAction.value
+  if (!key) return
+  if (key === 'create-db') return createDatabase()
+  if (key === 'delete-db' && confirmDbName.value) {
+    confirmOpen.value = true
+    return confirmDeleteDatabase()
+  }
+  if (key === 'create-rp' && lastFailedDbName.value) {
+    const db = databases.value.find((d) => d.name === lastFailedDbName.value)
+    if (db) return createRetentionPolicy(db)
+  }
+  if (key === 'load-detail' && lastFailedDbName.value) {
+    const db = databases.value.find((d) => d.name === lastFailedDbName.value)
+    if (db) return loadDatabaseDetails(db)
+  }
+  if (key === 'load-meas' && lastFailedDbName.value && lastFailedMeasName.value) {
+    const db = databases.value.find((d) => d.name === lastFailedDbName.value)
+    const meas = db?.measurements.find((m) => m.name === lastFailedMeasName.value)
+    if (db && meas) {
+      meas.expanded = false
+      meas.fields = []
+      meas.series = []
+      return toggleMeasurement(meas, db.name)
+    }
+  }
+}
+
 async function createDatabase() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
@@ -288,7 +335,7 @@ async function createDatabase() {
   }
   if (!isAdmin.value) return
   if (!newDbName.value.trim()) return
-  actionResult.value = null
+  clearActionResult()
   try {
     await apiPost('/api/v1/admin/databases', { name: newDbName.value.trim() })
     databases.value.push({
@@ -302,12 +349,11 @@ async function createDatabase() {
       newRpDuration: '',
     })
     newDbName.value = ''
+    lastFailedAction.value = null
     actionResult.value = makeActionResult('ok', t.value('databasesCreated'))
     success(t.value('databasesCreated'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('create-db', e)
   }
 }
 function requestDeleteDatabase(name: string) {
@@ -329,17 +375,16 @@ async function confirmDeleteDatabase() {
   const name = confirmDbName.value
   if (!name) return
   confirmLoading.value = true
-  actionResult.value = null
+  clearActionResult()
   try {
     await apiDelete(`/api/v1/admin/databases/${encodeURIComponent(name)}`)
     databases.value = databases.value.filter((d) => d.name !== name)
     pruneTo(databases.value.map((d) => d.name))
     confirmOpen.value = false
+    lastFailedAction.value = null
     success(formatMessage(t.value('databasesDeleted'), { name }))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('delete-db', e, { db: name })
   } finally {
     confirmLoading.value = false
   }
@@ -365,7 +410,8 @@ async function createRetentionPolicy(db: DatabaseEntry) {
     notifyError(msg)
     return
   }
-  actionResult.value = null
+  clearActionResult()
+  lastFailedDbName.value = db.name
   try {
     await apiPost(`/api/v1/admin/databases/${encodeURIComponent(db.name)}/retention-policies`, {
       policy: { name, duration: durationNs },
@@ -373,12 +419,11 @@ async function createRetentionPolicy(db: DatabaseEntry) {
     db.retentionPolicies.push({ name, duration: durationNs })
     db.newRpName = ''
     db.newRpDuration = ''
+    lastFailedAction.value = null
     actionResult.value = makeActionResult('ok', t.value('databasesRpCreated'))
     success(t.value('databasesRpCreated'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('create-rp', e, { db: db.name })
   }
 }
 function parseDuration(s: string): number {
@@ -518,7 +563,13 @@ onBeforeUnmount(() => {
 <template>
   <div class="space-y-4" data-testid="databases-page">
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="databases-load-error" @retry="loadDatabasesList" @dismiss="loadError = ''" />
-    <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
+    <ActionResultBanner
+      :result="actionResult"
+      :retryable="!!(actionResult && actionResult.kind === 'error' && lastFailedAction)"
+      data-testid="databases-action-result"
+      @retry="retryLastDatabaseAction"
+      @dismiss="clearActionResult"
+    />
     <p
       v-if="!isAdmin"
       class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"

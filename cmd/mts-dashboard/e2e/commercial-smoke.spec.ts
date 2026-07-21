@@ -252,6 +252,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('ops-share-link')).toBeVisible()
 
   await expect(page.getByTestId('ops-status-strip')).toBeVisible()
+  await expect(page.getByTestId('ops-partial-error')).toHaveCount(0)
+  await expect(page.getByTestId('ops-load-error')).toHaveCount(0)
   await expect(page.getByTestId('ops-status-connectivity')).toBeVisible()
   await expect(page.getByTestId('ops-status-stats-at')).toBeVisible()
   await expect(page.getByRole('main').getByRole('heading', { name: /^(运维|Operations)$/ })).toBeVisible()
@@ -313,6 +315,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // 6b) 库/用户/降采样清单导出
   await page.goto('/databases')
   await expect(page.getByTestId('databases-page')).toBeVisible()
+  await expect(page.getByTestId('databases-load-error')).toHaveCount(0)
   await expect(page.getByTestId('databases-export-json')).toBeVisible()
   await expect(page.getByTestId('databases-export-csv')).toBeVisible()
   await expect(page.getByTestId('databases-share-link')).toBeVisible()
@@ -348,6 +351,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('user-grant-panel')).toHaveCount(0)
   await page.goto('/downsample')
   await expect(page.getByTestId('downsample-page')).toBeVisible()
+  await expect(page.getByTestId('downsample-load-error')).toHaveCount(0)
   await expect(page.getByTestId('downsample-export-json')).toBeVisible()
   await expect(page.getByTestId('downsample-export-csv')).toBeVisible()
   await page.getByTestId('downsample-open-create').click()
