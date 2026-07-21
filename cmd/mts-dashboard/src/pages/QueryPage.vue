@@ -904,7 +904,11 @@ const columnRows = computed(() => {
       @cancel="cancelExport"
       @dismiss="resetExport"
     />
-    <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
+    <p
+      v-if="actionError"
+      :class="lastQueryErrorCode === 'canceled' ? 'mts-alert-info' : 'mts-alert-error'"
+      data-testid="query-action-error"
+    >{{ actionError }}</p>
     <p v-if="deleteResult" class="mts-alert-ok">{{ deleteResult }}</p>
 
     <div id="query-stats" class="scroll-mt-20 space-y-2" data-testid="query-stats-panel">

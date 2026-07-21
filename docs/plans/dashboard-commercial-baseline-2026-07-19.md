@@ -1051,3 +1051,6 @@
 - AbortError→canceled（不再误标超时）；Query 取消清 loading + `queryCancelled` toast
 - Write 取消统一 `isCanceledError`
 
+## P228（2026-07-21）
+- Readiness 导入错误 `formatCaughtError`
+- Query 取消态 info 样式 + `query-cancel` 空闲 disabled e2e

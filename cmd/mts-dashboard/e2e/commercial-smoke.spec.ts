@@ -838,9 +838,13 @@ test('commercial browser smoke path', async ({ page }) => {
   }
 
   // P202: write-cancel 非 loading 时 disabled
+  // P228: query-cancel 空闲 disabled；取消态文案与 info 样式
   await page.goto('/write')
   await expect(page.getByTestId('write-page')).toBeVisible()
   await expect(page.getByTestId('write-cancel')).toBeDisabled()
+  await page.goto('/query')
+  await expect(page.getByTestId('query-page')).toBeVisible()
+  await expect(page.getByTestId('query-cancel')).toBeDisabled()
 
   // P203: Databases 导出进度 banner
   await page.goto('/databases')

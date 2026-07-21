@@ -388,7 +388,7 @@ async function onImportFile(ev: Event) {
     markReadinessClean()
     flash('ok', t.value('readinessImportOk'))
   } catch (e) {
-    flash('error', `${t.value('readinessImportFail')}: ${e instanceof Error ? e.message : String(e)}`)
+    flash('error', `${t.value('readinessImportFail')}: ${formatCaughtError(e)}`)
   }
 }
 
