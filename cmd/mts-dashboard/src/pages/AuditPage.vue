@@ -73,6 +73,7 @@ const serverTotal = ref<number | null>(null)
 const auditEvents = ref<AuditEvent[]>([])
 const loading = ref(false)
 const loadError = ref('')
+const usersLoadError = ref('')
 
 const AUDIT_SORT_KEY = 'mts.dashboard.audit-sort.prefs.v1'
 const AUDIT_SORT_KEYS = ['time', 'user', 'action', 'database'] as const
@@ -146,14 +147,21 @@ const quickRanges: { id: AuditQuickRange; labelKey: MessageKey }[] = [
   { id: '30d', labelKey: 'auditRange30d' },
 ]
 
+async function loadUsersForFilter() {
+  if (!isAdmin.value) return
+  usersLoadError.value = ''
+  try {
+    const data = await apiGet<UsersResponse>('/api/v1/users')
+    users.value = data.users ?? []
+  } catch (e) {
+    users.value = []
+    usersLoadError.value = formatCaughtError(e)
+  }
+}
+
 onMounted(async () => {
   if (isAdmin.value) {
-    try {
-      const data = await apiGet<UsersResponse>('/api/v1/users')
-      users.value = data.users ?? []
-    } catch (e) {
-      loadError.value = formatCaughtError(e)
-    }
+    await loadUsersForFilter()
   } else if (currentUser.value) {
     selectedUser.value = currentUser.value
   }
@@ -383,6 +391,15 @@ watch(
     >{{ t('auditSelfHint') }}</p>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="audit-load-error" @retry="loadAudit" @dismiss="loadError = ''" />
+    <ActionResultBanner
+      v-else-if="usersLoadError"
+      kind="warn"
+      :message="`${t('auditUsersLoadFailed')}：${usersLoadError}`"
+      retryable
+      data-testid="audit-users-load-error"
+      @retry="loadUsersForFilter"
+      @dismiss="usersLoadError = ''"
+    />
     <p class="mts-alert-warn" role="note">{{ t('auditHint') }}</p>
 
     <div id="audit-filters" class="scroll-mt-20 flex flex-wrap gap-2" data-testid="audit-quick-ranges">

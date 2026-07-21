@@ -151,6 +151,7 @@ const DOC_ROW_HEIGHT = 40
 const DOC_LIST_HEIGHT = 280
 const doctor = ref<DoctorResponse | null>(null)
 const doctorError = ref('')
+const versionError = ref('')
 const loadingDoctor = ref(false)
 const actionMsg = ref('')
 const actionKind = ref<'ok' | 'error' | 'info'>('info')
@@ -324,10 +325,12 @@ async function copySignoffMissing() {
 }
 
 async function loadServerVersion() {
+  versionError.value = ''
   try {
     serverVersion.value = await apiGet<VersionResponse>('/api/v1/admin/version')
-  } catch {
+  } catch (e) {
     serverVersion.value = null
+    versionError.value = formatCaughtError(e)
   }
 }
 
@@ -865,6 +868,15 @@ watch(
       data-testid="readiness-doctor-error"
       @retry="loadDoctor"
       @dismiss="doctorError = ''"
+    />
+    <ActionResultBanner
+      v-if="versionError"
+      kind="warn"
+      :message="`${t('readinessVersionLoadFailed')}：${versionError}`"
+      retryable
+      data-testid="readiness-version-error"
+      @retry="loadServerVersion"
+      @dismiss="versionError = ''"
     />
     <div id="readiness-action" class="scroll-mt-20" data-testid="readiness-action-anchor">
       <ActionResultBanner

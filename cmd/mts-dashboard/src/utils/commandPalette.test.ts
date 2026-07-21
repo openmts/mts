@@ -67,6 +67,8 @@ test('command palette includes ops deep links for admin', () => {
     'readiness-signoff',
     'readiness-export-preflight',
     'readiness-deploy-drill',
+    'readiness-doctor',
+    'readiness-action',
     'operations-flush',
     'operations-compact',
     'operations-retention',
@@ -248,4 +250,14 @@ test('palette includes storage snapshots and account session deep links', () => 
   const userIds = new Set(user.map((i) => i.id))
   assert.equal(userIds.has('storage-snapshots'), false)
   assert.ok(userIds.has('account-session'))
+})
+
+
+test('command palette includes readiness doctor and account prefs anchors', () => {
+  const admin = visibleCommandItems(COMMAND_NAV_ITEMS, true)
+  assert.ok(admin.some((i) => i.id === 'readiness-doctor' && i.path.includes('#doctor-panel')))
+  assert.ok(admin.some((i) => i.id === 'readiness-action' && i.path.includes('#readiness-action')))
+  assert.ok(admin.some((i) => i.id === 'metrics-filter' && i.path.includes('#metrics-filter')))
+  const all = visibleCommandItems(COMMAND_NAV_ITEMS, true)
+  assert.ok(all.some((i) => i.id === 'account-prefs' && i.path.includes('#account-prefs-tools')))
 })

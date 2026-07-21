@@ -441,6 +441,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('deploy-runbook-links')).toBeVisible()
   await expect(page.getByTestId('deploy-accept-step-1')).toBeVisible()
   await expect(page.getByTestId('readiness-export')).toBeVisible()
+  await expect(page.getByTestId('readiness-doctor-error')).toHaveCount(0)
+  await expect(page.getByTestId('readiness-version-error')).toHaveCount(0)
   await expect(page.getByTestId('readiness-share-link')).toBeVisible()
   await expect(page.getByTestId('readiness-archive')).toBeVisible()
   await expect(page.getByTestId('readiness-acceptance-pack')).toBeVisible()
@@ -856,6 +858,8 @@ test('commercial browser smoke path', async ({ page }) => {
   // P201: 审计导出进度 banner
   await page.goto('/audit')
   await expect(page.getByTestId('audit-page')).toBeVisible()
+  await expect(page.getByTestId('audit-load-error')).toHaveCount(0)
+  await expect(page.getByTestId('audit-users-load-error')).toHaveCount(0)
   await page.getByTestId('audit-export-json').click()
   await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
   // P230: banner 暴露 status 属性（done/cancelled/error/running）

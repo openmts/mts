@@ -1145,3 +1145,9 @@
 
 ## P256（2026-07-21）
 - Account 改密/会话续期失败可重试 banner
+
+## P257（2026-07-21）
+- Audit 用户列表 / Readiness 版本加载失败可重试
+
+## P258（2026-07-21）
+- 命令面板补齐 readiness doctor/action、account prefs、metrics filter 深链

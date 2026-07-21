@@ -284,6 +284,13 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['metrics list', '指标列表', 'prometheus list'],
     adminOnly: true,
   },
+  {
+    id: 'metrics-filter',
+    path: '/observability/metrics#metrics-filter',
+    labelKey: 'cmdMetricsFilter',
+    keywords: ['metrics filter', '指标筛选', 'metrics search'],
+    adminOnly: true,
+  },
   { id: 'config', path: '/config', labelKey: 'config', keywords: ['配置', 'reload', 'token'], adminOnly: true },
   {
     id: 'config-effective',
@@ -462,6 +469,20 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     adminOnly: true,
   },
   {
+    id: 'readiness-doctor',
+    path: '/ops/readiness#doctor-panel',
+    labelKey: 'cmdReadinessDoctor',
+    keywords: ['doctor', '就绪医生', 'readiness doctor', 'tls check'],
+    adminOnly: true,
+  },
+  {
+    id: 'readiness-action',
+    path: '/ops/readiness#readiness-action',
+    labelKey: 'cmdReadinessAction',
+    keywords: ['readiness score', '就绪评分', 'checklist action'],
+    adminOnly: true,
+  },
+  {
     id: 'notify-history',
     path: notifyHistoryFormToPrefill({ kind: 'all', range: 'all' }, { path: '/' }),
     labelKey: 'cmdNotifyHistory',
@@ -516,6 +537,12 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     path: '/account#account-density',
     labelKey: 'cmdAccountDensity',
     keywords: ['density', '紧凑', 'ui density', '显示密度'],
+  },
+  {
+    id: 'account-prefs',
+    path: '/account#account-prefs-tools',
+    labelKey: 'cmdAccountPrefs',
+    keywords: ['client prefs', '偏好导入', 'prefs export', '偏好工具'],
   },
 ]
 
