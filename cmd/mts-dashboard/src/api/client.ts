@@ -5,6 +5,7 @@ import {
   isAbortError,
   resolveApiTimeoutMs,
 } from '@/utils/requestTimeout'
+import { readAuthStorageSnapshot } from '@/utils/authStorageSync'
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 const API_TIMEOUT_MS = resolveApiTimeoutMs(import.meta.env.VITE_API_TIMEOUT_MS, DEFAULT_API_TIMEOUT_MS)
 const TOKEN_KEY = 'mts_bearer_token'
@@ -101,6 +102,22 @@ export function setTokenExpiresAt(iso: string) {
 export function getTokenExpiresAt(): string {
   return tokenExpiresAt
 }
+
+/** 从 localStorage 重载会话到内存（多标签 storage 事件后调用） */
+export function reloadAuthFromStorage(): void {
+  const snap = readAuthStorageSnapshot((key) => {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return ''
+    }
+  })
+  bearerToken = snap.token
+  currentUserName = snap.user
+  currentUserRole = snap.role
+  tokenExpiresAt = snap.expiresAt
+}
+
 
 export function isTokenExpired(nowMs = Date.now()): boolean {
   if (!tokenExpiresAt) return false

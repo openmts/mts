@@ -17,6 +17,7 @@ import {
   apiChangePassword,
   setMustChangePassword,
   getMustChangePassword,
+  reloadAuthFromStorage,
 } from '@/api/client'
 
 const isAuthenticated = ref(!!getBearerToken() && !isTokenExpired())
@@ -29,6 +30,8 @@ export function useAuth() {
   const isAdmin = computed(() => currentRole.value === 'admin')
 
   function syncFromStorage() {
+    // 多标签：他页改 localStorage 后，本页须先重载内存再同步 Vue 态
+    reloadAuthFromStorage()
     currentUser.value = getCurrentUser()
     currentRole.value = getCurrentUserRole()
     mustChangePassword.value = getMustChangePassword()

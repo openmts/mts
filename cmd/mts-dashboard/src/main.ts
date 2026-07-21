@@ -5,6 +5,7 @@ import { setOnAuthFailed, clearAuth } from './api/client'
 import { useAuth } from './composables/useAuth'
 import { useNotify } from './composables/useNotify'
 import { loginReasonMessage } from './utils/authReason'
+import { isAuthStorageKey } from './utils/authStorageSync'
 import './index.css'
 
 function currentLocale(): 'zh' | 'en' {
@@ -41,7 +42,7 @@ setOnAuthFailed(() => {
 
 // 多标签会话同步
 window.addEventListener('storage', (ev) => {
-  if (!ev.key || !ev.key.startsWith('mts_')) return
+  if (!isAuthStorageKey(ev.key)) return
   const { syncFromStorage, ensureSession } = useAuth()
   syncFromStorage()
   if (!ensureSession() && router.currentRoute.value.name !== 'Login') {

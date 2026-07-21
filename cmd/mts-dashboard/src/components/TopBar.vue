@@ -7,6 +7,7 @@ import { useNotify } from '@/composables/useNotify'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Menu, Moon, Sun, Languages, Search, Keyboard, Bell } from 'lucide-vue-next'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
+import { sessionClockTickMs } from '@/utils/sessionClock'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
 import {
@@ -147,12 +148,24 @@ function goAccountSession() {
   void router.push({ path: '/account', hash: '#account-session' })
 }
 
+function armSessionTimer() {
+  if (timer) clearInterval(timer)
+  const ms = sessionClockTickMs(sessionView.value.urgency, sessionView.value.remainingMs)
+  timer = setInterval(() => {
+    tickSession()
+    armSessionTimer()
+  }, ms)
+}
+
 onMounted(() => {
   tickSession()
-  timer = setInterval(() => { tickSession() }, 15_000)
+  armSessionTimer()
 })
 onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
+  if (timer) {
+    clearInterval(timer)
+    timer = null
+  }
 })
 </script>
 

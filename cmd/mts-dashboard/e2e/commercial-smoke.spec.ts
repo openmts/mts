@@ -876,6 +876,7 @@ test('commercial browser smoke path', async ({ page }) => {
     window.dispatchEvent(new Event('offline'))
   })
   await expect(page.getByTestId('offline-banner')).toBeVisible()
+  await expect(page.getByTestId('offline-banner-retry')).toBeVisible()
   await expect(page.getByTestId('write-submit')).toBeDisabled()
   await page.evaluate(() => {
     Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })

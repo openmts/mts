@@ -31,6 +31,7 @@ import { CLIENT_PREFS_CHANGED_EVENT } from '@/utils/clientPrefs'
 import { scrollElementToTop, shouldResetScrollOnRouteChange, shouldShowBackToTop } from '@/utils/scrollTop'
 import { ArrowUp } from 'lucide-vue-next'
 import { useMutationGuard } from '@/composables/useMutationGuard'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuth } from '@/composables/useAuth'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
@@ -38,8 +39,14 @@ import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
 
 const { t } = useI18n()
 const { offline, sessionWriteBlocked, sessionRemainingLabel } = useMutationGuard()
+const { sync: syncNetworkStatus } = useNetworkStatus()
 const { logout } = useAuth()
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
+
+function retryNetworkStatus() {
+  syncNetworkStatus()
+  void retryReadyz()
+}
 const route = useRoute()
 const router = useRouter()
 const sidebarOpen = ref(false)
@@ -268,13 +275,21 @@ function onSkipToMain(e: Event) {
       <BreadcrumbBar v-if="showBreadcrumb" />
       <div
         v-if="offline"
-        class="no-print border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100 sm:px-6"
+        class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100 sm:px-6"
         role="status"
         aria-live="polite"
         data-testid="offline-banner"
       >
-        <span class="font-semibold">{{ t('offlineBannerTitle') }}</span>
-        <span class="ml-1">{{ t('offlineBanner') }}</span>
+        <div class="min-w-0">
+          <span class="font-semibold">{{ t('offlineBannerTitle') }}</span>
+          <span class="ml-1">{{ t('offlineBanner') }}</span>
+        </div>
+        <button
+          type="button"
+          class="mts-btn mts-focus-ring shrink-0 !border-amber-300 !bg-white !text-amber-950 dark:!border-amber-800 dark:!bg-amber-950 dark:!text-amber-100"
+          data-testid="offline-banner-retry"
+          @click="retryNetworkStatus"
+        >{{ t('offlineBannerRetry') }}</button>
       </div>
       <div
         v-else-if="sessionWriteBlocked"
