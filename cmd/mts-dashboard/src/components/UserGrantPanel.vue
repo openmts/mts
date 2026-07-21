@@ -11,6 +11,7 @@ export interface GrantItem { database: string; permission: string }
 export interface UserItem { name: string; display_name?: string; role?: string; disabled?: boolean }
 
 const props = defineProps<{
+  offline?: boolean
   selectedUser: UserItem
   userGrants: GrantItem[]
   databases: string[]
@@ -62,8 +63,9 @@ const canGrant = computed(() => props.grantDbs.length > 0 && props.grantPerms.le
           v-for="g in sortedGrants"
           :key="g.database + g.permission"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700 hover:bg-red-50 hover:text-red-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:text-red-200"
-          :title="t('grantRevokeTitle')"
+          class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700 hover:bg-red-50 hover:text-red-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+          :title="offline ? t('offlineAdminBlocked') : t('grantRevokeTitle')"
+          :disabled="offline"
           :data-testid="`user-grant-revoke-${g.database}-${g.permission}`"
           @click="emit('revoke', g)"
         >{{ g.database }}:{{ permText(g.permission) }}</button>
@@ -113,7 +115,8 @@ const canGrant = computed(() => props.grantDbs.length > 0 && props.grantPerms.le
         type="button"
         class="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
         data-testid="user-grant-submit"
-        :disabled="!canGrant"
+        :disabled="!canGrant || offline"
+        :title="offline ? t('offlineAdminBlocked') : undefined"
         @click="emit('grant')"
       >{{ t('grantAction') }}</button>
     </div>

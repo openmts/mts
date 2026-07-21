@@ -307,6 +307,10 @@ async function createDatabase() {
 }
 function requestDeleteDatabase(name: string) {
   if (!isAdmin.value) return
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineAdminBlocked'))
+    return
+  }
   confirmDbName.value = name
   confirmOpen.value = true
 }
@@ -576,7 +580,7 @@ onBeforeUnmount(() => {
         :description="databases.length ? t('databasesFilterEmptyDesc') : t('databasesEmptyDesc')"
       >
         <template v-if="!databases.length && isAdmin" #action>
-          <button type="button" class="mts-btn-primary" data-testid="databases-empty-create" @click="createDatabase">{{ t('databasesCreate') }}</button>
+          <button type="button" class="mts-btn-primary" data-testid="databases-empty-create" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="createDatabase">{{ t('databasesCreate') }}</button>
         </template>
       </EmptyState>
     </div>
@@ -617,8 +621,9 @@ onBeforeUnmount(() => {
               <button
                 v-if="isAdmin"
                 type="button"
-                class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300"
-                :title="t('databasesDeleteDbBtnTitle')"
+                class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+                :title="offline ? t('offlineAdminBlocked') : t('databasesDeleteDbBtnTitle')"
+                :disabled="offline"
                 :data-testid="`databases-delete-${db.name}`"
                 @click="requestDeleteDatabase(db.name)"
               >
@@ -767,7 +772,7 @@ onBeforeUnmount(() => {
           <div v-if="isAdmin" class="mt-2 flex flex-wrap items-center gap-2" data-testid="databases-rp-create">
             <input v-model="activeDatabase.newRpName" type="text" :placeholder="t('databasesRpNamePlaceholder')" class="w-28 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-name" />
             <input v-model="activeDatabase.newRpDuration" type="text" :placeholder="t('databasesRpDurationPlaceholder')" class="w-24 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-duration" />
-            <button type="button" class="inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" data-testid="databases-rp-add" @click="createRetentionPolicy(activeDatabase)">
+            <button type="button" class="disabled:cursor-not-allowed disabled:opacity-50 inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" data-testid="databases-rp-add" @click="createRetentionPolicy(activeDatabase)" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined">
               <Plus class="h-3.5 w-3.5" /> {{ t('databasesAdd') }}
             </button>
           </div>

@@ -5,6 +5,7 @@ import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 
 const props = defineProps<{
+  offline?: boolean
   showCreate: boolean
   newUser: { name: string; display_name: string; password: string; role: string }
   showSetPassword: boolean
@@ -112,7 +113,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" data-testid="users-create-cancel" @click="emit('update:showCreate', false)">{{ t('cancel') }}</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="users-create-submit" @click="emit('create-user')">{{ t('create') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-create-submit" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="emit('create-user')">{{ t('create') }}</button>
       </div>
     </div>
   </div>
@@ -135,7 +136,7 @@ onBeforeUnmount(() => {
       <input :value="setPasswordValue" @input="emit('update:setPasswordValue', ($event.target as HTMLInputElement).value)" type="password" :placeholder="t('usersNewPasswordPlaceholder')" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" @keyup.enter="emit('set-password')" />
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showSetPassword', false)">{{ t('cancel') }}</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('set-password')">{{ t('usersSetAction') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-set-password-submit" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="emit('set-password')">{{ t('usersSetAction') }}</button>
       </div>
     </div>
   </div>
@@ -161,7 +162,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showChangeSelfPassword', false)">{{ t('cancel') }}</button>
-        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" @click="emit('change-password')">{{ t('usersConfirmChange') }}</button>
+        <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-change-self-submit" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="emit('change-password')">{{ t('usersConfirmChange') }}</button>
       </div>
     </div>
   </div>

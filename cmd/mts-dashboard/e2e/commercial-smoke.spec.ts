@@ -796,28 +796,25 @@ test('commercial browser smoke path', async ({ page }) => {
   })
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
   await page.locator('#main-content').focus()
-  // P197/P198: Users 创建草稿脏标记 + 离线拦截创建
+  // P197: Users 创建草稿脏标记
   await page.goto('/users')
   await expect(page.getByTestId('users-create-open')).toBeVisible()
   await page.getByTestId('users-create-open').click()
   await page.getByTestId('users-create-name').fill('draft-user-e2e')
   await expect(page.getByTestId('users-dirty-badge')).toBeVisible()
   await page.getByTestId('users-create-cancel').click()
+  // P198/P213: Users 创建入口离线禁用（不再打开弹层）
   await page.evaluate(() => {
     Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
     window.dispatchEvent(new Event('offline'))
   })
   await expect(page.getByTestId('offline-banner')).toBeVisible()
-  await page.getByTestId('users-create-open').click()
-  await page.getByTestId('users-create-name').fill('offline-user-e2e')
-  await page.getByTestId('users-create-submit').click()
-  // 离线应保留创建弹层（请求被前端拦截）
-  await expect(page.getByTestId('users-create-name')).toBeVisible()
+  await expect(page.getByTestId('users-create-open')).toBeDisabled()
+  await expect(page.getByTestId('users-batch-enable')).toBeDisabled()
   await page.evaluate(() => {
     Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
     window.dispatchEvent(new Event('online'))
   })
-  await page.getByTestId('users-create-cancel').click()
 
   // P200: Databases 创建草稿脏标记
   await page.goto('/databases')
@@ -962,6 +959,20 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('ops-flush')).toBeDisabled()
   await expect(page.getByTestId('ops-compact')).toBeDisabled()
   await expect(page.getByTestId('ops-retention')).toBeDisabled()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+
+  // P213: Databases 创建按钮离线禁用
+  await page.goto('/databases')
+  await expect(page.getByTestId('databases-create-btn')).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('offline-banner')).toBeVisible()
+  await expect(page.getByTestId('databases-create-btn')).toBeDisabled()
   await page.evaluate(() => {
     Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
     window.dispatchEvent(new Event('online'))

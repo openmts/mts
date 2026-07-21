@@ -292,6 +292,10 @@ async function doChangeSelfPassword() {
 }
 
 function requestDelete(name: string) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineAdminBlocked'))
+    return
+  }
   deleteName.value = name
   deleteOpen.value = true
 }
@@ -415,6 +419,10 @@ async function revokeGrant(g: DatabaseGrant) {
 }
 
 function openSetPassword(name: string) {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineAdminBlocked'))
+    return
+  }
   setPasswordUser.value = name
   setPasswordValue.value = ''
   showSetPassword.value = true
@@ -488,6 +496,10 @@ async function exportCSV() {
 }
 
 function openBatch(mode: 'enable' | 'disable') {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    notifyError(t.value('offlineAdminBlocked'))
+    return
+  }
   if (!selectedIds.value.length) return
   batchMode.value = mode
   batchOpen.value = true
@@ -572,10 +584,10 @@ onBeforeUnmount(() => {
         <button type="button" class="mts-btn" data-testid="users-share-link" @click="copyUsersShareLink">
           {{ t('usersShareLink') }}
         </button>
-        <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="showChangeSelfPassword = true">
+        <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-change-self-open" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="showChangeSelfPassword = true">
           <Lock class="h-3.5 w-3.5" /> {{ t('usersChangeMyPassword') }}
         </button>
-        <button v-if="isAdmin" type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700" data-testid="users-create-open" @click="showCreate = true">
+        <button v-if="isAdmin" type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-create-open" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="showCreate = true">
           <Plus class="h-3.5 w-3.5" /> {{ t('usersCreate') }}
         </button>
         <span
@@ -625,8 +637,8 @@ onBeforeUnmount(() => {
         @clear="clearSelection"
       >
         <template #actions>
-          <button type="button" class="mts-btn" data-testid="users-batch-enable" :disabled="!selectedCount" @click="openBatch('enable')">{{ t('listBatchEnable') }}</button>
-          <button type="button" class="mts-btn" data-testid="users-batch-disable" :disabled="!selectedCount" @click="openBatch('disable')">{{ t('listBatchDisable') }}</button>
+          <button type="button" class="mts-btn" data-testid="users-batch-enable" :disabled="!selectedCount || offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="openBatch('enable')">{{ t('listBatchEnable') }}</button>
+          <button type="button" class="mts-btn" data-testid="users-batch-disable" :disabled="!selectedCount || offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="openBatch('disable')">{{ t('listBatchDisable') }}</button>
         </template>
       </ListSelectionToolbar>
     </div>
@@ -638,7 +650,7 @@ onBeforeUnmount(() => {
         :description="users.length ? t('usersFilterEmptyDesc') : t('usersEmptyDesc')"
       >
         <template v-if="!users.length" #action>
-          <button type="button" class="mts-btn-primary" @click="showCreate = true">{{ t('usersCreate') }}</button>
+          <button type="button" class="mts-btn-primary" data-testid="users-empty-create" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="showCreate = true">{{ t('usersCreate') }}</button>
         </template>
       </EmptyState>
     </div>
@@ -716,9 +728,9 @@ onBeforeUnmount(() => {
               </div>
               <div class="px-4">
                 <div class="flex items-center gap-1">
-                  <button class="rounded p-1 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200" :title="t('usersSetPassword')" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
-                  <button class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800" @click="toggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
-                  <button class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
+                  <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" :title="offline ? t('offlineAdminBlocked') : t('usersSetPassword')" :disabled="offline" :data-testid="`users-set-password-${u.name}`" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
+                  <button type="button" class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" :data-testid="`users-toggle-${u.name}`" @click="toggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
+                  <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" :data-testid="`users-delete-${u.name}`" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
                 </div>
               </div>
             </div>
@@ -734,6 +746,7 @@ onBeforeUnmount(() => {
     </template>
 
     <UserGrantPanel
+      :offline="offline"
       v-if="isAdmin && selectedUser"
       :selected-user="selectedUser"
       :user-grants="userGrants"
@@ -748,6 +761,7 @@ onBeforeUnmount(() => {
     />
 
     <UserModals
+      :offline="offline"
       v-model:show-create="showCreate"
       v-model:new-user="newUser"
       v-model:show-set-password="showSetPassword"
