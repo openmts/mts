@@ -23,7 +23,7 @@ import {
   type OpsActionEntry,
   type OpsActionKind,
 } from '@/utils/opsActionLog'
-import { downloadJSON, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
@@ -223,16 +223,27 @@ async function runConfirmed() {
 }
 
 
-function exportStats() {
-  downloadJSON(
-    stampFilename('mts-ops-stats', 'json'),
-    buildOpsStatsExport({
-      maintenance: maintenanceStats.value,
-      compaction: compactionStats.value,
-      maintenance_errors: maintenanceErrors.value,
-    }),
-  )
-  success(t.value('opsStatsExported'))
+async function exportStats() {
+  if (exportBusy.value) return
+  const payload = buildOpsStatsExport({
+    maintenance: maintenanceStats.value,
+    compaction: compactionStats.value,
+    maintenance_errors: maintenanceErrors.value,
+  })
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-ops-stats', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('opsStatsExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 async function copyStats() {
@@ -247,16 +258,34 @@ async function copyStats() {
   else notifyError(res.error || t.value('failed'))
 }
 
-function exportMaintErrors() {
+async function exportMaintErrors() {
   if (!filteredMaintenanceErrors.value.length) {
     warn(t.value('opsMaintErrorsEmpty'))
     return
   }
-  downloadJSON(
-    stampFilename('mts-ops-maintenance-errors', 'json'),
-    buildMaintenanceErrorsExport(filteredMaintenanceErrors.value),
-  )
-  success(t.value('opsMaintErrorsExported'))
+  if (exportBusy.value) return
+  const list = filteredMaintenanceErrors.value.slice()
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-ops-maintenance-errors', 'json'),
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      const chunk = 100
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildMaintenanceErrorsExport(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('opsMaintErrorsExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 async function copyMaintErrors() {
@@ -406,7 +435,7 @@ watch(
         <button type="button" class="mts-btn" :disabled="loading" data-testid="ops-refresh" @click="loadStats">
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="ops-export-stats" @click="exportStats">
+        <button type="button" class="mts-btn" data-testid="ops-export-stats" :disabled="exportBusy" @click="exportStats">
           <Download class="h-3.5 w-3.5" /> {{ t('opsExportStats') }}
         </button>
         <button type="button" class="mts-btn" data-testid="ops-share-link" @click="copyOperationsShareLink">
@@ -474,7 +503,7 @@ watch(
             data-testid="ops-maint-errors-filter"
             :placeholder="t('opsMaintErrorsFilter')"
           />
-          <button type="button" class="mts-btn" data-testid="ops-export-maint-errors" :disabled="!filteredMaintenanceErrors.length" @click="exportMaintErrors">
+          <button type="button" class="mts-btn" data-testid="ops-export-maint-errors" :disabled="exportBusy || (!filteredMaintenanceErrors.length)" @click="exportMaintErrors">
             <Download class="h-3.5 w-3.5" /> {{ t('opsExportMaintErrors') }}
           </button>
           <button type="button" class="mts-btn" data-testid="ops-copy-maint-errors" :disabled="!filteredMaintenanceErrors.length" @click="copyMaintErrors">

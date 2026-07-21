@@ -33,7 +33,9 @@ import {
 } from '@/composables/usePointParsers'
 import { loadWritePrefs, saveWritePrefs, type WriteModePref } from '@/utils/writePrefs'
 import { buildWriteDraftExport, buildWriteResultExport } from '@/utils/writeExport'
-import { downloadJSON, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { makeFormErrorT } from '@/utils/formErrors'
 
 type WriteMode = 'form' | 'line' | 'prometheus' | 'typed'
@@ -87,6 +89,15 @@ const rpMetaHint = ref('')
 const metaSource = ref<MetaLoadSource>('admin')
 const { offline } = useNetworkStatus()
 const { success, error: notifyError, warn } = useNotify()
+
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runJSONExport,
+} = useExportJob()
+
 const { t } = useI18n()
 
 function fieldTypeLabel(value: string): string {
@@ -545,44 +556,66 @@ const modeLabel = computed(() => ({
   typed: t.value('typedBatch'),
 }[writeMode.value]))
 
-function exportWriteResult() {
+async function exportWriteResult() {
   if (!result.value) {
     warn(t.value('writeResultExportEmpty'))
     return
   }
-  downloadJSON(
-    stampFilename('mts-write-result', 'json'),
-    buildWriteResultExport({
-      ok: result.value.ok,
-      message: result.value.message,
-      mode: writeMode.value,
-      database: selectedDb.value,
-      retention_policy: retentionPolicy.value,
-      sync: syncWrite.value,
-      use_points_typed: usePointsTyped.value,
-    }),
-  )
-  success(t.value('writeResultExported'))
+  if (exportBusy.value) return
+  const payload = buildWriteResultExport({
+    ok: result.value.ok,
+    message: result.value.message,
+    mode: writeMode.value,
+    database: selectedDb.value,
+    retention_policy: retentionPolicy.value,
+    sync: syncWrite.value,
+    use_points_typed: usePointsTyped.value,
+  })
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-write-result', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('writeResultExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function exportWriteDraft() {
-  downloadJSON(
-    stampFilename('mts-write-draft', 'json'),
-    buildWriteDraftExport({
-      mode: writeMode.value,
-      database: selectedDb.value,
-      retention_policy: retentionPolicy.value,
-      line_input: lineInput.value,
-      form_rows: formRows.value,
-      typed: {
-        measurement: typedMeasurement.value,
-        timestamps: typedTimestamps.value,
-        tags: typedTagCols.value,
-        fields: typedFieldCols.value,
-      },
-    }),
-  )
-  success(t.value('writeDraftExported'))
+async function exportWriteDraft() {
+  if (exportBusy.value) return
+  const payload = buildWriteDraftExport({
+    mode: writeMode.value,
+    database: selectedDb.value,
+    retention_policy: retentionPolicy.value,
+    line_input: lineInput.value,
+    form_rows: formRows.value,
+    typed: {
+      measurement: typedMeasurement.value,
+      timestamps: typedTimestamps.value,
+      tags: typedTagCols.value,
+      fields: typedFieldCols.value,
+    },
+  })
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-write-draft', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('writeDraftExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 </script>
 
@@ -780,10 +813,11 @@ function exportWriteDraft() {
       <button type="button" class="mts-btn" data-testid="write-cancel" :disabled="!loading" @click="cancelWrite">
         {{ t('writeCancel') }}
       </button>
-      <button type="button" class="mts-btn" data-testid="write-export-result" :disabled="!result" @click="exportWriteResult">
+      <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+      <button type="button" class="mts-btn" data-testid="write-export-result" :disabled="!result || exportBusy" @click="exportWriteResult">
         <Download class="h-3.5 w-3.5" /> {{ t('writeExportResult') }}
       </button>
-      <button type="button" class="mts-btn" data-testid="write-export-draft" @click="exportWriteDraft">
+      <button type="button" class="mts-btn" data-testid="write-export-draft" :disabled="exportBusy" @click="exportWriteDraft">
         <Download class="h-3.5 w-3.5" /> {{ t('writeExportDraft') }}
       </button>
       <button type="button" class="mts-btn" data-testid="write-share-link" @click="copyWriteShareLink">

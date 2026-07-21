@@ -971,3 +971,8 @@
 
 ## P206 状态（2026-07-21）
 - Account 密码+TTL 会话续期（无独立 refresh token）
+
+## P207 状态（2026-07-21）
+- 剩余小导出统一 ExportJob：Query history / Overview / About / Ops stats+errors / Storage / Account / Write / NotifyHistory
+- 页面层不再直连 downloadJSON/downloadText
+

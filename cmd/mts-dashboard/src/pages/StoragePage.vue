@@ -18,7 +18,9 @@ import { useI18n } from '@/composables/useI18n'
 import { textForLocale, type LocaleCode } from '@/utils/localizedText'
 import { makeActionResult, type ActionResult } from '@/utils/actionResult'
 import { formatBytes } from '@/utils/formatBytes'
-import { downloadJSON, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { buildStorageConfigExport, formatStorageExportPretty } from '@/utils/storageExport'
 import { copyText } from '@/utils/clipboard'
 import { storageFormToPrefill, parseStoragePrefill } from '@/utils/routePrefill'
@@ -55,6 +57,13 @@ const route = useRoute()
 const { isAdmin } = useAuth()
 const { offline } = useNetworkStatus()
 const { success, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runJSONExport,
+} = useExportJob()
 const { t , locale } = useI18n()
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const validateResult = ref<ValidateResponse | null>(null)
@@ -264,17 +273,32 @@ async function doExport() {
   } finally { loading.value = '' }
 }
 
-function downloadExport() {
+async function downloadExport() {
   if (!exportData.value) {
     notifyError(t.value('storageExportEmpty'))
     return
   }
-  downloadJSON(
-    stampFilename('mts-storage-export', 'json'),
-    buildStorageConfigExport(exportData.value),
-  )
-  actionResult.value = makeActionResult('ok', t.value('storageDownloadStarted'))
-  success(t.value('storageDownloadToast'))
+  if (exportBusy.value) return
+  const payload = buildStorageConfigExport(exportData.value)
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-storage-export', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') {
+    actionResult.value = makeActionResult('ok', t.value('storageDownloadStarted'))
+    success(t.value('storageDownloadToast'))
+  } else if (outcome === 'cancelled') {
+    success(t.value('exportCancelledToast'))
+  } else if (outcome === 'error') {
+    notifyError(exportJob.value.error || t.value('failed'))
+  }
 }
 
 async function copyExport() {
@@ -465,7 +489,8 @@ async function copyStorageShareLink() {
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('export') }}</h3></div>
         <button data-testid="storage-export-fetch" :disabled="loading === 'export'" class="mts-btn-primary w-full justify-center py-2" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
-        <button v-if="exportData" type="button" class="mts-btn mt-2 w-full justify-center" data-testid="storage-export-download" @click="downloadExport">{{ t('storageDownloadJson') }}</button>
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button v-if="exportData" type="button" class="mts-btn mt-2 w-full justify-center" data-testid="storage-export-download" :disabled="exportBusy" @click="downloadExport">{{ t('storageDownloadJson') }}</button>
         <button v-if="exportData" type="button" class="mts-btn mt-2 w-full justify-center" data-testid="storage-export-copy" @click="copyExport">{{ t('storageCopyExport') }}</button>
       </div>
     </div>

@@ -11,7 +11,9 @@ import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { clientBuildInfo } from '@/utils/buildInfo'
 import { buildAboutExport, formatAboutExportPretty } from '@/utils/aboutExport'
-import { downloadJSON, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { Download, Copy, Info } from 'lucide-vue-next'
 
@@ -26,6 +28,14 @@ useHashScroll()
 const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runJSONExport,
+  runTextExport,
+} = useExportJob()
 const client = clientBuildInfo()
 const server = ref<VersionResponse | null>(null)
 const loadError = ref('')
@@ -48,16 +58,27 @@ async function loadVersion() {
   }
 }
 
-function exportAbout() {
-  downloadJSON(
-    stampFilename('mts-about', 'json'),
-    buildAboutExport({
-      client,
-      server: server.value,
-      user: currentUser.value || '',
-    }),
-  )
-  success(t.value('aboutExported'))
+async function exportAbout() {
+  if (exportBusy.value) return
+  const payload = buildAboutExport({
+    client,
+    server: server.value,
+    user: currentUser.value || '',
+  })
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-about', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('aboutExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 async function copyAbout() {
@@ -104,7 +125,8 @@ onMounted(() => {
         <p class="text-xs mts-muted">{{ t('aboutDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button type="button" class="mts-btn" data-testid="about-export-json" @click="exportAbout">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button type="button" class="mts-btn" data-testid="about-export-json" :disabled="exportBusy" @click="exportAbout">
           <Download class="h-3.5 w-3.5" /> {{ t('aboutExportJSON') }}
         </button>
         <button type="button" class="mts-btn" data-testid="about-copy" @click="copyAbout">

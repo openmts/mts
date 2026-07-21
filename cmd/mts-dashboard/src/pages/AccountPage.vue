@@ -16,7 +16,9 @@ import { KeyRound, UserRound, Download, Copy } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
 import { buildAccountExport, formatAccountExportPretty } from '@/utils/accountExport'
 import { buildClientPrefsExport, formatClientPrefsExportPretty } from '@/utils/clientPrefsExport'
-import { downloadJSON, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { formatMessage } from '@/utils/formatMessage'
 import {
@@ -86,6 +88,13 @@ function roleLabel(role?: string | null): string {
   return role
 }
 const { success, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runJSONExport,
+} = useExportJob()
 const renewPassword = ref('')
 const renewTtlSeconds = ref(12 * 3600)
 const renewLoading = ref(false)
@@ -296,10 +305,25 @@ function accountSnapshotInput() {
   }
 }
 
-function exportAccount() {
-  downloadJSON(stampFilename('mts-account', 'json'), buildAccountExport(accountSnapshotInput()))
-  success(t.value('accountExported'))
+async function exportAccount() {
+  if (exportBusy.value) return
+  const payload = buildAccountExport(accountSnapshotInput())
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-account', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('accountExported') || t.value('inventoryExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
+
 
 async function copyAccount() {
   const res = await copyText(formatAccountExportPretty(accountSnapshotInput()))
@@ -319,12 +343,23 @@ function currentClientPrefs() {
   }
 }
 
-function exportClientPrefsOnly() {
-  downloadJSON(
-    stampFilename('mts-client-prefs', 'json'),
-    buildClientPrefsExport(currentClientPrefs()),
-  )
-  success(t.value('accountPrefsExported'))
+async function exportClientPrefsOnly() {
+  if (exportBusy.value) return
+  const payload = buildClientPrefsExport(currentClientPrefs())
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-client-prefs', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('accountPrefsExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 async function copyClientPrefsOnly() {
@@ -369,10 +404,11 @@ async function submit() {
         <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
         <button type="button" class="mts-btn" data-testid="account-share-link" @click="copyAccountShareLink">
           {{ t('accountShareLink') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="account-export-json" @click="exportAccount">
+        <button type="button" class="mts-btn" data-testid="account-export-json" :disabled="exportBusy" @click="exportAccount">
           <Download class="h-3.5 w-3.5" /> {{ t('accountExportJSON') }}
         </button>
         <button type="button" class="mts-btn" data-testid="account-copy-snapshot" @click="copyAccount">
@@ -497,7 +533,7 @@ async function submit() {
       <h2 class="mb-1 text-sm font-semibold">{{ t('accountPrefsToolsTitle') }}</h2>
       <p class="mb-3 text-xs mts-muted">{{ t('accountPrefsToolsHint') }}</p>
       <div class="mb-3 flex flex-wrap gap-2">
-        <button type="button" class="mts-btn mts-focus-ring" data-testid="account-prefs-export" @click="exportClientPrefsOnly">
+        <button type="button" class="mts-btn mts-focus-ring" data-testid="account-prefs-export" :disabled="exportBusy" @click="exportClientPrefsOnly">
           <Download class="h-3.5 w-3.5" aria-hidden="true" />
           {{ t('accountPrefsExportBtn') }}
         </button>

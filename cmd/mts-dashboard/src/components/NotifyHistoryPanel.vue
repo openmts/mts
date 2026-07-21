@@ -19,7 +19,9 @@ import {
   formatNotifyHistoryExportPretty,
   notifyHistoryToCSV,
 } from '@/utils/notifyHistoryExport'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import {
   notifyHistoryFormToPrefill,
@@ -35,6 +37,16 @@ const props = defineProps<{
 const route = useRoute()
 const { t, locale } = useI18n()
 const { history, clearHistory, reloadHistory, success, error: notifyError } = useNotify()
+
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runJSONExport,
+  runTextExport,
+} = useExportJob()
+
 const panelRef = ref<HTMLElement | null>(null)
 let trap: FocusTrapHandle | null = null
 
@@ -141,29 +153,53 @@ function onClear() {
   clearHistory()
 }
 
-function onExportJSON() {
+async function onExportJSON() {
   if (!entries.value.length) {
     notifyError(t.value('notifyHistoryExportEmpty'))
     return
   }
-  downloadJSON(
-    stampFilename('mts-notify-history', 'json'),
-    buildNotifyHistoryExport(entries.value),
-  )
-  success(t.value('notifyHistoryExported'))
+  if (exportBusy.value) return
+  const payload = buildNotifyHistoryExport(entries.value)
+  const count = entries.value.length
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-notify-history', 'json'),
+    total: Math.max(count, 1),
+    build: async ({ isCancelled, progress }) => {
+      progress(0, Math.max(count, 1))
+      if (isCancelled()) return null
+      progress(Math.max(count, 1), Math.max(count, 1))
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('notifyHistoryExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function onExportCSV() {
+async function onExportCSV() {
   if (!entries.value.length) {
     notifyError(t.value('notifyHistoryExportEmpty'))
     return
   }
-  downloadText(
-    stampFilename('mts-notify-history', 'csv'),
-    notifyHistoryToCSV(entries.value),
-    'text/csv;charset=utf-8',
-  )
-  success(t.value('notifyHistoryExported'))
+  if (exportBusy.value) return
+  const text = notifyHistoryToCSV(entries.value)
+  const count = entries.value.length
+  const outcome = await runTextExport({
+    label: 'CSV',
+    filename: stampFilename('mts-notify-history', 'csv'),
+    mime: 'text/csv;charset=utf-8',
+    total: Math.max(count, 1),
+    build: async ({ isCancelled, progress }) => {
+      progress(0, Math.max(count, 1))
+      if (isCancelled()) return null
+      progress(Math.max(count, 1), Math.max(count, 1))
+      return text
+    },
+  })
+  if (outcome === 'done') success(t.value('notifyHistoryExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 async function onCopy() {
@@ -242,11 +278,12 @@ onBeforeUnmount(() => {
           >
             {{ t('notifyHistoryShareLink') }}
           </button>
+          <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
           <button
             type="button"
             class="mts-btn"
             data-testid="notify-history-export-json"
-            :disabled="!entries.length"
+            :disabled="!entries.length || exportBusy"
             :title="t('notifyHistoryExportJSON')"
             @click="onExportJSON"
           >
@@ -257,7 +294,7 @@ onBeforeUnmount(() => {
             type="button"
             class="mts-btn mts-focus-ring"
             data-testid="notify-history-export-csv"
-            :disabled="!entries.length"
+            :disabled="!entries.length || exportBusy"
             :title="t('notifyHistoryExportCSV')"
             @click="onExportCSV"
           >

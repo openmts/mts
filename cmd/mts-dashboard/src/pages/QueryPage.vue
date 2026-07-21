@@ -19,7 +19,7 @@ import { copyText } from '@/utils/clipboard'
 import { useI18n } from '@/composables/useI18n'
 import { formatEpoch, nowUnixMsString } from '@/utils/time'
 import { formatFieldsMap } from '@/utils/fieldValue'
-import { downloadJSON, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import {
@@ -73,6 +73,7 @@ const {
   cancelExport,
   resetExport,
   runTextExport,
+  runJSONExport,
 } = useExportJob()
 const { t, locale } = useI18n()
 const { currentUser, isAdmin } = useAuth()
@@ -411,10 +412,24 @@ function confirmClearHistory() {
   success(t.value('queryHistoryCleared'))
 }
 
-function exportHistory() {
+async function exportHistory() {
+  if (exportBusy.value) return
   const payload = history.exportPayload()
-  downloadJSON(stampFilename('mts-query-history', 'json'), payload)
-  success(formatMessage(t.value('queryHistoryExported'), { count: payload.items.length }))
+  const count = payload.items?.length ?? 0
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-query-history', 'json'),
+    total: Math.max(count, 1),
+    build: async ({ isCancelled, progress }) => {
+      progress(0, Math.max(count, 1))
+      if (isCancelled()) return null
+      progress(Math.max(count, 1), Math.max(count, 1))
+      return payload
+    },
+  })
+  if (outcome === 'done') success(formatMessage(t.value('queryHistoryExported'), { count }))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 function triggerImportHistory() {
@@ -605,7 +620,7 @@ const columnRows = computed(() => {
           <button
             type="button"
             class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-            data-testid="query-export-history"
+            data-testid="query-export-history" :disabled="exportBusy"
             @click="exportHistory"
           ><Download class="h-3 w-3" />{{ t('queryExport') }}</button>
           <button

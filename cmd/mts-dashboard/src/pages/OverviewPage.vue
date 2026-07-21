@@ -30,7 +30,9 @@ import type { LocaleCode } from '@/utils/localizedText'
 import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3, FileCode2, Download, Copy } from 'lucide-vue-next'
 import { useNotify } from '@/composables/useNotify'
 import { buildOverviewExport, formatOverviewExportPretty } from '@/utils/overviewExport'
-import { downloadJSON, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import VirtualTable from '@/components/VirtualTable.vue'
 
@@ -61,6 +63,14 @@ const route = useRoute()
 useHashScroll()
 const { t, locale } = useI18n()
 const { success, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runJSONExport,
+  runTextExport,
+} = useExportJob()
 const {
   kind: connectivityKind,
   showUnreachableBanner,
@@ -425,9 +435,23 @@ function buildOverviewSnapshotPayload() {
   })
 }
 
-function exportOverview() {
-  downloadJSON(stampFilename('mts-overview', 'json'), buildOverviewSnapshotPayload())
-  success(t.value('overviewExported'))
+async function exportOverview() {
+  if (exportBusy.value) return
+  const payload = buildOverviewSnapshotPayload()
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-overview', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('overviewExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 async function copyOverview() {
@@ -520,7 +544,8 @@ async function copyOverview() {
           <span class="font-mono text-xs">{{ serverVersion?.version || t('emptyValue') }}</span>
           <span v-if="serverVersion?.commit" class="font-mono text-[11px] mts-muted">{{ serverVersion.commit.slice(0, 8) }}</span>
         </div>
-        <button type="button" class="mts-btn" data-testid="overview-export-json" @click="exportOverview">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button type="button" class="mts-btn" data-testid="overview-export-json" :disabled="exportBusy" @click="exportOverview">
           <Download class="h-3.5 w-3.5" /> {{ t('overviewExportJSON') }}
         </button>
         <button type="button" class="mts-btn" data-testid="overview-copy-snapshot" @click="copyOverview">
