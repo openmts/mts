@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseAccountPrefill, accountFormToPrefill } from '@/utils/routePrefill'
@@ -45,6 +45,9 @@ import {
   type ClientPrefs,
 } from '@/utils/clientPrefs'
 import { loadNavOrderPrefs, saveNavOrderMap } from '@/utils/navOrder'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import { registerDirtyChecker } from '@/utils/routeDirty'
 
 const router = useRouter()
 const route = useRoute()
@@ -102,6 +105,11 @@ const renewError = ref('')
 
 async function renewSessionWithPassword() {
   renewError.value = ''
+  if (shouldBlockOfflineMutation(offline.value)) {
+    renewError.value = t.value('offlineAccountBlocked')
+    notifyError(renewError.value)
+    return
+  }
   const user = currentUser.value || ''
   if (!user) {
     renewError.value = t.value('accountSessionRenewNeedUser')
@@ -156,7 +164,15 @@ async function copyAccountShareLink() {
 }
 
 onMounted(() => {
+  unregisterAccountDirty = registerDirtyChecker('account', () => passwordFormDirty.value)
+  window.addEventListener('beforeunload', onAccountBeforeUnload)
   applyAccountPrefillFromRoute()
+})
+
+onBeforeUnmount(() => {
+  unregisterAccountDirty?.()
+  unregisterAccountDirty = null
+  window.removeEventListener('beforeunload', onAccountBeforeUnload)
 })
 
 watch(
@@ -275,6 +291,7 @@ function onDensityChange(e: Event) {
   success(t.value('accountDensitySaved'))
 }
 
+const { offline } = useNetworkStatus()
 const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
@@ -282,6 +299,17 @@ const loading = ref(false)
 const error = ref('')
 const info = ref('')
 const invalid = computed(() => !!error.value)
+const passwordFormDirty = computed(
+  () => !!(oldPassword.value || newPassword.value || confirmPassword.value),
+)
+
+function onAccountBeforeUnload(e: BeforeUnloadEvent) {
+  if (!passwordFormDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+let unregisterAccountDirty: (() => void) | null = null
 
 
 function accountSnapshotInput() {
@@ -371,6 +399,11 @@ async function copyClientPrefsOnly() {
 async function submit() {
   error.value = ''
   info.value = ''
+  if (shouldBlockOfflineMutation(offline.value)) {
+    error.value = t.value('offlineAccountBlocked')
+    notifyError(error.value)
+    return
+  }
   const check = validateNewPassword(oldPassword.value, newPassword.value, confirmPassword.value, {
     locale: locale.value,
   })
@@ -400,6 +433,11 @@ async function submit() {
         <h1 class="mts-title flex items-center gap-2">
           <UserRound class="h-5 w-5" aria-hidden="true" />
           {{ t('accountTitle') }}
+          <span
+            v-if="passwordFormDirty"
+            data-testid="account-password-dirty-badge"
+            class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+          >{{ t('accountPasswordDirtyBadge') }}</span>
         </h1>
         <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
       </div>
@@ -634,7 +672,8 @@ async function submit() {
           type="submit"
           class="mts-btn-primary"
           data-testid="account-session-renew-submit"
-          :disabled="renewLoading || !renewPassword"
+          :disabled="renewLoading || !renewPassword || offline"
+          :title="offline ? t('offlineAccountBlocked') : undefined"
         >
           {{ renewLoading ? t('accountSessionRenewBusy') : t('accountSessionRenewSubmit') }}
         </button>
@@ -709,7 +748,8 @@ async function submit() {
 <button
           type="submit"
           class="mts-btn-primary mts-focus-ring"
-          :disabled="loading"
+          :disabled="loading || offline"
+          :title="offline ? t('offlineAccountBlocked') : undefined"
           data-testid="account-password-submit"
           :aria-busy="loading ? 'true' : undefined"
         >

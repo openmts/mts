@@ -976,3 +976,6 @@
 - 剩余小导出统一 ExportJob：Query history / Overview / About / Ops stats+errors / Storage / Account / Write / NotifyHistory
 - 页面层不再直连 downloadJSON/downloadText
 
+## P208 状态（2026-07-21）
+- Account 改密/会话续期离线门禁
+- 改密表单脏离开守卫（badge / routeDirty / beforeunload）
