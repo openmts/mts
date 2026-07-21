@@ -47,6 +47,7 @@ import {
 import QueryChart from '@/components/QueryChart.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -58,7 +59,7 @@ const {
   loadMeasurementMeta, refreshSeriesWithTags, applySeriesTags,
   queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, lastQueryErrorCode, loading,
   engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, loadEngineStats,
-  loadDatabases, loadDbChildren, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
+  loadDatabases, loadDbChildren, hasQuerySnapshot, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
 const history = useQueryHistory()
 const seriesFilter = ref('')
@@ -926,13 +927,17 @@ const columnRows = computed(() => {
       @cancel="cancelExport"
       @dismiss="resetExport"
     />
-    <p
+    <ActionResultBanner
       v-if="actionError"
-      :class="lastQueryErrorCode === 'canceled' ? 'mts-alert-info' : 'mts-alert-error'"
+      :kind="lastQueryErrorCode === 'canceled' ? 'info' : (hasQuerySnapshot() ? 'warn' : 'error')"
+      :message="hasQuerySnapshot() && lastQueryErrorCode !== 'canceled'
+        ? `${t('queryFailedKeepSnapshot')}：${actionError}`
+        : actionError"
+      retryable
       data-testid="query-action-error"
-      :role="lastQueryErrorCode === 'canceled' ? 'status' : 'alert'"
-      :aria-live="lastQueryErrorCode === 'canceled' ? 'polite' : 'assertive'"
-    >{{ actionError }}</p>
+      @retry="runQuery"
+      @dismiss="actionError = ''; lastQueryErrorCode = ''"
+    />
     <p v-if="deleteResult" class="mts-alert-ok" role="status" aria-live="polite" data-testid="query-delete-result">{{ deleteResult }}</p>
 
     <div id="query-stats" class="scroll-mt-20 space-y-2" data-testid="query-stats-panel">

@@ -143,6 +143,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // 3) Line Protocol 写入
   await page.goto('/write')
   await expect(page.getByTestId('write-page')).toBeVisible()
+  await expect(page.getByTestId('write-action-error')).toHaveCount(0)
   await expect(page.getByTestId('write-export-draft')).toBeVisible()
   await expect(page.getByTestId('write-share-link')).toBeVisible()
   await expect(page.getByTestId('write-export-result')).toBeVisible()
@@ -179,6 +180,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // 4) 查询页可达 + 执行一次 rows 查询以验证结果虚拟列表
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
+  await expect(page.getByTestId('query-action-error')).toHaveCount(0)
   // 等库/表元数据预填后再查（写入后通常有 default + cpu）
   await expect.poll(async () => {
     const db = await page.getByTestId('query-database').inputValue()

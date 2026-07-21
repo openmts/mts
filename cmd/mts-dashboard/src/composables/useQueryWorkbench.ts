@@ -243,17 +243,29 @@ export function useQueryWorkbench() {
     return { signal: queryAbort.signal, seq }
   }
 
-  async function executeQuery() {
-    actionError.value = ''
-    lastQueryErrorCode.value = ''
-    loading.value = true
+  function hasQuerySnapshot(): boolean {
+    return (
+      rows.value.length > 0
+      || columnSeries.value.length > 0
+      || !!rawOutput.value
+      || !!queryStats.value
+    )
+  }
+
+  function clearQuerySnapshot() {
     rows.value = []
     columnSeries.value = []
     queryStats.value = null
     engineStatsSource.value = 'query'
-    engineStatsError.value = ''
     rawOutput.value = ''
     streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
+  }
+
+  async function executeQuery() {
+    actionError.value = ''
+    lastQueryErrorCode.value = ''
+    engineStatsError.value = ''
+    loading.value = true
     const { signal, seq } = beginRequest()
     try {
       const query = buildQuery()
@@ -265,7 +277,13 @@ export function useQueryWorkbench() {
         )
         if (seq !== requestSeq) return
         rows.value = data.rows ?? []
-        if (data.stats) queryStats.value = data.stats
+        columnSeries.value = []
+        rawOutput.value = ''
+        streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
+        queryStats.value = data.stats ?? null
+        engineStatsSource.value = 'query'
+        actionError.value = ''
+        lastQueryErrorCode.value = ''
       } else if (queryMode.value === 'explain') {
         const data = await apiPost<{
           result: {
@@ -275,13 +293,19 @@ export function useQueryWorkbench() {
           }
         }>('/api/v1/data/query/explain', { query }, { signal })
         if (seq !== requestSeq) return
+        rows.value = []
+        columnSeries.value = []
         queryStats.value = data.result?.stats ?? null
+        engineStatsSource.value = 'query'
         const payload = {
           explain: data.result?.explain ?? null,
           stats: data.result?.stats ?? null,
           columns: data.result?.columns ?? [],
         }
         rawOutput.value = JSON.stringify(payload, null, 2)
+        streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
+        actionError.value = ''
+        lastQueryErrorCode.value = ''
       } else if (queryMode.value === 'columns') {
         const data = await apiPost<{ columns: unknown[]; stats?: QueryStatsData }>(
           '/api/v1/data/query/columns',
@@ -289,9 +313,14 @@ export function useQueryWorkbench() {
           { signal },
         )
         if (seq !== requestSeq) return
+        rows.value = []
         columnSeries.value = data.columns ?? []
         rawOutput.value = JSON.stringify(data.columns, null, 2)
-        if (data.stats) queryStats.value = data.stats
+        streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
+        queryStats.value = data.stats ?? null
+        engineStatsSource.value = 'query'
+        actionError.value = ''
+        lastQueryErrorCode.value = ''
       } else {
         const format = queryMode.value === 'stream-column' ? 'column' : 'row'
         const preview: string[] = []
@@ -328,6 +357,8 @@ export function useQueryWorkbench() {
         )
         if (seq !== requestSeq) return
         const previewOnly = lines > preview.length
+        rows.value = []
+        columnSeries.value = []
         streamMeta.value = { lines, records, errors, previewOnly, previewLimit: 200 }
         rawOutput.value =
           preview.join('\n') +
@@ -338,13 +369,24 @@ export function useQueryWorkbench() {
                 limit: preview.length,
               })
             : '')
-        if (endStats) queryStats.value = endStats
-        if (streamError) actionError.value = streamError
+        queryStats.value = endStats
+        engineStatsSource.value = 'query'
+        if (streamError) {
+          actionError.value = streamError
+          lastQueryErrorCode.value = 'stream'
+        } else {
+          actionError.value = ''
+          lastQueryErrorCode.value = ''
+        }
       }
     } catch (e) {
       if (seq !== requestSeq) return
       lastQueryErrorCode.value = resolveCaughtErrorCode(e)
       actionError.value = formatCaughtError(e)
+      // 失败/取消：保留上次成功快照，避免结果区闪空
+      if (!hasQuerySnapshot()) {
+        clearQuerySnapshot()
+      }
     } finally {
       if (seq === requestSeq) {
         loading.value = false
@@ -407,6 +449,7 @@ export function useQueryWorkbench() {
     loading,
     loadDatabases,
     loadDbChildren,
+    hasQuerySnapshot,
     executeQuery,
     cancelQuery,
     resultTextForCopy,

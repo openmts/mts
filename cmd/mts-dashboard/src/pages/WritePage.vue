@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
@@ -498,7 +499,7 @@ async function submit() {
   loading.value = true
   actionError.value = ''
   writeWasCanceled.value = false
-  result.value = null
+  // 失败时保留上次成功结果，成功时再覆盖
   try {
     if (writeMode.value === 'typed') {
       const batch = buildTypedBatch()
@@ -536,13 +537,18 @@ async function submit() {
     if (isCanceledError(e)) {
       writeWasCanceled.value = true
       actionError.value = t.value('writeCancelled')
-      result.value = { ok: false, message: actionError.value }
+      // 取消不抹掉上次成功写入提示
+      if (!result.value?.ok) {
+        result.value = { ok: false, message: actionError.value }
+      }
       info(actionError.value)
     } else {
       writeWasCanceled.value = false
       actionError.value = formatCaughtError(e)
       notifyError(actionError.value)
-      result.value = { ok: false, message: actionError.value }
+      if (!result.value?.ok) {
+        result.value = { ok: false, message: actionError.value }
+      }
     }
   } finally {
     writeAbort = null
@@ -852,13 +858,17 @@ async function exportWriteDraft() {
         class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
       >{{ t('writeDirtyBadge') }}</span>
     </div>
-    <p
+    <ActionResultBanner
       v-if="actionError"
-      :class="writeWasCanceled ? 'mts-alert-info' : 'mts-alert-error'"
+      :kind="writeWasCanceled ? 'info' : (result?.ok ? 'warn' : 'error')"
+      :message="result?.ok && !writeWasCanceled
+        ? `${t('writeFailedKeepLastSuccess')}：${actionError}`
+        : actionError"
+      retryable
       data-testid="write-action-error"
-      :role="writeWasCanceled ? 'status' : 'alert'"
-      :aria-live="writeWasCanceled ? 'polite' : 'assertive'"
-    >{{ actionError }}</p>
+      @retry="submit"
+      @dismiss="actionError = ''; writeWasCanceled = false"
+    />
     <p v-if="result?.ok" class="mts-alert-ok" data-testid="write-result-ok" role="status" aria-live="polite">{{ result.message }}</p>
     <div v-else-if="!loading && !actionError && !result" class="mts-card">
       <EmptyState
