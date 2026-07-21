@@ -145,6 +145,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // P236: 成功结果 live region
   await expect(page.getByTestId('write-result-ok')).toHaveAttribute('role', 'status')
   await expect(page.getByRole('main').getByText(/写入成功/).first()).toBeVisible({ timeout: 20_000 })
+
   await expect(page.getByRole('main').getByRole('button', { name: /表单写入|Form write/i })).toBeVisible()
   await expect(page.getByTestId('write-mode-tabs')).toBeVisible()
   await expect(page.getByTestId('write-mode-typed')).toBeVisible()

@@ -326,7 +326,7 @@ watch(
       </div>
     </div>
 
-    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
+    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="access-grants-load-error" @retry="load" @dismiss="loadError = ''" />
     <ActionResultBanner
       v-else-if="partialErrors.length"
       kind="warn"

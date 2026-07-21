@@ -600,7 +600,10 @@ onBeforeUnmount(() => {
     <ActionResultBanner
       v-if="loadError"
       kind="error"
+      data-testid="users-load-error"
       :message="loadError"
+      retryable
+      @retry="loadUsers"
       @dismiss="loadError = ''"
     />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />

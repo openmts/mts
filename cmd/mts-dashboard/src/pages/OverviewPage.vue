@@ -510,6 +510,9 @@ async function copyOverview() {
       v-if="loadError"
       kind="error"
       :message="loadError"
+      retryable
+      data-testid="overview-load-error"
+      @retry="loadOverview"
       @dismiss="loadError = ''"
     />
     <ActionResultBanner

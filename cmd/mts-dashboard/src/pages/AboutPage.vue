@@ -138,7 +138,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
+    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="about-load-error" @retry="loadVersion" @dismiss="loadError = ''" />
 
     <div class="grid gap-4 md:grid-cols-2">
       <div id="about-client" class="mts-card scroll-mt-20 p-4" data-testid="about-client">

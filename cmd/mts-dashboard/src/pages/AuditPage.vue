@@ -382,7 +382,7 @@ watch(
       data-testid="audit-self-hint"
     >{{ t('auditSelfHint') }}</p>
 
-    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
+    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="audit-load-error" @retry="loadAudit" @dismiss="loadError = ''" />
     <p class="mts-alert-warn" role="note">{{ t('auditHint') }}</p>
 
     <div id="audit-filters" class="scroll-mt-20 flex flex-wrap gap-2" data-testid="audit-quick-ranges">

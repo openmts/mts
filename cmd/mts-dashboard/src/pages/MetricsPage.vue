@@ -256,7 +256,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="loadError" data-testid="metrics-error">
-      <ActionResultBanner kind="error" :message="loadError" @dismiss="loadError = ''" />
+      <ActionResultBanner kind="error" :message="loadError" retryable @retry="load" @dismiss="loadError = ''" />
     </div>
 
     <div class="grid gap-3 sm:grid-cols-2">

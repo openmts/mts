@@ -14,14 +14,19 @@ const props = withDefaults(defineProps<{
   kind?: ActionResultKind
   message?: string
   dismissible?: boolean
+  /** 显示重试按钮（加载失败等） */
+  retryable?: boolean
+  retryLabel?: string
 }>(), {
   result: null,
   kind: 'info',
   message: '',
   dismissible: true,
+  retryable: false,
+  retryLabel: '',
 })
 
-const emit = defineEmits<{ dismiss: [] }>()
+const emit = defineEmits<{ dismiss: []; retry: [] }>()
 const { t, locale } = useI18n()
 
 const view = computed(() => {
@@ -57,15 +62,25 @@ const liveRole = computed(() => (view.value?.kind === 'error' ? 'alert' : 'statu
       <div class="mb-0.5 text-[11px] font-semibold uppercase tracking-wide opacity-80">{{ label }}</div>
       <p class="whitespace-pre-wrap break-words text-sm">{{ view.message }}</p>
     </div>
-    <button
-      v-if="dismissible"
-      type="button"
-      class="mts-focus-ring shrink-0 rounded p-1 opacity-60 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
-      :title="t('dismiss')"
-      :aria-label="t('dismiss')"
-      @click="emit('dismiss')"
-    >
-      <X class="h-3.5 w-3.5" />
-    </button>
+    <div class="flex shrink-0 items-center gap-1">
+      <button
+        v-if="retryable"
+        type="button"
+        class="mts-btn text-xs"
+        data-testid="action-result-retry"
+        @click="emit('retry')"
+      >{{ retryLabel || t('retry') }}</button>
+      <button
+        v-if="dismissible"
+        type="button"
+        class="mts-focus-ring rounded p-1 opacity-60 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+        :title="t('dismiss')"
+        :aria-label="t('dismiss')"
+        data-testid="action-result-dismiss"
+        @click="emit('dismiss')"
+      >
+        <X class="h-3.5 w-3.5" />
+      </button>
+    </div>
   </div>
 </template>

@@ -136,6 +136,12 @@ const actionResult = ref<ActionResult | null>(null)
 const confirmOpen = ref(false)
 const confirmDbName = ref('')
 const confirmLoading = ref(false)
+
+async function loadDatabasesList() {
+  loadError.value = ''
+  await loadDatabasesList()
+}
+
 onMounted(async () => {
   unregisterDatabasesDirty = registerDirtyChecker('databases', () => databasesFormDirty.value)
   window.addEventListener('beforeunload', onDatabasesBeforeUnload)
@@ -511,7 +517,7 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="space-y-4" data-testid="databases-page">
-    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
+    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="databases-load-error" @retry="loadDatabasesList" @dismiss="loadError = ''" />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
     <p
       v-if="!isAdmin"

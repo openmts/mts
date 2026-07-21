@@ -746,7 +746,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" @dismiss="loadError = ''" />
+    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="downsample-load-error" @retry="loadData" @dismiss="loadError = ''" />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 
     <div id="downsample-filters" class="scroll-mt-20 flex flex-wrap items-end gap-3" data-testid="downsample-filter-bar">

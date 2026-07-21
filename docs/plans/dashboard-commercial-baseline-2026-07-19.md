@@ -1081,3 +1081,7 @@
 
 ## P236（2026-07-21）
 - 扩展结果条 live region（Query/Write/ApiSpec/Config/Audit）
+
+## P237（2026-07-21）
+- ActionResultBanner 可选重试
+- 关键页 loadError 一键重试
