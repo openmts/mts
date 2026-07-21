@@ -1055,7 +1055,7 @@ const columnRows = computed(() => {
               <span v-if="resultColumns.time" class="truncate font-mono" :title="formatTimestamp(row.timestamp)">{{ formatTimestamp(row.timestamp) }}</span>
               <span v-if="resultColumns.measurement" class="truncate" :title="row.measurement">{{ row.measurement }}</span>
               <span v-if="resultColumns.tags" class="truncate font-mono text-slate-500 dark:text-slate-400" :title="row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : ''">{{ row.tags && Object.keys(row.tags).length ? JSON.stringify(row.tags) : t('emptyValue') }}</span>
-              <span v-if="resultColumns.fields" class="truncate font-mono" :title="showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any)">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields as any) }}</span>
+              <span v-if="resultColumns.fields" class="truncate font-mono" :title="showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields)">{{ showRawFields ? JSON.stringify(row.fields) : formatFieldsMap(row.fields) }}</span>
             </div>
           </template>
         </VirtualTable>

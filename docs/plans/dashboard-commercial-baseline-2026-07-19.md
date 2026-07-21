@@ -1088,3 +1088,6 @@
 
 ## P238（2026-07-21）
 - Config/Operations/Readiness doctor 加载失败重试
+
+## P239（2026-07-21）
+- Query 结果 fields 去掉 `as any`
