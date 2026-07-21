@@ -9,7 +9,7 @@ import { useQueryWorkbench } from '@/composables/useQueryWorkbench'
 import { useQueryHistory } from '@/composables/useQueryHistory'
 import { filterQueryHistory } from '@/utils/queryHistory'
 import { useNotify } from '@/composables/useNotify'
-import { formatCaughtError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
 import { useI18n } from '@/composables/useI18n'
@@ -84,7 +84,9 @@ const copyState = ref<'idle' | 'ok' | 'fail'>('idle')
 let copyTimer: ReturnType<typeof setTimeout> | null = null
 const deleteOpen = ref(false)
 const deleteLoading = ref(false)
+const deleteStartedAt = ref<number | null>(null)
 const deleteResult = ref('')
+let deleteAbort: AbortController | null = null
 const PREFS_KEY = 'mts_query_prefs'
 const initialPrefs = loadQueryPrefs(typeof localStorage !== 'undefined' ? localStorage : null, PREFS_KEY)
 const showHistory = ref(initialPrefs.showHistory)
@@ -272,6 +274,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onQueryKeydown)
   window.removeEventListener('beforeunload', onBeforeUnload)
   cancelQuery()
+  cancelRangeDelete()
   if (copyTimer) clearTimeout(copyTimer)
 })
 watch([showChart, showRawFields, showHistory, resultColumns], () => { persistPrefs() }, { deep: true })
@@ -535,13 +538,24 @@ function openRangeDelete() {
   deleteOpen.value = true
 }
 
+function cancelRangeDelete() {
+  if (deleteAbort) {
+    deleteAbort.abort()
+    deleteAbort = null
+  }
+}
+
 async function doRangeDelete() {
   if (writeBlocked.value) {
     deleteResult.value = t.value(blockedMessageKey('offlineDeleteBlocked'))
     notifyError(deleteResult.value)
     return
   }
+  cancelRangeDelete()
+  deleteAbort = new AbortController()
+  const signal = deleteAbort.signal
   deleteLoading.value = true
+  deleteStartedAt.value = Date.now()
   deleteResult.value = ''
   try {
     const query = buildQuery()
@@ -555,15 +569,25 @@ async function doRangeDelete() {
         end_time: query.end_time,
         precision: query.precision,
       },
-    })
+    }, { signal })
     deleteResult.value = t.value('queryDeleteSubmitted')
     success(deleteResult.value)
     deleteOpen.value = false
   } catch (e) {
-    deleteResult.value = formatCaughtError(e)
-    notifyError(deleteResult.value)
+    if (isCanceledError(e)) {
+      deleteResult.value = t.value('queryDeleteCancelled')
+      info(deleteResult.value)
+    } else if (isTimeoutError(e)) {
+      deleteResult.value = t.value('queryDeleteTimedOut')
+      notifyError(deleteResult.value)
+    } else {
+      deleteResult.value = formatCaughtError(e)
+      notifyError(deleteResult.value)
+    }
   } finally {
+    deleteAbort = null
     deleteLoading.value = false
+    deleteStartedAt.value = null
   }
 }
 
@@ -1260,6 +1284,13 @@ const columnRows = computed(() => {
       <pre class="max-h-96 overflow-auto bg-slate-950 p-4 font-mono text-xs text-emerald-400">{{ rawOutput }}</pre>
     </div>
 
+    <InFlightBanner
+      v-if="deleteLoading"
+      :active="deleteLoading"
+      :started-at-ms="deleteStartedAt"
+      kind="delete"
+      @cancel="cancelRangeDelete"
+    />
     <ConfirmDialog
       v-model:open="deleteOpen"
       :write-blocked="writeBlocked"
@@ -1271,7 +1302,9 @@ const columnRows = computed(() => {
       :confirm-label="t('delete')"
       danger
       :loading="deleteLoading"
+      allow-cancel-while-loading
       @confirm="doRangeDelete"
+      @cancel="cancelRangeDelete"
     />
     <ConfirmDialog
       v-model:open="clearHistoryOpen"

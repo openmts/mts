@@ -9,7 +9,7 @@ const props = withDefaults(
   defineProps<{
     active: boolean
     startedAtMs?: number | null
-    kind?: 'query' | 'write'
+    kind?: 'query' | 'write' | 'delete'
     timeoutHintMs?: number
     longThresholdMs?: number
   }>(),
@@ -58,9 +58,11 @@ const nearTimeout = computed(
   () => props.timeoutHintMs > 0 && elapsedMs.value >= Math.max(0, props.timeoutHintMs - 5_000),
 )
 
-const title = computed(() =>
-  props.kind === 'write' ? t.value('writeInFlightTitle') : t.value('queryInFlightTitle'),
-)
+const title = computed(() => {
+  if (props.kind === 'write') return t.value('writeInFlightTitle')
+  if (props.kind === 'delete') return t.value('deleteInFlightTitle')
+  return t.value('queryInFlightTitle')
+})
 
 const detail = computed(() => {
   const base = formatMessage(t.value('inFlightElapsed'), { elapsed: elapsedLabel.value })

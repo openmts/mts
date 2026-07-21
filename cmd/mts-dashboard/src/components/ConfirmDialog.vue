@@ -21,6 +21,8 @@ const props = withDefaults(defineProps<{
   blockReason?: 'none' | 'offline' | 'session' | null
   /** 离线场景 i18n key；session 时固定 sessionMutationBlocked */
   offlineMessageKey?: MessageKey
+  /** 加载中是否允许取消（长请求 abort） */
+  allowCancelWhileLoading?: boolean
 }>(), {
   confirmLabel: '',
   cancelLabel: '',
@@ -30,6 +32,7 @@ const props = withDefaults(defineProps<{
   writeBlocked: false,
   blockReason: 'none',
   offlineMessageKey: 'offlineAdminBlocked',
+  allowCancelWhileLoading: false,
 })
 
 const emit = defineEmits<{
@@ -76,7 +79,7 @@ function releaseTrap() {
 }
 
 function close() {
-  if (props.loading) return
+  if (props.loading && !props.allowCancelWhileLoading) return
   emit('update:open', false)
   emit('cancel')
   input.value = ''
@@ -141,6 +144,12 @@ onBeforeUnmount(() => {
       <h3 :id="titleId" class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ title }}</h3>
       <p :id="descId" class="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{{ message }}</p>
       <p
+        v-if="loading"
+        class="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
+        data-testid="confirm-dialog-loading"
+        role="status"
+      >{{ t('processing') }}{{ allowCancelWhileLoading ? ` · ${t('confirmCancelWhileLoading')}` : '' }}</p>
+      <p
         v-if="writeBlocked && blockedTitle"
         class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
         data-testid="confirm-dialog-blocked"
@@ -164,7 +173,7 @@ onBeforeUnmount(() => {
           type="button"
           class="mts-btn mts-focus-ring"
           data-testid="confirm-dialog-cancel"
-          :disabled="loading"
+          :disabled="loading && !allowCancelWhileLoading"
           @click="close"
         >{{ resolvedCancel }}</button>
         <button

@@ -1294,3 +1294,7 @@
 ## P302（2026-07-22）
 - Query/Write：进行中横幅（耗时、长耗时/近超时提示、取消）
 - 查询/写入超时文案区分；QueryWorkbench/Write 记录 startedAt
+
+## P303（2026-07-22）
+- Query 范围删除：Abort + 进行中横幅 + 取消/超时文案；ConfirmDialog 支持加载中取消
+- Readiness：Doctor/Version 失败 chip 可单独重试；Doctor 空态失败文案

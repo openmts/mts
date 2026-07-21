@@ -156,6 +156,7 @@ const doctor = ref<DoctorResponse | null>(null)
 const doctorError = ref('')
 const versionError = ref('')
 const loadingDoctor = ref(false)
+const loadingVersion = ref(false)
 const actionMsg = ref('')
 const actionKind = ref<'ok' | 'error' | 'info'>('info')
 const importMerge = ref(true)
@@ -328,6 +329,7 @@ async function copySignoffMissing() {
 }
 
 async function loadServerVersion() {
+  loadingVersion.value = true
   try {
     serverVersion.value = await apiGet<VersionResponse>('/api/v1/admin/version')
     versionError.value = ''
@@ -339,6 +341,8 @@ async function loadServerVersion() {
       serverVersion.value = null
       versionError.value = msg
     }
+  } finally {
+    loadingVersion.value = false
   }
 }
 
@@ -896,6 +900,29 @@ watch(
       @retry="loadServerVersion"
       @dismiss="versionError = ''"
     />
+    <div
+      v-if="doctorError || versionError"
+      class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/30"
+      data-testid="readiness-partial-sections"
+    >
+      <span class="text-xs font-medium text-amber-900 dark:text-amber-100">{{ t('overviewPartialRetryHint') }}</span>
+      <button
+        v-if="doctorError"
+        type="button"
+        class="mts-btn text-xs"
+        data-testid="readiness-partial-retry-doctor"
+        :disabled="loadingDoctor"
+        @click="loadDoctor"
+      >{{ t('overviewPartialDoctor') }} · {{ loadingDoctor ? t('loading') : t('retry') }}</button>
+      <button
+        v-if="versionError"
+        type="button"
+        class="mts-btn text-xs"
+        data-testid="readiness-partial-retry-version"
+        :disabled="loadingVersion"
+        @click="loadServerVersion"
+      >{{ t('overviewPartialVersion') }} · {{ loadingVersion ? t('loading') : t('retry') }}</button>
+    </div>
     <div id="readiness-action" class="scroll-mt-20" data-testid="readiness-action-anchor">
       <ActionResultBanner
         v-if="actionMsg"
@@ -1380,8 +1407,8 @@ watch(
         v-else-if="!loadingDoctor"
         compact
         data-testid="readiness-doctor-empty"
-        :title="t('readinessDoctorEmpty')"
-        :description="t('readinessDoctorEmptyDesc')"
+        :title="doctorError ? t('overviewDoctorEmptyFailed') : t('readinessDoctorEmpty')"
+        :description="doctorError || t('readinessDoctorEmptyDesc')"
       >
         <template #action>
           <button type="button" class="mts-btn-primary" data-testid="readiness-doctor-empty-retry" :disabled="loadingDoctor" @click="loadDoctor">{{ t('readinessDoctorRetry') }}</button>
