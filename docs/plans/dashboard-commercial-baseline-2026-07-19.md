@@ -1069,3 +1069,8 @@
 
 ## P233（2026-07-21）
 - 查询超时 mock e2e + 写入取消 e2e
+
+## P234（2026-07-21）
+- 写入超时 mock e2e
+- 导出取消 e2e（`__MTS_E2E_SLOW_EXPORT_MS`）
+- `exportYieldMs` 工具

@@ -136,9 +136,16 @@ export async function joinTextWithExportProgress(
   return `${header}\n${body}`
 }
 
-function yieldExportTick(): Promise<void> {
+/** 测试/慢导出可注入延迟，默认 0 与 yieldExportTick 等价 */
+export function exportYieldMs(ms = 0): Promise<void> {
+  const n = Number(ms)
+  const delay = Number.isFinite(n) && n > 0 ? Math.min(Math.trunc(n), 60_000) : 0
   return new Promise((resolve) => {
-    if (typeof setTimeout === 'function') setTimeout(resolve, 0)
+    if (typeof setTimeout === 'function') setTimeout(resolve, delay)
     else resolve()
   })
+}
+
+function yieldExportTick(): Promise<void> {
+  return exportYieldMs(0)
 }

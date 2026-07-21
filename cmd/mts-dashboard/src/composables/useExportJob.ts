@@ -26,6 +26,31 @@ export type ExportBundleFile =
  * 页面级导出任务：协作式构建 + 统一进度/取消状态。
  * 同步小导出也可走同一路径，便于 UI 一致。
  */
+
+function readE2ESlowExportMs(): number {
+  try {
+    const w = window as unknown as { __MTS_E2E_SLOW_EXPORT_MS?: unknown }
+    const n = Number(w.__MTS_E2E_SLOW_EXPORT_MS)
+    if (!Number.isFinite(n) || n <= 0) return 0
+    return Math.min(Math.trunc(n), 10_000)
+  } catch {
+    return 0
+  }
+}
+
+async function maybeSlowExport(isCancelled: () => boolean): Promise<boolean> {
+  const ms = readE2ESlowExportMs()
+  if (ms <= 0) return false
+  const step = Math.max(50, Math.floor(ms / 4))
+  let waited = 0
+  while (waited < ms) {
+    if (isCancelled()) return true
+    await new Promise((r) => setTimeout(r, step))
+    waited += step
+  }
+  return isCancelled()
+}
+
 export function useExportJob() {
   const state = ref<ExportJobState>(createExportJobState())
   let token = 0
@@ -56,6 +81,10 @@ export function useExportJob() {
     cancelled = false
     state.value = beginExportJob(input.label, input.total ?? 0)
     try {
+      if (await maybeSlowExport(() => cancelled || my !== token)) {
+        state.value = cancelExportJob(state.value)
+        return 'cancelled'
+      }
       const text = await input.build({
         isCancelled: () => cancelled || my !== token,
         progress: (done, total) => {
@@ -89,6 +118,10 @@ export function useExportJob() {
     cancelled = false
     state.value = beginExportJob(input.label, input.total ?? 0)
     try {
+      if (await maybeSlowExport(() => cancelled || my !== token)) {
+        state.value = cancelExportJob(state.value)
+        return 'cancelled'
+      }
       const payload = await input.build({
         isCancelled: () => cancelled || my !== token,
         progress: (done, total) => {
@@ -122,6 +155,10 @@ export function useExportJob() {
     cancelled = false
     state.value = beginExportJob(input.label, input.total ?? 0)
     try {
+      if (await maybeSlowExport(() => cancelled || my !== token)) {
+        state.value = cancelExportJob(state.value)
+        return 'cancelled'
+      }
       const files = await input.build({
         isCancelled: () => cancelled || my !== token,
         progress: (done, total) => {

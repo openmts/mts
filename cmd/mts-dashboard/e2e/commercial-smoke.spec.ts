@@ -920,6 +920,82 @@ test('commercial browser smoke path', async ({ page }) => {
     await page.unroute('**/api/v1/data/write/**', hangWrite).catch(() => {})
   }
 
+  // P234: 写入超时 mock — 408 timeout 友好文案（error 样式）
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible()
+  const fulfillTimeout = async (route: import('@playwright/test').Route) => {
+    await route.fulfill({
+      status: 408,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, code: 'timeout', message: 'request timeout' }),
+    })
+  }
+  await page.route('**/api/v1/data/write', fulfillTimeout)
+  await page.route('**/api/v1/data/write/**', fulfillTimeout)
+  try {
+    await page.getByTestId('write-mode-line').click()
+    await page.getByRole('main').locator('textarea').first().fill('cpu,host=e2e-timeout usage=2 3000')
+    await page.getByTestId('write-submit').click()
+    await expect(page.getByTestId('write-action-error')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('write-action-error')).toContainText(/超时|timeout/i)
+    await expect(page.getByTestId('write-action-error')).toHaveClass(/mts-alert-error/)
+  } finally {
+    await page.unroute('**/api/v1/data/write', fulfillTimeout).catch(() => {})
+    await page.unroute('**/api/v1/data/write/**', fulfillTimeout).catch(() => {})
+  }
+
+  // P234b: 导出取消 — 慢导出窗口 + export-job-cancel
+  await page.goto('/query')
+  await expect(page.getByTestId('query-page')).toBeVisible()
+  await page.evaluate(() => {
+    const items = Array.from({ length: 12 }, (_, i) => ({
+      id: `e2e-hist-${i}`,
+      at: Date.now() - i * 1000,
+      mode: 'rows',
+      form: {
+        database: 'default',
+        measurement: 'cpu',
+        retention_policy: 'autogen',
+        start_time: '0',
+        end_time: '0',
+        tags: '',
+        fields: '',
+        predicates: '',
+        aggregates: '',
+        window: '',
+        offset: '0',
+        limit: '100',
+      },
+      pinned: false,
+    }))
+    localStorage.setItem('mts_query_history', JSON.stringify(items))
+    ;(window as unknown as { __MTS_E2E_SLOW_EXPORT_MS?: number }).__MTS_E2E_SLOW_EXPORT_MS = 1200
+  })
+  await page.reload()
+  await expect(page.getByTestId('query-page')).toBeVisible()
+  await page.evaluate(() => {
+    ;(window as unknown as { __MTS_E2E_SLOW_EXPORT_MS?: number }).__MTS_E2E_SLOW_EXPORT_MS = 1200
+  })
+  await page.goto('/query#query-history')
+  await expect(page.getByTestId('query-export-history')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('query-export-history').click()
+  await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByTestId('export-job-banner')).toHaveAttribute('data-export-status', 'running')
+  await page.getByTestId('export-job-cancel').click()
+  await expect(page.getByTestId('export-job-banner')).toHaveAttribute(
+    'data-export-status',
+    /^(cancelled|done)$/,
+    { timeout: 10_000 },
+  )
+  // 取消成功应为 cancelled；若极端竞态 done 也可接受但优先 cancelled
+  const st = await page.getByTestId('export-job-banner').getAttribute('data-export-status')
+  if (st === 'cancelled') {
+    await expect(page.getByTestId('export-job-title')).toContainText(/取消|cancel/i)
+  }
+  await page.evaluate(() => {
+    delete (window as unknown as { __MTS_E2E_SLOW_EXPORT_MS?: number }).__MTS_E2E_SLOW_EXPORT_MS
+  })
+
   // P203: Databases 导出进度 banner
   await page.goto('/databases')
   await expect(page.getByTestId('databases-export-json')).toBeVisible()

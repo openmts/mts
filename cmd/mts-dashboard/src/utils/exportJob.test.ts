@@ -9,6 +9,7 @@ import {
   finishExportJob,
   isExportJobBusy,
   joinTextWithExportProgress,
+  exportYieldMs,
   mapWithExportProgress,
   progressExportJob,
 } from './exportJob.ts'
@@ -59,4 +60,11 @@ test('joinTextWithExportProgress', async () => {
     cancelled: () => true,
   })
   assert.equal(cancelled, null)
+})
+
+test('exportYieldMs resolves', async () => {
+  const t0 = Date.now()
+  await exportYieldMs(0)
+  await exportYieldMs(5)
+  assert.ok(Date.now() - t0 >= 0)
 })
