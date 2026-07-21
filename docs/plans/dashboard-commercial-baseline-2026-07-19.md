@@ -1298,3 +1298,7 @@
 ## P303（2026-07-22）
 - Query 范围删除：Abort + 进行中横幅 + 取消/超时文案；ConfirmDialog 支持加载中取消
 - Readiness：Doctor/Version 失败 chip 可单独重试；Doctor 空态失败文案
+
+## P304（2026-07-22）
+- Storage/Ops 长操作：Abort + InFlightBanner + 取消/超时文案
+- ConfirmDialog 运维危险操作支持加载中取消；抽取 `actionAbort` 工具

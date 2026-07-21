@@ -9,9 +9,11 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
-import { formatCaughtError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { createActionAbort } from '@/utils/actionAbort'
 import { formatMessage } from '@/utils/formatMessage'
 import { scheduleScrollToHash } from '@/utils/hashScroll'
 import { useI18n } from '@/composables/useI18n'
@@ -92,6 +94,8 @@ const snapshotListError = ref('')
 const dataListLoading = ref(false)
 const dataListError = ref('')
 const loading = ref('')
+const actionStartedAt = ref<number | null>(null)
+const actionAbort = createActionAbort()
 const listLoading = ref(false)
 const SNAPSHOT_ROW_HEIGHT = 44
 const DATA_ROW_HEIGHT = 48
@@ -209,6 +213,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  cancelStorageAction()
   if (typeof window !== 'undefined') {
     window.removeEventListener('hashchange', scrollToCurrentHash)
   }
@@ -221,6 +226,40 @@ watch(
   },
 )
 
+
+function beginStorageAction(key: string): AbortSignal {
+  loading.value = key
+  actionStartedAt.value = Date.now()
+  clearActionResult()
+  return actionAbort.begin()
+}
+
+function endStorageAction() {
+  actionAbort.end()
+  loading.value = ''
+  actionStartedAt.value = null
+}
+
+function cancelStorageAction() {
+  actionAbort.cancel()
+}
+
+function reportStorageCatch(key: StorageActionKey, e: unknown) {
+  if (isCanceledError(e)) {
+    const msg = t.value('storageActionCancelled')
+    setActionResult(makeActionResult('info', msg))
+    info(msg)
+    return
+  }
+  if (isTimeoutError(e)) {
+    const msg = t.value('storageActionTimedOut')
+    setActionResult(makeActionResult('error', msg))
+    notifyError(msg)
+    return
+  }
+  reportActionError(key, e)
+}
+
 async function doValidate() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
@@ -228,17 +267,16 @@ async function doValidate() {
     notifyError(msg)
     return
   }
-  loading.value = 'validate'
-  clearActionResult()
+  const signal = beginStorageAction('validate')
   try {
-    validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/storage/validate')
+    validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/storage/validate', undefined, { signal })
     drillDone.value = { ...drillDone.value, validate: true }
     const msg = validateResult.value.ok ? t.value('storageValidateOk') : t.value('storageValidateDone')
     setActionResult(makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg))
     success(msg)
   } catch (e) {
-    reportActionError('validate', e)
-  } finally { loading.value = '' }
+    reportStorageCatch('validate', e)
+  } finally { endStorageAction() }
 }
 
 async function doSnapshot() {
@@ -248,18 +286,17 @@ async function doSnapshot() {
     notifyError(msg)
     return
   }
-  loading.value = 'snapshot'
-  clearActionResult()
+  const signal = beginStorageAction('snapshot')
   try {
-    snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot')
+    snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot', undefined, { signal })
     drillDone.value = { ...drillDone.value, snapshot: true }
     const msg = `${t.value('createSnapshot')}：${snapshotResult.value.path || 'ok'}`
     setActionOk(msg)
     success(t.value('createSnapshot'))
     await loadSnapshots()
   } catch (e) {
-    reportActionError('snapshot', e)
-  } finally { loading.value = '' }
+    reportStorageCatch('snapshot', e)
+  } finally { endStorageAction() }
 }
 
 async function doDataSnapshot() {
@@ -269,10 +306,9 @@ async function doDataSnapshot() {
     notifyError(msg)
     return
   }
-  loading.value = 'data-snapshot'
-  clearActionResult()
+  const signal = beginStorageAction('data-snapshot')
   try {
-    dataSnapshotResult.value = await apiPost<DataSnapshotResponse>('/api/v1/admin/storage/data-snapshot', { flush: true })
+    dataSnapshotResult.value = await apiPost<DataSnapshotResponse>('/api/v1/admin/storage/data-snapshot', { flush: true }, { signal })
     if (dataSnapshotResult.value.path) selectedDataSnapshotPath.value = dataSnapshotResult.value.path
     drillDone.value = { ...drillDone.value, 'data-snapshot': true }
     const msg = formatMessage(t.value('storageDataSnapshotMsg'), { path: dataSnapshotResult.value.path || 'ok', files: dataSnapshotResult.value.files ?? 0 })
@@ -280,8 +316,8 @@ async function doDataSnapshot() {
     success(t.value('storageDataSnapshotOk'))
     await loadDataSnapshots()
   } catch (e) {
-    reportActionError('data-snapshot', e)
-  } finally { loading.value = '' }
+    reportStorageCatch('data-snapshot', e)
+  } finally { endStorageAction() }
 }
 
 async function doRestoreDrill() {
@@ -291,12 +327,11 @@ async function doRestoreDrill() {
     notifyError(msg)
     return
   }
-  loading.value = 'restore-drill'
-  clearActionResult()
+  const signal = beginStorageAction('restore-drill')
   try {
     const source = selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || ''
     const body = source ? { source_path: source } : {}
-    restoreDrillResult.value = await apiPost<RestoreDrillResponse>('/api/v1/admin/storage/restore-drill', body)
+    restoreDrillResult.value = await apiPost<RestoreDrillResponse>('/api/v1/admin/storage/restore-drill', body, { signal })
     const ok = !!restoreDrillResult.value.ok && (restoreDrillResult.value.check_fatals ?? 0) === 0
     drillDone.value = { ...drillDone.value, 'restore-side': ok }
     const msg = ok
@@ -307,8 +342,8 @@ async function doRestoreDrill() {
     else notifyError(msg)
     await loadDataSnapshots()
   } catch (e) {
-    reportActionError('restore-side', e)
-  } finally { loading.value = '' }
+    reportStorageCatch('restore-side', e)
+  } finally { endStorageAction() }
 }
 
 async function doExport() {
@@ -318,17 +353,16 @@ async function doExport() {
     notifyError(msg)
     return
   }
-  loading.value = 'export'
-  clearActionResult()
+  const signal = beginStorageAction('export')
   try {
-    const data = await apiGet<ExportResponse>('/api/v1/admin/storage/export')
+    const data = await apiGet<ExportResponse>('/api/v1/admin/storage/export', { signal })
     exportData.value = data.export
     drillDone.value = { ...drillDone.value, 'export-config': true }
     setActionOk(t.value('storageConfigExported'))
     success(t.value('storageConfigExportToast'))
   } catch (e) {
-    reportActionError('export-config', e)
-  } finally { loading.value = '' }
+    reportStorageCatch('export-config', e)
+  } finally { endStorageAction() }
 }
 
 async function downloadExport() {
@@ -402,17 +436,19 @@ async function confirmDelete() {
     notifyError(msg)
     return
   }
+  const signal = beginStorageAction('delete')
   deleteLoading.value = true
   try {
-    await apiDelete(`/api/v1/admin/storage/snapshots?name=${encodeURIComponent(deleteName.value)}`)
+    await apiDelete(`/api/v1/admin/storage/snapshots?name=${encodeURIComponent(deleteName.value)}`, { signal })
     deleteOpen.value = false
     setActionOk(formatMessage(t.value('storageSnapshotDeleted'), { name: deleteName.value }))
     success(t.value('storageSnapshotDeletedToast'))
     await loadSnapshots()
   } catch (e) {
-    reportActionError('delete', e)
+    reportStorageCatch('delete', e)
   } finally {
     deleteLoading.value = false
+    endStorageAction()
   }
 }
 
@@ -782,6 +818,12 @@ async function copyStorageShareLink() {
       </div>
     </div>
 
+    <InFlightBanner
+      :active="!!loading"
+      :started-at-ms="actionStartedAt"
+      kind="storage"
+      @cancel="cancelStorageAction"
+    />
     <ConfirmDialog
       v-model:open="deleteOpen"
       :write-blocked="writeBlocked"
@@ -792,7 +834,9 @@ async function copyStorageShareLink() {
       :confirm-label="t('delete')"
       danger
       :loading="deleteLoading"
+      allow-cancel-while-loading
       @confirm="confirmDelete"
+      @cancel="cancelStorageAction"
     />
   </div>
 </template>

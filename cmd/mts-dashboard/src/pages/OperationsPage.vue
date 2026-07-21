@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiGet, apiPost } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
@@ -10,9 +10,11 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
-import { formatCaughtError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { createActionAbort } from '@/utils/actionAbort'
 import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import {
@@ -67,6 +69,7 @@ const {
   canRetryAction,
   clearActionResult,
   setActionOk,
+  setActionResult,
   reportActionError: reportRetryError,
 } = useActionRetry<OpsActionKey>()
 const loading = ref(false)
@@ -82,6 +85,8 @@ const MAINT_ROW_HEIGHT = 36
 const MAINT_LIST_HEIGHT = 160
 const confirmKind = ref<'flush' | 'compact' | 'retention' | null>(null)
 const confirmLoading = ref(false)
+const opsActionStartedAt = ref<number | null>(null)
+const opsActionAbort = createActionAbort()
 const clearLogOpen = ref(false)
 const clearLogLoading = ref(false)
 const actionLog = ref<OpsActionEntry[]>(loadOpsActionLog())
@@ -305,6 +310,10 @@ async function retryLastOpsAction() {
   await runConfirmed()
 }
 
+function cancelOpsAction() {
+  opsActionAbort.cancel()
+}
+
 async function runConfirmed() {
   if (!confirmKind.value) return
   if (writeBlocked.value) {
@@ -314,17 +323,19 @@ async function runConfirmed() {
   }
   const kind = confirmKind.value
   confirmLoading.value = true
+  opsActionStartedAt.value = Date.now()
   clearActionResult()
+  const signal = opsActionAbort.begin()
   try {
     let msg = ''
     if (kind === 'flush') {
-      await apiPost('/api/v1/admin/flush', {})
+      await apiPost('/api/v1/admin/flush', {}, { signal })
       msg = t.value('opsFlushDone')
     } else if (kind === 'compact') {
-      await apiPost('/api/v1/admin/compact', {})
+      await apiPost('/api/v1/admin/compact', {}, { signal })
       msg = t.value('opsCompactDone')
     } else {
-      await apiPost('/api/v1/admin/retention/apply', {})
+      await apiPost('/api/v1/admin/retention/apply', {}, { signal })
       msg = t.value('opsRetentionDone')
     }
     setActionOk(msg)
@@ -333,9 +344,23 @@ async function runConfirmed() {
     confirmKind.value = null
     await loadStats()
   } catch (e) {
-    reportActionError(kind, e)
+    if (isCanceledError(e)) {
+      const msg = t.value('opsActionCancelled')
+      setActionResult(makeActionResult('info', msg))
+      info(msg)
+      recordAction(kind, 'error', msg)
+    } else if (isTimeoutError(e)) {
+      const msg = t.value('opsActionTimedOut')
+      setActionResult(makeActionResult('error', msg))
+      notifyError(msg)
+      recordAction(kind, 'error', msg)
+    } else {
+      reportActionError(kind, e)
+    }
   } finally {
+    opsActionAbort.end()
     confirmLoading.value = false
+    opsActionStartedAt.value = null
   }
 }
 
@@ -528,6 +553,10 @@ async function copyOperationsShareLink() {
   else notifyError(res.error || t.value('failed'))
 }
 
+onBeforeUnmount(() => {
+  cancelOpsAction()
+})
+
 onMounted(() => {
   void loadStats()
   applyOperationsPrefillFromRoute()
@@ -607,6 +636,13 @@ watch(
       data-testid="ops-action-result"
       @retry="retryLastOpsAction"
       @dismiss="clearActionResult"
+    />
+
+    <InFlightBanner
+      :active="confirmLoading"
+      :started-at-ms="opsActionStartedAt"
+      kind="ops"
+      @cancel="cancelOpsAction"
     />
 
     <div
@@ -934,9 +970,11 @@ watch(
       :require-text="confirmRequireText"
       danger
       :loading="confirmLoading"
+      allow-cancel-while-loading
       data-testid="ops-danger-confirm"
       @update:open="(v) => { if (!v) confirmKind = null }"
       @confirm="runConfirmed"
+      @cancel="cancelOpsAction"
     />
     <ConfirmDialog
       v-model:open="clearLogOpen"
