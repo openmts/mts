@@ -367,7 +367,11 @@ func (e *Engine) VerifyToken(ctx context.Context, token string) (Principal, erro
 	if err != nil {
 		return Principal{}, err
 	}
-	return Principal{UserName: principal.UserName}, nil
+	return Principal{
+		UserName:  principal.UserName,
+		Role:      UserRole(principal.Role),
+		ExpiresAt: principal.ExpiresAt,
+	}, nil
 }
 
 func (e *Engine) RevokeToken(ctx context.Context, token string) error {

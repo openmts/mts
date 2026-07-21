@@ -29,6 +29,7 @@ export function buildOpsStatsExport(
   input: {
     maintenance?: object | null
     compaction?: object | null
+    memory?: object | null
     maintenance_errors?: string[] | null
   },
   at = new Date(),
@@ -38,6 +39,7 @@ export function buildOpsStatsExport(
   generated_at: string
   maintenance: object | null
   compaction: object | null
+  memory: object | null
   maintenance_errors: string[]
   maintenance_error_count: number
 } {
@@ -50,6 +52,7 @@ export function buildOpsStatsExport(
     generated_at: at.toISOString(),
     maintenance: input.maintenance ?? null,
     compaction: input.compaction ?? null,
+    memory: input.memory ?? null,
     maintenance_errors: errors,
     maintenance_error_count: errors.length,
   }

@@ -298,6 +298,51 @@ export function apiGet<T>(path: string, init: RequestInit = {}): Promise<T> {
   return request<T>(path, { ...init, method: 'GET' })
 }
 
+/** 不触发全局 loading 的 GET（会话同步/心跳等后台请求） */
+export async function apiGetSilent<T>(path: string, init: RequestInit = {}): Promise<T> {
+  if (bearerToken && isTokenExpired()) {
+    triggerAuthFailed()
+    throw new APIClientError(401, 'unauthenticated', 'session expired')
+  }
+  const method = 'GET'
+  const headers = authHeaders(init.headers as Record<string, string> | undefined, method)
+  const timeoutHandle = createTimeoutSignal(init.signal, API_TIMEOUT_MS)
+  try {
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}${path}`, {
+        ...init,
+        method,
+        headers,
+        signal: timeoutHandle.signal,
+      })
+    } catch (err) {
+      if (isAbortError(err)) {
+        if (timeoutHandle.didTimeout()) {
+          throw new APIClientError(408, 'timeout', 'request timeout')
+        }
+        throw new APIClientError(499, 'canceled', 'request canceled')
+      }
+      throw err
+    }
+    if (!response.ok) {
+      const err = await readAPIError(response)
+      handleAuthFailure(path, response.status, err.code)
+      throw new APIClientError(response.status, err.code, err.message)
+    }
+    if (response.status === 204) return undefined as T
+    const body = await response.text()
+    if (!body) return undefined as T
+    try {
+      return JSON.parse(body) as T
+    } catch (_) {
+      throw new APIClientError(response.status, 'internal', 'invalid JSON response')
+    }
+  } finally {
+    timeoutHandle.cleanup()
+  }
+}
+
 /** 轻量可达性探测：不携带鉴权、不触发全局 loading、不因过期 token 强制登出 */
 export async function probeReadyz(init: RequestInit = {}): Promise<{ ok: boolean; status: number }> {
   const timeoutHandle = createTimeoutSignal(init.signal, 5_000)
@@ -512,6 +557,21 @@ export async function apiChangePassword(userName: string, oldPassword: string, n
     old_password: oldPassword,
     new_password: newPassword,
   })
+}
+
+
+export interface SessionResponse {
+  ok: boolean
+  user_name: string
+  role?: string
+  expires_at: string
+  must_change_password?: boolean
+  remaining_seconds?: number
+}
+
+/** 服务端会话检视：校验 token 并回填 role/expires/must_change */
+export async function apiGetSession(init: RequestInit = {}): Promise<SessionResponse> {
+  return apiGetSilent<SessionResponse>('/api/v1/auth/session', init)
 }
 
 export async function apiLogout(): Promise<void> {

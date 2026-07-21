@@ -68,5 +68,7 @@ type AuthToken struct {
 }
 
 type Principal struct {
-	UserName string
+	UserName  string
+	Role      Role
+	ExpiresAt time.Time
 }

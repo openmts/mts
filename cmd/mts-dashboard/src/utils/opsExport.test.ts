@@ -22,6 +22,7 @@ test('buildOpsStatsExport', () => {
     {
       maintenance: { compaction_active: 1 },
       compaction: { total: 2 },
+      memory: { heap_alloc_bytes: 3 },
       maintenance_errors: ['e1'],
     },
     new Date('2026-07-20T00:00:00.000Z'),
@@ -29,6 +30,7 @@ test('buildOpsStatsExport', () => {
   assert.equal(out.kind, 'mts.ops.stats')
   assert.equal(out.maintenance_error_count, 1)
   assert.equal((out.compaction as { total: number }).total, 2)
+  assert.equal((out.memory as { heap_alloc_bytes: number }).heap_alloc_bytes, 3)
 })
 
 test('formatOpsStatsPretty', () => {

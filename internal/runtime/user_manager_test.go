@@ -41,6 +41,12 @@ func TestRuntimeLocalUserManagerSupportsUserPermissionAndAuth(t *testing.T) {
 	if principal.UserName != "alice" {
 		t.Fatalf("principal user = %q, want alice", principal.UserName)
 	}
+	if principal.Role != UserRoleAdmin {
+		t.Fatalf("principal role = %q, want admin", principal.Role)
+	}
+	if principal.ExpiresAt.IsZero() {
+		t.Fatalf("principal expires empty")
+	}
 }
 
 func TestRuntimeLocalUserManagerPersistsUsers(t *testing.T) {

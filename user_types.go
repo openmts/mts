@@ -51,5 +51,7 @@ type AuthToken struct {
 }
 
 type Principal struct {
-	UserName string `json:"user_name"`
+	UserName  string    `json:"user_name"`
+	Role      UserRole  `json:"role,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitempty"`
 }

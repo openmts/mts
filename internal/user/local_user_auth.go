@@ -168,7 +168,11 @@ func (m *Manager) VerifyToken(ctx context.Context, token string) (Principal, err
 		}
 		return Principal{}, ErrInvalidCredentials
 	}
-	return Principal{UserName: record.UserName}, nil
+	return Principal{
+		UserName:  record.UserName,
+		Role:      user.Role,
+		ExpiresAt: time.Unix(0, record.ExpiresAtUnixNano).UTC(),
+	}, nil
 }
 
 func (m *Manager) RevokeToken(ctx context.Context, token string) error {

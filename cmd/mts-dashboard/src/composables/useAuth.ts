@@ -15,6 +15,7 @@ import {
   apiLogin,
   apiLogout,
   apiChangePassword,
+  apiGetSession,
   setMustChangePassword,
   getMustChangePassword,
   reloadAuthFromStorage,
@@ -96,6 +97,42 @@ export function useAuth() {
     }
   }
 
+
+  async function refreshSession(): Promise<boolean> {
+    const token = getBearerToken()
+    if (!token || isTokenExpired()) {
+      clearAuth()
+      isAuthenticated.value = false
+      currentUser.value = ''
+      currentRole.value = ''
+      mustChangePassword.value = false
+      return false
+    }
+    try {
+      const session = await apiGetSession()
+      const role = (session.role || '').trim()
+      if (role === 'admin' || role === 'user') {
+        setCurrentUserRole(role)
+        currentRole.value = role
+      }
+      if (session.user_name) {
+        setCurrentUser(session.user_name)
+        currentUser.value = session.user_name
+      }
+      if (session.expires_at) {
+        setTokenExpiresAt(session.expires_at)
+      }
+      setMustChangePassword(!!session.must_change_password)
+      mustChangePassword.value = !!session.must_change_password
+      isAuthenticated.value = true
+      return true
+    } catch {
+      // 网络抖动时不立即清会话；仅 token 失效由 request 层 triggerAuthFailed
+      syncFromStorage()
+      return ensureSession()
+    }
+  }
+
   function ensureSession(): boolean {
     if (!getBearerToken() || isTokenExpired()) {
       clearAuth()
@@ -122,6 +159,7 @@ export function useAuth() {
     loggingOut,
     syncFromStorage,
     ensureSession,
+    refreshSession,
     getTokenExpiresAt,
   }
 }

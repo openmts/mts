@@ -114,3 +114,38 @@ func (r *serverRuntime) handleChangePassword(writer http.ResponseWriter, request
 	r.audit.record(auditEvent{UserName: principal.UserName, Action: "change_password"})
 	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
 }
+
+func (r *serverRuntime) handleSession(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodGet) {
+		return
+	}
+	token := bearerToken(request.Header.Get(headerAuthorization))
+	if strings.TrimSpace(token) == "" {
+		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "user bearer token is required", nil))
+		return
+	}
+	principal, err := r.engine.VerifyToken(request.Context(), token)
+	if err != nil {
+		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err))
+		return
+	}
+	mustChange := false
+	if user, ok, getErr := r.engine.GetUser(request.Context(), principal.UserName); getErr == nil && ok {
+		mustChange = userMustChangePassword(user)
+	}
+	remaining := int64(0)
+	if !principal.ExpiresAt.IsZero() {
+		sec := int64(time.Until(principal.ExpiresAt).Seconds())
+		if sec > 0 {
+			remaining = sec
+		}
+	}
+	writeHTTPJSON(writer, http.StatusOK, sessionResponse{
+		OK:                 true,
+		UserName:           principal.UserName,
+		Role:               principal.Role,
+		ExpiresAt:          principal.ExpiresAt,
+		MustChangePassword: mustChange,
+		RemainingSeconds:   remaining,
+	})
+}

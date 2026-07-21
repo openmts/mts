@@ -30,7 +30,7 @@ import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { buildMaintenanceErrorsExport, buildOpsStatsExport, formatOpsStatsPretty, maintenanceErrorsToText } from '@/utils/opsExport'
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser, Copy } from 'lucide-vue-next'
-import type { CompactionStats, MaintenanceStats } from '@/api/types'
+import type { CompactionStats, MaintenanceStats, StorageMemorySnapshot } from '@/api/types'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { formatMessage } from '@/utils/formatMessage'
@@ -39,6 +39,7 @@ import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePr
 interface CompactionStatsResponse { stats: CompactionStats }
 interface MaintenanceStatsResponse { stats: MaintenanceStats }
 interface MaintenanceErrorsResponse { errors: string[] }
+interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
 
 const { isAdmin } = useAuth()
 const route = useRoute()
@@ -72,6 +73,7 @@ const loading = ref(false)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceErrors = ref<string[]>([])
+const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
 const maintErrorFilter = ref('')
 const MAINT_ROW_HEIGHT = 36
 const MAINT_LIST_HEIGHT = 160
@@ -127,11 +129,13 @@ async function loadStats() {
       apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance'),
       apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction'),
       apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors'),
+      apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory'),
     ])
     const labels = [
       t.value('overviewPartialMaintenance'),
       t.value('overviewPartialCompaction'),
       t.value('overviewPartialMaintErrors'),
+      t.value('overviewPartialMemory'),
     ]
     const partials: string[] = []
     if (results[0].status === 'fulfilled') maintenanceStats.value = results[0].value.stats ?? null
@@ -147,16 +151,21 @@ async function loadStats() {
     else {
       partials.push(`${labels[2]}: ${formatCaughtError(results[2].reason)}`)
     }
+    if (results[3].status === 'fulfilled') memorySnapshot.value = results[3].value.snapshot ?? null
+    else {
+      partials.push(`${labels[3]}: ${formatCaughtError(results[3].reason)}`)
+    }
     const hasAnySnapshot = !!(
       maintenanceStats.value
       || compactionStats.value
       || (maintenanceErrors.value && maintenanceErrors.value.length)
+      || memorySnapshot.value
     )
-    if (partials.length === 3 && !hasAnySnapshot) {
+    if (partials.length === 4 && !hasAnySnapshot) {
       loadError.value = partials.join('；')
     } else if (partials.length) {
       partialStatsError.value = partials.join('；')
-      if (hasAnySnapshot || partials.length < 3) statsLoadedAt.value = Date.now()
+      if (hasAnySnapshot || partials.length < 4) statsLoadedAt.value = Date.now()
     } else {
       statsLoadedAt.value = Date.now()
     }
@@ -278,6 +287,7 @@ async function exportStats() {
   const payload = buildOpsStatsExport({
     maintenance: maintenanceStats.value,
     compaction: compactionStats.value,
+    memory: memorySnapshot.value,
     maintenance_errors: maintenanceErrors.value,
   })
   const outcome = await runJSONExport({
@@ -301,6 +311,7 @@ async function copyStats() {
     formatOpsStatsPretty({
       maintenance: maintenanceStats.value,
       compaction: compactionStats.value,
+      memory: memorySnapshot.value,
       maintenance_errors: maintenanceErrors.value,
     }),
   )
@@ -675,6 +686,15 @@ watch(
           <div>{{ t('opsStatActive') }}: <b>{{ compactionStats.active }}</b></div>
         </dl>
         <p v-if="compactionStats?.last_error" class="mt-2 text-xs text-red-600 dark:text-red-300">{{ compactionStats.last_error }}</p>
+      </div>
+      <div class="mts-card p-5 lg:col-span-2" data-testid="ops-memory-stats">
+        <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsMemoryStats') }}</h2>
+        <EmptyState v-if="!memorySnapshot" compact :title="t('opsNoMemoryStats')" :description="t('opsStatsEmptyHint')" />
+        <dl v-else class="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300 md:grid-cols-4">
+          <div v-for="(v, k) in memorySnapshot" :key="String(k)">
+            <span class="mts-muted">{{ k }}</span>: <b>{{ v }}</b>
+          </div>
+        </dl>
       </div>
     </div>
 

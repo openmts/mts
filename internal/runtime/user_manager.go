@@ -48,7 +48,9 @@ type AuthToken struct {
 }
 
 type Principal struct {
-	UserName string
+	UserName  string
+	Role      UserRole
+	ExpiresAt time.Time
 }
 
 type UserManager interface {
@@ -204,7 +206,11 @@ func (m *localUserManager) VerifyToken(ctx context.Context, token string) (Princ
 	if err != nil {
 		return Principal{}, err
 	}
-	return Principal{UserName: principal.UserName}, nil
+	return Principal{
+		UserName:  principal.UserName,
+		Role:      UserRole(principal.Role),
+		ExpiresAt: principal.ExpiresAt,
+	}, nil
 }
 
 func (m *localUserManager) RevokeToken(ctx context.Context, token string) error {

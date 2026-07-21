@@ -1242,3 +1242,7 @@
 ## P288（2026-07-22）
 - 写入/查询进行中状态与取消按钮可访问性
 
+## P289（2026-07-22）
+- Server：`GET /api/v1/auth/session` + gRPC `GetSession`（role/expires/must_change/remaining）
+- Principal 扩展 Role/ExpiresAt；series 列表落实 offset/q
+- Dashboard：visibility/storage 同步调用 session；Account 服务端校验；Ops 接入 storage-memory

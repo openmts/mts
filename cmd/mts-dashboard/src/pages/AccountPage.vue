@@ -54,7 +54,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
-const { currentUser, currentRole, changePassword, isAdmin, logout, login } = useAuth()
+const { currentUser, currentRole, changePassword, isAdmin, logout, login, refreshSession } = useAuth()
 const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
 let sessionClock: ReturnType<typeof setInterval> | null = null
@@ -117,6 +117,23 @@ const renewTtlSeconds = ref(12 * 3600)
 const renewLoading = ref(false)
 const renewError = ref('')
 const renewRetryable = ref(false)
+const sessionVerifyLoading = ref(false)
+const sessionVerifyNote = ref('')
+
+
+async function verifyServerSession() {
+  sessionVerifyNote.value = ''
+  sessionVerifyLoading.value = true
+  try {
+    const ok = await refreshSession()
+    nowMs.value = Date.now()
+    sessionVerifyNote.value = ok ? t.value('accountSessionVerifyOk') : t.value('accountSessionVerifyFailed')
+    if (ok) success(sessionVerifyNote.value)
+    else notifyError(sessionVerifyNote.value)
+  } finally {
+    sessionVerifyLoading.value = false
+  }
+}
 
 async function renewSessionWithPassword() {
   renewError.value = ''
@@ -680,7 +697,19 @@ async function submit() {
         >
           {{ t('accountSessionRelogin') }}
         </button>
+        <button
+          type="button"
+          class="mts-btn"
+          data-testid="account-session-verify"
+          :disabled="sessionVerifyLoading || offline"
+          :aria-busy="sessionVerifyLoading ? 'true' : undefined"
+          @click="verifyServerSession"
+        >
+          {{ sessionVerifyLoading ? t('loading') : t('accountSessionVerify') }}
+        </button>
       </div>
+      <p v-if="sessionVerifyNote" class="mt-2 text-xs mts-muted" data-testid="account-session-verify-note">{{ sessionVerifyNote }}</p>
+
       <form class="mt-4 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-700" data-testid="account-session-renew-form" @submit.prevent="renewSessionWithPassword">
         <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ t('accountSessionRenewWithPassword') }}</p>
         <label class="block text-xs mts-muted">

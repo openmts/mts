@@ -19,6 +19,7 @@ func TestOperationRegistryCoversAllGRPCMethods(t *testing.T) {
 		grpcMethodLogin:                    {},
 		grpcMethodLogout:                   {},
 		grpcMethodChangePassword:           {},
+		grpcMethodGetSession:               {},
 		grpcMethodSetUserPassword:          {},
 		grpcMethodCreateUser:               {},
 		grpcMethodUpdateUser:               {},

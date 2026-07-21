@@ -44,7 +44,7 @@ setOnAuthFailed(() => {
 // 多标签会话同步
 window.addEventListener('storage', (ev) => {
   if (!isAuthStorageKey(ev.key)) return
-  const { syncFromStorage, ensureSession } = useAuth()
+  const { syncFromStorage, ensureSession, refreshSession } = useAuth()
   syncFromStorage()
   if (!ensureSession() && router.currentRoute.value.name !== 'Login') {
     try {
@@ -52,13 +52,15 @@ window.addEventListener('storage', (ev) => {
       error(loginReasonMessage('storage', currentLocale()))
     } catch { /* ignore */ }
     void router.replace({ name: 'Login', query: { reason: 'storage' } })
+    return
   }
+  void refreshSession()
 })
 
-// 标签页重新可见：重载会话内存（他页可能已续期/登出）
+// 标签页重新可见：重载本地会话并请求服务端 session 校验
 document.addEventListener('visibilitychange', () => {
   if (!shouldSyncOnVisibility(document.visibilityState, document.hidden)) return
-  const { syncFromStorage, ensureSession } = useAuth()
+  const { syncFromStorage, ensureSession, refreshSession } = useAuth()
   syncFromStorage()
   if (!ensureSession() && router.currentRoute.value.name !== 'Login') {
     try {
@@ -69,6 +71,8 @@ document.addEventListener('visibilitychange', () => {
       name: 'Login',
       query: { redirect: router.currentRoute.value.fullPath, reason: 'session' },
     })
+    return
   }
+  void refreshSession()
 })
 

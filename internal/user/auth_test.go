@@ -33,6 +33,12 @@ func TestManagerPasswordAuthenticationLifecycle(t *testing.T) {
 	if principal.UserName != "alice" {
 		t.Fatalf("principal = %#v, want alice", principal)
 	}
+	if principal.Role != RoleUser {
+		t.Fatalf("principal.Role = %q, want user", principal.Role)
+	}
+	if principal.ExpiresAt.IsZero() || principal.ExpiresAt.Before(time.Now()) {
+		t.Fatalf("principal.ExpiresAt = %v, want future", principal.ExpiresAt)
+	}
 	if err := manager.RevokeToken(ctx, token.Token); err != nil {
 		t.Fatalf("RevokeToken() error = %v", err)
 	}

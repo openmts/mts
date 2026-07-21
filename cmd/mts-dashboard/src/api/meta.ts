@@ -143,11 +143,14 @@ export type ListSeriesResult = {
   total: number
   truncated: boolean
   limit: number
+  offset: number
 }
 
 export type ListSeriesOptions = {
   tags?: Record<string, string>
   limit?: number
+  offset?: number
+  q?: string
   init?: RequestInit
 }
 
@@ -158,7 +161,7 @@ export async function listSeriesDetailed(
   opts: ListSeriesOptions = {},
 ): Promise<ListSeriesResult> {
   if (!database.trim() || !measurement.trim()) {
-    return { series: [], total: 0, truncated: false, limit: opts.limit ?? 0 }
+    return { series: [], total: 0, truncated: false, limit: opts.limit ?? 0, offset: opts.offset ?? 0 }
   }
   const qs = new URLSearchParams()
   if (opts.tags) {
@@ -167,6 +170,8 @@ export async function listSeriesDetailed(
     }
   }
   if (opts.limit != null && opts.limit > 0) qs.set('limit', String(opts.limit))
+  if (opts.offset != null && opts.offset > 0) qs.set('offset', String(opts.offset))
+  if (opts.q && opts.q.trim()) qs.set('q', opts.q.trim())
   const q = qs.toString()
   const path =
     `/api/v1/data/databases/${encodeURIComponent(database)}/measurements/${encodeURIComponent(measurement)}/series` +
@@ -176,6 +181,7 @@ export async function listSeriesDetailed(
     total?: number
     truncated?: boolean
     limit?: number
+    offset?: number
   }>(path, opts.init)
   const series = data.series ?? []
   const total = typeof data.total === 'number' ? data.total : series.length
@@ -184,6 +190,7 @@ export async function listSeriesDetailed(
     total,
     truncated: !!data.truncated,
     limit: typeof data.limit === 'number' ? data.limit : opts.limit ?? 0,
+    offset: typeof data.offset === 'number' ? data.offset : opts.offset ?? 0,
   }
 }
 

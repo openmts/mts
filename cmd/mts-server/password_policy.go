@@ -68,7 +68,7 @@ func (r *serverRuntime) enforcePasswordChangeGate(ctx context.Context, userName 
 
 func passwordChangeAllowedPath(path string) bool {
 	switch strings.TrimSpace(path) {
-	case routeAuthPassword, routeAuthLogout, routeAuthLogin:
+	case routeAuthPassword, routeAuthLogout, routeAuthLogin, routeAuthSession:
 		return true
 	default:
 		// health/metrics/ready 无用户 token 时不走此门禁

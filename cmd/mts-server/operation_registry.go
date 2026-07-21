@@ -250,6 +250,18 @@ func operationCatalog() []operation {
 			GRPCFn:      grpcChangePassword,
 		},
 		{
+			Name:        "get_session",
+			Namespace:   "auth",
+			Description: "inspect current user bearer session",
+			Auth:        authUserToken,
+			HTTPMethods: []string{http.MethodGet},
+			HTTPPaths:   []string{routeAuthSession},
+			HTTPHandler: (*serverRuntime).handleSession,
+			GRPCMethod:  grpcMethodGetSession,
+			GRPCRequest: &okResponse{},
+			GRPCFn:      grpcGetSession,
+		},
+		{
 			Name:        "check_database_permission",
 			Namespace:   "authz",
 			Description: "check database permission",

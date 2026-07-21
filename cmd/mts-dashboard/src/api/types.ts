@@ -114,6 +114,12 @@ export interface MaintenanceStats {
   maintenance_error_count: number
 }
 
+export interface StorageMemorySnapshot {
+  heap_alloc_bytes?: number
+  heap_inuse_bytes?: number
+  [key: string]: number | string | undefined
+}
+
 export interface CompactionStats {
   active: number
   backlog: number

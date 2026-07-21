@@ -123,6 +123,15 @@ type authTokenResponse struct {
 	MustChangePassword bool          `json:"must_change_password,omitempty"`
 }
 
+type sessionResponse struct {
+	OK                 bool         `json:"ok"`
+	UserName           string       `json:"user_name"`
+	Role               mts.UserRole `json:"role,omitempty"`
+	ExpiresAt          time.Time    `json:"expires_at"`
+	MustChangePassword bool         `json:"must_change_password,omitempty"`
+	RemainingSeconds   int64        `json:"remaining_seconds"`
+}
+
 type logoutRequest struct {
 	Token string `json:"token,omitempty"`
 }
@@ -200,6 +209,7 @@ type seriesResponse struct {
 	Total     int          `json:"total,omitempty"`
 	Truncated bool         `json:"truncated,omitempty"`
 	Limit     int          `json:"limit,omitempty"`
+	Offset    int          `json:"offset,omitempty"`
 }
 
 type configResponse struct {

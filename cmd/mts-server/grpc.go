@@ -304,6 +304,36 @@ func grpcLogout(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	return okResponse{OK: true}, nil
 }
 
+func grpcGetSession(r *serverRuntime, ctx context.Context, _ any) (any, error) {
+	token := bearerToken(grpcMetadataValue(ctx, strings.ToLower(headerAuthorization)))
+	if token == "" {
+		return nil, newAPIError(errorCodeUnauthenticated, "user bearer token is required", nil)
+	}
+	principal, err := r.engine.VerifyToken(ctx, token)
+	if err != nil {
+		return nil, newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err)
+	}
+	mustChange := false
+	if user, ok, getErr := r.engine.GetUser(ctx, principal.UserName); getErr == nil && ok {
+		mustChange = userMustChangePassword(user)
+	}
+	remaining := int64(0)
+	if !principal.ExpiresAt.IsZero() {
+		sec := int64(time.Until(principal.ExpiresAt).Seconds())
+		if sec > 0 {
+			remaining = sec
+		}
+	}
+	return sessionResponse{
+		OK:                 true,
+		UserName:           principal.UserName,
+		Role:               principal.Role,
+		ExpiresAt:          principal.ExpiresAt,
+		MustChangePassword: mustChange,
+		RemainingSeconds:   remaining,
+	}, nil
+}
+
 func grpcChangePassword(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	request := req.(*changePasswordRequest)
 	token := bearerToken(grpcMetadataValue(ctx, strings.ToLower(headerAuthorization)))
