@@ -1314,6 +1314,20 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('confirm-dialog-cancel').click()
   await expect(page.getByTestId('confirm-dialog')).toHaveCount(0)
 
+  // P286: 会话 warn 横幅（未禁用写）
+  await page.evaluate(() => {
+    const soon = new Date(Date.now() + 5 * 60_000).toISOString()
+    localStorage.setItem('mts_token_expires_at', soon)
+  })
+  await page.reload()
+  await expect(page.getByTestId('session-warn-banner')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('session-warn-remaining')).toBeVisible()
+  await expect(page.getByTestId('session-warn-renew')).toBeVisible()
+  await expect(page.getByTestId('session-critical-banner')).toHaveCount(0)
+  await page.getByTestId('session-warn-renew').click()
+  await expect(page).toHaveURL(/\/account/)
+  await expect(page.getByTestId('account-session').or(page.getByTestId('account-session-renew-form')).first()).toBeVisible({ timeout: 10000 })
+
   // P215: 会话 critical 时写操作禁用 + 顶栏 banner
   await page.evaluate(() => {
     const soon = new Date(Date.now() + 30_000).toISOString()

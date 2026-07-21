@@ -39,7 +39,7 @@ import { shouldSyncOnVisibility } from '@/utils/pageVisibilitySync'
 import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
 
 const { t } = useI18n()
-const { offline, sessionWriteBlocked, sessionRemainingLabel } = useMutationGuard()
+const { offline, sessionWriteBlocked, sessionRemainingLabel, sessionUrgency } = useMutationGuard()
 const { sync: syncNetworkStatus } = useNetworkStatus()
 const { logout } = useAuth()
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
@@ -299,6 +299,31 @@ function onSkipToMain(e: Event) {
           data-testid="offline-banner-retry"
           @click="retryNetworkStatus"
         >{{ t('offlineBannerRetry') }}</button>
+      </div>
+      <div
+        v-else-if="sessionUrgency === 'warn'"
+        class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 sm:px-6"
+        role="status"
+        aria-live="polite"
+        data-testid="session-warn-banner"
+      >
+        <div class="min-w-0">
+          <span class="font-semibold">{{ t('sessionWarnBannerTitle') }}</span>
+          <span
+            v-if="sessionRemainingLabel"
+            class="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-mono text-[11px] text-amber-900 dark:bg-amber-900/50 dark:text-amber-100"
+            data-testid="session-warn-remaining"
+          >{{ sessionRemainingLabel }}</span>
+          <span class="ml-1">{{ t('sessionWarnBanner') }}</span>
+        </div>
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring !border-amber-300 !bg-white !text-amber-950 dark:!border-amber-800 dark:!bg-amber-950 dark:!text-amber-100"
+            data-testid="session-warn-renew"
+            @click="goSessionRenew"
+          >{{ t('sessionWarnRenew') }}</button>
+        </div>
       </div>
       <div
         v-else-if="sessionWriteBlocked"
