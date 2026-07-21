@@ -1312,3 +1312,8 @@
 - Server：`POST /api/v1/users/batch-disabled` 与 `POST /api/v1/admin/downsample/policies/batch`（单项结果汇总 + gRPC）
 - Dashboard：Users/Downsample 批量操作改为单次 batch API，保留 Abort + InFlightBanner
 
+## P307（2026-07-22）
+- Databases：创建/删除/RP 写路径 Abort + InFlightBanner(admin) + 取消/超时；删除 Confirm 加载中可取消
+- Config：validate/reload Abort + 进行中横幅 + 取消/超时
+- Users 单用户启用禁用、Downsample 单策略启停补齐 Abort 与横幅联动
+

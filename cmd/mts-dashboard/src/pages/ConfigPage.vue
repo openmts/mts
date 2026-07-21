@@ -8,14 +8,17 @@ import { useMutationGuard } from '@/composables/useMutationGuard'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
-import { formatCaughtError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { createActionAbort } from '@/utils/actionAbort'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useActionRetry } from '@/composables/useActionRetry'
+import { makeActionResult } from '@/utils/actionResult'
 import {
   buildConfigSchemaExport,
   buildEffectiveConfigExport,
@@ -75,8 +78,34 @@ const {
   clearActionResult,
   setActionOk,
   setActionError,
+  setActionResult,
   reportActionError,
 } = useActionRetry<ConfigActionKey>()
+const configActionLoading = ref('')
+const configActionStartedAt = ref<number | null>(null)
+const configActionAbort = createActionAbort()
+
+function cancelConfigAction() {
+  configActionAbort.cancel()
+}
+
+function reportConfigCatch(key: ConfigActionKey, e: unknown) {
+  if (isCanceledError(e)) {
+    const msg = t.value('adminActionCancelled')
+    setActionResult(makeActionResult('info', msg))
+    info(msg)
+    return
+  }
+  if (isTimeoutError(e)) {
+    const msg = t.value('adminActionTimedOut')
+    setActionResult(makeActionResult('error', msg))
+    notifyError(msg)
+    return
+  }
+  reportActionError(key, e)
+  if (actionResult.value?.message) notifyError(actionResult.value.message)
+}
+
 function reportAndNotify(key: ConfigActionKey, e: unknown) {
   reportActionError(key, e)
   if (actionResult.value?.message) notifyError(actionResult.value.message)
@@ -252,8 +281,11 @@ async function handleValidate() {
   }
   clearActionResult()
   validateResult.value = null
+  configActionLoading.value = 'validate'
+  configActionStartedAt.value = Date.now()
+  const signal = configActionAbort.begin()
   try {
-    validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/config/validate', { config: config.value })
+    validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/config/validate', { config: config.value }, { signal })
     if (validateResult.value.ok) {
       setActionOk(t.value('configValidateOk'))
       success(t.value('configValidateOk'))
@@ -263,7 +295,11 @@ async function handleValidate() {
       notifyError(msg)
     }
   } catch (e) {
-    reportAndNotify('validate', e)
+    reportConfigCatch('validate', e)
+  } finally {
+    configActionAbort.end()
+    configActionLoading.value = ''
+    configActionStartedAt.value = null
   }
 }
 
@@ -276,13 +312,20 @@ async function handleReload() {
   }
   clearActionResult()
   reloadResult.value = null
+  configActionLoading.value = 'reload'
+  configActionStartedAt.value = Date.now()
+  const signal = configActionAbort.begin()
   try {
-    reloadResult.value = await apiPost<ReloadResponse>('/api/v1/admin/config/reload')
+    reloadResult.value = await apiPost<ReloadResponse>('/api/v1/admin/config/reload', undefined, { signal })
     setActionOk(reloadResult.value.fields?.length ? formatMessage(t.value('configReloadOkFields'), { fields: reloadResult.value.fields.join(', ') }) : t.value('configReloadOk'))
     await loadConfig()
     success(t.value('configReloadToast'))
   } catch (e) {
-    reportAndNotify('reload', e)
+    reportConfigCatch('reload', e)
+  } finally {
+    configActionAbort.end()
+    configActionLoading.value = ''
+    configActionStartedAt.value = null
   }
 }
 
@@ -404,6 +447,7 @@ function statusLabel(httpStatus: number): string {
 }
 
 onBeforeUnmount(() => {
+  cancelConfigAction()
   unregisterConfigDirty?.()
   unregisterConfigDirty = null
   window.removeEventListener('beforeunload', onConfigBeforeUnload)
@@ -468,6 +512,12 @@ onBeforeUnmount(() => {
       @retry="retryLastConfigAction"
       @dismiss="clearActionResult"
     />
+    <InFlightBanner
+      :active="!!configActionLoading"
+      :started-at-ms="configActionStartedAt"
+      kind="admin"
+      @cancel="cancelConfigAction"
+    />
 
     <div class="mts-panel" data-testid="config-token-panel">
       <h2 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configTokenTitle') }}</h2>
@@ -505,8 +555,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="flex flex-wrap gap-3">
-      <button class="mts-btn-primary" data-testid="config-validate" @click="handleValidate" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined"><CheckCircle class="h-4 w-4" />{{ t('configValidate') }}</button>
-      <button class="mts-btn-primary" data-testid="config-reload" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="handleReload"><RefreshCw class="h-4 w-4" />{{ t('configReload') }}</button>
+      <button class="mts-btn-primary" data-testid="config-validate" @click="handleValidate" :disabled="writeBlocked || !!configActionLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined"><CheckCircle class="h-4 w-4" />{{ t('configValidate') }}</button>
+      <button class="mts-btn-primary" data-testid="config-reload" :disabled="writeBlocked || !!configActionLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="handleReload"><RefreshCw class="h-4 w-4" />{{ t('configReload') }}</button>
     </div>
     <div v-if="validateResult" :class="validateResult.ok ? 'mts-alert-ok' : 'mts-alert-error'" :role="validateResult.ok ? 'status' : 'alert'" :aria-live="validateResult.ok ? 'polite' : 'assertive'" data-testid="config-validate-result">
       <p v-if="validateResult.ok">{{ t('configValidateOk') }}</p>

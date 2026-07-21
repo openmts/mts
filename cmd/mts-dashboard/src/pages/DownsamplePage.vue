@@ -98,6 +98,7 @@ const batchLoading = ref(false)
 const dsActionStartedAt = ref<number | null>(null)
 const dsActionAbort = createActionAbort()
 const createLoading = ref(false)
+const dsToggleLoading = ref(false)
 
 const rangeOpen = ref(false)
 const rangeMode = ref<DownsampleRangeMode>('repair')
@@ -646,15 +647,22 @@ async function togglePolicy(policy: DownsamplePolicy) {
   const action = policy.enabled ? 'disable' : 'enable'
   lastToggleName.value = policy.name
   lastToggleWantEnabled.value = !policy.enabled
+  dsToggleLoading.value = true
+  dsActionStartedAt.value = Date.now()
+  const signal = dsActionAbort.begin()
   try {
-    await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`)
+    await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`, undefined, { signal })
     await loadData()
     lastFailedAction.value = null
     const msg = policy.enabled ? t.value('downsampleDisabledOk') : t.value('downsampleEnabledOk')
     setActionOk(msg)
     success(msg)
   } catch (e) {
-    reportActionError('toggle', e)
+    reportDsCatch('toggle', e)
+  } finally {
+    dsActionAbort.end()
+    dsToggleLoading.value = false
+    dsActionStartedAt.value = null
   }
 }
 
@@ -904,7 +912,7 @@ onBeforeUnmount(() => {
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="downsample-load-error" @retry="loadData" @dismiss="loadError = ''" />
     <InFlightBanner
-      :active="deleteLoading || batchLoading || rangeLoading || createLoading"
+      :active="deleteLoading || batchLoading || rangeLoading || createLoading || dsToggleLoading"
       :started-at-ms="dsActionStartedAt"
       kind="admin"
       @cancel="cancelDsAction"

@@ -177,6 +177,7 @@ const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
 const usersActionStartedAt = ref<number | null>(null)
 const usersActionAbort = createActionAbort()
+const usersToggleLoading = ref(false)
 
 onMounted(async () => {
   unregisterUsersDirty = registerDirtyChecker('users', () => usersFormDirty.value)
@@ -419,16 +420,23 @@ async function toggleDisable(user: User) {
     notifyError(msg)
     return
   }
+  usersToggleLoading.value = true
+  usersActionStartedAt.value = Date.now()
+  const signal = usersActionAbort.begin()
   try {
     // 供重试定位用户
     // context set on failure via reportAndNotify
-    await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled })
+    await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled }, { signal })
     await loadUsers()
     const okMsg = user.disabled ? t.value('usersEnabled') : t.value('usersDisabled')
     setActionOk(okMsg)
     success(okMsg)
   } catch (e) {
-    reportAndNotify('toggle', e, { name: user.name })
+    reportUsersCatch('toggle', e, { name: user.name })
+  } finally {
+    usersActionAbort.end()
+    usersToggleLoading.value = false
+    usersActionStartedAt.value = null
   }
 }
 
@@ -709,7 +717,7 @@ onBeforeUnmount(() => {
       @dismiss="clearActionResult"
     />
     <InFlightBanner
-      :active="deleteLoading || batchLoading"
+      :active="deleteLoading || batchLoading || usersToggleLoading"
       :started-at-ms="usersActionStartedAt"
       kind="admin"
       @cancel="cancelUsersAction"

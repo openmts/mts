@@ -18,6 +18,7 @@ import {
 } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -26,7 +27,8 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
-import { formatCaughtError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { createActionAbort } from '@/utils/actionAbort'
 import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
 import { filterByName } from '@/utils/listFilter'
 import { filterRowsByIds } from '@/utils/listSelection'
@@ -154,6 +156,7 @@ const {
   clearActionResult,
   setActionOk,
   setActionError,
+  setActionResult,
   reportActionError: reportRetryError,
 } = useActionRetry<DbActionKey>()
 const lastFailedDbName = ref('')
@@ -161,6 +164,10 @@ const lastFailedMeasName = ref('')
 const confirmOpen = ref(false)
 const confirmDbName = ref('')
 const confirmLoading = ref(false)
+const createDbLoading = ref(false)
+const rpLoading = ref(false)
+const dbActionStartedAt = ref<number | null>(null)
+const dbActionAbort = createActionAbort()
 
 async function loadDatabasesList() {
   try {
@@ -420,6 +427,27 @@ async function retryLastDatabaseAction() {
   }
 }
 
+
+function cancelDbAction() {
+  dbActionAbort.cancel()
+}
+
+function reportDbCatch(key: DbActionKey, e: unknown, ctx?: Record<string, string>) {
+  if (isCanceledError(e)) {
+    const msg = t.value('adminActionCancelled')
+    setActionResult(makeActionResult('info', msg))
+    info(msg)
+    return
+  }
+  if (isTimeoutError(e)) {
+    const msg = t.value('adminActionTimedOut')
+    setActionResult(makeActionResult('error', msg))
+    notifyError(msg)
+    return
+  }
+  reportActionError(key, e, ctx)
+}
+
 async function createDatabase() {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
@@ -430,10 +458,14 @@ async function createDatabase() {
   if (!isAdmin.value) return
   if (!newDbName.value.trim()) return
   clearActionResult()
+  createDbLoading.value = true
+  dbActionStartedAt.value = Date.now()
+  const signal = dbActionAbort.begin()
   try {
-    await apiPost('/api/v1/admin/databases', { name: newDbName.value.trim() })
+    const name = newDbName.value.trim()
+    await apiPost('/api/v1/admin/databases', { name }, { signal })
     databases.value.push({
-      name: newDbName.value.trim(),
+      name,
       measurements: [],
       retentionPolicies: [],
       expanded: false,
@@ -447,7 +479,11 @@ async function createDatabase() {
     setActionOk(t.value('databasesCreated'))
     success(t.value('databasesCreated'))
   } catch (e) {
-    reportActionError('create-db', e)
+    reportDbCatch('create-db', e)
+  } finally {
+    dbActionAbort.end()
+    createDbLoading.value = false
+    dbActionStartedAt.value = null
   }
 }
 function requestDeleteDatabase(name: string) {
@@ -470,17 +506,23 @@ async function confirmDeleteDatabase() {
   if (!name) return
   confirmLoading.value = true
   clearActionResult()
+  dbActionStartedAt.value = Date.now()
+  const signal = dbActionAbort.begin()
   try {
-    await apiDelete(`/api/v1/admin/databases/${encodeURIComponent(name)}`)
+    await apiDelete(`/api/v1/admin/databases/${encodeURIComponent(name)}`, { signal })
     databases.value = databases.value.filter((d) => d.name !== name)
     pruneTo(databases.value.map((d) => d.name))
     confirmOpen.value = false
     lastFailedAction.value = null
-    success(formatMessage(t.value('databasesDeleted'), { name }))
+    const okMsg = formatMessage(t.value('databasesDeleted'), { name })
+    setActionOk(okMsg)
+    success(okMsg)
   } catch (e) {
-    reportActionError('delete-db', e, { db: name })
+    reportDbCatch('delete-db', e, { db: name })
   } finally {
+    dbActionAbort.end()
     confirmLoading.value = false
+    dbActionStartedAt.value = null
   }
 }
 async function createRetentionPolicy(db: DatabaseEntry) {
@@ -506,17 +548,24 @@ async function createRetentionPolicy(db: DatabaseEntry) {
   }
   clearActionResult()
   lastFailedDbName.value = db.name
+  rpLoading.value = true
+  dbActionStartedAt.value = Date.now()
+  const signal = dbActionAbort.begin()
   try {
     await apiPost(`/api/v1/admin/databases/${encodeURIComponent(db.name)}/retention-policies`, {
       policy: { name, duration: durationNs },
-    })
+    }, { signal })
     db.retentionPolicies.push({ name, duration: durationNs })
     db.newRpName = ''
     db.newRpDuration = ''
     setActionOk(t.value('databasesRpCreated'))
     success(t.value('databasesRpCreated'))
   } catch (e) {
-    reportActionError('create-rp', e, { db: db.name })
+    reportDbCatch('create-rp', e, { db: db.name })
+  } finally {
+    dbActionAbort.end()
+    rpLoading.value = false
+    dbActionStartedAt.value = null
   }
 }
 function parseDuration(s: string): number {
@@ -648,6 +697,7 @@ async function exportCSV() {
 }
 
 onBeforeUnmount(() => {
+  cancelDbAction()
   unregisterDatabasesDirty?.()
   unregisterDatabasesDirty = null
   window.removeEventListener('beforeunload', onDatabasesBeforeUnload)
@@ -678,6 +728,12 @@ onBeforeUnmount(() => {
       @retry="retryLastDatabaseAction"
       @dismiss="clearActionResult"
     />
+    <InFlightBanner
+      :active="confirmLoading || createDbLoading || rpLoading"
+      :started-at-ms="dbActionStartedAt"
+      kind="admin"
+      @cancel="cancelDbAction"
+    />
     <p
       v-if="!isAdmin"
       class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
@@ -701,7 +757,7 @@ onBeforeUnmount(() => {
         </button>
         <template v-if="isAdmin">
           <input v-model="newDbName" type="text" :placeholder="t('databasesCreatePlaceholder')" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" data-testid="databases-create-input" @keyup.enter="createDatabase" />
-          <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="databases-create-btn" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="createDatabase">
+          <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="databases-create-btn" :disabled="writeBlocked || createDbLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="createDatabase">
             <Plus class="h-4 w-4" /> {{ t('databasesCreate') }}
           </button>
           <span
@@ -1001,7 +1057,7 @@ onBeforeUnmount(() => {
           <div v-if="isAdmin" class="mt-2 flex flex-wrap items-center gap-2" data-testid="databases-rp-create">
             <input v-model="activeDatabase.newRpName" type="text" :placeholder="t('databasesRpNamePlaceholder')" class="w-28 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-name" />
             <input v-model="activeDatabase.newRpDuration" type="text" :placeholder="t('databasesRpDurationPlaceholder')" class="w-24 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-duration" />
-            <button type="button" class="disabled:cursor-not-allowed disabled:opacity-50 inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" data-testid="databases-rp-add" @click="createRetentionPolicy(activeDatabase)" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined">
+            <button type="button" class="disabled:cursor-not-allowed disabled:opacity-50 inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" data-testid="databases-rp-add" @click="createRetentionPolicy(activeDatabase)" :disabled="writeBlocked || rpLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined">
               <Plus class="h-3.5 w-3.5" /> {{ t('databasesAdd') }}
             </button>
           </div>
@@ -1020,7 +1076,9 @@ onBeforeUnmount(() => {
       :confirm-label="t('delete')"
       danger
       :loading="confirmLoading"
+      allow-cancel-while-loading
       @confirm="confirmDeleteDatabase"
+      @cancel="cancelDbAction"
     />
   </div>
 </template>
