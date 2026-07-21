@@ -900,7 +900,7 @@ async function copyOverview() {
       </div>
       <div class="mts-card p-5">
         <div class="mb-2 flex items-center gap-2 mts-muted"><AlertTriangle class="h-4 w-4" aria-hidden="true" /><span class="text-xs">{{ t('reasons') }}</span></div>
-        <p v-if="!healthReasons.length" class="text-sm mts-muted">{{ t('emptyValue') }}</p>
+        <p v-if="!healthReasons.length" class="text-sm mts-muted" data-testid="overview-health-reasons-empty">{{ t('overviewNoHealthReasons') }}</p>
         <ul v-else class="list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-200">
           <li v-for="(r, i) in healthReasons" :key="i">{{ r }}</li>
         </ul>

@@ -74,6 +74,9 @@ const maintenanceStats = ref<MaintenanceStats | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
+type OpsSectionKey = 'maintenance' | 'compaction' | 'maintErrors' | 'memory'
+const sectionRetrying = ref<Partial<Record<OpsSectionKey, boolean>>>({})
+const sectionErrors = ref<Partial<Record<OpsSectionKey, string>>>({})
 const maintErrorFilter = ref('')
 const MAINT_ROW_HEIGHT = 36
 const MAINT_LIST_HEIGHT = 160
@@ -119,56 +122,106 @@ function recordAction(kind: OpsActionKind, status: 'ok' | 'error', message: stri
   persistLog()
 }
 
+function sectionLabel(key: OpsSectionKey): string {
+  switch (key) {
+    case 'maintenance': return t.value('overviewPartialMaintenance')
+    case 'compaction': return t.value('overviewPartialCompaction')
+    case 'maintErrors': return t.value('overviewPartialMaintErrors')
+    case 'memory': return t.value('overviewPartialMemory')
+  }
+}
+
+function clearSectionError(key: OpsSectionKey) {
+  if (!sectionErrors.value[key]) return
+  const next = { ...sectionErrors.value }
+  delete next[key]
+  sectionErrors.value = next
+}
+
+function setSectionError(key: OpsSectionKey, err: unknown) {
+  sectionErrors.value = { ...sectionErrors.value, [key]: formatCaughtError(err) }
+}
+
+async function loadOpsSection(key: OpsSectionKey): Promise<void> {
+  switch (key) {
+    case 'maintenance': {
+      const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
+      maintenanceStats.value = v.stats ?? null
+      return
+    }
+    case 'compaction': {
+      const v = await apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction')
+      compactionStats.value = v.stats
+      return
+    }
+    case 'maintErrors': {
+      const v = await apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors')
+      maintenanceErrors.value = v.errors ?? []
+      return
+    }
+    case 'memory': {
+      const v = await apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory')
+      memorySnapshot.value = v.snapshot ?? null
+      return
+    }
+  }
+}
+
+async function retryOpsSection(key: OpsSectionKey) {
+  if (!isAdmin.value || sectionRetrying.value[key]) return
+  sectionRetrying.value = { ...sectionRetrying.value, [key]: true }
+  try {
+    await loadOpsSection(key)
+    clearSectionError(key)
+  } catch (e) {
+    setSectionError(key, e)
+  } finally {
+    const next = { ...sectionRetrying.value }
+    delete next[key]
+    sectionRetrying.value = next
+    rebuildPartialFromSections()
+  }
+}
+
+function rebuildPartialFromSections() {
+  const order: OpsSectionKey[] = ['maintenance', 'compaction', 'maintErrors', 'memory']
+  const partials = order
+    .filter((k) => sectionErrors.value[k])
+    .map((k) => `${sectionLabel(k)}: ${sectionErrors.value[k]}`)
+  const hasAnySnapshot = !!(
+    maintenanceStats.value
+    || compactionStats.value
+    || (maintenanceErrors.value && maintenanceErrors.value.length)
+    || memorySnapshot.value
+  )
+  if (partials.length === 4 && !hasAnySnapshot) {
+    loadError.value = partials.join('；')
+    partialStatsError.value = ''
+    return
+  }
+  loadError.value = ''
+  partialStatsError.value = partials.join('；')
+  if (!partials.length || hasAnySnapshot || partials.length < 4) {
+    statsLoadedAt.value = Date.now()
+  }
+}
+
 async function loadStats() {
   if (!isAdmin.value) return
   loading.value = true
   loadError.value = ''
   partialStatsError.value = ''
+  sectionErrors.value = {}
   try {
-    const results = await Promise.allSettled([
-      apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance'),
-      apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction'),
-      apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors'),
-      apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory'),
-    ])
-    const labels = [
-      t.value('overviewPartialMaintenance'),
-      t.value('overviewPartialCompaction'),
-      t.value('overviewPartialMaintErrors'),
-      t.value('overviewPartialMemory'),
-    ]
-    const partials: string[] = []
-    if (results[0].status === 'fulfilled') maintenanceStats.value = results[0].value.stats ?? null
-    else {
-      // soft-keep：已有维护统计则保留快照
-      partials.push(`${labels[0]}: ${formatCaughtError(results[0].reason)}`)
+    const keys: OpsSectionKey[] = ['maintenance', 'compaction', 'maintErrors', 'memory']
+    const results = await Promise.allSettled(keys.map((k) => loadOpsSection(k)))
+    for (let i = 0; i < keys.length; i++) {
+      const r = results[i]
+      const key = keys[i]
+      if (r.status === 'fulfilled') clearSectionError(key)
+      else setSectionError(key, r.reason)
     }
-    if (results[1].status === 'fulfilled') compactionStats.value = results[1].value.stats
-    else {
-      partials.push(`${labels[1]}: ${formatCaughtError(results[1].reason)}`)
-    }
-    if (results[2].status === 'fulfilled') maintenanceErrors.value = results[2].value.errors ?? []
-    else {
-      partials.push(`${labels[2]}: ${formatCaughtError(results[2].reason)}`)
-    }
-    if (results[3].status === 'fulfilled') memorySnapshot.value = results[3].value.snapshot ?? null
-    else {
-      partials.push(`${labels[3]}: ${formatCaughtError(results[3].reason)}`)
-    }
-    const hasAnySnapshot = !!(
-      maintenanceStats.value
-      || compactionStats.value
-      || (maintenanceErrors.value && maintenanceErrors.value.length)
-      || memorySnapshot.value
-    )
-    if (partials.length === 4 && !hasAnySnapshot) {
-      loadError.value = partials.join('；')
-    } else if (partials.length) {
-      partialStatsError.value = partials.join('；')
-      if (hasAnySnapshot || partials.length < 4) statsLoadedAt.value = Date.now()
-    } else {
-      statsLoadedAt.value = Date.now()
-    }
+    rebuildPartialFromSections()
   } catch (e) {
     loadError.value = formatCaughtError(e)
   } finally {
@@ -588,9 +641,20 @@ watch(
       <EmptyState
         v-if="!maintenanceErrors.length"
         compact
-        :title="t('noMaintenanceErrors')"
-        :description="t('opsNoMaintErrorsDesc')"
-      />
+        data-testid="ops-maint-errors-empty"
+        :title="sectionErrors.maintErrors ? t('opsMaintErrorsLoadFailed') : t('noMaintenanceErrors')"
+        :description="sectionErrors.maintErrors ? sectionErrors.maintErrors : t('opsNoMaintErrorsDesc')"
+      >
+        <template #action>
+          <button
+            type="button"
+            class="mts-btn-primary text-xs"
+            data-testid="ops-maint-errors-retry"
+            :disabled="!!sectionRetrying.maintErrors || loading"
+            @click="retryOpsSection('maintErrors')"
+          >{{ sectionRetrying.maintErrors ? t('loading') : t('overviewSectionRetry') }}</button>
+        </template>
+      </EmptyState>
       <EmptyState
         v-else-if="!filteredMaintenanceErrors.length"
         compact
@@ -677,8 +741,8 @@ watch(
           :description="t('opsStatsEmptyHint')"
         >
           <template #action>
-            <button type="button" class="mts-btn-primary text-xs" data-testid="ops-maint-stats-retry" :disabled="loading" @click="loadStats">
-              {{ loading ? t('loading') : t('overviewSectionRetry') }}
+            <button type="button" class="mts-btn-primary text-xs" data-testid="ops-maint-stats-retry" :disabled="!!sectionRetrying.maintenance || loading" @click="retryOpsSection('maintenance')">
+              {{ sectionRetrying.maintenance ? t('loading') : t('overviewSectionRetry') }}
             </button>
           </template>
         </EmptyState>
@@ -701,8 +765,8 @@ watch(
           :description="t('opsStatsEmptyHint')"
         >
           <template #action>
-            <button type="button" class="mts-btn-primary text-xs" data-testid="ops-compact-stats-retry" :disabled="loading" @click="loadStats">
-              {{ loading ? t('loading') : t('overviewSectionRetry') }}
+            <button type="button" class="mts-btn-primary text-xs" data-testid="ops-compact-stats-retry" :disabled="!!sectionRetrying.compaction || loading" @click="retryOpsSection('compaction')">
+              {{ sectionRetrying.compaction ? t('loading') : t('overviewSectionRetry') }}
             </button>
           </template>
         </EmptyState>
@@ -725,8 +789,8 @@ watch(
           :description="t('opsStatsEmptyHint')"
         >
           <template #action>
-            <button type="button" class="mts-btn-primary text-xs" data-testid="ops-memory-stats-retry" :disabled="loading" @click="loadStats">
-              {{ loading ? t('loading') : t('overviewSectionRetry') }}
+            <button type="button" class="mts-btn-primary text-xs" data-testid="ops-memory-stats-retry" :disabled="!!sectionRetrying.memory || loading" @click="retryOpsSection('memory')">
+              {{ sectionRetrying.memory ? t('loading') : t('overviewSectionRetry') }}
             </button>
           </template>
         </EmptyState>

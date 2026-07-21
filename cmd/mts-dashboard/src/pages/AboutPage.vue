@@ -9,6 +9,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import { clientBuildInfo } from '@/utils/buildInfo'
 import { buildAboutExport, formatAboutExportPretty } from '@/utils/aboutExport'
@@ -223,7 +224,23 @@ onMounted(() => {
             <dd class="font-mono">{{ server.built_at }}</dd>
           </div>
         </dl>
-        <p v-else class="text-xs mts-muted">{{ loading ? t('loading') : t('emptyValue') }}</p>
+        <EmptyState
+          v-else
+          compact
+          data-testid="about-server-empty"
+          :title="loading ? t('loading') : t('aboutServerEmptyTitle')"
+          :description="loading ? '' : t('aboutServerEmptyDesc')"
+        >
+          <template v-if="!loading" #action>
+            <button
+              type="button"
+              class="mts-btn-primary text-xs"
+              data-testid="about-server-empty-retry"
+              :disabled="loading"
+              @click="loadVersion"
+            >{{ t('overviewSectionRetry') }}</button>
+          </template>
+        </EmptyState>
       </div>
     </div>
   </div>
