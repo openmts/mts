@@ -20,6 +20,7 @@
 - Dashboard 静态资源由 `mts-server` 嵌入（`dashboard-dist`）。
 - 子路径部署设置 `http.dashboard_base`（例如 `/mts/`），前端构建使用匹配的 `VITE_BASE`。
 - API 前缀默认 `/api/v1/...`；前端使用站点根或 `VITE_API_BASE`，不要把 `VITE_BASE` 拼进 API。
+- 普通 API 请求默认超时 **30s**（`VITE_API_TIMEOUT_MS` 可覆盖，单位毫秒，上限 600000）；`/readyz` 探测 5s；NDJSON 流式查询不套默认超时，依赖用户取消。
 
 ## 2. 上线前检查清单
 

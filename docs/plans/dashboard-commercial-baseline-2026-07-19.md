@@ -1036,3 +1036,6 @@
 ## P223（2026-07-21）
 - API 默认超时 30s（probe 5s）；超时友好错误 `timeout`
 - NDJSON 流式查询不套默认超时
+
+## P224（2026-07-21）
+- API 超时可配置：`VITE_API_TIMEOUT_MS`；运维 runbook 补充超时策略

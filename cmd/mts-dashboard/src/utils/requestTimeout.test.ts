@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createTimeoutSignal, isAbortError } from './requestTimeout.ts'
+import { createTimeoutSignal, isAbortError, resolveApiTimeoutMs } from './requestTimeout.ts'
 
 test('createTimeoutSignal without timeout uses user signal', () => {
   const c = new AbortController()
@@ -31,4 +31,13 @@ test('user abort does not mark timeout', async () => {
 test('isAbortError detects DOMException-like', () => {
   assert.equal(isAbortError({ name: 'AbortError' }), true)
   assert.equal(isAbortError(new Error('x')), false)
+})
+
+test('resolveApiTimeoutMs defaults and clamps', () => {
+  assert.equal(resolveApiTimeoutMs(undefined), 30_000)
+  assert.equal(resolveApiTimeoutMs('45000'), 45_000)
+  assert.equal(resolveApiTimeoutMs(0), 30_000)
+  assert.equal(resolveApiTimeoutMs(-1), 30_000)
+  assert.equal(resolveApiTimeoutMs('nope'), 30_000)
+  assert.equal(resolveApiTimeoutMs(999_999_999), 600_000)
 })

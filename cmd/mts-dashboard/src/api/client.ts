@@ -3,8 +3,10 @@ import {
   createTimeoutSignal,
   DEFAULT_API_TIMEOUT_MS,
   isAbortError,
+  resolveApiTimeoutMs,
 } from '@/utils/requestTimeout'
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
+const API_TIMEOUT_MS = resolveApiTimeoutMs(import.meta.env.VITE_API_TIMEOUT_MS, DEFAULT_API_TIMEOUT_MS)
 const TOKEN_KEY = 'mts_bearer_token'
 const USER_KEY = 'mts_user_name'
 const ROLE_KEY = 'mts_user_role'
@@ -232,7 +234,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   const method = (options.method || 'GET').toUpperCase()
   const headers = authHeaders(options.headers as Record<string, string> | undefined, method)
-  const timeoutHandle = createTimeoutSignal(options.signal, DEFAULT_API_TIMEOUT_MS)
+  const timeoutHandle = createTimeoutSignal(options.signal, API_TIMEOUT_MS)
   beginRequest()
   try {
     let response: Response
@@ -310,7 +312,7 @@ export async function apiGetText(path: string, init: RequestInit = {}): Promise<
   }
   const method = 'GET'
   const headers = authHeaders(init.headers as Record<string, string> | undefined, method)
-  const timeoutHandle = createTimeoutSignal(init.signal, DEFAULT_API_TIMEOUT_MS)
+  const timeoutHandle = createTimeoutSignal(init.signal, API_TIMEOUT_MS)
   beginRequest()
   try {
     let response: Response

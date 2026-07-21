@@ -2,6 +2,18 @@
 
 export const DEFAULT_API_TIMEOUT_MS = 30_000
 
+/** 解析超时毫秒：非法/非正数回退 defaultMs */
+export function resolveApiTimeoutMs(
+  raw: unknown,
+  defaultMs: number = DEFAULT_API_TIMEOUT_MS,
+): number {
+  if (raw == null || raw === '') return defaultMs
+  const n = typeof raw === 'number' ? raw : Number(String(raw).trim())
+  if (!Number.isFinite(n) || n <= 0) return defaultMs
+  // 上限 10 分钟，避免误配无限挂起伪装
+  return Math.min(Math.trunc(n), 600_000)
+}
+
 export interface TimeoutSignalHandle {
   signal: AbortSignal
   /** 是否因超时 abort */
