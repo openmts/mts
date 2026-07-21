@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,4 +88,52 @@ func TestHTTPBatchDownsamplePolicies(t *testing.T) {
 		Names:  []string{"batch_ds_a"},
 		Action: "pause",
 	}, headers, http.StatusBadRequest, &errorResponse{})
+}
+
+func TestHTTPBatchUserDisabledStream(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	t.Cleanup(server.Close)
+
+	seedUserWithPassword(t, runtime, mts.User{Name: "s1", Role: mts.UserRoleUser}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "s2", Role: mts.UserRoleUser}, "secret")
+	adminToken := loginHTTPUser(t, server.URL, "admin", "admin")
+
+	body := `{"names":["s1","s2","missing"],"disabled":true}`
+	req, err := http.NewRequest(http.MethodPost, server.URL+routeUsersBatchDisabled+"?stream=1", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", contentTypeNDJSON)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	if !strings.Contains(resp.Header.Get("Content-Type"), "ndjson") {
+		t.Fatalf("content-type=%q", resp.Header.Get("Content-Type"))
+	}
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("lines=%d body=%q", len(lines), raw)
+	}
+	var summary batchProgressEvent
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &summary); err != nil {
+		t.Fatalf("summary json: %v body=%s", err, lines[len(lines)-1])
+	}
+	if summary.Type != "summary" {
+		t.Fatalf("last type=%q want summary", summary.Type)
+	}
+	if summary.OKCount != 2 {
+		t.Fatalf("ok_count=%d want 2 summary=%#v", summary.OKCount, summary)
+	}
 }

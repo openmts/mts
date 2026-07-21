@@ -440,6 +440,10 @@ function cancelRename() {
 }
 
 function confirmClearHistory() {
+  if (writeBlocked.value) {
+    clearHistoryOpen.value = false
+    return
+  }
   history.clear({ keepPinned: true })
   clearHistoryOpen.value = false
   success(t.value('queryHistoryCleared'))
@@ -1310,6 +1314,9 @@ const columnRows = computed(() => {
     />
     <ConfirmDialog
       v-model:open="clearHistoryOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineDeleteBlocked'"
       :title="t('queryClearHistoryTitle')"
       :message="t('queryClearHistoryMsg')"
       :confirm-label="t('clearHistory')"

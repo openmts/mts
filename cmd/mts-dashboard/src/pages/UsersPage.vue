@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
-import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
+import { apiDelete, apiGet, apiPost, apiPostNDJSONStream, apiPut } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { useMutationGuard } from '@/composables/useMutationGuard'
@@ -27,6 +27,13 @@ import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
+import {
+  applyBatchProgressEvent,
+  batchProgressPercent,
+  emptyBatchProgress,
+  type BatchProgressState,
+  type BatchMutationSummary,
+} from '@/utils/batchProgress'
 import { formatMessage } from '@/utils/formatMessage'
 import { filterUsers } from '@/utils/listFilter'
 import { filterRowsByIds } from '@/utils/listSelection'
@@ -175,6 +182,7 @@ const deleteLoading = ref(false)
 const batchOpen = ref(false)
 const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
+const batchProgress = ref<BatchProgressState>(emptyBatchProgress())
 const usersActionStartedAt = ref<number | null>(null)
 const usersActionAbort = createActionAbort()
 const usersToggleLoading = ref(false)
@@ -633,6 +641,7 @@ async function exportCSV() {
 }
 
 function openBatch(mode: 'enable' | 'disable') {
+  if (batchLoading.value) return
   if (writeBlocked.value) {
     notifyError(t.value(blockedMessageKey('offlineAdminBlocked')))
     return
@@ -643,6 +652,7 @@ function openBatch(mode: 'enable' | 'disable') {
 }
 
 async function confirmBatch() {
+  if (batchLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -655,20 +665,33 @@ async function confirmBatch() {
     return
   }
   batchLoading.value = true
+  batchProgress.value = { ...emptyBatchProgress(), total: names.length }
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   const wantDisabled = batchMode.value === 'disable'
+  let data: BatchMutationSummary | null = null
   try {
-    const data = await apiPost<{
-      ok: boolean
-      ok_count: number
-      skip_count: number
-      fail_count: number
-      items?: Array<{ name: string; status: string; message?: string }>
-    }>('/api/v1/users/batch-disabled', {
-      names,
-      disabled: wantDisabled,
-    }, { signal })
+    await apiPostNDJSONStream(
+      '/api/v1/users/batch-disabled?stream=1',
+      { names, disabled: wantDisabled },
+      (_line, record, parseError) => {
+        if (parseError || record == null) return
+        const applied = applyBatchProgressEvent(batchProgress.value, record)
+        batchProgress.value = applied.next
+        if (applied.summary) data = applied.summary
+        if (applied.error) throw new Error(applied.error)
+      },
+      { signal, headers: { Accept: 'application/x-ndjson' } },
+    )
+    if (!data) {
+      data = {
+        ok: batchProgress.value.fail === 0,
+        ok_count: batchProgress.value.ok,
+        skip_count: batchProgress.value.skip,
+        fail_count: batchProgress.value.fail,
+        items: [],
+      }
+    }
     await loadUsers()
     const ok = data.ok_count ?? 0
     const skip = data.skip_count ?? 0
@@ -699,6 +722,7 @@ async function confirmBatch() {
     usersActionAbort.end()
     batchLoading.value = false
     usersActionStartedAt.value = null
+    batchProgress.value = emptyBatchProgress()
   }
 }
 onBeforeUnmount(() => {
@@ -768,6 +792,8 @@ onBeforeUnmount(() => {
       :active="deleteLoading || batchLoading || usersToggleLoading || usersWriteLoading"
       :started-at-ms="usersActionStartedAt"
       kind="admin"
+      :progress-percent="batchLoading ? batchProgressPercent(batchProgress) : null"
+      :progress-label="batchLoading && batchProgress.total ? formatMessage(t('batchProgressLabel'), { done: batchProgress.done, total: batchProgress.total, ok: batchProgress.ok, skip: batchProgress.skip, fail: batchProgress.fail }) : undefined"
       @cancel="cancelUsersAction"
     />
     <PartialErrorBanner

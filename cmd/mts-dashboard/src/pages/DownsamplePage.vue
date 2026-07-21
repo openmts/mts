@@ -4,7 +4,7 @@ import { useHashScroll } from '@/composables/useHashScroll'
 import { useRoute } from 'vue-router'
 import { parseDownsamplePrefill, downsampleFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { apiGet, apiPost, apiDelete } from '@/api/client'
+import { apiGet, apiPost, apiDelete, apiPostNDJSONStream } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import {
   isDownsampleCreateDraftDirty,
@@ -25,6 +25,13 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
+import {
+  applyBatchProgressEvent,
+  batchProgressPercent,
+  emptyBatchProgress,
+  type BatchProgressState,
+  type BatchMutationSummary,
+} from '@/utils/batchProgress'
 import { formatMessage } from '@/utils/formatMessage'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/listFilter'
@@ -97,6 +104,7 @@ const selectedNames = ref<string[]>([])
 const batchOpen = ref(false)
 const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
+const batchProgress = ref<BatchProgressState>(emptyBatchProgress())
 const dsActionStartedAt = ref<number | null>(null)
 const dsActionAbort = createActionAbort()
 const createLoading = ref(false)
@@ -398,6 +406,7 @@ function clearSelection() {
 }
 
 function openBatch(mode: 'enable' | 'disable') {
+  if (batchLoading.value) return
   if (writeBlocked.value) {
     notifyError(t.value(blockedMessageKey('offlineAdminBlocked')))
     return
@@ -468,6 +477,7 @@ async function retryLastDownsampleAction() {
 }
 
 async function confirmBatch() {
+  if (batchLoading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -480,21 +490,34 @@ async function confirmBatch() {
     return
   }
   batchLoading.value = true
+  batchProgress.value = { ...emptyBatchProgress(), total: names.length }
   dsActionStartedAt.value = Date.now()
   const signal = dsActionAbort.begin()
   clearActionResult()
   const action = batchMode.value === 'enable' ? 'enable' : 'disable'
+  let data: BatchMutationSummary | null = null
   try {
-    const data = await apiPost<{
-      ok: boolean
-      ok_count: number
-      skip_count: number
-      fail_count: number
-      items?: Array<{ name: string; status: string; message?: string }>
-    }>('/api/v1/admin/downsample/policies/batch', {
-      names,
-      action,
-    }, { signal })
+    await apiPostNDJSONStream(
+      '/api/v1/admin/downsample/policies/batch?stream=1',
+      { names, action },
+      (_line, record, parseError) => {
+        if (parseError || record == null) return
+        const applied = applyBatchProgressEvent(batchProgress.value, record)
+        batchProgress.value = applied.next
+        if (applied.summary) data = applied.summary
+        if (applied.error) throw new Error(applied.error)
+      },
+      { signal, headers: { Accept: 'application/x-ndjson' } },
+    )
+    if (!data) {
+      data = {
+        ok: batchProgress.value.fail === 0,
+        ok_count: batchProgress.value.ok,
+        skip_count: batchProgress.value.skip,
+        fail_count: batchProgress.value.fail,
+        items: [],
+      }
+    }
     await loadData()
     selectedNames.value = []
     batchOpen.value = false
@@ -526,6 +549,7 @@ async function confirmBatch() {
     dsActionAbort.end()
     batchLoading.value = false
     dsActionStartedAt.value = null
+    batchProgress.value = emptyBatchProgress()
   }
 }
 
@@ -935,6 +959,8 @@ onBeforeUnmount(() => {
       :active="deleteLoading || batchLoading || rangeLoading || createLoading || dsToggleLoading || dsRunLoading"
       :started-at-ms="dsActionStartedAt"
       kind="admin"
+      :progress-percent="batchLoading ? batchProgressPercent(batchProgress) : null"
+      :progress-label="batchLoading && batchProgress.total ? formatMessage(t('batchProgressLabel'), { done: batchProgress.done, total: batchProgress.total, ok: batchProgress.ok, skip: batchProgress.skip, fail: batchProgress.fail }) : undefined"
       @cancel="cancelDsAction"
     />
     <PartialErrorBanner

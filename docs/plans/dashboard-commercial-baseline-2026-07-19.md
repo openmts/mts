@@ -1341,3 +1341,8 @@
 ## P312（2026-07-22）
 - Server：`GET /api/v1/admin/stats/maintenance`（gRPC 同）增加 `admin_op_busy`，反映 flush/compact/retention 进程内互斥
 - Operations：拉取 busy 状态；入口禁用 + chip + 确认/重试门禁；本地执行时乐观置 busy，结束后刷新
+
+## P313（2026-07-22）
+- Server：users/downsample batch 支持 `?stream=1` / Accept NDJSON 进度流（item/summary）；statusRecorder 透传 Flusher
+- Dashboard：Users/Downsample 批量改为 NDJSON 流并显示 InFlight 百分比进度；防双提交
+- Query：清除历史 Confirm 对齐 writeBlocked 门禁

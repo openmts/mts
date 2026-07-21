@@ -12,12 +12,17 @@ const props = withDefaults(
     kind?: 'query' | 'write' | 'delete' | 'ops' | 'storage' | 'admin' | 'login'
     timeoutHintMs?: number
     longThresholdMs?: number
+    /** 0-100 可选批量进度 */
+    progressPercent?: number | null
+    progressLabel?: string
   }>(),
   {
     startedAtMs: null,
     kind: 'query',
     timeoutHintMs: 30_000,
     longThresholdMs: 5_000,
+    progressPercent: null,
+    progressLabel: '',
   },
 )
 
@@ -93,6 +98,22 @@ const detail = computed(() => {
     <div class="min-w-0 flex-1">
       <p class="font-medium" data-testid="in-flight-title">{{ title }}</p>
       <p class="mt-0.5 mts-muted text-sky-800/80 dark:text-sky-200/80" data-testid="in-flight-detail">{{ detail }}</p>
+      <p
+        v-if="progressLabel || (progressPercent != null && progressPercent >= 0)"
+        class="mt-1 font-mono text-[11px] text-sky-900 dark:text-sky-100"
+        data-testid="in-flight-progress"
+      >{{ progressLabel || `${progressPercent}%` }}</p>
+      <div
+        v-if="progressPercent != null && progressPercent >= 0"
+        class="mt-1 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-sky-100 dark:bg-sky-900/50"
+        data-testid="in-flight-progress-bar"
+        role="progressbar"
+        :aria-valuenow="progressPercent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <div class="h-full rounded-full bg-sky-500 transition-all dark:bg-sky-400" :style="{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }" />
+      </div>
     </div>
     <button
       type="button"

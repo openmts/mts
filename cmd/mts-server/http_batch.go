@@ -29,6 +29,10 @@ func (r *serverRuntime) handleBatchUserDisabled(writer http.ResponseWriter, requ
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
+	if wantsBatchProgressStream(request) {
+		r.streamBatchUserDisabled(writer, request, req)
+		return
+	}
 	resp, err := r.batchUpdateUserDisabled(request.Context(), req, r.auditUser(request))
 	if err != nil {
 		writeAPIError(writer, err)
@@ -43,11 +47,8 @@ func (r *serverRuntime) batchUpdateUserDisabled(
 	actor string,
 ) (batchMutationResponse, error) {
 	names := normalizeBatchNames(req.Names)
-	if len(names) == 0 {
-		return batchMutationResponse{}, newAPIError(errorCodeBadRequest, "names is required", nil)
-	}
-	if len(names) > batchMaxItems {
-		return batchMutationResponse{}, newAPIError(errorCodeBadRequest, "too many names", nil)
+	if err := validateBatchNames(names); err != nil {
+		return batchMutationResponse{}, err
 	}
 	out := batchMutationResponse{OK: true, Items: make([]batchItemResult, 0, len(names))}
 	for _, name := range names {
@@ -106,6 +107,10 @@ func (r *serverRuntime) handleBatchDownsamplePolicies(writer http.ResponseWriter
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
+	if wantsBatchProgressStream(request) {
+		r.streamBatchDownsamplePolicies(writer, request, req)
+		return
+	}
 	resp, err := r.batchDownsamplePolicies(request.Context(), req, r.auditUser(request))
 	if err != nil {
 		writeAPIError(writer, err)
@@ -124,11 +129,8 @@ func (r *serverRuntime) batchDownsamplePolicies(
 		return batchMutationResponse{}, newAPIError(errorCodeBadRequest, "action must be enable or disable", nil)
 	}
 	names := normalizeBatchNames(req.Names)
-	if len(names) == 0 {
-		return batchMutationResponse{}, newAPIError(errorCodeBadRequest, "names is required", nil)
-	}
-	if len(names) > batchMaxItems {
-		return batchMutationResponse{}, newAPIError(errorCodeBadRequest, "too many names", nil)
+	if err := validateBatchNames(names); err != nil {
+		return batchMutationResponse{}, err
 	}
 	out := batchMutationResponse{OK: true, Items: make([]batchItemResult, 0, len(names))}
 	for _, name := range names {

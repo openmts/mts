@@ -21,6 +21,18 @@ type statusRecorder struct {
 	status int
 }
 
+// Flush 透传底层 Flusher，保证 NDJSON 批处理进度可边写边推。
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap 供 http.ResponseController 等识别底层 ResponseWriter。
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
 // applySecurityHeaders 设置可商用后台默认安全响应头（API + Dashboard 静态资源共用）。
 // enableHSTS 仅在确认 TLS 终止（本机 TLS 或受信边缘 HTTPS）时启用。
 func applySecurityHeaders(header http.Header, enableHSTS bool) {
