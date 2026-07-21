@@ -1061,15 +1061,24 @@ test('commercial browser smoke path', async ({ page }) => {
   })
   await page.reload()
   await expect(page.getByTestId('session-critical-banner')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('session-critical-renew')).toBeVisible()
+  await expect(page.getByTestId('session-critical-relogin')).toBeVisible()
+  await page.getByTestId('session-critical-renew').click()
+  await expect(page).toHaveURL(/\/account/)
+  await expect(page.getByTestId('account-session').or(page.getByTestId('account-session-renew-form')).first()).toBeVisible({ timeout: 10000 })
+  // 回到 critical 态校验写按钮与 Users title
+  await page.evaluate(() => {
+    const soon = new Date(Date.now() + 30_000).toISOString()
+    localStorage.setItem('mts_token_expires_at', soon)
+  })
   await page.goto('/write')
+  await expect(page.getByTestId('session-critical-banner')).toBeVisible({ timeout: 15000 })
   await expect(page.getByTestId('write-submit')).toBeDisabled()
-  // P218: Users 弹窗提交按钮在会话 critical 下禁用，title 为会话文案（非离线）
+  // P218: Users 弹窗入口 title 为会话文案（非离线）
   await page.goto('/users')
   await expect(page.getByTestId('users-create-open')).toBeDisabled()
-  // 若入口已 disabled 仍可通过 evaluate 打开的场景不测；直接校验入口 title 含会话语义
   const createTitle = await page.getByTestId('users-create-open').getAttribute('title')
   if (createTitle) {
-    // zh: 会话即将过期 / en: Session is critical
     if (!/会话|Session|session|过期|expired|critical|续期|Renew/i.test(createTitle)) {
       throw new Error(`unexpected users-create-open title under critical: ${createTitle}`)
     }
@@ -1077,13 +1086,18 @@ test('commercial browser smoke path', async ({ page }) => {
       throw new Error(`users-create-open should not show offline title under session critical: ${createTitle}`)
     }
   }
-  // 恢复较长 TTL 以便后续用例
+  // P221: 重新登录会先 logout 并进入登录页
+  await page.getByTestId('session-critical-relogin').click()
+  await expect(page.getByTestId('login-panel')).toBeVisible({ timeout: 15000 })
+  // 重新登录以继续后续用例
+  await page.getByTestId('login-username').fill('admin')
+  await page.getByTestId('login-password').fill(NEW_PASSWORD)
+  await page.getByTestId('login-submit').click()
+  await expect(page.getByTestId('overview-page').or(page.getByRole('main')).first()).toBeVisible({ timeout: 20000 })
   await page.evaluate(() => {
     const later = new Date(Date.now() + 12 * 3600_000).toISOString()
     localStorage.setItem('mts_token_expires_at', later)
   })
-  await page.reload()
-  await expect(page.getByTestId('session-critical-banner')).toHaveCount(0)
 
   // P209: 登录离线门禁
   await page.getByTestId('topbar-logout').click()

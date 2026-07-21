@@ -31,10 +31,13 @@ import { CLIENT_PREFS_CHANGED_EVENT } from '@/utils/clientPrefs'
 import { scrollElementToTop, shouldResetScrollOnRouteChange, shouldShowBackToTop } from '@/utils/scrollTop'
 import { ArrowUp } from 'lucide-vue-next'
 import { useMutationGuard } from '@/composables/useMutationGuard'
+import { useAuth } from '@/composables/useAuth'
+import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
 
 const { t } = useI18n()
 const { offline, sessionWriteBlocked } = useMutationGuard()
+const { logout } = useAuth()
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 const route = useRoute()
 const router = useRouter()
@@ -61,6 +64,15 @@ function toggleSidebarCollapse() {
   })
 }
 function openCommandPalette() { commandPaletteRef.value?.openPalette() }
+function goSessionRenew() {
+  void router.push({ path: '/account', hash: '#account-session' })
+}
+async function goSessionRelogin() {
+  await logout()
+  await router.replace(
+    buildLoginLocation({ reason: 'session', redirectRaw: '/account#account-session' }),
+  )
+}
 function openShortcuts() { shortcutsOpen.value = true }
 
 function recentLabel(entry: RecentRouteEntry): string {
@@ -261,13 +273,29 @@ function onSkipToMain(e: Event) {
       </div>
       <div
         v-else-if="sessionWriteBlocked"
-        class="no-print border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100 sm:px-6"
+        class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100 sm:px-6"
         role="status"
         aria-live="polite"
         data-testid="session-critical-banner"
       >
-        <span class="font-semibold">{{ t('sessionCriticalBannerTitle') }}</span>
-        <span class="ml-1">{{ t('sessionCriticalBanner') }}</span>
+        <div class="min-w-0">
+          <span class="font-semibold">{{ t('sessionCriticalBannerTitle') }}</span>
+          <span class="ml-1">{{ t('sessionCriticalBanner') }}</span>
+        </div>
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring !border-red-300 !bg-white !text-red-900 dark:!border-red-800 dark:!bg-red-950 dark:!text-red-100"
+            data-testid="session-critical-renew"
+            @click="goSessionRenew"
+          >{{ t('sessionCriticalRenew') }}</button>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring !border-red-300 !bg-white !text-red-900 dark:!border-red-800 dark:!bg-red-950 dark:!text-red-100"
+            data-testid="session-critical-relogin"
+            @click="goSessionRelogin"
+          >{{ t('sessionCriticalRelogin') }}</button>
+        </div>
       </div>
       <div
         v-if="!offline && showUnreachableBanner"
