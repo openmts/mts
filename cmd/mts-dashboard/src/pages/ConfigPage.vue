@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseConfigPrefill, configFormToPrefill } from '@/utils/routePrefill'
 import { apiGet, apiPost, getAdminToken, setAdminToken, getDataToken, setDataToken } from '@/api/client'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import { registerDirtyChecker } from '@/utils/routeDirty'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError } from '@/utils/apiError'
@@ -63,6 +64,20 @@ const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
 const adminTokenInput = ref(getAdminToken())
 const dataTokenInput = ref(getDataToken())
+const tokenBaseline = ref({ admin: getAdminToken(), data: getDataToken() })
+const tokenFormDirty = computed(
+  () =>
+    adminTokenInput.value !== tokenBaseline.value.admin
+    || dataTokenInput.value !== tokenBaseline.value.data,
+)
+
+function onConfigBeforeUnload(e: BeforeUnloadEvent) {
+  if (!tokenFormDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+let unregisterConfigDirty: (() => void) | null = null
 
 const filteredSchema = computed(() => {
   const q = schemaFilter.value.trim().toLowerCase()
@@ -122,6 +137,8 @@ async function copyConfigShareLink() {
 }
 
 onMounted(async () => {
+  unregisterConfigDirty = registerDirtyChecker('config', () => tokenFormDirty.value)
+  window.addEventListener('beforeunload', onConfigBeforeUnload)
   if (!isAdmin.value) return
   try {
     await loadConfig()
@@ -189,6 +206,7 @@ async function handleReload() {
 function saveServiceTokens() {
   setAdminToken(adminTokenInput.value)
   setDataToken(dataTokenInput.value)
+  tokenBaseline.value = { admin: adminTokenInput.value, data: dataTokenInput.value }
   success(t.value('configTokenSaved'))
 }
 
@@ -197,6 +215,7 @@ function clearServiceTokens() {
   dataTokenInput.value = ''
   setAdminToken('')
   setDataToken('')
+  tokenBaseline.value = { admin: '', data: '' }
   actionResult.value = makeActionResult('ok', t.value('configTokenCleared'))
   success(t.value('configTokenCleared'))
 }
@@ -300,6 +319,12 @@ function statusLabel(httpStatus: number): string {
   if (httpStatus >= 500) return t.value('configHttpServerErr')
   return ''
 }
+
+onBeforeUnmount(() => {
+  unregisterConfigDirty?.()
+  unregisterConfigDirty = null
+  window.removeEventListener('beforeunload', onConfigBeforeUnload)
+})
 </script>
 
 <template>
@@ -307,7 +332,14 @@ function statusLabel(httpStatus: number): string {
   <div v-else class="space-y-6" data-testid="config-page">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="mts-title">{{ t('configTitle') }}</h1>
+        <h1 class="mts-title flex flex-wrap items-center gap-2">
+          {{ t('configTitle') }}
+          <span
+            v-if="tokenFormDirty"
+            data-testid="config-token-dirty-badge"
+            class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+          >{{ t('configTokenDirtyBadge') }}</span>
+        </h1>
         <p class="text-xs mts-muted">{{ t('configDesc') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -331,22 +363,36 @@ function statusLabel(httpStatus: number): string {
     />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 
-    <div class="mts-panel">
+    <div class="mts-panel" data-testid="config-token-panel">
       <h2 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configTokenTitle') }}</h2>
       <p class="mb-4 text-xs mts-muted">{{ t('configTokenHint') }}</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="mb-1 block text-xs mts-muted">{{ t('configAdminTokenLabel') }}</label>
-          <input v-model="adminTokenInput" type="password" class="mts-input"  :placeholder="t('optional')" />
+          <label class="mb-1 block text-xs mts-muted" for="config-admin-token">{{ t('configAdminTokenLabel') }}</label>
+          <input
+            id="config-admin-token"
+            v-model="adminTokenInput"
+            type="password"
+            class="mts-input"
+            data-testid="config-token-admin"
+            :placeholder="t('optional')"
+          />
         </div>
         <div>
-          <label class="mb-1 block text-xs mts-muted">{{ t('configDataTokenLabel') }}</label>
-          <input v-model="dataTokenInput" type="password" class="mts-input"  :placeholder="t('optional')" />
+          <label class="mb-1 block text-xs mts-muted" for="config-data-token">{{ t('configDataTokenLabel') }}</label>
+          <input
+            id="config-data-token"
+            v-model="dataTokenInput"
+            type="password"
+            class="mts-input"
+            data-testid="config-token-data"
+            :placeholder="t('optional')"
+          />
         </div>
       </div>
       <div class="mt-3 flex gap-2">
-        <button class="mts-btn-primary" @click="saveServiceTokens">{{ t('configTokenSave') }}</button>
-        <button class="mts-btn" @click="clearServiceTokens">{{ t('configTokenClear') }}</button>
+        <button type="button" class="mts-btn-primary" data-testid="config-token-save" @click="saveServiceTokens">{{ t('configTokenSave') }}</button>
+        <button type="button" class="mts-btn" data-testid="config-token-clear" @click="clearServiceTokens">{{ t('configTokenClear') }}</button>
       </div>
     </div>
 

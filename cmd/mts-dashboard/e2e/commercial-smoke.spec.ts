@@ -879,7 +879,47 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('account-session-renew-form')).toBeVisible()
   await expect(page.getByTestId('account-session-renew-submit')).toBeDisabled()
 
+  // P208: Account 改密脏标记
+  await page.goto('/account')
+  await expect(page.getByTestId('account-password-form')).toBeVisible()
+  await page.getByTestId('account-old-password').fill('draft-old')
+  await expect(page.getByTestId('account-password-dirty-badge')).toBeVisible()
+  await page.getByTestId('account-old-password').fill('')
+  await expect(page.getByTestId('account-password-dirty-badge')).toHaveCount(0)
 
+  // P207: Overview / About 导出入口与 Write 导出
+  await page.goto('/')
+  await expect(page.getByTestId('overview-export-json')).toBeVisible()
+  await page.getByTestId('overview-export-json').click()
+  await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
+  {
+    const dismiss = page.getByTestId('export-job-dismiss')
+    if (await dismiss.count()) await dismiss.click()
+  }
+  await page.goto('/about')
+  await expect(page.getByTestId('about-export-json')).toBeVisible()
+  await page.getByTestId('about-export-json').click()
+  await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
+  {
+    const dismiss = page.getByTestId('export-job-dismiss')
+    if (await dismiss.count()) await dismiss.click()
+  }
+  await page.goto('/write')
+  await expect(page.getByTestId('write-export-draft')).toBeVisible()
+  await page.getByTestId('write-export-draft').click()
+  await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
+  {
+    const dismiss = page.getByTestId('export-job-dismiss')
+    if (await dismiss.count()) await dismiss.click()
+  }
+
+  // P210: Config Token 脏标记
+  await page.goto('/config')
+  await expect(page.getByTestId('config-token-panel')).toBeVisible()
+  await page.getByTestId('config-token-admin').fill('draft-token-e2e')
+  await expect(page.getByTestId('config-token-dirty-badge')).toBeVisible()
+  await page.getByTestId('config-token-clear').click()
+  await expect(page.getByTestId('config-token-dirty-badge')).toHaveCount(0)
 
   // P199: Config offline 时 validate/reload disabled
   await page.goto('/config')
