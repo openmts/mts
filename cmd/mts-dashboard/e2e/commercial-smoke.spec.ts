@@ -308,6 +308,7 @@ test('commercial browser smoke path', async ({ page }) => {
   }
   await expect(page.getByTestId('api-spec-page')).toBeVisible()
   await expect(page.getByTestId('api-spec-load-error')).toHaveCount(0)
+  await expect(page.getByTestId('api-spec-refresh-error')).toHaveCount(0)
   await expect(page.getByTestId('api-spec-export-json')).toBeVisible()
   await expect(page.getByTestId('api-spec-export-md')).toBeVisible()
   await expect(page.getByTestId('api-spec-share-link')).toBeVisible()
@@ -458,6 +459,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('deploy-accept-step-1')).toBeVisible()
   await expect(page.getByTestId('readiness-export')).toBeVisible()
   await expect(page.getByTestId('readiness-doctor-error')).toHaveCount(0)
+  await expect(page.getByTestId('readiness-doctor-refresh-error')).toHaveCount(0)
   await expect(page.getByTestId('readiness-version-error')).toHaveCount(0)
   await expect(page.getByTestId('readiness-share-link')).toBeVisible()
   await expect(page.getByTestId('readiness-archive')).toBeVisible()
@@ -743,6 +745,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect.poll(async () => page.evaluate(() => document.getElementById('main-content')?.scrollTop ?? 0)).toBeGreaterThan(100)
   await page.goto('/about')
   await expect(page.getByTestId('about-page')).toBeVisible()
+  await expect(page.getByTestId('about-refresh-error')).toHaveCount(0)
   await expect(page.getByTestId('about-share-link')).toBeVisible()
   await expect.poll(async () => page.evaluate(() => document.getElementById('main-content')?.scrollTop ?? -1)).toBe(0)
 

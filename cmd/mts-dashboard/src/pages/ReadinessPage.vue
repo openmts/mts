@@ -195,7 +195,7 @@ const scoreBreakdown = computed(() => {
     requiredChecklistRatio: requiredRatio,
     edgeHttpsRequiredRatio: edgeRatio,
     backupScheduleRequiredRatio: scheduleRatio,
-    doctorLoaded: doctor.value != null && !doctorError.value,
+    doctorLoaded: doctor.value != null,
     doctorOk: doctor.value?.ok,
     doctorWarnCount: doctorWarns.value.length,
     httpTlsEnabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
@@ -220,7 +220,7 @@ const exportPreflight = computed(() => {
     requiredChecklistRatio: requiredRatio,
     edgeHttpsRequiredRatio: edgeRatio,
     backupScheduleRequiredRatio: scheduleRatio,
-    doctorLoaded: doctor.value != null && !doctorError.value,
+    doctorLoaded: doctor.value != null,
     doctorOk: doctor.value?.ok,
     doctorWarnCount: doctorWarns.value.length,
     httpTlsEnabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
@@ -326,23 +326,33 @@ async function copySignoffMissing() {
 }
 
 async function loadServerVersion() {
-  versionError.value = ''
   try {
     serverVersion.value = await apiGet<VersionResponse>('/api/v1/admin/version')
+    versionError.value = ''
   } catch (e) {
-    serverVersion.value = null
-    versionError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    // soft-keep：已有版本信息时保留快照
+    if (serverVersion.value) versionError.value = msg
+    else {
+      serverVersion.value = null
+      versionError.value = msg
+    }
   }
 }
 
 async function loadDoctor() {
   loadingDoctor.value = true
-  doctorError.value = ''
   try {
     doctor.value = await apiGet<DoctorResponse>('/api/v1/admin/doctor')
+    doctorError.value = ''
   } catch (e) {
-    doctor.value = null
-    doctorError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    // soft-keep：已有 doctor 快照时保留
+    if (doctor.value) doctorError.value = msg
+    else {
+      doctor.value = null
+      doctorError.value = msg
+    }
   } finally {
     loadingDoctor.value = false
   }
@@ -398,7 +408,7 @@ async function onImportFile(ev: Event) {
 
 function doctorArchiveSummary() {
   return {
-    loaded: doctor.value != null && !doctorError.value,
+    loaded: doctor.value != null,
     ok: doctor.value?.ok,
     http_tls_enabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
     warn_count: doctorWarns.value.length,
@@ -862,11 +872,18 @@ watch(
     </div>
 
     <ActionResultBanner
-      v-if="doctorError"
+      v-if="doctorError && !doctor"
       kind="error"
       :message="doctorError"
       retryable
       data-testid="readiness-doctor-error"
+      @retry="loadDoctor"
+      @dismiss="doctorError = ''"
+    />
+    <PartialErrorBanner
+      v-else-if="doctorError && doctor"
+      :message="`${t('readinessDoctorRefreshFailed')}：${doctorError}`"
+      test-id="readiness-doctor-refresh-error"
       @retry="loadDoctor"
       @dismiss="doctorError = ''"
     />

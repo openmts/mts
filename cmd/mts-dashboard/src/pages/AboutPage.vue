@@ -9,6 +9,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import { clientBuildInfo } from '@/utils/buildInfo'
 import { buildAboutExport, formatAboutExportPretty } from '@/utils/aboutExport'
 import { stampFilename } from '@/utils/download'
@@ -47,12 +48,16 @@ async function loadVersion() {
     return
   }
   loading.value = true
-  loadError.value = ''
   try {
     server.value = await apiGet<VersionResponse>('/api/v1/admin/version')
+    loadError.value = ''
   } catch (e) {
-    server.value = null
-    loadError.value = formatCaughtError(e)
+    const msg = formatCaughtError(e)
+    if (server.value) loadError.value = msg
+    else {
+      server.value = null
+      loadError.value = msg
+    }
   } finally {
     loading.value = false
   }
@@ -138,7 +143,22 @@ onMounted(() => {
       </div>
     </div>
 
-    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="about-load-error" @retry="loadVersion" @dismiss="loadError = ''" />
+    <ActionResultBanner
+      v-if="loadError && !server"
+      kind="error"
+      :message="loadError"
+      retryable
+      data-testid="about-load-error"
+      @retry="loadVersion"
+      @dismiss="loadError = ''"
+    />
+    <PartialErrorBanner
+      v-else-if="loadError && server"
+      :message="`${t('aboutVersionRefreshFailed')}：${loadError}`"
+      test-id="about-refresh-error"
+      @retry="loadVersion"
+      @dismiss="loadError = ''"
+    />
 
     <div class="grid gap-4 md:grid-cols-2">
       <div id="about-client" class="mts-card scroll-mt-20 p-4" data-testid="about-client">

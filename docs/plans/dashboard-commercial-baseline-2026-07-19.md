@@ -1199,3 +1199,9 @@
 
 ## P274（2026-07-21）
 - Account 会话时钟刷新 + Audit soft-keep
+
+## P275（2026-07-21）
+- Readiness Doctor/Version 刷新 soft-keep
+
+## P276（2026-07-21）
+- About / ApiSpec 刷新 soft-keep

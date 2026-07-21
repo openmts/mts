@@ -14,6 +14,7 @@ import { Download, RefreshCw, Search } from 'lucide-vue-next'
 import VirtualTable from '@/components/VirtualTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import { apiSpecToMarkdown, buildApiSpecExport } from '@/utils/apiSpecExport'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
@@ -61,7 +62,6 @@ const EP_LIST_HEIGHT = 360
 async function load() {
   if (!isAdmin.value) return
   loading.value = true
-  loadError.value = ''
   try {
     const data = await apiGet<APISpecResponse>('/api/v1/admin/api-spec')
     version.value = data.version || 'v1'
@@ -69,9 +69,15 @@ async function load() {
     if (!nsFilter.value && namespaces.value.length) {
       nsFilter.value = namespaces.value[0].name
     }
+    loadError.value = ''
   } catch (e) {
-    loadError.value = formatCaughtError(e)
-    notifyError(loadError.value)
+    const msg = formatCaughtError(e)
+    if (namespaces.value.length) {
+      loadError.value = msg
+    } else {
+      loadError.value = msg
+      notifyError(msg)
+    }
   } finally {
     loading.value = false
   }
@@ -239,7 +245,7 @@ async function exportMarkdown() {
       </div>
     </div>
 
-    <div v-if="loadError" data-testid="api-spec-error">
+        <div v-if="loadError && !namespaces.length" data-testid="api-spec-error">
       <ActionResultBanner
         kind="error"
         :message="loadError"
@@ -249,8 +255,14 @@ async function exportMarkdown() {
         @dismiss="loadError = ''"
       />
     </div>
-
-    <div id="api-spec-filters" class="grid gap-3 scroll-mt-20 md:grid-cols-3" data-testid="api-spec-filters">
+    <PartialErrorBanner
+      v-else-if="loadError && namespaces.length"
+      :message="`${t('apiSpecRefreshFailed')}：${loadError}`"
+      test-id="api-spec-refresh-error"
+      @retry="load"
+      @dismiss="loadError = ''"
+    />
+<div id="api-spec-filters" class="grid gap-3 scroll-mt-20 md:grid-cols-3" data-testid="api-spec-filters">
       <label class="text-xs mts-muted md:col-span-1">{{ t('apiSpecNamespace') }}
         <select v-model="nsFilter" class="mts-input mt-1" data-testid="api-spec-ns-filter">
           <option value="">{{ t('apiSpecAll') }}</option>
@@ -266,7 +278,7 @@ async function exportMarkdown() {
     </div>
 
     <EmptyState
-      v-if="!loading && !loadError && !filtered.length"
+      v-if="!loading && !filtered.length && !(loadError && !namespaces.length)"
       data-testid="api-spec-empty"
       :title="t('apiSpecFilterEmpty')"
       :description="t('apiSpecFilterEmptyDesc')"
