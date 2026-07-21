@@ -704,6 +704,9 @@ watch(
 
     <ConfirmDialog
       :open="!!confirmKind"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineOpsBlocked'"
       :title="confirmKind ? confirmTitle[confirmKind] : ''"
       :message="confirmKind ? confirmMessage[confirmKind] : ''"
       :confirm-label="t('opsExecute')"

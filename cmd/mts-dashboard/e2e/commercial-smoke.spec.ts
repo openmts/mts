@@ -1034,6 +1034,26 @@ test('commercial browser smoke path', async ({ page }) => {
     window.dispatchEvent(new Event('online'))
   })
 
+  // P220: 危险确认框在离线时禁用确认并展示阻断提示
+  await page.goto('/query')
+  await expect(page.getByTestId('query-range-delete')).toBeVisible()
+  await page.getByTestId('query-range-delete').click()
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+  await page.getByTestId('confirm-dialog-input').fill('DELETE')
+  await expect(page.getByTestId('confirm-dialog-confirm')).toBeEnabled()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('confirm-dialog-blocked')).toBeVisible()
+  await expect(page.getByTestId('confirm-dialog-confirm')).toBeDisabled()
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+  await page.getByTestId('confirm-dialog-cancel').click()
+  await expect(page.getByTestId('confirm-dialog')).toHaveCount(0)
+
   // P215: 会话 critical 时写操作禁用 + 顶栏 banner
   await page.evaluate(() => {
     const soon = new Date(Date.now() + 30_000).toISOString()

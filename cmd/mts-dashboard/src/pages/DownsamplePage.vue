@@ -1049,6 +1049,9 @@ onBeforeUnmount(() => {
 
     <ConfirmDialog
       v-model:open="deleteOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineAdminBlocked'"
       :title="t('downsampleDeleteTitle')"
       :message="`${t('downsampleDeleteMsg')} ${deleteName}`"
       :confirm-label="t('delete')"
@@ -1058,6 +1061,9 @@ onBeforeUnmount(() => {
     />
     <ConfirmDialog
       v-model:open="batchOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineAdminBlocked'"
       :title="batchMode === 'enable' ? t('downsampleBatchEnableTitle') : t('downsampleBatchDisableTitle')"
       :message="(batchMode === 'enable' ? t('downsampleBatchEnableMsg') : t('downsampleBatchDisableMsg')) + ` (${selectedNames.length})`"
       :confirm-label="batchMode === 'enable' ? t('downsampleBatchEnable') : t('downsampleBatchDisable')"

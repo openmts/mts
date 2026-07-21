@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
+import { mutationBlockedMessageKey } from '@/utils/mutationGuard'
+import type { MessageKey } from '@/i18n/messages'
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -14,12 +16,20 @@ const props = withDefaults(defineProps<{
   /** 若设置，用户必须输入完全匹配的字符串才能确认 */
   requireText?: string
   loading?: boolean
+  /** 离线或会话 critical/expired 时禁用确认 */
+  writeBlocked?: boolean
+  blockReason?: 'none' | 'offline' | 'session' | null
+  /** 离线场景 i18n key；session 时固定 sessionMutationBlocked */
+  offlineMessageKey?: MessageKey
 }>(), {
   confirmLabel: '',
   cancelLabel: '',
   danger: false,
   requireText: '',
   loading: false,
+  writeBlocked: false,
+  blockReason: 'none',
+  offlineMessageKey: 'offlineAdminBlocked',
 })
 
 const emit = defineEmits<{
@@ -44,7 +54,17 @@ const requireHint = computed(() =>
   props.requireText ? formatMessage(t.value('typeToConfirm'), { text: props.requireText }) : '',
 )
 
+const blockedTitle = computed(() => {
+  if (!props.writeBlocked) return undefined
+  const key = mutationBlockedMessageKey(
+    props.blockReason === 'session' || props.blockReason === 'offline' ? props.blockReason : 'offline',
+    props.offlineMessageKey || 'offlineAdminBlocked',
+  ) as MessageKey
+  return t.value(key)
+})
+
 const canConfirm = computed(() => {
+  if (props.writeBlocked) return false
   if (props.loading) return false
   if (!props.requireText) return true
   return input.value === props.requireText
@@ -63,7 +83,7 @@ function close() {
 }
 
 function onConfirm() {
-  if (!canConfirm.value) return
+  if (props.writeBlocked || !canConfirm.value) return
   emit('confirm')
 }
 
@@ -120,6 +140,11 @@ onBeforeUnmount(() => {
     >
       <h3 :id="titleId" class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ title }}</h3>
       <p :id="descId" class="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{{ message }}</p>
+      <p
+        v-if="writeBlocked && blockedTitle"
+        class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+        data-testid="confirm-dialog-blocked"
+      >{{ blockedTitle }}</p>
       <div v-if="requireText" class="mt-3">
         <label class="mb-1 block text-xs text-slate-500 dark:text-slate-400" :for="`confirm-require-${uid}`">
           {{ requireHint }}
@@ -149,6 +174,7 @@ onBeforeUnmount(() => {
           :class="danger ? 'bg-red-600 hover:bg-red-500' : 'bg-slate-800 hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white'"
           data-testid="confirm-dialog-confirm"
           :disabled="!canConfirm"
+          :title="blockedTitle"
           :aria-busy="loading ? 'true' : undefined"
           @click="onConfirm"
         >{{ loading ? t('processing') : resolvedConfirm }}</button>

@@ -1108,6 +1108,9 @@ const columnRows = computed(() => {
 
     <ConfirmDialog
       v-model:open="deleteOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineDeleteBlocked'"
       :title="t('queryDeleteTitle')"
       :message="`${t('queryDeleteMsg')}\n\n${deleteScopeMessage}`"
       require-text="DELETE"

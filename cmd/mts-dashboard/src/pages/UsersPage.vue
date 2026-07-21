@@ -778,6 +778,9 @@ onBeforeUnmount(() => {
 
     <ConfirmDialog
       v-model:open="batchOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineAdminBlocked'"
       :title="batchMode === 'enable' ? t('listBatchEnableTitle') : t('listBatchDisableTitle')"
       :message="(batchMode === 'enable' ? t('listBatchEnableMsg') : t('listBatchDisableMsg')) + ` (${selectedCount})`"
       :confirm-label="batchMode === 'enable' ? t('listBatchEnable') : t('listBatchDisable')"
@@ -787,6 +790,9 @@ onBeforeUnmount(() => {
     />
     <ConfirmDialog
       v-model:open="deleteOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineAdminBlocked'"
       :title="t('usersDeleteTitle')"
       :message="formatMessage(t('usersDeleteMsg'), { name: deleteName })"
       :confirm-label="t('delete')"

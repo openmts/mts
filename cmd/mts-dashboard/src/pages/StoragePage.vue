@@ -667,8 +667,11 @@ async function copyStorageShareLink() {
       </div>
     </div>
 
-<ConfirmDialog
+    <ConfirmDialog
       v-model:open="deleteOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineAdminBlocked'"
       :title="t('storageDeleteSnapshotTitle')"
       :message="formatMessage(t('storageDeleteSnapshotMsg'), { name: deleteName })"
       :confirm-label="t('delete')"

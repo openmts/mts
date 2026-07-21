@@ -780,6 +780,9 @@ onBeforeUnmount(() => {
     </div>
     <ConfirmDialog
       v-model:open="confirmOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineAdminBlocked'"
       :title="t('databasesDeleteDbBtnTitle')"
       :message="t('databasesDeleteDbMsg')"
       :require-text="confirmDbName"
