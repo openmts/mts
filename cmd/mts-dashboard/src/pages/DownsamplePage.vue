@@ -5,8 +5,7 @@ import { useRoute } from 'vue-router'
 import { parseDownsamplePrefill, downsampleFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import { useMutationGuard } from '@/composables/useMutationGuard'
 import {
   isDownsampleCreateDraftDirty,
   shouldBlockLeaveAdminCreate,
@@ -55,7 +54,7 @@ interface StatusesResponse { statuses: DownsampleStatus[] }
 useHashScroll()
 const route = useRoute()
 const { isAdmin } = useAuth()
-const { offline } = useNetworkStatus()
+const { offline, writeBlocked, blockReason } = useMutationGuard()
 const { t, locale } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
 const {
@@ -325,8 +324,8 @@ function clearSelection() {
 }
 
 function openBatch(mode: 'enable' | 'disable') {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    notifyError(t.value('offlineAdminBlocked'))
+  if (writeBlocked.value) {
+    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked'))
     return
   }
   if (!selectedNames.value.length) return
@@ -335,8 +334,8 @@ function openBatch(mode: 'enable' | 'disable') {
 }
 
 async function confirmBatch() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -412,8 +411,8 @@ function onDownsampleBeforeUnload(e: BeforeUnloadEvent) {
 let unregisterDownsampleDirty: (() => void) | null = null
 
 async function createPolicy() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -455,8 +454,8 @@ async function createPolicy() {
 }
 
 function requestDelete(name: string) {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    notifyError(t.value('offlineAdminBlocked'))
+  if (writeBlocked.value) {
+    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked'))
     return
   }
   deleteName.value = name
@@ -464,8 +463,8 @@ function requestDelete(name: string) {
 }
 
 async function confirmDelete() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -487,8 +486,8 @@ async function confirmDelete() {
 }
 
 async function togglePolicy(policy: DownsamplePolicy) {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -525,8 +524,8 @@ function formatDuration(ns: number) {
 }
 
 async function runPolicy(name: string) {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -548,8 +547,8 @@ async function runPolicy(name: string) {
 }
 
 async function resetPolicy(name: string) {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -570,8 +569,8 @@ async function resetPolicy(name: string) {
 }
 
 function openRange(mode: DownsampleRangeMode, name: string) {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    notifyError(t.value('offlineAdminBlocked'))
+  if (writeBlocked.value) {
+    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked'))
     return
   }
   rangeMode.value = mode
@@ -603,8 +602,8 @@ const rangeConfirmLabel = computed(() => {
 })
 
 async function confirmRange() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -738,8 +737,8 @@ onBeforeUnmount(() => {
           type="button"
           class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           data-testid="downsample-open-create"
-          :disabled="offline"
-          :title="offline ? t('offlineAdminBlocked') : undefined"
+          :disabled="writeBlocked"
+          :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined"
           @click="showCreate = true"
         >
           <Plus class="h-3.5 w-3.5" /> {{ t('downsampleCreate') }}
@@ -777,8 +776,8 @@ onBeforeUnmount(() => {
         @clear="clearSelection"
       >
         <template #actions>
-          <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length || offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
-          <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length || offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length || writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length || writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
           <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
           <button type="button" class="mts-btn" data-testid="downsample-export-json" :disabled="exportBusy || !filteredPolicies.length" @click="exportJSON">
             <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
@@ -796,7 +795,7 @@ onBeforeUnmount(() => {
     <div v-if="!policies.length" class="mts-card">
       <EmptyState data-testid="downsample-empty" :title="t('downsampleEmpty')" :description="t('downsampleEmptyDesc')">
         <template #action>
-          <button type="button" class="mts-btn-primary" data-testid="downsample-empty-create" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="showCreate = true">{{ t('downsampleCreate') }}</button>
+          <button type="button" class="mts-btn-primary" data-testid="downsample-empty-create" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="showCreate = true">{{ t('downsampleCreate') }}</button>
         <span v-if="downsampleFormDirty" data-testid="downsample-dirty-badge" class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">{{ t('adminDirtyBadge') }}</span>
         </template>
       </EmptyState>
@@ -863,25 +862,25 @@ onBeforeUnmount(() => {
             </div>
             <div class="px-2">
               <div class="flex flex-wrap items-center gap-0.5">
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleRunTitle')" :data-testid="`downsample-run-${policy.name}`" @click="runPolicy(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : t('downsampleRunTitle')" :data-testid="`downsample-run-${policy.name}`" @click="runPolicy(policy.name)">
                   <PlayCircle class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleDryRun')" :data-testid="`downsample-dryrun-${policy.name}`" @click="openRange('dry-run', policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : t('downsampleDryRun')" :data-testid="`downsample-dryrun-${policy.name}`" @click="openRange('dry-run', policy.name)">
                   <FlaskConical class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleRunRange')" :data-testid="`downsample-runrange-${policy.name}`" @click="openRange('run-range', policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : t('downsampleRunRange')" :data-testid="`downsample-runrange-${policy.name}`" @click="openRange('run-range', policy.name)">
                   <Timer class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleRepair')" :data-testid="`downsample-repair-${policy.name}`" @click="openRange('repair', policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : t('downsampleRepair')" :data-testid="`downsample-repair-${policy.name}`" @click="openRange('repair', policy.name)">
                   <Wrench class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : t('downsampleResetTitle')" :data-testid="`downsample-reset-${policy.name}`" @click="resetPolicy(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : t('downsampleResetTitle')" :data-testid="`downsample-reset-${policy.name}`" @click="resetPolicy(policy.name)">
                   <RotateCcw class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" :data-testid="`downsample-toggle-${policy.name}`" @click="togglePolicy(policy)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" :data-testid="`downsample-toggle-${policy.name}`" @click="togglePolicy(policy)">
                   <component :is="policy.enabled ? Pause : Play" class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" :data-testid="`downsample-delete-${policy.name}`" @click="requestDelete(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" :data-testid="`downsample-delete-${policy.name}`" @click="requestDelete(policy.name)">
                   <Trash2 class="h-4 w-4" />
                 </button>
               </div>
@@ -1043,7 +1042,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="mt-4 flex justify-end gap-2">
           <button class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" @click="showCreate = false">{{ t('cancel') }}</button>
-          <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" data-testid="downsample-create-submit" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="createPolicy">{{ t('create') }}</button>
+          <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" data-testid="downsample-create-submit" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="createPolicy">{{ t('create') }}</button>
         </div>
       </div>
     </div>
@@ -1096,8 +1095,8 @@ onBeforeUnmount(() => {
             type="button"
             class="mts-btn-primary"
             data-testid="downsample-range-confirm"
-            :disabled="rangeLoading || offline"
-            :title="offline ? t('offlineAdminBlocked') : undefined"
+            :disabled="rangeLoading || writeBlocked"
+            :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined"
             @click="confirmRange"
           >
             {{ rangeLoading ? t('loading') : rangeConfirmLabel }}

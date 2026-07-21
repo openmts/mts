@@ -2,8 +2,7 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiPost, apiGet, apiDelete } from '@/api/client'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -55,7 +54,7 @@ interface ExportResponse { export: ExportData }
 
 const route = useRoute()
 const { isAdmin } = useAuth()
-const { offline } = useNetworkStatus()
+const { offline, writeBlocked, blockReason } = useMutationGuard()
 const { success, error: notifyError } = useNotify()
 const {
   exportJob,
@@ -160,8 +159,8 @@ watch(
 )
 
 async function doValidate() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -182,8 +181,8 @@ async function doValidate() {
 }
 
 async function doSnapshot() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -205,8 +204,8 @@ async function doSnapshot() {
 }
 
 async function doDataSnapshot() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -229,8 +228,8 @@ async function doDataSnapshot() {
 }
 
 async function doRestoreDrill() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -258,8 +257,8 @@ async function doRestoreDrill() {
 }
 
 async function doExport() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -333,13 +332,19 @@ async function copySnapshotPath(path: string) {
 }
 
 function requestDelete(name: string) {
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
+    actionResult.value = makeActionResult('error', msg)
+    notifyError(msg)
+    return
+  }
   deleteName.value = name
   deleteOpen.value = true
 }
 
 async function confirmDelete() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -484,17 +489,17 @@ async function copyStorageShareLink() {
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('storageValidateTitle') }}</h3></div>
-        <button data-testid="storage-validate" :disabled="loading === 'validate' || offline" :title="offline ? t('offlineAdminBlocked') : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doValidate">{{ loading === 'validate' ? t('loading') : t('storageValidateRun') }}</button>
+        <button data-testid="storage-validate" :disabled="loading === 'validate' || writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doValidate">{{ loading === 'validate' ? t('loading') : t('storageValidateRun') }}</button>
         <pre v-if="validateResult" class="mt-3 max-h-40 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(validateResult, null, 2) }}</pre>
       </div>
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Camera class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('createSnapshot') }}</h3></div>
-        <button data-testid="storage-snapshot" :disabled="loading === 'snapshot' || offline" :title="offline ? t('offlineAdminBlocked') : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
+        <button data-testid="storage-snapshot" :disabled="loading === 'snapshot' || writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
         <p v-if="snapshotResult?.path" class="mt-2 break-all font-mono text-[11px] mts-muted">{{ snapshotResult.path }}</p>
       </div>
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('export') }}</h3></div>
-        <button data-testid="storage-export-fetch" :disabled="loading === 'export' || offline" :title="offline ? t('offlineAdminBlocked') : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
+        <button data-testid="storage-export-fetch" :disabled="loading === 'export' || writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doExport">{{ loading === 'export' ? t('loading') : t('export') }}</button>
         <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
         <button v-if="exportData" type="button" class="mts-btn mt-2 w-full justify-center" data-testid="storage-export-download" :disabled="exportBusy" @click="downloadExport">{{ t('storageDownloadJson') }}</button>
         <button v-if="exportData" type="button" class="mts-btn mt-2 w-full justify-center" data-testid="storage-export-copy" @click="copyExport">{{ t('storageCopyExport') }}</button>
@@ -518,7 +523,7 @@ async function copyStorageShareLink() {
         :description="t('storageNoSnapshotsDesc')"
       >
         <template #action>
-          <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot' || offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="doSnapshot">{{ t('createSnapshot') }}</button>
+          <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot' || writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="doSnapshot">{{ t('createSnapshot') }}</button>
         </template>
       </EmptyState>
       <div id="snapshots" class="scroll-mt-20" data-testid="storage-snapshots-table">
@@ -546,7 +551,7 @@ async function copyStorageShareLink() {
               <div class="px-4 text-xs">{{ formatBytes(s.size_bytes) }}</div>
               <div class="truncate px-4 text-xs mts-muted" :title="s.mod_time">{{ s.mod_time }}</div>
               <div class="px-2 text-right">
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600" :title="t('delete')" :data-testid="`storage-delete-${s.name}`" @click="requestDelete(s.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : t('delete')" :data-testid="`storage-delete-${s.name}`" @click="requestDelete(s.name)">
                   <Trash2 class="h-4 w-4" />
                 </button>
               </div>
@@ -593,8 +598,8 @@ async function copyStorageShareLink() {
         <button data-testid="storage-data-snapshot"
           type="button"
           class="mts-btn-primary justify-center py-2"
-          :disabled="loading === 'data-snapshot' || offline"
-          :title="offline ? t('offlineAdminBlocked') : undefined"
+          :disabled="loading === 'data-snapshot' || writeBlocked"
+          :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined"
           @click="doDataSnapshot"
         >
           {{ loading === 'data-snapshot' ? t('loading') : t('storageCreateDataSnapshot') }}
@@ -603,8 +608,8 @@ async function copyStorageShareLink() {
           type="button"
           class="mts-btn justify-center py-2"
           data-testid="storage-restore-drill"
-          :disabled="loading === 'restore-drill' || offline"
-          :title="offline ? t('offlineAdminBlocked') : undefined"
+          :disabled="loading === 'restore-drill' || writeBlocked"
+          :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined"
           @click="doRestoreDrill"
         >
           {{ loading === 'restore-drill' ? t('loading') : t('storageRunRestoreDrill') }}

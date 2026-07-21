@@ -992,6 +992,42 @@ test('commercial browser smoke path', async ({ page }) => {
     window.dispatchEvent(new Event('online'))
   })
 
+  // P215/P216: Storage 删除按钮离线禁用
+  await page.goto('/storage')
+  await expect(page.getByTestId('storage-export-fetch')).toBeVisible()
+  // 若有快照行则校验删除按钮；无则至少校验校验按钮离线禁用
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByTestId('offline-banner')).toBeVisible()
+  await expect(page.getByTestId('storage-validate')).toBeDisabled()
+  const delBtn = page.locator('[data-testid^="storage-delete-"]').first()
+  if (await delBtn.count()) {
+    await expect(delBtn).toBeDisabled()
+  }
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+
+  // P215: 会话 critical 时写操作禁用 + 顶栏 banner
+  await page.evaluate(() => {
+    const soon = new Date(Date.now() + 30_000).toISOString()
+    localStorage.setItem('mts_token_expires_at', soon)
+  })
+  await page.reload()
+  await expect(page.getByTestId('session-critical-banner')).toBeVisible({ timeout: 15000 })
+  await page.goto('/write')
+  await expect(page.getByTestId('write-submit')).toBeDisabled()
+  // 恢复较长 TTL 以便后续用例
+  await page.evaluate(() => {
+    const later = new Date(Date.now() + 12 * 3600_000).toISOString()
+    localStorage.setItem('mts_token_expires_at', later)
+  })
+  await page.reload()
+  await expect(page.getByTestId('session-critical-banner')).toHaveCount(0)
+
   // P209: 登录离线门禁
   await page.getByTestId('topbar-logout').click()
   await expect(page.getByTestId('login-panel')).toBeVisible()

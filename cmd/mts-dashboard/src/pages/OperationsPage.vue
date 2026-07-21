@@ -2,8 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiGet, apiPost } from '@/api/client'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -43,7 +42,7 @@ const { isAdmin } = useAuth()
 const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
-const { offline } = useNetworkStatus()
+const { offline, writeBlocked, blockReason } = useMutationGuard()
 const { success, error: notifyError, warn, info } = useNotify()
 const {
   exportJob,
@@ -178,8 +177,8 @@ const statsLoadedLabel = computed(() => {
 })
 
 function openConfirm(kind: 'flush' | 'compact' | 'retention') {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    notifyError(t.value('offlineOpsBlocked'))
+  if (writeBlocked.value) {
+    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked'))
     return
   }
   confirmKind.value = kind
@@ -187,8 +186,8 @@ function openConfirm(kind: 'flush' | 'compact' | 'retention') {
 
 async function runConfirmed() {
   if (!confirmKind.value) return
-  if (shouldBlockOfflineMutation(offline.value)) {
-    notifyError(t.value('offlineOpsBlocked'))
+  if (writeBlocked.value) {
+    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked'))
     confirmKind.value = null
     return
   }
@@ -552,8 +551,8 @@ watch(
         id="ops-flush"
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         data-testid="ops-flush"
-        :disabled="offline"
-        :title="offline ? t('offlineOpsBlocked') : undefined"
+        :disabled="writeBlocked"
+        :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked') : undefined"
         @click="openConfirm('flush')"
       >
         <DatabaseBackup class="mb-2 h-5 w-5 mts-muted" />
@@ -565,8 +564,8 @@ watch(
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         id="ops-compact"
         data-testid="ops-compact"
-        :disabled="offline"
-        :title="offline ? t('offlineOpsBlocked') : undefined"
+        :disabled="writeBlocked"
+        :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked') : undefined"
         @click="openConfirm('compact')"
       >
         <Layers class="mb-2 h-5 w-5 mts-muted" />
@@ -578,8 +577,8 @@ watch(
         class="mts-card p-5 text-left hover:border-slate-300 dark:hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
         id="ops-retention"
         data-testid="ops-retention"
-        :disabled="offline"
-        :title="offline ? t('offlineOpsBlocked') : undefined"
+        :disabled="writeBlocked"
+        :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineOpsBlocked') : undefined"
         @click="openConfirm('retention')"
       >
         <Timer class="mb-2 h-5 w-5 mts-muted" />

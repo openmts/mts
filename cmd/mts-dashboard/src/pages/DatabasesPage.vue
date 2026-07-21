@@ -3,8 +3,7 @@ import { ref, onMounted, computed, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import { useMutationGuard } from '@/composables/useMutationGuard'
 import {
   anyRetentionPolicyDraftDirty,
   isDatabaseCreateDraftDirty,
@@ -72,7 +71,7 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
-const { offline } = useNetworkStatus()
+const { offline, writeBlocked, blockReason } = useMutationGuard()
 const route = useRoute()
 const router = useRouter()
 useHashScroll()
@@ -275,8 +274,8 @@ function onDatabasesBeforeUnload(e: BeforeUnloadEvent) {
 let unregisterDatabasesDirty: (() => void) | null = null
 
 async function createDatabase() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -307,16 +306,16 @@ async function createDatabase() {
 }
 function requestDeleteDatabase(name: string) {
   if (!isAdmin.value) return
-  if (shouldBlockOfflineMutation(offline.value)) {
-    notifyError(t.value('offlineAdminBlocked'))
+  if (writeBlocked.value) {
+    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked'))
     return
   }
   confirmDbName.value = name
   confirmOpen.value = true
 }
 async function confirmDeleteDatabase() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -340,8 +339,8 @@ async function confirmDeleteDatabase() {
   }
 }
 async function createRetentionPolicy(db: DatabaseEntry) {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    const msg = t.value('offlineAdminBlocked')
+  if (writeBlocked.value) {
+    const msg = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked')
     actionResult.value = makeActionResult('error', msg)
     notifyError(msg)
     return
@@ -537,7 +536,7 @@ onBeforeUnmount(() => {
         </button>
         <template v-if="isAdmin">
           <input v-model="newDbName" type="text" :placeholder="t('databasesCreatePlaceholder')" class="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800" data-testid="databases-create-input" @keyup.enter="createDatabase" />
-          <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="databases-create-btn" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="createDatabase">
+          <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700" data-testid="databases-create-btn" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="createDatabase">
             <Plus class="h-4 w-4" /> {{ t('databasesCreate') }}
           </button>
           <span
@@ -580,7 +579,7 @@ onBeforeUnmount(() => {
         :description="databases.length ? t('databasesFilterEmptyDesc') : t('databasesEmptyDesc')"
       >
         <template v-if="!databases.length && isAdmin" #action>
-          <button type="button" class="mts-btn-primary" data-testid="databases-empty-create" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined" @click="createDatabase">{{ t('databasesCreate') }}</button>
+          <button type="button" class="mts-btn-primary" data-testid="databases-empty-create" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined" @click="createDatabase">{{ t('databasesCreate') }}</button>
         </template>
       </EmptyState>
     </div>
@@ -622,8 +621,8 @@ onBeforeUnmount(() => {
                 v-if="isAdmin"
                 type="button"
                 class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
-                :title="offline ? t('offlineAdminBlocked') : t('databasesDeleteDbBtnTitle')"
-                :disabled="offline"
+                :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : t('databasesDeleteDbBtnTitle')"
+                :disabled="writeBlocked"
                 :data-testid="`databases-delete-${db.name}`"
                 @click="requestDeleteDatabase(db.name)"
               >
@@ -772,7 +771,7 @@ onBeforeUnmount(() => {
           <div v-if="isAdmin" class="mt-2 flex flex-wrap items-center gap-2" data-testid="databases-rp-create">
             <input v-model="activeDatabase.newRpName" type="text" :placeholder="t('databasesRpNamePlaceholder')" class="w-28 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-name" />
             <input v-model="activeDatabase.newRpDuration" type="text" :placeholder="t('databasesRpDurationPlaceholder')" class="w-24 rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-600" data-testid="databases-rp-duration" />
-            <button type="button" class="disabled:cursor-not-allowed disabled:opacity-50 inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" data-testid="databases-rp-add" @click="createRetentionPolicy(activeDatabase)" :disabled="offline" :title="offline ? t('offlineAdminBlocked') : undefined">
+            <button type="button" class="disabled:cursor-not-allowed disabled:opacity-50 inline-flex items-center gap-1 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-white" data-testid="databases-rp-add" @click="createRetentionPolicy(activeDatabase)" :disabled="writeBlocked" :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineAdminBlocked') : undefined">
               <Plus class="h-3.5 w-3.5" /> {{ t('databasesAdd') }}
             </button>
           </div>

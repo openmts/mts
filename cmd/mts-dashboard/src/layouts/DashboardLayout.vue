@@ -30,11 +30,11 @@ import { loadSidebarPrefs, saveSidebarPrefs } from '@/utils/sidebarPrefs'
 import { CLIENT_PREFS_CHANGED_EVENT } from '@/utils/clientPrefs'
 import { scrollElementToTop, shouldResetScrollOnRouteChange, shouldShowBackToTop } from '@/utils/scrollTop'
 import { ArrowUp } from 'lucide-vue-next'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useServerReachability } from '@/composables/useServerReachability'
 
 const { t } = useI18n()
-const { offline } = useNetworkStatus()
+const { offline, sessionWriteBlocked } = useMutationGuard()
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 const route = useRoute()
 const router = useRouter()
@@ -258,6 +258,16 @@ function onSkipToMain(e: Event) {
       >
         <span class="font-semibold">{{ t('offlineBannerTitle') }}</span>
         <span class="ml-1">{{ t('offlineBanner') }}</span>
+      </div>
+      <div
+        v-else-if="sessionWriteBlocked"
+        class="no-print border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100 sm:px-6"
+        role="status"
+        aria-live="polite"
+        data-testid="session-critical-banner"
+      >
+        <span class="font-semibold">{{ t('sessionCriticalBannerTitle') }}</span>
+        <span class="ml-1">{{ t('sessionCriticalBanner') }}</span>
       </div>
       <div
         v-if="!offline && showUnreachableBanner"

@@ -30,8 +30,7 @@ import {
 import { loadQueryPrefs, saveQueryPrefs } from '@/utils/queryPrefs'
 import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import { useMutationGuard } from '@/composables/useMutationGuard'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { latencyFromNanos } from '@/utils/queryLatency'
 import { filterSeriesList, seriesLabel } from '@/utils/seriesMeta'
@@ -65,7 +64,7 @@ const history = useQueryHistory()
 const seriesFilter = ref('')
 const route = useRoute()
 useHashScroll()
-const { offline } = useNetworkStatus()
+const { offline, writeBlocked, blockReason } = useMutationGuard()
 const { success, error: notifyError } = useNotify()
 const {
   exportJob,
@@ -498,16 +497,16 @@ const deleteScopeMessage = computed(() => {
 })
 
 function openRangeDelete() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    notifyError(t.value('offlineDeleteBlocked'))
+  if (writeBlocked.value) {
+    notifyError(t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineDeleteBlocked'))
     return
   }
   deleteOpen.value = true
 }
 
 async function doRangeDelete() {
-  if (shouldBlockOfflineMutation(offline.value)) {
-    deleteResult.value = t.value('offlineDeleteBlocked')
+  if (writeBlocked.value) {
+    deleteResult.value = t.value(blockReason.value === 'session' ? 'sessionMutationBlocked' : 'offlineDeleteBlocked')
     notifyError(deleteResult.value)
     return
   }
@@ -879,8 +878,8 @@ const columnRows = computed(() => {
         type="button"
         class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-200"
         data-testid="query-range-delete"
-        :disabled="offline"
-        :title="offline ? t('offlineDeleteBlocked') : undefined"
+        :disabled="writeBlocked"
+        :title="writeBlocked ? t(blockReason === 'session' ? 'sessionMutationBlocked' : 'offlineDeleteBlocked') : undefined"
         @click="openRangeDelete"
       ><Trash2 class="h-4 w-4" />{{ t('queryRangeDelete') }}</button>
       <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm dark:border-slate-700" @click="copyResults">
