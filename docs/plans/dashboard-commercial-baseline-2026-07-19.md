@@ -1074,3 +1074,7 @@
 - 写入超时 mock e2e
 - 导出取消 e2e（`__MTS_E2E_SLOW_EXPORT_MS`）
 - `exportYieldMs` 工具
+
+## P235（2026-07-21）
+- Query/Write actionError live region（alert/status）
+- clipboard 错误友好化

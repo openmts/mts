@@ -1,5 +1,16 @@
 /** 剪贴板写入（纯函数接口 + DOM 实现，便于单测 mock） */
 
+function friendlyClipboardError(err: unknown): string {
+  if (err == null) return 'clipboard-failed'
+  if (typeof err === 'string' && err.trim()) return err.trim()
+  if (err instanceof Error && err.message.trim()) {
+    // 保留短消息；过长/堆栈噪声截断
+    const m = err.message.trim()
+    return m.length > 160 ? `${m.slice(0, 157)}...` : m
+  }
+  return 'clipboard-failed'
+}
+
 export async function copyText(
   text: string,
   opts?: {
@@ -15,7 +26,7 @@ export async function copyText(
       await write(value)
       return { ok: true, method: 'clipboard' }
     } catch (e) {
-      return { ok: false, method: 'clipboard', error: e instanceof Error ? e.message : String(e) }
+      return { ok: false, method: 'clipboard', error: friendlyClipboardError(e) }
     }
   }
 
@@ -44,6 +55,6 @@ export async function copyText(
     ta.remove()
     return ok ? { ok: true, method: 'execCommand' } : { ok: false, method: 'execCommand', error: 'execCommand-failed' }
   } catch (e) {
-    return { ok: false, method: 'execCommand', error: e instanceof Error ? e.message : String(e) }
+    return { ok: false, method: 'execCommand', error: friendlyClipboardError(e) }
   }
 }

@@ -830,6 +830,8 @@ async function exportWriteDraft() {
       v-if="actionError"
       :class="writeWasCanceled ? 'mts-alert-info' : 'mts-alert-error'"
       data-testid="write-action-error"
+      :role="writeWasCanceled ? 'status' : 'alert'"
+      :aria-live="writeWasCanceled ? 'polite' : 'assertive'"
     >{{ actionError }}</p>
     <p v-if="result?.ok" class="mts-alert-ok" data-testid="write-result-ok">{{ result.message }}</p>
     <div v-else-if="!loading && !actionError && !result" class="mts-card">

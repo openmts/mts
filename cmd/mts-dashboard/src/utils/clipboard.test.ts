@@ -29,3 +29,13 @@ test('copyText reports writer failure', async () => {
   assert.equal(r.ok, false)
   assert.match(String(r.error), /denied/)
 })
+
+test('copyText friendly error from Error message', async () => {
+  const r = await copyText('x', {
+    writeText: async () => {
+      throw new Error('no permission')
+    },
+  })
+  assert.equal(r.ok, false)
+  assert.equal(r.error, 'no permission')
+})

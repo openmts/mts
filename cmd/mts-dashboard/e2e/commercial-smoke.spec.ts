@@ -867,6 +867,7 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('query-action-error')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTestId('query-action-error')).toContainText(/查询已取消|Query cancelled/i)
     await expect(page.getByTestId('query-action-error')).toHaveClass(/mts-alert-info/)
+    await expect(page.getByTestId('query-action-error')).toHaveAttribute('role', 'status')
     await expect(page.getByTestId('query-cancel')).toBeDisabled({ timeout: 5_000 })
     await expect(page.getByTestId('query-run')).toBeEnabled({ timeout: 5_000 })
   } finally {
@@ -892,6 +893,8 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('query-action-error')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTestId('query-action-error')).toContainText(/超时|timeout/i)
     await expect(page.getByTestId('query-action-error')).toHaveClass(/mts-alert-error/)
+    // P235: 错误态 live region
+    await expect(page.getByTestId('query-action-error')).toHaveAttribute('role', 'alert')
     await expect(page.getByTestId('query-run')).toBeEnabled({ timeout: 5_000 })
   } finally {
     await page.unroute('**/api/v1/data/query/rows').catch(() => {})

@@ -908,6 +908,8 @@ const columnRows = computed(() => {
       v-if="actionError"
       :class="lastQueryErrorCode === 'canceled' ? 'mts-alert-info' : 'mts-alert-error'"
       data-testid="query-action-error"
+      :role="lastQueryErrorCode === 'canceled' ? 'status' : 'alert'"
+      :aria-live="lastQueryErrorCode === 'canceled' ? 'polite' : 'assertive'"
     >{{ actionError }}</p>
     <p v-if="deleteResult" class="mts-alert-ok">{{ deleteResult }}</p>
 
