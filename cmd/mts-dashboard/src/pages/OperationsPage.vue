@@ -206,6 +206,11 @@ function rebuildPartialFromSections() {
   }
 }
 
+const opsFailedSections = computed(() => {
+  const order: OpsSectionKey[] = ['maintenance', 'compaction', 'maintErrors', 'memory']
+  return order.filter((k) => Boolean(sectionErrors.value[k]))
+})
+
 async function loadStats() {
   if (!isAdmin.value) return
   loading.value = true
@@ -577,6 +582,25 @@ watch(
       @retry="loadStats"
       @dismiss="partialStatsError = ''"
     />
+    <div
+      v-if="opsFailedSections.length"
+      class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/30"
+      data-testid="ops-partial-sections"
+    >
+      <span class="text-xs font-medium text-amber-900 dark:text-amber-100">{{ t('overviewPartialRetryHint') }}</span>
+      <button
+        v-for="key in opsFailedSections"
+        :key="key"
+        type="button"
+        class="mts-btn text-xs"
+        :data-testid="`ops-partial-retry-${key}`"
+        :disabled="!!sectionRetrying[key]"
+        @click="retryOpsSection(key)"
+      >
+        {{ sectionLabel(key) }} · {{ sectionRetrying[key] ? t('loading') : t('retry') }}
+      </button>
+    </div>
+
     <ActionResultBanner
       :result="actionResult"
       :retryable="canRetryAction"

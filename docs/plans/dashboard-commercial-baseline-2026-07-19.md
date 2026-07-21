@@ -1286,3 +1286,7 @@
 - Operations：stats/errors/memory 分项独立加载与重试（sectionRetrying），空态 CTA 不再整页 loadStats
 - About：服务端版本空态 EmptyState + 重试
 - Overview：健康 reasons 空态文案（无额外不健康原因）
+
+## P301（2026-07-22）
+- Overview：Doctor 空态常显 + 分项重试（含失败文案）
+- Operations：分项失败 chip 条（对齐 Overview partial retry）

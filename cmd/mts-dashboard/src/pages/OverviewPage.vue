@@ -934,7 +934,7 @@ async function copyOverview() {
     </div>
 
 
-        <div v-if="showAdminPanels && doctorChecks.length" id="overview-doctor" class="mts-panel scroll-mt-20" data-testid="overview-doctor-checks">
+        <div v-if="showAdminPanels" id="overview-doctor" class="mts-panel scroll-mt-20" data-testid="overview-doctor-checks">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2">
           <ShieldCheck class="h-4 w-4 text-slate-500" />
@@ -949,7 +949,24 @@ async function copyOverview() {
         </span>
       </div>
       <p class="mb-3 text-xs mts-muted">{{ t('doctorDesc') }}</p>
-      <div class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
+      <EmptyState
+        v-if="!doctorChecks.length"
+        compact
+        data-testid="overview-doctor-empty"
+        :title="adminSectionErrors.doctor ? t('overviewDoctorEmptyFailed') : t('overviewDoctorEmptyTitle')"
+        :description="adminSectionErrors.doctor || t('overviewDoctorEmptyDesc')"
+      >
+        <template #action>
+          <button
+            type="button"
+            class="mts-btn-primary text-xs"
+            data-testid="overview-doctor-retry"
+            :disabled="!!adminSectionRetrying.doctor"
+            @click="retryAdminSection('doctor')"
+          >{{ adminSectionRetrying.doctor ? t('loading') : t('overviewSectionRetry') }}</button>
+        </template>
+      </EmptyState>
+      <div v-else class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
         <div class="grid grid-cols-[minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(8rem,1.3fr)] border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
           <span>{{ t('readinessDoctorColLevel') }}</span>
           <span>{{ t('readinessDoctorColCode') }}</span>
