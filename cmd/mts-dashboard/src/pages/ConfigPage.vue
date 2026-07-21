@@ -60,6 +60,7 @@ const ERROR_ROW_HEIGHT = 44
 const CONFIG_LIST_HEIGHT = 320
 const errorCodeFilter = ref('')
 const loadError = ref('')
+const schemaError = ref('')
 const actionResult = ref<ActionResult | null>(null)
 const adminTokenInput = ref(getAdminToken())
 const dataTokenInput = ref(getDataToken())
@@ -97,15 +98,43 @@ const filteredErrorCodes = computed(() => {
   )
 })
 
+async function reloadAllConfig() {
+  loadError.value = ''
+  try {
+    await loadConfig()
+  } catch (e) {
+    loadError.value = formatCaughtError(e)
+  }
+}
+
+async function reloadConfigSchema() {
+  schemaError.value = ''
+  try {
+    const schemaData = await apiGet<SchemaResponse>('/api/v1/admin/config/schema')
+    schemaFields.value = schemaData.fields ?? []
+  } catch (e) {
+    schemaFields.value = []
+    schemaError.value = formatCaughtError(e)
+  }
+}
+
 async function loadConfig() {
-  const [cfgData, ecData, schemaData] = await Promise.all([
+  schemaError.value = ''
+  const results = await Promise.allSettled([
     apiGet<ConfigResponse>('/api/v1/admin/config/effective'),
     apiGet<ErrorCodesResponse>('/api/v1/admin/error-codes'),
-    apiGet<SchemaResponse>('/api/v1/admin/config/schema').catch(() => ({ fields: [] as SchemaField[] })),
+    apiGet<SchemaResponse>('/api/v1/admin/config/schema'),
   ])
-  config.value = cfgData.config
-  errorCodes.value = ecData.codes ?? []
-  schemaFields.value = schemaData.fields ?? []
+  if (results[0].status !== 'fulfilled') throw results[0].reason
+  if (results[1].status !== 'fulfilled') throw results[1].reason
+  config.value = results[0].value.config
+  errorCodes.value = results[1].value.codes ?? []
+  if (results[2].status === 'fulfilled') {
+    schemaFields.value = results[2].value.fields ?? []
+  } else {
+    schemaFields.value = []
+    schemaError.value = formatCaughtError(results[2].reason)
+  }
 }
 
 function applyConfigPrefillFromRoute() {
@@ -360,8 +389,17 @@ onBeforeUnmount(() => {
       :message="loadError"
       retryable
       data-testid="config-load-error"
-      @retry="loadConfig"
+      @retry="() => { void reloadAllConfig() }"
       @dismiss="loadError = ''"
+    />
+    <ActionResultBanner
+      v-if="schemaError"
+      kind="warn"
+      :message="`${t('configSchemaLoadFailed')}：${schemaError}`"
+      retryable
+      data-testid="config-schema-error"
+      @retry="() => { void reloadConfigSchema() }"
+      @dismiss="schemaError = ''"
     />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 

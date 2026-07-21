@@ -1121,3 +1121,9 @@
 
 ## P248（2026-07-21）
 - Users 批量启停失败列出失败用户名
+
+## P249（2026-07-21）
+- Storage 操作失败 ActionResult 可重试（lastFailedAction）
+
+## P250（2026-07-21）
+- Config schema / Users 授权库列表失败可见可重试

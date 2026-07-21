@@ -167,6 +167,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/storage')
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
+  await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
 
   // 4) 查询页可达 + 执行一次 rows 查询以验证结果虚拟列表
   await page.goto('/query')
@@ -381,6 +382,7 @@ test('commercial browser smoke path', async ({ page }) => {
   // Config 表头 i18n（表头在空数据时仍可见；a11y 树中 th 可能暴露为 cell）
   await page.goto('/config')
   await expect(page.getByTestId('config-page')).toBeVisible()
+  await expect(page.getByTestId('config-schema-error')).toHaveCount(0)
   await expect(page.getByTestId('config-share-link')).toBeVisible()
   await expect(page.getByTestId('config-export-effective')).toBeVisible()
   await expect(page.getByTestId('config-copy-effective')).toBeVisible()
@@ -828,6 +830,7 @@ test('commercial browser smoke path', async ({ page }) => {
   })
   await expect(page.getByTestId('offline-banner')).toBeVisible()
   await expect(page.getByTestId('users-create-open')).toBeDisabled()
+  await expect(page.getByTestId('users-grant-db-error')).toHaveCount(0)
   await expect(page.getByTestId('users-batch-enable')).toBeDisabled()
   await page.evaluate(() => {
     Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })

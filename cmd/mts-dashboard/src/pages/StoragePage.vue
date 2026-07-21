@@ -74,6 +74,9 @@ const selectedDataSnapshotPath = ref('')
 const snapshots = ref<SnapshotInfo[]>([])
 const exportData = ref<ExportData | null>(null)
 const actionResult = ref<ActionResult | null>(null)
+/** 最近一次失败写操作，供 ActionResultBanner 重试 */
+type StorageActionKey = 'validate' | 'snapshot' | 'data-snapshot' | 'restore-side' | 'export-config' | 'delete'
+const lastFailedAction = ref<StorageActionKey | null>(null)
 const listError = ref('')
 const loading = ref('')
 const listLoading = ref(false)
@@ -141,6 +144,32 @@ async function reloadStorageLists() {
   await loadDataSnapshots()
 }
 
+function reportActionError(key: StorageActionKey, e: unknown) {
+  lastFailedAction.value = key
+  const msg = formatCaughtError(e)
+  actionResult.value = makeActionResult('error', msg)
+  notifyError(msg)
+}
+
+function clearActionResult() {
+  actionResult.value = null
+  lastFailedAction.value = null
+}
+
+async function retryLastStorageAction() {
+  const key = lastFailedAction.value
+  if (!key) return
+  if (key === 'validate') return doValidate()
+  if (key === 'snapshot') return doSnapshot()
+  if (key === 'data-snapshot') return doDataSnapshot()
+  if (key === 'restore-side') return doRestoreDrill()
+  if (key === 'export-config') return doExport()
+  if (key === 'delete' && deleteName.value) {
+    deleteOpen.value = true
+    return confirmDelete()
+  }
+}
+
 function scrollToCurrentHash() {
   if (typeof window === 'undefined') return
   scheduleScrollToHash(window.location.hash || route.hash)
@@ -178,7 +207,7 @@ async function doValidate() {
     return
   }
   loading.value = 'validate'
-  actionResult.value = null
+  clearActionResult()
   try {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/storage/validate')
     drillDone.value = { ...drillDone.value, validate: true }
@@ -186,9 +215,7 @@ async function doValidate() {
     actionResult.value = makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg)
     success(msg)
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('validate', e)
   } finally { loading.value = '' }
 }
 
@@ -200,7 +227,7 @@ async function doSnapshot() {
     return
   }
   loading.value = 'snapshot'
-  actionResult.value = null
+  clearActionResult()
   try {
     snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot')
     drillDone.value = { ...drillDone.value, snapshot: true }
@@ -209,9 +236,7 @@ async function doSnapshot() {
     success(t.value('createSnapshot'))
     await loadSnapshots()
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('snapshot', e)
   } finally { loading.value = '' }
 }
 
@@ -223,7 +248,7 @@ async function doDataSnapshot() {
     return
   }
   loading.value = 'data-snapshot'
-  actionResult.value = null
+  clearActionResult()
   try {
     dataSnapshotResult.value = await apiPost<DataSnapshotResponse>('/api/v1/admin/storage/data-snapshot', { flush: true })
     if (dataSnapshotResult.value.path) selectedDataSnapshotPath.value = dataSnapshotResult.value.path
@@ -233,9 +258,7 @@ async function doDataSnapshot() {
     success(t.value('storageDataSnapshotOk'))
     await loadDataSnapshots()
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('data-snapshot', e)
   } finally { loading.value = '' }
 }
 
@@ -247,7 +270,7 @@ async function doRestoreDrill() {
     return
   }
   loading.value = 'restore-drill'
-  actionResult.value = null
+  clearActionResult()
   try {
     const source = selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || ''
     const body = source ? { source_path: source } : {}
@@ -262,9 +285,7 @@ async function doRestoreDrill() {
     else notifyError(msg)
     await loadDataSnapshots()
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('restore-side', e)
   } finally { loading.value = '' }
 }
 
@@ -276,7 +297,7 @@ async function doExport() {
     return
   }
   loading.value = 'export'
-  actionResult.value = null
+  clearActionResult()
   try {
     const data = await apiGet<ExportResponse>('/api/v1/admin/storage/export')
     exportData.value = data.export
@@ -284,9 +305,7 @@ async function doExport() {
     actionResult.value = makeActionResult('ok', t.value('storageConfigExported'))
     success(t.value('storageConfigExportToast'))
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('export-config', e)
   } finally { loading.value = '' }
 }
 
@@ -365,13 +384,12 @@ async function confirmDelete() {
   try {
     await apiDelete(`/api/v1/admin/storage/snapshots?name=${encodeURIComponent(deleteName.value)}`)
     deleteOpen.value = false
+    lastFailedAction.value = null
     actionResult.value = makeActionResult('ok', formatMessage(t.value('storageSnapshotDeleted'), { name: deleteName.value }))
     success(t.value('storageSnapshotDeletedToast'))
     await loadSnapshots()
   } catch (e) {
-    const msg = formatCaughtError(e)
-    actionResult.value = makeActionResult('error', msg)
-    notifyError(msg)
+    reportActionError('delete', e)
   } finally {
     deleteLoading.value = false
   }
@@ -421,7 +439,13 @@ async function copyStorageShareLink() {
       @retry="reloadStorageLists"
       @dismiss="listError = ''"
     />
-    <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
+    <ActionResultBanner
+      :result="actionResult"
+      :retryable="!!(actionResult && actionResult.kind === 'error' && lastFailedAction)"
+      data-testid="storage-action-result"
+      @retry="retryLastStorageAction"
+      @dismiss="clearActionResult"
+    />
 
     <div id="backup-drill" class="mts-card p-4 scroll-mt-20">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">

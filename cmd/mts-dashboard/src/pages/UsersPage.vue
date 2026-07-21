@@ -108,6 +108,7 @@ const {
   runJSONExport,
 } = useExportJob()
 const loadError = ref('')
+const grantDbError = ref('')
 const actionResult = ref<ActionResult | null>(null)
 const showCreate = ref(false)
 const newUser = ref({ name: '', display_name: '', password: '', role: 'user' })
@@ -134,10 +135,7 @@ onMounted(async () => {
 
   if (!isAdmin.value) return
   await loadUsers()
-  try {
-    const { listDatabases } = await import('@/api/meta')
-    databases.value = await listDatabases()
-  } catch (_) { /* 非关键 */ }
+  await loadGrantDatabases()
   await applyUsersPrefillFromRoute()
 })
 
@@ -181,6 +179,17 @@ async function copyUsersShareLink() {
   const res = await copyText(url)
   if (res.ok) success(t.value('usersShareCopied'))
   else notifyError(res.error || t.value('failed'))
+}
+
+async function loadGrantDatabases() {
+  grantDbError.value = ''
+  try {
+    const { listDatabases } = await import('@/api/meta')
+    databases.value = await listDatabases()
+  } catch (e) {
+    databases.value = []
+    grantDbError.value = formatCaughtError(e)
+  }
 }
 
 async function loadUsers() {
@@ -614,6 +623,15 @@ onBeforeUnmount(() => {
       @dismiss="loadError = ''"
     />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
+    <ActionResultBanner
+      v-if="grantDbError"
+      kind="warn"
+      :message="`${t('usersGrantDbLoadFailed')}：${grantDbError}`"
+      retryable
+      data-testid="users-grant-db-error"
+      @retry="loadGrantDatabases"
+      @dismiss="grantDbError = ''"
+    />
 
     <div v-if="!isAdmin" class="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60 p-4 text-sm text-slate-600 dark:text-slate-300">
       {{ t('usersNonAdminHint') }}
