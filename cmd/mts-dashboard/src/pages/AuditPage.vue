@@ -225,10 +225,16 @@ async function loadAudit() {
     serverTotal.value = typeof data.total === 'number' ? data.total : (data.events ?? []).length
     clearSelection()
   } catch (e) {
-    loadError.value = formatCaughtError(e)
-    auditEvents.value = []
-    serverTotal.value = null
-    notifyError(loadError.value)
+    const msg = formatCaughtError(e)
+    if (auditEvents.value.length) {
+      // soft-keep：刷新失败保留上次审计列表
+      loadError.value = msg
+    } else {
+      auditEvents.value = []
+      serverTotal.value = null
+      loadError.value = msg
+      notifyError(msg)
+    }
   } finally {
     loading.value = false
   }
@@ -392,7 +398,22 @@ watch(
       data-testid="audit-self-hint"
     >{{ t('auditSelfHint') }}</p>
 
-    <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="audit-load-error" @retry="loadAudit" @dismiss="loadError = ''" />
+    <ActionResultBanner
+      v-if="loadError && !auditEvents.length"
+      kind="error"
+      :message="loadError"
+      retryable
+      data-testid="audit-load-error"
+      @retry="loadAudit"
+      @dismiss="loadError = ''"
+    />
+    <PartialErrorBanner
+      v-else-if="loadError && auditEvents.length"
+      :message="`${t('auditRefreshFailed')}：${loadError}`"
+      test-id="audit-refresh-error"
+      @retry="loadAudit"
+      @dismiss="loadError = ''"
+    />
     <PartialErrorBanner
       v-else-if="usersLoadError"
       :message="`${t('auditUsersLoadFailed')}：${usersLoadError}`"

@@ -732,6 +732,11 @@ export const messages = {
     databasesMeasFailed: '表详情加载失败',
     queryFailedKeepSnapshot: '查询失败（已保留上次结果）',
     usersRefreshFailed: '用户列表刷新失败（已保留上次列表）',
+    sessionLevelOk: '正常',
+    sessionLevelWarn: '即将到期',
+    sessionLevelCritical: '临界',
+    auditRefreshFailed: '审计列表刷新失败（已保留上次结果）',
+
     writeFailedKeepLastSuccess: '写入失败（已保留上次成功结果）',
     downsamplePoliciesLoadFailed: '降采样策略加载失败（已保留上次列表）',
     downsampleStatusesLoadFailed: '降采样状态加载失败（已保留上次列表）',
@@ -2117,6 +2122,11 @@ export const messages = {
     databasesMeasFailed: 'Measurement detail load failed',
     queryFailedKeepSnapshot: 'Query failed (kept last result)',
     usersRefreshFailed: 'User list refresh failed (kept last list)',
+    sessionLevelOk: 'OK',
+    sessionLevelWarn: 'Warning',
+    sessionLevelCritical: 'Critical',
+    auditRefreshFailed: 'Audit list refresh failed (kept last result)',
+
     writeFailedKeepLastSuccess: 'Write failed (kept last success)',
     downsamplePoliciesLoadFailed: 'Downsample policies load failed (kept last list)',
     downsampleStatusesLoadFailed: 'Downsample statuses load failed (kept last list)',

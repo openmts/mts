@@ -55,6 +55,7 @@ useHashScroll()
 const { currentUser, currentRole, changePassword, isAdmin, logout, login } = useAuth()
 const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
+let sessionClock: ReturnType<typeof setInterval> | null = null
 const expiresAt = computed(() => parseExpiresAt(getTokenExpiresAt()))
 const sessionView = computed(() =>
   sessionExpiryView(
@@ -69,6 +70,15 @@ const remainingText = computed(() => {
   if (expiresAt.value == null) return t.value('accountSessionNone')
   if (sessionView.value.urgency === 'expired') return t.value('sessionExpiredLabel')
   return formatRemaining(Math.max(0, sessionView.value.remainingMs))
+})
+const sessionLevelLabel = computed(() => {
+  switch (sessionView.value.urgency) {
+    case 'ok': return t.value('sessionLevelOk')
+    case 'warn': return t.value('sessionLevelWarn')
+    case 'critical': return t.value('sessionLevelCritical')
+    case 'expired': return t.value('sessionExpiredLabel')
+    default: return t.value('sessionUnknown')
+  }
 })
 const expiresAtText = computed(() => {
   if (expiresAt.value == null) return t.value('emptyValue')
@@ -170,12 +180,18 @@ onMounted(() => {
   unregisterAccountDirty = registerDirtyChecker('account', () => passwordFormDirty.value)
   window.addEventListener('beforeunload', onAccountBeforeUnload)
   applyAccountPrefillFromRoute()
+  nowMs.value = Date.now()
+  sessionClock = setInterval(() => { nowMs.value = Date.now() }, 15_000)
 })
 
 onBeforeUnmount(() => {
   unregisterAccountDirty?.()
   unregisterAccountDirty = null
   window.removeEventListener('beforeunload', onAccountBeforeUnload)
+  if (sessionClock) {
+    clearInterval(sessionClock)
+    sessionClock = null
+  }
 })
 
 watch(
@@ -639,7 +655,7 @@ async function submit() {
         </div>
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('sessionExpiry') }}</dt>
-          <dd class="font-mono" data-testid="account-session-level">{{ sessionView.urgency }}</dd>
+          <dd class="font-mono" data-testid="account-session-level">{{ sessionLevelLabel }}</dd>
         </div>
       </dl>
       <p class="mt-3 text-xs mts-muted" data-testid="account-session-hint">{{ t('accountSessionRenewHint') }}</p>

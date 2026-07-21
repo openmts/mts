@@ -878,6 +878,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/audit')
   await expect(page.getByTestId('audit-page')).toBeVisible()
   await expect(page.getByTestId('audit-load-error')).toHaveCount(0)
+  await expect(page.getByTestId('audit-refresh-error')).toHaveCount(0)
   await expect(page.getByTestId('audit-users-load-error')).toHaveCount(0)
   await page.getByTestId('audit-export-json').click()
   await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
