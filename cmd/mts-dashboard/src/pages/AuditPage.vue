@@ -6,6 +6,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -391,12 +392,10 @@ watch(
     >{{ t('auditSelfHint') }}</p>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="audit-load-error" @retry="loadAudit" @dismiss="loadError = ''" />
-    <ActionResultBanner
+    <PartialErrorBanner
       v-else-if="usersLoadError"
-      kind="warn"
       :message="`${t('auditUsersLoadFailed')}：${usersLoadError}`"
-      retryable
-      data-testid="audit-users-load-error"
+      test-id="audit-users-load-error"
       @retry="loadUsersForFilter"
       @dismiss="usersLoadError = ''"
     />

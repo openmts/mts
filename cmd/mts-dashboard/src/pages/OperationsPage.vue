@@ -8,6 +8,7 @@ import { useI18n } from '@/composables/useI18n'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
@@ -500,12 +501,10 @@ watch(
       @retry="loadStats"
       @dismiss="loadError = ''"
     />
-    <ActionResultBanner
+    <PartialErrorBanner
       v-else-if="partialStatsError"
-      kind="warn"
       :message="`${t('partialAdminStats')}：${partialStatsError}`"
-      retryable
-      data-testid="ops-partial-error"
+      test-id="ops-partial-error"
       @retry="loadStats"
       @dismiss="partialStatsError = ''"
     />

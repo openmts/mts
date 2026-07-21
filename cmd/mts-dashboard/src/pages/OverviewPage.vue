@@ -10,6 +10,7 @@ import { useI18n } from '@/composables/useI18n'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
 import { clientBuildInfo } from '@/utils/buildInfo'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
@@ -598,14 +599,11 @@ async function copyOverview() {
       @retry="loadOverview"
       @dismiss="loadError = ''"
     />
-    <ActionResultBanner
+    <PartialErrorBanner
       v-else-if="adminPartialError"
-      kind="warn"
       :message="`${t('partialAdminStats')}：${adminPartialError}`"
-      retryable
-      data-testid="overview-partial-error"
+      test-id="overview-partial-error"
       @retry="loadOverview"
-      :dismissible="true"
       @dismiss="adminSectionErrors = {}"
     />
     <div

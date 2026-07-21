@@ -10,6 +10,7 @@ import { permissionLabel } from '@/utils/permissionLabel'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
@@ -327,12 +328,10 @@ watch(
     </div>
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="access-grants-load-error" @retry="load" @dismiss="loadError = ''" />
-    <ActionResultBanner
+    <PartialErrorBanner
       v-else-if="partialErrors.length"
-      kind="warn"
       :message="formatMessage(t('accessGrantsPartialFail'), { summary: partialErrors.slice(0, 3).join('; ') + (partialErrors.length > 3 ? '…' : '') })"
-      retryable
-      data-testid="access-grants-partial-error"
+      test-id="access-grants-partial-error"
       @retry="load"
       @dismiss="partialErrors = []"
     />

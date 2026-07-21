@@ -1151,3 +1151,9 @@
 
 ## P258（2026-07-21）
 - 命令面板补齐 readiness doctor/action、account prefs、metrics filter 深链
+
+## P259（2026-07-21）
+- Metrics 自动刷新失败保留快照并可重试
+
+## P260（2026-07-21）
+- 抽取 PartialErrorBanner，统一分项失败条

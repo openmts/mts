@@ -13,6 +13,7 @@ import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useActionRetry } from '@/composables/useActionRetry'
 import {
@@ -406,12 +407,10 @@ onBeforeUnmount(() => {
       @retry="() => { void reloadAllConfig() }"
       @dismiss="loadError = ''"
     />
-    <ActionResultBanner
+    <PartialErrorBanner
       v-if="schemaError"
-      kind="warn"
       :message="`${t('configSchemaLoadFailed')}：${schemaError}`"
-      retryable
-      data-testid="config-schema-error"
+      test-id="config-schema-error"
       @retry="() => { void reloadConfigSchema() }"
       @dismiss="schemaError = ''"
     />

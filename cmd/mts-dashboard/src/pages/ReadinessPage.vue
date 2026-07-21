@@ -36,6 +36,7 @@ import PermissionDenied from '@/components/PermissionDenied.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import {
   PRODUCTION_CHECKLIST,
   automatedCoverage,
@@ -869,12 +870,10 @@ watch(
       @retry="loadDoctor"
       @dismiss="doctorError = ''"
     />
-    <ActionResultBanner
+    <PartialErrorBanner
       v-if="versionError"
-      kind="warn"
       :message="`${t('readinessVersionLoadFailed')}：${versionError}`"
-      retryable
-      data-testid="readiness-version-error"
+      test-id="readiness-version-error"
       @retry="loadServerVersion"
       @dismiss="versionError = ''"
     />

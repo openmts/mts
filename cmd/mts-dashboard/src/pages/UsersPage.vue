@@ -17,6 +17,7 @@ import UserModals from '@/components/UserModals.vue'
 import UserGrantPanel from '@/components/UserGrantPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
@@ -662,12 +663,10 @@ onBeforeUnmount(() => {
       @retry="retryLastUsersAction"
       @dismiss="clearActionResult"
     />
-    <ActionResultBanner
+    <PartialErrorBanner
       v-if="grantDbError"
-      kind="warn"
       :message="`${t('usersGrantDbLoadFailed')}：${grantDbError}`"
-      retryable
-      data-testid="users-grant-db-error"
+      test-id="users-grant-db-error"
       @retry="loadGrantDatabases"
       @dismiss="grantDbError = ''"
     />

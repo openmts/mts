@@ -11,6 +11,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import {
@@ -42,6 +43,8 @@ const {
 } = useExportJob()
 const loading = ref(false)
 const loadError = ref('')
+const refreshError = ref('')
+const refreshFailStreak = ref(0)
 const raw = ref('')
 const families = ref<PrometheusFamily[]>([])
 const q = ref('')
@@ -58,22 +61,37 @@ const summary = computed(() => summarizeFamilies(filtered.value))
 const refreshOptions = metricsRefreshIntervalsMs()
 const activeFamily = computed(() => filtered.value.find((f) => f.name === activeFamilyName.value) ?? null)
 
-async function load() {
+async function load(opts?: { background?: boolean }) {
   if (!isAdmin.value) return
-  loading.value = true
-  loadError.value = ''
+  const background = !!opts?.background
+  if (!background) {
+    loading.value = true
+    loadError.value = ''
+  }
   try {
     const text = await apiGetText('/metrics')
     raw.value = text
     families.value = parsePrometheusText(text)
     lastRefreshed.value = new Date().toLocaleTimeString()
+    refreshError.value = ''
+    refreshFailStreak.value = 0
   } catch (e) {
-    loadError.value = formatCaughtError(e)
-    families.value = []
-    raw.value = ''
-    notifyError(loadError.value)
+    const msg = formatCaughtError(e)
+    const hasData = !!raw.value || families.value.length > 0
+    if (background && hasData) {
+      // 自动刷新失败：保留上次快照，避免闪空 + toast 风暴
+      refreshError.value = msg
+      refreshFailStreak.value += 1
+      if (refreshFailStreak.value === 1) notifyError(`${t.value('metricsRefreshFailed')}：${msg}`)
+    } else {
+      loadError.value = msg
+      families.value = []
+      raw.value = ''
+      refreshError.value = ''
+      notifyError(msg)
+    }
   } finally {
-    loading.value = false
+    if (!background) loading.value = false
   }
 }
 
@@ -155,7 +173,7 @@ function setupAutoRefresh() {
   clearTimer()
   if (!autoRefreshMs.value || autoRefreshMs.value <= 0) return
   timer = setInterval(() => {
-    void load()
+    void load({ background: true })
   }, autoRefreshMs.value)
 }
 
@@ -249,15 +267,22 @@ onBeforeUnmount(() => {
         <button type="button" class="mts-btn" data-testid="metrics-export-json" :disabled="exportBusy || (!filtered.length)" @click="exportJSON">
           <Download class="h-3.5 w-3.5" /> {{ t('metricsExportJSON') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="metrics-refresh" :disabled="loading" :aria-busy="loading ? 'true' : undefined" @click="load">
+        <button type="button" class="mts-btn" data-testid="metrics-refresh" :disabled="loading" :aria-busy="loading ? 'true' : undefined" @click="() => load()">
           <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" /> {{ t('refresh') }}
         </button>
       </div>
     </div>
 
     <div v-if="loadError" data-testid="metrics-error">
-      <ActionResultBanner kind="error" :message="loadError" retryable @retry="load" @dismiss="loadError = ''" />
+      <ActionResultBanner kind="error" :message="loadError" retryable data-testid="metrics-load-error" @retry="() => load()" @dismiss="loadError = ''" />
     </div>
+    <PartialErrorBanner
+      v-else-if="refreshError"
+      :message="`${t('metricsRefreshFailed')}：${refreshError}`"
+      test-id="metrics-refresh-error"
+      @retry="() => load({ background: true })"
+      @dismiss="refreshError = ''"
+    />
 
     <div class="grid gap-3 sm:grid-cols-2">
       <div class="mts-card p-3" id="metrics-summary" data-testid="metrics-summary-families">
