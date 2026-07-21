@@ -15,9 +15,12 @@ import {
   saveLoginUsernamePref,
 } from '@/utils/loginUsernamePrefs'
 import { Eye, EyeOff, Server } from 'lucide-vue-next'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 
 const router = useRouter()
 const { login, mustChangePassword, isAdmin } = useAuth()
+const { offline } = useNetworkStatus()
 const { t, locale } = useI18n()
 
 const storage = typeof localStorage !== 'undefined' ? localStorage : null
@@ -41,6 +44,10 @@ const pendingRedirectLabel = computed(() =>
 const invalid = computed(() => !!error.value)
 
 async function handleLogin() {
+  if (shouldBlockOfflineMutation(offline.value)) {
+    error.value = t.value('offlineLoginBlocked')
+    return
+  }
   if (!username.value.trim() || !password.value) {
     error.value = t.value('loginNeedCredentials')
     return
@@ -205,7 +212,8 @@ async function handleLogin() {
           type="submit"
           class="mts-focus-ring w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
           data-testid="login-submit"
-          :disabled="loading"
+          :disabled="loading || offline"
+          :title="offline ? t('offlineLoginBlocked') : undefined"
           :aria-busy="loading ? 'true' : undefined"
         >
           {{ loading ? t('loggingIn') : t('login') }}

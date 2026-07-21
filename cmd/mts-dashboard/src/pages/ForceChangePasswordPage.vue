@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -7,6 +7,9 @@ import { validateNewPassword } from '@/utils/passwordPolicy'
 import { buildLoginLocation, formatRedirectLabel, sanitizeRedirect, withRedirectQuery } from '@/utils/redirect'
 import { KeyRound } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
+import { registerDirtyChecker } from '@/utils/routeDirty'
 
 const router = useRouter()
 const route = useRoute()
@@ -17,15 +20,42 @@ const pendingRedirectLabel = computed(() =>
   pendingRedirect.value ? formatRedirectLabel(pendingRedirect.value) : '',
 )
 
+const { offline } = useNetworkStatus()
 const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
 const invalid = computed(() => !!error.value)
+const passwordFormDirty = computed(
+  () => !!(oldPassword.value || newPassword.value || confirmPassword.value),
+)
+
+function onForceBeforeUnload(e: BeforeUnloadEvent) {
+  if (!passwordFormDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+let unregisterForceDirty: (() => void) | null = null
+
+onMounted(() => {
+  unregisterForceDirty = registerDirtyChecker('force-password', () => passwordFormDirty.value)
+  window.addEventListener('beforeunload', onForceBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  unregisterForceDirty?.()
+  unregisterForceDirty = null
+  window.removeEventListener('beforeunload', onForceBeforeUnload)
+})
 
 async function submit() {
   error.value = ''
+  if (shouldBlockOfflineMutation(offline.value)) {
+    error.value = t.value('offlineAccountBlocked')
+    return
+  }
   const check = validateNewPassword(oldPassword.value, newPassword.value, confirmPassword.value, {
     locale: locale.value,
   })
@@ -63,7 +93,14 @@ async function doLogout() {
     >
       <div class="mb-6 flex flex-col items-center gap-2 text-center">
         <KeyRound class="h-10 w-10 text-amber-600 dark:text-amber-300" aria-hidden="true" />
-        <h1 class="text-xl font-semibold text-slate-800 dark:text-slate-100">{{ t('forcePasswordTitle') }}</h1>
+        <h1 class="text-xl font-semibold text-slate-800 dark:text-slate-100">
+          {{ t('forcePasswordTitle') }}
+          <span
+            v-if="passwordFormDirty"
+            data-testid="force-password-dirty-badge"
+            class="ml-2 align-middle rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+          >{{ t('accountPasswordDirtyBadge') }}</span>
+        </h1>
         <p class="text-sm text-slate-500 dark:text-slate-400">
           {{ t('forcePasswordDesc') }}
           <span class="font-medium text-slate-700 dark:text-slate-200">{{ currentUser || 'admin' }}</span>
@@ -138,7 +175,8 @@ async function doLogout() {
           type="submit"
           class="mts-focus-ring w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
           data-testid="force-password-submit"
-          :disabled="loading"
+          :disabled="loading || offline"
+          :title="offline ? t('offlineAccountBlocked') : undefined"
           :aria-busy="loading ? 'true' : undefined"
         >
           {{ loading ? t('loading') : t('forcePasswordSubmit') }}
