@@ -19,8 +19,14 @@ import { copyText } from '@/utils/clipboard'
 import { useI18n } from '@/composables/useI18n'
 import { formatEpoch, nowUnixMsString } from '@/utils/time'
 import { formatFieldsMap } from '@/utils/fieldValue'
-import { rowsToCSV } from '@/utils/csv'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { downloadJSON, stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
+import {
+  collectQueryCSVColumns,
+  queryCSVHeader,
+  queryCSVRow,
+} from '@/utils/csv'
 import { loadQueryPrefs, saveQueryPrefs } from '@/utils/queryPrefs'
 import { isEditableTarget, matchQueryShortcut } from '@/utils/keyboard'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
@@ -61,6 +67,13 @@ const route = useRoute()
 useHashScroll()
 const { offline } = useNetworkStatus()
 const { success, error: notifyError } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+} = useExportJob()
 const { t, locale } = useI18n()
 const { currentUser, isAdmin } = useAuth()
 const authzHint = ref('')
@@ -501,14 +514,39 @@ async function doRangeDelete() {
   }
 }
 
-function exportCSV() {
+async function exportCSV() {
   if (!rows.value.length) {
     actionError.value = t.value('queryExportEmpty')
     notifyError(actionError.value)
     return
   }
-  downloadText(stampFilename('mts-query', 'csv'), rowsToCSV(rows.value), 'text/csv;charset=utf-8')
-  success(t.value('queryCsvExported'))
+  if (exportBusy.value) return
+  const list = rows.value.slice()
+  const cols = collectQueryCSVColumns(list)
+  const outcome = await runTextExport({
+    label: 'CSV',
+    filename: stampFilename('mts-query', 'csv'),
+    mime: 'text/csv;charset=utf-8',
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      const lines: string[] = [queryCSVHeader(cols.tags, cols.fields)]
+      progress(0, list.length)
+      const chunk = 400
+      for (let i = 0; i < list.length; i++) {
+        if (isCancelled()) return null
+        lines.push(queryCSVRow(list[i], cols.tags, cols.fields))
+        const done = i + 1
+        if (done === list.length || done % chunk === 0) {
+          progress(done, list.length)
+          if (done < list.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return lines.join('\n')
+    },
+  })
+  if (outcome === 'done') success(t.value('queryCsvExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 const HISTORY_ROW_HEIGHT = 56
@@ -827,11 +865,16 @@ const columnRows = computed(() => {
       <button type="button" class="mts-btn" data-testid="query-share-link" @click="copyShareLink">
         {{ t('queryShareLink') }}
       </button>
-      <button class="mts-btn" data-testid="query-export-csv" :disabled="!rows.length" @click="exportCSV">
+      <button class="mts-btn" data-testid="query-export-csv" :disabled="!rows.length || exportBusy" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> CSV
         </button>
     </div>
 
+    <ExportJobBanner
+      :job="exportJob"
+      @cancel="cancelExport"
+      @dismiss="resetExport"
+    />
     <p v-if="actionError" class="mts-alert-error">{{ actionError }}</p>
     <p v-if="deleteResult" class="mts-alert-ok">{{ deleteResult }}</p>
 

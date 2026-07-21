@@ -5,7 +5,7 @@ import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { parseWritePrefill, writeFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { apiPost } from '@/api/client'
+import { apiPost, APIClientError } from '@/api/client'
 import {
   listDatabasesDetailed,
   listFields,
@@ -80,6 +80,7 @@ const WRITE_FORM_ROW_MAX = 50
 const formRowCapReached = computed(() => formRows.value.length >= WRITE_FORM_ROW_MAX)
 const result = ref<{ ok: boolean; message: string } | null>(null)
 const loading = ref(false)
+let writeAbort: AbortController | null = null
 const actionError = ref('')
 const metaHint = ref('')
 const rpMetaHint = ref('')
@@ -195,6 +196,7 @@ onMounted(async () => {
   markWriteClean()
 })
 onBeforeUnmount(() => {
+  cancelWrite()
   unregisterDirty?.()
   unregisterDirty = null
   window.removeEventListener('beforeunload', onBeforeUnload)
@@ -450,6 +452,13 @@ async function checkWriteAuthz() {
   }
 }
 
+function cancelWrite() {
+  if (writeAbort) {
+    writeAbort.abort()
+    writeAbort = null
+  }
+}
+
 async function submit() {
   if (shouldBlockOfflineMutation(offline.value)) {
     actionError.value = t.value('offlineWriteBlocked')
@@ -457,13 +466,16 @@ async function submit() {
     result.value = { ok: false, message: actionError.value }
     return
   }
+  cancelWrite()
+  writeAbort = new AbortController()
+  const signal = writeAbort.signal
   loading.value = true
   actionError.value = ''
   result.value = null
   try {
     if (writeMode.value === 'typed') {
       const batch = buildTypedBatch()
-      await apiPost('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } })
+      await apiPost('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } }, { signal })
       result.value = { ok: true, message: formatMessage(t.value('writeTypedSuccess'), { count: (batch.timestamps as number[]).length }) }
       success(result.value.message)
       markWriteClean()
@@ -489,15 +501,27 @@ async function submit() {
       p.retention_policy = retentionPolicy.value
     }
     const writePath = usePointsTyped.value ? '/api/v1/data/write/points-typed' : '/api/v1/data/write'
-    await apiPost(writePath, { points, options: { sync: syncWrite.value } })
+    await apiPost(writePath, { points, options: { sync: syncWrite.value } }, { signal })
     result.value = { ok: true, message: formatMessage(t.value('writeSuccessPoints'), { count: points.length, path: writePath }) }
     success(result.value.message)
     markWriteClean()
   } catch (e) {
-    actionError.value = formatCaughtError(e)
-    notifyError(actionError.value)
-    result.value = { ok: false, message: actionError.value }
+    const msg = formatCaughtError(e)
+    const canceled =
+      (e instanceof APIClientError && e.code === 'canceled') ||
+      (e instanceof DOMException && e.name === 'AbortError') ||
+      /cancel/i.test(msg)
+    if (canceled) {
+      actionError.value = t.value('writeCancelled')
+      result.value = { ok: false, message: actionError.value }
+      success(actionError.value)
+    } else {
+      actionError.value = msg
+      notifyError(actionError.value)
+      result.value = { ok: false, message: actionError.value }
+    }
   } finally {
+    writeAbort = null
     loading.value = false
   }
 }
@@ -752,6 +776,9 @@ function exportWriteDraft() {
     <div id="write-actions" class="scroll-mt-20 flex flex-wrap items-center gap-2">
       <button class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:bg-slate-800 dark:text-slate-900" data-testid="write-submit" :disabled="loading || offline" :title="offline ? t('offlineWriteBlocked') : undefined" @click="submit">
         <Send class="h-4 w-4" /> {{ loading ? t('loading') : t('writeSubmit') }}
+      </button>
+      <button type="button" class="mts-btn" data-testid="write-cancel" :disabled="!loading" @click="cancelWrite">
+        {{ t('writeCancel') }}
       </button>
       <button type="button" class="mts-btn" data-testid="write-export-result" :disabled="!result" @click="exportWriteResult">
         <Download class="h-3.5 w-3.5" /> {{ t('writeExportResult') }}

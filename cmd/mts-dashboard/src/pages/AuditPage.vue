@@ -20,7 +20,7 @@ import {
 import { auditLimitOptions, buildAuditQueryString } from '@/utils/auditQuery'
 import { parseAuditPrefill, auditFormToPrefill, type PrefillTimeRange, isPrefillTimeRange } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { auditEventsToCSV } from '@/utils/auditExport'
+import { AUDIT_CSV_HEADER, auditEventToCSVLine, auditEventsToCSV } from '@/utils/auditExport'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
 import {
@@ -32,7 +32,9 @@ import {
 } from '@/utils/listSort'
 import { auditRowId } from '@/utils/rowIds'
 import { formatMessage } from '@/utils/formatMessage'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { ScrollText, Download, RefreshCw, Eraser } from 'lucide-vue-next'
 
 interface User { name: string; display_name?: string }
@@ -51,6 +53,14 @@ const route = useRoute()
 const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
 const { success, error: notifyError, warn } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+  runJSONExport,
+} = useExportJob()
 const users = ref<User[]>([])
 const selectedUser = ref('')
 const actionFilter = ref('')
@@ -282,24 +292,69 @@ async function copyAuditShareLink() {
   else notifyError(res.error || t.value('failed'))
 }
 
-function exportJSON() {
+async function exportJSON() {
   const rows = rowsForExport()
   if (!rows.length) {
     warn(t.value('auditExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-audit', 'json'), rows)
-  success(t.value('auditExportJSONOk'))
+  if (exportBusy.value) return
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-audit', 'json'),
+    total: rows.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, rows.length)
+      const chunk = 400
+      const out: typeof rows = []
+      for (let i = 0; i < rows.length; i++) {
+        if (isCancelled()) return null
+        out.push(rows[i])
+        const done = i + 1
+        if (done === rows.length || done % chunk === 0) {
+          progress(done, rows.length)
+          if (done < rows.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return out
+    },
+  })
+  if (outcome === 'done') success(t.value('auditExportJSONOk'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function exportCSV() {
+async function exportCSV() {
   const rows = rowsForExport()
   if (!rows.length) {
     warn(t.value('auditExportEmpty'))
     return
   }
-  downloadText(stampFilename('mts-audit', 'csv'), auditEventsToCSV(rows), 'text/csv;charset=utf-8')
-  success(t.value('auditExportCSVOk'))
+  if (exportBusy.value) return
+  const outcome = await runTextExport({
+    label: 'CSV',
+    filename: stampFilename('mts-audit', 'csv'),
+    mime: 'text/csv;charset=utf-8',
+    total: rows.length,
+    build: async ({ isCancelled, progress }) => {
+      const lines = [AUDIT_CSV_HEADER]
+      progress(0, rows.length)
+      const chunk = 400
+      for (let i = 0; i < rows.length; i++) {
+        if (isCancelled()) return null
+        lines.push(auditEventToCSVLine(rows[i]))
+        const done = i + 1
+        if (done === rows.length || done % chunk === 0) {
+          progress(done, rows.length)
+          if (done < rows.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return lines.join('\n')
+    },
+  })
+  if (outcome === 'done') success(t.value('auditExportCSVOk'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 watch(
@@ -382,22 +437,25 @@ watch(
           <option v-for="n in auditLimitOptions()" :key="n" :value="n">{{ n }}</option>
         </select>
       </label>
-      <div class="flex flex-wrap items-end gap-2">
-        <button type="button" :disabled="loading" class="mts-btn-primary" data-testid="audit-reload" @click="loadAudit">
-          <RefreshCw class="h-3.5 w-3.5" />
-          {{ loading ? t('loading') : t('filter') }}
-        </button>
-        <button type="button" class="mts-btn" data-testid="audit-export-json" @click="exportJSON">
-          <Download class="h-3.5 w-3.5" />
-          {{ t('exportJSON') }}
-        </button>
-        <button type="button" class="mts-btn" data-testid="audit-export-csv" @click="exportCSV">
-          <Download class="h-3.5 w-3.5" />
-          {{ t('exportCSV') }}
-        </button>
-        <button type="button" class="mts-btn" data-testid="audit-share-link" @click="copyAuditShareLink">
-          {{ t('auditShareLink') }}
-        </button>
+      <div class="md:col-span-6 space-y-2">
+        <ExportJobBanner :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <div class="flex flex-wrap items-end gap-2">
+          <button type="button" :disabled="loading" class="mts-btn-primary" data-testid="audit-reload" @click="loadAudit">
+            <RefreshCw class="h-3.5 w-3.5" />
+            {{ loading ? t('loading') : t('filter') }}
+          </button>
+          <button type="button" class="mts-btn" data-testid="audit-export-json" :disabled="exportBusy" @click="exportJSON">
+            <Download class="h-3.5 w-3.5" />
+            {{ t('exportJSON') }}
+          </button>
+          <button type="button" class="mts-btn" data-testid="audit-export-csv" :disabled="exportBusy" @click="exportCSV">
+            <Download class="h-3.5 w-3.5" />
+            {{ t('exportCSV') }}
+          </button>
+          <button type="button" class="mts-btn" data-testid="audit-share-link" @click="copyAuditShareLink">
+            {{ t('auditShareLink') }}
+          </button>
+        </div>
       </div>
     </div>
 

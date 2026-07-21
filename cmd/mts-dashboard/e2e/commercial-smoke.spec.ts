@@ -827,6 +827,23 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('databases-create-input').fill('')
   await expect(page.getByTestId('databases-dirty-badge')).toHaveCount(0)
 
+  // P201: 审计导出进度 banner
+  await page.goto('/audit')
+  await expect(page.getByTestId('audit-page')).toBeVisible()
+  await page.getByTestId('audit-export-json').click()
+  await expect(page.getByTestId('export-job-banner')).toBeVisible({ timeout: 10000 })
+  // 小数据通常瞬间完成，dismiss 完成态
+  const dismiss = page.getByTestId('export-job-dismiss')
+  if (await dismiss.count()) {
+    await dismiss.click()
+    await expect(page.getByTestId('export-job-banner')).toHaveCount(0)
+  }
+
+  // P202: write-cancel 非 loading 时 disabled
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible()
+  await expect(page.getByTestId('write-cancel')).toBeDisabled()
+
   // P199: Config offline 时 validate/reload disabled
   await page.goto('/config')
   await expect(page.getByTestId('config-page')).toBeVisible()

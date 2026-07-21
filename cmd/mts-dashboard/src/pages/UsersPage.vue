@@ -35,10 +35,12 @@ import {
   sortByAccessor,
   type SortState,
 } from '@/utils/listSort'
-import { buildUsersExport, usersToCSV } from '@/utils/usersExport'
+import { USERS_CSV_HEADER, buildUsersExport, userToCSVLine, usersToCSV } from '@/utils/usersExport'
 import { parseUsersPrefill, usersFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { downloadJSON, downloadText, stampFilename } from '@/utils/download'
+import { stampFilename } from '@/utils/download'
+import { useExportJob } from '@/composables/useExportJob'
+import ExportJobBanner from '@/components/ExportJobBanner.vue'
 
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
 interface UsersResponse { users: User[] }
@@ -98,6 +100,14 @@ function roleLabel(role?: string): string {
   return t.value('roleUser')
 }
 const { success, error: notifyError, warn } = useNotify()
+const {
+  exportJob,
+  exportBusy,
+  cancelExport,
+  resetExport,
+  runTextExport,
+  runJSONExport,
+} = useExportJob()
 const loadError = ref('')
 const actionResult = ref<ActionResult | null>(null)
 const showCreate = ref(false)
@@ -414,24 +424,67 @@ function rowsForExport() {
   return filterRowsByIds(filteredUsers.value, exportIds.value, (u) => u.name)
 }
 
-function exportJSON() {
+async function exportJSON() {
   const rows = rowsForExport()
   if (!rows.length) {
     warn(t.value('inventoryExportEmpty'))
     return
   }
-  downloadJSON(stampFilename('mts-users', 'json'), buildUsersExport(rows))
-  success(t.value('inventoryExported'))
+  if (exportBusy.value) return
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-users', 'json'),
+    total: rows.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, rows.length)
+      const chunk = 400
+      for (let i = 0; i < rows.length; i++) {
+        if (isCancelled()) return null
+        const done = i + 1
+        if (done === rows.length || done % chunk === 0) {
+          progress(done, rows.length)
+          if (done < rows.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return buildUsersExport(rows)
+    },
+  })
+  if (outcome === 'done') success(t.value('inventoryExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-function exportCSV() {
+async function exportCSV() {
   const rows = rowsForExport()
   if (!rows.length) {
     warn(t.value('inventoryExportEmpty'))
     return
   }
-  downloadText(stampFilename('mts-users', 'csv'), usersToCSV(rows), 'text/csv;charset=utf-8')
-  success(t.value('inventoryExported'))
+  if (exportBusy.value) return
+  const outcome = await runTextExport({
+    label: 'CSV',
+    filename: stampFilename('mts-users', 'csv'),
+    mime: 'text/csv;charset=utf-8',
+    total: rows.length,
+    build: async ({ isCancelled, progress }) => {
+      const lines = [USERS_CSV_HEADER]
+      progress(0, rows.length)
+      const chunk = 400
+      for (let i = 0; i < rows.length; i++) {
+        if (isCancelled()) return null
+        lines.push(userToCSVLine(rows[i]))
+        const done = i + 1
+        if (done === rows.length || done % chunk === 0) {
+          progress(done, rows.length)
+          if (done < rows.length) await new Promise((r) => setTimeout(r, 0))
+        }
+      }
+      return lines.join('\n')
+    },
+  })
+  if (outcome === 'done') success(t.value('inventoryExported'))
+  else if (outcome === 'cancelled') success(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
 function openBatch(mode: 'enable' | 'disable') {
@@ -509,10 +562,11 @@ onBeforeUnmount(() => {
         <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('usersDesc') }}</p>
       </div>
       <div class="flex gap-2">
-        <button type="button" class="mts-btn" data-testid="users-export-json" :disabled="!filteredUsers.length" @click="exportJSON">
+        <ExportJobBanner class="w-full basis-full" :job="exportJob" @cancel="cancelExport" @dismiss="resetExport" />
+        <button type="button" class="mts-btn" data-testid="users-export-json" :disabled="exportBusy || !filteredUsers.length" @click="exportJSON">
           <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
         </button>
-        <button type="button" class="mts-btn" data-testid="users-export-csv" :disabled="!filteredUsers.length" @click="exportCSV">
+        <button type="button" class="mts-btn" data-testid="users-export-csv" :disabled="exportBusy || !filteredUsers.length" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportCSV') }}
         </button>
         <button type="button" class="mts-btn" data-testid="users-share-link" @click="copyUsersShareLink">

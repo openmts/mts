@@ -13,14 +13,16 @@ function escapeCSV(v: string): string {
   return v
 }
 
+export const AUDIT_CSV_HEADER = 'time,user_name,action,database,detail'
+
+export function auditEventToCSVLine(e: AuditExportEvent): string {
+  return [e.time, e.user_name, e.action, e.database || '', e.detail || '']
+    .map((v) => escapeCSV(String(v ?? '')))
+    .join(',')
+}
+
 export function auditEventsToCSV(events: AuditExportEvent[]): string {
-  const header = ['time', 'user_name', 'action', 'database', 'detail']
-  const lines = [header.join(',')]
-  for (const e of events || []) {
-    const cols = [e.time, e.user_name, e.action, e.database || '', e.detail || ''].map((v) =>
-      escapeCSV(String(v ?? '')),
-    )
-    lines.push(cols.join(','))
-  }
+  const lines = [AUDIT_CSV_HEADER]
+  for (const e of events || []) lines.push(auditEventToCSVLine(e))
   return lines.join('\n')
 }

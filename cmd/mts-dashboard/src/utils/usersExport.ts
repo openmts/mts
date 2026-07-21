@@ -42,15 +42,16 @@ function escapeCSV(v: string): string {
   return v
 }
 
+export const USERS_CSV_HEADER = 'name,display_name,role,disabled'
+
+export function userToCSVLine(r: UserExportRow): string {
+  return [r.name, r.display_name || '', r.role || '', r.disabled ? 'true' : 'false']
+    .map((c) => escapeCSV(String(c ?? '')))
+    .join(',')
+}
+
 export function usersToCSV(rows: UserExportRow[] | null | undefined): string {
-  const header = ['name', 'display_name', 'role', 'disabled']
-  const lines = [header.join(',')]
-  for (const r of rows || []) {
-    lines.push(
-      [r.name, r.display_name || '', r.role || '', r.disabled ? 'true' : 'false']
-        .map((c) => escapeCSV(String(c ?? '')))
-        .join(','),
-    )
-  }
+  const lines = [USERS_CSV_HEADER]
+  for (const r of rows || []) lines.push(userToCSVLine(r))
   return lines.join('\n')
 }
