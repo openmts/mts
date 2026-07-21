@@ -155,6 +155,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('write-meta-panel')).toBeVisible()
   await expect(page.getByTestId('write-add-row')).toBeVisible()
   await expect(page.getByTestId('write-retention-policy')).toBeVisible()
+  // P245: 健康路径写入元数据错误区不出现
+  await expect(page.getByTestId('write-meta-error')).toHaveCount(0)
 
   // P240/P241: 管理页可达与错误恢复入口存在
   await page.goto('/api-spec')

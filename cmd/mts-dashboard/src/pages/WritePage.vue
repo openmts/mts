@@ -194,9 +194,7 @@ function createEmptyRow(): FormRow {
 
 let unregisterDirty: (() => void) | null = null
 
-onMounted(async () => {
-  unregisterDirty = registerDirtyChecker('write', () => formDirty.value)
-  window.addEventListener('beforeunload', onBeforeUnload)
+async function loadWriteDatabases() {
   const result = await listDatabasesDetailed()
   databases.value = result.names
   metaSource.value = result.source
@@ -204,6 +202,18 @@ onMounted(async () => {
   if (databases.value.length && !selectedDb.value) {
     selectedDb.value = databases.value[0]
   }
+}
+
+async function reloadWriteMeta() {
+  writeMetaError.value = ''
+  await loadWriteDatabases()
+  if (selectedDb.value) await loadWriteDbChildren(selectedDb.value)
+}
+
+onMounted(async () => {
+  unregisterDirty = registerDirtyChecker('write', () => formDirty.value)
+  window.addEventListener('beforeunload', onBeforeUnload)
+  await loadWriteDatabases()
   markWriteClean()
 })
 onBeforeUnmount(() => {
@@ -213,7 +223,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
 
-watch(selectedDb, async (db) => {
+async function loadWriteDbChildren(db: string) {
   retentionPolicies.value = []
   retentionPolicy.value = 'autogen'
   rpMetaHint.value = ''
@@ -234,8 +244,9 @@ watch(selectedDb, async (db) => {
       } else {
         rpMetaHint.value = t.value('writeRpEmptyHint')
       }
-    } catch {
+    } catch (e) {
       rpMetaHint.value = t.value('writeRpManualHint')
+      writeMetaError.value = formatCaughtError(e)
     }
     try {
       measurements.value = await listMeasurements(db)
@@ -246,6 +257,10 @@ watch(selectedDb, async (db) => {
   } finally {
     measurementsLoading.value = false
   }
+}
+
+watch(selectedDb, async (db) => {
+  await loadWriteDbChildren(db)
   // 自动填充 RP 不应算用户脏编辑
   markWriteClean()
 })
@@ -657,7 +672,15 @@ async function exportWriteDraft() {
         <input v-model="usePointsTyped" type="checkbox" /> {{ t('writePointsTypedPath') }}
       </label>
     </div>
-    <p v-if="metaHint" class="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{{ metaHint }}</p>
+    <div
+      v-if="metaHint"
+      class="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+      data-testid="write-meta-hint"
+      role="status"
+    >
+      <p class="min-w-0 flex-1">{{ metaHint }}</p>
+      <button type="button" class="mts-btn text-xs" data-testid="write-meta-reload" @click="loadWriteDatabases">{{ t('retry') }}</button>
+    </div>
     <div
       v-if="selectedDb"
       class="rounded-xl border border-slate-200 bg-white p-3 text-xs dark:border-slate-700 dark:bg-slate-900"
@@ -670,7 +693,10 @@ async function exportWriteDraft() {
         </span>
       </div>
       <p v-if="measurementsLoading || fieldsLoading" class="mts-muted">{{ t('loading') }}</p>
-      <p v-else-if="writeMetaError" class="text-rose-600" data-testid="write-meta-error">{{ writeMetaError }}</p>
+      <div v-else-if="writeMetaError" class="flex flex-wrap items-center gap-2" data-testid="write-meta-error">
+        <p class="text-rose-600" role="alert" aria-live="assertive">{{ writeMetaError }}</p>
+        <button type="button" class="mts-btn text-xs" data-testid="write-meta-error-retry" @click="reloadWriteMeta">{{ t('retry') }}</button>
+      </div>
       <div v-else class="space-y-2">
         <div>
           <p class="mb-1 mts-muted">{{ t('writeMetaMeasurements') }}</p>
