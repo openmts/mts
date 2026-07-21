@@ -5,7 +5,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { validateNewPassword } from '@/utils/passwordPolicy'
 import { buildLoginLocation, formatRedirectLabel, sanitizeRedirect, withRedirectQuery } from '@/utils/redirect'
-import { KeyRound } from 'lucide-vue-next'
+import { Eye, EyeOff, KeyRound } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
@@ -24,6 +24,9 @@ const { offline } = useNetworkStatus()
 const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
+const showOldPassword = ref(false)
+const showNewPassword = ref(false)
+const showConfirmPassword = ref(false)
 const loading = ref(false)
 const error = ref('')
 const errorRetryable = ref(false)
@@ -124,42 +127,84 @@ async function doLogout() {
       <form class="space-y-4" data-testid="force-password-form" @submit.prevent="submit">
         <div>
           <label class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200" for="old">{{ t('accountOldPassword') }}</label>
-          <input
-            id="old"
-            v-model="oldPassword"
-            type="password"
-            autocomplete="current-password"
-            class="mts-input mts-focus-ring"
-            data-testid="force-old"
-            :aria-invalid="invalid ? 'true' : undefined"
-            :aria-describedby="error ? 'force-password-error' : undefined"
-          />
+          <div class="relative">
+            <input
+              id="old"
+              v-model="oldPassword"
+              :type="showOldPassword ? 'text' : 'password'"
+              autocomplete="current-password"
+              class="mts-input mts-focus-ring pr-10"
+              data-testid="force-old"
+              :aria-invalid="invalid ? 'true' : undefined"
+              :aria-describedby="error ? 'force-password-error' : undefined"
+            />
+            <button
+              type="button"
+              class="mts-focus-ring absolute inset-y-0 right-1 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              data-testid="force-toggle-old"
+              :aria-label="showOldPassword ? t('loginHidePassword') : t('loginShowPassword')"
+              :title="showOldPassword ? t('loginHidePassword') : t('loginShowPassword')"
+              :aria-pressed="showOldPassword ? 'true' : 'false'"
+              @click="showOldPassword = !showOldPassword"
+            >
+              <EyeOff v-if="showOldPassword" class="h-4 w-4" aria-hidden="true" />
+              <Eye v-else class="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200" for="new">{{ t('accountNewPassword') }}</label>
-          <input
-            id="new"
-            v-model="newPassword"
-            type="password"
-            autocomplete="new-password"
-            class="mts-input mts-focus-ring"
-            data-testid="force-new"
-            :aria-invalid="invalid ? 'true' : undefined"
-            :aria-describedby="error ? 'force-password-error' : undefined"
-          />
+          <div class="relative">
+            <input
+              id="new"
+              v-model="newPassword"
+              :type="showNewPassword ? 'text' : 'password'"
+              autocomplete="new-password"
+              class="mts-input mts-focus-ring pr-10"
+              data-testid="force-new"
+              :aria-invalid="invalid ? 'true' : undefined"
+              :aria-describedby="error ? 'force-password-error' : undefined"
+            />
+            <button
+              type="button"
+              class="mts-focus-ring absolute inset-y-0 right-1 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              data-testid="force-toggle-new"
+              :aria-label="showNewPassword ? t('loginHidePassword') : t('loginShowPassword')"
+              :title="showNewPassword ? t('loginHidePassword') : t('loginShowPassword')"
+              :aria-pressed="showNewPassword ? 'true' : 'false'"
+              @click="showNewPassword = !showNewPassword"
+            >
+              <EyeOff v-if="showNewPassword" class="h-4 w-4" aria-hidden="true" />
+              <Eye v-else class="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200" for="confirm">{{ t('accountConfirmPassword') }}</label>
-          <input
-            id="confirm"
-            v-model="confirmPassword"
-            type="password"
-            autocomplete="new-password"
-            class="mts-input mts-focus-ring"
-            data-testid="force-confirm"
-            :aria-invalid="invalid ? 'true' : undefined"
-            :aria-describedby="error ? 'force-password-error' : undefined"
-          />
+          <div class="relative">
+            <input
+              id="confirm"
+              v-model="confirmPassword"
+              :type="showConfirmPassword ? 'text' : 'password'"
+              autocomplete="new-password"
+              class="mts-input mts-focus-ring pr-10"
+              data-testid="force-confirm"
+              :aria-invalid="invalid ? 'true' : undefined"
+              :aria-describedby="error ? 'force-password-error' : undefined"
+            />
+            <button
+              type="button"
+              class="mts-focus-ring absolute inset-y-0 right-1 my-auto inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              data-testid="force-toggle-confirm"
+              :aria-label="showConfirmPassword ? t('loginHidePassword') : t('loginShowPassword')"
+              :title="showConfirmPassword ? t('loginHidePassword') : t('loginShowPassword')"
+              :aria-pressed="showConfirmPassword ? 'true' : 'false'"
+              @click="showConfirmPassword = !showConfirmPassword"
+            >
+              <EyeOff v-if="showConfirmPassword" class="h-4 w-4" aria-hidden="true" />
+              <Eye v-else class="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <PasswordHints
           class="mt-1"

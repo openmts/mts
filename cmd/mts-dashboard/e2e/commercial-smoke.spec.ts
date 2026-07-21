@@ -51,6 +51,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await login(page, 'admin', 'admin')
   await expect(page).toHaveURL(/force-change-password/)
   await expect(page.getByTestId('password-hints')).toBeVisible()
+  // P280: 强改密密码可见性切换
+  await expect(page.getByTestId('force-toggle-old')).toBeVisible()
+  await expect(page.getByTestId('force-toggle-new')).toBeVisible()
+  await expect(page.getByTestId('force-toggle-confirm')).toBeVisible()
+  await page.getByTestId('force-toggle-new').click()
+  await expect(page.getByTestId('force-new')).toHaveAttribute('type', 'text')
+  await page.getByTestId('force-toggle-new').click()
+  await expect(page.getByTestId('force-new')).toHaveAttribute('type', 'password')
   // P279: 本地策略失败仅 dismiss、不可 retry
   await page.getByTestId('force-old').fill('admin')
   await page.getByTestId('force-new').fill('short')

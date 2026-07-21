@@ -7,6 +7,7 @@ import { buildLoginLocation } from '@/utils/redirect'
 import { useAuth } from '@/composables/useAuth'
 import { getTokenExpiresAt } from '@/api/client'
 import { parseExpiresAt, sessionExpiryView, formatRemaining } from '@/utils/sessionExpiry'
+import { sessionClockTickMs } from '@/utils/sessionClock'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -181,7 +182,15 @@ onMounted(() => {
   window.addEventListener('beforeunload', onAccountBeforeUnload)
   applyAccountPrefillFromRoute()
   nowMs.value = Date.now()
-  sessionClock = setInterval(() => { nowMs.value = Date.now() }, 15_000)
+  const armSessionClock = () => {
+    if (sessionClock) clearInterval(sessionClock)
+    const ms = sessionClockTickMs(sessionView.value.urgency, sessionView.value.remainingMs)
+    sessionClock = setInterval(() => {
+      nowMs.value = Date.now()
+      armSessionClock()
+    }, ms)
+  }
+  armSessionClock()
 })
 
 onBeforeUnmount(() => {
