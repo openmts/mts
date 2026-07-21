@@ -1386,3 +1386,7 @@
 ## P322（2026-07-22）
 - Overview 维护区 admin busy chip 对齐 elapsed/detail（注入 Layout 摘要）
 - e2e：空闲时确认无 `admin-op-busy-poll-error-banner`
+
+## P323（2026-07-22）
+- Operations：状态条「刷新占用状态」快捷钮 + busy 提示文案（不拉全量 stats）
+- Overview：管理统计失败且 admin busy 时展示关联提示 + 刷新占用状态

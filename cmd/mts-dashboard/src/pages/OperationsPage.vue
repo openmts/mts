@@ -60,7 +60,24 @@ const {
   runJSONExport,
 } = useExportJob()
 const { kind: connectivityKind, checking: reachChecking, checkOnce: retryReadyz } = useServerReachability()
-const { adminOpBusy, adminOpKind, setAdminOpBusy, refreshAdminOpBusy, applyAdminOpStatus } = useAdminOpBusy()
+const {
+  adminOpBusy,
+  adminOpKind,
+  adminOpBusyChecking,
+  setAdminOpBusy,
+  refreshAdminOpBusy,
+  applyAdminOpStatus,
+} = useAdminOpBusy()
+const opsStatusRefreshing = ref(false)
+async function refreshOpsBusyOnly() {
+  if (opsStatusRefreshing.value || adminOpBusyChecking.value) return
+  opsStatusRefreshing.value = true
+  try {
+    await refreshAdminOpBusy()
+  } finally {
+    opsStatusRefreshing.value = false
+  }
+}
 const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
 const adminOpBusyDetailTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('opsAdminBusy'))
 const adminOpBusyChipLabel = computed(() => {
@@ -718,10 +735,27 @@ watch(
             data-testid="ops-status-loading"
           >{{ loading ? t('opsStatsLoading') : t('connectivityUnknown') }}</span>
         </div>
+        <p
+          v-if="adminOpBusy && !confirmLoading"
+          class="text-xs text-sky-800 dark:text-sky-200"
+          data-testid="ops-status-busy-hint"
+        >{{ t('opsStatusBusyHint') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="mts-btn" data-testid="ops-status-retry-readyz" :disabled="reachChecking" @click="retryReadyz">
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('connectivityTitle') }}
+        </button>
+        <button
+          type="button"
+          class="mts-btn"
+          data-testid="ops-status-refresh-busy"
+          :disabled="opsStatusRefreshing || adminOpBusyChecking"
+          :aria-busy="opsStatusRefreshing || adminOpBusyChecking ? 'true' : undefined"
+          :title="t('opsStatusRefreshBusy')"
+          @click="refreshOpsBusyOnly"
+        >
+          <RefreshCw class="h-3.5 w-3.5" :class="(opsStatusRefreshing || adminOpBusyChecking) ? 'animate-spin' : ''" />
+          {{ t('opsStatusRefreshBusy') }}
         </button>
         <button type="button" class="mts-btn" data-testid="ops-status-refresh-stats" :disabled="loading" @click="loadStats" :aria-busy="loading ? 'true' : undefined">
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}

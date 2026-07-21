@@ -62,7 +62,7 @@ interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[] }
 
 const { isAdmin, getTokenExpiresAt } = useAuth()
-const { adminOpBusy, adminOpKind, setAdminOpBusy, applyAdminOpStatus } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, setAdminOpBusy, applyAdminOpStatus, refreshAdminOpBusy } = useAdminOpBusy()
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
@@ -77,6 +77,12 @@ const adminOpBusyChipLabel = computed(() => {
   return elapsed ? `${base} · ${elapsed}` : base
 })
 const adminOpBusyChipTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('opsAdminBusy'))
+const overviewAdminBusyHintText = computed(() => {
+  if (!adminOpBusy.value) return ''
+  const op = (adminOpBusySummary?.value?.opLabel || '').trim()
+  if (op) return formatMessage(t.value('overviewAdminBusyHint'), { op })
+  return t.value('overviewAdminBusyHintGeneric')
+})
 const { success, info, error: notifyError } = useNotify()
 const {
   exportJob,
@@ -678,6 +684,22 @@ async function copyOverview() {
       @retry="() => loadOverview()"
       @dismiss="adminSectionErrors = {}"
     />
+    <div
+      v-if="showAdminPanels && adminOpBusy && (adminPartialError || adminFailedSections.length || refreshError)"
+      class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50/90 px-3 py-2 dark:border-sky-900/50 dark:bg-sky-950/30"
+      data-testid="overview-admin-busy-hint"
+      role="status"
+    >
+      <p class="min-w-0 text-xs text-sky-900 dark:text-sky-100">{{ overviewAdminBusyHintText }}</p>
+      <button
+        type="button"
+        class="mts-btn text-xs shrink-0"
+        data-testid="overview-admin-busy-refresh"
+        @click="() => refreshAdminOpBusy()"
+      >
+        <RefreshCw class="h-3.5 w-3.5" /> {{ t('adminOpBusyRefresh') }}
+      </button>
+    </div>
     <div
       v-if="showAdminPanels && adminFailedSections.length"
       class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/30"
