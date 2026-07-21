@@ -87,7 +87,7 @@ func (r *serverRuntime) handleStorageDataSnapshot(writer http.ResponseWriter, re
 	}
 	resp, err := r.storageDataSnapshot(request.Context(), flush)
 	if err != nil {
-		writeAPIError(writer, newAPIError(errorCodeInternal, err.Error(), err))
+		writeAPIError(writer, err)
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "storage_data_snapshot", Detail: resp.Path})
@@ -105,7 +105,8 @@ func (r *serverRuntime) handleStorageRestoreDrill(writer http.ResponseWriter, re
 	}
 	resp, err := r.storageRestoreDrill(request.Context(), req.SourcePath)
 	if err != nil {
-		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+		// 互斥冲突保留 resource_exhausted；路径校验等仍按原始错误分类
+		writeAPIError(writer, err)
 		return
 	}
 	r.audit.record(auditEvent{

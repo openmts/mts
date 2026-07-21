@@ -37,13 +37,18 @@ func (r *serverRuntime) storageDataSnapshot(ctx context.Context, flush bool) (st
 	if err := ctx.Err(); err != nil {
 		return storageDataSnapshotResponse{}, err
 	}
+	if err := r.tryBeginAdminHeavy(); err != nil {
+		return storageDataSnapshotResponse{}, err
+	}
+	defer r.endAdminHeavy()
 	cfg := r.currentConfig()
 	root, err := backupRoot(cfg)
 	if err != nil {
 		return storageDataSnapshotResponse{}, err
 	}
 	if flush {
-		if err := r.flush(ctx); err != nil {
+		// 已持有 admin heavy 锁，直接刷引擎，避免 r.flush 重入互斥。
+		if err := r.engine.Flush(ctx); err != nil {
 			return storageDataSnapshotResponse{}, fmt.Errorf("flush before data snapshot: %w", err)
 		}
 	}
@@ -66,6 +71,10 @@ func (r *serverRuntime) storageRestoreDrill(ctx context.Context, sourcePath stri
 	if err := ctx.Err(); err != nil {
 		return storageRestoreDrillResponse{}, err
 	}
+	if err := r.tryBeginAdminHeavy(); err != nil {
+		return storageRestoreDrillResponse{}, err
+	}
+	defer r.endAdminHeavy()
 	cfg := r.currentConfig()
 	root, err := backupRoot(cfg)
 	if err != nil {

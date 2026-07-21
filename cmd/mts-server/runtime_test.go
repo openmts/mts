@@ -271,3 +271,40 @@ func TestRuntimeMaintenanceStatsPayloadBusy(t *testing.T) {
 		t.Fatal("AdminOpBusy want false after end")
 	}
 }
+
+func TestRuntimeAdminHeavySharedMutex(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.HTTP.Addr = "127.0.0.1:0"
+	cfg.HTTP.Enabled = true
+	cfg.GRPC.Enabled = false
+	runtime, err := openRuntime(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("openRuntime() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = runtime.engine.Close(context.Background())
+	})
+
+	if err := runtime.tryBeginAdminHeavy(); err != nil {
+		t.Fatalf("hold heavy: %v", err)
+	}
+	// storage snapshot should fail while held
+	if _, err := runtime.storageSnapshot(context.Background()); err == nil {
+		t.Fatal("storageSnapshot during heavy want error")
+	} else if !errors.Is(err, mts.ErrEngineBusy) {
+		// apiError unwraps to ErrEngineBusy
+		var apiErr apiError
+		if !errors.As(err, &apiErr) || apiErr.Code != errorCodeResourceExhausted {
+			t.Fatalf("storageSnapshot err = %v", err)
+		}
+	}
+	// flush also busy
+	if err := runtime.flush(context.Background()); err == nil {
+		t.Fatal("flush during heavy want error")
+	}
+	runtime.endAdminHeavy()
+	if _, err := runtime.storageSnapshot(context.Background()); err != nil {
+		t.Fatalf("storageSnapshot after release: %v", err)
+	}
+}

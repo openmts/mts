@@ -314,26 +314,31 @@ func (r *serverRuntime) queryStats() mts.QueryStats {
 	return r.engine.QueryStatsSnapshot()
 }
 
-// tryBeginMaintenance 串行化 flush/compact/retention，避免 Dashboard 连点或并发请求叠加压垮引擎。
-func (r *serverRuntime) tryBeginMaintenance() error {
+// tryBeginAdminHeavy 串行化 flush/compact/retention 与 storage 重操作，避免 Dashboard 并发压垮引擎/磁盘。
+func (r *serverRuntime) tryBeginAdminHeavy() error {
 	if !r.maintenanceBusy.CompareAndSwap(false, true) {
-		return newAPIError(errorCodeResourceExhausted, "maintenance operation already in progress", mts.ErrEngineBusy)
+		return newAPIError(errorCodeResourceExhausted, "admin heavy operation already in progress", mts.ErrEngineBusy)
 	}
 	return nil
 }
 
-func (r *serverRuntime) endMaintenance() {
+func (r *serverRuntime) endAdminHeavy() {
 	r.maintenanceBusy.Store(false)
 }
+
+// 兼容旧名（运维路径）。
+func (r *serverRuntime) tryBeginMaintenance() error { return r.tryBeginAdminHeavy() }
+
+func (r *serverRuntime) endMaintenance() { r.endAdminHeavy() }
 
 func (r *serverRuntime) flush(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := r.tryBeginMaintenance(); err != nil {
+	if err := r.tryBeginAdminHeavy(); err != nil {
 		return err
 	}
-	defer r.endMaintenance()
+	defer r.endAdminHeavy()
 	return r.engine.Flush(ctx)
 }
 
@@ -341,10 +346,10 @@ func (r *serverRuntime) compact(ctx context.Context) (mts.CompactionResult, erro
 	if err := ctx.Err(); err != nil {
 		return mts.CompactionResult{}, err
 	}
-	if err := r.tryBeginMaintenance(); err != nil {
+	if err := r.tryBeginAdminHeavy(); err != nil {
 		return mts.CompactionResult{}, err
 	}
-	defer r.endMaintenance()
+	defer r.endAdminHeavy()
 	return r.engine.CompactWithResult(ctx)
 }
 
@@ -352,10 +357,10 @@ func (r *serverRuntime) applyRetention(ctx context.Context, req retentionApplyRe
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := r.tryBeginMaintenance(); err != nil {
+	if err := r.tryBeginAdminHeavy(); err != nil {
 		return err
 	}
-	defer r.endMaintenance()
+	defer r.endAdminHeavy()
 	return r.engine.ApplyRetention(ctx, unixNanosOrNow(req.NowUnixNanos))
 }
 

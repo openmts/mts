@@ -22,6 +22,10 @@ func (r *serverRuntime) storageSnapshot(ctx context.Context) (storageSnapshotRes
 	if err := ctx.Err(); err != nil {
 		return storageSnapshotResponse{}, err
 	}
+	if err := r.tryBeginAdminHeavy(); err != nil {
+		return storageSnapshotResponse{}, err
+	}
+	defer r.endAdminHeavy()
 	cfg := r.currentConfig()
 	dir := cfg.Backup.Dir
 	if dir == "" {

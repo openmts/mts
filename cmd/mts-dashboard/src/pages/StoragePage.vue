@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiPost, apiGet, apiDelete } from '@/api/client'
+import type { MaintenanceStatsResponse } from '@/api/types'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
@@ -94,6 +95,7 @@ const snapshotListError = ref('')
 const dataListLoading = ref(false)
 const dataListError = ref('')
 const loading = ref('')
+const adminOpBusy = ref(false)
 const actionStartedAt = ref<number | null>(null)
 const actionAbort = createActionAbort()
 const listLoading = ref(false)
@@ -203,6 +205,7 @@ function scrollToCurrentHash() {
 
 onMounted(() => {
   if (isAdmin.value) {
+    void refreshAdminBusy()
     void loadSnapshots()
     void loadDataSnapshots()
   }
@@ -227,6 +230,30 @@ watch(
 )
 
 
+async function refreshAdminBusy() {
+  try {
+    const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
+    adminOpBusy.value = Boolean(v.admin_op_busy)
+  } catch {
+    /* soft */
+  }
+}
+
+function guardAdminHeavy(): boolean {
+  if (writeBlocked.value) {
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
+    setActionError(msg)
+    notifyError(msg)
+    return false
+  }
+  if (loading.value) return false
+  if (adminOpBusy.value) {
+    notifyError(t.value('storageAdminBusy'))
+    return false
+  }
+  return true
+}
+
 function beginStorageAction(key: string): AbortSignal {
   loading.value = key
   actionStartedAt.value = Date.now()
@@ -238,6 +265,7 @@ function endStorageAction() {
   actionAbort.end()
   loading.value = ''
   actionStartedAt.value = null
+  void refreshAdminBusy()
 }
 
 function cancelStorageAction() {
@@ -261,6 +289,7 @@ function reportStorageCatch(key: StorageActionKey, e: unknown) {
 }
 
 async function doValidate() {
+  if (loading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -280,12 +309,8 @@ async function doValidate() {
 }
 
 async function doSnapshot() {
-  if (writeBlocked.value) {
-    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    setActionError(msg)
-    notifyError(msg)
-    return
-  }
+  if (!guardAdminHeavy()) return
+  adminOpBusy.value = true
   const signal = beginStorageAction('snapshot')
   try {
     snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot', undefined, { signal })
@@ -300,12 +325,8 @@ async function doSnapshot() {
 }
 
 async function doDataSnapshot() {
-  if (writeBlocked.value) {
-    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    setActionError(msg)
-    notifyError(msg)
-    return
-  }
+  if (!guardAdminHeavy()) return
+  adminOpBusy.value = true
   const signal = beginStorageAction('data-snapshot')
   try {
     dataSnapshotResult.value = await apiPost<DataSnapshotResponse>('/api/v1/admin/storage/data-snapshot', { flush: true }, { signal })
@@ -321,12 +342,8 @@ async function doDataSnapshot() {
 }
 
 async function doRestoreDrill() {
-  if (writeBlocked.value) {
-    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
-    setActionError(msg)
-    notifyError(msg)
-    return
-  }
+  if (!guardAdminHeavy()) return
+  adminOpBusy.value = true
   const signal = beginStorageAction('restore-drill')
   try {
     const source = selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || ''
@@ -347,6 +364,7 @@ async function doRestoreDrill() {
 }
 
 async function doExport() {
+  if (loading.value) return
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
@@ -626,7 +644,7 @@ async function copyStorageShareLink() {
       </div>
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Camera class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('createSnapshot') }}</h3></div>
-        <button data-testid="storage-snapshot" :disabled="loading === 'snapshot' || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
+        <button data-testid="storage-snapshot" :disabled="loading === 'snapshot' || writeBlocked || adminOpBusy" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? t('storageAdminBusy') : undefined)" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
         <p v-if="snapshotResult?.path" class="mt-2 break-all font-mono text-[11px] mts-muted">{{ snapshotResult.path }}</p>
       </div>
       <div class="mts-panel">
@@ -655,7 +673,7 @@ async function copyStorageShareLink() {
         :description="t('storageNoSnapshotsDesc')"
       >
         <template #action>
-          <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot' || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="doSnapshot">{{ t('createSnapshot') }}</button>
+          <button type="button" class="mts-btn-primary" :disabled="loading === 'snapshot' || writeBlocked || adminOpBusy" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? t('storageAdminBusy') : undefined)" @click="doSnapshot">{{ t('createSnapshot') }}</button>
         </template>
       </EmptyState>
       <div id="snapshots" class="scroll-mt-20" data-testid="storage-snapshots-table">
@@ -730,8 +748,8 @@ async function copyStorageShareLink() {
         <button data-testid="storage-data-snapshot"
           type="button"
           class="mts-btn-primary justify-center py-2"
-          :disabled="loading === 'data-snapshot' || writeBlocked"
-          :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined"
+          :disabled="loading === 'data-snapshot' || writeBlocked || adminOpBusy"
+          :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? t('storageAdminBusy') : undefined)"
           @click="doDataSnapshot"
         >
           {{ loading === 'data-snapshot' ? t('loading') : t('storageCreateDataSnapshot') }}
@@ -740,8 +758,8 @@ async function copyStorageShareLink() {
           type="button"
           class="mts-btn justify-center py-2"
           data-testid="storage-restore-drill"
-          :disabled="loading === 'restore-drill' || writeBlocked"
-          :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined"
+          :disabled="loading === 'restore-drill' || writeBlocked || adminOpBusy"
+          :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? t('storageAdminBusy') : undefined)"
           @click="doRestoreDrill"
         >
           {{ loading === 'restore-drill' ? t('loading') : t('storageRunRestoreDrill') }}
@@ -762,7 +780,7 @@ async function copyStorageShareLink() {
             type="button"
             class="mts-btn-primary"
             data-testid="storage-data-empty-create"
-            :disabled="loading === 'data-snapshot' || writeBlocked"
+            :disabled="loading === 'data-snapshot' || writeBlocked || adminOpBusy"
             :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined"
             @click="doDataSnapshot"
           >{{ t('storageCreateDataSnapshotCta') }}</button>
@@ -818,6 +836,12 @@ async function copyStorageShareLink() {
       </div>
     </div>
 
+    <div
+      v-if="adminOpBusy && !loading"
+      class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
+      data-testid="storage-admin-busy"
+      role="status"
+    >{{ t('storageAdminBusyChip') }} · {{ t('storageAdminBusy') }}</div>
     <InFlightBanner
       :active="!!loading"
       :started-at-ms="actionStartedAt"

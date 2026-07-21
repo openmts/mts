@@ -717,7 +717,23 @@ async function confirmBatch() {
     clearSelection()
     batchOpen.value = false
   } catch (e) {
-    reportUsersCatch('batch', e)
+    if (isCanceledError(e) && batchProgress.value.done > 0) {
+      const prog = batchProgress.value
+      const msg = formatMessage(t.value('listBatchCancelledPartial'), {
+        done: prog.done,
+        total: prog.total || names.length,
+        ok: prog.ok,
+        skip: prog.skip,
+        fail: prog.fail,
+      })
+      setActionResult(makeActionResult('info', msg))
+      info(msg)
+      try { await loadUsers() } catch { /* soft */ }
+      clearSelection()
+      batchOpen.value = false
+    } else {
+      reportUsersCatch('batch', e)
+    }
   } finally {
     usersActionAbort.end()
     batchLoading.value = false
@@ -835,8 +851,8 @@ onBeforeUnmount(() => {
         @clear="clearSelection"
       >
         <template #actions>
-          <button type="button" class="mts-btn" data-testid="users-batch-enable" :disabled="!selectedCount || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('enable')">{{ t('listBatchEnable') }}</button>
-          <button type="button" class="mts-btn" data-testid="users-batch-disable" :disabled="!selectedCount || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('disable')">{{ t('listBatchDisable') }}</button>
+          <button type="button" class="mts-btn" data-testid="users-batch-enable" :disabled="!selectedCount || writeBlocked || batchLoading || usersWriteLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('enable')">{{ t('listBatchEnable') }}</button>
+          <button type="button" class="mts-btn" data-testid="users-batch-disable" :disabled="!selectedCount || writeBlocked || batchLoading || usersWriteLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('disable')">{{ t('listBatchDisable') }}</button>
         </template>
       </ListSelectionToolbar>
     </div>

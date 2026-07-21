@@ -1346,3 +1346,8 @@
 - Server：users/downsample batch 支持 `?stream=1` / Accept NDJSON 进度流（item/summary）；statusRecorder 透传 Flusher
 - Dashboard：Users/Downsample 批量改为 NDJSON 流并显示 InFlight 百分比进度；防双提交
 - Query：清除历史 Confirm 对齐 writeBlocked 门禁
+
+## P314（2026-07-22）
+- Users/Downsample：批量取消时若已有进度，展示部分结果摘要并刷新列表
+- Server：admin heavy 互斥覆盖 flush/compact/retention + data-snapshot/restore-drill/config-snapshot（避免 reentry）
+- Storage：拉取 `admin_op_busy`，重操作门禁/禁用/chip；API 错误码透传

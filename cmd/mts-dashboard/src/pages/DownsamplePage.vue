@@ -544,7 +544,23 @@ async function confirmBatch() {
       }
     }
   } catch (e) {
-    reportDsCatch('batch', e)
+    if (isCanceledError(e) && batchProgress.value.done > 0) {
+      const prog = batchProgress.value
+      const msg = formatMessage(t.value('listBatchCancelledPartial'), {
+        done: prog.done,
+        total: prog.total || names.length,
+        ok: prog.ok,
+        skip: prog.skip,
+        fail: prog.fail,
+      })
+      setActionResult(makeActionResult('info', msg))
+      info(msg)
+      try { await loadData() } catch { /* soft */ }
+      selectedNames.value = []
+      batchOpen.value = false
+    } else {
+      reportDsCatch('batch', e)
+    }
   } finally {
     dsActionAbort.end()
     batchLoading.value = false
@@ -1012,8 +1028,8 @@ onBeforeUnmount(() => {
         @clear="clearSelection"
       >
         <template #actions>
-          <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
-          <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-batch-enable" :disabled="!selectedNames.length || writeBlocked || batchLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('enable')">{{ t('downsampleBatchEnable') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-batch-disable" :disabled="!selectedNames.length || writeBlocked || batchLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="openBatch('disable')">{{ t('downsampleBatchDisable') }}</button>
           <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
           <button type="button" class="mts-btn" data-testid="downsample-export-json" :disabled="exportBusy || !filteredPolicies.length" @click="exportJSON">
             <Download class="h-3.5 w-3.5" /> {{ t('inventoryExportJSON') }}
