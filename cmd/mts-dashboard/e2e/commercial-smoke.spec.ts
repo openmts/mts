@@ -876,6 +876,29 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('account-session-renew-form')).toBeVisible()
   await expect(page.getByTestId('account-session-renew-submit')).toBeDisabled()
 
+
+  // P217: Readiness 清单/签核会话脏标记（相对进页基线；改动会自动落 localStorage）
+  await page.goto('/ops/readiness')
+  await expect(page.getByTestId('readiness-signoff-notes')).toBeVisible()
+  await expect(page.getByTestId('readiness-dirty-badge')).toHaveCount(0)
+  const prodBox = page.locator('[data-testid^="readiness-prod-"]').first()
+  if (await prodBox.count()) {
+    const was = await prodBox.isChecked()
+    await prodBox.click()
+    await expect(page.getByTestId('readiness-dirty-badge')).toBeVisible()
+    await prodBox.click()
+    if (was) await expect(prodBox).toBeChecked()
+    else await expect(prodBox).not.toBeChecked()
+    await expect(page.getByTestId('readiness-dirty-badge')).toHaveCount(0)
+  }
+  const signoffEdge = page.getByTestId('signoff-edge-https')
+  const originalSignoff = await signoffEdge.inputValue()
+  const mutated = originalSignoff === 'e2e-signoff-edge' ? 'e2e-signoff-edge-2' : 'e2e-signoff-edge'
+  await signoffEdge.fill(mutated)
+  await expect(page.getByTestId('readiness-dirty-badge')).toBeVisible()
+  await signoffEdge.fill(originalSignoff)
+  await expect(page.getByTestId('readiness-dirty-badge')).toHaveCount(0)
+
   // P208: Account 改密脏标记
   await page.goto('/account')
   await expect(page.getByTestId('account-password-form')).toBeVisible()

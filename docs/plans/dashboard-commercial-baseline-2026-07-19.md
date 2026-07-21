@@ -1010,3 +1010,9 @@
 
 ## P216 状态（2026-07-21）
 - Storage 快照删除入口离线/会话门禁
+
+## P217（2026-07-21）
+- Readiness 清单/签核：**相对进页基线**的会话脏离开守卫（`registerDirtyChecker` + `beforeunload` + dirty badge）
+- 导入成功后重置基线；变更仍自动写入 localStorage（非服务端未保存语义）
+- 部署侧边缘证书/cron/跨主机备份仍为人工签核项，dashboard 仅清单与证据备注
+

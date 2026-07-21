@@ -1,3 +1,5 @@
+import { isDirty } from './formDirty.ts'
+
 /** 可商用就绪清单完成状态（localStorage 持久化，跨 Storage/Readiness 页共享） */
 
 export const READINESS_STORAGE_KEY = 'mts.dashboard.readiness.v1'
@@ -126,4 +128,30 @@ export function completedIds(map: Record<string, boolean> | undefined): string[]
   return Object.entries(map)
     .filter(([, v]) => !!v)
     .map(([k]) => k)
+}
+
+/** 可比对快照：忽略 updatedAt（每次 save 都会变） */
+export interface ReadinessComparable {
+  production: Record<string, boolean>
+  edgeHttps: Record<string, boolean>
+  backupSchedule: Record<string, boolean>
+  deployKit: Record<string, boolean>
+  signoffNotes: SignoffNotes
+}
+
+export function readinessComparable(state: ReadinessState): ReadinessComparable {
+  return {
+    production: { ...(state.production ?? {}) },
+    edgeHttps: { ...(state.edgeHttps ?? {}) },
+    backupSchedule: { ...(state.backupSchedule ?? {}) },
+    deployKit: { ...(state.deployKit ?? {}) },
+    signoffNotes: normalizeSignoffNotes(state.signoffNotes),
+  }
+}
+
+/** 相对基线是否有清单/签核变更（用于路由离开与 beforeunload） */
+export function isReadinessDirty(baseline: ReadinessState | ReadinessComparable, current: ReadinessState): boolean {
+  const a = readinessComparable(baseline as ReadinessState)
+  const b = readinessComparable(current)
+  return isDirty(a, b)
 }

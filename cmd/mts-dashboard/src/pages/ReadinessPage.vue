@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { registerDirtyChecker } from '@/utils/routeDirty'
+import { snapshotForm } from '@/utils/formDirty'
 import { useRoute, useRouter } from 'vue-router'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
@@ -43,6 +45,7 @@ import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttp
 import { BACKUP_SCHEDULE_STEPS, backupScheduleProgress } from '@/utils/backupSchedule'
 import {
   completedIds,
+  isReadinessDirty,
   loadReadinessState,
   setReadinessFlag,
   setSignoffNote,
@@ -129,6 +132,21 @@ const {
 } = useExportJob()
 
 const state = ref<ReadinessState>(loadReadinessState())
+const readinessBaseline = ref(snapshotForm(state.value))
+const formDirty = computed(() => isReadinessDirty(readinessBaseline.value, state.value))
+
+function markReadinessClean() {
+  readinessBaseline.value = snapshotForm(state.value)
+}
+
+function onBeforeUnload(e: BeforeUnloadEvent) {
+  if (!formDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+let unregisterDirty: (() => void) | null = null
+
 const DOC_ROW_HEIGHT = 40
 const DOC_LIST_HEIGHT = 280
 const doctor = ref<DoctorResponse | null>(null)
@@ -367,6 +385,7 @@ async function onImportFile(ev: Event) {
       return
     }
     state.value = persistImportedReadiness(parsed.state, { merge: importMerge.value })
+    markReadinessClean()
     flash('ok', t.value('readinessImportOk'))
   } catch (e) {
     flash('error', `${t.value('readinessImportFail')}: ${e instanceof Error ? e.message : String(e)}`)
@@ -661,6 +680,11 @@ async function copyPreflightSummary() {
 }
 
 onMounted(() => {
+  unregisterDirty = registerDirtyChecker('readiness', () => formDirty.value)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', onBeforeUnload)
+  }
+  markReadinessClean()
   if (isAdmin.value) {
     void loadDoctor()
     void loadServerVersion()
@@ -672,7 +696,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unregisterDirty?.()
+  unregisterDirty = null
   if (typeof window !== 'undefined') {
+    window.removeEventListener('beforeunload', onBeforeUnload)
     window.removeEventListener('hashchange', scrollToCurrentHash)
   }
 })
@@ -693,6 +720,12 @@ watch(
         <h1 class="mts-title flex items-center gap-2">
           <ClipboardCheck class="h-5 w-5" />
           {{ t('readinessTitle') }}
+          <span
+            v-if="formDirty"
+            class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+            data-testid="readiness-dirty-badge"
+            :title="t('readinessDirtyTitle')"
+          >{{ t('readinessDirtyBadge') }}</span>
         </h1>
         <p class="text-xs mts-muted">{{ t('readinessDesc') }}</p>
         <p v-if="state.updatedAt" class="mt-1 text-[11px] mts-muted">

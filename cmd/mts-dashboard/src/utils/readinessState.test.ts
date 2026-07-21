@@ -3,8 +3,10 @@ import test from 'node:test'
 import {
   completedIds,
   emptyReadinessState,
+  isReadinessDirty,
   loadReadinessState,
   READINESS_STORAGE_KEY,
+  readinessComparable,
   saveReadinessState,
   setReadinessFlag,
   setSignoffNote,
@@ -92,4 +94,36 @@ test('legacy state without signoffNotes loads empty notes', () => {
   const st = loadReadinessState(legacy)
   assert.deepEqual(st.signoffNotes, {})
   assert.equal(st.deployKit.reviewed, true)
+})
+
+test('isReadinessDirty ignores updatedAt and detects content changes', () => {
+  const base = emptyReadinessState()
+  base.production = { a: true }
+  base.signoffNotes = { edgeHttps: 'cert ok' }
+  base.updatedAt = '2026-01-01T00:00:00.000Z'
+  const same = { ...base, updatedAt: '2026-07-21T00:00:00.000Z' }
+  assert.equal(isReadinessDirty(base, same), false)
+  const changedFlag = { ...base, production: { a: true, b: true } }
+  assert.equal(isReadinessDirty(base, changedFlag), true)
+  const changedNote = {
+    ...base,
+    signoffNotes: { edgeHttps: 'cert ok', backupOffsite: 'rsync' },
+  }
+  assert.equal(isReadinessDirty(base, changedNote), true)
+  const cleared = { ...base, production: {}, signoffNotes: {} }
+  assert.equal(isReadinessDirty(base, cleared), true)
+})
+
+test('readinessComparable normalizes signoff and drops updatedAt', () => {
+  const c = readinessComparable({
+    production: { x: true },
+    edgeHttps: {},
+    backupSchedule: {},
+    deployKit: {},
+    signoffNotes: { edgeHttps: '  hi  ', backupOffsite: '' },
+    updatedAt: 't',
+  })
+  assert.equal(c.signoffNotes.edgeHttps, 'hi')
+  assert.equal(c.signoffNotes.backupOffsite, undefined)
+  assert.equal('updatedAt' in c, false)
 })
