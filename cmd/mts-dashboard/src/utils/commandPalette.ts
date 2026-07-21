@@ -425,6 +425,13 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['hsts', 'tls', 'edge', '边缘', 'https'],
     adminOnly: true,
   },
+  {
+    id: 'storage-snapshots',
+    path: '/storage#snapshots',
+    labelKey: 'cmdStorageSnapshots',
+    keywords: ['snapshot list', '快照列表', 'snapshots table', '备份列表'],
+    adminOnly: true,
+  },
   { id: 'readiness', path: '/ops/readiness', labelKey: 'readiness', keywords: ['go-live', '就绪', 'doctor'], adminOnly: true },
   {
     id: 'readiness-deploy-kit',
@@ -491,6 +498,24 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     path: '/account#account-landing',
     labelKey: 'cmdAccountLanding',
     keywords: ['landing page', '默认落地', 'landing filter', '账户落地'],
+  },
+  {
+    id: 'account-session',
+    path: '/account#account-session',
+    labelKey: 'cmdAccountSession',
+    keywords: ['session renew', '会话续期', 'ttl', 'token expiry', '密码续期'],
+  },
+  {
+    id: 'account-password',
+    path: '/account#account-password',
+    labelKey: 'cmdAccountPassword',
+    keywords: ['change password', '修改密码', 'password form'],
+  },
+  {
+    id: 'account-density',
+    path: '/account#account-density',
+    labelKey: 'cmdAccountDensity',
+    keywords: ['density', '紧凑', 'ui density', '显示密度'],
   },
 ]
 

@@ -13,6 +13,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import { Download, RefreshCw, Search } from 'lucide-vue-next'
 import VirtualTable from '@/components/VirtualTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { apiSpecToMarkdown, buildApiSpecExport } from '@/utils/apiSpecExport'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
@@ -238,7 +239,16 @@ async function exportMarkdown() {
       </div>
     </div>
 
-    <p v-if="loadError" class="mts-alert-error" data-testid="api-spec-error" role="alert" aria-live="assertive">{{ loadError }}</p>
+    <div v-if="loadError" data-testid="api-spec-error">
+      <ActionResultBanner
+        kind="error"
+        :message="loadError"
+        retryable
+        data-testid="api-spec-load-error"
+        @retry="load"
+        @dismiss="loadError = ''"
+      />
+    </div>
 
     <div id="api-spec-filters" class="grid gap-3 scroll-mt-20 md:grid-cols-3" data-testid="api-spec-filters">
       <label class="text-xs mts-muted md:col-span-1">{{ t('apiSpecNamespace') }}

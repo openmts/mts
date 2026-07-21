@@ -145,7 +145,6 @@ test('commercial browser smoke path', async ({ page }) => {
   // P236: 成功结果 live region
   await expect(page.getByTestId('write-result-ok')).toHaveAttribute('role', 'status')
   await expect(page.getByRole('main').getByText(/写入成功/).first()).toBeVisible({ timeout: 20_000 })
-
   await expect(page.getByRole('main').getByRole('button', { name: /表单写入|Form write/i })).toBeVisible()
   await expect(page.getByTestId('write-mode-tabs')).toBeVisible()
   await expect(page.getByTestId('write-mode-typed')).toBeVisible()
@@ -156,6 +155,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('write-meta-panel')).toBeVisible()
   await expect(page.getByTestId('write-add-row')).toBeVisible()
   await expect(page.getByTestId('write-retention-policy')).toBeVisible()
+
+  // P240/P241: 管理页可达与错误恢复入口存在
+  await page.goto('/api-spec')
+  await expect(page.getByTestId('api-spec-page').or(page.getByRole('main')).first()).toBeVisible()
+  await page.goto('/storage')
+  await expect(page.getByTestId('storage-page')).toBeVisible()
+  await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
 
   // 4) 查询页可达 + 执行一次 rows 查询以验证结果虚拟列表
   await page.goto('/query')

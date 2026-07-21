@@ -1091,3 +1091,13 @@
 
 ## P239（2026-07-21）
 - Query 结果 fields 去掉 `as any`
+
+## P240（2026-07-21）
+- Overview 管理统计部分失败可重试
+- ApiSpec 加载失败重试
+
+## P241（2026-07-21）
+- Storage 快照列表错误可见 + 重试
+
+## P242（2026-07-21）
+- 命令面板补 storage snapshots / account session·password·density 深链

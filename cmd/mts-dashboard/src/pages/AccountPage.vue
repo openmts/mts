@@ -551,7 +551,7 @@ async function submit() {
       />
     </div>
 
-    <div class="mts-card p-4" data-testid="account-density">
+    <div id="account-density" class="mts-card scroll-mt-20 p-4" data-testid="account-density">
       <h2 class="mb-1 text-sm font-semibold">{{ t('accountDensityTitle') }}</h2>
       <p class="mb-3 text-xs mts-muted">{{ t('accountDensityHint') }}</p>
       <label class="mb-1 block text-sm font-medium" for="account-density-select">{{ t('accountDensityLabel') }}</label>
@@ -699,7 +699,7 @@ async function submit() {
       </div>
       <ActionResultBanner v-if="info" kind="info" :message="info" @dismiss="info = ''" />
 
-      <form class="space-y-3" data-testid="account-password-form" @submit.prevent="submit">
+      <form id="account-password" class="space-y-3 scroll-mt-20" data-testid="account-password-form" @submit.prevent="submit">
         <div>
           <label class="mb-1 block text-sm font-medium" for="acct-old">{{ t('accountOldPassword') }}</label>
           <input

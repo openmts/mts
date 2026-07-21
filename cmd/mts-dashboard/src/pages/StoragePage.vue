@@ -74,6 +74,7 @@ const selectedDataSnapshotPath = ref('')
 const snapshots = ref<SnapshotInfo[]>([])
 const exportData = ref<ExportData | null>(null)
 const actionResult = ref<ActionResult | null>(null)
+const listError = ref('')
 const loading = ref('')
 const listLoading = ref(false)
 const SNAPSHOT_ROW_HEIGHT = 44
@@ -105,11 +106,13 @@ function toggleHostDrill(id: string, checked: boolean) {
 
 async function loadSnapshots() {
   listLoading.value = true
+  listError.value = ''
   try {
     const data = await apiGet<SnapshotsResponse>('/api/v1/admin/storage/snapshots')
     snapshots.value = data.snapshots ?? []
-  } catch {
+  } catch (e) {
     snapshots.value = []
+    listError.value = formatCaughtError(e)
   } finally {
     listLoading.value = false
   }
@@ -123,10 +126,19 @@ async function loadDataSnapshots() {
       dataSnapshots.value,
       selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || null,
     )
-  } catch {
+  } catch (e) {
     dataSnapshots.value = []
     selectedDataSnapshotPath.value = ''
+    // 列表错误合并展示，避免静默空列表
+    const msg = formatCaughtError(e)
+    listError.value = listError.value ? `${listError.value}；${msg}` : msg
   }
+}
+
+async function reloadStorageLists() {
+  listError.value = ''
+  await loadSnapshots()
+  await loadDataSnapshots()
 }
 
 function scrollToCurrentHash() {
@@ -394,12 +406,21 @@ async function copyStorageShareLink() {
         <button type="button" class="mts-btn" data-testid="storage-share-link" @click="copyStorageShareLink">
           {{ t('storageShareLink') }}
         </button>
-        <button class="mts-btn" :disabled="listLoading" @click="() => { void loadSnapshots(); void loadDataSnapshots() }">
+        <button class="mts-btn" :disabled="listLoading" @click="() => { void reloadStorageLists() }">
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('storageRefreshSnapshots') }}
         </button>
       </div>
     </div>
 
+    <ActionResultBanner
+      v-if="listError"
+      kind="error"
+      :message="listError"
+      retryable
+      data-testid="storage-list-error"
+      @retry="reloadStorageLists"
+      @dismiss="listError = ''"
+    />
     <ActionResultBanner :result="actionResult" @dismiss="actionResult = null" />
 
     <div id="backup-drill" class="mts-card p-4 scroll-mt-20">

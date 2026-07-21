@@ -236,3 +236,16 @@ test('command palette prefill deep links are read-only paths', () => {
   assert.ok(login)
   assert.match(login!.path, /action=login/)
 })
+
+test('palette includes storage snapshots and account session deep links', () => {
+  const admin = visibleCommandItems(COMMAND_NAV_ITEMS, true)
+  const ids = new Set(admin.map((i) => i.id))
+  assert.ok(ids.has('storage-snapshots'))
+  assert.ok(ids.has('account-session'))
+  assert.ok(ids.has('account-password'))
+  assert.ok(ids.has('account-density'))
+  const user = visibleCommandItems(COMMAND_NAV_ITEMS, false)
+  const userIds = new Set(user.map((i) => i.id))
+  assert.equal(userIds.has('storage-snapshots'), false)
+  assert.ok(userIds.has('account-session'))
+})

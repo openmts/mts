@@ -519,7 +519,11 @@ async function copyOverview() {
       v-else-if="adminPartialError"
       kind="warn"
       :message="`${t('partialAdminStats')}：${adminPartialError}`"
-      :dismissible="false"
+      retryable
+      data-testid="overview-partial-error"
+      @retry="loadOverview"
+      :dismissible="true"
+      @dismiss="adminPartialError = ''"
     />
 
     <div id="overview-summary" class="mts-card scroll-mt-20 p-4" data-testid="overview-summary">
