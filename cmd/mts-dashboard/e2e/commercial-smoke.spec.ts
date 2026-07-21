@@ -17,7 +17,7 @@ test('commercial browser smoke path', async ({ page }) => {
   page.on('dialog', async (dialog) => {
     await dialog.accept()
   })
-  // 0) 登录表单校验：空密码 -> alert 错误区
+  // 0) 登录表单校验：空密码 -> alert 错误区（本地校验不可重试，仅 dismiss）
   await page.goto('/login')
   await expect(page.getByTestId('login-toggle-password')).toBeVisible()
   await expect(page.getByTestId('login-remember-user')).toBeVisible()
@@ -26,8 +26,21 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('login-submit').click()
   await expect(page.getByTestId('login-error')).toBeVisible()
   await expect(page.getByTestId('login-error')).toHaveAttribute('role', 'alert')
+  await expect(page.getByTestId('login-error-retry')).toHaveCount(0)
+  await expect(page.getByTestId('login-error-dismiss')).toBeVisible()
   await expect(page.getByTestId('login-password')).toHaveAttribute('aria-invalid', 'true')
+  await page.getByTestId('login-error-dismiss').click()
+  await expect(page.getByTestId('login-error')).toHaveCount(0)
   await expect(page.getByTestId('login-ttl')).toBeVisible()
+
+  // P279: 错误密码 -> 服务端失败可 retry/dismiss
+  await page.getByTestId('login-password').fill('definitely-wrong-password')
+  await page.getByTestId('login-submit').click()
+  await expect(page.getByTestId('login-error')).toBeVisible()
+  await expect(page.getByTestId('login-error-retry')).toBeVisible()
+  await expect(page.getByTestId('login-error-dismiss')).toBeVisible()
+  await page.getByTestId('login-error-dismiss').click()
+  await expect(page.getByTestId('login-error')).toHaveCount(0)
 
   // P187: 登录页展示深链 redirect 目标
   await page.goto('/login?redirect=%2Fquery%3Fdatabase%3Ddefault')
@@ -38,6 +51,17 @@ test('commercial browser smoke path', async ({ page }) => {
   await login(page, 'admin', 'admin')
   await expect(page).toHaveURL(/force-change-password/)
   await expect(page.getByTestId('password-hints')).toBeVisible()
+  // P279: 本地策略失败仅 dismiss、不可 retry
+  await page.getByTestId('force-old').fill('admin')
+  await page.getByTestId('force-new').fill('short')
+  await page.getByTestId('force-confirm').fill('short')
+  await page.getByTestId('force-password-submit').click()
+  await expect(page.getByTestId('force-password-error')).toBeVisible()
+  await expect(page.getByTestId('force-password-error')).toHaveAttribute('role', 'alert')
+  await expect(page.getByTestId('force-password-error-retry')).toHaveCount(0)
+  await expect(page.getByTestId('force-password-error-dismiss')).toBeVisible()
+  await page.getByTestId('force-password-error-dismiss').click()
+  await expect(page.getByTestId('force-password-error')).toHaveCount(0)
   await page.getByTestId('force-old').fill('admin')
   await page.getByTestId('force-new').fill(NEW_PASSWORD)
   await page.getByTestId('force-confirm').fill(NEW_PASSWORD)
@@ -1275,6 +1299,7 @@ test('commercial browser smoke path', async ({ page }) => {
   })
   await page.reload()
   await expect(page.getByTestId('session-critical-banner')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('session-critical-remaining')).toBeVisible()
   await expect(page.getByTestId('session-critical-renew')).toBeVisible()
   await expect(page.getByTestId('session-critical-relogin')).toBeVisible()
   await page.getByTestId('session-critical-renew').click()
@@ -1287,7 +1312,19 @@ test('commercial browser smoke path', async ({ page }) => {
   })
   await page.goto('/write')
   await expect(page.getByTestId('session-critical-banner')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('session-critical-remaining')).toBeVisible()
   await expect(page.getByTestId('write-submit')).toBeDisabled()
+  {
+    const writeTitle = await page.getByTestId('write-submit').getAttribute('title')
+    if (writeTitle) {
+      if (!/会话|Session|session|过期|expired|critical|续期|Renew/i.test(writeTitle)) {
+        throw new Error(`unexpected write-submit title under critical: ${writeTitle}`)
+      }
+      if (/离线|offline/i.test(writeTitle)) {
+        throw new Error(`write-submit should not show offline title under session critical: ${writeTitle}`)
+      }
+    }
+  }
   // P218: Users 弹窗入口 title 为会话文案（非离线）
   await page.goto('/users')
   await expect(page.getByTestId('users-create-open')).toBeDisabled()
@@ -1777,6 +1814,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/write')
   await expect(page.getByTestId('write-page')).toBeVisible()
   await expect(page.getByTestId('session-critical-banner')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('session-critical-remaining')).toBeVisible()
   await expect(page.getByTestId('session-critical-renew')).toBeVisible()
   await expect(page.getByTestId('write-submit')).toBeDisabled()
   await page.getByTestId('session-critical-renew').click()

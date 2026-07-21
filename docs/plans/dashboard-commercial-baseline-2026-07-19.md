@@ -1208,3 +1208,10 @@
 
 ## P277（2026-07-21）
 - Audit/Write/Downsample 元数据与库列表 soft-keep
+
+## P278（2026-07-21）
+- 会话 critical 剩余时间与 write-submit title e2e 强化
+
+## P279（2026-07-21）
+- 登录/强改密错误区 retry/dismiss；本地校验不暴露 retry
+

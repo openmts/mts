@@ -32,6 +32,7 @@ const rememberUsername = ref(!!remembered)
 const ttlSeconds = ref(loadLoginTTLPref(storage))
 const loading = ref(false)
 const error = ref('')
+const errorRetryable = ref(false)
 const reasonHint = computed(() =>
   loginReasonMessage(router.currentRoute.value.query.reason, locale.value),
 )
@@ -46,18 +47,22 @@ const invalid = computed(() => !!error.value)
 async function handleLogin() {
   if (shouldBlockOfflineMutation(offline.value)) {
     error.value = t.value('offlineLoginBlocked')
+    errorRetryable.value = true
     return
   }
   if (!username.value.trim() || !password.value) {
     error.value = t.value('loginNeedCredentials')
+    errorRetryable.value = false
     return
   }
   const ttl = parseLoginTTLSeconds(ttlSeconds.value)
   if (!ttl.ok) {
     error.value = t.value('loginTTLInvalid')
+    errorRetryable.value = false
     return
   }
   error.value = ''
+  errorRetryable.value = false
   loading.value = true
   try {
     const err = await login(
@@ -67,6 +72,7 @@ async function handleLogin() {
     )
     if (err) {
       error.value = err
+      errorRetryable.value = true
     } else {
       saveLoginTTLPref(storage, ttlSeconds.value)
       if (rememberUsername.value) {
@@ -198,15 +204,33 @@ async function handleLogin() {
           <p id="login-ttl-hint" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{{ t('loginTTLHint') }}</p>
         </div>
 
-        <p
+        <div
           v-if="error"
           id="login-error"
-          class="text-sm text-red-600 dark:text-red-300"
+          class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900 dark:bg-red-950/40"
           role="alert"
           aria-live="assertive"
           :aria-label="t('loginErrorRegion')"
           data-testid="login-error"
-        >{{ error }}</p>
+        >
+          <p class="text-sm text-red-700 dark:text-red-200">{{ error }}</p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button
+              v-if="errorRetryable"
+              type="button"
+              class="mts-btn text-xs"
+              data-testid="login-error-retry"
+              :disabled="loading || offline"
+              @click="handleLogin"
+            >{{ t('retry') }}</button>
+            <button
+              type="button"
+              class="mts-btn text-xs"
+              data-testid="login-error-dismiss"
+              @click="error = ''; errorRetryable = false"
+            >{{ t('dismiss') }}</button>
+          </div>
+        </div>
 
         <button
           type="submit"

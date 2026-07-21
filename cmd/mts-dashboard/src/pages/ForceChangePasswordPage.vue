@@ -26,6 +26,7 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
+const errorRetryable = ref(false)
 const invalid = computed(() => !!error.value)
 const passwordFormDirty = computed(
   () => !!(oldPassword.value || newPassword.value || confirmPassword.value),
@@ -52,8 +53,10 @@ onBeforeUnmount(() => {
 
 async function submit() {
   error.value = ''
+  errorRetryable.value = false
   if (shouldBlockOfflineMutation(offline.value)) {
     error.value = t.value('offlineAccountBlocked')
+    errorRetryable.value = true
     return
   }
   const check = validateNewPassword(oldPassword.value, newPassword.value, confirmPassword.value, {
@@ -61,6 +64,7 @@ async function submit() {
   })
   if (!check.ok) {
     error.value = check.error || t.value('failed')
+    errorRetryable.value = false
     return
   }
   loading.value = true
@@ -68,6 +72,7 @@ async function submit() {
     const err = await changePassword(oldPassword.value, newPassword.value)
     if (err) {
       error.value = err
+      errorRetryable.value = true
       return
     }
     await router.replace({
@@ -162,15 +167,33 @@ async function doLogout() {
           :new-password="newPassword"
           :confirm-password="confirmPassword"
         />
-        <p
+        <div
           v-if="error"
           id="force-password-error"
-          class="text-sm text-red-600 dark:text-red-300"
+          class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900 dark:bg-red-950/40"
           role="alert"
           aria-live="assertive"
           :aria-label="t('forcePasswordErrorRegion')"
           data-testid="force-password-error"
-        >{{ error }}</p>
+        >
+          <p class="text-sm text-red-700 dark:text-red-200">{{ error }}</p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button
+              v-if="errorRetryable"
+              type="button"
+              class="mts-btn text-xs"
+              data-testid="force-password-error-retry"
+              :disabled="loading || offline"
+              @click="submit"
+            >{{ t('retry') }}</button>
+            <button
+              type="button"
+              class="mts-btn text-xs"
+              data-testid="force-password-error-dismiss"
+              @click="error = ''; errorRetryable = false"
+            >{{ t('dismiss') }}</button>
+          </div>
+        </div>
         <button
           type="submit"
           class="mts-focus-ring w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
