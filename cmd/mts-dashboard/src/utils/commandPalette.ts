@@ -30,6 +30,7 @@ export type CommandActionId =
   | 'click-share-deep-link'
   | 'focus-main'
   | 'reload-page'
+  | 'retry-last-action'
 
 /** 页内快捷动作（不离开当前路由，除非动作本身导航） */
 export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
@@ -136,6 +137,23 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
     keywords: ['reload', 'refresh', '刷新页面', '重新加载'],
     kind: 'action',
     action: 'reload-page',
+  },
+  {
+    id: 'action-retry-last-action',
+    path: 'action:retry-last-action',
+    labelKey: 'cmdActionRetryLast',
+    keywords: [
+      'retry',
+      'retry last',
+      'retry action',
+      'failed action',
+      '重试',
+      '重试失败',
+      '重试上次',
+      '失败恢复',
+    ],
+    kind: 'action',
+    action: 'retry-last-action',
   },
 ]
 

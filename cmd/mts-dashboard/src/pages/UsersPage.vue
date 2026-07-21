@@ -178,6 +178,7 @@ const batchLoading = ref(false)
 const usersActionStartedAt = ref<number | null>(null)
 const usersActionAbort = createActionAbort()
 const usersToggleLoading = ref(false)
+const usersWriteLoading = ref(false)
 
 onMounted(async () => {
   unregisterUsersDirty = registerDirtyChecker('users', () => usersFormDirty.value)
@@ -293,20 +294,27 @@ async function createUser() {
   }
   if (!newUser.value.name.trim()) return
   clearActionResult()
+  usersWriteLoading.value = true
+  usersActionStartedAt.value = Date.now()
+  const signal = usersActionAbort.begin()
   try {
     await apiPost('/api/v1/users', {
       name: newUser.value.name.trim(),
       display_name: newUser.value.display_name,
       role: newUser.value.role,
       password: newUser.value.password || undefined,
-    })
+    }, { signal })
     showCreate.value = false
     newUser.value = { name: '', display_name: '', role: 'user', password: '' }
     await loadUsers()
     setActionOk(t.value('usersCreated'))
     success(t.value('usersCreated'))
   } catch (e) {
-    reportAndNotify('create', e)
+    reportUsersCatch('create', e)
+  } finally {
+    usersActionAbort.end()
+    usersWriteLoading.value = false
+    usersActionStartedAt.value = null
   }
 }
 
@@ -319,14 +327,21 @@ async function doSetPassword() {
   }
   if (!setPasswordValue.value) return
   clearActionResult()
+  usersWriteLoading.value = true
+  usersActionStartedAt.value = Date.now()
+  const signal = usersActionAbort.begin()
   try {
-    await apiPut(`/api/v1/users/${encodeURIComponent(setPasswordUser.value)}/password`, { password: setPasswordValue.value })
+    await apiPut(`/api/v1/users/${encodeURIComponent(setPasswordUser.value)}/password`, { password: setPasswordValue.value }, { signal })
     showSetPassword.value = false
     setPasswordValue.value = ''
     setActionOk(t.value('usersPasswordSet'))
     success(t.value('usersPasswordSet'))
   } catch (e) {
-    reportAndNotify('set-password', e)
+    reportUsersCatch('set-password', e)
+  } finally {
+    usersActionAbort.end()
+    usersWriteLoading.value = false
+    usersActionStartedAt.value = null
   }
 }
 
@@ -339,19 +354,26 @@ async function doChangeSelfPassword() {
   }
   if (!selfOldPassword.value || !selfNewPassword.value) return
   clearActionResult()
+  usersWriteLoading.value = true
+  usersActionStartedAt.value = Date.now()
+  const signal = usersActionAbort.begin()
   try {
     await apiPost('/api/v1/auth/password', {
       user_name: currentUser.value,
       old_password: selfOldPassword.value,
       new_password: selfNewPassword.value,
-    })
+    }, { signal })
     showChangeSelfPassword.value = false
     selfOldPassword.value = ''
     selfNewPassword.value = ''
     setActionOk(t.value('usersPasswordChanged'))
     success(t.value('usersPasswordChanged'))
   } catch (e) {
-    reportAndNotify('change-self-password', e)
+    reportUsersCatch('change-self-password', e)
+  } finally {
+    usersActionAbort.end()
+    usersWriteLoading.value = false
+    usersActionStartedAt.value = null
   }
 }
 
@@ -471,11 +493,18 @@ async function grantPermission() {
   }
   if (!grantDbs.value.length || !grantPerms.value.length || !selectedUser.value) return
   clearActionResult()
+  usersWriteLoading.value = true
+  usersActionStartedAt.value = Date.now()
+  const signal = usersActionAbort.begin()
   try {
     const tasks: Promise<unknown>[] = []
     for (const db of grantDbs.value) {
       for (const perm of grantPerms.value) {
-        tasks.push(apiPut(`/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(db)}/${perm}`))
+        tasks.push(apiPut(
+          `/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(db)}/${perm}`,
+          undefined,
+          { signal },
+        ))
       }
     }
     await Promise.all(tasks)
@@ -485,7 +514,11 @@ async function grantPermission() {
     setActionOk(t.value('usersGrantOk'))
     success(t.value('usersGrantOk'))
   } catch (e) {
-    reportAndNotify('grant', e)
+    reportUsersCatch('grant', e)
+  } finally {
+    usersActionAbort.end()
+    usersWriteLoading.value = false
+    usersActionStartedAt.value = null
   }
 }
 
@@ -497,13 +530,23 @@ async function revokeGrant(g: DatabaseGrant) {
     return
   }
   if (!selectedUser.value) return
+  usersWriteLoading.value = true
+  usersActionStartedAt.value = Date.now()
+  const signal = usersActionAbort.begin()
   try {
-    await apiDelete(`/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(g.database)}/${encodeURIComponent(g.permission)}`)
+    await apiDelete(
+      `/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(g.database)}/${encodeURIComponent(g.permission)}`,
+      { signal },
+    )
     await selectUser(selectedUser.value)
     setActionOk(t.value('usersRevokeOk'))
     success(t.value('usersRevokeOk'))
   } catch (e) {
-    reportAndNotify('revoke', e, { database: g.database, permission: g.permission })
+    reportUsersCatch('revoke', e, { database: g.database, permission: g.permission })
+  } finally {
+    usersActionAbort.end()
+    usersWriteLoading.value = false
+    usersActionStartedAt.value = null
   }
 }
 
@@ -717,7 +760,7 @@ onBeforeUnmount(() => {
       @dismiss="clearActionResult"
     />
     <InFlightBanner
-      :active="deleteLoading || batchLoading || usersToggleLoading"
+      :active="deleteLoading || batchLoading || usersToggleLoading || usersWriteLoading"
       :started-at-ms="usersActionStartedAt"
       kind="admin"
       @cancel="cancelUsersAction"

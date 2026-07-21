@@ -34,6 +34,7 @@ import {
   resolveShareDeepLinkAction,
   stripSensitiveUrlParams,
 } from '@/utils/shareDeepLink'
+import { pickActionResultRetryButton, resolveActionResultRetryAction, clickActionResultRetryButton } from '@/utils/actionResultRetry'
 import { pathOpensShortcutsHelp } from '@/utils/shortcutsPrefill'
 import { Search, Command, History, Zap } from 'lucide-vue-next'
 
@@ -219,6 +220,22 @@ function runAction(action: CommandActionId) {
       success(t.value('cmdActionReloading'))
       if (typeof window !== 'undefined') window.location.reload()
       break
+    case 'retry-last-action': {
+      const root = typeof document !== 'undefined' ? document : null
+      const decision = resolveActionResultRetryAction({ root })
+      if (decision.kind === 'clicked') {
+        const btn = pickActionResultRetryButton(root)
+        if (btn) {
+          clickActionResultRetryButton(btn)
+          success(t.value('cmdActionRetryLastTriggered'))
+        } else {
+          notifyError(t.value('cmdActionRetryLastFailed'))
+        }
+      } else {
+        notifyError(t.value('cmdActionRetryLastFailed'))
+      }
+      break
+    }
     default:
       break
   }

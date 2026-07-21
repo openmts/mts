@@ -139,6 +139,7 @@ test('command actions catalog and filter', () => {
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-click-share-deep-link'))
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-focus-main'))
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-reload-page'))
+  assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-retry-last-action'))
   assert.ok(COMMAND_ACTION_ITEMS.every((i) => isCommandAction(i)))
   const all = allVisibleCommandItems(true)
   assert.ok(all.some((i) => i.id === 'action-toggle-theme'))
@@ -153,6 +154,7 @@ test('command actions catalog and filter', () => {
   assert.ok(filterCommandItems(all, '复制筛选链接', resolve).some((i) => i.id === 'action-click-share-deep-link'))
   assert.ok(filterCommandItems(all, 'share deep link', resolve).some((i) => i.id === 'action-click-share-deep-link'))
   assert.ok(filterCommandItems(all, 'reload', resolve).some((i) => i.id === 'action-reload-page'))
+  assert.ok(filterCommandItems(all, '重试失败', resolve).some((i) => i.id === 'action-retry-last-action'))
 })
 
 test('groupCommandItems splits nav and action', () => {

@@ -1317,3 +1317,8 @@
 - Config：validate/reload Abort + 进行中横幅 + 取消/超时
 - Users 单用户启用禁用、Downsample 单策略启停补齐 Abort 与横幅联动
 
+## P308（2026-07-22）
+- Downsample：run/reset Abort + 进行中横幅 + 失败可重试（DsActionKey 扩展）
+- Users：创建/改密/授权/撤销补齐 Abort 与横幅
+- 命令面板：`retry-last-action` 触发页内 ActionResultBanner 重试
+

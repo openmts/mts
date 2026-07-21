@@ -76,7 +76,7 @@ const statuses = ref<DownsampleStatus[]>([])
 const loadError = ref('')
 const policiesError = ref('')
 const statusesError = ref('')
-type DsActionKey = 'create' | 'delete' | 'toggle' | 'batch' | 'range'
+type DsActionKey = 'create' | 'delete' | 'toggle' | 'batch' | 'range' | 'run' | 'reset'
 const {
   lastFailedAction,
   actionResult,
@@ -89,6 +89,8 @@ const {
 } = useActionRetry<DsActionKey>()
 const lastToggleName = ref('')
 const lastToggleWantEnabled = ref(false)
+const lastRunName = ref('')
+const lastResetName = ref('')
 const policyFilter = ref('')
 const enabledFilter = ref<DownsampleEnabledFilter>('')
 const selectedNames = ref<string[]>([])
@@ -99,6 +101,7 @@ const dsActionStartedAt = ref<number | null>(null)
 const dsActionAbort = createActionAbort()
 const createLoading = ref(false)
 const dsToggleLoading = ref(false)
+const dsRunLoading = ref(false)
 
 const rangeOpen = ref(false)
 const rangeMode = ref<DownsampleRangeMode>('repair')
@@ -460,6 +463,8 @@ async function retryLastDownsampleAction() {
     rangeOpen.value = true
     return confirmRange()
   }
+  if (key === 'run' && lastRunName.value) return runPolicy(lastRunName.value)
+  if (key === 'reset' && lastResetName.value) return resetPolicy(lastResetName.value)
 }
 
 async function confirmBatch() {
@@ -690,19 +695,27 @@ async function runPolicy(name: string) {
     notifyError(msg)
     return
   }
+  lastRunName.value = name
+  dsRunLoading.value = true
+  dsActionStartedAt.value = Date.now()
+  const signal = dsActionAbort.begin()
+  clearActionResult()
   try {
     const data = await apiPost<{ result: DownsampleRunResult }>(
       `/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/run`,
       {},
+      { signal },
     )
     const msg = formatRunResultMessage('run', name, data.result)
     setActionOk(msg)
     await loadData()
     success(msg)
   } catch (e) {
-    const msg = formatCaughtError(e)
-    setActionError(msg)
-    notifyError(msg)
+    reportDsCatch('run', e)
+  } finally {
+    dsActionAbort.end()
+    dsRunLoading.value = false
+    dsActionStartedAt.value = null
   }
 }
 
@@ -713,18 +726,25 @@ async function resetPolicy(name: string) {
     notifyError(msg)
     return
   }
+  lastResetName.value = name
+  dsRunLoading.value = true
+  dsActionStartedAt.value = Date.now()
+  const signal = dsActionAbort.begin()
+  clearActionResult()
   try {
     await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/reset`, {
       reset: { allow_policy_replace: true },
-    })
+    }, { signal })
     await loadData()
     const msg = `${t.value('downsampleResetOk')}: ${name}`
     setActionOk(msg)
     success(msg)
   } catch (e) {
-    const msg = formatCaughtError(e)
-    setActionError(msg)
-    notifyError(msg)
+    reportDsCatch('reset', e)
+  } finally {
+    dsActionAbort.end()
+    dsRunLoading.value = false
+    dsActionStartedAt.value = null
   }
 }
 
@@ -912,7 +932,7 @@ onBeforeUnmount(() => {
 
     <ActionResultBanner v-if="loadError" kind="error" :message="loadError" retryable data-testid="downsample-load-error" @retry="loadData" @dismiss="loadError = ''" />
     <InFlightBanner
-      :active="deleteLoading || batchLoading || rangeLoading || createLoading || dsToggleLoading"
+      :active="deleteLoading || batchLoading || rangeLoading || createLoading || dsToggleLoading || dsRunLoading"
       :started-at-ms="dsActionStartedAt"
       kind="admin"
       @cancel="cancelDsAction"
@@ -1056,7 +1076,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="px-2">
               <div class="flex flex-wrap items-center gap-0.5">
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : t('downsampleRunTitle')" :data-testid="`downsample-run-${policy.name}`" @click="runPolicy(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked || dsRunLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : t('downsampleRunTitle')" :data-testid="`downsample-run-${policy.name}`" @click="runPolicy(policy.name)">
                   <PlayCircle class="h-4 w-4" />
                 </button>
                 <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : t('downsampleDryRun')" :data-testid="`downsample-dryrun-${policy.name}`" @click="openRange('dry-run', policy.name)">
@@ -1068,7 +1088,7 @@ onBeforeUnmount(() => {
                 <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : t('downsampleRepair')" :data-testid="`downsample-repair-${policy.name}`" @click="openRange('repair', policy.name)">
                   <Wrench class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : t('downsampleResetTitle')" :data-testid="`downsample-reset-${policy.name}`" @click="resetPolicy(policy.name)">
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked || dsRunLoading" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : t('downsampleResetTitle')" :data-testid="`downsample-reset-${policy.name}`" @click="resetPolicy(policy.name)">
                   <RotateCcw class="h-4 w-4" />
                 </button>
                 <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`downsample-toggle-${policy.name}`" @click="togglePolicy(policy)">
