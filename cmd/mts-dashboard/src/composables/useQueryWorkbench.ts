@@ -74,6 +74,7 @@ export function useQueryWorkbench() {
   const actionError = ref('')
   const lastQueryErrorCode = ref('')
   const loading = ref(false)
+  const queryStartedAt = ref<number | null>(null)
   let queryAbort: AbortController | null = null
   let requestSeq = 0
 
@@ -353,6 +354,7 @@ export function useQueryWorkbench() {
     lastQueryErrorCode.value = ''
     engineStatsError.value = ''
     loading.value = true
+    queryStartedAt.value = Date.now()
     const { signal, seq } = beginRequest()
     try {
       const query = buildQuery()
@@ -477,6 +479,7 @@ export function useQueryWorkbench() {
     } finally {
       if (seq === requestSeq) {
         loading.value = false
+        queryStartedAt.value = null
         queryAbort = null
       }
     }
@@ -539,6 +542,7 @@ export function useQueryWorkbench() {
     actionError,
     lastQueryErrorCode,
     loading,
+    queryStartedAt,
     loadDatabases,
     loadDbChildren,
     hasQuerySnapshot,

@@ -1290,3 +1290,7 @@
 ## P301（2026-07-22）
 - Overview：Doctor 空态常显 + 分项重试（含失败文案）
 - Operations：分项失败 chip 条（对齐 Overview partial retry）
+
+## P302（2026-07-22）
+- Query/Write：进行中横幅（耗时、长耗时/近超时提示、取消）
+- 查询/写入超时文案区分；QueryWorkbench/Write 记录 startedAt

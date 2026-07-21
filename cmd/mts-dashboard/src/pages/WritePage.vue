@@ -19,12 +19,13 @@ import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
-import { formatCaughtError, isCanceledError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { Send, Plus, Trash2, Download } from 'lucide-vue-next'
 import EmptyState from '@/components/EmptyState.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
 import { isDirty, snapshotForm } from '@/utils/formDirty'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { registerDirtyChecker } from '@/utils/routeDirty'
@@ -82,6 +83,7 @@ const WRITE_FORM_ROW_MAX = 50
 const formRowCapReached = computed(() => formRows.value.length >= WRITE_FORM_ROW_MAX)
 const result = ref<{ ok: boolean; message: string } | null>(null)
 const loading = ref(false)
+const writeStartedAt = ref<number | null>(null)
 let writeAbort: AbortController | null = null
 const actionError = ref('')
 const writeWasCanceled = ref(false)
@@ -531,6 +533,7 @@ async function submit() {
   writeAbort = new AbortController()
   const signal = writeAbort.signal
   loading.value = true
+  writeStartedAt.value = Date.now()
   actionError.value = ''
   writeWasCanceled.value = false
   // 失败时保留上次成功结果，成功时再覆盖
@@ -576,6 +579,13 @@ async function submit() {
         result.value = { ok: false, message: actionError.value }
       }
       info(actionError.value)
+    } else if (isTimeoutError(e)) {
+      writeWasCanceled.value = false
+      actionError.value = t.value('writeTimedOut')
+      notifyError(actionError.value)
+      if (!result.value?.ok) {
+        result.value = { ok: false, message: actionError.value }
+      }
     } else {
       writeWasCanceled.value = false
       actionError.value = formatCaughtError(e)
@@ -587,6 +597,7 @@ async function submit() {
   } finally {
     writeAbort = null
     loading.value = false
+    writeStartedAt.value = null
   }
 }
 
@@ -869,6 +880,13 @@ async function exportWriteDraft() {
     <div id="write-body" v-else class="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <textarea v-model="lineInput" rows="10" class="w-full rounded border border-slate-300 dark:border-slate-600 px-3 py-2 font-mono text-xs dark:border-slate-600 dark:bg-slate-800" :placeholder="modeLabel" />
     </div>
+
+    <InFlightBanner
+      :active="loading"
+      :started-at-ms="writeStartedAt"
+      kind="write"
+      @cancel="cancelWrite"
+    />
 
     <div id="write-actions" class="scroll-mt-20 flex flex-wrap items-center gap-2">
       <button

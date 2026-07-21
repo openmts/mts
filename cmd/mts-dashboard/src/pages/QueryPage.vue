@@ -43,6 +43,7 @@ import {
 import QueryChart from '@/components/QueryChart.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
@@ -54,6 +55,7 @@ const {
   fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError, seriesHasMore, SERIES_CAP, loadMoreSeries, refreshSeriesWithServerQuery,
   loadMeasurementMeta, refreshSeriesWithTags, applySeriesTags,
   queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, lastQueryErrorCode, loading,
+  queryStartedAt,
   engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, loadEngineStats,
   loadDatabases, loadDbChildren, hasQuerySnapshot, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
@@ -386,6 +388,11 @@ async function runQuery() {
   if (lastQueryErrorCode.value === 'canceled') {
     actionError.value = t.value('queryCancelled')
     info(actionError.value)
+    return
+  }
+  if (lastQueryErrorCode.value === 'timeout') {
+    actionError.value = t.value('queryTimedOut')
+    notifyError(actionError.value)
     return
   }
   notifyError(actionError.value)
@@ -918,6 +925,13 @@ const columnRows = computed(() => {
       </label>
     </div>
 
+    <InFlightBanner
+      :active="loading"
+      :started-at-ms="queryStartedAt"
+      kind="query"
+      @cancel="cancelQuery"
+    />
+
     <div id="query-actions" class="scroll-mt-20 flex flex-wrap gap-2">
       <button
         type="button"
@@ -975,7 +989,7 @@ const columnRows = computed(() => {
     />
     <ActionResultBanner
       v-if="actionError"
-      :kind="lastQueryErrorCode === 'canceled' ? 'info' : (hasQuerySnapshot() ? 'warn' : 'error')"
+      :kind="lastQueryErrorCode === 'canceled' ? 'info' : (lastQueryErrorCode === 'timeout' ? 'error' : (hasQuerySnapshot() ? 'warn' : 'error'))"
       :message="hasQuerySnapshot() && lastQueryErrorCode !== 'canceled'
         ? `${t('queryFailedKeepSnapshot')}：${actionError}`
         : actionError"
