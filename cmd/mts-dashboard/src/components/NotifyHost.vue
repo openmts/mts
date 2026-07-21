@@ -1,10 +1,25 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { notifyDisplayText } from '@/utils/notifyQueue'
+import {
+  hasOpenNotifyHistory,
+  requestOpenNotifyHistory,
+} from '@/utils/notifyHistoryBridge'
 
 const { items, dismiss } = useNotify()
 const { t } = useI18n()
+// items 变化时重算，确保 DashboardLayout 挂载后按钮出现
+const canOpenHistory = computed(() => {
+  void items.value.length
+  return hasOpenNotifyHistory()
+})
+
+function openHistory(id: number) {
+  dismiss(id)
+  requestOpenNotifyHistory()
+}
 </script>
 
 <template>
@@ -29,14 +44,24 @@ const { t } = useI18n()
     >
       <div class="flex items-start justify-between gap-2">
         <p class="flex-1 break-words">{{ notifyDisplayText(n) }}</p>
-        <button
-          type="button"
-          class="mts-focus-ring shrink-0 rounded text-xs opacity-60 hover:opacity-100"
-          :aria-label="t('close')"
-          :title="t('close')"
-          data-testid="notify-dismiss"
-          @click="dismiss(n.id)"
-        >{{ t('close') }}</button>
+        <div class="flex shrink-0 flex-col items-end gap-1">
+          <button
+            type="button"
+            class="mts-focus-ring rounded text-xs opacity-60 hover:opacity-100"
+            :aria-label="t('close')"
+            :title="t('close')"
+            data-testid="notify-dismiss"
+            @click="dismiss(n.id)"
+          >{{ t('close') }}</button>
+          <button
+            v-if="canOpenHistory && (n.kind === 'error' || n.kind === 'warn')"
+            type="button"
+            class="mts-focus-ring rounded text-[11px] font-medium underline-offset-2 hover:underline opacity-80 hover:opacity-100"
+            data-testid="notify-open-history"
+            :aria-label="t('notifyOpenHistory')"
+            @click="openHistory(n.id)"
+          >{{ t('notifyOpenHistory') }}</button>
+        </div>
       </div>
     </div>
   </div>

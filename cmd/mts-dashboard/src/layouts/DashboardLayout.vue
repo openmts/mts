@@ -34,6 +34,7 @@ import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
+import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
 
 const { t } = useI18n()
 const { offline, sessionWriteBlocked } = useMutationGuard()
@@ -52,6 +53,7 @@ const showBackToTop = ref(false)
 const shortcutsOpen = ref(false)
 const notifyHistoryOpen = ref(false)
 const notifyHistoryPrefill = ref<NotifyHistoryPrefill | null>(null)
+let unregisterNotifyHistoryBridge: (() => void) | null = null
 const recent = ref<RecentRouteEntry[]>(loadRecentRoutes())
 const showBreadcrumb = computed(() => route.path !== '/')
 
@@ -198,10 +200,13 @@ function onPrefsChanged() {
 onMounted(() => {
   window.addEventListener('keydown', onGlobalKey)
   window.addEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
+  unregisterNotifyHistoryBridge = registerOpenNotifyHistory(openNotifyHistory)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKey)
   window.removeEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
+  unregisterNotifyHistoryBridge?.()
+  unregisterNotifyHistoryBridge = null
 })
 
 provide('toggleSidebar', toggleSidebar)

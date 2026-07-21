@@ -89,7 +89,33 @@ const maintenanceStats = ref<MaintenanceStats | null>(null)
 const doctorChecks = ref<DoctorCheck[]>([])
 const doctorTLS = ref<boolean | null>(null)
 const loadError = ref('')
-const adminPartialError = ref('')
+/** 管理分项失败：key -> 错误文案；支持单项重试 */
+type AdminSectionKey = 'memory' | 'compaction' | 'maintenance' | 'maintErrors' | 'doctor' | 'version'
+const adminSectionErrors = ref<Partial<Record<AdminSectionKey, string>>>({})
+const adminSectionRetrying = ref<Partial<Record<AdminSectionKey, boolean>>>({})
+const adminPartialError = computed(() => {
+  const order: AdminSectionKey[] = ['memory', 'compaction', 'maintenance', 'maintErrors', 'doctor', 'version']
+  const labelOf = (k: AdminSectionKey): string => {
+    switch (k) {
+      case 'memory': return t.value('overviewPartialMemory')
+      case 'compaction': return t.value('overviewPartialCompaction')
+      case 'maintenance': return t.value('overviewPartialMaintenance')
+      case 'maintErrors': return t.value('overviewPartialMaintErrors')
+      case 'doctor': return t.value('overviewPartialDoctor')
+      case 'version': return t.value('overviewPartialVersion')
+    }
+  }
+  const parts: string[] = []
+  for (const k of order) {
+    const msg = adminSectionErrors.value[k]
+    if (msg) parts.push(`${labelOf(k)}: ${msg}`)
+  }
+  return parts.join('；')
+})
+const adminFailedSections = computed(() => {
+  const order: AdminSectionKey[] = ['memory', 'compaction', 'maintenance', 'maintErrors', 'doctor', 'version']
+  return order.filter((k) => Boolean(adminSectionErrors.value[k]))
+})
 const loading = ref(false)
 const lastRefreshed = ref('')
 const autoRefresh = ref(false)
@@ -237,73 +263,125 @@ function applyHealth(h: HealthSnapshot) {
 }
 
 
-function pushAdminPartial(errs: string[], label: string, err: unknown) {
-  errs.push(`${label}: ${formatCaughtError(err)}`)
+function setAdminSectionError(key: AdminSectionKey, err: unknown) {
+  adminSectionErrors.value = { ...adminSectionErrors.value, [key]: formatCaughtError(err) }
+}
+
+function clearAdminSectionError(key: AdminSectionKey) {
+  if (!adminSectionErrors.value[key]) return
+  const next = { ...adminSectionErrors.value }
+  delete next[key]
+  adminSectionErrors.value = next
+}
+
+function adminSectionLabel(key: AdminSectionKey): string {
+  switch (key) {
+    case 'memory': return t.value('overviewPartialMemory')
+    case 'compaction': return t.value('overviewPartialCompaction')
+    case 'maintenance': return t.value('overviewPartialMaintenance')
+    case 'maintErrors': return t.value('overviewPartialMaintErrors')
+    case 'doctor': return t.value('overviewPartialDoctor')
+    case 'version': return t.value('overviewPartialVersion')
+  }
+}
+
+async function loadAdminSection(key: AdminSectionKey): Promise<void> {
+  switch (key) {
+    case 'memory': {
+      const v = await apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory')
+      memorySnapshot.value = v.snapshot
+      return
+    }
+    case 'compaction': {
+      const v = await apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction')
+      compactionStats.value = v.stats
+      return
+    }
+    case 'maintenance': {
+      const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
+      maintenanceStats.value = v.stats ?? null
+      return
+    }
+    case 'maintErrors': {
+      const v = await apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors')
+      maintenanceErrors.value = v.errors ?? []
+      return
+    }
+    case 'doctor': {
+      const v = await apiGet<DoctorResponse>('/api/v1/admin/doctor')
+      doctorChecks.value = v.checks ?? []
+      doctorTLS.value = !!v.http_tls_enabled
+      return
+    }
+    case 'version': {
+      serverVersion.value = await apiGet<{ version: string; commit: string; built_at: string }>('/api/v1/admin/version')
+      return
+    }
+  }
+}
+
+async function retryAdminSection(key: AdminSectionKey) {
+  if (!isAdmin.value || adminSectionRetrying.value[key]) return
+  adminSectionRetrying.value = { ...adminSectionRetrying.value, [key]: true }
+  try {
+    await loadAdminSection(key)
+    clearAdminSectionError(key)
+  } catch (e) {
+    setAdminSectionError(key, e)
+  } finally {
+    const next = { ...adminSectionRetrying.value }
+    delete next[key]
+    adminSectionRetrying.value = next
+  }
 }
 
 async function loadOverview() {
   loading.value = true
   loadError.value = ''
-  adminPartialError.value = ''
+  adminSectionErrors.value = {}
   try {
     const healthData = await apiGet<HealthResponse>('/healthz')
     applyHealth(healthData)
 
     if (isAdmin.value) {
       const results = await Promise.allSettled([
-        apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory'),
-        apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction'),
-        apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance'),
-        apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors'),
+        loadAdminSection('memory'),
+        loadAdminSection('compaction'),
+        loadAdminSection('maintenance'),
+        loadAdminSection('maintErrors'),
         apiGet<AdminHealthResponse | HealthSnapshot>('/api/v1/admin/health'),
-        apiGet<DoctorResponse>('/api/v1/admin/doctor'),
-        apiGet<{ version: string; commit: string; built_at: string }>('/api/v1/admin/version'),
+        loadAdminSection('doctor'),
+        loadAdminSection('version'),
       ])
-      const errs: string[] = []
-      if (results[0].status === 'fulfilled') memorySnapshot.value = results[0].value.snapshot
-      else {
-        memorySnapshot.value = null
-        pushAdminPartial(errs, t.value('overviewPartialMemory'), results[0].reason)
-      }
-      if (results[1].status === 'fulfilled') compactionStats.value = results[1].value.stats
-      else {
-        compactionStats.value = null
-        pushAdminPartial(errs, t.value('overviewPartialCompaction'), results[1].reason)
-      }
-      if (results[2].status === 'fulfilled') maintenanceStats.value = results[2].value.stats ?? null
-      else {
-        maintenanceStats.value = null
-        pushAdminPartial(errs, t.value('overviewPartialMaintenance'), results[2].reason)
-      }
-      if (results[3].status === 'fulfilled') maintenanceErrors.value = results[3].value.errors ?? []
-      else {
-        maintenanceErrors.value = []
-        pushAdminPartial(errs, t.value('overviewPartialMaintErrors'), results[3].reason)
-      }
-      if (results[4].status === 'fulfilled') {
-        const raw = results[4].value as AdminHealthResponse
-        const h = (raw.health ?? raw) as HealthSnapshot
-        if (h && typeof h.healthy === 'boolean') {
-          // admin health 更完整时覆盖 checks
-          if (h.checks?.length) healthChecks.value = h.checks
-          if (h.reasons?.length) healthReasons.value = h.reasons
+      const keys: Array<AdminSectionKey | null> = [
+        'memory', 'compaction', 'maintenance', 'maintErrors', null, 'doctor', 'version',
+      ]
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i]
+        const key = keys[i]
+        if (r.status === 'fulfilled') {
+          if (key) clearAdminSectionError(key)
+          else {
+            const raw = r.value as AdminHealthResponse
+            const h = (raw.health ?? raw) as HealthSnapshot
+            if (h && typeof h.healthy === 'boolean') {
+              if (h.checks?.length) healthChecks.value = h.checks
+              if (h.reasons?.length) healthReasons.value = h.reasons
+            }
+          }
+          continue
         }
+        if (!key) continue
+        if (key === 'memory') memorySnapshot.value = null
+        else if (key === 'compaction') compactionStats.value = null
+        else if (key === 'maintenance') maintenanceStats.value = null
+        else if (key === 'maintErrors') maintenanceErrors.value = []
+        else if (key === 'doctor') {
+          doctorChecks.value = []
+          doctorTLS.value = null
+        } else if (key === 'version') serverVersion.value = null
+        setAdminSectionError(key, r.reason)
       }
-      if (results[5].status === 'fulfilled') {
-        doctorChecks.value = results[5].value.checks ?? []
-        doctorTLS.value = !!results[5].value.http_tls_enabled
-      } else {
-        doctorChecks.value = []
-        doctorTLS.value = null
-        pushAdminPartial(errs, t.value('overviewPartialDoctor'), results[5].reason)
-      }
-      if (results[6].status === 'fulfilled') {
-        serverVersion.value = results[6].value
-      } else {
-        serverVersion.value = null
-        pushAdminPartial(errs, t.value('overviewPartialVersion'), results[6].reason)
-      }
-      if (errs.length) adminPartialError.value = errs.join('；')
     } else {
       memorySnapshot.value = null
       compactionStats.value = null
@@ -528,8 +606,26 @@ async function copyOverview() {
       data-testid="overview-partial-error"
       @retry="loadOverview"
       :dismissible="true"
-      @dismiss="adminPartialError = ''"
+      @dismiss="adminSectionErrors = {}"
     />
+    <div
+      v-if="showAdminPanels && adminFailedSections.length"
+      class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/30"
+      data-testid="overview-partial-sections"
+    >
+      <span class="text-xs font-medium text-amber-900 dark:text-amber-100">{{ t('overviewPartialRetryHint') }}</span>
+      <button
+        v-for="key in adminFailedSections"
+        :key="key"
+        type="button"
+        class="mts-btn text-xs"
+        :data-testid="`overview-partial-retry-${key}`"
+        :disabled="!!adminSectionRetrying[key]"
+        @click="retryAdminSection(key)"
+      >
+        {{ adminSectionLabel(key) }} · {{ adminSectionRetrying[key] ? t('loading') : t('retry') }}
+      </button>
+    </div>
 
     <div id="overview-summary" class="mts-card scroll-mt-20 p-4" data-testid="overview-summary">
       <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">

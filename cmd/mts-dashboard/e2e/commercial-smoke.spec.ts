@@ -57,6 +57,9 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('overview-doctor-virtual-list')).toBeVisible()
   }
   await expect(page.getByTestId('overview-summary')).toBeVisible()
+  await expect(page.getByTestId('overview-load-error')).toHaveCount(0)
+  await expect(page.getByTestId('overview-partial-error')).toHaveCount(0)
+  await expect(page.getByTestId('overview-partial-sections')).toHaveCount(0)
   // P187: 登出后访问受保护深链应带 redirect 提示，登录后回到原路径
   await page.getByTestId('topbar-logout').click()
   await expect(page).toHaveURL(/login/)
@@ -763,6 +766,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('notify-history-filter').selectOption('all')
   await page.getByTestId('notify-history-close').click()
   await expect(page.getByTestId('notify-history-panel')).toHaveCount(0)
+  await expect(page.getByTestId('notify-host')).toBeAttached()
 
   // P193–P194: 通知历史筛选深链自动打开并预填
   await page.goto('/?notify=1&nh_kind=error&nh_q=fail&nh_range=24h#notify-history')

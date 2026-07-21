@@ -520,6 +520,7 @@ async function confirmBatch() {
   let ok = 0
   let skip = 0
   let fail = 0
+  const failNames: string[] = []
   const wantDisabled = batchMode.value === 'disable'
   try {
     for (const name of names) {
@@ -544,11 +545,17 @@ async function confirmBatch() {
         ok += 1
       } catch {
         fail += 1
+        failNames.push(name)
       }
     }
     await loadUsers()
     const key = fail ? 'listBatchPartial' : 'listBatchDone'
-    const msg = formatMessage(t.value(key), { ok, skip, fail })
+    let msg = formatMessage(t.value(key), { ok, skip, fail })
+    if (failNames.length) {
+      const shown = failNames.slice(0, 8).join(', ')
+      const more = failNames.length > 8 ? `…(+${failNames.length - 8})` : ''
+      msg = `${msg}；${formatMessage(t.value('listBatchFailDetail'), { names: shown + more })}`
+    }
     actionResult.value = makeActionResult(fail ? 'error' : 'ok', msg)
     if (fail) notifyError(msg)
     else success(msg)
