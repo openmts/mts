@@ -230,3 +230,18 @@ export function canDismissAdminOpLast(opts: {
     Math.floor(finished) === Math.floor(acked)
   )
 }
+
+export type CommandAdminOpLastCopyFeedback =
+  | { kind: 'denied' }
+  | { kind: 'empty' }
+  | { kind: 'copy' }
+
+/** 命令面板「复制最近一次管理重操作」反馈（纯函数） */
+export function commandAdminOpLastCopyFeedback(opts: {
+  isAdmin: boolean
+  hasLastSummary: boolean
+}): CommandAdminOpLastCopyFeedback {
+  if (!opts.isAdmin) return { kind: 'denied' }
+  if (!opts.hasLastSummary) return { kind: 'empty' }
+  return { kind: 'copy' }
+}

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
-import { isAdminHeavyBusyError } from '@/utils/adminOpBusy'
+import { adminOpLastChipSurfaceClass, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { permissionLabel } from '@/utils/permissionLabel'
@@ -54,6 +54,8 @@ interface PermissionsResponse { grants: Array<{ database: string; permission: st
 const route = useRoute()
 useHashScroll()
 const { isAdmin } = useAuth()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const accessGrantsAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const { t, locale } = useI18n()
 const { success, info, warn, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
@@ -322,9 +324,18 @@ watch(
           <ShieldCheck class="h-5 w-5" />
           {{ t('accessGrantsTitle') }}
         </h1>
-        <p class="text-xs mts-muted">
-          {{ t('accessGrantsDesc') }}
-        </p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs mts-muted">
+            {{ t('accessGrantsDesc') }}
+          </p>
+          <span
+            v-if="accessGrantsAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="access-grants-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="accessGrantsAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ accessGrantsAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex flex-wrap gap-2">
         <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />

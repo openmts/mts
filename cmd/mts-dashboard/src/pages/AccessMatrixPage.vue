@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, inject, ref, onMounted, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useAuth } from '@/composables/useAuth'
@@ -15,6 +15,7 @@ import {
   type RoleName,
 } from '@/utils/rbacMatrix'
 import { Download, Shield } from 'lucide-vue-next'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
@@ -41,7 +42,9 @@ import {
 
 const route = useRoute()
 useHashScroll()
-const { currentRole } = useAuth()
+const { currentRole, isAdmin } = useAuth()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const accessMatrixAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const { t, locale } = useI18n()
 const { success, info, warn, error: notifyError } = useNotify()
 const {
@@ -258,10 +261,19 @@ async function exportMatrixCSV() {
           <Shield class="h-5 w-5" />
           {{ t('accessMatrixTitle') }}
         </h1>
-        <p class="text-xs mts-muted">
-          {{ t('accessMatrixDesc') }}
-          <span class="font-medium text-slate-800 dark:text-slate-100">{{ roleLabel(displayRole) }}</span>
-        </p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs mts-muted">
+            {{ t('accessMatrixDesc') }}
+            <span class="font-medium text-slate-800 dark:text-slate-100">{{ roleLabel(displayRole) }}</span>
+          </p>
+          <span
+            v-if="isAdmin && accessMatrixAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="access-matrix-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="accessMatrixAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ accessMatrixAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex flex-wrap gap-2">
         <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />

@@ -6,7 +6,9 @@ import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import {
   adminOpKindLabelKey,
   commandAdminOpLastDismissFeedback,
+  commandAdminOpLastCopyFeedback,
   commandAdminOpRefreshFeedback,
+  formatAdminHeavyLastCopyText,
   joinAdminOpChip,
 } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
@@ -56,7 +58,7 @@ let trap: FocusTrapHandle | null = null
 
 const router = useRouter()
 const { isAdmin } = useAuth()
-const { adminOpBusy, adminOpKind, refreshAdminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, adminOpLast, refreshAdminOpBusy } = useAdminOpBusy()
 const injectedAdminOpSummary = inject<ComputedRef<{ busy: boolean; op: string; opLabel: string; elapsed?: string; detail: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const { t, toggleLocale } = useI18n()
 const { toggleTheme } = useTheme()
@@ -301,6 +303,35 @@ function runAction(action: CommandActionId) {
       success(t.value('cmdActionDismissAdminOpLastDone'))
       break
     }
+    case 'copy-admin-op-last': {
+      const summary = (injectedAdminOpSummary?.value?.lastSummary || '').trim()
+      const fb = commandAdminOpLastCopyFeedback({
+        isAdmin: isAdmin.value,
+        hasLastSummary: Boolean(summary) || Boolean(adminOpLast.value?.op),
+      })
+      if (fb.kind === 'denied') {
+        notifyError(t.value('permissionDenied') || 'admin only')
+        break
+      }
+      if (fb.kind === 'empty') {
+        notifyError(t.value('cmdActionCopyAdminOpLastEmpty'))
+        break
+      }
+      const last = adminOpLast.value
+      const key = adminOpKindLabelKey(last?.op) as MessageKey
+      const kind = t.value(key) || last?.op || ''
+      const textToCopy = formatAdminHeavyLastCopyText(last, kind) || summary
+      if (!textToCopy) {
+        notifyError(t.value('cmdActionCopyAdminOpLastEmpty'))
+        break
+      }
+      void copyText(textToCopy).then((res) => {
+        if (res.ok) success(t.value('cmdActionCopyAdminOpLastDone'))
+        else notifyError(res.error || t.value('failed'))
+      })
+      break
+    }
+
     case 'retry-last-action': {
       const root = typeof document !== 'undefined' ? document : null
       const decision = resolveActionResultRetryAction({ root })

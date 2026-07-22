@@ -1540,3 +1540,12 @@
 - Operations：运维状态条「复制最近一次」按钮（摘要 + 错误详情）
 - e2e：About/ApiSpec last 芯片 + ops-status-last-copy
 - Server：补齐 `finishAdminHeavy` 失败路径 `last.error` 单测（协议字段已有）
+
+## P369（2026-07-22）
+- Access 矩阵/授权页：admin last 摘要芯片（desc 行）
+
+## P370（2026-07-22）
+- 命令面板：复制最近管理重操作结果动作 + 纯函数反馈 + 单测
+
+## P371（2026-07-22）
+- e2e：Access last 芯片覆盖

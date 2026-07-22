@@ -365,6 +365,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('ops-status-last-copy')).toBeVisible()
   await page.getByTestId('ops-status-last-copy').click()
 
+  // P369: Access last 芯片
+  await page.goto('/access')
+  await expect(page.getByTestId('access-matrix-page')).toBeVisible()
+  await expect(page.getByTestId('access-matrix-admin-last')).toBeVisible()
+  await page.goto('/access/grants')
+  await expect(page.getByTestId('access-grants-page')).toBeVisible()
+  await expect(page.getByTestId('access-grants-admin-last')).toBeVisible()
+
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')
   await expect(page.getByTestId('access-matrix-page')).toBeVisible()

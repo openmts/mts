@@ -17,9 +17,10 @@ import {
   adminOpLastChipSurfaceClass,
   canDismissAdminOpLast,
   commandAdminOpLastDismissFeedback,
+  commandAdminOpLastCopyFeedback,
 } from './adminOpLast.ts'
 
-export type { AdminHeavyLast, CommandAdminOpLastDismissFeedback } from './adminOpLast.ts'
+export type { AdminHeavyLast, CommandAdminOpLastDismissFeedback, CommandAdminOpLastCopyFeedback } from './adminOpLast.ts'
 export {
   formatAdminHeavyLastSummary,
   formatAdminHeavyLastDetail,
@@ -35,6 +36,7 @@ export {
   adminOpLastChipSurfaceClass,
   canDismissAdminOpLast,
   commandAdminOpLastDismissFeedback,
+  commandAdminOpLastCopyFeedback,
 } from './adminOpLast.ts'
 
 export type AdminOpKind =

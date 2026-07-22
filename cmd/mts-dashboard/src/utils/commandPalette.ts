@@ -33,6 +33,7 @@ export type CommandActionId =
   | 'retry-last-action'
   | 'refresh-admin-op-busy'
   | 'dismiss-admin-op-last'
+  | 'copy-admin-op-last'
 
 /** 页内快捷动作（不离开当前路由，除非动作本身导航） */
 export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
@@ -191,6 +192,22 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
     kind: 'action',
     adminOnly: true,
     action: 'dismiss-admin-op-last',
+  },
+  {
+    id: 'action-copy-admin-op-last',
+    path: 'action:copy-admin-op-last',
+    labelKey: 'cmdActionCopyAdminOpLast',
+    keywords: [
+      'copy last',
+      'copy last op',
+      'copy admin last',
+      '复制最近一次',
+      '复制最近管理重操作',
+      'copy ops last',
+    ],
+    kind: 'action',
+    adminOnly: true,
+    action: 'copy-admin-op-last',
   },
 ]
 

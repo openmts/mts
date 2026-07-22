@@ -31,6 +31,7 @@ import {
   adminOpLastBannerSurfaceClass,
   adminOpLastChipSurfaceClass,
   commandAdminOpLastDismissFeedback,
+  commandAdminOpLastCopyFeedback,
   canDismissAdminOpLast,
   readFailAckedAdminOpLastFinishedAt,
   writeFailAckedAdminOpLastFinishedAt,
@@ -405,4 +406,10 @@ test('canDismissAdminOpLast', () => {
   assert.equal(canDismissAdminOpLast({ lastOk: true }), true)
   assert.equal(canDismissAdminOpLast({ lastOk: false, lastFinishedAtUnix: 1, failAckedFinishedAtUnix: null }), false)
   assert.equal(canDismissAdminOpLast({ lastOk: false, lastFinishedAtUnix: 1, failAckedFinishedAtUnix: 1 }), true)
+})
+
+test('commandAdminOpLastCopyFeedback', () => {
+  assert.deepEqual(commandAdminOpLastCopyFeedback({ isAdmin: false, hasLastSummary: true }), { kind: 'denied' })
+  assert.deepEqual(commandAdminOpLastCopyFeedback({ isAdmin: true, hasLastSummary: false }), { kind: 'empty' })
+  assert.deepEqual(commandAdminOpLastCopyFeedback({ isAdmin: true, hasLastSummary: true }), { kind: 'copy' })
 })
