@@ -112,7 +112,7 @@ func validateUserPassword(password string) error {
 	return nil
 }
 
-const passwordPolicyVersion = 1
+const passwordPolicyVersion = 2
 
 func publicPasswordPolicy() passwordPolicyResponse {
 	return passwordPolicyResponse{
@@ -120,6 +120,8 @@ func publicPasswordPolicy() passwordPolicyResponse {
 		MinLength:              minUserPasswordLength,
 		ForbiddenDefaults:      []string{forbiddenDefaultPassword},
 		RequireChangeBootstrap: true,
+		DefaultAuthTTLSeconds:  int64(defaultAuthTTL.Seconds()),
+		MaxAuthTTLSeconds:      int64(maxAuthTTL.Seconds()),
 		Version:                passwordPolicyVersion,
 	}
 }

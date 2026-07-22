@@ -7,7 +7,9 @@ import { sanitizeRedirect } from '@/router'
 import { formatRedirectLabel } from '@/utils/redirect'
 import { loadLandingPath, resolveLandingPath } from '@/utils/landingPrefs'
 import { loginReasonMessage } from '@/utils/authReason'
-import { parseLoginTTLSeconds } from '@/utils/loginTTL'
+import { formatAuthTTLLimit, parseLoginTTLSeconds } from '@/utils/loginTTL'
+import { formatMessage } from '@/utils/formatMessage'
+import { getDefaultAuthTTLSeconds, getMaxAuthTTLSeconds, getPasswordPolicyVersion } from '@/utils/passwordPolicy'
 import { loadLoginTTLPref, saveLoginTTLPref } from '@/utils/loginTTLPrefs'
 import {
   clearLoginUsernamePref,
@@ -68,6 +70,17 @@ const pendingRedirectLabel = computed(() =>
   pendingRedirect.value ? formatRedirectLabel(pendingRedirect.value) : '',
 )
 const invalid = computed(() => !!error.value)
+const ttlPolicyHint = computed(() =>
+  formatMessage(t.value('loginTTLLimitHint'), {
+    def: formatAuthTTLLimit(getDefaultAuthTTLSeconds()),
+    max: formatAuthTTLLimit(getMaxAuthTTLSeconds()),
+  }),
+)
+const passwordPolicySyncLabel = computed(() => {
+  const v = getPasswordPolicyVersion()
+  if (v > 0) return formatMessage(t.value('passwordPolicyServerSynced'), { version: v })
+  return t.value('passwordPolicyLocalDefault')
+})
 
 function cancelLogin() {
   loginAbort.cancel()
@@ -97,7 +110,13 @@ async function handleLogin() {
   }
   const ttl = parseLoginTTLSeconds(ttlSeconds.value)
   if (!ttl.ok) {
-    error.value = t.value('loginTTLInvalid')
+    if (ttl.reason === 'too_large') {
+      error.value = formatMessage(t.value('loginTTLTooLarge'), {
+        max: formatAuthTTLLimit(getMaxAuthTTLSeconds()),
+      })
+    } else {
+      error.value = t.value('loginTTLInvalid')
+    }
     errorRetryable.value = false
     return
   }
@@ -251,6 +270,7 @@ onBeforeUnmount(() => {
             :aria-describedby="error ? 'login-error login-ttl-hint' : 'login-ttl-hint'"
           />
           <p id="login-ttl-hint" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{{ t('loginTTLHint') }}</p>
+          <p class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400" data-testid="login-ttl-limit">{{ ttlPolicyHint }}</p>
         </div>
 
         <div
@@ -312,6 +332,7 @@ onBeforeUnmount(() => {
         <p class="font-medium text-amber-950 dark:text-amber-50">{{ t('loginDefaultPolicy') }}</p>
         <p class="mt-1">{{ t('loginDefaultHint') }}</p>
         <p class="mt-2 font-medium" data-testid="login-default-risk-detail">{{ t('loginDefaultRisk') }}</p>
+        <p class="mt-1 text-[10px] opacity-90" data-testid="login-password-policy-sync">{{ passwordPolicySyncLabel }}</p>
       </div>
     </div>
   </div>

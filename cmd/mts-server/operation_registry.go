@@ -283,7 +283,7 @@ func operationCatalog() []operation {
 			Name:         "password_policy",
 			Namespace:    "auth",
 			Description:  "public password policy for dashboard client-side validation alignment",
-			ResponseHint: "passwordPolicyResponse{ok,min_length,forbidden_defaults,version}",
+			ResponseHint: "passwordPolicyResponse{ok,min_length,forbidden_defaults,default_auth_ttl_seconds,max_auth_ttl_seconds,version}",
 			Auth:         authNone,
 			HTTPMethods:  []string{http.MethodGet},
 			HTTPPaths:    []string{routeAuthPasswordPolicy},

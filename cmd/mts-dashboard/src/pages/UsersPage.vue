@@ -32,6 +32,7 @@ import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { validateAssignedPassword, validateNewPassword } from '@/utils/passwordPolicy'
+import { bootstrapPasswordPolicy } from '@/utils/passwordPolicyBootstrap'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
   applyBatchProgressEvent,
@@ -228,6 +229,7 @@ const usersToggleLoading = ref(false)
 const usersWriteLoading = ref(false)
 
 onMounted(async () => {
+  void bootstrapPasswordPolicy()
   unregisterUsersDirty = registerDirtyChecker('users', () => usersFormDirty.value)
   window.addEventListener('beforeunload', onUsersBeforeUnload)
 

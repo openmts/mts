@@ -626,6 +626,8 @@ export interface PasswordPolicyResponse {
   min_length?: number
   forbidden_defaults?: string[]
   require_change_bootstrap?: boolean
+  default_auth_ttl_seconds?: number
+  max_auth_ttl_seconds?: number
   version?: number
 }
 

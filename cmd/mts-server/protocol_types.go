@@ -205,6 +205,8 @@ type passwordPolicyResponse struct {
 	MinLength              int      `json:"min_length"`
 	ForbiddenDefaults      []string `json:"forbidden_defaults"`
 	RequireChangeBootstrap bool     `json:"require_change_bootstrap"`
+	DefaultAuthTTLSeconds  int64    `json:"default_auth_ttl_seconds"`
+	MaxAuthTTLSeconds      int64    `json:"max_auth_ttl_seconds"`
 	Version                int      `json:"version"`
 }
 

@@ -16,6 +16,8 @@ export interface ServerPasswordPolicy {
   min_length?: number
   forbidden_defaults?: string[]
   require_change_bootstrap?: boolean
+  default_auth_ttl_seconds?: number
+  max_auth_ttl_seconds?: number
   version?: number
 }
 
@@ -23,6 +25,10 @@ let runtimeMinLength = MIN_PASSWORD_LENGTH
 let runtimeForbidden: string[] = [FORBIDDEN_DEFAULT_PASSWORD]
 let runtimeVersion = 0
 let runtimeRequireBootstrap = true
+/** 与 server defaultAuthTTL 对齐；0 表示未知 */
+let runtimeDefaultAuthTTLSeconds = 12 * 3600
+/** 与 server maxAuthTTL 对齐；0 表示未知/不限制前端 */
+let runtimeMaxAuthTTLSeconds = 30 * 24 * 3600
 
 export function getMinPasswordLength(): number {
   return runtimeMinLength
@@ -38,6 +44,14 @@ export function getPasswordPolicyVersion(): number {
 
 export function getRequireChangeBootstrap(): boolean {
   return runtimeRequireBootstrap
+}
+
+export function getDefaultAuthTTLSeconds(): number {
+  return runtimeDefaultAuthTTLSeconds
+}
+
+export function getMaxAuthTTLSeconds(): number {
+  return runtimeMaxAuthTTLSeconds
 }
 
 /** 应用服务端策略；非法字段忽略并保留默认。测试可 resetPasswordPolicyRuntime。 */
@@ -60,6 +74,16 @@ export function applyServerPasswordPolicy(input: ServerPasswordPolicy | null | u
   if (typeof input.require_change_bootstrap === 'boolean') {
     runtimeRequireBootstrap = input.require_change_bootstrap
   }
+  const defTTL = input.default_auth_ttl_seconds
+  if (typeof defTTL === 'number' && Number.isFinite(defTTL)) {
+    const n = Math.floor(defTTL)
+    if (n >= 60 && n <= 30 * 24 * 3600) runtimeDefaultAuthTTLSeconds = n
+  }
+  const maxTTL = input.max_auth_ttl_seconds
+  if (typeof maxTTL === 'number' && Number.isFinite(maxTTL)) {
+    const n = Math.floor(maxTTL)
+    if (n >= 60 && n <= 365 * 24 * 3600) runtimeMaxAuthTTLSeconds = n
+  }
 }
 
 export function resetPasswordPolicyRuntime(): void {
@@ -67,6 +91,8 @@ export function resetPasswordPolicyRuntime(): void {
   runtimeForbidden = [FORBIDDEN_DEFAULT_PASSWORD]
   runtimeVersion = 0
   runtimeRequireBootstrap = true
+  runtimeDefaultAuthTTLSeconds = 12 * 3600
+  runtimeMaxAuthTTLSeconds = 30 * 24 * 3600
 }
 
 function isZh(locale?: PasswordLocale): boolean {

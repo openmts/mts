@@ -17,7 +17,17 @@ import InFlightBanner from '@/components/InFlightBanner.vue'
 import { createActionAbort } from '@/utils/actionAbort'
 import { isCanceledError, isTimeoutError } from '@/utils/apiError'
 import EmptyState from '@/components/EmptyState.vue'
-import { validateNewPassword } from '@/utils/passwordPolicy'
+import {
+  getDefaultAuthTTLSeconds,
+  getForbiddenDefaultPasswords,
+  getMaxAuthTTLSeconds,
+  getMinPasswordLength,
+  getPasswordPolicyVersion,
+  validateNewPassword,
+} from '@/utils/passwordPolicy'
+import { bootstrapPasswordPolicy } from '@/utils/passwordPolicyBootstrap'
+import { formatAuthTTLLimit } from '@/utils/loginTTL'
+import { formatMessage } from '@/utils/formatMessage'
 import { KeyRound, UserRound, Download, Copy } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
 import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
@@ -27,7 +37,6 @@ import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
-import { formatMessage } from '@/utils/formatMessage'
 import {
   LANDING_PATH_OPTIONS,
   isAdminOnlyLandingPath,
@@ -84,6 +93,16 @@ const remainingText = computed(() => {
   if (sessionView.value.urgency === 'expired') return t.value('sessionExpiredLabel')
   return formatRemaining(Math.max(0, sessionView.value.remainingMs))
 })
+
+const policyMinLength = computed(() => getMinPasswordLength())
+const policyForbidden = computed(() => getForbiddenDefaultPasswords().join(', '))
+const policyTTLMax = computed(() => formatAuthTTLLimit(getMaxAuthTTLSeconds()))
+const policyTTLDefault = computed(() => formatAuthTTLLimit(getDefaultAuthTTLSeconds()))
+const policyVersionLabel = computed(() => {
+  const v = getPasswordPolicyVersion()
+  if (v > 0) return formatMessage(t.value('passwordPolicyServerSynced'), { version: v })
+  return t.value('passwordPolicyLocalDefault')
+})
 const sessionLevelLabel = computed(() => {
   switch (sessionView.value.urgency) {
     case 'ok': return t.value('sessionLevelOk')
@@ -125,6 +144,16 @@ const {
 } = useExportJob()
 const renewPassword = ref('')
 const renewTtlSeconds = ref(12 * 3600)
+const renewTtlOptions = computed(() => {
+  const max = getMaxAuthTTLSeconds()
+  const all = [
+    { value: 12 * 3600, labelKey: 'accountSessionRenewTtl12h' as const },
+    { value: 24 * 3600, labelKey: 'accountSessionRenewTtl24h' as const },
+    { value: 7 * 24 * 3600, labelKey: 'accountSessionRenewTtl7d' as const },
+    { value: 30 * 24 * 3600, labelKey: 'accountSessionRenewTtl30d' as const },
+  ]
+  return all.filter((o) => o.value <= max)
+})
 const renewLoading = ref(false)
 const renewError = ref('')
 const renewRetryable = ref(false)
@@ -272,6 +301,7 @@ async function copyAccountShareLink() {
 }
 
 onMounted(() => {
+  void bootstrapPasswordPolicy()
   unregisterAccountDirty = registerDirtyChecker('account', () => passwordFormDirty.value)
   window.addEventListener('beforeunload', onAccountBeforeUnload)
   applyAccountPrefillFromRoute()
@@ -852,10 +882,11 @@ async function submit() {
         <label class="block text-xs mts-muted">
           {{ t('accountSessionRenewTtlLabel') }}
           <select v-model.number="renewTtlSeconds" class="mts-input mt-1" data-testid="account-session-renew-ttl" :disabled="renewLoading">
-            <option :value="12 * 3600">{{ t('accountSessionRenewTtl12h') }}</option>
-            <option :value="24 * 3600">{{ t('accountSessionRenewTtl24h') }}</option>
-            <option :value="7 * 24 * 3600">{{ t('accountSessionRenewTtl7d') }}</option>
+            <option v-for="o in renewTtlOptions" :key="o.value" :value="o.value">{{ t(o.labelKey) }}</option>
           </select>
+          <p class="mt-1 text-[11px] mts-muted" data-testid="account-session-ttl-policy">
+            {{ t('accountSessionTTLPolicy') }}: {{ policyTTLDefault }} / {{ policyTTLMax }}
+          </p>
         </label>
         <div
           v-if="renewError"
@@ -891,6 +922,25 @@ async function submit() {
       kind="admin"
       @cancel="cancelAccountAction"
     />
+
+    <div class="mts-card p-4" data-testid="account-password-policy">
+      <h2 class="mb-1 text-sm font-semibold">{{ t('accountPasswordPolicyTitle') }}</h2>
+      <p class="mb-3 text-[11px] mts-muted" data-testid="account-password-policy-sync">{{ policyVersionLabel }}</p>
+      <dl class="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+        <div>
+          <dt class="mts-muted">{{ t('accountPasswordPolicyMin') }}</dt>
+          <dd class="font-mono" data-testid="account-password-policy-min">{{ policyMinLength }}</dd>
+        </div>
+        <div>
+          <dt class="mts-muted">{{ t('accountPasswordPolicyForbidden') }}</dt>
+          <dd class="font-mono" data-testid="account-password-policy-forbidden">{{ policyForbidden }}</dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="mts-muted">{{ t('accountSessionTTLPolicy') }}</dt>
+          <dd class="font-mono" data-testid="account-password-policy-ttl">{{ policyTTLDefault }} / {{ policyTTLMax }}</dd>
+        </div>
+      </dl>
+    </div>
 
     <div class="mts-card p-4">
       <h2 class="mb-1 flex items-center gap-2 text-sm font-semibold">

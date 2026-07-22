@@ -143,4 +143,13 @@ func TestPasswordPolicyPublic(t *testing.T) {
 	if !got.RequireChangeBootstrap {
 		t.Fatal("expected require_change_bootstrap")
 	}
+	if got.DefaultAuthTTLSeconds != int64(defaultAuthTTL.Seconds()) {
+		t.Fatalf("default ttl = %d", got.DefaultAuthTTLSeconds)
+	}
+	if got.MaxAuthTTLSeconds != int64(maxAuthTTL.Seconds()) {
+		t.Fatalf("max ttl = %d", got.MaxAuthTTLSeconds)
+	}
+	if got.Version < 2 {
+		t.Fatalf("version = %d want >=2", got.Version)
+	}
 }

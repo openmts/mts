@@ -36,6 +36,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('login-remember-user')).toBeVisible()
   await expect(page.getByTestId('login-default-risk')).toBeVisible()
   await expect(page.getByTestId('login-default-risk-detail')).toBeVisible()
+  await expect(page.getByTestId('login-ttl-limit')).toBeVisible()
+  await expect(page.getByTestId('login-password-policy-sync')).toBeVisible()
   await page.getByTestId('login-username').fill('admin')
   await page.getByTestId('login-password').fill('')
   await page.getByTestId('login-submit').click()

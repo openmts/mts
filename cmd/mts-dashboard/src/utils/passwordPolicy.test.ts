@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   applyServerPasswordPolicy,
+  getDefaultAuthTTLSeconds,
+  getMaxAuthTTLSeconds,
   getMinPasswordLength,
   resetPasswordPolicyRuntime,
   validateAssignedPassword,
@@ -56,4 +58,18 @@ test('applyServerPasswordPolicy overrides min length', () => {
   assert.equal(validateAssignedPassword('password').ok, false)
   resetPasswordPolicyRuntime()
   assert.equal(getMinPasswordLength(), 8)
+})
+
+test('applyServerPasswordPolicy applies auth ttl', () => {
+  resetPasswordPolicyRuntime()
+  applyServerPasswordPolicy({
+    default_auth_ttl_seconds: 7200,
+    max_auth_ttl_seconds: 86400,
+    version: 2,
+  })
+  assert.equal(getDefaultAuthTTLSeconds(), 7200)
+  assert.equal(getMaxAuthTTLSeconds(), 86400)
+  resetPasswordPolicyRuntime()
+  assert.equal(getDefaultAuthTTLSeconds(), 12 * 3600)
+  assert.equal(getMaxAuthTTLSeconds(), 30 * 24 * 3600)
 })

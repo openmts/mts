@@ -2237,3 +2237,15 @@
 | 密码策略 | password-policy | runtime override | 无需登录 |
 | 强制改密 | validateUserPassword | hints + progress | 同源规则 |
 
+## P451（2026-07-22）
+- Server：`password-policy` v2 增加 `default_auth_ttl_seconds` / `max_auth_ttl_seconds`
+- Dashboard：登录 TTL 上限校验 + 策略同步提示；Account 密码策略卡片与续期 TTL 选项按上限过滤
+- Users/Account/Login：bootstrap 拉取服务端策略
+
+### 前后端对齐（P451）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 鉴权 TTL 上限 | maxAuthTTL | parseLoginTTLSeconds | 超限拒绝 |
+| 策略展示 | password-policy v2 | Account 卡片 | 只读 |
+| 续期 TTL | login clamp | renew options | ≤ max |
+
