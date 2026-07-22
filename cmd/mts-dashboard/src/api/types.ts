@@ -76,6 +76,7 @@ export interface DownsampleStatus {
   last_error: string
   next_run_unix?: number
   lag_seconds?: number
+  last_duration?: number
   windows_processed?: number
   points_written?: number
 }

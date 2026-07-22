@@ -580,6 +580,14 @@ type downsampleStatusesResponse struct {
 	Last          *adminHeavyLastResult        `json:"last,omitempty"`
 }
 
+type downsamplePolicyStatusResponse struct {
+	Status        mts.DownsamplePolicyStatus `json:"status"`
+	AdminOpBusy   bool                       `json:"admin_op_busy,omitempty"`
+	Op            string                     `json:"op,omitempty"`
+	StartedAtUnix int64                      `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult      `json:"last,omitempty"`
+}
+
 type downsampleResetRequest struct {
 	Reset mts.DownsampleReset `json:"reset"`
 }

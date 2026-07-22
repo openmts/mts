@@ -2080,3 +2080,14 @@
 | 单策略直读 | GET policies/{name} | 深链补齐 | 失败走 missing 提示 |
 | 列表 refresh | 策略字段已有 | 独立列 | 运维扫视 |
 | 详情 functions | policy.functions | 分行 + MD | 粘贴核对 |
+
+## P439（2026-07-22）
+- Server：`GET /api/v1/admin/downsample/policies/{name}/status` 单策略状态
+- Dashboard 状态表增加 next_run 列；详情 status 展示 lag/duration/windows/points/active
+- 深链补齐时直读单策略 status
+
+### 前后端对齐（P439）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 单策略 status | GET .../status | 详情/深链补齐 | 列表仍用 statuses 批量 |
+| next_run/lag | status 字段 | 状态表+详情 | 运维扫视 |

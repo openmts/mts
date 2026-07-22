@@ -2497,6 +2497,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('downsample-detail-panel')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('downsample-detail-name')).toContainText('e2e-batch-ds')
   await expect(page.getByTestId('downsample-detail-functions-list')).toBeVisible()
+  await expect(page.getByTestId('downsample-detail-status-extra')).toBeVisible()
+  await expect(page.getByTestId('downsample-status-next-e2e-batch-ds')).toBeVisible()
   await page.getByTestId('downsample-detail-close').click()
   await page.getByTestId('downsample-select-e2e-batch-ds').check()
   await expect(page.getByTestId('downsample-batch-disable')).toBeEnabled()

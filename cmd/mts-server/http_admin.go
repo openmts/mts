@@ -380,6 +380,15 @@ func (r *serverRuntime) handleDownsamplePolicyResource(writer http.ResponseWrite
 		}
 		return
 	}
+	if len(parts) == 2 && parts[1] == "status" && request.Method == http.MethodGet {
+		status, err := r.engine.GetDownsamplePolicyStatus(request.Context(), name, time.Now())
+		if err != nil {
+			writeAPIError(writer, err)
+			return
+		}
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsamplePolicyStatus(downsamplePolicyStatusResponse{Status: status}))
+		return
+	}
 	if request.Method != http.MethodPost {
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 		return

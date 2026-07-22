@@ -317,3 +317,38 @@ func TestHTTPGetDownsamplePolicy(t *testing.T) {
 		t.Fatalf("missing code = %v, want not_found", missing.Code)
 	}
 }
+
+func TestHTTPGetDownsamplePolicyStatus(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	policy := mts.DownsamplePolicy{
+		Name:              "status-ds",
+		SourceDatabase:    "default",
+		SourceRetention:   "autogen",
+		SourceMeasurement: "cpu",
+		TargetDatabase:    "default",
+		TargetRetention:   "autogen",
+		TargetMeasurement: "cpu_1m_status",
+		Interval:          time.Minute,
+		RefreshInterval:   time.Minute,
+		Lookback:          time.Minute,
+		BatchSize:         10,
+		Functions:         []mts.DownsampleFunction{{Function: mts.AggregateAvg, Field: "usage", As: "mean_usage"}},
+		Enabled:           true,
+	}
+	postJSON(t, server.URL+"/api/v1/admin/downsample/policies", policy, http.StatusOK, &okResponse{})
+
+	var got downsamplePolicyStatusResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/downsample/policies/status-ds/status", nil, http.StatusOK, &got)
+	if got.Status.PolicyName != "status-ds" {
+		t.Fatalf("status name = %q", got.Status.PolicyName)
+	}
+
+	var missing errorResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/downsample/policies/missing-ds/status", nil, http.StatusNotFound, &missing)
+	if missing.Code != errorCodeNotFound {
+		t.Fatalf("missing code = %v", missing.Code)
+	}
+}

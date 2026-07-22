@@ -413,6 +413,7 @@ async function loadData() {
   }
   detailListReady.value = true
   await fetchDetailPolicyIfNeeded()
+  await fetchDetailStatusIfNeeded()
   maybeNotifyDetailMissing()
 }
 
@@ -936,6 +937,32 @@ const detailStatus = computed(() => {
   return getStatus(name) || null
 })
 
+
+
+async function fetchDetailStatusIfNeeded() {
+  const name = detailPolicyName.value.trim()
+  if (!name) return
+  if (getStatus(name)) return
+  try {
+    const data = await apiGet<{ status?: DownsampleStatus }>(
+      `/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/status`,
+    )
+    applyAdminOpStatus(parseAdminOpStatusPayload(data as { admin_op_busy?: unknown; op?: unknown; started_at_unix?: unknown; last?: unknown }))
+    const st = data?.status
+    if (st?.policy_name) {
+      const idx = statuses.value.findIndex((s) => s.policy_name === st.policy_name)
+      if (idx >= 0) {
+        const next = statuses.value.slice()
+        next[idx] = st
+        statuses.value = next
+      } else {
+        statuses.value = [...statuses.value, st]
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
 
 async function fetchDetailPolicyIfNeeded() {
   const name = detailPolicyName.value.trim()
@@ -1471,9 +1498,20 @@ onBeforeUnmount(() => {
       </div>
       <div v-if="detailStatus" class="border-t border-slate-100 px-3 py-2 text-xs dark:border-slate-800" data-testid="downsample-detail-status">
         <p class="mts-muted">{{ t('downsampleStatusPanel') }}</p>
-        <p class="mt-1 font-mono text-slate-700 dark:text-slate-200">
+        <p class="mt-1 font-mono text-slate-700 dark:text-slate-200" data-testid="downsample-detail-status-main">
           {{ t('downsampleColCompleted') }}: {{ formatUnix(detailStatus.completed_until_unix) }}
           · {{ t('downsampleColLastRun') }}: {{ formatUnix(detailStatus.last_run_unix) }}
+          · {{ t('downsampleColLastSuccess') }}: {{ formatUnix(detailStatus.last_success_unix || 0) }}
+        </p>
+        <p class="mt-1 font-mono text-slate-700 dark:text-slate-200" data-testid="downsample-detail-status-extra">
+          {{ t('downsampleColNextRun') }}: {{ detailStatus.next_run_unix ? formatUnix(detailStatus.next_run_unix) : t('emptyValue') }}
+          · {{ t('downsampleColLag') }}: {{ detailStatus.lag_seconds != null ? `${detailStatus.lag_seconds}s` : t('emptyValue') }}
+          · {{ t('downsampleColLastDuration') }}: {{ detailStatus.last_duration ? formatDuration(detailStatus.last_duration) : t('emptyValue') }}
+        </p>
+        <p class="mt-1 font-mono text-slate-700 dark:text-slate-200" data-testid="downsample-detail-status-stats">
+          {{ t('downsampleColWindows') }}: {{ detailStatus.windows_processed ?? t('emptyValue') }}
+          · {{ t('downsampleColPoints') }}: {{ detailStatus.points_written ?? t('emptyValue') }}
+          · {{ t('downsampleColActive') }}: {{ detailStatus.active ? t('downsampleEnabledOnly') : t('downsampleDisabledOnly') }}
         </p>
         <p v-if="detailStatus.last_error" class="mt-1 text-red-600 dark:text-red-300" data-testid="downsample-detail-status-error">{{ detailStatus.last_error }}</p>
       </div>
@@ -1491,13 +1529,14 @@ onBeforeUnmount(() => {
       <div v-else class="overflow-x-auto">
         <div class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800" data-testid="downsample-status-table">
           <div
-            class="grid grid-cols-[minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(5rem,0.6fr)_minmax(6rem,0.8fr)] border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400"
+            class="grid grid-cols-[minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6rem,0.9fr)_minmax(4.5rem,0.55fr)_minmax(6rem,0.8fr)] border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400"
             data-testid="downsample-status-header"
           >
             <div class="px-3 py-2.5">{{ t('downsampleColName') }}</div>
             <div class="px-3 py-2.5">{{ t('downsampleColCompleted') }}</div>
             <div class="px-3 py-2.5">{{ t('downsampleColLastRun') }}</div>
             <div class="px-3 py-2.5">{{ t('downsampleColLastSuccess') }}</div>
+            <div class="px-3 py-2.5">{{ t('downsampleColNextRun') }}</div>
             <div class="px-3 py-2.5">{{ t('downsampleColLag') }}</div>
             <div class="px-3 py-2.5">{{ t('downsampleColError') }}</div>
           </div>
@@ -1509,14 +1548,15 @@ onBeforeUnmount(() => {
           >
             <template #default="{ item: st }">
               <div
-                class="grid h-full grid-cols-[minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(5rem,0.6fr)_minmax(6rem,0.8fr)] items-center border-b border-slate-50 dark:border-slate-800"
+                class="grid h-full grid-cols-[minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6rem,0.9fr)_minmax(4.5rem,0.55fr)_minmax(6rem,0.8fr)] items-center border-b border-slate-50 dark:border-slate-800"
                 :data-testid="`downsample-status-row-${st.policy_name}`"
               >
                 <div class="truncate px-3 font-medium text-slate-700 dark:text-slate-200">{{ st.policy_name }}</div>
                 <div class="truncate px-3 text-xs mts-muted">{{ formatUnix(st.completed_until_unix) }}</div>
                 <div class="truncate px-3 text-xs mts-muted">{{ formatUnix(st.last_run_unix) }}</div>
                 <div class="truncate px-3 text-xs mts-muted">{{ formatUnix(st.last_success_unix || 0) }}</div>
-                <div class="truncate px-3 text-xs mts-muted">{{ st.lag_seconds != null ? `${st.lag_seconds}s` : t('emptyValue') }}</div>
+                <div class="truncate px-3 text-xs mts-muted" :data-testid="`downsample-status-next-${st.policy_name}`">{{ st.next_run_unix ? formatUnix(st.next_run_unix) : t('emptyValue') }}</div>
+                <div class="truncate px-3 text-xs mts-muted" :data-testid="`downsample-status-lag-${st.policy_name}`">{{ st.lag_seconds != null ? `${st.lag_seconds}s` : t('emptyValue') }}</div>
                 <div class="truncate px-3 text-xs" :class="st.last_error ? 'text-red-600 dark:text-red-300' : 'mts-muted'">{{ st.last_error || t('emptyValue') }}</div>
               </div>
             </template>

@@ -183,3 +183,47 @@ func TestEngineGetDownsamplePolicy(t *testing.T) {
 		t.Fatal("GetDownsamplePolicy(missing) error = nil, want error")
 	}
 }
+
+func TestEngineGetDownsamplePolicyStatus(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{Path: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := eng.Close(ctx); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+	policy := model.DownsamplePolicy{
+		Name:              "cpu_st",
+		SourceDatabase:    "metrics",
+		SourceRetention:   "autogen",
+		SourceMeasurement: "cpu",
+		TargetDatabase:    "metrics",
+		TargetRetention:   "rp_1m",
+		TargetMeasurement: "cpu",
+		Interval:          time.Minute,
+		Functions: []model.DownsampleFunction{{
+			Function: "avg",
+			Field:    "usage",
+		}},
+		Delay:           time.Minute,
+		RefreshInterval: time.Minute,
+		Lookback:        time.Minute,
+		Enabled:         true,
+	}
+	if err := eng.CreateDownsamplePolicy(ctx, policy); err != nil {
+		t.Fatalf("CreateDownsamplePolicy() error = %v", err)
+	}
+	st, err := eng.GetDownsamplePolicyStatus(ctx, "cpu_st", time.Duration(time.Now().UnixNano()))
+	if err != nil {
+		t.Fatalf("GetDownsamplePolicyStatus() error = %v", err)
+	}
+	if st.PolicyName != "cpu_st" {
+		t.Fatalf("status = %#v", st)
+	}
+	if _, err := eng.GetDownsamplePolicyStatus(ctx, "missing", 0); err == nil {
+		t.Fatal("GetDownsamplePolicyStatus(missing) error = nil, want error")
+	}
+}

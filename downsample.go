@@ -76,6 +76,19 @@ func (e *Engine) DownsamplePolicyStatuses(
 	return fromModelDownsamplePolicyStatuses(statuses), nil
 }
 
+// GetDownsamplePolicyStatus 返回单条降采样策略运行状态。
+func (e *Engine) GetDownsamplePolicyStatus(
+	ctx context.Context,
+	name string,
+	now time.Time,
+) (DownsamplePolicyStatus, error) {
+	status, err := e.runtime.Storage().GetDownsamplePolicyStatus(ctx, name, time.Duration(now.UnixNano()))
+	if err != nil {
+		return DownsamplePolicyStatus{}, publicError(err)
+	}
+	return fromModelDownsamplePolicyStatuses([]model.DownsamplePolicyStatus{status})[0], nil
+}
+
 // RunDownsamplePolicy 按当前时间触发一次策略运行。
 func (e *Engine) RunDownsamplePolicy(
 	ctx context.Context,

@@ -120,6 +120,22 @@ func (e *Engine) DownsamplePolicyStatuses(
 	return statuses, nil
 }
 
+func (e *Engine) GetDownsamplePolicyStatus(
+	ctx context.Context,
+	name string,
+	now time.Duration,
+) (model.DownsamplePolicyStatus, error) {
+	policy, err := e.downsamplePolicyByName(ctx, name)
+	if err != nil {
+		return model.DownsamplePolicyStatus{}, err
+	}
+	watermark, _, err := e.metadata.DownsampleWatermark(ctx, policy.Name)
+	if err != nil {
+		return model.DownsamplePolicyStatus{}, err
+	}
+	return e.downsamplePolicyStatus(policy, watermark, now), nil
+}
+
 func (e *Engine) downsamplePolicyStatus(
 	policy model.DownsamplePolicy,
 	watermark model.DownsampleWatermark,
