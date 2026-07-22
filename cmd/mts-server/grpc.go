@@ -189,7 +189,7 @@ func grpcFlushHandler(service any, ctx context.Context, decode func(any) error, 
 		if err := service.(*grpcService).runtime.flush(ctx); err != nil {
 			return nil, grpcError(ctx, err)
 		}
-		return service.(*grpcService).runtime.attachAdminOpToMaintenance(maintenanceResponse{OK: true}), nil
+		return service.(*grpcService).runtime.attachAdminOpToMaintenance(maintenanceResponse{OK: true, Path: routeAdminFlush}), nil
 	}
 	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, grpcFullMethod(grpcMethodFlush), handler)
 }
@@ -203,7 +203,7 @@ func grpcCompactHandler(service any, ctx context.Context, decode func(any) error
 		if err != nil {
 			return nil, grpcError(ctx, err)
 		}
-		return service.(*grpcService).runtime.attachAdminOpToMaintenance(maintenanceResponse{OK: true, Result: result}), nil
+		return service.(*grpcService).runtime.attachAdminOpToMaintenance(maintenanceResponse{OK: true, Path: routeAdminCompact, Result: result}), nil
 	}
 	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, grpcFullMethod(grpcMethodCompact), handler)
 }
@@ -715,7 +715,7 @@ func grpcApplyRetention(r *serverRuntime, ctx context.Context, req any) (any, er
 	if err := r.applyRetention(ctx, *req.(*retentionApplyRequest)); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminRetentionApply}), nil
 }
 
 func grpcMaintenanceErrors(r *serverRuntime, ctx context.Context, _ any) (any, error) {

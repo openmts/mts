@@ -534,6 +534,9 @@ test('commercial browser smoke path', async ({ page }) => {
   // P350–P351: flush 后展示最近一次管理重操作
   await expect(page.getByTestId('ops-status-last')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('ops-status-last')).toContainText(/flush|Flush|刷盘/i)
+  if (await page.getByTestId('ops-action-result').count()) {
+    await expect(page.getByTestId('ops-action-result')).toContainText(/flush|Flush|\/api\/v1\/admin\/flush/i)
+  }
   await expect(page.getByTestId('admin-op-last-banner')).toBeVisible()
   await expect(page.getByTestId('admin-op-last-summary')).toContainText(/flush|Flush|刷盘|ok/i)
   await expect(page.getByTestId('ops-status-last')).toHaveAttribute('data-ok', 'true')

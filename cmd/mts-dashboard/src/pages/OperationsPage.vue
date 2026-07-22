@@ -433,17 +433,17 @@ async function runConfirmed() {
   try {
     let msg = ''
     if (kind === 'flush') {
-      const resp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/flush', {}, { signal })
+      const resp = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/flush', {}, { signal })
       applyAdminOpStatus(parseAdminOpStatusPayload(resp))
-      msg = t.value('opsFlushDone')
+      msg = formatMessage(t.value('opsFlushDone'), { path: String(resp?.path || '/api/v1/admin/flush') })
     } else if (kind === 'compact') {
-      const resp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/compact', {}, { signal })
+      const resp = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/compact', {}, { signal })
       applyAdminOpStatus(parseAdminOpStatusPayload(resp))
-      msg = t.value('opsCompactDone')
+      msg = formatMessage(t.value('opsCompactDone'), { path: String(resp?.path || '/api/v1/admin/compact') })
     } else {
-      const resp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/retention/apply', {}, { signal })
+      const resp = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/retention/apply', {}, { signal })
       applyAdminOpStatus(parseAdminOpStatusPayload(resp))
-      msg = t.value('opsRetentionDone')
+      msg = formatMessage(t.value('opsRetentionDone'), { path: String(resp?.path || '/api/v1/admin/retention/apply') })
     }
     setActionOk(msg)
     success(msg)

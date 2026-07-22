@@ -609,8 +609,8 @@ func operationCatalog() []operation {
 		{
 			Name:         "flush",
 			Namespace:    "admin",
-			Description:  "flush memtables (response includes admin_op_busy/last)",
-			ResponseHint: "okResponse{ok,admin_op_busy,op,started_at_unix,last}",
+			Description:  "flush memtables (response includes path/admin_op_busy/last)",
+			ResponseHint: "maintenanceResponse{ok,path,admin_op_busy,op,started_at_unix,last}",
 			Auth:         authAdmin,
 			HTTPMethods:  []string{http.MethodPost},
 			HTTPPaths:    []string{routeAdminFlush},
@@ -621,8 +621,8 @@ func operationCatalog() []operation {
 		{
 			Name:         "compact",
 			Namespace:    "admin",
-			Description:  "run compaction (response includes admin_op_busy/last)",
-			ResponseHint: "okResponse{ok,admin_op_busy,op,started_at_unix,last}",
+			Description:  "run compaction (response includes path/admin_op_busy/last)",
+			ResponseHint: "maintenanceResponse{ok,path,result,admin_op_busy,op,started_at_unix,last}",
 			Auth:         authAdmin,
 			HTTPMethods:  []string{http.MethodPost},
 			HTTPPaths:    []string{routeAdminCompact},
@@ -633,8 +633,8 @@ func operationCatalog() []operation {
 		{
 			Name:         "apply_retention",
 			Namespace:    "admin",
-			Description:  "apply retention (response includes admin_op_busy/last)",
-			ResponseHint: "okResponse{ok,admin_op_busy,op,started_at_unix,last}",
+			Description:  "apply retention (response includes path/admin_op_busy/last)",
+			ResponseHint: "okResponse{ok,path,admin_op_busy,op,started_at_unix,last}",
 			Auth:         authAdmin,
 			HTTPMethods:  []string{http.MethodPost},
 			HTTPPaths:    []string{routeAdminRetentionApply},

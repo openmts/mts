@@ -53,6 +53,7 @@ test('production checklist has required commercial gates', () => {
     'write-result-export-meta',
     'write-response-retention',
     'databases-meas-path',
+    'ops-maintenance-path',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -353,4 +354,13 @@ test('databases-meas-path is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('/databases'))
+})
+
+
+test('ops-maintenance-path is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'ops-maintenance-path')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/ops'))
 })

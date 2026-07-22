@@ -197,7 +197,7 @@ func (r *serverRuntime) handleFlush(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "flush"})
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMaintenance(maintenanceResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMaintenance(maintenanceResponse{OK: true, Path: routeAdminFlush}))
 }
 
 func (r *serverRuntime) handleCompact(writer http.ResponseWriter, request *http.Request) {
@@ -210,7 +210,7 @@ func (r *serverRuntime) handleCompact(writer http.ResponseWriter, request *http.
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "compact"})
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMaintenance(maintenanceResponse{OK: true, Result: result}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMaintenance(maintenanceResponse{OK: true, Path: routeAdminCompact, Result: result}))
 }
 
 func (r *serverRuntime) handleApplyRetention(writer http.ResponseWriter, request *http.Request) {
@@ -227,7 +227,7 @@ func (r *serverRuntime) handleApplyRetention(writer http.ResponseWriter, request
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "apply_retention"})
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminRetentionApply}))
 }
 
 func (r *serverRuntime) handleMaintenanceErrors(writer http.ResponseWriter, request *http.Request) {

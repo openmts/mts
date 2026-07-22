@@ -2657,3 +2657,15 @@
 | write 响应 | retention_policy | 结果徽章 + 导出 | 单 RP 批次 |
 | measurements list | path (P478) | databases-meas-path | 展开 database |
 | 契约 | write_response_retention | REQUIRED_FEATURE_IDS | 交接/验收包 |
+
+## P481（2026-07-23）
+- Server：flush/compact 的 `maintenanceResponse.path`；retention/apply 的 `okResponse.path`（HTTP+gRPC）
+- Dashboard：运维成功文案展示服务端 path
+- 清单：`ops-maintenance-path`；ApiSpec ResponseHint 对齐
+
+### 前后端对齐（P481）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| flush/compact | path | opsFlushDone/opsCompactDone | maintenanceResponse |
+| retention/apply | path | opsRetentionDone | okResponse |
+| 契约检索 | ResponseHint | 命令面板 | 运维对照 |

@@ -20,6 +20,7 @@ const (
 
 type okResponse struct {
 	OK            bool                  `json:"ok"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -490,6 +491,7 @@ type configFieldSchema struct {
 
 type maintenanceResponse struct {
 	OK            bool                  `json:"ok"`
+	Path          string                `json:"path,omitempty"`
 	Result        mts.CompactionResult  `json:"result,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`

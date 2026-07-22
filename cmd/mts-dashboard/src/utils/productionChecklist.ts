@@ -563,6 +563,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/databases',
   },
   {
+    id: 'ops-maintenance-path',
+    severity: 'recommended',
+    title: { zh: '运维维护响应含 path', en: 'Ops maintenance responses include path' },
+    detail: {
+      zh: 'flush/compact/retention/apply 响应含 path；运维页成功文案展示服务端 path。',
+      en: 'flush/compact/retention/apply responses include path; Operations success messages surface server path.',
+    },
+    automated: true,
+    jump: '/ops#ops-status-strip',
+  },
+  {
     id: 'write-result-export-meta',
     severity: 'recommended',
     title: { zh: '写入结果导出含服务端 meta', en: 'Write result export includes server meta' },
