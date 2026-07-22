@@ -2728,6 +2728,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('users-toggle-reader-e2e').click()
   await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('users-action-result')).toContainText(/禁用|disabled|Disabled/i)
+  // P431: 单条禁用写入轻量 last，Users 芯片可见
+  await expect(page.getByTestId('users-admin-last')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('users-admin-last-copy')).toBeVisible()
   await page.getByTestId('topbar-logout').click()
   await expect(page).toHaveURL(/login/)
   await page.getByTestId('login-username').fill('reader-e2e')

@@ -188,9 +188,17 @@ func TestHTTPProductionHardening(t *testing.T) {
 	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point, point}}, dataHeaders, http.StatusBadRequest, &errorResponse{})
 	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, dataHeaders, http.StatusOK, &writeResponse{})
 	putJSON(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod", Disabled: true}, http.StatusUnauthorized, &errorResponse{})
-	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod", Disabled: true}, adminHeaders, http.StatusOK, &okResponse{})
+	var disableResp okResponse
+	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod", Disabled: true}, adminHeaders, http.StatusOK, &disableResp)
+	if disableResp.Last == nil || disableResp.Last.Op != "user_disable" || !disableResp.Last.OK {
+		t.Fatalf("disable last=%#v", disableResp.Last)
+	}
 	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, dataHeaders, http.StatusUnauthorized, &errorResponse{})
-	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod"}, adminHeaders, http.StatusOK, &okResponse{})
+	var enableResp okResponse
+	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod"}, adminHeaders, http.StatusOK, &enableResp)
+	if enableResp.Last == nil || enableResp.Last.Op != "user_enable" || !enableResp.Last.OK {
+		t.Fatalf("enable last=%#v", enableResp.Last)
+	}
 	// 禁用会撤销 token，重新启用后需重新登录再继续写读
 	var loginAfterEnable authTokenResponse
 	postJSON(t, server.URL+"/api/v1/auth/login", loginRequest{UserName: "prod", Password: "secret12", TTLSeconds: 60}, http.StatusOK, &loginAfterEnable)

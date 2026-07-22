@@ -119,11 +119,19 @@ func (r *serverRuntime) handleSingleUser(
 			return
 		}
 		user.Name = userName
+		prev, prevOK, prevErr := r.engine.GetUser(request.Context(), userName)
+		if prevErr != nil {
+			writeAPIError(writer, prevErr)
+			return
+		}
 		if err := r.engine.UpdateUser(request.Context(), user); err != nil {
 			writeAPIError(writer, err)
 			return
 		}
 		r.audit.record(auditEvent{UserName: user.Name, Action: "update_user"})
+		if prevOK {
+			r.recordUserDisabledTransitionLast(prev.Disabled, user.Disabled)
+		}
 		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 	case http.MethodDelete:
 		if err := r.engine.DeleteUser(request.Context(), userName); err != nil {
@@ -300,4 +308,16 @@ func (r *serverRuntime) handleAuthzDatabaseCheck(writer http.ResponseWriter, req
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, authzDatabaseCheckResponse{Allowed: true})
+}
+
+// recordUserDisabledTransitionLast 单条禁用/启用写入轻量 last（与批量对称）。
+func (r *serverRuntime) recordUserDisabledTransitionLast(wasDisabled, nowDisabled bool) {
+	if wasDisabled == nowDisabled {
+		return
+	}
+	if nowDisabled {
+		r.recordAdminOpLast("user_disable", true, "")
+		return
+	}
+	r.recordAdminOpLast("user_enable", true, "")
 }

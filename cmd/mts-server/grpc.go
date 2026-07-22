@@ -410,8 +410,16 @@ func grpcUpdateUser(r *serverRuntime, ctx context.Context, req any) (any, error)
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	if err := r.engine.UpdateUser(ctx, *req.(*mts.User)); err != nil {
+	body := *req.(*mts.User)
+	prev, prevOK, prevErr := r.engine.GetUser(ctx, body.Name)
+	if prevErr != nil {
+		return nil, prevErr
+	}
+	if err := r.engine.UpdateUser(ctx, body); err != nil {
 		return nil, err
+	}
+	if prevOK {
+		r.recordUserDisabledTransitionLast(prev.Disabled, body.Disabled)
 	}
 	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }

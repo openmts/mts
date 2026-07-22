@@ -1982,3 +1982,14 @@
 | gRPC 批量 | 同步 record | — | 与 HTTP 一致 |
 | 就绪清单 | — | batch-admin-last | 可勾选自动化项 |
 
+## P431（2026-07-22）
+- 服务端：单条用户禁用/启用（HTTP PUT + gRPC UpdateUser）写轻量 last（`user_disable` / `user_enable`）
+- Dashboard：op 文案；Operations 复制 last 回退与 Storage 对齐
+- e2e：reader 单条禁用后 `users-admin-last` 可见
+
+### 前后端对齐（P431）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 单条禁用 last | recordUserDisabledTransitionLast | applyAdminOpStatus | 仅 disabled 状态变化时写入 |
+| Ops 复制 | — | label 回退 | 与 Storage/chip 一致 |
+

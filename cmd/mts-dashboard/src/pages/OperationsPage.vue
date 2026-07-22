@@ -108,7 +108,15 @@ const adminOpLastLabel = computed(() => {
 async function copyAdminOpLast() {
   const last = adminOpLast.value
   if (!last || !last.op) {
-    notifyError(t.value('opsStatusLastEmpty'))
+    // 与 Storage/AdminOpLastChip 对齐：无 structured last 时回退到展示文案
+    const label = (adminOpLastLabel.value || '').trim()
+    if (!label) {
+      notifyError(t.value('opsStatusLastEmpty'))
+      return
+    }
+    const res = await copyText(label)
+    if (res.ok) success(t.value('opsStatusLastCopied'))
+    else notifyError(res.error || t.value('failed'))
     return
   }
   const key = adminOpKindLabelKey(last.op) as import('@/i18n/messages').MessageKey

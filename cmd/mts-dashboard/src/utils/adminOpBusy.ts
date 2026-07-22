@@ -116,6 +116,10 @@ export function adminOpKindLabelKey(op: string | null | undefined): string {
       return 'adminOpKindBatchDownsampleDisable'
     case 'batch_downsample_enable':
       return 'adminOpKindBatchDownsampleEnable'
+    case 'user_disable':
+      return 'adminOpKindUserDisable'
+    case 'user_enable':
+      return 'adminOpKindUserEnable'
     default:
       return 'adminOpKindGeneric'
   }

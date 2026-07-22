@@ -445,3 +445,7 @@ test('adminOpKindLabelKey maps batch user ops', () => {
   assert.equal(adminOpKindLabelKey('batch_downsample_enable'), 'adminOpKindBatchDownsampleEnable')
 })
 
+test('adminOpKindLabelKey maps single user disable/enable', () => {
+  assert.equal(adminOpKindLabelKey('user_disable'), 'adminOpKindUserDisable')
+  assert.equal(adminOpKindLabelKey('user_enable'), 'adminOpKindUserEnable')
+})
