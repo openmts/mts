@@ -10,6 +10,7 @@ import { useQueryHistory } from '@/composables/useQueryHistory'
 import { filterQueryHistory } from '@/utils/queryHistory'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
 import { useI18n } from '@/composables/useI18n'
@@ -47,6 +48,7 @@ import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star, Pencil, X, Upload, Columns3 } from 'lucide-vue-next'
 
@@ -65,6 +67,7 @@ const route = useRoute()
 useHashScroll()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, info, error: notifyError } = useNotify()
+const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const {
   exportJob,
   exportBusy,
@@ -76,6 +79,16 @@ const {
   runJSONExport,
 } = useExportJob()
 const { t, locale } = useI18n()
+
+function notifyMaybeAdminBusy(message: string, err?: unknown) {
+  if (err && isAdminHeavyBusyError(err)) {
+    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
+    void refreshAdminOpBusy()
+    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
+    return
+  }
+  notifyError(message)
+}
 const { currentUser, isAdmin } = useAuth()
 const authzHint = ref('')
 const authzChecking = ref(false)
@@ -354,7 +367,7 @@ async function checkAuthz(perm: 'read' | 'write' = 'read') {
     else notifyError(authzHint.value)
   } catch (e) {
     authzHint.value = formatCaughtError(e)
-    notifyError(authzHint.value)
+    notifyMaybeAdminBusy(authzHint.value, e)
   } finally {
     authzChecking.value = false
   }
@@ -398,7 +411,12 @@ async function runQuery() {
     notifyError(actionError.value)
     return
   }
-  notifyError(actionError.value)
+  // 查询失败：若 message 体现 admin heavy，则挂运维跳转
+  notifyMaybeAdminBusy(actionError.value, {
+    code: lastQueryErrorCode.value || 'internal',
+    message: actionError.value,
+    status: lastQueryErrorCode.value === 'resource_exhausted' ? 429 : undefined,
+  })
 }
 
 function markFormClean() {
@@ -588,7 +606,7 @@ async function doRangeDelete() {
       notifyError(deleteResult.value)
     } else {
       deleteResult.value = formatCaughtError(e)
-      notifyError(deleteResult.value)
+      notifyMaybeAdminBusy(deleteResult.value, e)
     }
   } finally {
     deleteAbort = null

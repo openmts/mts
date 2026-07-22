@@ -823,6 +823,32 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.keyboard.press('Escape')
 
   // 通知历史面板 + 导出入口 + 快捷键
+  // 通知历史 action：预置一条可跳转运维的 error，再打开面板点击
+  await page.evaluate(() => {
+    const item = {
+      id: 'e2e-admin-busy',
+      kind: 'error',
+      message: 'e2e admin busy toast',
+      count: 1,
+      at: Date.now(),
+      actionLabel: '打开运维',
+      actionPath: '/operations#ops-status-strip',
+    }
+    sessionStorage.setItem(
+      'mts.dashboard.notify-history.v1',
+      JSON.stringify({ version: 1, items: [item] }),
+    )
+  })
+  await page.getByTestId('topbar-notify-history').click()
+  await expect(page.getByTestId('notify-history-panel')).toBeVisible()
+  await expect(page.getByTestId('notify-history-list')).toBeVisible()
+  await expect(page.getByTestId('notify-history-action')).toBeVisible()
+  await page.getByTestId('notify-history-action').click()
+  await expect(page).toHaveURL(/\/operations/)
+  await expect(page.getByTestId('ops-status-strip')).toBeVisible()
+  // 回到概览后再次打开历史面板做筛选/导出冒烟
+  await page.goto('/')
+  await page.waitForLoadState('networkidle')
   await page.getByTestId('topbar-notify-history').click()
   await expect(page.getByTestId('notify-history-panel')).toBeVisible()
   await expect(page.getByTestId('notify-history-list')).toBeVisible()

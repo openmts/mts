@@ -17,9 +17,11 @@ import {
 import { fieldNames } from '@/utils/seriesMeta'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
@@ -92,6 +94,7 @@ const rpMetaHint = ref('')
 const metaSource = ref<MetaLoadSource>('admin')
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, info, error: notifyError, warn } = useNotify()
+const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 
 const {
   exportJob,
@@ -104,6 +107,16 @@ const {
 } = useExportJob()
 
 const { t } = useI18n()
+
+function notifyMaybeAdminBusy(message: string, err?: unknown) {
+  if (err && isAdminHeavyBusyError(err)) {
+    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
+    void refreshAdminOpBusy()
+    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
+    return
+  }
+  notifyError(message)
+}
 
 function fieldTypeLabel(value: string): string {
   switch (value) {
@@ -511,7 +524,7 @@ async function checkWriteAuthz() {
     else notifyError(authzHint.value)
   } catch (e) {
     authzHint.value = formatCaughtError(e)
-    notifyError(authzHint.value)
+    notifyMaybeAdminBusy(authzHint.value, e)
   }
 }
 
@@ -590,7 +603,7 @@ async function submit() {
     } else {
       writeWasCanceled.value = false
       actionError.value = formatCaughtError(e)
-      notifyError(actionError.value)
+      notifyMaybeAdminBusy(actionError.value, e)
       if (!result.value?.ok) {
         result.value = { ok: false, message: actionError.value }
       }

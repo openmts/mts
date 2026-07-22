@@ -1437,3 +1437,12 @@
 ## P335（2026-07-22）
 - ops-status 轮询失败指数退避（5s→30s）；Layout 横幅展示连续失败与下次重试间隔
 
+## P336（2026-07-22）
+- Write/Query/Audit/Metrics/AccessGrants：API 错误若 admin busy，toast 附带打开运维并乐观置 busy
+
+## P337（2026-07-22）
+- adminOpBusy：抽取 `adminOpPollIntervalMs` / `nextAdminOpFailStreak` 纯函数；单测覆盖 idle/busy/退避
+
+## P338（2026-07-22）
+- e2e：通知历史预置 action 条目，点击跳转 `/operations#ops-status-strip`
+

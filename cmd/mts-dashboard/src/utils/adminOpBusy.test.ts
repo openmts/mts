@@ -2,13 +2,18 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   ADMIN_OP_BUSY_OPS_PATH,
+  ADMIN_OP_POLL_BUSY_MS,
+  ADMIN_OP_POLL_FAIL_BACKOFF_MS,
+  ADMIN_OP_POLL_IDLE_MS,
   adminHeavyBusyOpFromError,
   adminOpBusyOpenAction,
   adminOpKindLabelKey,
+  adminOpPollIntervalMs,
   formatAdminOpElapsed,
   isAdminHeavyBusyError,
   isAdminHeavyBusyMessage,
   joinAdminOpChip,
+  nextAdminOpFailStreak,
   parseAdminBusyFromHeaders,
   parseAdminHeavyBusyOp,
   parseAdminOpBusyPayload,
@@ -131,5 +136,21 @@ test('parseAdminBusyFromHeaders', () => {
   }
   assert.deepEqual(parseAdminBusyFromHeaders(h), { busy: true, op: 'flush' })
   assert.deepEqual(parseAdminBusyFromHeaders(() => null), { busy: false, op: '' })
+})
+
+test('adminOpPollIntervalMs idle/busy/backoff', () => {
+  assert.equal(adminOpPollIntervalMs({ failStreak: 0, busy: false }), ADMIN_OP_POLL_IDLE_MS)
+  assert.equal(adminOpPollIntervalMs({ failStreak: 0, busy: true }), ADMIN_OP_POLL_BUSY_MS)
+  assert.equal(adminOpPollIntervalMs({ failStreak: 1, busy: true }), ADMIN_OP_POLL_FAIL_BACKOFF_MS[0])
+  assert.equal(adminOpPollIntervalMs({ failStreak: 2, busy: false }), ADMIN_OP_POLL_FAIL_BACKOFF_MS[1])
+  assert.equal(adminOpPollIntervalMs({ failStreak: 9, busy: false }), ADMIN_OP_POLL_FAIL_BACKOFF_MS[3])
+})
+
+test('nextAdminOpFailStreak', () => {
+  assert.equal(nextAdminOpFailStreak(0, true), 0)
+  assert.equal(nextAdminOpFailStreak(3, true), 0)
+  assert.equal(nextAdminOpFailStreak(0, false), 1)
+  assert.equal(nextAdminOpFailStreak(3, false), 4)
+  assert.equal(nextAdminOpFailStreak(4, false), 4)
 })
 

@@ -84,6 +84,37 @@ export function joinAdminOpChip(base: string, opLabel?: string | null): string {
   return `${base}: ${label}`
 }
 
+/** ops-status 轮询失败退避阶梯（ms） */
+export const ADMIN_OP_POLL_FAIL_BACKOFF_MS = [5_000, 10_000, 20_000, 30_000] as const
+export const ADMIN_OP_POLL_IDLE_MS = 15_000
+export const ADMIN_OP_POLL_BUSY_MS = 3_000
+export const ADMIN_OP_POLL_MIN_MS = 2_000
+
+/** 失败 streak → 下次轮询间隔；成功时 streak=0 回 idle/busy */
+export function adminOpPollIntervalMs(opts: {
+  failStreak: number
+  busy: boolean
+  idleMs?: number
+  busyMs?: number
+}): number {
+  const idleMs = Math.max(ADMIN_OP_POLL_MIN_MS, opts.idleMs ?? ADMIN_OP_POLL_IDLE_MS)
+  const busyMs = Math.max(
+    ADMIN_OP_POLL_MIN_MS,
+    Math.min(opts.busyMs ?? ADMIN_OP_POLL_BUSY_MS, idleMs),
+  )
+  const streak = Math.max(0, Math.trunc(opts.failStreak || 0))
+  if (streak > 0) {
+    const idx = Math.min(streak, ADMIN_OP_POLL_FAIL_BACKOFF_MS.length) - 1
+    return ADMIN_OP_POLL_FAIL_BACKOFF_MS[Math.max(0, idx)]
+  }
+  return opts.busy ? busyMs : idleMs
+}
+
+export function nextAdminOpFailStreak(current: number, ok: boolean): number {
+  if (ok) return 0
+  return Math.min(ADMIN_OP_POLL_FAIL_BACKOFF_MS.length, Math.max(0, Math.trunc(current || 0)) + 1)
+}
+
 /** 服务端 admin heavy 互斥错误文案识别（resource_exhausted） */
 export function isAdminHeavyBusyMessage(message: string | null | undefined): boolean {
   const m = String(message || '').toLowerCase()

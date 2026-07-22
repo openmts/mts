@@ -6,9 +6,11 @@ import { parseMetricsPrefill, metricsFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { apiGetText } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
+import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
@@ -33,6 +35,17 @@ const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
 const { success, info, error: notifyError } = useNotify()
+const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+
+function notifyMaybeAdminBusy(message: string, err?: unknown) {
+  if (err && isAdminHeavyBusyError(err)) {
+    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
+    void refreshAdminOpBusy()
+    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
+    return
+  }
+  notifyError(message)
+}
 const {
   exportJob,
   exportBusy,
@@ -84,13 +97,13 @@ async function load(opts?: { background?: boolean }) {
       // 自动刷新失败：保留上次快照，避免闪空 + toast 风暴
       refreshError.value = msg
       refreshFailStreak.value += 1
-      if (refreshFailStreak.value === 1) notifyError(`${t.value('metricsRefreshFailed')}：${msg}`)
+      if (refreshFailStreak.value === 1) notifyMaybeAdminBusy(`${t.value('metricsRefreshFailed')}：${msg}`, e)
     } else {
       loadError.value = msg
       families.value = []
       raw.value = ''
       refreshError.value = ''
-      notifyError(msg)
+      notifyMaybeAdminBusy(msg, e)
     }
   } finally {
     if (!background) loading.value = false

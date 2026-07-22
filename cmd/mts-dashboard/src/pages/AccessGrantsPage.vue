@@ -4,10 +4,12 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
+import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { permissionLabel } from '@/utils/permissionLabel'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
@@ -54,6 +56,17 @@ useHashScroll()
 const { isAdmin } = useAuth()
 const { t, locale } = useI18n()
 const { success, info, warn, error: notifyError } = useNotify()
+const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+
+function notifyMaybeAdminBusy(message: string, err?: unknown) {
+  if (err && isAdminHeavyBusyError(err)) {
+    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
+    void refreshAdminOpBusy()
+    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
+    return
+  }
+  notifyError(message)
+}
 const {
   exportJob,
   exportBusy,
@@ -187,9 +200,11 @@ async function load() {
       // soft-keep：用户列表/授权全量刷新失败时保留上次表
       loadError.value = ''
       partialErrors.value = [msg]
+      if (isAdminHeavyBusyError(e)) notifyMaybeAdminBusy(msg, e)
     } else {
       loadError.value = msg
       rows.value = []
+      notifyMaybeAdminBusy(msg, e)
     }
   } finally {
     loading.value = false

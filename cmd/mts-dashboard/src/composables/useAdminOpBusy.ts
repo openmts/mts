@@ -3,6 +3,8 @@ import { apiGetSilent } from '@/api/client'
 import type { OpsStatusResponse } from '@/api/types'
 import { useAuth } from '@/composables/useAuth'
 import {
+  adminOpPollIntervalMs as resolveAdminOpPollIntervalMs,
+  nextAdminOpFailStreak,
   parseAdminOpStatusPayload,
   shouldPollAdminOpBusy,
   type AdminOpStatus,
@@ -11,8 +13,6 @@ import {
 const IDLE_INTERVAL_MS = 15_000
 const BUSY_INTERVAL_MS = 3_000
 const MIN_INTERVAL_MS = 2_000
-const FAIL_BACKOFF_STEPS_MS = [5_000, 10_000, 20_000, 30_000] as const
-const MAX_FAIL_STREAK = FAIL_BACKOFF_STEPS_MS.length
 
 interface SharedAdminOpBusy {
   status: Ref<AdminOpStatus>
@@ -50,11 +50,12 @@ function createShared(idleIntervalMs: number): SharedAdminOpBusy {
   const { isAdmin, isAuthenticated } = useAuth()
 
   function desiredInterval(): number {
-    if (failStreak.value > 0) {
-      const idx = Math.min(failStreak.value, MAX_FAIL_STREAK) - 1
-      return FAIL_BACKOFF_STEPS_MS[Math.max(0, idx)]
-    }
-    return status.value.busy ? busyMs : idleMs
+    return resolveAdminOpPollIntervalMs({
+      failStreak: failStreak.value,
+      busy: status.value.busy,
+      idleMs,
+      busyMs,
+    })
   }
 
   function arm() {
@@ -116,15 +117,14 @@ function createShared(idleIntervalMs: number): SharedAdminOpBusy {
       applyStatus(parseAdminOpStatusPayload(v))
       lastCheckedAt.value = Date.now()
       error.value = ''
-      if (failStreak.value !== 0) {
-        failStreak.value = 0
-        rearmIfNeeded()
-      }
+      const prev = failStreak.value
+      failStreak.value = nextAdminOpFailStreak(failStreak.value, true)
+      if (prev !== 0) rearmIfNeeded()
     } catch (e) {
       if (signal.aborted) return
       // 轮询失败不闪断 busy；保留上次值，并指数退避降低噪音
       error.value = e instanceof Error ? e.message : String(e)
-      failStreak.value = Math.min(MAX_FAIL_STREAK, failStreak.value + 1)
+      failStreak.value = nextAdminOpFailStreak(failStreak.value, false)
       rearmIfNeeded()
     } finally {
       if (!signal.aborted) checking.value = false
