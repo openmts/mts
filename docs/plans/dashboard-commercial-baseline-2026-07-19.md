@@ -2327,3 +2327,16 @@
 | 就绪清单 | — | overview-session-server-hint | recommended |
 | 命令面板 | — | /#overview-summary | 运维跳转 |
 
+## P458（2026-07-23）
+- 纯函数 `clockSkew`：`server_time_unix` + 校验时刻 → 偏差/urgency
+- Layout：|skew|>=30s 展示全局偏差异常横幅（刷新会话 / 打开账户校准）
+- Overview/Readiness 下一步：大偏差优先于签核
+- 就绪清单 `clock-skew-banner`；命令面板深链账户会话
+
+### 前后端对齐（P458）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 时钟样本 | server_time_unix | lastSessionServerTimeUnix | 会话校验时写入 |
+| 偏差异常横幅 | — | clock-skew-banner | 阈值 30s |
+| 运维下一步 | — | opsNextSteps.clockSkew | 优先于签核 |
+

@@ -24,6 +24,7 @@ import {
   sessionViewFromRemainingMs,
 } from '@/utils/sessionExpiry'
 import { buildSessionBadgeMeta } from '@/utils/sessionBadgeTitle'
+import { computeClockSkewSeconds } from '@/utils/clockSkew'
 import { completedIds, loadReadinessState } from '@/utils/readinessState'
 import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import { requiredChecklist } from '@/utils/productionChecklist'
@@ -259,12 +260,17 @@ const overviewPreflight = computed(() => {
   })
 })
 
+const overviewClockSkewSeconds = computed(() =>
+  computeClockSkewSeconds(lastSessionServerTimeUnix.value, lastSessionCheckedAt.value),
+)
+
 const overviewNextSteps = computed(() =>
   buildOpsNextSteps({
     locale: uiLocale.value,
     preflight: overviewPreflight.value,
     signoffNotes: localReadiness.value.signoffNotes,
     limit: 4,
+    clockSkewSeconds: overviewClockSkewSeconds.value,
   }),
 )
 

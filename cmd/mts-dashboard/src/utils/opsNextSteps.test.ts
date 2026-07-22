@@ -82,3 +82,36 @@ test('buildOpsNextSteps respects limit and deploy kit info', () => {
   assert.ok(steps.some((s) => s.id === 'deployKit'))
   assert.ok(steps.length <= 2)
 })
+
+test('buildOpsNextSteps prioritizes large clock skew', () => {
+  const preflight = buildExportPreflight({
+    locale: 'zh',
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    signoffNotes: {
+      edgeHttps: 'a',
+      backupOffsite: 'b',
+      backupAlert: 'c',
+    },
+    deployKitReviewed: true,
+  })
+  const steps = buildOpsNextSteps({
+    locale: 'zh',
+    preflight,
+    signoffNotes: {
+      edgeHttps: 'a',
+      backupOffsite: 'b',
+      backupAlert: 'c',
+    },
+    clockSkewSeconds: 45,
+    limit: 2,
+  })
+  assert.equal(steps[0]?.id, 'clockSkew')
+  assert.match(steps[0]?.message ?? '', /45s/)
+  assert.ok(steps[0]?.target?.includes('account-session'))
+})

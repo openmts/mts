@@ -310,6 +310,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/#overview-summary',
   },
   {
+    id: 'clock-skew-banner',
+    severity: 'recommended',
+    title: { zh: '大时钟偏差全局提示', en: 'Large clock skew global banner' },
+    detail: {
+      zh: '有 server_time_unix 样本且 |skew|>=30s 时 Layout 展示偏差异常横幅；下一步建议与就绪清单可跳转账户会话。',
+      en: 'When server_time_unix is sampled and |skew|>=30s, Layout shows a skew banner; next-steps and readiness jump to account session.',
+    },
+    automated: true,
+    jump: '/account#account-session',
+  },
+  {
     id: 'api-spec-password-policy',
     severity: 'recommended',
     title: { zh: '契约可检索 password-policy', en: 'Api-spec searchable password-policy' },

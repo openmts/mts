@@ -27,9 +27,13 @@ export interface BuildOpsNextStepsInput {
   signoffNotes?: SignoffNotes | null
   /** 最多返回几条（不含 done） */
   limit?: number
+  /** 客户端相对服务端时钟偏差（秒）；|skew|>=阈值时作为运维下一步 */
+  clockSkewSeconds?: number | null
+  clockSkewWarnAbsSec?: number
 }
 
 const priorityById: Record<string, number> = {
+  clockSkew: 5,
   signoff: 10,
   checklist: 20,
   edgeHttps: 30,
@@ -39,6 +43,30 @@ const priorityById: Record<string, number> = {
   'doctor-warn': 52,
   deployKit: 60,
   tls: 70,
+}
+
+const DEFAULT_SKEW_WARN = 30
+
+function clockSkewStep(
+  locale: LocaleCode,
+  skewSec: number | null | undefined,
+  warnAbs: number | undefined,
+): OpsNextStep | null {
+  if (typeof skewSec !== 'number' || !Number.isFinite(skewSec)) return null
+  const threshold =
+    typeof warnAbs === 'number' && Number.isFinite(warnAbs) && warnAbs > 0 ? warnAbs : DEFAULT_SKEW_WARN
+  if (Math.abs(skewSec) < threshold) return null
+  const sign = skewSec > 0 ? '+' : ''
+  const label = `${sign}${Math.round(skewSec)}s`
+  return {
+    id: 'clockSkew',
+    message:
+      locale === 'en'
+        ? `Client/server clock skew is large (${label}); verify NTP before acceptance`
+        : `客户端与服务端时钟偏差较大（${label}）；验收前请核对 NTP`,
+    target: '/account#account-session',
+    priority: priorityById.clockSkew,
+  }
 }
 
 function signoffMessage(locale: LocaleCode, missing: SignoffNoteField[]): string {
@@ -86,6 +114,9 @@ export function buildOpsNextSteps(input: BuildOpsNextStepsInput): OpsNextStep[] 
       priority,
     })
   }
+
+  const skew = clockSkewStep(locale, input.clockSkewSeconds, input.clockSkewWarnAbsSec)
+  if (skew) candidates.push(skew)
 
   candidates.sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id))
   const sliced = candidates.slice(0, limit)

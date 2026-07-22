@@ -33,6 +33,7 @@ import {
 } from '@/utils/commercialHandoffSummary'
 import { formatCommercialHandoffClipboardText } from '@/utils/healthReportExport'
 import { buildOpsNextSteps } from '@/utils/opsNextSteps'
+import { computeClockSkewSeconds } from '@/utils/clockSkew'
 import { copyText } from '@/utils/clipboard'
 import {
   DEPLOY_TEMPLATES,
@@ -337,6 +338,10 @@ const readinessNextSteps = computed(() =>
     preflight: exportPreflight.value,
     signoffNotes: state.value.signoffNotes,
     limit: 4,
+    clockSkewSeconds: computeClockSkewSeconds(
+      lastSessionServerTimeUnix.value,
+      lastSessionCheckedAt.value,
+    ),
   }),
 )
 

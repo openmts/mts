@@ -57,6 +57,7 @@ import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { shouldSyncOnVisibility } from '@/utils/pageVisibilitySync'
 import { nextSessionProbe } from '@/utils/sessionProbe'
+import { clockSkewView, shouldShowClockSkewBanner } from '@/utils/clockSkew'
 import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
 import { copyText } from '@/utils/clipboard'
 import { useNotify } from '@/composables/useNotify'
@@ -78,8 +79,33 @@ import {
 const { t } = useI18n()
 const { offline, sessionWriteBlocked, sessionRemainingLabel, sessionUrgency } = useMutationGuard()
 const { sync: syncNetworkStatus } = useNetworkStatus()
-const { logout, isAdmin, refreshSession, isAuthenticated } = useAuth()
+const { logout, isAdmin, refreshSession, isAuthenticated, lastSessionServerTimeUnix, lastSessionCheckedAt } = useAuth()
+const layoutClockSkew = computed(() =>
+  clockSkewView(lastSessionServerTimeUnix.value, lastSessionCheckedAt.value),
+)
+const showClockSkewBanner = computed(
+  () => isAuthenticated.value && shouldShowClockSkewBanner(layoutClockSkew.value),
+)
+const clockSkewBannerText = computed(() =>
+  formatMessage(t.value('clockSkewBanner'), { skew: layoutClockSkew.value.label || '—' }),
+)
+
+function goClockSkewSession() {
+  void router.push({ path: '/account', hash: '#account-session' })
+}
+
 const { success, error: notifyError } = useNotify()
+
+async function refreshSessionForSkew() {
+  try {
+    const ok = await refreshSession()
+    if (ok) success(t.value('accountSessionVerifyOk'))
+    else notifyError(t.value('accountSessionVerifyFailed'))
+  } catch {
+    notifyError(t.value('accountSessionVerifyFailed'))
+  }
+}
+
 const {
   adminOpBusy,
   adminOpKind,
@@ -709,6 +735,32 @@ function onSkipToMain(e: Event) {
             data-testid="session-critical-relogin"
             @click="goSessionRelogin"
           >{{ t('sessionCriticalRelogin') }}</button>
+        </div>
+      </div>
+      <div
+        v-if="showClockSkewBanner && !offline"
+        class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100 sm:px-6"
+        role="status"
+        aria-live="polite"
+        data-testid="clock-skew-banner"
+      >
+        <div class="min-w-0 flex-1">
+          <div class="font-medium" data-testid="clock-skew-banner-title">{{ t('clockSkewBannerTitle') }}</div>
+          <div class="mt-0.5 opacity-90" data-testid="clock-skew-banner-detail">{{ clockSkewBannerText }}</div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring !border-amber-300 !bg-white !text-amber-950 dark:!border-amber-800 dark:!bg-amber-950 dark:!text-amber-100"
+            data-testid="clock-skew-banner-refresh"
+            @click="refreshSessionForSkew"
+          >{{ t('clockSkewBannerRefresh') }}</button>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring !border-amber-300 !bg-white !text-amber-950 dark:!border-amber-800 dark:!bg-amber-950 dark:!text-amber-100"
+            data-testid="clock-skew-banner-open-session"
+            @click="goClockSkewSession"
+          >{{ t('clockSkewBannerOpenSession') }}</button>
         </div>
       </div>
       <div

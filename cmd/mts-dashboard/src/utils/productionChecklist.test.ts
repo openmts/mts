@@ -27,6 +27,7 @@ test('production checklist has required commercial gates', () => {
     'password-policy-public',
     'session-remaining-calibration',
     'overview-session-server-hint',
+    'clock-skew-banner',
     'api-spec-password-policy',
   ]) {
     assert.ok(ids.includes(need), need)
@@ -145,4 +146,12 @@ test('overview-session-server-hint is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('overview-summary'))
+})
+
+test('clock-skew-banner is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'clock-skew-banner')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('account-session'))
 })

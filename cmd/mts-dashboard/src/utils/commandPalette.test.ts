@@ -371,3 +371,8 @@ test('command palette overview session server hint', () => {
   const admin = allVisibleCommandItems(true)
   assert.ok(admin.some((i) => i.id === 'overview-session-server-hint'))
 })
+
+test('command palette clock skew banner', () => {
+  const all = allVisibleCommandItems(false)
+  assert.ok(all.some((i) => i.id === 'clock-skew-banner' && i.path.includes('account-session')))
+})
