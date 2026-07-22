@@ -2498,7 +2498,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('downsample-detail-name')).toContainText('e2e-batch-ds')
   await expect(page.getByTestId('downsample-detail-functions-list')).toBeVisible()
   await expect(page.getByTestId('downsample-detail-status-extra')).toBeVisible()
-  // P440: 状态筛选条 + 状态行点开详情
+  // P440/P442: 状态摘要 + 状态行点开详情（先于 health 深链，避免 error 过滤隐藏行）
   await expect(page.getByTestId('downsample-status-next-e2e-batch-ds')).toBeVisible()
   await expect(page.getByTestId('downsample-status-health-filter')).toBeVisible()
   await expect(page.getByTestId('downsample-status-summary')).toBeVisible()
@@ -2511,6 +2511,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('downsample-detail-name')).toContainText('e2e-batch-ds')
   await page.getByTestId('downsample-detail-close').click()
   await expect(page.getByTestId('downsample-detail-panel')).toHaveCount(0)
+  // P443: 状态健康深链（只读筛选，不依赖错误行存在）
+  await page.goto('/downsample?health=error#downsample-status')
+  await expect(page.getByTestId('downsample-status-health-filter')).toHaveValue('error', { timeout: 15_000 })
+  await expect(page.getByTestId('downsample-status-summary')).toBeVisible()
+  await page.goto('/downsample#downsample-filters')
+  await expect(page.getByTestId('downsample-status-health-filter')).toHaveValue('', { timeout: 15_000 })
   await page.getByTestId('downsample-select-e2e-batch-ds').check()
   await expect(page.getByTestId('downsample-batch-disable')).toBeEnabled()
   await page.getByTestId('downsample-batch-disable').click()

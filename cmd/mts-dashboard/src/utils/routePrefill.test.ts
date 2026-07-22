@@ -220,6 +220,14 @@ test('access grants and downsample prefill helpers', () => {
     downsampleFormToPrefill({ policy: 'e2e-batch-ds' }),
     '/downsample?policy=e2e-batch-ds#downsample-detail',
   )
+  assert.deepEqual(parseDownsamplePrefill({ health: 'error', min_lag: '60' }), {
+    health: 'error',
+    min_lag: '60',
+  })
+  assert.equal(
+    downsampleFormToPrefill({ health: 'lagging', min_lag: 120 }),
+    '/downsample?health=lagging&min_lag=120#downsample-status',
+  )
 })
 
 test('operations and storage prefill helpers', () => {

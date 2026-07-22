@@ -252,7 +252,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'Status table supports error/active/lagging filters; server statuses include summary; Overview shows health and deep-links.',
     },
     automated: true,
-    jump: '/downsample#downsample-status',
+    jump: '/downsample?health=error#downsample-status',
   },
 ]
 

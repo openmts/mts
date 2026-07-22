@@ -103,4 +103,5 @@ test('downsample-status-health is automated recommended gate', () => {
   assert.ok(item)
   assert.equal(item?.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('downsample-status'))
+  assert.ok(productionChecklistJump(item!)?.includes('health=error'))
 })

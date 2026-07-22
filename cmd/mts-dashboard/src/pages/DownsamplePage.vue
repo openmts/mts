@@ -352,6 +352,19 @@ function applyDownsamplePrefillFromRoute() {
       changed = true
     }
   }
+  if (pre.health === 'error' || pre.health === 'active' || pre.health === 'lagging') {
+    if (statusHealthFilter.value !== pre.health) {
+      statusHealthFilter.value = pre.health
+      changed = true
+    }
+  }
+  if (pre.min_lag != null) {
+    const n = Number(pre.min_lag)
+    if (Number.isFinite(n) && n >= 0 && statusMinLag.value !== n) {
+      statusMinLag.value = n
+      changed = true
+    }
+  }
   if (changed) success(t.value('downsamplePrefillApplied'))
 }
 
@@ -359,7 +372,9 @@ async function copyDownsampleShareLink() {
   const path = downsampleFormToPrefill({
     q: policyFilter.value,
     enabled: enabledFilter.value || undefined,
-  }, { hash: '#downsample-filters' })
+    health: statusHealthFilter.value || undefined,
+    min_lag: statusHealthFilter.value === 'lagging' ? statusMinLag.value : undefined,
+  }, { hash: statusHealthFilter.value ? '#downsample-status' : '#downsample-filters' })
   const url = `${window.location.origin}${path}`
   const res = await copyText(url)
   if (res.ok) success(t.value('downsampleShareCopied'))
@@ -382,8 +397,13 @@ watch(
 )
 
 watch(statusHealthFilter, () => {
+  syncStatusHealthQuery()
   if (!isAdmin.value) return
   void loadData()
+})
+watch(statusMinLag, () => {
+  if (statusHealthFilter.value !== 'lagging') return
+  syncStatusHealthQuery()
 })
 
 
@@ -1066,6 +1086,23 @@ function syncPolicyDetailQuery(name: string) {
   const cur = typeof route.query.policy === 'string' ? route.query.policy : ''
   if ((cur || '') === next) return
   void router.replace({ path: '/downsample', query: q, hash: next ? '#downsample-detail' : route.hash || undefined })
+}
+function syncStatusHealthQuery() {
+  const q = { ...(route.query as Record<string, string | string[] | null | undefined>) }
+  const health = statusHealthFilter.value
+  if (health) q.health = health
+  else delete q.health
+  if (health === 'lagging' && Number(statusMinLag.value) > 0) q.min_lag = String(Number(statusMinLag.value))
+  else delete q.min_lag
+  const curH = typeof route.query.health === 'string' ? route.query.health : ''
+  const curM = typeof route.query.min_lag === 'string' ? route.query.min_lag : ''
+  const nextM = health === 'lagging' && Number(statusMinLag.value) > 0 ? String(Number(statusMinLag.value)) : ''
+  if (curH === (health || '') && curM === nextM) return
+  void router.replace({
+    path: '/downsample',
+    query: q,
+    hash: health ? '#downsample-status' : (route.hash || undefined),
+  })
 }
 async function copyPolicyDetailJSON() {
   const text = downsamplePolicyDetailToJSONText(detailPolicy.value || undefined)

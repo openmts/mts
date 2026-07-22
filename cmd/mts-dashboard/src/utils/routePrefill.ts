@@ -439,6 +439,10 @@ export type DownsamplePrefill = {
   enabled?: string
   /** 打开策略详情（只读核对，不自动写操作） */
   policy?: string
+  /** 状态健康筛选：error|active|lagging（与 server statuses?health= 对齐） */
+  health?: string
+  /** lagging 时最小滞后秒（server min_lag_seconds） */
+  min_lag?: string
 }
 
 /** 降采样策略筛选预填（不自动 run/enable） */
@@ -452,6 +456,10 @@ export function parseDownsamplePrefill(
   if (enabled === 'enabled' || enabled === 'disabled') out.enabled = enabled
   const policy = firstQueryValue(query.policy)
   if (policy) out.policy = policy
+  const health = firstQueryValue(query.health)
+  if (health === 'error' || health === 'active' || health === 'lagging') out.health = health
+  const minLag = firstQueryValue(query.min_lag ?? query.min_lag_seconds)
+  if (minLag && /^\d+$/.test(minLag)) out.min_lag = minLag
   return out
 }
 
@@ -460,8 +468,12 @@ export function buildDownsamplePrefillPath(opts: DownsamplePrefill & { hash?: st
   if (opts.q) params.set('q', opts.q)
   if (opts.enabled) params.set('enabled', opts.enabled)
   if (opts.policy) params.set('policy', opts.policy)
+  if (opts.health) params.set('health', opts.health)
+  if (opts.min_lag) params.set('min_lag', opts.min_lag)
   const qs = params.toString()
-  const defaultHash = opts.policy ? '#downsample-detail' : '#downsample-filters'
+  let defaultHash = '#downsample-filters'
+  if (opts.policy) defaultHash = '#downsample-detail'
+  else if (opts.health) defaultHash = '#downsample-status'
   const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : defaultHash
   return qs ? `/downsample?${qs}${hash}` : `/downsample${hash}`
 }
@@ -470,11 +482,18 @@ export function downsampleFormToPrefill(form: {
   q?: string
   enabled?: string
   policy?: string
+  health?: string
+  min_lag?: string | number
 }, opts?: { hash?: string }): string {
+  const minLag = form.min_lag == null || form.min_lag === ''
+    ? undefined
+    : String(form.min_lag).trim() || undefined
   return buildDownsamplePrefillPath({
     q: form.q?.trim() || undefined,
     enabled: form.enabled?.trim() || undefined,
     policy: form.policy?.trim() || undefined,
+    health: form.health?.trim() || undefined,
+    min_lag: minLag && /^\d+$/.test(minLag) ? minLag : undefined,
     hash: opts?.hash,
   })
 }

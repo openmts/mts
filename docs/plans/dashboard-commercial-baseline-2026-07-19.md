@@ -2129,3 +2129,15 @@
 | statuses summary | summary 字段 | 页内摘要条/导出 | 过滤后汇总 |
 | 就绪清单 | — | downsample-status-health | 可勾选 |
 | 命令面板 | — | readiness + overview 入口 | 运维跳转 |
+
+## P443（2026-07-22）
+- routePrefill：`health` / `min_lag` 与 server `statuses?health=&min_lag_seconds=` 对齐
+- 状态健康筛选写入 URL；复制分享链接带健康筛选
+- 就绪清单/命令面板深链 `?health=error#downsample-status`
+- e2e：深链预填 health=error
+
+### 前后端对齐（P443）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 状态健康深链 | statuses query | `?health=&min_lag=` | 只读筛选 |
+| 分享链接 | — | share 含 health | 运维协作 |

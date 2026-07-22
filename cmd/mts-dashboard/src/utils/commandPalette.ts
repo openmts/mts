@@ -758,7 +758,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
   },
   {
     id: 'readiness-downsample-status-health',
-    path: '/downsample#downsample-status',
+    path: '/downsample?health=error#downsample-status',
     labelKey: 'cmdReadinessDownsampleStatusHealth',
     keywords: [
       'downsample status health',
