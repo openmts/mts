@@ -28,7 +28,7 @@ import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
@@ -165,6 +165,12 @@ const {
   setActionResult,
   reportActionError: reportRetryError,
 } = useActionRetry<DbActionKey>()
+const databasesAdminBusyAction = computed(() =>
+  actionResultAdminBusyAction({
+    message: actionResult.value?.message || '',
+    openLabel: t.value('adminOpBusyOpenOps'),
+  }),
+)
 const lastFailedDbName = ref('')
 const lastFailedMeasName = ref('')
 const confirmOpen = ref(false)
@@ -733,6 +739,8 @@ onBeforeUnmount(() => {
     <ActionResultBanner
       :result="actionResult"
       :retryable="canRetryAction"
+      :action-label="databasesAdminBusyAction?.label || ''"
+      :action-path="databasesAdminBusyAction?.path || ''"
       data-testid="databases-action-result"
       @retry="retryLastDatabaseAction"
       @dismiss="clearActionResult"

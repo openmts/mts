@@ -26,7 +26,7 @@ import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
@@ -141,6 +141,12 @@ const {
   setActionResult,
   reportActionError,
 } = useActionRetry<UsersActionKey>()
+const usersAdminBusyAction = computed(() =>
+  actionResultAdminBusyAction({
+    message: actionResult.value?.message || '',
+    openLabel: t.value('adminOpBusyOpenOps'),
+  }),
+)
 function reportAndNotify(key: UsersActionKey, e: unknown, ctx?: Record<string, string>) {
   reportActionError(key, e, ctx)
   const msg = actionResult.value?.message
@@ -837,6 +843,8 @@ onBeforeUnmount(() => {
     <ActionResultBanner
       :result="actionResult"
       :retryable="canRetryAction"
+      :action-label="usersAdminBusyAction?.label || ''"
+      :action-path="usersAdminBusyAction?.path || ''"
       data-testid="users-action-result"
       @retry="retryLastUsersAction"
       @dismiss="clearActionResult"

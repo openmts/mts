@@ -1609,3 +1609,6 @@
 
 ## P391（2026-07-22）
 - Readiness 根节点 `data-testid="readiness-page"`；e2e 失败 last 场景 mock doctor 防覆盖
+
+## P392（2026-07-22）
+- Databases / Users：ActionResultBanner 命中 admin busy 时提供运维跳转（与运维类页对齐）

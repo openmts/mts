@@ -415,6 +415,17 @@ test('commercial browser smoke path', async ({ page }) => {
       })
       return
     }
+    if (url.includes('/maintenance/errors')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          errors: [],
+          ...failLastPayload,
+        }),
+      })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -423,6 +434,7 @@ test('commercial browser smoke path', async ({ page }) => {
   }
   await page.route('**/api/v1/admin/ops-status', fulfillFailLast)
   await page.route('**/api/v1/admin/stats/maintenance', fulfillFailLast)
+  await page.route('**/api/v1/admin/maintenance/errors', fulfillFailLast)
   // doctor 加载也会 applyAdminOpStatus，需与 fail last 一致，避免真实服务 last 覆盖 mock
   await page.route('**/api/v1/admin/doctor', async (route) => {
     await route.fulfill({
@@ -464,6 +476,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-score-reasons')).toContainText(/最近管理重操作失败|Last admin heavy op failed/)
   await page.unroute('**/api/v1/admin/ops-status', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/stats/maintenance', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/maintenance/errors', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/doctor').catch(() => {})
 
   // P381: mock 写入命中 admin busy → 结果条可跳转运维
