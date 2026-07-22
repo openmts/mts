@@ -2501,6 +2501,9 @@ test('commercial browser smoke path', async ({ page }) => {
   // P440: 状态筛选条 + 状态行点开详情
   await expect(page.getByTestId('downsample-status-next-e2e-batch-ds')).toBeVisible()
   await expect(page.getByTestId('downsample-status-health-filter')).toBeVisible()
+  await expect(page.getByTestId('downsample-status-summary')).toBeVisible()
+  await expect(page.getByTestId('downsample-status-summary-total')).toBeVisible()
+  await expect(page.getByTestId('downsample-export-status-summary')).toBeVisible()
   await page.getByTestId('downsample-detail-close').click()
   await expect(page.getByTestId('downsample-detail-panel')).toHaveCount(0)
   await page.getByTestId('downsample-status-row-e2e-batch-ds').click()

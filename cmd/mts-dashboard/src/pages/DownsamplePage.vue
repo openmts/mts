@@ -63,8 +63,16 @@ import {
   Plus, Trash2, Play, Pause, RefreshCw, PlayCircle, RotateCcw, FlaskConical, Wrench, Timer, Download, Eye
 } from 'lucide-vue-next'
 import type {
-  DownsamplePolicy, DownsampleStatus, DownsampleRunResult, DownsampleDryRunResult,
+  DownsamplePolicy, DownsampleStatus, DownsampleRunResult, DownsampleDryRunResult, DownsampleStatusSummary,
 } from '@/api/types'
+import {
+  buildDownsampleStatusSummaryExport,
+  downsampleStatusSummaryToCSV,
+  downsampleStatusesToCSV,
+  normalizeDownsampleStatusSummary,
+  summarizeDownsampleStatuses,
+  downsampleStatusSummaryTone,
+} from '@/utils/downsampleStatusSummary'
 
 interface PoliciesResponse {
   policies: DownsamplePolicy[]
@@ -75,6 +83,7 @@ interface PoliciesResponse {
 }
 interface StatusesResponse {
   statuses: DownsampleStatus[]
+  summary?: DownsampleStatusSummary
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -136,6 +145,7 @@ const lastResetName = ref('')
 const policyFilter = ref('')
 const statusHealthFilter = ref<DownsampleStatusHealthFilter>('')
 const statusMinLag = ref(0)
+const statusSummaryServer = ref<ReturnType<typeof normalizeDownsampleStatusSummary> | null>(null)
 const enabledFilter = ref<DownsampleEnabledFilter>('')
 const selectedNames = ref<string[]>([])
 const detailPolicyName = ref('')
@@ -409,6 +419,9 @@ async function loadData() {
   if (results[1].status === 'fulfilled') {
     applyAdminOpStatus(parseAdminOpStatusPayload(results[1].value))
     statuses.value = results[1].value.statuses ?? []
+    statusSummaryServer.value = results[1].value.summary
+      ? normalizeDownsampleStatusSummary(results[1].value.summary)
+      : summarizeDownsampleStatuses(results[1].value.statuses ?? [])
     statusesError.value = ''
   } else {
     const msg = formatCaughtError(results[1].reason)
@@ -455,6 +468,19 @@ const filteredStatuses = computed(() => {
     statusHealthFilter.value,
     Number(statusMinLag.value) || 0,
   )
+})
+
+const statusSummaryView = computed(() => {
+  const local = summarizeDownsampleStatuses(filteredStatuses.value)
+  if (!statusSummaryServer.value) return local
+  if (policyFilter.value || enabledFilter.value) return local
+  return statusSummaryServer.value
+})
+const statusSummaryToneClass = computed(() => {
+  const tone = downsampleStatusSummaryTone(statusSummaryView.value)
+  if (tone === 'bad') return 'border-red-200 bg-red-50/60 dark:border-red-900/40 dark:bg-red-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20'
+  return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
 })
 
 const statusByName = computed(() => {
@@ -1240,6 +1266,63 @@ async function exportCSV() {
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
+
+async function exportStatusSummary() {
+  if (!statuses.value.length && !statusSummaryView.value.total) {
+    warn(t.value('inventoryExportEmpty'))
+    return
+  }
+  if (exportBusy.value) return
+  const payload = buildDownsampleStatusSummaryExport(statusSummaryView.value, {
+    filter_health: statusHealthFilter.value || undefined,
+    min_lag_seconds: statusHealthFilter.value === 'lagging' ? Number(statusMinLag.value) || 0 : undefined,
+    statuses: filteredStatuses.value,
+  })
+  const outcome = await runJSONExport({
+    label: 'StatusSummary',
+    filename: stampFilename('mts-downsample-status-summary', 'json'),
+    total: 1,
+    build: async () => payload,
+  })
+  if (outcome === 'done') success(t.value('inventoryExported'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
+}
+
+async function exportStatusCSV() {
+  if (!filteredStatuses.value.length) {
+    warn(t.value('inventoryExportEmpty'))
+    return
+  }
+  if (exportBusy.value) return
+  const list = filteredStatuses.value.slice()
+  const outcome = await runTextExport({
+    label: 'StatusCSV',
+    filename: stampFilename('mts-downsample-statuses', 'csv'),
+    mime: 'text/csv;charset=utf-8',
+    total: list.length,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, list.length)
+      if (isCancelled()) return null
+      progress(list.length, list.length)
+      return downsampleStatusSummaryToCSV(statusSummaryView.value) + '\n\n' + downsampleStatusesToCSV(list)
+    },
+  })
+  if (outcome === 'done') success(t.value('inventoryExported'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
+}
+
+async function copyStatusSummary() {
+  const payload = buildDownsampleStatusSummaryExport(statusSummaryView.value, {
+    filter_health: statusHealthFilter.value || undefined,
+    min_lag_seconds: statusHealthFilter.value === 'lagging' ? Number(statusMinLag.value) || 0 : undefined,
+  })
+  const res = await copyText(JSON.stringify(payload, null, 2))
+  if (res.ok) success(t.value('downsampleStatusSummaryCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 onBeforeUnmount(() => {
   cancelDsAction()
   unregisterDownsampleDirty?.()
@@ -1550,6 +1633,20 @@ onBeforeUnmount(() => {
       <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('downsampleStatusPanel') }}</h2>
         <p class="text-[11px] mts-muted">{{ t('downsampleStatusPanelHint') }}</p>
+        <div
+          class="mt-2 rounded-lg border px-3 py-2"
+          :class="statusSummaryToneClass"
+          data-testid="downsample-status-summary"
+        >
+          <p class="text-xs font-semibold text-slate-800 dark:text-slate-100">{{ t('downsampleStatusSummaryTitle') }}</p>
+          <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            <span data-testid="downsample-status-summary-total">{{ t('overviewDownsampleTotal') }}: <b>{{ statusSummaryView.total }}</b></span>
+            <span data-testid="downsample-status-summary-error">{{ t('overviewDownsampleErrors') }}: <b>{{ statusSummaryView.error }}</b></span>
+            <span data-testid="downsample-status-summary-lagging">{{ t('overviewDownsampleLagging') }}: <b>{{ statusSummaryView.lagging }}</b></span>
+            <span data-testid="downsample-status-summary-max-lag">{{ t('overviewDownsampleMaxLag') }}: <b>{{ statusSummaryView.max_lag_seconds }}s</b></span>
+            <span data-testid="downsample-status-summary-active">{{ t('downsampleColActive') }}: <b>{{ statusSummaryView.active }}</b></span>
+          </div>
+        </div>
         <div class="mt-2 flex flex-wrap items-end gap-3" data-testid="downsample-status-filter-bar">
           <label class="text-xs mts-muted">{{ t('downsampleStatusHealthFilter') }}
             <select v-model="statusHealthFilter" class="mts-input mt-1" data-testid="downsample-status-health-filter">
@@ -1564,6 +1661,9 @@ onBeforeUnmount(() => {
           </label>
           <span class="text-xs mts-muted" data-testid="downsample-status-filter-count">{{ filteredStatuses.length }} / {{ statuses.length }}</span>
           <button type="button" class="mts-btn" data-testid="downsample-status-clear-filters" @click="statusHealthFilter = ''; statusMinLag = 0">{{ t('clearFilters') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-export-status-summary" :disabled="exportBusy" @click="exportStatusSummary">{{ t('downsampleExportStatusSummary') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-export-status-csv" :disabled="exportBusy || !filteredStatuses.length" @click="exportStatusCSV">{{ t('downsampleExportStatusCSV') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-copy-status-summary" @click="copyStatusSummary">{{ t('copy') }}</button>
         </div>
       </div>
       <div v-if="!filteredStatuses.length" class="p-4">

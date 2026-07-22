@@ -2116,3 +2116,16 @@
 |------|--------|-----------|------|
 | statuses summary | summary 字段 | Overview 卡片 | 过滤后汇总 |
 | 跳转 | — | /downsample#status | 运维下钻 |
+
+## P442（2026-07-22）
+- 就绪清单 `downsample-status-health` + 命令面板入口（含 Overview 健康卡片）
+- Downsample 状态摘要条 + 导出 JSON/CSV + 复制摘要
+- 客户端本地汇总回退；优先服务端 `summary`
+- e2e：status summary 可见与导出按钮
+
+### 前后端对齐（P442）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| statuses summary | summary 字段 | 页内摘要条/导出 | 过滤后汇总 |
+| 就绪清单 | — | downsample-status-health | 可勾选 |
+| 命令面板 | — | readiness + overview 入口 | 运维跳转 |

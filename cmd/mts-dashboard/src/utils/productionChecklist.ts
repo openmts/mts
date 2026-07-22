@@ -243,6 +243,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
     jump: '/downsample?policy=example#downsample-detail',
   },
+  {
+    id: 'downsample-status-health',
+    severity: 'recommended',
+    title: { zh: '降采样状态健康可扫视', en: 'Downsample status health scannable' },
+    detail: {
+      zh: '状态表支持 error/active/lagging 筛选，服务端 statuses 返回 summary；Overview 展示健康摘要并可下钻。',
+      en: 'Status table supports error/active/lagging filters; server statuses include summary; Overview shows health and deep-links.',
+    },
+    automated: true,
+    jump: '/downsample#downsample-status',
+  },
 ]
 
 
