@@ -41,6 +41,7 @@ test('production checklist has required commercial gates', () => {
     'data-contract-endpoint',
     'overview-data-contract',
     'overview-data-contract-jump',
+    'acceptance-data-contract',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -277,4 +278,14 @@ test('overview-data-contract-jump is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('overview-summary'))
+})
+
+
+test('acceptance-data-contract is automated required gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'acceptance-data-contract')
+  assert.ok(item)
+  assert.equal(item!.severity, 'required')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('commercial-handoff'))
+  assert.ok(requiredChecklist().some((x) => x.id === 'acceptance-data-contract'))
 })

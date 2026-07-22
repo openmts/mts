@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  assertAcceptanceDataContractShape,
   buildDataContractView,
   formatDataContractHandoffLine,
   requiredDataContractFeatureIds,
+  toAcceptanceDataContractSummary,
 } from './dataContractView.ts'
 
 test('buildDataContractView empty is incomplete', () => {
@@ -41,4 +43,19 @@ test('missing feature keeps incomplete', () => {
   const v = buildDataContractView({ features })
   assert.equal(v.complete, false)
   assert.ok(v.missingRequired.includes('delete_response_meta'))
+})
+
+
+test('toAcceptanceDataContractSummary and shape guard', () => {
+  const s = toAcceptanceDataContractSummary({
+    version: 1,
+    path: '/api/v1/data/contract',
+    max_write_points: 1000,
+    features: requiredDataContractFeatureIds().map((id) => ({ id, enabled: true })),
+  })
+  assert.equal(s.loaded, true)
+  assert.equal(s.complete, true)
+  assert.match(s.summary_line, /complete/)
+  assert.equal(assertAcceptanceDataContractShape(s), true)
+  assert.equal(assertAcceptanceDataContractShape({}), false)
 })

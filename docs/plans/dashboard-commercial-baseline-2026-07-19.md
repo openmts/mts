@@ -2531,3 +2531,20 @@
 | 下一步 | — | data-contract priority=15 | 缺口优先于清单 |
 | 冒烟 | — | chip jump + complete 文案 | commercial-smoke |
 
+
+## P472（2026-07-23）
+- 验收包 v2：顶层 `data_contract` 摘要（loaded/complete/path/summary_line/missing_required）
+- Markdown 独立「数据面契约」章节；导出预检纳入契约 loaded/complete
+- 纯函数：`toAcceptanceDataContractSummary` / `assertAcceptanceDataContractShape`
+- Query：未查询 idle 空态（`query-results-idle`）；Readiness：契约未加载 EmptyState
+- e2e：query idle 可见；契约已加载时 readiness empty count=0
+- 清单：`acceptance-data-contract`（required）
+
+### 前后端对齐（P472）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 契约快照 | /data/contract | 验收包顶层 data_contract | 机器可读交接 |
+| 预检 | — | data-contract ok/warn | 与 handoff 一致 |
+| 空态 | — | Query idle + Readiness empty | 可操作 |
+| 冒烟 | — | idle + empty=0 | commercial-smoke |
+

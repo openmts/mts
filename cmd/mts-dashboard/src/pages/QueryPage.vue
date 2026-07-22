@@ -474,6 +474,13 @@ async function retryNoMatchQuery() {
   await runQuery()
 }
 
+function focusQueryForm() {
+  const el = document.querySelector('#query-form') as HTMLElement | null
+  el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const meas = document.querySelector('[data-testid="query-measurement"]') as HTMLElement | null
+  meas?.focus?.()
+}
+
 async function runQuery() {
   queryAttempted.value = true
   await executeQuery()
@@ -957,7 +964,7 @@ const columnRows = computed(() => {
       <span v-if="queryLimitWarn" class="text-amber-700 dark:text-amber-200" data-testid="query-limits-warn">{{ t('queryLimitExceedsServer') }}</span>
     </div>
 
-    <div id="query-form" class="scroll-mt-20 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
+    <div id="query-form" data-testid="query-form" class="scroll-mt-20 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
       <label class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('database') }}
         <input v-model="queryForm.database" list="db-list" data-testid="query-database" class="mt-1 w-full rounded border px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" :placeholder="t('queryPlaceholderManual')" />
         <datalist id="db-list"><option v-for="db in databases" :key="db" :value="db" /></datalist>
@@ -1291,6 +1298,24 @@ const columnRows = computed(() => {
               data-testid="query-chart-empty-hide"
               @click="showChart = false"
             >{{ t('queryChartHide') }}</button>
+          </div>
+        </template>
+      </EmptyState>
+    </div>
+
+    <div
+      v-if="!queryAttempted && !loading && !actionError && !rows.length && !columnRows.length && !rawOutput"
+      class="mts-card"
+      data-testid="query-results-idle"
+    >
+      <EmptyState
+        :title="t('queryResultEmpty')"
+        :description="t('queryResultEmptyDesc')"
+      >
+        <template #action>
+          <div class="flex flex-wrap justify-center gap-2">
+            <button type="button" class="mts-btn-primary" data-testid="query-idle-run" :disabled="loading" @click="runQuery">{{ loading ? t('querySubmitting') : t('runQuery') }}</button>
+            <button type="button" class="mts-btn" data-testid="query-idle-goto-form" @click="focusQueryForm">{{ t('queryIdleGotoForm') }}</button>
           </div>
         </template>
       </EmptyState>

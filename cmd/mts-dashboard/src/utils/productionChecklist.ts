@@ -442,6 +442,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/#overview-summary',
   },
   {
+    id: 'acceptance-data-contract',
+    severity: 'required',
+    title: { zh: '验收包含顶层 data_contract', en: 'Acceptance pack includes top-level data_contract' },
+    detail: {
+      zh: '验收包 v2 顶层含 data_contract 摘要（loaded/complete/path/summary_line）；Markdown 独立章节；导出预检纳入契约状态。',
+      en: 'Acceptance pack v2 includes top-level data_contract summary (loaded/complete/path/summary_line); Markdown has a dedicated section; export preflight includes contract status.',
+    },
+    automated: true,
+    jump: '/ops/readiness#commercial-handoff-panel',
+  },
+  {
     id: 'stream-delete-meta',
     severity: 'required',
     title: { zh: '流式查询 end 与删除响应含 meta', en: 'Stream end and delete responses include meta' },

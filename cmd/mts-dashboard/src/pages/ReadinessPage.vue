@@ -1708,6 +1708,23 @@ watch(
           <dd class="font-mono" data-testid="readiness-commercial-handoff-data-contract">{{ commercialHandoffDataContractLine }}</dd>
         </div>
       </dl>
+      <div
+        v-if="!commercialHandoffView.data_contract.loaded && !loadingDataContract"
+        class="mt-3"
+        data-testid="readiness-data-contract-empty"
+      >
+        <EmptyState
+          compact
+          :title="t('readinessDataContractEmptyTitle')"
+          :description="t('readinessDataContractEmptyDesc')"
+        >
+          <template #action>
+            <button type="button" class="mts-btn-primary text-xs" data-testid="readiness-data-contract-empty-retry" :disabled="loadingDataContract" @click="loadDataContract">
+              {{ loadingDataContract ? t('loading') : t('readinessCommercialHandoffRefreshContract') }}
+            </button>
+          </template>
+        </EmptyState>
+      </div>
       <p v-if="dataContractError" class="mt-2 text-xs text-amber-700 dark:text-amber-200" data-testid="readiness-data-contract-error">{{ dataContractError }}</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button type="button" class="mts-btn text-xs" data-testid="readiness-copy-commercial-handoff" @click="copyCommercialHandoff">{{ t('readinessCommercialHandoffCopy') }}</button>

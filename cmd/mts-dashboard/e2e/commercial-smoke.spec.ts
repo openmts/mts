@@ -343,6 +343,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
   await expect(page.getByTestId('query-action-error')).toHaveCount(0)
+  // P472: 未查询前结果区 idle 空态
+  if (await page.getByTestId('query-results-idle').count()) {
+    await expect(page.getByTestId('query-results-idle')).toBeVisible()
+    await expect(page.getByTestId('query-idle-run')).toBeVisible()
+  }
   // P467: 查询 limits 横幅
   if (await page.getByTestId('query-limits-banner').count()) {
     await expect(page.getByTestId('query-limits-banner')).toBeVisible()
@@ -2665,6 +2670,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-commercial-handoff-data-contract')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('readiness-commercial-handoff-data-contract')).toContainText(/data_contract/)
   await expect(page.getByTestId('readiness-commercial-handoff-data-contract')).toContainText(/complete|features=/)
+  // 契约已加载时不应展示 empty 占位
+  await expect(page.getByTestId('readiness-data-contract-empty')).toHaveCount(0)
   // 预检 data-contract 项在契约齐全时应为 ok
   const preflightDc = page.getByTestId('preflight-item-data-contract')
   if (await preflightDc.count()) {

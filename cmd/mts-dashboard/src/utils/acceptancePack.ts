@@ -23,9 +23,13 @@ import {
   formatSessionCalibrationHandoffLine,
   formatDataContractHandoffLine,
 } from './commercialHandoffSummary.ts'
+import {
+  toAcceptanceDataContractSummary,
+  type AcceptanceDataContractSummary,
+} from './dataContractView.ts'
 
 export const ACCEPTANCE_PACK_KIND = 'mts.acceptance.pack' as const
-export const ACCEPTANCE_PACK_VERSION = 1 as const
+export const ACCEPTANCE_PACK_VERSION = 2 as const
 
 export interface ServerVersionInfo {
   version: string
@@ -78,6 +82,8 @@ export interface AcceptancePackPayload {
     ok_count: number
     items: Pick<ExportPreflightItem, 'id' | 'level' | 'message' | 'target'>[]
   }
+  /** 数据面契约快照（顶层机器可读；与 commercial_handoff.data_contract 对齐） */
+  data_contract: AcceptanceDataContractSummary
 }
 
 const copy = {
@@ -118,6 +124,11 @@ const copy = {
     preflightInfo: 'info',
     preflightOk: 'ok',
     preflightNotScored: '预检不阻止导出，不代表生产验收完成',
+    dataContract: '## 数据面契约',
+    dataContractLoaded: '已加载',
+    dataContractMissing: '未加载',
+    dataContractComplete: '能力齐全',
+    dataContractIncomplete: '能力缺失',
   },
   en: {
     disclaimer:
@@ -156,6 +167,11 @@ const copy = {
     preflightInfo: 'info',
     preflightOk: 'ok',
     preflightNotScored: 'Preflight does not block export or complete acceptance',
+    dataContract: '## Data-plane contract',
+    dataContractLoaded: 'loaded',
+    dataContractMissing: 'not loaded',
+    dataContractComplete: 'complete',
+    dataContractIncomplete: 'incomplete',
   },
 } as const
 
@@ -178,6 +194,8 @@ export function buildAcceptancePack(input: AcceptancePackInput): AcceptancePackP
   const deploy_kit = input.deployKit ?? buildDeployKitSummary(locale)
   const sc = assessSignoffCompleteness(input.archive.signoff_notes ?? input.archive.state?.signoffNotes)
   const score = input.archive.score
+  const handoffContract = input.archive.commercial_handoff?.data_contract
+  const data_contract = toAcceptanceDataContractSummary(handoffContract ?? null)
   const pf = buildExportPreflight({
     locale,
     requiredChecklistRatio: (score.checklist ?? 0) / 100,
@@ -189,6 +207,9 @@ export function buildAcceptancePack(input: AcceptancePackInput): AcceptancePackP
     httpTlsEnabled: input.archive.doctor?.http_tls_enabled ?? null,
     signoffNotes: input.archive.signoff_notes ?? input.archive.state?.signoffNotes,
     deployKitReviewed: !!input.archive.state?.deployKit?.reviewed,
+    dataContractLoaded: data_contract.loaded,
+    dataContractComplete: data_contract.complete,
+    dataContractMissing: data_contract.missing_required,
   })
   return {
     version: ACCEPTANCE_PACK_VERSION,
@@ -229,6 +250,7 @@ export function buildAcceptancePack(input: AcceptancePackInput): AcceptancePackP
         target: i.target,
       })),
     },
+    data_contract,
   }
 }
 
@@ -321,6 +343,17 @@ export function formatAcceptancePackMarkdown(pack: AcceptancePackPayload): strin
     lines.push(
       `- data_contract: ${formatDataContractHandoffLine(pack.readiness.commercial_handoff.data_contract)}`,
     )
+  }
+  lines.push('', t.dataContract, '')
+  lines.push(
+    `- status: ${pack.data_contract.loaded ? t.dataContractLoaded : t.dataContractMissing} / ${
+      pack.data_contract.complete ? t.dataContractComplete : t.dataContractIncomplete
+    }`,
+  )
+  lines.push(`- path: ${pack.data_contract.path}`)
+  lines.push(`- summary: ${pack.data_contract.summary_line}`)
+  if (pack.data_contract.missing_required.length) {
+    lines.push(`- missing: ${pack.data_contract.missing_required.join(', ')}`)
   }
   lines.push('', t.ops, '')
   if (!pack.ops_actions.length) {

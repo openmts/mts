@@ -59,7 +59,7 @@ test('buildAcceptancePack aggregates archive client server ops', () => {
     now: '2026-07-20T13:00:00.000Z',
   })
   assert.equal(pack.kind, ACCEPTANCE_PACK_KIND)
-  assert.equal(pack.version, 1)
+  assert.equal(pack.version, 2)
   assert.equal(pack.locale, 'zh')
   assert.equal(pack.operator, 'bob')
   assert.equal(pack.client.version, '1.2.3')
@@ -88,7 +88,53 @@ test('buildAcceptancePack aggregates archive client server ops', () => {
   assert.ok(pack.export_preflight.items.some((i) => i.id === 'signoff'))
   assert.match(md, /导出前预检/)
   assert.match(md, /预检不阻止导出/)
+  assert.ok(pack.data_contract)
+  assert.equal(typeof pack.data_contract.summary_line, 'string')
+  assert.equal(typeof pack.data_contract.loaded, 'boolean')
+  assert.match(md, /数据面契约/)
+  assert.match(md, /data_contract|max_write|unavailable|complete|features=/)
 })
+
+test('acceptance pack data_contract reflects commercial handoff features', () => {
+  const archive = sampleArchive('zh')
+  archive.commercial_handoff = {
+    password_policy: archive.commercial_handoff!.password_policy,
+    session_calibration: archive.commercial_handoff!.session_calibration,
+    data_contract: {
+      loaded: true,
+      path: '/api/v1/data/contract',
+      version: 1,
+      maxWritePoints: 5000,
+      defaultQueryLimit: 1000,
+      maxQueryLimit: 10000,
+      features: [
+        { id: 'write_accepted_points', path: '/api/v1/data/write', enabled: true, description: '' },
+        { id: 'query_result_meta', path: '/api/v1/data/query/rows', enabled: true, description: '' },
+        { id: 'query_stream_end_meta', path: '/api/v1/data/query/stream', enabled: true, description: '' },
+        { id: 'delete_response_meta', path: '/api/v1/data/delete', enabled: true, description: '' },
+        { id: 'data_limits', path: '/api/v1/data/limits', enabled: true, description: '' },
+      ],
+      enabledCount: 5,
+      totalFeatures: 5,
+      missingRequired: [],
+      complete: true,
+    },
+  }
+  const pack = buildAcceptancePack({
+    archive,
+    client: { name: 'mts-dashboard', version: '1.0.0', mode: 'test', base: '/', apiBase: '' },
+    locale: 'zh',
+  })
+  assert.equal(pack.data_contract.loaded, true)
+  assert.equal(pack.data_contract.complete, true)
+  assert.equal(pack.data_contract.max_write_points, 5000)
+  assert.match(pack.data_contract.summary_line, /complete/)
+  assert.ok(pack.export_preflight.items.some((i) => i.id === 'data-contract' && i.level === 'ok'))
+  const md = formatAcceptancePackMarkdown(pack)
+  assert.match(md, /数据面契约/)
+  assert.match(md, /能力齐全|complete/)
+})
+
 
 test('acceptance pack signoff completeness reflects archive notes', () => {
   const archive = sampleArchive('zh')
