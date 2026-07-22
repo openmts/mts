@@ -10,6 +10,7 @@ import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import { clientBuildInfo } from '@/utils/buildInfo'
@@ -19,7 +20,6 @@ import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { Download, Copy, Info } from 'lucide-vue-next'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 
 interface VersionResponse {
   version: string
@@ -30,8 +30,12 @@ interface VersionResponse {
 const route = useRoute()
 useHashScroll()
 const { isAdmin, currentUser } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const aboutAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const aboutAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const { t } = useI18n()
 const { success, info, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
@@ -144,13 +148,14 @@ onMounted(() => {
         </h1>
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <p class="text-xs mts-muted">{{ t('aboutDesc') }}</p>
-          <span
+          <AdminOpLastChip
             v-if="isAdmin && aboutAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="about-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="aboutAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ aboutAdminLastLabel }}</span>
+            :label="aboutAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="aboutAdminLastErrorDetail"
+            test-id="about-admin-last"
+            error-test-id="about-admin-last-error"
+          />
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

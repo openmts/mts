@@ -31,8 +31,12 @@ import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { Activity, RefreshCw, Download } from 'lucide-vue-next'
 
 const { isAdmin } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const metricsAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const metricsAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
@@ -263,6 +267,11 @@ onBeforeUnmount(() => {
             :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="metricsAdminLastLabel"
           >{{ t('opsStatusLastLabel') }}: {{ metricsAdminLastLabel }}</span>
+          <span
+            v-if="metricsAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="metrics-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ metricsAdminLastErrorDetail }}</span>
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2">

@@ -58,7 +58,7 @@ interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
 interface CompactionStatsResponse { stats: CompactionStats }
 interface MaintenanceStatsResponse { stats: MaintenanceStats; admin_op_busy?: boolean }
 interface MaintenanceErrorsResponse { errors?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
-interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks'] }
+interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks']; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 
@@ -399,10 +399,14 @@ function nullAdminSectionData(key: AdminSectionKey) {
 }
 
 function applyAdminHealthRaw(raw: AdminHealthResponse | HealthSnapshot) {
-  const h = ((raw as AdminHealthResponse).health ?? raw) as HealthSnapshot
+  const wrapped = raw as AdminHealthResponse
+  const h = (wrapped.health ?? raw) as HealthSnapshot
   if (h && typeof h.healthy === 'boolean') {
-    if (h.checks?.length) healthChecks.value = h.checks
-    if (h.reasons?.length) healthReasons.value = h.reasons
+    applyHealth(h)
+  }
+  // admin/health 现附带 busy/last，与 doctor/maintenance 对齐
+  if (wrapped && (typeof wrapped.admin_op_busy === 'boolean' || wrapped.last != null || wrapped.op)) {
+    applyAdminOpStatus(parseAdminOpStatusPayload(wrapped))
   }
 }
 

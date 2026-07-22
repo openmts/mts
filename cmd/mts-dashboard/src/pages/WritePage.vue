@@ -147,8 +147,12 @@ function writeFormT() {
   })
 }
 const { currentUser, isAdmin } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; opLabel?: string; elapsed?: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; opLabel?: string; elapsed?: string; lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const writeAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const writeAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const writeAdminBusy = computed(() => Boolean(adminOpBusySummary?.value?.busy))
 const writeAdminBusyLabel = computed(() => {
   if (!writeAdminBusy.value) return ''
@@ -727,6 +731,11 @@ async function exportWriteDraft() {
           :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
           :title="writeAdminLastLabel"
         >{{ t('opsStatusLastLabel') }}: {{ writeAdminLastLabel }}</span>
+          <span
+            v-if="writeAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="write-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ writeAdminLastErrorDetail }}</span>
       </div>
       <div id="write-mode-tabs" class="scroll-mt-20 flex flex-wrap gap-2" data-testid="write-mode-tabs">
         <button

@@ -54,8 +54,12 @@ interface AuditResponse { events: AuditEvent[]; total?: number }
 
 useHashScroll()
 const route = useRoute()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const auditAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const auditAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
 const { success, info, error: notifyError, warn } = useNotify()
@@ -412,6 +416,11 @@ watch(
           :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
           :title="auditAdminLastLabel"
         >{{ t('opsStatusLastLabel') }}: {{ auditAdminLastLabel }}</span>
+          <span
+            v-if="auditAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="audit-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ auditAdminLastErrorDetail }}</span>
       </div>
     </div>
     <p

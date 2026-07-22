@@ -50,8 +50,12 @@ const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGua
 const { t } = useI18n()
 const { success, info, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
-const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const configAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const configAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 
 const {
   exportJob,
@@ -491,6 +495,11 @@ onBeforeUnmount(() => {
             :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="configAdminLastLabel"
           >{{ t('opsStatusLastLabel') }}: {{ configAdminLastLabel }}</span>
+          <span
+            v-if="configAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="config-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ configAdminLastErrorDetail }}</span>
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

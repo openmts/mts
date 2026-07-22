@@ -40,8 +40,12 @@ interface APISpecResponse {
 }
 
 const { isAdmin } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const apiSpecAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const apiSpecAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const route = useRoute()
 useHashScroll()
 const { success, info, error: notifyError, warn } = useNotify()
@@ -232,6 +236,11 @@ async function exportMarkdown() {
             :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="apiSpecAdminLastLabel"
           >{{ t('opsStatusLastLabel') }}: {{ apiSpecAdminLastLabel }}</span>
+          <span
+            v-if="apiSpecAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="api-spec-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ apiSpecAdminLastErrorDetail }}</span>
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

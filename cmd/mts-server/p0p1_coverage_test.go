@@ -65,9 +65,9 @@ func TestHTTPP0P1RemainingEndpoints(t *testing.T) {
 	getJSONWithHeaders(t, server.URL+"/api/v1/admin/stats/storage-memory", nil, http.StatusOK, &memory)
 	var compaction compactionStatsResponse
 	getJSONWithHeaders(t, server.URL+"/api/v1/admin/stats/compaction", nil, http.StatusOK, &compaction)
-	var health mts.HealthSnapshot
+	var health adminHealthResponse
 	getJSONWithHeaders(t, server.URL+"/api/v1/admin/health", nil, http.StatusOK, &health)
-	if !health.Healthy {
+	if !health.Health.Healthy {
 		t.Fatalf("admin health = %#v, want healthy", health)
 	}
 

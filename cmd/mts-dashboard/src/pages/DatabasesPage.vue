@@ -86,8 +86,12 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const databasesAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const databasesAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const route = useRoute()
 const router = useRouter()
@@ -768,6 +772,11 @@ onBeforeUnmount(() => {
             :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="databasesAdminLastLabel"
           >{{ t('opsStatusLastLabel') }}: {{ databasesAdminLastLabel }}</span>
+          <span
+            v-if="databasesAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="databases-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ databasesAdminLastErrorDetail }}</span>
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

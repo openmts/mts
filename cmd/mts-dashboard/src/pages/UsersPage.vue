@@ -105,8 +105,12 @@ const {
   pruneTo,
 } = useListSelection(visibleUserIds)
 const databases = ref<string[]>([])
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const usersAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const usersAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const { currentUser, isAdmin } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
@@ -797,6 +801,11 @@ onBeforeUnmount(() => {
             :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="usersAdminLastLabel"
           >{{ t('opsStatusLastLabel') }}: {{ usersAdminLastLabel }}</span>
+          <span
+            v-if="usersAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="users-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ usersAdminLastErrorDetail }}</span>
         </div>
       </div>
       <div class="flex gap-2">

@@ -351,7 +351,11 @@ type storageValidateResponse struct {
 }
 
 type adminHealthResponse struct {
-	Health mts.HealthSnapshot `json:"health"`
+	Health        mts.HealthSnapshot    `json:"health"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type storageSnapshotResponse struct {

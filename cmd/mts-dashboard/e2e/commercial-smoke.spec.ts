@@ -435,7 +435,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.route('**/api/v1/admin/ops-status', fulfillFailLast)
   await page.route('**/api/v1/admin/stats/maintenance', fulfillFailLast)
   await page.route('**/api/v1/admin/maintenance/errors', fulfillFailLast)
-  // doctor 加载也会 applyAdminOpStatus，需与 fail last 一致，避免真实服务 last 覆盖 mock
+  // doctor / admin health 加载也会 applyAdminOpStatus，需与 fail last 一致
   await page.route('**/api/v1/admin/doctor', async (route) => {
     await route.fulfill({
       status: 200,
@@ -449,12 +449,23 @@ test('commercial browser smoke path', async ({ page }) => {
       }),
     })
   })
+  await page.route('**/api/v1/admin/health', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        health: { healthy: true, ready: true, reasons: [], checks: [] },
+        ...failLastPayload,
+      }),
+    })
+  })
   await page.goto('/operations')
   await page.getByTestId('ops-status-refresh-busy').click()
   await expect(page.getByTestId('ops-status-last')).toContainText(/fail|失败|compact|压缩/i)
   await expect(page.getByTestId('admin-op-last-banner')).toBeVisible()
   await expect(page.getByTestId('admin-op-last-banner')).toHaveAttribute('data-ok', 'false')
   await expect(page.getByTestId('admin-op-last-error')).toContainText(/e2e disk full/i)
+  await expect(page.getByTestId('ops-status-last-error')).toContainText(/e2e disk full/i)
   // 运维页对失败 last 自动 ack 后可关闭
   await expect(page.getByTestId('admin-op-last-dismiss')).toBeEnabled({ timeout: 5_000 })
   await page.getByTestId('admin-op-last-dismiss').click()
@@ -478,6 +489,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/admin/stats/maintenance', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/maintenance/errors', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/doctor').catch(() => {})
+  await page.unroute('**/api/v1/admin/health').catch(() => {})
 
   // P381: mock 写入命中 admin busy → 结果条可跳转运维
   await page.route('**/api/v1/data/write', async (route) => {

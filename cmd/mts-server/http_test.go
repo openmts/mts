@@ -663,6 +663,30 @@ func TestHTTPMaintenanceErrorsBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPAdminHealthBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var busy adminHealthResponse
+	getJSONWithHeaders(t, server.URL+routeAdminHealth, nil, http.StatusOK, &busy)
+	if !busy.Health.Healthy || !busy.AdminOpBusy || busy.Op != "compact" || busy.StartedAtUnix <= 0 {
+		t.Fatalf("health busy = %+v", busy)
+	}
+	runtime.finishAdminHeavy(errors.New("health probe fail"))
+	var done adminHealthResponse
+	getJSONWithHeaders(t, server.URL+routeAdminHealth, nil, http.StatusOK, &done)
+	if done.AdminOpBusy {
+		t.Fatal("health want not busy after finish")
+	}
+	if done.Last == nil || done.Last.Op != "compact" || done.Last.OK || done.Last.Error != "health probe fail" {
+		t.Fatalf("health last after fail = %+v", done.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

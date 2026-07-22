@@ -304,7 +304,7 @@ func (r *serverRuntime) handleAdminHealth(writer http.ResponseWriter, request *h
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, r.health())
+	writeHTTPJSON(writer, http.StatusOK, r.adminHealthPayload())
 }
 
 func (r *serverRuntime) handleDownsamplePolicies(writer http.ResponseWriter, request *http.Request) {

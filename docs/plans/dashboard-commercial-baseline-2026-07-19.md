@@ -1612,3 +1612,10 @@
 
 ## P392（2026-07-22）
 - Databases / Users：ActionResultBanner 命中 admin busy 时提供运维跳转（与运维类页对齐）
+
+## P393（2026-07-22）
+- 全站页头失败 last 错误明细：About/Access/Account/ApiSpec/Audit/Config/Databases/Downsample/Metrics/Query/Users/Write + Operations `ops-status-last-error`
+- 共享组件 `AdminOpLastChip.vue`（可复用芯片+错误明细）
+
+## P394（2026-07-22）
+- Server `GET /api/v1/admin/health`（HTTP/gRPC）附带 `admin_op_busy/op/started_at_unix/last`；Overview 加载时 `applyAdminOpStatus` + 完整 applyHealth；HTTP 单测 busy/last

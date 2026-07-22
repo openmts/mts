@@ -162,6 +162,15 @@ export interface DoctorResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/admin/health（包装 Health + busy/last） */
+export interface AdminHealthResponse {
+  health: HealthSnapshot
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
 export interface StorageMemorySnapshot {
   heap_alloc_bytes?: number
   heap_inuse_bytes?: number

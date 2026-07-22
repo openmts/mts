@@ -54,8 +54,12 @@ interface PermissionsResponse { grants: Array<{ database: string; permission: st
 const route = useRoute()
 useHashScroll()
 const { isAdmin } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const accessGrantsAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const accessGrantsAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const { t, locale } = useI18n()
 const { success, info, warn, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
@@ -335,6 +339,11 @@ watch(
             :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="accessGrantsAdminLastLabel"
           >{{ t('opsStatusLastLabel') }}: {{ accessGrantsAdminLastLabel }}</span>
+          <span
+            v-if="accessGrantsAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="access-grants-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ accessGrantsAdminLastErrorDetail }}</span>
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

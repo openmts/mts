@@ -81,7 +81,7 @@ async function refreshOpsBusyOnly() {
     opsStatusRefreshing.value = false
   }
 }
-const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const ackAdminOpLastFail = inject<(() => void) | undefined>('ackAdminOpLastFail', undefined)
 const adminOpBusyDetailTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('opsAdminBusy'))
 const adminOpBusyChipLabel = computed(() => {
@@ -821,6 +821,11 @@ watch(
           >
             <Copy class="h-3 w-3" /> {{ t('opsStatusLastCopy') }}
           </button>
+          <p
+            v-if="adminOpLast?.ok === false && adminOpLast?.error"
+            class="w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="ops-status-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ adminOpLast.error }}</p>
         </div>
         <p
           v-else-if="!adminOpBusy"

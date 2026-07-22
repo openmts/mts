@@ -59,8 +59,12 @@ const router = useRouter()
 const route = useRoute()
 useHashScroll()
 const { currentUser, currentRole, changePassword, isAdmin, logout, login, refreshSession, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const accountAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const accountAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
 let sessionClock: ReturnType<typeof setInterval> | null = null
@@ -580,6 +584,11 @@ async function submit() {
             :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="accountAdminLastLabel"
           >{{ t('opsStatusLastLabel') }}: {{ accountAdminLastLabel }}</span>
+          <span
+            v-if="accountAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="account-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ accountAdminLastErrorDetail }}</span>
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

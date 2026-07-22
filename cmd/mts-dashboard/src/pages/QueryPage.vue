@@ -82,8 +82,12 @@ const {
 const { t, locale } = useI18n()
 
 const { currentUser, isAdmin } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; opLabel?: string; elapsed?: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; opLabel?: string; elapsed?: string; lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const queryAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const queryAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const queryAdminBusy = computed(() => Boolean(adminOpBusySummary?.value?.busy))
 const queryAdminBusyLabel = computed(() => {
   if (!queryAdminBusy.value) return ''
@@ -712,6 +716,11 @@ const columnRows = computed(() => {
           :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
           :title="queryAdminLastLabel"
         >{{ t('opsStatusLastLabel') }}: {{ queryAdminLastLabel }}</span>
+          <span
+            v-if="queryAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="query-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ queryAdminLastErrorDetail }}</span>
       </div>
       <div class="flex gap-2">
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showHistory = !showHistory" :title="t('queryHistoryShortcutTitle')"><History class="h-3.5 w-3.5" />{{ t('queryHistoryBtn') }}</button>

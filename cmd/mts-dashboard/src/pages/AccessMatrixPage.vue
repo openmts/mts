@@ -43,8 +43,12 @@ import {
 const route = useRoute()
 useHashScroll()
 const { currentRole, isAdmin } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const accessMatrixAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const accessMatrixAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const { t, locale } = useI18n()
 const { success, info, warn, error: notifyError } = useNotify()
 const {
@@ -273,6 +277,11 @@ async function exportMatrixCSV() {
             :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="accessMatrixAdminLastLabel"
           >{{ t('opsStatusLastLabel') }}: {{ accessMatrixAdminLastLabel }}</span>
+          <span
+            v-if="accessMatrixAdminLastErrorDetail"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="access-matrix-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ accessMatrixAdminLastErrorDetail }}</span>
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

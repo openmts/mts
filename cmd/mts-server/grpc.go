@@ -598,7 +598,7 @@ func grpcAdminHealth(r *serverRuntime, ctx context.Context, _ any) (any, error) 
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return adminHealthResponse{Health: r.health()}, nil
+	return r.adminHealthPayload(), nil
 }
 
 func grpcStorageMemory(r *serverRuntime, ctx context.Context, _ any) (any, error) {
