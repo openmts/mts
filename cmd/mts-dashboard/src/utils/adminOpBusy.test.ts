@@ -22,6 +22,9 @@ import {
   parseAdminOpStatusPayload,
   parseAdminHeavyLast,
   formatAdminHeavyLastSummary,
+  shouldShowAdminOpLastBanner,
+  readDismissedAdminOpLastFinishedAt,
+  writeDismissedAdminOpLastFinishedAt,
   shouldPollAdminOpBusy,
 } from './adminOpBusy.ts'
 
@@ -249,3 +252,37 @@ test('commandAdminOpRefreshFeedback', () => {
   }
 })
 
+
+test('shouldShowAdminOpLastBanner and dismiss storage', () => {
+  assert.equal(
+    shouldShowAdminOpLastBanner({
+      isAdmin: true,
+      busy: false,
+      offline: false,
+      lastSummary: 'Flush · ok · 12ms',
+      lastFinishedAtUnix: 100,
+      dismissedFinishedAtUnix: null,
+    }),
+    true,
+  )
+  assert.equal(
+    shouldShowAdminOpLastBanner({
+      isAdmin: true,
+      busy: false,
+      offline: false,
+      lastSummary: 'Flush · ok',
+      lastFinishedAtUnix: 100,
+      dismissedFinishedAtUnix: 100,
+    }),
+    false,
+  )
+  const mem = new Map<string, string>()
+  const storage = {
+    getItem: (k: string) => mem.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      mem.set(k, v)
+    },
+  }
+  assert.equal(writeDismissedAdminOpLastFinishedAt(storage, 42), true)
+  assert.equal(readDismissedAdminOpLastFinishedAt(storage), 42)
+})

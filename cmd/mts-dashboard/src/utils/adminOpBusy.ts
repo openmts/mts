@@ -5,10 +5,19 @@ import {
   type AdminHeavyLast,
   formatAdminHeavyLastSummary,
   parseAdminHeavyLast,
+  readDismissedAdminOpLastFinishedAt,
+  shouldShowAdminOpLastBanner,
+  writeDismissedAdminOpLastFinishedAt,
 } from './adminOpLast.ts'
 
 export type { AdminHeavyLast } from './adminOpLast.ts'
-export { formatAdminHeavyLastSummary, parseAdminHeavyLast } from './adminOpLast.ts'
+export {
+  formatAdminHeavyLastSummary,
+  parseAdminHeavyLast,
+  readDismissedAdminOpLastFinishedAt,
+  shouldShowAdminOpLastBanner,
+  writeDismissedAdminOpLastFinishedAt,
+} from './adminOpLast.ts'
 
 export type AdminOpKind =
   | 'flush'

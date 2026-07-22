@@ -56,3 +56,63 @@ export function formatAdminHeavyLastSummary(
   const base = dur ? `${label} · fail · ${dur}` : `${label} · fail`
   return err ? `${base}: ${err}` : base
 }
+
+export const ADMIN_OP_LAST_DISMISS_KEY = 'mts.admin-op-last-dismissed-finished-at'
+
+/** 是否展示全局「最近管理重操作」条（纯函数） */
+export function shouldShowAdminOpLastBanner(opts: {
+  isAdmin: boolean
+  busy: boolean
+  offline: boolean
+  pollError?: string | null
+  lastSummary?: string | null
+  lastFinishedAtUnix?: number | null
+  dismissedFinishedAtUnix?: number | null
+}): boolean {
+  if (!opts.isAdmin || opts.busy || opts.offline) return false
+  if ((opts.pollError || '').trim()) return false
+  if (!(opts.lastSummary || '').trim()) return false
+  const finished = opts.lastFinishedAtUnix
+  const dismissed = opts.dismissedFinishedAtUnix
+  if (
+    finished != null &&
+    Number.isFinite(finished) &&
+    dismissed != null &&
+    Number.isFinite(dismissed) &&
+    Math.floor(finished) === Math.floor(dismissed)
+  ) {
+    return false
+  }
+  return true
+}
+
+export function readDismissedAdminOpLastFinishedAt(
+  storage: { getItem(key: string): string | null } | null | undefined,
+  key: string = ADMIN_OP_LAST_DISMISS_KEY,
+): number | null {
+  if (!storage) return null
+  try {
+    const raw = storage.getItem(key)
+    if (raw == null || raw === '') return null
+    const n = Number(raw)
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : null
+  } catch {
+    return null
+  }
+}
+
+export function writeDismissedAdminOpLastFinishedAt(
+  storage: { setItem(key: string, value: string): void } | null | undefined,
+  finishedAtUnix: number | null | undefined,
+  key: string = ADMIN_OP_LAST_DISMISS_KEY,
+): boolean {
+  if (!storage || finishedAtUnix == null || !Number.isFinite(finishedAtUnix) || finishedAtUnix <= 0) {
+    return false
+  }
+  try {
+    storage.setItem(key, String(Math.floor(finishedAtUnix)))
+    return true
+  } catch {
+    return false
+  }
+}

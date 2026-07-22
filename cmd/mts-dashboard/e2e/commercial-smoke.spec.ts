@@ -324,9 +324,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('ops-status-last')).toContainText(/flush|Flush|刷盘/i)
   await expect(page.getByTestId('admin-op-last-banner')).toBeVisible()
   await expect(page.getByTestId('admin-op-last-summary')).toContainText(/flush|Flush|刷盘|ok/i)
-  await page.getByTestId('admin-op-last-open-ops').click()
-  await expect(page).toHaveURL(/\/operations#ops-status-strip/)
-  await expect(page.getByTestId('ops-status-strip')).toBeVisible()
+  await page.getByTestId('admin-op-last-dismiss').click()
+  await expect(page.getByTestId('admin-op-last-banner')).toHaveCount(0)
+  // 运维条仍保留最近一次
+  await expect(page.getByTestId('ops-status-last')).toBeVisible()
+  await page.getByTestId('ops-status-refresh-busy').click()
+  await expect(page.getByTestId('ops-status-last')).toContainText(/flush|Flush|刷盘/i)
 
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')

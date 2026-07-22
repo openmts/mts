@@ -34,7 +34,14 @@ import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, formatAdminHeavyLastSummary, formatAdminOpElapsed } from '@/utils/adminOpBusy'
+import {
+  adminOpKindLabelKey,
+  formatAdminHeavyLastSummary,
+  formatAdminOpElapsed,
+  readDismissedAdminOpLastFinishedAt,
+  shouldShowAdminOpLastBanner,
+  writeDismissedAdminOpLastFinishedAt,
+} from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
@@ -55,6 +62,9 @@ const {
   adminOpPollIntervalMs,
   refreshAdminOpBusy,
 } = useAdminOpBusy()
+const dismissedAdminOpLastFinishedAt = ref<number | null>(
+  typeof localStorage !== 'undefined' ? readDismissedAdminOpLastFinishedAt(localStorage) : null,
+)
 
 /** busy 期间 1s tick，让横幅 elapsed 实时跳动 */
 const adminOpNowMs = ref(Date.now())
@@ -115,6 +125,26 @@ const adminOpLastSummary = computed(() => {
   const kind = t.value(key) || last.op
   return formatAdminHeavyLastSummary(last, kind)
 })
+
+const showAdminOpLastBanner = computed(() =>
+  shouldShowAdminOpLastBanner({
+    isAdmin: isAdmin.value,
+    busy: adminOpBusy.value,
+    offline: offline.value,
+    pollError: adminOpBusyError.value,
+    lastSummary: adminOpLastSummary.value,
+    lastFinishedAtUnix: adminOpLast.value?.finishedAtUnix ?? null,
+    dismissedFinishedAtUnix: dismissedAdminOpLastFinishedAt.value,
+  }),
+)
+
+function dismissAdminOpLastBanner() {
+  const finished = adminOpLast.value?.finishedAtUnix ?? null
+  if (typeof localStorage !== 'undefined') {
+    writeDismissedAdminOpLastFinishedAt(localStorage, finished)
+  }
+  dismissedAdminOpLastFinishedAt.value = finished != null && finished > 0 ? Math.floor(finished) : null
+}
 
 provide('adminOpBusySummary', computed(() => ({
 
@@ -498,7 +528,7 @@ function onSkipToMain(e: Event) {
         </div>
       </div>
       <div
-        v-if="isAdmin && !adminOpBusy && adminOpLastSummary && !offline && !adminOpBusyPollErrorLabel"
+        v-if="showAdminOpLastBanner"
         class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-100 sm:px-6"
         role="status"
         aria-live="polite"
@@ -515,6 +545,12 @@ function onSkipToMain(e: Event) {
             data-testid="admin-op-last-open-ops"
             @click="goAdminOpBusyOps"
           >{{ t('adminOpLastOpenOps') }}</button>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring"
+            data-testid="admin-op-last-dismiss"
+            @click="dismissAdminOpLastBanner"
+          >{{ t('adminOpLastDismiss') }}</button>
         </div>
       </div>
       <div

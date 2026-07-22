@@ -1486,3 +1486,12 @@
 
 ## P351（2026-07-22）
 - e2e：flush 完成后校验 ops-status-last 与 admin-op-last-banner
+
+## P352（2026-07-22）
+- Layout：最近管理重操作条可关闭（按 finished_at 记忆，新操作再出现）
+
+## P353（2026-07-22）
+- Storage：空闲时展示 last 摘要条
+
+## P354（2026-07-22）
+- e2e：flush 后 dismiss 全局 last 条；ops-status-last 仍可见
