@@ -1784,3 +1784,12 @@
 | users batch-disabled | 是 | 是 | 是 | 非流式体 + 流式 summary |
 | downsample policies batch | 是 | 是 | 是 | 非流式体 + 流式 summary |
 
+## P416（2026-07-22）
+- Dashboard：Storage 删除 config 快照成功后即时 `applyAdminOpStatus`（服务端 ok 已 attach）
+- e2e fail-last：DELETE `/admin/storage/snapshots` mock 防止真实 last 覆盖
+
+### busy/last 覆盖矩阵（P416 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| storage snapshots DELETE | 是（既有） | 是（既有） | 是 | 删快照成功响应 |
+

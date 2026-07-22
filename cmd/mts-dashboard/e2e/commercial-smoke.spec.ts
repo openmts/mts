@@ -716,6 +716,20 @@ test('commercial browser smoke path', async ({ page }) => {
       ].join('\n') + '\n',
     })
   })
+  await page.route('**/api/v1/admin/storage/snapshots**', async (route) => {
+    const req = route.request()
+    const url = req.url()
+    if (req.method() === 'DELETE') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, ...failLastPayload }),
+      })
+      return
+    }
+    // GET list 由 fulfillFailLast 覆盖；此处仅兜底 DELETE 以外未匹配场景
+    await route.fallback()
+  })
   await page.goto('/operations')
   await page.getByTestId('ops-status-refresh-busy').click()
   await expect(page.getByTestId('ops-status-last')).toContainText(/fail|失败|compact|压缩/i)
@@ -798,6 +812,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/data/delete').catch(() => {})
   await page.unroute('**/api/v1/users/**/database-permissions/**').catch(() => {})
   await page.unroute('**/api/v1/users/batch-disabled**').catch(() => {})
+  await page.unroute('**/api/v1/admin/storage/snapshots**').catch(() => {})
 
   // P381: mock 写入命中 admin busy → 结果条可跳转运维
   await page.route('**/api/v1/data/write', async (route) => {

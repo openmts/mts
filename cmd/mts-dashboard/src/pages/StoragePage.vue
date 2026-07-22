@@ -583,7 +583,11 @@ async function confirmDelete() {
   const signal = beginStorageAction('delete')
   deleteLoading.value = true
   try {
-    await apiDelete(`/api/v1/admin/storage/snapshots?name=${encodeURIComponent(deleteName.value)}`, { signal })
+    const del = await apiDelete<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
+      `/api/v1/admin/storage/snapshots?name=${encodeURIComponent(deleteName.value)}`,
+      { signal },
+    )
+    applyAdminOpStatus(parseAdminOpStatusPayload(del))
     deleteOpen.value = false
     setActionOk(formatMessage(t.value('storageSnapshotDeleted'), { name: deleteName.value }))
     success(t.value('storageSnapshotDeletedToast'))
