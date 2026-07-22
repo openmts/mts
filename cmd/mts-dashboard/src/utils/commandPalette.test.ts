@@ -429,6 +429,7 @@ test('query result scope palette entries', () => {
   assert.ok(all.some((i) => i.id === 'ops-config-stats-path' && i.path.includes('/operations')))
   assert.ok(all.some((i) => i.id === 'storage-overview-path' && i.path.includes('/storage')))
   assert.ok(all.some((i) => i.id === 'readiness-storage-result-path' && i.path.includes('/storage')))
+  assert.ok(all.some((i) => i.id === 'storage-validate-metrics-path' && i.path.includes('/observability/metrics')))
   assert.ok(all.some((i) => i.id === 'api-spec-query-rows-scope' && i.path.includes('queryRowsResponse')))
 })
 

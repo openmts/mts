@@ -83,3 +83,68 @@ export function formatStorageBytes(bytes: number): string {
   if (n >= 1 << 10) return `${(n / (1 << 10)).toFixed(1)} KB`
   return `${n} B`
 }
+
+
+export interface ValidateResultView {
+  ok: boolean
+  path: string
+  data_dir: string
+  healthy?: boolean | null
+  ready?: boolean | null
+  reasons: string[]
+  check_count: number
+  tone: 'ok' | 'warn' | 'bad'
+}
+
+export function normalizeValidateResult(
+  raw: {
+    ok?: boolean
+    path?: string
+    data_dir?: string
+    health?: Record<string, unknown> | null
+  } | null | undefined,
+  fallbackPath = '/api/v1/admin/storage/validate',
+): ValidateResultView | null {
+  if (!raw) return null
+  const health = (raw.health && typeof raw.health === 'object') ? raw.health : {}
+  const healthyRaw = health.healthy
+  const readyRaw = health.ready
+  const healthy: boolean | null = typeof healthyRaw === 'boolean' ? healthyRaw : null
+  const ready: boolean | null = typeof readyRaw === 'boolean' ? readyRaw : null
+  const reasons = Array.isArray(health.reasons)
+    ? health.reasons.map((x) => String(x)).filter(Boolean)
+    : []
+  const checks = Array.isArray(health.checks) ? health.checks : []
+  const healthyBad = healthy === false
+  const readyBad = ready === false
+  const ok = raw.ok !== false && !healthyBad
+  let tone: ValidateResultView['tone'] = 'ok'
+  if (!ok || healthyBad) tone = 'bad'
+  else if (readyBad || reasons.length > 0) tone = 'warn'
+  return {
+    ok,
+    path: String(raw.path || fallbackPath),
+    data_dir: String(raw.data_dir || ''),
+    healthy,
+    ready,
+    reasons,
+    check_count: checks.length,
+    tone,
+  }
+}
+
+export interface SnapshotResultView {
+  ok: boolean
+  path: string
+}
+
+export function normalizeSnapshotResult(
+  raw: { ok?: boolean; path?: string } | null | undefined,
+  fallbackPath = '/api/v1/admin/storage/snapshot',
+): SnapshotResultView | null {
+  if (!raw) return null
+  return {
+    ok: raw.ok !== false,
+    path: String(raw.path || fallbackPath),
+  }
+}

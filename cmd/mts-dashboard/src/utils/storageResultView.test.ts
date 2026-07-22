@@ -4,6 +4,8 @@ import {
   formatStorageBytes,
   normalizeDataSnapshotResult,
   normalizeRestoreDrillResult,
+  normalizeSnapshotResult,
+  normalizeValidateResult,
 } from './storageResultView.ts'
 
 test('normalizeDataSnapshotResult defaults', () => {
@@ -52,4 +54,31 @@ test('normalizeRestoreDrillResult tone', () => {
 test('formatStorageBytes', () => {
   assert.equal(formatStorageBytes(512), '512 B')
   assert.match(formatStorageBytes(2048), /KB/)
+})
+
+test('normalizeValidateResult tone and health fields', () => {
+  const ok = normalizeValidateResult({
+    ok: true,
+    path: '/api/v1/admin/storage/validate',
+    data_dir: '/data',
+    health: { healthy: true, ready: true, reasons: [], checks: [{ name: 'a' }] },
+  })
+  assert.equal(ok?.tone, 'ok')
+  assert.equal(ok?.check_count, 1)
+  assert.equal(ok?.data_dir, '/data')
+
+  const bad = normalizeValidateResult({
+    ok: true,
+    data_dir: '/data',
+    health: { healthy: false, ready: false, reasons: ['disk'], checks: [] },
+  })
+  assert.equal(bad?.tone, 'bad')
+  assert.equal(bad?.ok, false)
+  assert.deepEqual(bad?.reasons, ['disk'])
+})
+
+test('normalizeSnapshotResult', () => {
+  const v = normalizeSnapshotResult({ path: '/snap/a' })
+  assert.equal(v?.path, '/snap/a')
+  assert.equal(v?.ok, true)
 })

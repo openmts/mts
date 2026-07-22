@@ -651,6 +651,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/storage#data-restore')
   await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('storage-restore-drill')).toBeVisible()
+
+  // P490: Metrics 源 path 徽章
+  await page.goto('/observability/metrics')
+  await expect(page.getByTestId('metrics-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('metrics-source-paths').count()) {
+    await expect(page.getByTestId('metrics-source-paths')).toContainText('/metrics')
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

@@ -2775,3 +2775,15 @@
 | restore-drill | path + 字段 | 结构化结果卡 | 替代纯 JSON pre |
 | data-snapshot | path + files | 结构化结果卡 | 运维扫视 |
 
+## P490（2026-07-23）
+- Storage：validate/snapshot 结构化结果卡（替代 validate 原始 JSON pre）
+- Metrics：展示 `/metrics`、ops-status、downsample statuses 源 path
+- 清单：`storage-validate-metrics-path`
+
+### 前后端对齐（P490）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| storage validate | path + health | storage-validate-result | 结构化 |
+| storage snapshot | path | storage-snapshot-result | 结构化 |
+| metrics + ops-status | text/JSON path | metrics-source-paths | 可观测 |
+

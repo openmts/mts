@@ -654,6 +654,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/users',
   },
   {
+    id: 'storage-validate-metrics-path',
+    severity: 'recommended',
+    title: { zh: '存储验证结构化 + Metrics 源 path', en: 'Structured storage validate + Metrics source paths' },
+    detail: {
+      zh: 'Storage validate/snapshot 结构化结果卡；Metrics 展示 /metrics、ops-status、downsample statuses path。',
+      en: 'Storage validate/snapshot structured result cards; Metrics shows /metrics, ops-status, downsample statuses paths.',
+    },
+    automated: true,
+    jump: '/storage',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

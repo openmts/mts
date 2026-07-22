@@ -62,6 +62,7 @@ test('production checklist has required commercial gates', () => {
     'ops-config-stats-path',
     'storage-overview-path',
     'readiness-storage-result-path',
+    'storage-validate-metrics-path',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -432,6 +433,14 @@ test('storage-overview-path is automated recommended gate', () => {
 
 test('readiness-storage-result-path is automated recommended gate', () => {
   const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'readiness-storage-result-path')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/storage'))
+})
+
+test('storage-validate-metrics-path is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'storage-validate-metrics-path')
   assert.ok(item)
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)

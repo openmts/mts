@@ -38,7 +38,7 @@ import {
 } from '@/utils/storageSnapshots'
 import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
 import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
-import { formatStorageBytes, normalizeDataSnapshotResult, normalizeRestoreDrillResult } from '@/utils/storageResultView'
+import { formatStorageBytes, normalizeDataSnapshotResult, normalizeRestoreDrillResult, normalizeSnapshotResult, normalizeValidateResult } from '@/utils/storageResultView'
 import { completedIds, loadReadinessState, setReadinessFlag } from '@/utils/readinessState'
 import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList } from 'lucide-vue-next'
 
@@ -167,6 +167,8 @@ const exportPath = ref('')
 const restoreDrillPath = ref('')
 const dataSnapshotResult = ref<DataSnapshotResponse | null>(null)
 const restoreDrillResult = ref<RestoreDrillResponse | null>(null)
+const validateResultView = computed(() => normalizeValidateResult(validateResult.value))
+const snapshotResultView = computed(() => normalizeSnapshotResult(snapshotResult.value))
 const dataSnapshotView = computed(() => normalizeDataSnapshotResult(dataSnapshotResult.value))
 const restoreDrillView = computed(() =>
   normalizeRestoreDrillResult(
@@ -776,18 +778,45 @@ async function copyStorageShareLink() {
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('storageValidateTitle') }}</h3></div>
         <button data-testid="storage-validate" :disabled="loading === 'validate' || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doValidate">{{ loading === 'validate' ? t('loading') : t('storageValidateRun') }}</button>
-        <p
-          v-if="validateResult?.path"
-          class="mt-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
-          data-testid="storage-validate-path"
-          :title="validateResult.path"
-        >{{ validateResult.path }}</p>
-        <pre v-if="validateResult" class="mt-3 max-h-40 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(validateResult, null, 2) }}</pre>
+        <div
+          v-if="validateResultView"
+          class="mt-3 rounded-lg border p-3 text-xs"
+          :class="validateResultView.tone === 'ok'
+            ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+            : validateResultView.tone === 'warn'
+              ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+              : 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'"
+          data-testid="storage-validate-result"
+        >
+          <p class="mb-2 font-semibold text-slate-800 dark:text-slate-100">
+            {{ validateResultView.ok ? t('storageValidateResultTitleOk') : t('storageValidateResultTitleBad') }}
+          </p>
+          <dl class="grid gap-1">
+            <div><dt class="inline mts-muted">{{ t('storageResultPath') }}：</dt><dd class="inline font-mono break-all" data-testid="storage-validate-path">{{ validateResultView.path }}</dd></div>
+            <div v-if="validateResultView.data_dir"><dt class="inline mts-muted">{{ t('storageValidateDataDir') }}：</dt><dd class="inline font-mono break-all" data-testid="storage-validate-data-dir">{{ validateResultView.data_dir }}</dd></div>
+            <div><dt class="inline mts-muted">{{ t('healthy') }}：</dt><dd class="inline font-semibold" data-testid="storage-validate-healthy">{{ validateResultView.healthy === null ? t('emptyValue') : (validateResultView.healthy ? t('healthy') : t('unhealthy')) }}</dd></div>
+            <div><dt class="inline mts-muted">{{ t('ready') }}：</dt><dd class="inline font-semibold" data-testid="storage-validate-ready">{{ validateResultView.ready === null ? t('emptyValue') : (validateResultView.ready ? t('ready') : t('notReady')) }}</dd></div>
+            <div><dt class="inline mts-muted">{{ t('storageValidateChecks') }}：</dt><dd class="inline font-semibold">{{ validateResultView.check_count }}</dd></div>
+            <div v-if="validateResultView.reasons.length" class="mt-1">
+              <p class="mts-muted">{{ t('storageValidateReasons') }}</p>
+              <ul class="mt-0.5 list-disc pl-4" data-testid="storage-validate-reasons">
+                <li v-for="(r, i) in validateResultView.reasons" :key="i">{{ r }}</li>
+              </ul>
+            </div>
+          </dl>
+        </div>
       </div>
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Camera class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('createSnapshot') }}</h3></div>
         <button data-testid="storage-snapshot" :disabled="loading === 'snapshot' || writeBlocked || adminOpBusy" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : (adminOpBusy ? storageAdminBusyTitle : undefined)" class="mts-btn-primary w-full justify-center py-2" @click="doSnapshot">{{ loading === 'snapshot' ? t('loading') : t('createSnapshot') }}</button>
-        <p v-if="snapshotResult?.path" class="mt-2 break-all font-mono text-[11px] mts-muted">{{ snapshotResult.path }}</p>
+        <div
+          v-if="snapshotResultView"
+          class="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs dark:border-slate-700 dark:bg-slate-900/40"
+          data-testid="storage-snapshot-result"
+        >
+          <p class="mb-1 font-semibold text-slate-800 dark:text-slate-100">{{ t('storageSnapshotResultTitle') }}</p>
+          <p class="font-mono break-all text-[11px] mts-muted" data-testid="storage-snapshot-result-path">{{ snapshotResultView.path }}</p>
+        </div>
       </div>
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><Download class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('export') }}</h3></div>

@@ -818,6 +818,13 @@ export const messages = {
     storageResultIssues: '检查问题',
     storageResultFatals: '致命问题',
     storageResultCheckRoot: '检查根目录',
+    storageValidateResultTitleOk: '存储验证结果（通过）',
+    storageValidateResultTitleBad: '存储验证结果（异常）',
+    storageValidateDataDir: '数据目录',
+    storageValidateChecks: '检查项',
+    storageValidateReasons: '原因',
+    storageSnapshotResultTitle: '配置快照结果',
+
 
     storageConfigExported: '配置已导出，可下载 JSON',
     storageConfigExportToast: '配置已导出',
@@ -2567,6 +2574,13 @@ export const messages = {
     storageResultIssues: 'Check issues',
     storageResultFatals: 'Fatal issues',
     storageResultCheckRoot: 'Check root',
+    storageValidateResultTitleOk: 'Storage validate result (passed)',
+    storageValidateResultTitleBad: 'Storage validate result (issues)',
+    storageValidateDataDir: 'Data dir',
+    storageValidateChecks: 'Checks',
+    storageValidateReasons: 'Reasons',
+    storageSnapshotResultTitle: 'Config snapshot result',
+
 
     storageConfigExported: 'Config exported; JSON ready to download',
     storageConfigExportToast: 'Config exported',

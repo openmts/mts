@@ -66,6 +66,9 @@ const loading = ref(false)
 const loadError = ref('')
 const refreshError = ref('')
 const refreshFailStreak = ref(0)
+const metricsSourcePath = ref('/metrics')
+const opsStatusPath = ref('/api/v1/admin/ops-status')
+const downsampleStatusesPath = ref('/api/v1/admin/downsample/statuses')
 const raw = ref('')
 const families = ref<PrometheusFamily[]>([])
 const q = ref('')
@@ -110,9 +113,10 @@ async function load(opts?: { background?: boolean }) {
     void refreshAdminOpBusy()
     // 降采样健康摘要：失败不阻断 metrics；summary_only 减少载荷
     try {
-      const st = await apiGet<{ summary?: DownsampleStatusSummaryInput }>(
+      const st = await apiGet<{ summary?: DownsampleStatusSummaryInput; path?: string }>(
         '/api/v1/admin/downsample/statuses?summary_only=1',
       )
+      if (st.path) downsampleStatusesPath.value = String(st.path)
       downsampleStatusSummary.value = normalizeDownsampleStatusSummary(st.summary)
     } catch {
       if (!downsampleStatusSummary.value) {
@@ -293,6 +297,11 @@ onBeforeUnmount(() => {
           <p class="text-xs mts-muted">
             {{ t('metricsDesc') }}
             <span v-if="lastRefreshed" data-testid="metrics-refreshed">{{ formatMessage(t('metricsRefreshedAt'), { time: lastRefreshed }) }}</span>
+            <p
+              class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+              data-testid="metrics-source-paths"
+              :title="[metricsSourcePath, opsStatusPath, downsampleStatusesPath].join(' · ')"
+            >{{ [metricsSourcePath, opsStatusPath, downsampleStatusesPath].join(' · ') }}</p>
           </p>
           <AdminOpLastChip
             v-if="metricsAdminLastLabel"
