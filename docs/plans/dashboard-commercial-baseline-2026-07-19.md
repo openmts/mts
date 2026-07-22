@@ -1477,3 +1477,6 @@
 ## P348（2026-07-22）
 - Server：admin heavy `duration_ms` 使用毫秒时钟，短操作不再被量化为 0s
 - Dashboard：最近一次耗时展示 ms/小数秒；Layout 注入 lastSummary
+
+## P349（2026-07-22）
+- Overview：空闲时展示最近一次管理重操作摘要芯片（复用 Layout lastSummary）

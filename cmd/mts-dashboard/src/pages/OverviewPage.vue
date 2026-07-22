@@ -68,7 +68,7 @@ const router = useRouter()
 const route = useRoute()
 useHashScroll()
 const { t, locale } = useI18n()
-const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string }> | undefined>('adminOpBusySummary', undefined)
 const adminOpBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
   const key = adminOpKindLabelKey(adminOpKind.value) as import('@/i18n/messages').MessageKey
@@ -78,6 +78,7 @@ const adminOpBusyChipLabel = computed(() => {
   return elapsed ? `${base} · ${elapsed}` : base
 })
 const adminOpBusyChipTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('opsAdminBusy'))
+const adminOpLastSummaryLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const overviewAdminBusyHintText = computed(() => {
   if (!adminOpBusy.value) return ''
   const op = (adminOpBusySummary?.value?.opLabel || '').trim()
@@ -1160,6 +1161,12 @@ async function copyOverview() {
             data-testid="overview-admin-busy"
             :title="adminOpBusyChipTitle"
           >{{ adminOpBusyChipLabel }}</span>
+          <span
+            v-else-if="adminOpLastSummaryLabel"
+            class="inline-flex max-w-full truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            data-testid="overview-admin-last"
+            :title="adminOpLastSummaryLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ adminOpLastSummaryLabel }}</span>
         </div>
         <EmptyState
           v-if="!maintenanceStats"
