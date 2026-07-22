@@ -38,6 +38,7 @@ import {
   adminOpKindLabelKey,
   formatAdminHeavyLastSummary,
   formatAdminHeavyLastDetail,
+  formatAdminHeavyLastCopyText,
   formatAdminOpElapsed,
   readDismissedAdminOpLastFinishedAt,
   shouldShowAdminOpLastBanner,
@@ -52,11 +53,14 @@ import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { shouldSyncOnVisibility } from '@/utils/pageVisibilitySync'
 import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
+import { copyText } from '@/utils/clipboard'
+import { useNotify } from '@/composables/useNotify'
 
 const { t } = useI18n()
 const { offline, sessionWriteBlocked, sessionRemainingLabel, sessionUrgency } = useMutationGuard()
 const { sync: syncNetworkStatus } = useNetworkStatus()
 const { logout, isAdmin } = useAuth()
+const { success, error: notifyError } = useNotify()
 const {
   adminOpBusy,
   adminOpKind,
@@ -167,6 +171,24 @@ function ackAdminOpLastFailIfNeeded() {
   }
   failAckedAdminOpLastFinishedAt.value =
     finished != null && finished > 0 ? Math.floor(finished) : null
+}
+
+async function copyAdminOpLastBanner() {
+  const last = adminOpLast.value
+  if (!last || !last.op) {
+    notifyError(t.value('opsStatusLastEmpty'))
+    return
+  }
+  const key = adminOpKindLabelKey(last.op) as MessageKey
+  const kind = t.value(key) || last.op
+  const textToCopy = formatAdminHeavyLastCopyText(last, kind)
+  if (!textToCopy) {
+    notifyError(t.value('opsStatusLastEmpty'))
+    return
+  }
+  const res = await copyText(textToCopy)
+  if (res.ok) success(t.value('opsStatusLastCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 function dismissAdminOpLastBanner() {
@@ -602,6 +624,13 @@ function onSkipToMain(e: Event) {
             class="text-[11px] opacity-90"
             data-testid="admin-op-last-fail-ack-hint"
           >{{ t('adminOpLastFailAckHint') }}</span>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring"
+            data-testid="admin-op-last-copy"
+            :title="t('opsStatusLastCopy')"
+            @click="copyAdminOpLastBanner"
+          >{{ t('opsStatusLastCopy') }}</button>
           <button
             type="button"
             class="mts-btn mts-focus-ring"

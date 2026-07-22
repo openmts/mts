@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -599,6 +600,36 @@ func clearTestMustChangePassword(t *testing.T, runtime *serverRuntime) {
 	t.Helper()
 	if err := runtime.clearMustChangePassword(context.Background(), defaultSystemAdminName); err != nil {
 		t.Fatalf("clearTestMustChangePassword error = %v", err)
+	}
+}
+
+func TestHTTPOpsStatusLastErrorAfterFailedHeavy(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin heavy: %v", err)
+	}
+	runtime.finishAdminHeavy(errors.New("disk full"))
+
+	var opsStatusResp opsStatusResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/ops-status", nil, http.StatusOK, &opsStatusResp)
+	if opsStatusResp.AdminOpBusy {
+		t.Fatal("ops-status want not busy after failed heavy")
+	}
+	if opsStatusResp.Last == nil || opsStatusResp.Last.Op != "compact" || opsStatusResp.Last.OK || opsStatusResp.Last.Error != "disk full" {
+		t.Fatalf("ops-status last after error = %+v", opsStatusResp.Last)
+	}
+	if opsStatusResp.Last.FinishedAtUnix <= 0 {
+		t.Fatalf("finished_at_unix missing: %+v", opsStatusResp.Last)
+	}
+
+	// maintenance stats should mirror last
+	var maint maintenanceStatsResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/stats/maintenance", nil, http.StatusOK, &maint)
+	if maint.Last == nil || maint.Last.Op != "compact" || maint.Last.OK || maint.Last.Error != "disk full" {
+		t.Fatalf("maintenance last after error = %+v", maint.Last)
 	}
 }
 

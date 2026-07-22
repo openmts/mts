@@ -1549,3 +1549,15 @@
 
 ## P371（2026-07-22）
 - e2e：Access last 芯片覆盖
+
+## P372（2026-07-22）
+- Layout：最近管理重操作条支持一键复制（摘要+错误）
+
+## P373（2026-07-22）
+- Account：admin last 摘要芯片（desc 行）
+
+## P374（2026-07-22）
+- Server HTTP：失败 heavy 后 `ops-status`/`stats/maintenance` 暴露 `last.error`
+
+## P375（2026-07-22）
+- e2e：横幅复制、Account last、命令面板复制最近一次

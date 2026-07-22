@@ -326,6 +326,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('admin-op-last-summary')).toContainText(/flush|Flush|刷盘|ok/i)
   await expect(page.getByTestId('ops-status-last')).toHaveAttribute('data-ok', 'true')
   await expect(page.getByTestId('admin-op-last-banner')).toHaveAttribute('data-ok', 'true')
+  await expect(page.getByTestId('admin-op-last-copy')).toBeVisible()
+  await page.getByTestId('admin-op-last-copy').click()
   await page.getByTestId('admin-op-last-dismiss').click()
   await expect(page.getByTestId('admin-op-last-banner')).toHaveCount(0)
   // 运维条仍保留最近一次
@@ -372,6 +374,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/access/grants')
   await expect(page.getByTestId('access-grants-page')).toBeVisible()
   await expect(page.getByTestId('access-grants-admin-last')).toBeVisible()
+
+  await page.goto('/account')
+  await expect(page.getByTestId('account-page')).toBeVisible()
+  await expect(page.getByTestId('account-admin-last')).toBeVisible()
 
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')
@@ -675,6 +681,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-item-audit')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('刷新占用')
   await expect(page.getByTestId('command-item-action-refresh-admin-op-busy')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('复制最近一次')
+  await expect(page.getByTestId('command-item-action-copy-admin-op-last')).toBeVisible()
+  await page.getByTestId('command-item-action-copy-admin-op-last').click()
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  // 动作执行后面板关闭，后续检索需重新打开
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('audit')
   await page.getByTestId('command-item-audit').click()
   await expect(page).toHaveURL(/\/audit/)

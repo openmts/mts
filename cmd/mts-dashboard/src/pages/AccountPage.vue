@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseAccountPrefill, accountFormToPrefill } from '@/utils/routePrefill'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useAuth } from '@/composables/useAuth'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { getTokenExpiresAt } from '@/api/client'
 import { parseExpiresAt, sessionExpiryView, formatRemaining } from '@/utils/sessionExpiry'
 import { sessionClockTickMs } from '@/utils/sessionClock'
@@ -58,6 +59,8 @@ const router = useRouter()
 const route = useRoute()
 useHashScroll()
 const { currentUser, currentRole, changePassword, isAdmin, logout, login, refreshSession, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix } = useAuth()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const accountAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
 let sessionClock: ReturnType<typeof setInterval> | null = null
@@ -568,7 +571,16 @@ async function submit() {
             class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
           >{{ t('accountPasswordDirtyBadge') }}</span>
         </h1>
-        <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
+          <span
+            v-if="isAdmin && accountAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="account-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="accountAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ accountAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex flex-wrap gap-2">
         <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
