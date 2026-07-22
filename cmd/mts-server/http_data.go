@@ -32,10 +32,11 @@ func (r *serverRuntime) handleWrite(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{
-		OK:     true,
-		Points: len(req.Points),
-		Path:   routeDataWrite,
-		Mode:   "points",
+		OK:       true,
+		Points:   len(req.Points),
+		Path:     routeDataWrite,
+		Mode:     "points",
+		Database: writePrimaryDatabase(req),
 	}))
 }
 
@@ -62,10 +63,11 @@ func (r *serverRuntime) handleWriteTyped(writer http.ResponseWriter, request *ht
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{
-		OK:     true,
-		Points: len(req.Batch.Timestamps),
-		Path:   routeDataWriteTyped,
-		Mode:   "typed",
+		OK:       true,
+		Points:   len(req.Batch.Timestamps),
+		Path:     routeDataWriteTyped,
+		Mode:     "typed",
+		Database: req.Batch.Database,
 	}))
 }
 
@@ -295,10 +297,11 @@ func (r *serverRuntime) handleWritePointsTyped(writer http.ResponseWriter, reque
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{
-		OK:     true,
-		Points: len(req.Points),
-		Path:   routeDataWritePointsTyped,
-		Mode:   "points_typed",
+		OK:       true,
+		Points:   len(req.Points),
+		Path:     routeDataWritePointsTyped,
+		Mode:     "points_typed",
+		Database: writePrimaryDatabase(req),
 	}))
 }
 
@@ -346,6 +349,18 @@ func writeRequestDatabases(req writeRequest) []string {
 		}
 	}
 	return dbs
+}
+
+// writePrimaryDatabase 返回写入目标库（单库路径优先；多库批次时返回空串）。
+func writePrimaryDatabase(req writeRequest) string {
+	dbs := writeRequestDatabases(req)
+	if len(dbs) != 1 {
+		return ""
+	}
+	if dbs[0] == "__default__" {
+		return ""
+	}
+	return dbs[0]
 }
 
 func errorPayload(err error) *errorResponse {

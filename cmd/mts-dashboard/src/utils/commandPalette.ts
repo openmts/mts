@@ -675,7 +675,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', 'api-spec-auth-session-seed', 'query-result-meta', 'write-accepted-points', 'stream-delete-meta', 'data-contract-endpoint', 'overview-data-contract', 'acceptance-data-contract', 'write-empty-aligned', 'write-response-mode', 'api-spec-query-rows-meta', 'api-spec-query-stream-end', 'api-spec-data-delete', 'api-spec-data-contract', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', 'api-spec-auth-session-seed', 'query-result-meta', 'write-accepted-points', 'stream-delete-meta', 'data-contract-endpoint', 'overview-data-contract', 'acceptance-data-contract', 'write-empty-aligned', 'write-response-mode', 'write-result-export-meta', 'api-spec-query-rows-meta', 'api-spec-query-stream-end', 'api-spec-data-delete', 'api-spec-data-contract', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
     adminOnly: true,
   },
   {
@@ -974,6 +974,12 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     path: '/write',
     labelKey: 'cmdWriteResponseMode',
     keywords: ['write mode', 'writeResponse.mode', '写入 mode', 'points_typed', 'write path badge'],
+  },
+  {
+    id: 'write-result-export-meta',
+    path: '/write',
+    labelKey: 'cmdWriteResultExportMeta',
+    keywords: ['write export', 'write result meta', '写入导出', 'server_mode', 'points path'],
   },
   {
     id: 'api-spec-write-response-mode',

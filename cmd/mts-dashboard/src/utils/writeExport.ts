@@ -4,11 +4,14 @@ export interface WriteResultExportInput {
   ok?: boolean | null
   message?: string
   mode?: string
+  /** 服务端 writeResponse.mode（points|typed|points_typed） */
+  server_mode?: string
   database?: string
   retention_policy?: string
   sync?: boolean
   use_points_typed?: boolean
   path?: string
+  points?: number | null
 }
 
 export function buildWriteResultExport(
@@ -16,30 +19,37 @@ export function buildWriteResultExport(
   at = new Date(),
 ): {
   kind: 'mts.write.result'
-  version: 1
+  version: 2
   generated_at: string
   ok: boolean | null
   message: string
   mode: string
+  server_mode: string
   database: string
   retention_policy: string
   sync: boolean
   use_points_typed: boolean
   path: string
+  points: number | null
 } {
   const src = input || {}
+  const pointsRaw = src.points
+  const points =
+    typeof pointsRaw === 'number' && Number.isFinite(pointsRaw) ? Math.trunc(pointsRaw) : null
   return {
     kind: 'mts.write.result',
-    version: 1,
+    version: 2,
     generated_at: at.toISOString(),
     ok: typeof src.ok === 'boolean' ? src.ok : null,
     message: src.message || '',
     mode: src.mode || '',
+    server_mode: src.server_mode || '',
     database: src.database || '',
     retention_policy: src.retention_policy || '',
     sync: Boolean(src.sync),
     use_points_typed: Boolean(src.use_points_typed),
     path: src.path || '',
+    points,
   }
 }
 

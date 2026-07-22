@@ -109,7 +109,7 @@ async function loadDataLimits() {
 }
 
 const formRowCapReached = computed(() => formRows.value.length >= WRITE_FORM_ROW_MAX)
-const result = ref<{ ok: boolean; message: string; path?: string; mode?: string } | null>(null)
+const result = ref<{ ok: boolean; message: string; path?: string; mode?: string; database?: string; points?: number } | null>(null)
 const loading = ref(false)
 const writeStartedAt = ref<number | null>(null)
 let writeAbort: AbortController | null = null
@@ -631,6 +631,8 @@ async function submit() {
         ok: true,
         path: acceptedWritePath(typedResp, '/api/v1/data/write/typed'),
         mode: String(typedResp?.mode || 'typed'),
+        database: String(typedResp?.database || selectedDb.value || ''),
+        points: Number(typedResp?.points ?? (batch.timestamps as number[]).length) || 0,
         message: formatWriteSuccessMessage({
           mode: 'typed',
           server: typedResp,
@@ -678,6 +680,8 @@ async function submit() {
       ok: true,
       path: acceptedWritePath(writeResp, writePath),
       mode: String(writeResp?.mode || (usePointsTyped.value ? 'points_typed' : 'points')),
+      database: String(writeResp?.database || selectedDb.value || ''),
+      points: Number(writeResp?.points ?? points.length) || 0,
       message: formatWriteSuccessMessage({
         mode: 'points',
         server: writeResp,
@@ -754,10 +758,13 @@ async function exportWriteResult() {
     ok: result.value.ok,
     message: result.value.message,
     mode: writeMode.value,
-    database: selectedDb.value,
+    server_mode: result.value.mode || '',
+    database: result.value.database || selectedDb.value,
     retention_policy: retentionPolicy.value,
     sync: syncWrite.value,
     use_points_typed: usePointsTyped.value,
+    path: result.value.path || '',
+    points: result.value.points ?? null,
   })
   const outcome = await runJSONExport({
     label: 'JSON',
@@ -1101,7 +1108,7 @@ async function exportWriteDraft() {
     />
     <div v-if="result?.ok" class="space-y-2" data-testid="write-result-ok-wrap">
       <p class="mts-alert-ok" data-testid="write-result-ok" role="status" aria-live="polite">{{ result.message }}</p>
-      <div v-if="result.path || result.mode" class="flex flex-wrap items-center gap-2">
+      <div v-if="result.path || result.mode || result.database || result.points != null" class="flex flex-wrap items-center gap-2">
         <p
           v-if="result.path"
           class="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
@@ -1113,6 +1120,17 @@ async function exportWriteDraft() {
           class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-800 dark:text-emerald-200"
           data-testid="write-result-mode"
         >{{ result.mode }}</span>
+        <span
+          v-if="result.database"
+          class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+          data-testid="write-result-database"
+          :title="result.database"
+        >{{ result.database }}</span>
+        <span
+          v-if="result.points != null"
+          class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+          data-testid="write-result-points"
+        >{{ result.points }} pts</span>
       </div>
     </div>
     <div v-else-if="!loading && !actionError && !result" class="mts-card" data-testid="write-empty">

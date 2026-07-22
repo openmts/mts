@@ -406,5 +406,6 @@ test('write empty and writeResponse mode palette entries', () => {
   const all = allVisibleCommandItems(true)
   assert.ok(all.some((i) => i.id === 'write-empty-aligned' && i.path.includes('/write')))
   assert.ok(all.some((i) => i.id === 'write-response-mode' && i.path.includes('/write')))
+  assert.ok(all.some((i) => i.id === 'write-result-export-meta' && i.path.includes('/write')))
   assert.ok(all.some((i) => i.id === 'api-spec-write-response-mode' && i.path.includes('writeResponse')))
 })

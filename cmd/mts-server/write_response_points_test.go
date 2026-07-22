@@ -14,13 +14,18 @@ func TestHTTPWriteResponsesReportAcceptedPoints(t *testing.T) {
 	defer server.Close()
 
 	point := testPoint()
+	point.Database = "default"
 	var writeResp writeResponse
 	postJSON(t, server.URL+routeDataWrite, writeRequest{Points: []mts.Point{point}}, http.StatusOK, &writeResp)
 	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWrite || writeResp.Mode != "points" {
 		t.Fatalf("write resp = %+v", writeResp)
 	}
+	if writeResp.Database != "default" {
+		t.Fatalf("write database = %q want default", writeResp.Database)
+	}
 
 	batch := mts.TypedBatch{
+		Database:    "default",
 		Measurement: point.Measurement,
 		Tags: []mts.TagColumn{{
 			Name:   "host",
@@ -38,10 +43,16 @@ func TestHTTPWriteResponsesReportAcceptedPoints(t *testing.T) {
 	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWriteTyped || writeResp.Mode != "typed" {
 		t.Fatalf("typed write resp = %+v", writeResp)
 	}
+	if writeResp.Database != "default" {
+		t.Fatalf("typed database = %q want default", writeResp.Database)
+	}
 
 	writeResp = writeResponse{}
 	postJSON(t, server.URL+routeDataWritePointsTyped, writeRequest{Points: []mts.Point{point}}, http.StatusOK, &writeResp)
 	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWritePointsTyped || writeResp.Mode != "points_typed" {
 		t.Fatalf("points-typed write resp = %+v", writeResp)
+	}
+	if writeResp.Database != "default" {
+		t.Fatalf("points-typed database = %q want default", writeResp.Database)
 	}
 }

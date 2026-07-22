@@ -466,10 +466,21 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   {
     id: 'write-response-mode',
     severity: 'recommended',
-    title: { zh: '写入响应含 mode', en: 'Write response includes mode' },
+    title: { zh: '写入响应含 mode/database', en: 'Write response includes mode/database' },
     detail: {
-      zh: 'POST write|typed|points-typed 返回 mode（points/typed/points_typed）与 path/points；Dashboard 结果区展示。',
-      en: 'POST write|typed|points-typed returns mode (points/typed/points_typed) with path/points; Write page surfaces them.',
+      zh: 'POST write|typed|points-typed 返回 mode/database/path/points；Dashboard 结果区与结果导出纳入。',
+      en: 'POST write|typed|points-typed returns mode/database/path/points; Write page and result export consume them.',
+    },
+    automated: true,
+    jump: '/write',
+  },
+  {
+    id: 'write-result-export-meta',
+    severity: 'recommended',
+    title: { zh: '写入结果导出含服务端 meta', en: 'Write result export includes server meta' },
+    detail: {
+      zh: '结果导出 v2 含 path/server_mode/database/points，与 writeResponse 对齐。',
+      en: 'Result export v2 includes path/server_mode/database/points aligned with writeResponse.',
     },
     automated: true,
     jump: '/write',

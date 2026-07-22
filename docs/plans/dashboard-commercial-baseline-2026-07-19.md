@@ -2564,3 +2564,18 @@
 | 验收包 | data_contract v2 | e2e download 解析 | commercial-smoke |
 | 契约检索 | writeResponse.mode | ApiSpec + 命令面板 | 运维对照 |
 | 就绪门禁 | — | write-empty-aligned / write-response-mode | recommended |
+
+
+## P474（2026-07-23）
+- Server：`writeResponse.database`（单库批次/typed）；HTTP+gRPC 对齐；ApiSpec ResponseHint 更新
+- Dashboard：结果区徽章 path/mode/database/points；结果导出 v2 含 server_mode/path/database/points
+- e2e：写入成功后 points 徽章；清单 `write-result-export-meta`
+- 契约 feature 文案纳入 database
+
+### 前后端对齐（P474）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| write 响应 | path/mode/database/points | 结果徽章 + 导出 v2 | HTTP+gRPC |
+| 结果导出 | writeResponse meta | mts.write.result v2 | 机器可读 |
+| 契约 | write_response_mode 描述 | required feature | 运维对照 |
+| 冒烟 | — | path/mode/points | commercial-smoke |

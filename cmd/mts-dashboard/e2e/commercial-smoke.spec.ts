@@ -309,10 +309,16 @@ test('commercial browser smoke path', async ({ page }) => {
   // P236: 成功结果 live region
   await expect(page.getByTestId('write-result-ok')).toHaveAttribute('role', 'status')
   await expect(page.getByRole('main').getByText(/写入成功/).first()).toBeVisible({ timeout: 20_000 })
-  // P473: 服务端 path/mode 徽章
+  // P473/P474: 服务端 path/mode/database/points 徽章
   await expect(page.getByTestId('write-result-path')).toContainText('/api/v1/data/write')
   if (await page.getByTestId('write-result-mode').count()) {
     await expect(page.getByTestId('write-result-mode')).toContainText(/points|typed/)
+  }
+  if (await page.getByTestId('write-result-points').count()) {
+    await expect(page.getByTestId('write-result-points')).toContainText(/pts/)
+  }
+  if (await page.getByTestId('write-result-database').count()) {
+    await expect(page.getByTestId('write-result-database')).toBeVisible()
   }
   await expect(page.getByRole('main').getByRole('button', { name: /表单写入|Form write/i })).toBeVisible()
   await expect(page.getByTestId('write-mode-tabs')).toBeVisible()
