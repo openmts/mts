@@ -30,6 +30,7 @@ func TestHTTPDataContractReportsLimitsAndFeatures(t *testing.T) {
 		"query_stream_end_meta": false,
 		"delete_response_meta":  false,
 		"data_limits":           false,
+		"meta_list_path":        false,
 	}
 	for _, f := range resp.Features {
 		if _, ok := wantIDs[f.ID]; ok {

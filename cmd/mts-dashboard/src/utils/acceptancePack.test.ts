@@ -115,6 +115,7 @@ test('acceptance pack data_contract reflects commercial handoff features', () =>
         { id: 'query_stream_end_meta', path: '/api/v1/data/query/stream', enabled: true, description: '' },
         { id: 'delete_response_meta', path: '/api/v1/data/delete', enabled: true, description: '' },
         { id: 'data_limits', path: '/api/v1/data/limits', enabled: true, description: '' },
+        { id: 'meta_list_path', path: '/api/v1/data/databases', enabled: true, description: '' },
       ],
       enabledCount: 7,
       totalFeatures: 7,

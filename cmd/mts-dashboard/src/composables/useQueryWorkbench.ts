@@ -56,6 +56,7 @@ export function useQueryWorkbench() {
   const seriesTruncated = ref(false)
   const seriesLoading = ref(false)
   const seriesError = ref('')
+  const seriesMetaPath = ref('')
   const seriesOffset = ref(0)
   const seriesHasMore = ref(false)
   const SERIES_CAP = 200
@@ -128,6 +129,7 @@ export function useQueryWorkbench() {
     seriesOptions.value = []
     seriesTotal.value = 0
     seriesTruncated.value = false
+    seriesMetaPath.value = ''
     seriesOffset.value = 0
     seriesHasMore.value = false
     seriesError.value = ''
@@ -200,9 +202,10 @@ export function useQueryWorkbench() {
   }
 
   function applySeriesPage(
-    result: { series: SeriesMeta[]; total: number; truncated: boolean; offset?: number },
+    result: { series: SeriesMeta[]; total: number; truncated: boolean; offset?: number; path?: string },
     append: boolean,
   ) {
+    if (result.path) seriesMetaPath.value = result.path
     if (append) {
       const seen = new Set(seriesOptions.value.map((s) => String(s.id ?? seriesLabelKey(s))))
       for (const s of result.series) {
@@ -620,6 +623,7 @@ export function useQueryWorkbench() {
     seriesTruncated,
     seriesLoading,
     seriesError,
+    seriesMetaPath,
     seriesOffset,
     seriesHasMore,
     SERIES_CAP,

@@ -20,7 +20,11 @@ func (r *serverRuntime) handleAdminDatabases(writer http.ResponseWriter, request
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMeasurements(measurementsResponse{Databases: databases, Measurements: databases}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMeasurements(measurementsResponse{
+			Databases:    databases,
+			Measurements: databases,
+			Path:         routeAdminDatabases,
+		}))
 	case http.MethodPost:
 		var req databaseRequest
 		if err := decodeHTTPJSON(request, &req); err != nil {
@@ -93,7 +97,11 @@ func (r *serverRuntime) handleRetentionPolicies(
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToRetentionPolicies(retentionPoliciesResponse{Policies: policies}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToRetentionPolicies(retentionPoliciesResponse{
+			Policies: policies,
+			Path:     request.URL.Path,
+			Database: database,
+		}))
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
@@ -118,7 +126,11 @@ func (r *serverRuntime) handleDataDatabases(writer http.ResponseWriter, request 
 		writeAPIError(writer, err)
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMeasurements(measurementsResponse{Databases: databases, Measurements: databases}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMeasurements(measurementsResponse{
+		Databases:    databases,
+		Measurements: databases,
+		Path:         routeDataDatabases,
+	}))
 }
 
 func (r *serverRuntime) listReadableDatabases(ctx context.Context, userName string) ([]string, error) {
@@ -179,7 +191,11 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMeasurements(measurementsResponse{Measurements: measurements}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMeasurements(measurementsResponse{
+			Measurements: measurements,
+			Path:         request.URL.Path,
+			Database:     database,
+		}))
 		return
 	}
 	// data 面只读 RP：有 database read 权限即可，避免非 admin 只能手填
@@ -189,7 +205,11 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToRetentionPolicies(retentionPoliciesResponse{Policies: policies}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToRetentionPolicies(retentionPoliciesResponse{
+			Policies: policies,
+			Path:     request.URL.Path,
+			Database: database,
+		}))
 		return
 	}
 	if len(parts) >= 4 && parts[1] == "measurements" {
@@ -201,14 +221,23 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 				writeAPIError(writer, err)
 				return
 			}
-			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToFields(fieldsResponse{Fields: fields}))
+			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToFields(fieldsResponse{
+				Fields:      fields,
+				Path:        request.URL.Path,
+				Database:    database,
+				Measurement: measurement,
+			}))
 		case "series":
 			series, err := r.engine.ListSeries(request.Context(), database, measurement, queryTags(request))
 			if err != nil {
 				writeAPIError(writer, err)
 				return
 			}
-			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToSeries(buildSeriesResponse(series, seriesPageOptions(request))))
+			resp := buildSeriesResponse(series, seriesPageOptions(request))
+			resp.Path = request.URL.Path
+			resp.Database = database
+			resp.Measurement = measurement
+			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToSeries(resp))
 		default:
 			writeAPIError(writer, newAPIError(errorCodeNotFound, "metadata resource not found", nil))
 		}

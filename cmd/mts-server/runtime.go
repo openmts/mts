@@ -937,6 +937,7 @@ func (r *serverRuntime) dataContractPayload() dataContractResponse {
 			{ID: "query_stream_end_meta", Path: routeDataQueryStream, Description: "stream end frame includes path/format/record_count/database/measurement/admin_op", Enabled: true},
 			{ID: "delete_response_meta", Path: routeDataDelete, Description: "delete response includes path/database/measurement/admin_op", Enabled: true},
 			{ID: "data_limits", Path: routeDataLimits, Description: "GET data/limits exposes write/query caps", Enabled: true},
+			{ID: "meta_list_path", Path: routeDataDatabases, Description: "meta list responses include path/database/measurement scope", Enabled: true},
 		},
 	}
 	return r.attachAdminOpToDataContract(resp)

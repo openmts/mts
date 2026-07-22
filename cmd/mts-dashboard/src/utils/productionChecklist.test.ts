@@ -40,6 +40,7 @@ test('production checklist has required commercial gates', () => {
     'query-result-export-meta',
     'query-stats-path',
     'delete-result-export-meta',
+    'meta-list-path',
     'data-limits-endpoint',
     'stream-delete-meta',
     'data-contract-endpoint',
@@ -313,4 +314,13 @@ test('acceptance-data-contract is automated required gate', () => {
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('commercial-handoff'))
   assert.ok(requiredChecklist().some((x) => x.id === 'acceptance-data-contract'))
+})
+
+
+test('meta-list-path is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'meta-list-path')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/query'))
 })

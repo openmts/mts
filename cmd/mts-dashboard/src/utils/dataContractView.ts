@@ -40,6 +40,7 @@ const REQUIRED_FEATURE_IDS = [
   'query_stream_end_meta',
   'delete_response_meta',
   'data_limits',
+  'meta_list_path',
 ] as const
 
 export function requiredDataContractFeatureIds(): readonly string[] {

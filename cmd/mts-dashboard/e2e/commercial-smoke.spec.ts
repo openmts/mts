@@ -487,6 +487,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('query-stats-source-engine')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('query-stats-path')).toBeVisible({ timeout: 10_000 })
   await expect(page.getByTestId('query-stats-path')).toContainText('/api/v1/data/query/stats')
+  // P478: series 元数据 path（有 measurement 时）
+  if (await page.getByTestId('query-series-path').count()) {
+    await expect(page.getByTestId('query-series-path')).toContainText('/series')
+  }
   // 若有结果则校验虚拟列表；冷启动无结果时跳过
   if (await page.getByTestId('query-results-virtual-list').count()) {
     await expect(page.getByTestId('query-results-virtual-list')).toBeVisible()

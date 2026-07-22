@@ -453,6 +453,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/query#query-stats',
   },
   {
+    id: 'meta-list-path',
+    severity: 'recommended',
+    title: { zh: '元数据列表含 path/scope', en: 'Meta list responses include path/scope' },
+    detail: {
+      zh: 'databases/measurements/fields/series 列表响应含 path 与 database/measurement；Query series 区展示 path 徽章；契约 feature meta_list_path。',
+      en: 'databases/measurements/fields/series list responses include path and database/measurement; Query series shows path badge; contract feature meta_list_path.',
+    },
+    automated: true,
+    jump: '/query',
+  },
+  {
     id: 'data-contract-endpoint',
     severity: 'required',
     title: { zh: '数据面契约快照可交接', en: 'Data-plane contract snapshot for handoff' },

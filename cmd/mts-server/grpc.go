@@ -566,7 +566,7 @@ func grpcListDatabases(r *serverRuntime, ctx context.Context, _ any) (any, error
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToDatabases(databasesResponse{Databases: databases}), nil
+	return r.attachAdminOpToDatabases(databasesResponse{Databases: databases, Path: routeAdminDatabases}), nil
 }
 
 func grpcDropDatabase(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -598,7 +598,11 @@ func grpcListRetentionPolicies(r *serverRuntime, ctx context.Context, req any) (
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToRetentionPolicies(retentionPoliciesResponse{Policies: policies}), nil
+	return r.attachAdminOpToRetentionPolicies(retentionPoliciesResponse{
+		Policies: policies,
+		Path:     routeAdminDatabasesPrefix + req.(*databaseRequest).Name + "/retention-policies",
+		Database: req.(*databaseRequest).Name,
+	}), nil
 }
 
 func grpcListMeasurements(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -607,7 +611,14 @@ func grpcListMeasurements(r *serverRuntime, ctx context.Context, req any) (any, 
 		return nil, err
 	}
 	measurements, err := r.engine.ListMeasurements(ctx, request.Database)
-	return measurementsResponse{Measurements: measurements}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToMeasurements(measurementsResponse{
+		Measurements: measurements,
+		Path:         routeDataDatabasesPrefix + request.Database + "/measurements",
+		Database:     request.Database,
+	}), nil
 }
 
 func grpcListFields(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -619,7 +630,12 @@ func grpcListFields(r *serverRuntime, ctx context.Context, req any) (any, error)
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToFields(fieldsResponse{Fields: fields}), nil
+	return r.attachAdminOpToFields(fieldsResponse{
+		Fields:      fields,
+		Path:        routeDataDatabasesPrefix + request.Database + "/measurements/" + request.Measurement + "/fields",
+		Database:    request.Database,
+		Measurement: request.Measurement,
+	}), nil
 }
 
 func grpcListSeries(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -631,7 +647,12 @@ func grpcListSeries(r *serverRuntime, ctx context.Context, req any) (any, error)
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToSeries(seriesResponse{Series: series}), nil
+	return r.attachAdminOpToSeries(seriesResponse{
+		Series:      series,
+		Path:        routeDataDatabasesPrefix + request.Database + "/measurements/" + request.Measurement + "/series",
+		Database:    request.Database,
+		Measurement: request.Measurement,
+	}), nil
 }
 
 func grpcGetConfig(r *serverRuntime, ctx context.Context, _ any) (any, error) {

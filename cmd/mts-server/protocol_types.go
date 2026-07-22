@@ -374,6 +374,7 @@ type databaseRequest struct {
 
 type databasesResponse struct {
 	Databases     []string              `json:"databases"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -391,6 +392,8 @@ type grpcRetentionPolicyRequest struct {
 
 type retentionPoliciesResponse struct {
 	Policies      []mts.RetentionPolicy `json:"policies"`
+	Path          string                `json:"path,omitempty"`
+	Database      string                `json:"database,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -401,6 +404,8 @@ type measurementsResponse struct {
 	// Databases 为正式字段；Measurements 保留兼容历史客户端。
 	Databases     []string              `json:"databases,omitempty"`
 	Measurements  []string              `json:"measurements,omitempty"`
+	Path          string                `json:"path,omitempty"`
+	Database      string                `json:"database,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -409,6 +414,9 @@ type measurementsResponse struct {
 
 type fieldsResponse struct {
 	Fields        []mts.FieldSchema     `json:"fields"`
+	Path          string                `json:"path,omitempty"`
+	Database      string                `json:"database,omitempty"`
+	Measurement   string                `json:"measurement,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -427,6 +435,9 @@ type seriesResponse struct {
 	Truncated     bool                  `json:"truncated,omitempty"`
 	Limit         int                   `json:"limit,omitempty"`
 	Offset        int                   `json:"offset,omitempty"`
+	Path          string                `json:"path,omitempty"`
+	Database      string                `json:"database,omitempty"`
+	Measurement   string                `json:"measurement,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`

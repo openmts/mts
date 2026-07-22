@@ -64,7 +64,7 @@ import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star
 
 const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
-  fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError, seriesHasMore, SERIES_CAP, loadMoreSeries, refreshSeriesWithServerQuery,
+  fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError, seriesHasMore, seriesMetaPath, SERIES_CAP, loadMoreSeries, refreshSeriesWithServerQuery,
   loadMeasurementMeta, refreshSeriesWithTags, applySeriesTags,
   queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, lastQueryErrorCode, lastQueryMeta, loading,
   queryStartedAt,
@@ -1102,6 +1102,13 @@ const columnRows = computed(() => {
           <span v-else-if="seriesTotal" class="text-[11px] mts-muted" data-testid="query-series-count">
             {{ formatMessage(t('querySeriesCountMeta'), { shown: filteredSeriesOptions.length, total: seriesTotal }) }}
           </span>
+          <span
+            v-if="seriesMetaPath"
+            class="max-w-[16rem] truncate rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-series-path"
+            :title="seriesMetaPath"
+          >{{ seriesMetaPath }}</span>
+
         </div>
         <input
           v-model="seriesFilter"

@@ -5,6 +5,8 @@ import { formatCaughtError } from '@/utils/apiError'
 interface MeasurementsPayload {
   measurements?: string[]
   databases?: string[]
+  path?: string
+  database?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -16,6 +18,7 @@ export type MetaLoadSource = 'admin' | 'data' | 'manual' | 'partial'
 export interface ListDatabasesResult {
   names: string[]
   source: MetaLoadSource
+  path?: string
   error?: string
   adminOp?: {
     admin_op_busy?: boolean
@@ -48,6 +51,7 @@ export async function listDatabasesDetailed(init: RequestInit = {}): Promise<Lis
     return {
       names: [...names].sort(),
       source: 'data' as MetaLoadSource,
+      path: String(data.path || dataPath).trim() || dataPath,
       adminOp: {
         admin_op_busy: data.admin_op_busy,
         op: data.op,
@@ -62,6 +66,7 @@ export async function listDatabasesDetailed(init: RequestInit = {}): Promise<Lis
       return {
         names: [...names].sort(),
         source: 'admin',
+        path: String(data.path || adminPath).trim() || adminPath,
         adminOp: {
           admin_op_busy: data.admin_op_busy,
           op: data.op,
@@ -93,6 +98,8 @@ export async function listMeasurements(database: string, init: RequestInit = {})
 
 export interface ListMeasurementsResult {
   names: string[]
+  path?: string
+  database?: string
   adminOp?: {
     admin_op_busy?: boolean
     op?: string
@@ -114,6 +121,8 @@ export async function listMeasurementsDetailed(
     )
     return {
       names: [...(data.measurements ?? [])].sort(),
+      path: String(data.path || '').trim(),
+      database: String(data.database || database).trim(),
       adminOp: {
         admin_op_busy: data.admin_op_busy,
         op: data.op,
@@ -227,6 +236,9 @@ export async function listFields(
 
 export interface ListFieldsResult {
   fields: FieldMeta[]
+  path?: string
+  database?: string
+  measurement?: string
   adminOp?: {
     admin_op_busy?: boolean
     op?: string
@@ -245,6 +257,9 @@ export async function listFieldsDetailed(
   try {
     const data = await apiGet<{
       fields?: FieldMeta[]
+      path?: string
+      database?: string
+      measurement?: string
       admin_op_busy?: boolean
       op?: string
       started_at_unix?: number
@@ -256,6 +271,9 @@ export async function listFieldsDetailed(
     const fields = [...(data.fields ?? [])].sort((a, b) => a.name.localeCompare(b.name))
     return {
       fields,
+      path: String(data.path || '').trim(),
+      database: String(data.database || database).trim(),
+      measurement: String(data.measurement || measurement).trim(),
       adminOp: {
         admin_op_busy: data.admin_op_busy,
         op: data.op,
@@ -280,6 +298,9 @@ export type ListSeriesResult = {
   truncated: boolean
   limit: number
   offset: number
+  path?: string
+  database?: string
+  measurement?: string
   adminOp?: {
     admin_op_busy?: boolean
     op?: string
@@ -324,6 +345,9 @@ export async function listSeriesDetailed(
     truncated?: boolean
     limit?: number
     offset?: number
+    path?: string
+    database?: string
+    measurement?: string
     admin_op_busy?: boolean
     op?: string
     started_at_unix?: number
@@ -337,6 +361,9 @@ export async function listSeriesDetailed(
     truncated: !!data.truncated,
     limit: typeof data.limit === 'number' ? data.limit : opts.limit ?? 0,
     offset: typeof data.offset === 'number' ? data.offset : opts.offset ?? 0,
+    path: String(data.path || path.split('?')[0]).trim(),
+    database: String(data.database || database).trim(),
+    measurement: String(data.measurement || measurement).trim(),
     adminOp: {
       admin_op_busy: data.admin_op_busy,
       op: data.op,

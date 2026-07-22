@@ -102,6 +102,7 @@ test('commercial handoff includes data_contract view', () => {
         { id: 'query_stream_end_meta', enabled: true },
         { id: 'delete_response_meta', enabled: true },
         { id: 'data_limits', enabled: true },
+        { id: 'meta_list_path', enabled: true },
       ],
     },
   })

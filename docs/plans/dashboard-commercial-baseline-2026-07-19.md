@@ -2620,3 +2620,16 @@
 | data contract | query_stats_path | REQUIRED_FEATURE_IDS | 交接/验收包 |
 | range delete | path/database/measurement | mts.delete.result 导出 | 对齐 write/query export |
 
+## P478（2026-07-23）
+- Server：meta list（databases/measurements/fields/series/RP）响应补 `path` 与 `database`/`measurement`
+- Server：数据面契约 feature `meta_list_path`；gRPC 对齐；ApiSpec ResponseHint 更新
+- Dashboard：meta 客户端解析 path/scope；Query series 区 path 徽章
+- 清单：`meta-list-path`；命令面板深链；e2e 可选校验 series path
+
+### 前后端对齐（P478）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| databases/measurements | path(+database) | meta API path | data/admin |
+| fields/series | path+database+measurement | series path 徽章 | Query/Databases |
+| 契约 | meta_list_path | REQUIRED_FEATURE_IDS | 交接/验收包 |
+
