@@ -2068,3 +2068,15 @@
 | 单策略 GET | `GET .../policies/{name}` | 列表+深链；契约可直读 | 对齐 registry GET |
 | 就绪清单 | — | downsample-policy-deep-link | 可勾选 |
 
+## P438（2026-07-22）
+- Downsample 列表独立 refresh 列（不再仅悬停 interval）
+- 详情 functions 分行清单 + 复制 Markdown
+- 深链列表缺失时 `GET /api/v1/admin/downsample/policies/{name}` 直读补齐
+- e2e：refresh 列、functions 列表、copy-md
+
+### 前后端对齐（P438）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 单策略直读 | GET policies/{name} | 深链补齐 | 失败走 missing 提示 |
+| 列表 refresh | 策略字段已有 | 独立列 | 运维扫视 |
+| 详情 functions | policy.functions | 分行 + MD | 粘贴核对 |

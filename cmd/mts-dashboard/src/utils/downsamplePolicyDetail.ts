@@ -125,3 +125,40 @@ export function downsamplePolicyDetailToJSONText(
   return JSON.stringify(buildDownsamplePolicyDetailJSON(p), null, space)
 }
 
+/** functions 分行展示（详情列表） */
+export function listDownsampleFunctions(
+  functions: DownsamplePolicyDetailInput['functions'] | null | undefined,
+): string[] {
+  const text = formatDownsampleFunctions(functions)
+  if (!text) return []
+  return text.split(', ').filter(Boolean)
+}
+
+/** 运维粘贴用 Markdown 摘要 */
+export function buildDownsamplePolicyDetailMarkdown(
+  p: DownsamplePolicyDetailInput | null | undefined,
+  formatDuration: (ns: number | null | undefined) => string,
+  empty = '—',
+): string {
+  if (!p || !p.name) return ''
+  const fields = buildDownsamplePolicyDetailFields(p, formatDuration, empty)
+  const lines: string[] = [`# Downsample policy: ${p.name}`, '']
+  for (const f of fields) {
+    if (f.key === 'functions') continue
+    lines.push(`- **${f.key}**: ${f.value}`)
+  }
+  const fns = listDownsampleFunctions(p.functions)
+  lines.push('', '## Functions')
+  if (!fns.length) lines.push(`- ${empty}`)
+  else for (const fn of fns) lines.push(`- \`${fn}\``)
+  lines.push('')
+  return lines.join('\n')
+}
+
+export function downsamplePolicyDetailToMarkdownText(
+  p: DownsamplePolicyDetailInput | null | undefined,
+  formatDuration: (ns: number | null | undefined) => string,
+  empty = '—',
+): string {
+  return buildDownsamplePolicyDetailMarkdown(p, formatDuration, empty)
+}

@@ -43,7 +43,7 @@ import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { buildDownsampleExport, downsampleToCSV } from '@/utils/downsampleExport'
-import { buildDownsamplePolicyDetailFields, downsamplePolicyDetailToJSONText } from '@/utils/downsamplePolicyDetail'
+import { buildDownsamplePolicyDetailFields, downsamplePolicyDetailToJSONText, listDownsampleFunctions, downsamplePolicyDetailToMarkdownText } from '@/utils/downsamplePolicyDetail'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -138,6 +138,7 @@ const enabledFilter = ref<DownsampleEnabledFilter>('')
 const selectedNames = ref<string[]>([])
 const detailPolicyName = ref('')
 const detailMissingNotified = ref('')
+const detailListReady = ref(false)
 const batchOpen = ref(false)
 const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
@@ -410,6 +411,8 @@ async function loadData() {
     policiesError.value = ''
     statusesError.value = ''
   }
+  detailListReady.value = true
+  await fetchDetailPolicyIfNeeded()
   maybeNotifyDetailMissing()
 }
 
@@ -915,9 +918,9 @@ const detailPolicy = computed(() => {
 })
 const detailPolicyMissing = computed(() => {
   const name = detailPolicyName.value.trim()
-  if (!name) return false
-  // 列表已加载且仍找不到时视为缺失（深链/删后残留）
-  return policies.value.length > 0 && !detailPolicy.value
+  if (!name || !detailListReady.value) return false
+  // 列表已拉取后仍找不到时视为缺失（含空列表深链）
+  return !detailPolicy.value
 })
 const detailFields = computed(() =>
   buildDownsamplePolicyDetailFields(
@@ -926,11 +929,32 @@ const detailFields = computed(() =>
     t.value('emptyValue'),
   ).map((f) => ({ ...f, label: t.value(f.labelKey as MessageKey) })),
 )
+const detailFunctions = computed(() => listDownsampleFunctions(detailPolicy.value?.functions))
 const detailStatus = computed(() => {
   const name = detailPolicyName.value.trim()
   if (!name) return null
   return getStatus(name) || null
 })
+
+
+async function fetchDetailPolicyIfNeeded() {
+  const name = detailPolicyName.value.trim()
+  if (!name || detailPolicy.value) return
+  // 列表未含深链策略时，直读单策略 GET 对齐 server（失败则走 missing 提示）
+  try {
+    const data = await apiGet<{ policy?: typeof policies.value[number] }>(
+      `/api/v1/admin/downsample/policies/${encodeURIComponent(name)}`,
+    )
+    applyAdminOpStatus(parseAdminOpStatusPayload(data as { admin_op_busy?: unknown; op?: unknown; started_at_unix?: unknown; last?: unknown }))
+    const pol = data?.policy
+    if (pol?.name) {
+      const exists = policies.value.some((p) => p.name === pol.name)
+      if (!exists) policies.value = [...policies.value, pol]
+    }
+  } catch {
+    // ignore; maybeNotifyDetailMissing handles UX
+  }
+}
 
 function maybeNotifyDetailMissing() {
   const name = detailPolicyName.value.trim()
@@ -970,6 +994,24 @@ async function copyPolicyDetailJSON() {
   }
   const res = await copyText(text)
   if (res.ok) success(t.value('downsampleDetailCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+async function copyPolicyDetailMarkdown() {
+  if (!detailPolicy.value) {
+    notifyError(t.value('opsStatusLastEmpty'))
+    return
+  }
+  const md = downsamplePolicyDetailToMarkdownText(
+    detailPolicy.value,
+    (ns) => formatDuration(ns || 0),
+    t.value('emptyValue'),
+  )
+  if (!md.trim()) {
+    notifyError(t.value('opsStatusLastEmpty'))
+    return
+  }
+  const res = await copyText(md)
+  if (res.ok) success(t.value('downsampleDetailMarkdownCopied'))
   else notifyError(res.error || t.value('failed'))
 }
 async function copyPolicyDetailLink() {
@@ -1284,7 +1326,7 @@ onBeforeUnmount(() => {
 
     <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900" data-testid="downsample-policies-table">
       <div
-        class="grid grid-cols-[2.5rem_minmax(7rem,0.9fr)_minmax(10rem,1.4fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(11rem,1.2fr)] border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-400"
+        class="grid grid-cols-[2.5rem_minmax(7rem,0.9fr)_minmax(10rem,1.4fr)_minmax(5rem,0.55fr)_minmax(5rem,0.55fr)_minmax(5rem,0.55fr)_minmax(7rem,0.85fr)_minmax(11rem,1.15fr)] border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase text-slate-500 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-400"
         data-testid="downsample-policies-header"
       >
         <div class="px-3 py-2.5">
@@ -1298,6 +1340,7 @@ onBeforeUnmount(() => {
         <div class="px-3 py-2.5">{{ t('downsampleColName') }}</div>
         <div class="px-3 py-2.5">{{ t('downsampleColPath') }}</div>
         <div class="px-3 py-2.5" :title="t('downsampleColIntervalHint')">{{ t('downsampleColInterval') }}</div>
+        <div class="px-3 py-2.5">{{ t('downsampleColRefresh') }}</div>
         <div class="px-3 py-2.5">{{ t('downsampleStatusFilter') }}</div>
         <div class="px-3 py-2.5">{{ t('downsampleColCompleted') }}</div>
         <div class="px-3 py-2.5">{{ t('action') }}</div>
@@ -1310,7 +1353,7 @@ onBeforeUnmount(() => {
       >
         <template #default="{ item: policy }">
           <div
-            class="grid h-full grid-cols-[2.5rem_minmax(7rem,0.9fr)_minmax(10rem,1.4fr)_minmax(5rem,0.6fr)_minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(11rem,1.2fr)] items-center border-b border-slate-50 dark:border-slate-800"
+            class="grid h-full grid-cols-[2.5rem_minmax(7rem,0.9fr)_minmax(10rem,1.4fr)_minmax(5rem,0.55fr)_minmax(5rem,0.55fr)_minmax(5rem,0.55fr)_minmax(7rem,0.85fr)_minmax(11rem,1.15fr)] items-center border-b border-slate-50 dark:border-slate-800"
             :data-testid="`downsample-row-${policy.name}`"
           >
             <div class="px-3">
@@ -1339,9 +1382,14 @@ onBeforeUnmount(() => {
             </div>
             <div
               class="px-3 text-slate-600 dark:text-slate-300"
-              :title="formatDuration(policy.interval) + (policy.refresh_interval ? ` · refresh ${formatDuration(policy.refresh_interval)}` : '')"
+              :title="formatDuration(policy.interval)"
               :data-testid="`downsample-interval-${policy.name}`"
             >{{ formatDuration(policy.interval) }}</div>
+            <div
+              class="truncate px-3 text-xs text-slate-600 dark:text-slate-300"
+              :title="policy.refresh_interval ? formatDuration(policy.refresh_interval) : t('emptyValue')"
+              :data-testid="`downsample-refresh-${policy.name}`"
+            >{{ policy.refresh_interval ? formatDuration(policy.refresh_interval) : t('emptyValue') }}</div>
             <div class="px-3">
               <span
                 class="rounded px-2 py-0.5 text-xs font-medium"
@@ -1402,17 +1450,25 @@ onBeforeUnmount(() => {
         </div>
         <div class="flex flex-wrap gap-2">
           <button type="button" class="mts-btn" data-testid="downsample-detail-copy-json" :disabled="!detailPolicy" @click="copyPolicyDetailJSON">{{ t('downsampleDetailCopyJSON') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-detail-copy-md" :disabled="!detailPolicy" @click="copyPolicyDetailMarkdown">{{ t('downsampleDetailCopyMarkdown') }}</button>
           <button type="button" class="mts-btn" data-testid="downsample-detail-copy-link" :disabled="!detailPolicyName.trim()" @click="copyPolicyDetailLink">{{ t('downsampleDetailCopyLink') }}</button>
           <button type="button" class="mts-btn" data-testid="downsample-detail-close" @click="closePolicyDetail">{{ t('downsampleDetailClose') }}</button>
         </div>
       </div>
       <template v-if="detailPolicy">
       <dl class="grid gap-2 p-3 sm:grid-cols-2" data-testid="downsample-detail-fields">
-        <div v-for="f in detailFields" :key="f.key" class="min-w-0 rounded border border-slate-100 px-2 py-1.5 dark:border-slate-800" :data-testid="`downsample-detail-field-${f.key}`">
+        <div v-for="f in detailFields.filter((x) => x.key !== 'functions')" :key="f.key" class="min-w-0 rounded border border-slate-100 px-2 py-1.5 dark:border-slate-800" :data-testid="`downsample-detail-field-${f.key}`">
           <dt class="text-[11px] mts-muted">{{ f.label }}</dt>
           <dd class="mt-0.5 break-all text-xs text-slate-800 dark:text-slate-100" :class="f.mono ? 'font-mono' : ''">{{ f.key === 'enabled' ? detailEnabledLabel(detailPolicy.enabled) : f.value }}</dd>
         </div>
       </dl>
+      <div class="border-t border-slate-100 px-3 py-2 dark:border-slate-800" data-testid="downsample-detail-functions">
+        <p class="text-[11px] mts-muted">{{ t('downsampleFunctions') }}</p>
+        <ul v-if="detailFunctions.length" class="mt-1 space-y-1" data-testid="downsample-detail-functions-list">
+          <li v-for="(fn, idx) in detailFunctions" :key="idx" class="font-mono text-xs text-slate-800 dark:text-slate-100" :data-testid="`downsample-detail-fn-${idx}`">{{ fn }}</li>
+        </ul>
+        <p v-else class="mt-1 text-xs mts-muted" data-testid="downsample-detail-functions-empty">{{ t('emptyValue') }}</p>
+      </div>
       <div v-if="detailStatus" class="border-t border-slate-100 px-3 py-2 text-xs dark:border-slate-800" data-testid="downsample-detail-status">
         <p class="mts-muted">{{ t('downsampleStatusPanel') }}</p>
         <p class="mt-1 font-mono text-slate-700 dark:text-slate-200">

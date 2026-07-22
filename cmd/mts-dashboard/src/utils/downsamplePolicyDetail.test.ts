@@ -4,6 +4,8 @@ import {
   buildDownsamplePolicyDetailFields,
   buildDownsamplePolicyDetailJSON,
   downsamplePolicyDetailToJSONText,
+  buildDownsamplePolicyDetailMarkdown,
+  listDownsampleFunctions,
   formatDownsampleFunctions,
   formatDownsamplePolicyPath,
 } from './downsamplePolicyDetail.ts'
@@ -53,4 +55,14 @@ test('buildDownsamplePolicyDetailJSON', () => {
   const text = downsamplePolicyDetailToJSONText(sample)
   assert.match(text, /"name": "p1"/)
   assert.equal(buildDownsamplePolicyDetailJSON(null).policy, null)
+})
+
+
+test('listDownsampleFunctions and markdown', () => {
+  assert.deepEqual(listDownsampleFunctions(sample.functions), ['mean(usage) as mean_usage'])
+  const md = buildDownsamplePolicyDetailMarkdown(sample, (ns) => `${Number(ns) / 1e9}s`)
+  assert.match(md, /# Downsample policy: p1/)
+  assert.match(md, /## Functions/)
+  assert.match(md, /mean\(usage\) as mean_usage/)
+  assert.equal(buildDownsamplePolicyDetailMarkdown(null, () => ''), '')
 })

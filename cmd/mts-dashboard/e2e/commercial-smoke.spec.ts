@@ -2485,6 +2485,10 @@ test('commercial browser smoke path', async ({ page }) => {
   // P437: 复制 JSON/链接 + 深链 policy=
   await expect(page.getByTestId('downsample-detail-copy-json')).toBeVisible()
   await expect(page.getByTestId('downsample-detail-copy-link')).toBeVisible()
+  // P438: refresh 列 + functions 清单 + Markdown 复制
+  await expect(page.getByTestId('downsample-refresh-e2e-batch-ds')).toBeVisible()
+  await expect(page.getByTestId('downsample-detail-functions')).toBeVisible()
+  await expect(page.getByTestId('downsample-detail-copy-md')).toBeVisible()
   await page.getByTestId('downsample-detail-copy-json').click()
   await expect(page).toHaveURL(/policy=e2e-batch-ds/)
   await page.getByTestId('downsample-detail-close').click()
@@ -2492,6 +2496,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/downsample?policy=e2e-batch-ds#downsample-detail')
   await expect(page.getByTestId('downsample-detail-panel')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('downsample-detail-name')).toContainText('e2e-batch-ds')
+  await expect(page.getByTestId('downsample-detail-functions-list')).toBeVisible()
   await page.getByTestId('downsample-detail-close').click()
   await page.getByTestId('downsample-select-e2e-batch-ds').check()
   await expect(page.getByTestId('downsample-batch-disable')).toBeEnabled()
