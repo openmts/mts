@@ -5,6 +5,8 @@ import { parseQueryPrefill, timeRangeToQueryFormTimes, queryFormToPrefill } from
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
+import { applyGlobalAdminOpStatus } from '@/composables/useAdminOpBusy'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useQueryWorkbench } from '@/composables/useQueryWorkbench'
 import { useQueryHistory } from '@/composables/useQueryHistory'
 import { filterQueryHistory } from '@/utils/queryHistory'
@@ -606,7 +608,7 @@ async function doRangeDelete() {
   deleteResult.value = ''
   try {
     const query = buildQuery()
-    await apiPost('/api/v1/data/delete', {
+    const delResp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/data/delete', {
       request: {
         database: query.database,
         retention_policy: query.retention_policy,
@@ -617,6 +619,7 @@ async function doRangeDelete() {
         precision: query.precision,
       },
     }, { signal })
+    applyGlobalAdminOpStatus(parseAdminOpStatusPayload(delResp))
     deleteResult.value = t.value('queryDeleteSubmitted')
     success(deleteResult.value)
     deleteOpen.value = false

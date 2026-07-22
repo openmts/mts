@@ -1134,6 +1134,29 @@ func TestHTTPUserDatabaseMutationOKBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPWriteBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var busy writeResponse
+	postJSONWithHeaders(t, server.URL+routeDataWrite, writeRequest{Points: []mts.Point{testPoint()}}, nil, http.StatusOK, &busy)
+	if !busy.OK || !busy.AdminOpBusy || busy.Op != "compact" {
+		t.Fatalf("write busy = %+v", busy)
+	}
+	runtime.finishAdminHeavy(errors.New("write probe fail"))
+	var done writeResponse
+	postJSONWithHeaders(t, server.URL+routeDataWrite, writeRequest{Points: []mts.Point{testPoint()}}, nil, http.StatusOK, &done)
+	if done.AdminOpBusy {
+		t.Fatal("write want not busy")
+	}
+	if done.Last == nil || done.Last.Op != "compact" || done.Last.OK || done.Last.Error != "write probe fail" {
+		t.Fatalf("write last = %+v", done.Last)
+	}
+}
 
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()

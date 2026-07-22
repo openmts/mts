@@ -65,7 +65,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "write",
 			Namespace:   "data",
-			Description: "write point batch",
+			Description: "write point batch (response includes admin_op_busy/last)",
 			Auth:        authDataToken,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeDataWrite},
@@ -76,7 +76,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "write_typed",
 			Namespace:   "data",
-			Description: "write typed column batch",
+			Description: "write typed column batch (response includes admin_op_busy/last)",
 			Auth:        authDataToken,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeDataWriteTyped},
@@ -88,7 +88,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "write_points_typed",
 			Namespace:   "data",
-			Description: "convert []Point to typed batch and write",
+			Description: "convert []Point to typed batch and write (response includes admin_op_busy/last)",
 			Auth:        authDataToken,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeDataWritePointsTyped},

@@ -41,7 +41,11 @@ type writeRequest struct {
 }
 
 type writeResponse struct {
-	OK bool `json:"ok"`
+	OK            bool                  `json:"ok"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type typedWriteRequest struct {

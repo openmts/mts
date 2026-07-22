@@ -1735,3 +1735,14 @@
 | data delete | 是 | 是 | 列表/查询侧回读 | ok 体 |
 | auth password/logout 等 | 是 | 是 | 会话刷新 | ok 体 |
 
+## P412（2026-07-22）
+- Server：`data/write`、`write/typed`、`write/points-typed` 成功响应附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）
+- Dashboard：Write 页写入成功、Query 页 delete 成功后即时 `applyGlobalAdminOpStatus`
+- registry 描述对齐；HTTP 单测；全量 mts-server 测试通过
+
+### busy/last 覆盖矩阵（P412 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| data write / typed / points-typed | 是 | 是 | 是 | 写路径成功响应 |
+| data delete | 是 | 是 | 是 | Query 删除成功即时 apply |
+

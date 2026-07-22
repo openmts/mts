@@ -8,6 +8,8 @@ import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { parseWritePrefill, writeFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { apiPost } from '@/api/client'
+import { applyGlobalAdminOpStatus } from '@/composables/useAdminOpBusy'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import {
   listDatabasesDetailed,
   listFields,
@@ -569,7 +571,8 @@ async function submit() {
   try {
     if (writeMode.value === 'typed') {
       const batch = buildTypedBatch()
-      await apiPost('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } }, { signal })
+      const typedResp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } }, { signal })
+      applyGlobalAdminOpStatus(parseAdminOpStatusPayload(typedResp))
       result.value = { ok: true, message: formatMessage(t.value('writeTypedSuccess'), { count: (batch.timestamps as number[]).length }) }
       success(result.value.message)
       markWriteClean()
@@ -595,7 +598,8 @@ async function submit() {
       p.retention_policy = retentionPolicy.value
     }
     const writePath = usePointsTyped.value ? '/api/v1/data/write/points-typed' : '/api/v1/data/write'
-    await apiPost(writePath, { points, options: { sync: syncWrite.value } }, { signal })
+    const writeResp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(writePath, { points, options: { sync: syncWrite.value } }, { signal })
+    applyGlobalAdminOpStatus(parseAdminOpStatusPayload(writeResp))
     result.value = { ok: true, message: formatMessage(t.value('writeSuccessPoints'), { count: points.length, path: writePath }) }
     success(result.value.message)
     markWriteClean()
