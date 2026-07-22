@@ -276,6 +276,39 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
     jump: '/operations',
   },
+  {
+    id: 'password-policy-public',
+    severity: 'required',
+    title: { zh: '公开密码策略可对齐', en: 'Public password policy alignment' },
+    detail: {
+      zh: 'GET /api/v1/auth/password-policy（v2）提供 min_length/禁用默认密码/鉴权 TTL；Dashboard 启动与登录/改密页拉取对齐。',
+      en: 'GET /api/v1/auth/password-policy (v2) exposes min_length/forbidden defaults/auth TTL; Dashboard bootstraps on app start, login and password pages.',
+    },
+    automated: true,
+    jump: '/account#account-password-policy',
+  },
+  {
+    id: 'session-remaining-calibration',
+    severity: 'required',
+    title: { zh: '会话 remaining 服务端校准', en: 'Session remaining server calibration' },
+    detail: {
+      zh: '写门禁/TopBar/Account 取 min(本地 expires, 服务端 remaining 推演)；warn/critical 周期探测 /auth/session。',
+      en: 'Write guard/TopBar/Account use min(local expires, projected server remaining); warn/critical probe /auth/session on a cadence.',
+    },
+    automated: true,
+    jump: '/account#account-session',
+  },
+  {
+    id: 'api-spec-password-policy',
+    severity: 'recommended',
+    title: { zh: '契约可检索 password-policy', en: 'Api-spec searchable password-policy' },
+    detail: {
+      zh: 'API Spec 含 auth/password-policy 与 TTL 字段说明；命令面板/深链可跳转筛选。',
+      en: 'API Spec includes auth/password-policy and TTL fields; command palette/deep-link can filter.',
+    },
+    automated: true,
+    jump: '/api-spec?ns=auth&q=password-policy#api-spec-filters',
+  },
 ]
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {

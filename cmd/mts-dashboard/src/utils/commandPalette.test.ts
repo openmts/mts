@@ -351,3 +351,11 @@ test('command palette has users status filter deep links', () => {
   assert.ok(filterCommandItems(all, 'user_enable', (k) => k).some((i) => i.id === 'users-status-active'))
 })
 
+
+test('command palette password policy deep links', () => {
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'account-password-policy'))
+  assert.ok(all.some((i) => i.id === 'api-spec-password-policy' && i.path.includes('password-policy')))
+  assert.ok(all.some((i) => i.id === 'readiness-session-calibration'))
+  assert.ok(all.some((i) => i.id === 'readiness-password-policy'))
+})

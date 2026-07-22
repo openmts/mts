@@ -24,6 +24,9 @@ test('production checklist has required commercial gates', () => {
     'downsample-status-health',
     'readiness-downsample-health-card',
     'ops-downsample-health-card',
+    'password-policy-public',
+    'session-remaining-calibration',
+    'api-spec-password-policy',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -122,4 +125,15 @@ test('ops-downsample-health-card is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('/operations'))
+})
+
+test('password policy and session calibration jumps', () => {
+  const policy = PRODUCTION_CHECKLIST.find((x) => x.id === 'password-policy-public')
+  assert.ok(productionChecklistJump(policy!)?.includes('account-password-policy'))
+  const session = PRODUCTION_CHECKLIST.find((x) => x.id === 'session-remaining-calibration')
+  assert.ok(productionChecklistJump(session!)?.includes('account-session'))
+  const spec = PRODUCTION_CHECKLIST.find((x) => x.id === 'api-spec-password-policy')
+  assert.ok(productionChecklistJump(spec!)?.includes('password-policy'))
+  assert.ok(requiredChecklist().some((x) => x.id === 'password-policy-public'))
+  assert.ok(requiredChecklist().some((x) => x.id === 'session-remaining-calibration'))
 })

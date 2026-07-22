@@ -197,6 +197,18 @@ const serverRemainingText = computed(() => {
   return formatRemaining(Math.max(0, sec) * 1000)
 })
 
+const calibratedRemainingText = computed(() => {
+  if (expiresAt.value == null) return t.value('accountSessionNone')
+  if (sessionView.value.urgency === 'expired') return t.value('sessionExpiredLabel')
+  return formatRemaining(Math.max(0, sessionView.value.remainingMs))
+})
+const calibrationSourceText = computed(() => {
+  if (lastSessionRemainingSeconds.value != null && lastSessionCheckedAt.value != null) {
+    return t.value('accountSessionCalibrationMerged')
+  }
+  return t.value('accountSessionCalibrationLocal')
+})
+
 const serverCheckedAtText = computed(() => {
   const at = lastSessionCheckedAt.value
   if (at == null) return t.value('emptyValue')
@@ -858,8 +870,17 @@ async function submit() {
           <dt class="mts-muted">{{ t('accountSessionClockSkew') }}</dt>
           <dd class="font-mono" data-testid="account-session-clock-skew">{{ serverClockSkewText }}</dd>
         </div>
+        <div class="flex justify-between gap-3">
+          <dt class="mts-muted">{{ t('accountSessionCalibratedRemaining') }}</dt>
+          <dd class="font-mono" data-testid="account-session-calibrated">{{ calibratedRemainingText }}</dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="mts-muted">{{ t('accountSessionCalibrationSource') }}</dt>
+          <dd class="font-mono" data-testid="account-session-calibration-source">{{ calibrationSourceText }}</dd>
+        </div>
       </dl>
       <p class="mt-3 text-xs mts-muted" data-testid="account-session-hint">{{ t('accountSessionRenewHint') }}</p>
+      <p class="mt-1 text-[11px] mts-muted" data-testid="account-session-probe-hint">{{ t('accountSessionProbeHint') }}</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button
           type="button"

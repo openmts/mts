@@ -668,7 +668,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'api-spec-password-policy', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
     adminOnly: true,
   },
   {
@@ -868,6 +868,34 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     labelKey: 'cmdAccountPassword',
     keywords: ['change password', '修改密码', 'password form'],
   },
+  {
+    id: 'account-password-policy',
+    path: '/account#account-password-policy',
+    labelKey: 'cmdAccountPasswordPolicy',
+    keywords: ['password policy', '密码策略', 'password-policy', 'min_length', 'auth ttl'],
+  },
+  {
+    id: 'api-spec-password-policy',
+    path: '/api-spec?ns=auth&q=password-policy#api-spec-filters',
+    labelKey: 'cmdApiSpecPasswordPolicy',
+    keywords: ['password-policy', 'api-spec auth', '契约密码策略', 'password policy api'],
+    adminOnly: true,
+  },
+  {
+    id: 'readiness-password-policy',
+    path: '/ops/readiness#production-checklist',
+    labelKey: 'cmdReadinessPasswordPolicy',
+    keywords: ['password-policy-public', '就绪密码策略', 'public password policy'],
+    adminOnly: true,
+  },
+  {
+    id: 'readiness-session-calibration',
+    path: '/account#account-session',
+    labelKey: 'cmdReadinessSessionCalibration',
+    keywords: ['session-remaining-calibration', '会话校准', 'remaining calibration', 'session probe'],
+    adminOnly: true,
+  },
+
   {
     id: 'account-density',
     path: '/account#account-density',

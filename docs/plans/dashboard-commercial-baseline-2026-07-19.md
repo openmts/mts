@@ -2262,3 +2262,16 @@
 | 临界探测 | GET /auth/session | layout probe | warn 60s / critical 20s |
 | 登录校准 | expires_at | seed + visibility refresh | 无 refresh token |
 
+## P453（2026-07-22）
+- 就绪清单：`password-policy-public` / `session-remaining-calibration`（required）+ `api-spec-password-policy`
+- 命令面板：账户密码策略、契约 password-policy、就绪深链
+- Account：校准后剩余 / 校准来源 / 临界探测提示
+- e2e：Account 校准字段；ApiSpec 深链预填 password-policy
+
+### 前后端对齐（P453）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 密码策略契约 | password-policy v2 | api-spec 检索 | 运维可读 |
+| 会话校准可见 | remaining_seconds | Account 校准行 | 只读 |
+| 就绪清单 | — | production checklist | 商用门禁 |
+
