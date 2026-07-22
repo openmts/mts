@@ -31,16 +31,24 @@ export function parseAdminHeavyLast(raw: unknown): AdminHeavyLast | null {
 }
 
 /** 运维条「最近一次」摘要文案（纯函数） */
+
+function formatLastDuration(durationMs: number | null | undefined): string {
+  if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) return ''
+  if (durationMs < 1000) return `${Math.max(1, Math.round(durationMs))}ms`
+  const sec = durationMs / 1000
+  if (sec < 60) return `${sec >= 10 ? Math.round(sec) : Math.round(sec * 10) / 10}s`
+  const m = Math.floor(sec / 60)
+  const s = Math.round(sec % 60)
+  return `${m}m${String(s).padStart(2, '0')}s`
+}
+
 export function formatAdminHeavyLastSummary(
   last: AdminHeavyLast | null | undefined,
   opLabel: string,
 ): string {
   if (!last || !last.op) return ''
   const label = (opLabel || last.op).trim() || last.op
-  const dur =
-    last.durationMs != null && last.durationMs >= 0
-      ? `${Math.max(1, Math.round(last.durationMs / 1000))}s`
-      : ''
+  const dur = formatLastDuration(last.durationMs)
   if (last.ok) {
     return dur ? `${label} · ok · ${dur}` : `${label} · ok`
   }

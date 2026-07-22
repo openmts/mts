@@ -34,7 +34,7 @@ import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, formatAdminOpElapsed } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, formatAdminHeavyLastSummary, formatAdminOpElapsed } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
@@ -49,6 +49,7 @@ const {
   adminOpBusy,
   adminOpKind,
   adminOpStartedAtUnix,
+  adminOpLast,
   adminOpBusyError,
   adminOpBusyFailStreak,
   adminOpPollIntervalMs,
@@ -107,13 +108,23 @@ const adminOpBusyPollErrorLabel = computed(() => {
   return `${base} · ${formatMessage(t.value('adminOpBusyPollBackoff'), { n: String(streak), sec: String(sec) })}`
 })
 
+const adminOpLastSummary = computed(() => {
+  const last = adminOpLast.value
+  if (!last || !last.op) return ''
+  const key = adminOpKindLabelKey(last.op) as import('@/i18n/messages').MessageKey
+  const kind = t.value(key) || last.op
+  return formatAdminHeavyLastSummary(last, kind)
+})
+
 provide('adminOpBusySummary', computed(() => ({
+
   busy: adminOpBusy.value,
   op: adminOpKind.value,
   opLabel: adminOpKindLabel.value,
   elapsed: adminOpElapsedLabel.value,
   detail: adminOpBusyDetail.value,
   pollError: adminOpBusyPollErrorLabel.value,
+  lastSummary: adminOpLastSummary.value,
 })))
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 

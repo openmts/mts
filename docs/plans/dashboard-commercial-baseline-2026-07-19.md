@@ -1473,3 +1473,7 @@
 
 ## P347（2026-07-22）
 - About/ApiSpec：加载失败走 `notifyMaybeAdminBusy` 与 soft-keep 联动
+
+## P348（2026-07-22）
+- Server：admin heavy `duration_ms` 使用毫秒时钟，短操作不再被量化为 0s
+- Dashboard：最近一次耗时展示 ms/小数秒；Layout 注入 lastSummary

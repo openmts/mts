@@ -75,6 +75,14 @@ test('parseAdminHeavyLast and formatAdminHeavyLastSummary', () => {
   assert.equal(last?.ok, false)
   assert.match(formatAdminHeavyLastSummary(last, 'Compact'), /fail/)
   assert.match(formatAdminHeavyLastSummary(last, 'Compact'), /disk full/)
+  assert.match(formatAdminHeavyLastSummary(last, 'Compact'), /2\.5s/)
+  assert.match(
+    formatAdminHeavyLastSummary(
+      { op: 'x', ok: true, error: '', startedAtUnix: 1, finishedAtUnix: 1, durationMs: 40 },
+      'X',
+    ),
+    /40ms/,
+  )
   assert.match(
     formatAdminHeavyLastSummary(
       { op: 'flush', ok: true, error: '', startedAtUnix: 1, finishedAtUnix: 2, durationMs: 3000 },

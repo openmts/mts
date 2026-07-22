@@ -28,6 +28,7 @@ type serverRuntime struct {
 	maintenanceBusy        atomic.Bool
 	maintenanceOp          atomic.Value // string
 	maintenanceStartedUnix atomic.Int64
+	maintenanceStartedMs   atomic.Int64
 	lastAdminHeavyMu       sync.Mutex
 	lastAdminHeavy         *adminHeavyLastResult
 	engine                 *mts.Engine
@@ -330,8 +331,10 @@ func (r *serverRuntime) tryBeginAdminHeavy(op string) error {
 	if op == "" {
 		op = "admin_heavy"
 	}
+	now := time.Now()
 	r.maintenanceOp.Store(op)
-	r.maintenanceStartedUnix.Store(time.Now().Unix())
+	r.maintenanceStartedUnix.Store(now.Unix())
+	r.maintenanceStartedMs.Store(now.UnixMilli())
 	return nil
 }
 
@@ -345,17 +348,24 @@ func (r *serverRuntime) finishAdminHeavy(err error) {
 	if v := r.maintenanceOp.Load(); v != nil {
 		op, _ = v.(string)
 	}
-	started := r.maintenanceStartedUnix.Load()
-	finished := time.Now().Unix()
+	startedUnix := r.maintenanceStartedUnix.Load()
+	startedMs := r.maintenanceStartedMs.Load()
+	now := time.Now()
+	finishedUnix := now.Unix()
 	durationMs := int64(0)
-	if started > 0 && finished >= started {
-		durationMs = (finished - started) * 1000
+	if startedMs > 0 {
+		durationMs = now.UnixMilli() - startedMs
+		if durationMs < 0 {
+			durationMs = 0
+		}
+	} else if startedUnix > 0 && finishedUnix >= startedUnix {
+		durationMs = (finishedUnix - startedUnix) * 1000
 	}
 	result := &adminHeavyLastResult{
 		Op:             op,
 		OK:             err == nil,
-		StartedAtUnix:  started,
-		FinishedAtUnix: finished,
+		StartedAtUnix:  startedUnix,
+		FinishedAtUnix: finishedUnix,
 		DurationMs:     durationMs,
 	}
 	if err != nil {
@@ -368,6 +378,7 @@ func (r *serverRuntime) finishAdminHeavy(err error) {
 	r.maintenanceBusy.Store(false)
 	r.maintenanceOp.Store("")
 	r.maintenanceStartedUnix.Store(0)
+	r.maintenanceStartedMs.Store(0)
 }
 
 func (r *serverRuntime) lastAdminHeavySnapshot() *adminHeavyLastResult {
