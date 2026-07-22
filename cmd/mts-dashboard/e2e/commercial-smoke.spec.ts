@@ -510,6 +510,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-admin-last')).toBeVisible()
   await expect(page.getByTestId('overview-admin-last')).toHaveAttribute('data-ok', 'false')
   await expect(page.getByTestId('overview-admin-last-error')).toContainText(/e2e disk full/i)
+  await expect(page.getByTestId('overview-admin-last-copy')).toBeVisible()
   // P397: last 芯片可跳转运维状态条
   await page.getByTestId('overview-admin-last').click()
   await expect(page).toHaveURL(/\/operations/)

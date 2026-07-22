@@ -1039,6 +1039,8 @@ watch(
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="readinessAdminLastErrorDetail"
             test-id="readiness-admin-last"
+            show-copy
+            copy-test-id="readiness-admin-last-copy"
             error-test-id="readiness-admin-last-error"
           />
 

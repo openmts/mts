@@ -1183,6 +1183,8 @@ async function copyOverview() {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="adminOpLastErrorDetail"
             test-id="overview-admin-last"
+            show-copy
+            copy-test-id="overview-admin-last-copy"
             error-test-id="overview-admin-last-error"
           />
 

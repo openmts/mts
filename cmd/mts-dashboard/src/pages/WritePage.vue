@@ -731,6 +731,8 @@ async function exportWriteDraft() {
           :last-ok="adminOpBusySummary?.lastOk"
           :last-error="writeAdminLastErrorDetail"
           test-id="write-admin-last"
+            show-copy
+            copy-test-id="write-admin-last-copy"
           error-test-id="write-admin-last-error"
         />
 

@@ -716,6 +716,8 @@ const columnRows = computed(() => {
           :last-ok="adminOpBusySummary?.lastOk"
           :last-error="queryAdminLastErrorDetail"
           test-id="query-admin-last"
+            show-copy
+            copy-test-id="query-admin-last-copy"
           error-test-id="query-admin-last-error"
         />
 

@@ -495,6 +495,8 @@ onBeforeUnmount(() => {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="configAdminLastErrorDetail"
             test-id="config-admin-last"
+            show-copy
+            copy-test-id="config-admin-last-copy"
             error-test-id="config-admin-last-error"
           />
 

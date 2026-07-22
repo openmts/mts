@@ -163,6 +163,8 @@ onMounted(() => {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="aboutAdminLastErrorDetail"
             test-id="about-admin-last"
+            show-copy
+            copy-test-id="about-admin-last-copy"
             error-test-id="about-admin-last-error"
           />
 
