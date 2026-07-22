@@ -152,14 +152,26 @@ const rangeAdvanceWatermark = ref(false)
 const rangeLoading = ref(false)
 const showCreate = ref(false)
 const intervalHuman = ref('1m')
+const refreshHuman = ref('1m')
+const lookbackHuman = ref('1m')
 const deleteOpen = ref(false)
 const deleteName = ref('')
 const deleteLoading = ref(false)
 const newPolicy = ref<DownsamplePolicy>({
-  name: '', source_database: '', source_measurement: '',
-  target_database: '', target_measurement: '',
-  interval: 60_000_000_000, functions: [{ function: 'mean', field: 'value', as: 'mean_value' }],
-  group_by_tags: [], enabled: true,
+  name: '',
+  source_database: '',
+  source_measurement: '',
+  source_retention: 'autogen',
+  target_database: '',
+  target_measurement: '',
+  target_retention: 'autogen',
+  interval: 60_000_000_000,
+  refresh_interval: 60_000_000_000,
+  lookback: 60_000_000_000,
+  batch_size: 100,
+  functions: [{ function: 'mean', field: 'value', as: 'mean_value' }],
+  group_by_tags: [],
+  enabled: true,
 })
 const createDatabases = ref<string[]>([])
 const createSourceMeasurements = ref<string[]>([])
@@ -669,6 +681,8 @@ async function createPolicy() {
   clearActionResult()
   try {
     newPolicy.value.interval = parseHumanDurationToNs(intervalHuman.value)
+    newPolicy.value.refresh_interval = parseHumanDurationToNs(refreshHuman.value || intervalHuman.value)
+    newPolicy.value.lookback = parseHumanDurationToNs(lookbackHuman.value || intervalHuman.value)
   } catch (e) {
     const msg = formatCaughtError(e)
     setActionError(msg)
@@ -706,12 +720,24 @@ async function createPolicy() {
     applyAdminOpStatus(parseAdminOpStatusPayload(created))
     showCreate.value = false
     newPolicy.value = {
-      name: '', source_database: '', source_measurement: '',
-      target_database: '', target_measurement: '',
-      interval: 60_000_000_000, functions: [{ function: 'mean', field: 'value', as: 'mean_value' }],
-      group_by_tags: [], enabled: true,
+      name: '',
+      source_database: '',
+      source_measurement: '',
+      source_retention: 'autogen',
+      target_database: '',
+      target_measurement: '',
+      target_retention: 'autogen',
+      interval: 60_000_000_000,
+      refresh_interval: 60_000_000_000,
+      lookback: 60_000_000_000,
+      batch_size: 100,
+      functions: [{ function: 'mean', field: 'value', as: 'mean_value' }],
+      group_by_tags: [],
+      enabled: true,
     }
     intervalHuman.value = '1m'
+    refreshHuman.value = '1m'
+    lookbackHuman.value = '1m'
     await loadData()
     setActionOk(t.value('downsampleCreated'))
     success(t.value('downsampleCreated'))
@@ -1345,6 +1371,40 @@ onBeforeUnmount(() => {
               v-model="newPolicy.target_measurement"
               list="downsample-source-meas-list"
               data-testid="downsample-target-measurement"
+              class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs mts-muted">{{ t('downsampleSourceRetention') }}</label>
+            <input
+              v-model="newPolicy.source_retention"
+              data-testid="downsample-source-retention"
+              class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs mts-muted">{{ t('downsampleTargetRetention') }}</label>
+            <input
+              v-model="newPolicy.target_retention"
+              data-testid="downsample-target-retention"
+              class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs mts-muted">{{ t('downsampleRefreshInterval') }}</label>
+            <input
+              v-model="refreshHuman"
+              data-testid="downsample-create-refresh"
+              :placeholder="t('downsamplePhInterval')"
+              class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs mts-muted">{{ t('downsampleLookback') }}</label>
+            <input
+              v-model="lookbackHuman"
+              data-testid="downsample-create-lookback"
+              :placeholder="t('downsamplePhInterval')"
               class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
             />
           </div>

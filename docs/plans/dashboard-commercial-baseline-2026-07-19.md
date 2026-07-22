@@ -2018,3 +2018,14 @@
 | 降采样批量 last | batch_downsample_* | e2e 芯片 | 真实写路径 |
 | Storage last | ops-status last | AdminOpLastChip | 复制/跳转运维一致 |
 
+## P434（2026-07-22）
+- Downsample 创建表单暴露 source/target retention、refresh、lookback（默认 autogen/1m）
+- Operations last 统一为 `AdminOpLastChip`（保留 ops-status-last* testid）
+- e2e：创建对话框可见高级字段；批量创建路径填写 retention/refresh
+
+### 前后端对齐（P434）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 创建默认值 | applyDownsamplePolicyRequestDefaults | 表单可见可改 | POC 可商用 |
+| Ops last | ops-status last | AdminOpLastChip | 与 Storage 一致 |
+

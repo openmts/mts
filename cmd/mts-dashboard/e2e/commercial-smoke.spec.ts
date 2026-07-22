@@ -1083,6 +1083,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('downsample-open-create').click()
   await expect(page.getByTestId('downsample-create-dialog')).toBeVisible()
   await expect(page.getByTestId('downsample-source-db')).toBeVisible()
+  await expect(page.getByTestId('downsample-source-retention')).toBeVisible()
+  await expect(page.getByTestId('downsample-create-refresh')).toBeVisible()
+  await expect(page.getByTestId('downsample-create-lookback')).toBeVisible()
   await expect(page.getByTestId('downsample-create-meta')).toBeVisible()
   await page.keyboard.press('Escape')
   if (await page.getByTestId('downsample-virtual-list').count()) {
@@ -2460,6 +2463,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('downsample-source-measurement').fill('cpu')
   await page.getByTestId('downsample-target-db').fill('default')
   await page.getByTestId('downsample-target-measurement').fill('cpu_1m_e2e')
+  // P434: 显式 retention/refresh/lookback（可商用表单）
+  await expect(page.getByTestId('downsample-source-retention')).toHaveValue('autogen')
+  await page.getByTestId('downsample-target-retention').fill('autogen')
+  await page.getByTestId('downsample-create-refresh').fill('1m')
+  await page.getByTestId('downsample-create-lookback').fill('1m')
   await page.getByTestId('downsample-fn-field').fill('usage')
   await page.getByTestId('downsample-create-submit').click()
   await expect(page.getByTestId('downsample-select-e2e-batch-ds')).toBeVisible({ timeout: 20_000 })

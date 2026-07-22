@@ -7,6 +7,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -37,7 +38,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { actionResultAdminBusyAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, adminOpLastToneClass, formatAdminHeavyLastSummary, formatAdminHeavyLastCopyText, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, formatAdminHeavyLastSummary, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -105,31 +106,6 @@ const adminOpLastLabel = computed(() => {
   return formatAdminHeavyLastSummary(last, kind)
 })
 
-async function copyAdminOpLast() {
-  const last = adminOpLast.value
-  if (!last || !last.op) {
-    // 与 Storage/AdminOpLastChip 对齐：无 structured last 时回退到展示文案
-    const label = (adminOpLastLabel.value || '').trim()
-    if (!label) {
-      notifyError(t.value('opsStatusLastEmpty'))
-      return
-    }
-    const res = await copyText(label)
-    if (res.ok) success(t.value('opsStatusLastCopied'))
-    else notifyError(res.error || t.value('failed'))
-    return
-  }
-  const key = adminOpKindLabelKey(last.op) as import('@/i18n/messages').MessageKey
-  const kind = t.value(key) || last.op
-  const textToCopy = formatAdminHeavyLastCopyText(last, kind)
-  if (!textToCopy) {
-    notifyError(t.value('opsStatusLastEmpty'))
-    return
-  }
-  const res = await copyText(textToCopy)
-  if (res.ok) success(t.value('opsStatusLastCopied'))
-  else notifyError(res.error || t.value('failed'))
-}
 
 type OpsActionKey = 'flush' | 'compact' | 'retention'
 const {
@@ -816,29 +792,16 @@ watch(
           class="flex flex-wrap items-start gap-2"
           data-testid="ops-status-last-row"
         >
-          <p
-            :class="adminOpLastToneClass(adminOpLast?.ok)"
-            data-testid="ops-status-last"
-            :data-ok="adminOpLast?.ok === true ? 'true' : (adminOpLast?.ok === false ? 'false' : undefined)"
-            :title="adminOpLast?.error || adminOpLastLabel"
-          >
-            <span class="font-medium text-slate-700 dark:text-slate-200">{{ t('opsStatusLastLabel') }}:</span>
-            {{ adminOpLastLabel }}
-          </p>
-          <button
-            type="button"
-            class="mts-btn py-0.5 text-[11px]"
-            data-testid="ops-status-last-copy"
-            :title="t('opsStatusLastCopy')"
-            @click="copyAdminOpLast"
-          >
-            <Copy class="h-3 w-3" /> {{ t('opsStatusLastCopy') }}
-          </button>
-          <p
-            v-if="adminOpLast?.ok === false && adminOpLast?.error"
-            class="w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="ops-status-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ adminOpLast.error }}</p>
+          <AdminOpLastChip
+            :label="adminOpLastLabel"
+            :last-ok="adminOpLast?.ok ?? null"
+            :last-error="adminOpLast?.error || ''"
+            test-id="ops-status-last"
+            show-copy
+            copy-test-id="ops-status-last-copy"
+            error-test-id="ops-status-last-error"
+            :link-to-ops="false"
+          />
         </div>
         <p
           v-else-if="!adminOpBusy"
