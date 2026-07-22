@@ -714,6 +714,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'write-contract-align',
+    severity: 'recommended',
+    title: { zh: 'Write 页对齐 data contract/limits', en: 'Write page aligns data contract/limits' },
+    detail: {
+      zh: 'Write 展示 contract/limits path、推荐 typed path、能力缺失与 limits 不一致告警。',
+      en: 'Write surfaces contract/limits paths, preferred typed path, missing features and limits mismatch warnings.',
+    },
+    automated: true,
+    jump: '/write',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

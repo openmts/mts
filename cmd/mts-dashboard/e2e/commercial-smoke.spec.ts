@@ -703,6 +703,15 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('readiness-storage-drill-jump')).toBeVisible()
   }
 
+  // P495: Write 契约/limits 对齐卡
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('write-contract-align').count()) {
+    await expect(page.getByTestId('write-contract-align')).toBeVisible()
+    await expect(page.getByTestId('write-contract-path')).toContainText('/api/v1/data/contract')
+    await expect(page.getByTestId('write-active-path')).toContainText('/api/v1/data/write')
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

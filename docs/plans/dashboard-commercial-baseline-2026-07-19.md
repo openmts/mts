@@ -2831,3 +2831,14 @@
 |------|--------|-----------|------|
 | storage 演练结果 | 既有 path/结果字段 | sessionStorage handoff | 会话级 |
 | readiness archive | 无新 API | storage_drill 字段 | 交接 JSON/MD |
+
+## P495（2026-07-23）
+- Write：data/contract + limits 对齐卡（path/推荐 typed/能力缺失/limits 不一致）
+- 清单：`write-contract-align`
+
+### 前后端对齐（P495）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| data/contract | path + features + limits | write-contract-path | GET |
+| data/limits | path + max_write_points | write-limits-path | GET |
+| write typed path | writeResponse path | preferred + active path | 推荐 TypedBatch |

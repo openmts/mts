@@ -27,7 +27,10 @@ import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError, resolveCaughtErrorCode } from '@/utils/apiError'
 import { acceptedWritePath, formatWriteSuccessMessage } from '@/utils/writeResultSummary'
 import { fetchDataLimits } from '@/api/dataLimits'
+import { fetchDataContract } from '@/api/dataContract'
 import { normalizeDataLimits, writePointsExceedsMax, type DataLimitsView } from '@/utils/dataLimitsView'
+import { buildDataContractView, type DataContractView } from '@/utils/dataContractView'
+import { alignWriteContract } from '@/utils/writeContractAlign'
 import type { WriteResponse } from '@/api/types'
 import { configErrorCodeDeepLink, remediationPathForCode } from '@/utils/errorCodeContract'
 import { formatMessage } from '@/utils/formatMessage'
@@ -98,6 +101,24 @@ const WRITE_FORM_ROW_MAX = 50
 const dataLimits = ref<DataLimitsView | null>(null)
 const dataLimitsError = ref('')
 const dataLimitsLoading = ref(false)
+const dataContract = ref<DataContractView | null>(null)
+const dataContractError = ref('')
+const dataContractLoading = ref(false)
+const writeContractAlign = computed(() =>
+  alignWriteContract({
+    contract: dataContract.value,
+    limits: dataLimits.value,
+    writeMode: writeMode.value,
+    usePointsTyped: usePointsTyped.value,
+  }),
+)
+const writeContractToneClass = computed(() => {
+  const tone = writeContractAlign.value.tone
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+  return 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/40'
+})
 
 async function loadDataLimits() {
   dataLimitsLoading.value = true
@@ -111,6 +132,25 @@ async function loadDataLimits() {
   } finally {
     dataLimitsLoading.value = false
   }
+}
+
+async function loadDataContract() {
+  dataContractLoading.value = true
+  dataContractError.value = ''
+  try {
+    const result = await fetchDataContract()
+    dataContract.value = buildDataContractView(result.contract)
+    if (result.adminOp) applyGlobalAdminOpStatus(result.adminOp)
+  } catch (e) {
+    dataContractError.value = formatCaughtError(e)
+    dataContract.value = buildDataContractView(null)
+  } finally {
+    dataContractLoading.value = false
+  }
+}
+
+async function refreshWriteContract() {
+  await Promise.all([loadDataLimits(), loadDataContract()])
 }
 
 const formRowCapReached = computed(() => formRows.value.length >= WRITE_FORM_ROW_MAX)
@@ -308,7 +348,7 @@ async function reloadWriteMeta() {
 onMounted(async () => {
   unregisterDirty = registerDirtyChecker('write', () => formDirty.value)
   window.addEventListener('beforeunload', onBeforeUnload)
-  await Promise.all([loadWriteDatabases(), loadDataLimits()])
+  await Promise.all([loadWriteDatabases(), refreshWriteContract()])
   markWriteClean()
 })
 onBeforeUnmount(() => {
@@ -868,20 +908,52 @@ async function exportWriteDraft() {
 
 
     <div
-      v-if="dataLimits || dataLimitsError"
-      class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
-      data-testid="write-limits-banner"
+      class="rounded-xl border px-3 py-2 text-xs"
+      :class="writeContractToneClass"
+      data-testid="write-contract-align"
     >
-      <template v-if="dataLimits">
-        <span data-testid="write-limits-max-points">{{ formatMessage(t('writeServerMaxPoints'), { max: dataLimits.maxWritePoints || '∞' }) }}</span>
+      <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <p class="font-semibold text-slate-800 dark:text-slate-100">{{ t('writeContractAlignTitle') }}</p>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" to="/api-spec?ns=data&q=writeResponse" data-testid="write-contract-jump-spec">{{ t('writeContractJumpSpec') }}</router-link>
+          <button type="button" class="mts-btn text-xs" data-testid="write-contract-refresh" :disabled="dataLimitsLoading || dataContractLoading" @click="refreshWriteContract">{{ t('refresh') }}</button>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 text-slate-700 dark:text-slate-200" data-testid="write-limits-banner">
+        <span data-testid="write-limits-max-points">{{ formatMessage(t('writeServerMaxPoints'), { max: writeContractAlign.max_write_points || dataLimits?.maxWritePoints || '∞' }) }}</span>
         <span
-          class="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
           data-testid="write-limits-path"
-          :title="dataLimits.path"
-        >{{ dataLimits.path }}</span>
-      </template>
-      <span v-else-if="dataLimitsError" class="text-amber-700 dark:text-amber-200" data-testid="write-limits-error">{{ dataLimitsError }}</span>
-      <button type="button" class="mts-btn text-xs" data-testid="write-limits-refresh" :disabled="dataLimitsLoading" @click="loadDataLimits">{{ t('refresh') }}</button>
+          :title="writeContractAlign.limits_path"
+        >{{ writeContractAlign.limits_path }}</span>
+        <span
+          class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          data-testid="write-contract-path"
+          :title="writeContractAlign.contract_path"
+        >{{ writeContractAlign.contract_path }}</span>
+        <span
+          class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          data-testid="write-contract-preferred-path"
+          :title="writeContractAlign.preferred_write_path"
+        >{{ writeContractAlign.preferred_write_path }}</span>
+      </div>
+      <p v-if="dataLimitsError" class="mt-1 text-amber-700 dark:text-amber-200" data-testid="write-limits-error">{{ dataLimitsError }}</p>
+      <p v-if="dataContractError" class="mt-1 text-amber-700 dark:text-amber-200" data-testid="write-contract-error">{{ dataContractError }}</p>
+      <p
+        v-if="writeContractAlign.recommend_typed"
+        class="mt-1 text-amber-800 dark:text-amber-200"
+        data-testid="write-contract-recommend-typed"
+      >{{ t('writeContractRecommendTyped') }}</p>
+      <p
+        v-if="writeContractAlign.limits_match_contract === false"
+        class="mt-1 text-amber-800 dark:text-amber-200"
+        data-testid="write-contract-limits-mismatch"
+      >{{ t('writeContractLimitsMismatch') }}</p>
+      <p
+        v-if="writeContractAlign.missing_write_features.length"
+        class="mt-1 text-red-700 dark:text-red-300"
+        data-testid="write-contract-missing-features"
+      >{{ formatMessage(t('writeContractMissingFeatures'), { ids: writeContractAlign.missing_write_features.join(', ') }) }}</p>
     </div>
 
     <div id="write-target" class="scroll-mt-20 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-4">

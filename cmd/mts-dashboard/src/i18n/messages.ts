@@ -846,6 +846,11 @@ export const messages = {
     storageExportGrants: '授权条目',
     storageExportRawToggle: '展开原始 JSON',
     writeActivePath: '当前写入 API',
+    writeContractAlignTitle: '写入契约对齐',
+    writeContractJumpSpec: '打开写入契约',
+    writeContractRecommendTyped: '推荐使用 TypedBatch 写入以获得最佳吞吐与契约元数据。',
+    writeContractLimitsMismatch: 'limits.max_write_points 与 data/contract 不一致，请核对配置。',
+    writeContractMissingFeatures: '数据面契约缺少写入能力：{ids}',
 
 
 
@@ -2625,6 +2630,11 @@ export const messages = {
     storageExportGrants: 'Grants',
     storageExportRawToggle: 'Expand raw JSON',
     writeActivePath: 'Active write API',
+    writeContractAlignTitle: 'Write contract alignment',
+    writeContractJumpSpec: 'Open write contract',
+    writeContractRecommendTyped: 'Prefer TypedBatch writes for best throughput and response meta.',
+    writeContractLimitsMismatch: 'limits.max_write_points differs from data/contract; verify config.',
+    writeContractMissingFeatures: 'Data contract missing write features: {ids}',
 
 
 
