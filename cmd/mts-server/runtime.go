@@ -485,6 +485,19 @@ func (r *serverRuntime) adminHealthPayload() adminHealthResponse {
 	}
 }
 
+func (r *serverRuntime) adminVersionPayload() versionResponse {
+	busy, op, started := r.adminHeavyState()
+	return versionResponse{
+		Version:       version,
+		Commit:        commit,
+		BuiltAt:       builtAt,
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
+	}
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {

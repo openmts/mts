@@ -119,6 +119,10 @@ interface VersionResponse {
   version: string
   commit: string
   built_at: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
 }
 
 const { adminOpBusy, adminOpKind, adminOpBusyChecking, refreshAdminOpBusy, applyAdminOpStatus } = useAdminOpBusy()
@@ -387,7 +391,9 @@ async function copySignoffMissing() {
 async function loadServerVersion() {
   loadingVersion.value = true
   try {
-    serverVersion.value = await apiGet<VersionResponse>('/api/v1/admin/version')
+    const v = await apiGet<VersionResponse>('/api/v1/admin/version')
+    serverVersion.value = v
+    applyAdminOpStatus(parseAdminOpStatusPayload(v))
     versionError.value = ''
   } catch (e) {
     const msg = formatCaughtError(e)

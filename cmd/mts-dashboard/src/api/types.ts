@@ -171,6 +171,17 @@ export interface AdminHealthResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/admin/version（构建信息 + busy/last） */
+export interface AdminVersionResponse {
+  version: string
+  commit: string
+  built_at: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
 export interface StorageMemorySnapshot {
   heap_alloc_bytes?: number
   heap_inuse_bytes?: number

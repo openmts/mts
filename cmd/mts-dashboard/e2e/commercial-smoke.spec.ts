@@ -459,6 +459,18 @@ test('commercial browser smoke path', async ({ page }) => {
       }),
     })
   })
+  await page.route('**/api/v1/admin/version', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        version: 'e2e',
+        commit: 'deadbeef',
+        built_at: '2026-01-01T00:00:00Z',
+        ...failLastPayload,
+      }),
+    })
+  })
   await page.goto('/operations')
   await page.getByTestId('ops-status-refresh-busy').click()
   await expect(page.getByTestId('ops-status-last')).toContainText(/fail|失败|compact|压缩/i)
@@ -482,6 +494,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-admin-last')).toHaveAttribute('data-ok', 'false')
   await expect(page.getByTestId('storage-admin-last-error')).toContainText(/e2e disk full/i)
+  await expect(page.getByTestId('storage-admin-last-copy')).toBeVisible()
   // P386: 失败 last 进入就绪评分原因（本地化文案）
   await page.goto('/ops/readiness')
   await expect(page.getByRole('main').getByRole('heading', { name: /就绪中心|Commercial readiness|可商用就绪/ })).toBeVisible()
@@ -494,6 +507,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/admin/maintenance/errors', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/doctor').catch(() => {})
   await page.unroute('**/api/v1/admin/health').catch(() => {})
+  await page.unroute('**/api/v1/admin/version').catch(() => {})
 
   // P381: mock 写入命中 admin busy → 结果条可跳转运维
   await page.route('**/api/v1/data/write', async (route) => {

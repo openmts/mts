@@ -353,7 +353,9 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
       return
     }
     case 'version': {
-      serverVersion.value = await apiGet<{ version: string; commit: string; built_at: string }>('/api/v1/admin/version')
+      const v = await apiGet<{ version: string; commit: string; built_at: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/version')
+      serverVersion.value = { version: v.version, commit: v.commit, built_at: v.built_at }
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
   }

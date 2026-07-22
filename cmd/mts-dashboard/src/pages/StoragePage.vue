@@ -5,7 +5,7 @@ import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { actionResultAdminBusyAction, ADMIN_OP_BUSY_OPS_PATH, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, ADMIN_OP_BUSY_OPS_PATH, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, formatAdminHeavyLastCopyText } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -38,7 +38,7 @@ import {
 import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
 import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
 import { completedIds, loadReadinessState, setReadinessFlag } from '@/utils/readinessState'
-import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList } from 'lucide-vue-next'
+import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList, Copy } from 'lucide-vue-next'
 
 interface ValidateResponse { ok: boolean; data_dir: string; health: Record<string, unknown> }
 interface SnapshotResponse { ok: boolean; path: string }
@@ -63,7 +63,7 @@ interface ExportResponse { export: ExportData }
 const route = useRoute()
 const { isAdmin } = useAuth()
 const router = useRouter()
-const { adminOpBusy, adminOpKind, adminOpBusyChecking, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, adminOpBusyChecking, adminOpLast, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const storageBusyRefreshing = ref(false)
 async function refreshStorageBusyOnly() {
   if (storageBusyRefreshing.value || adminOpBusyChecking.value) return
@@ -102,6 +102,34 @@ function openStorageAdminLastOps() {
   }
   void router.push(path)
 }
+async function copyStorageAdminLast(ev?: Event) {
+  ev?.stopPropagation()
+  const raw = adminOpLast.value
+  if (!raw || !raw.op) {
+    const label = storageAdminLastLabel.value
+    const err = storageAdminLastErrorDetail.value
+    const textToCopy = err ? `${label}\nerror=${err}` : label
+    if (!textToCopy) {
+      notifyError(t.value('opsStatusLastEmpty'))
+      return
+    }
+    const res = await copyText(textToCopy)
+    if (res.ok) success(t.value('opsStatusLastCopied'))
+    else notifyError(res.error || t.value('failed'))
+    return
+  }
+  const key = adminOpKindLabelKey(raw.op) as MessageKey
+  const kind = t.value(key) || raw.op
+  const textToCopy = formatAdminHeavyLastCopyText(raw, kind)
+  if (!textToCopy) {
+    notifyError(t.value('opsStatusLastEmpty'))
+    return
+  }
+  const res = await copyText(textToCopy)
+  if (res.ok) success(t.value('opsStatusLastCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+
 
 const storageAdminBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('storageAdminBusyChip')
@@ -930,6 +958,15 @@ async function copyStorageShareLink() {
           data-testid="storage-admin-last-error"
         >{{ t('adminOpLastErrorLabel') }}: {{ storageAdminLastErrorDetail }}</p>
       </div>
+      <button
+        type="button"
+        class="mts-btn py-0.5 text-[11px] shrink-0"
+        data-testid="storage-admin-last-copy"
+        :title="t('opsStatusLastCopy')"
+        @click="copyStorageAdminLast"
+      >
+        <Copy class="h-3 w-3" /> {{ t('opsStatusLastCopy') }}
+      </button>
     </div>
     <InFlightBanner
       :active="!!loading"

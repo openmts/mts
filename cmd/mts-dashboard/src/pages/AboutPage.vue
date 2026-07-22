@@ -6,11 +6,13 @@ import { aboutFormToPrefill, parseAboutPrefill } from '@/utils/routePrefill'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import EmptyState from '@/components/EmptyState.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import { clientBuildInfo } from '@/utils/buildInfo'
@@ -23,13 +25,18 @@ import { Download, Copy, Info } from 'lucide-vue-next'
 
 interface VersionResponse {
   version: string
-  commit: string
-  built_at: string
+  commit?: string
+  built_at?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
 }
 
 const route = useRoute()
 useHashScroll()
 const { isAdmin, currentUser } = useAuth()
+const { applyAdminOpStatus } = useAdminOpBusy()
 const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const aboutAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const aboutAdminLastErrorDetail = computed(() => {
@@ -61,7 +68,9 @@ async function loadVersion() {
   }
   loading.value = true
   try {
-    server.value = await apiGet<VersionResponse>('/api/v1/admin/version')
+    const v = await apiGet<VersionResponse>('/api/v1/admin/version')
+    server.value = v
+    applyAdminOpStatus(parseAdminOpStatusPayload(v))
     loadError.value = ''
   } catch (e) {
     const msg = formatCaughtError(e)

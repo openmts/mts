@@ -293,11 +293,7 @@ func (r *serverRuntime) handleAdminVersion(writer http.ResponseWriter, request *
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, versionResponse{
-		Version: version,
-		Commit:  commit,
-		BuiltAt: builtAt,
-	})
+	writeHTTPJSON(writer, http.StatusOK, r.adminVersionPayload())
 }
 
 func (r *serverRuntime) handleAdminHealth(writer http.ResponseWriter, request *http.Request) {

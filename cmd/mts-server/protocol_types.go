@@ -310,9 +310,13 @@ type maintenanceErrorsResponse struct {
 }
 
 type versionResponse struct {
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-	BuiltAt string `json:"built_at"`
+	Version       string                `json:"version"`
+	Commit        string                `json:"commit"`
+	BuiltAt       string                `json:"built_at"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type apiSpecResponse struct {

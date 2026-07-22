@@ -644,7 +644,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "admin_version",
 			Namespace:   "admin",
-			Description: "server build version information",
+			Description: "server build version information (includes admin_op_busy/last for dashboard alignment)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminVersion},

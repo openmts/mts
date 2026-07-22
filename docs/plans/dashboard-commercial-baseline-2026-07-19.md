@@ -1628,3 +1628,9 @@
 
 ## P397（2026-07-22）
 - `AdminOpLastChip` 默认可点击跳转 `/operations#ops-status-strip`；Storage 失败/成功 last 卡片同步可跳转；e2e 覆盖 Overview last → 运维
+
+## P398（2026-07-22）
+- Storage last 卡片：复制最近一次结果按钮（`storage-admin-last-copy`，点击不触发跳转）
+
+## P399（2026-07-22）
+- Server `GET /api/v1/admin/version` 附带 `admin_op_busy/op/started_at_unix/last`；Overview/Readiness/About 加载时 `applyAdminOpStatus`；HTTP 单测 busy/last
