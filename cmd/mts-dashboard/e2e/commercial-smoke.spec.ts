@@ -618,6 +618,44 @@ test('commercial browser smoke path', async ({ page }) => {
       }),
     })
   })
+  // session / query stats / storage validate 也会 applyAdminOpStatus，需与 fail last 一致
+  await page.route('**/api/v1/auth/session', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        user_name: 'admin',
+        role: 'admin',
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        remaining_seconds: 3600,
+        server_time_unix: Math.floor(Date.now() / 1000),
+        ...failLastPayload,
+      }),
+    })
+  })
+  await page.route('**/api/v1/data/query/stats', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        stats: {},
+        ...failLastPayload,
+      }),
+    })
+  })
+  await page.route('**/api/v1/admin/storage/validate', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data_dir: '/tmp/e2e',
+        health: { healthy: true, ready: true },
+        ...failLastPayload,
+      }),
+    })
+  })
   await page.goto('/operations')
   await page.getByTestId('ops-status-refresh-busy').click()
   await expect(page.getByTestId('ops-status-last')).toContainText(/fail|失败|compact|压缩/i)
@@ -674,6 +712,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/admin/doctor').catch(() => {})
   await page.unroute('**/api/v1/admin/health').catch(() => {})
   await page.unroute('**/api/v1/admin/version').catch(() => {})
+  await page.unroute('**/api/v1/auth/session').catch(() => {})
+  await page.unroute('**/api/v1/data/query/stats').catch(() => {})
+  await page.unroute('**/api/v1/admin/storage/validate').catch(() => {})
 
   // P381: mock 写入命中 admin busy → 结果条可跳转运维
   await page.route('**/api/v1/data/write', async (route) => {

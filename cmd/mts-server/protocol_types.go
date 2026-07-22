@@ -66,7 +66,11 @@ type queryExplainResponse struct {
 }
 
 type queryStatsResponse struct {
-	Stats mts.QueryStats `json:"stats"`
+	Stats         mts.QueryStats        `json:"stats"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type streamRecord struct {
@@ -184,13 +188,17 @@ type authTokenResponse struct {
 }
 
 type sessionResponse struct {
-	OK                 bool         `json:"ok"`
-	UserName           string       `json:"user_name"`
-	Role               mts.UserRole `json:"role,omitempty"`
-	ExpiresAt          time.Time    `json:"expires_at"`
-	MustChangePassword bool         `json:"must_change_password,omitempty"`
-	RemainingSeconds   int64        `json:"remaining_seconds"`
-	ServerTimeUnix     int64        `json:"server_time_unix"`
+	OK                 bool                  `json:"ok"`
+	UserName           string                `json:"user_name"`
+	Role               mts.UserRole          `json:"role,omitempty"`
+	ExpiresAt          time.Time             `json:"expires_at"`
+	MustChangePassword bool                  `json:"must_change_password,omitempty"`
+	RemainingSeconds   int64                 `json:"remaining_seconds"`
+	ServerTimeUnix     int64                 `json:"server_time_unix"`
+	AdminOpBusy        bool                  `json:"admin_op_busy,omitempty"`
+	Op                 string                `json:"op,omitempty"`
+	StartedAtUnix      int64                 `json:"started_at_unix,omitempty"`
+	Last               *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type logoutRequest struct {
@@ -393,9 +401,13 @@ type errorCodeSpec struct {
 }
 
 type storageValidateResponse struct {
-	OK      bool               `json:"ok"`
-	DataDir string             `json:"data_dir"`
-	Health  mts.HealthSnapshot `json:"health"`
+	OK            bool                  `json:"ok"`
+	DataDir       string                `json:"data_dir"`
+	Health        mts.HealthSnapshot    `json:"health"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type adminHealthResponse struct {

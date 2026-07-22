@@ -18,6 +18,8 @@ import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { formatMessage } from '@/utils/formatMessage'
 import { fetchEngineQueryStats } from '@/api/queryMeta'
+import { applyGlobalAdminOpStatus } from '@/composables/useAdminOpBusy'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import type { QueryResultRow, QueryStatsData } from '@/api/types'
 import { hasQueryResultSnapshot } from '@/utils/querySnapshot'
 
@@ -489,8 +491,11 @@ export function useQueryWorkbench() {
     engineStatsLoading.value = true
     engineStatsError.value = ''
     try {
-      const stats = await fetchEngineQueryStats()
-      queryStats.value = stats
+      const result = await fetchEngineQueryStats()
+      queryStats.value = result.stats
+      if (result.adminOp) {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(result.adminOp))
+      }
       engineStatsSource.value = 'engine'
       engineStatsAt.value = Date.now()
     } catch (e) {

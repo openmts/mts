@@ -182,6 +182,11 @@ function getShared(intervalMs?: number): SharedAdminOpBusy {
   return shared
 }
 
+/** 无组件挂载时写入共享 admin op 状态（如 session 刷新）。 */
+export function applyGlobalAdminOpStatus(s: AdminOpStatus) {
+  getShared().applyStatus(s)
+}
+
 /** 管理员会话内静默轮询 admin_op_busy（不触发全局 loading）。busy 时自动加速到 ~3s。 */
 export function useAdminOpBusy(opts?: { intervalMs?: number }): {
   adminOpBusy: ComputedRef<boolean>

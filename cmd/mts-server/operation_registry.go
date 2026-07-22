@@ -156,7 +156,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "query_stats",
 			Namespace:   "data",
-			Description: "latest query stats",
+			Description: "latest query stats (includes admin_op_busy/last)",
 			Auth:        authDataToken,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeDataQueryStats},
@@ -252,7 +252,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "get_session",
 			Namespace:   "auth",
-			Description: "inspect current user bearer session",
+			Description: "inspect current user bearer session (includes admin_op_busy/last)",
 			Auth:        authUserToken,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAuthSession},
@@ -665,7 +665,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "storage_validate",
 			Namespace:   "admin",
-			Description: "validate local storage state",
+			Description: "validate local storage state (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAdminStorageValidate},

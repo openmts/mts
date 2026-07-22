@@ -604,6 +604,10 @@ export interface SessionResponse {
   must_change_password?: boolean
   remaining_seconds?: number
   server_time_unix?: number
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
 }
 
 /** 服务端会话检视：校验 token 并回填 role/expires/must_change */

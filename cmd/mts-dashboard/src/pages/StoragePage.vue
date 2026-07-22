@@ -40,7 +40,15 @@ import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttp
 import { completedIds, loadReadinessState, setReadinessFlag } from '@/utils/readinessState'
 import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList, Copy } from 'lucide-vue-next'
 
-interface ValidateResponse { ok: boolean; data_dir: string; health: Record<string, unknown> }
+interface ValidateResponse {
+  ok: boolean
+  data_dir: string
+  health: Record<string, unknown>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface SnapshotResponse { ok: boolean; path: string }
 interface DataSnapshotResponse { ok: boolean; path: string; source?: string; files?: number; bytes?: number }
 interface RestoreDrillResponse {
@@ -391,6 +399,7 @@ async function doValidate() {
   const signal = beginStorageAction('validate')
   try {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/storage/validate', undefined, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(validateResult.value))
     drillDone.value = { ...drillDone.value, validate: true }
     const msg = validateResult.value.ok ? t.value('storageValidateOk') : t.value('storageValidateDone')
     setActionResult(makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg))

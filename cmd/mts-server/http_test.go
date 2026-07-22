@@ -915,6 +915,61 @@ func TestHTTPPermissionsAndMetaListBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPSessionStorageValidateQueryStatsBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("flush"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var qBusy queryStatsResponse
+	getJSONWithHeaders(t, server.URL+routeDataQueryStats, nil, http.StatusOK, &qBusy)
+	if !qBusy.AdminOpBusy || qBusy.Op != "flush" || qBusy.StartedAtUnix <= 0 {
+		t.Fatalf("query stats busy = %+v", qBusy)
+	}
+	var vBusy storageValidateResponse
+	postJSONWithHeaders(t, server.URL+routeAdminStorageValidate, emptyRequest{}, nil, http.StatusOK, &vBusy)
+	if !vBusy.AdminOpBusy || vBusy.Op != "flush" || vBusy.StartedAtUnix <= 0 {
+		t.Fatalf("storage validate busy = %+v", vBusy)
+	}
+	runtime.finishAdminHeavy(errors.New("session probe fail"))
+	var qDone queryStatsResponse
+	getJSONWithHeaders(t, server.URL+routeDataQueryStats, nil, http.StatusOK, &qDone)
+	if qDone.AdminOpBusy {
+		t.Fatal("query stats want not busy")
+	}
+	if qDone.Last == nil || qDone.Last.Op != "flush" || qDone.Last.OK || qDone.Last.Error != "session probe fail" {
+		t.Fatalf("query stats last = %+v", qDone.Last)
+	}
+	var vDone storageValidateResponse
+	postJSONWithHeaders(t, server.URL+routeAdminStorageValidate, emptyRequest{}, nil, http.StatusOK, &vDone)
+	if vDone.Last == nil || vDone.Last.Op != "flush" || vDone.Last.OK || vDone.Last.Error != "session probe fail" {
+		t.Fatalf("storage validate last = %+v", vDone.Last)
+	}
+
+	seedUserWithPassword(t, runtime, mts.User{Name: "session-busy", Role: mts.UserRoleUser}, "secret")
+	token := loginHTTPUser(t, server.URL, "session-busy", "secret")
+	headers := map[string]string{"Authorization": "Bearer " + token}
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin2: %v", err)
+	}
+	var sBusy sessionResponse
+	getJSONWithHeaders(t, server.URL+routeAuthSession, headers, http.StatusOK, &sBusy)
+	if !sBusy.AdminOpBusy || sBusy.Op != "compact" || sBusy.StartedAtUnix <= 0 {
+		t.Fatalf("session busy = %+v", sBusy)
+	}
+	runtime.finishAdminHeavy(nil)
+	var sDone sessionResponse
+	getJSONWithHeaders(t, server.URL+routeAuthSession, headers, http.StatusOK, &sDone)
+	if sDone.AdminOpBusy {
+		t.Fatal("session want not busy")
+	}
+	if sDone.Last == nil || sDone.Last.Op != "compact" || !sDone.Last.OK {
+		t.Fatalf("session last = %+v", sDone.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

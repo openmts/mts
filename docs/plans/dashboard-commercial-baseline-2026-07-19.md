@@ -1669,3 +1669,27 @@
 - Server：database-permissions、fields、series、measurements 列表附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）
 - Dashboard Users/AccessGrants/Databases 加载权限与 meta 时 `applyAdminOpStatus`；AccessMatrix 进入时 `refreshAdminOpBusy`
 - meta 透传 adminOp（measurements/fields/series）；types/registry/单测同步
+
+## P408（2026-07-22）
+- Server：`GET /api/v1/auth/session`、`POST /api/v1/admin/storage/validate`、`GET /api/v1/data/query/stats` 附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）
+- Dashboard：session 刷新（`refreshSession`/`apiGetSession`）、Storage validate、Query engine stats 加载时 `applyAdminOpStatus`
+- types/registry/单测同步；e2e fail-last mock 覆盖 session/validate/query-stats
+- busy/last 契约覆盖矩阵：见本节「覆盖矩阵」
+
+### busy/last 覆盖矩阵（P408）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| ops-status / maintenance stats | 是 | 是 | 是 | 轮询主源 |
+| doctor / health / version | 是 | 是 | 是 | Overview/Readiness/About |
+| compaction / storage-memory / maintenance errors | 是 | 是 | 是 | Overview/Operations |
+| storage snapshots/export | 是 | 是 | 是 | Storage |
+| config / api-spec / error-codes / audit | 是 | 是 | 是 | Config/ApiSpec/Audit |
+| downsample policies/statuses | 是 | 是 | 是 | Downsample；Metrics 联动 refresh |
+| users / databases / RP | 是 | 是 | 是 | Users/Databases/Access |
+| permissions / fields / series / measurements | 是 | 是 | 是 | Access/Databases meta |
+| **session** | 是 | 是 | 是 | Account 校验 / 全局 refreshSession |
+| **storage/validate** | 是 | 是 | 是 | Storage 校验按钮 |
+| **query/stats** | 是 | 是 | 是 | Query 引擎 stats |
+| 写路径/重操作启动本身 | 互斥错误体 | 互斥错误体 | 是 | busy 即时 chip |
+| SQL/expr 树等 | — | — | — | 非目标 |
+

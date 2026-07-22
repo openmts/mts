@@ -20,6 +20,7 @@ import {
   getMustChangePassword,
   reloadAuthFromStorage,
 } from '@/api/client'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 
 const isAuthenticated = ref(!!getBearerToken() && !isTokenExpired())
 const currentUser = ref(getCurrentUser())
@@ -158,6 +159,10 @@ export function useAuth() {
       setMustChangePassword(!!session.must_change_password)
       mustChangePassword.value = !!session.must_change_password
       isAuthenticated.value = true
+      // 动态 import，避免与 useAdminOpBusy 的循环依赖
+      void import('@/composables/useAdminOpBusy').then(({ applyGlobalAdminOpStatus }) => {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(session))
+      })
       return true
     } catch {
       // 网络抖动时不立即清会话；仅 token 失效由 request 层 triggerAuthFailed

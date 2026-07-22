@@ -140,7 +140,7 @@ func (r *serverRuntime) handleSession(writer http.ResponseWriter, request *http.
 			remaining = sec
 		}
 	}
-	writeHTTPJSON(writer, http.StatusOK, sessionResponse{
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToSession(sessionResponse{
 		OK:                 true,
 		UserName:           principal.UserName,
 		Role:               principal.Role,
@@ -148,5 +148,5 @@ func (r *serverRuntime) handleSession(writer http.ResponseWriter, request *http.
 		MustChangePassword: mustChange,
 		RemainingSeconds:   remaining,
 		ServerTimeUnix:     time.Now().Unix(),
-	})
+	}))
 }

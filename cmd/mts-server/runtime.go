@@ -681,6 +681,36 @@ func (r *serverRuntime) attachAdminOpToSeries(resp seriesResponse) seriesRespons
 	return resp
 }
 
+func (r *serverRuntime) queryStatsPayload() queryStatsResponse {
+	busy, op, started := r.adminHeavyState()
+	return queryStatsResponse{
+		Stats:         r.queryStats(),
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
+	}
+}
+
+func (r *serverRuntime) attachAdminOpToSession(resp sessionResponse) sessionResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) storageValidatePayload() storageValidateResponse {
+	busy, op, started := r.adminHeavyState()
+	resp := r.storageValidate()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {

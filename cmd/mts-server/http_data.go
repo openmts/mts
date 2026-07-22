@@ -111,7 +111,7 @@ func (r *serverRuntime) handleQueryStats(writer http.ResponseWriter, request *ht
 	if !requireHTTPMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, queryStatsResponse{Stats: r.queryStats()})
+	writeHTTPJSON(writer, http.StatusOK, r.queryStatsPayload())
 }
 
 func (r *serverRuntime) handleQueryStream(writer http.ResponseWriter, request *http.Request) {

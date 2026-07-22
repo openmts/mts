@@ -69,7 +69,7 @@ func (r *serverRuntime) handleStorageValidate(writer http.ResponseWriter, reques
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodPost) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, r.storageValidate())
+	writeHTTPJSON(writer, http.StatusOK, r.storageValidatePayload())
 }
 
 func (r *serverRuntime) handleStorageDataSnapshot(writer http.ResponseWriter, request *http.Request) {

@@ -268,7 +268,7 @@ func grpcQueryWithExplain(r *serverRuntime, ctx context.Context, req any) (any, 
 }
 
 func grpcQueryStats(r *serverRuntime, _ context.Context, _ any) (any, error) {
-	return queryStatsResponse{Stats: r.queryStats()}, nil
+	return r.queryStatsPayload(), nil
 }
 
 func grpcLogin(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -325,7 +325,7 @@ func grpcGetSession(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 			remaining = sec
 		}
 	}
-	return sessionResponse{
+	return r.attachAdminOpToSession(sessionResponse{
 		OK:                 true,
 		UserName:           principal.UserName,
 		Role:               principal.Role,
@@ -333,7 +333,7 @@ func grpcGetSession(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 		MustChangePassword: mustChange,
 		RemainingSeconds:   remaining,
 		ServerTimeUnix:     time.Now().Unix(),
-	}, nil
+	}), nil
 }
 
 func grpcChangePassword(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -637,7 +637,7 @@ func grpcStorageValidate(r *serverRuntime, ctx context.Context, _ any) (any, err
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return r.storageValidate(), nil
+	return r.storageValidatePayload(), nil
 }
 
 func grpcStorageSnapshot(r *serverRuntime, ctx context.Context, _ any) (any, error) {
