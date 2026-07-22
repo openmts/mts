@@ -31,6 +31,7 @@ test('production checklist has required commercial gates', () => {
     'overview-session-server-hint',
     'clock-skew-banner',
     'api-spec-password-policy',
+    'api-spec-auth-session-seed',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -172,4 +173,12 @@ test('session-sample-source is automated recommended gate', () => {
   assert.ok(item)
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
+})
+
+test('api-spec-auth-session-seed is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'api-spec-auth-session-seed')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('remaining_seconds'))
 })

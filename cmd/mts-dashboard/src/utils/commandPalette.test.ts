@@ -356,6 +356,7 @@ test('command palette password policy deep links', () => {
   const all = allVisibleCommandItems(true)
   assert.ok(all.some((i) => i.id === 'account-password-policy'))
   assert.ok(all.some((i) => i.id === 'api-spec-password-policy' && i.path.includes('password-policy')))
+  assert.ok(all.some((i) => i.id === 'api-spec-auth-session-seed' && i.path.includes('remaining_seconds')))
   assert.ok(all.some((i) => i.id === 'readiness-session-calibration'))
   assert.ok(all.some((i) => i.id === 'readiness-password-policy'))
 })

@@ -2378,3 +2378,16 @@
 | 会话探测 | GET /auth/session | sample_source=session | 周期/手动校验 |
 | 契约可读 | ResponseHint | ApiSpec 检索 | 运维对照 |
 
+## P462（2026-07-23）
+- Account：样本端点 `login|session` 可见（`account-session-sample-source`）
+- API Spec 深链：`remaining_seconds` 筛选；命令面板 `api-spec-auth-session-seed`
+- Readiness 交接：跳转契约校准字段
+- e2e：登录后样本来源 + 契约检索 remaining_seconds
+
+### 前后端对齐（P462）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 契约检索 | login/session ResponseHint | api-spec q=remaining_seconds | 运维对照 |
+| 样本来源 UI | login seed / session | Account 可见 | e2e 断言 |
+| 就绪交接 | — | handoff 深链 | 不计分 |
+

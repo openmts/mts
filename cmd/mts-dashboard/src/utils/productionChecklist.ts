@@ -353,6 +353,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
     jump: '/api-spec?ns=auth&q=password-policy#api-spec-filters',
   },
+  {
+    id: 'api-spec-auth-session-seed',
+    severity: 'recommended',
+    title: { zh: '契约可检索 login/session 校准字段', en: 'Api-spec searchable login/session calibration fields' },
+    detail: {
+      zh: 'API Spec 可检索 remaining_seconds / server_time_unix（login 与 session）；命令面板深链筛选。',
+      en: 'API Spec is searchable for remaining_seconds / server_time_unix (login and session); command palette deep-link filters.',
+    },
+    automated: true,
+    jump: '/api-spec?ns=auth&q=remaining_seconds#api-spec-filters',
+  },
 ]
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {

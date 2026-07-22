@@ -668,7 +668,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', 'api-spec-auth-session-seed', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
     adminOnly: true,
   },
   {
@@ -879,6 +879,19 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     path: '/api-spec?ns=auth&q=password-policy#api-spec-filters',
     labelKey: 'cmdApiSpecPasswordPolicy',
     keywords: ['password-policy', 'api-spec auth', '契约密码策略', 'password policy api'],
+    adminOnly: true,
+  },
+  {
+    id: 'api-spec-auth-session-seed',
+    path: '/api-spec?ns=auth&q=remaining_seconds#api-spec-filters',
+    labelKey: 'cmdApiSpecAuthSessionSeed',
+    keywords: [
+      'remaining_seconds',
+      'server_time_unix',
+      'login session seed',
+      '登录校准字段',
+      'api-spec auth session',
+    ],
     adminOnly: true,
   },
   {

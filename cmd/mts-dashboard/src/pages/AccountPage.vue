@@ -900,11 +900,20 @@ async function submit() {
         </div>
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('accountSessionCalibrationSource') }}</dt>
-          <dd class="font-mono" data-testid="account-session-calibration-source">{{ calibrationSourceText }}</dd>
+          <dd
+            class="font-mono"
+            data-testid="account-session-calibration-source"
+            :data-sample-source="lastSessionSampleSource || 'none'"
+          >{{ calibrationSourceText }}</dd>
         </div>
       </dl>
       <p class="mt-3 text-xs mts-muted" data-testid="account-session-hint">{{ t('accountSessionRenewHint') }}</p>
       <p class="mt-1 text-[11px] mts-muted" data-testid="account-session-probe-hint">{{ t('accountSessionProbeHint') }}</p>
+      <p
+        v-if="lastSessionSampleSource"
+        class="mt-1 font-mono text-[11px] mts-muted"
+        data-testid="account-session-sample-source"
+      >{{ t('accountSessionSampleSourceLabel') }}: {{ lastSessionSampleSource }}</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button
           type="button"

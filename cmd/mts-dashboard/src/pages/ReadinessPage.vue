@@ -1676,6 +1676,7 @@ watch(
         <router-link class="mts-btn text-xs" to="/account#account-password-policy" data-testid="readiness-handoff-jump-policy">{{ t('readinessCommercialHandoffJumpPolicy') }}</router-link>
         <router-link class="mts-btn text-xs" to="/account#account-session" data-testid="readiness-handoff-jump-session">{{ t('readinessCommercialHandoffJumpSession') }}</router-link>
         <router-link class="mts-btn text-xs" to="/api-spec?ns=auth&q=password-policy#api-spec-filters" data-testid="readiness-handoff-jump-spec">{{ t('readinessCommercialHandoffJumpSpec') }}</router-link>
+        <router-link class="mts-btn text-xs" to="/api-spec?ns=auth&q=remaining_seconds#api-spec-filters" data-testid="readiness-handoff-jump-session-spec">{{ t('readinessCommercialHandoffJumpSessionSpec') }}</router-link>
       </div>
     </div>
 

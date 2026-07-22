@@ -253,6 +253,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('account-session-remaining')).toBeVisible()
   await expect(page.getByTestId('account-session-calibrated')).toBeVisible()
   await expect(page.getByTestId('account-session-calibration-source')).toBeVisible()
+  // 登录后应有校准样本（login 种子或后续 session 探测）
+  await expect(page.getByTestId('account-session-sample-source')).toBeVisible()
+  await expect(page.getByTestId('account-session-sample-source')).toContainText(/login|session/)
   await expect(page.getByTestId('account-session-probe-hint')).toBeVisible()
   await expect(page.getByTestId('account-password-policy')).toBeVisible()
   await expect(page.getByTestId('account-session-relogin')).toBeVisible()
@@ -467,6 +470,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/api-spec?ns=auth&q=password-policy')
   await expect(page.getByTestId('api-spec-page')).toBeVisible()
   await expect(page.getByTestId('api-spec-search')).toHaveValue(/password-policy/i)
+  await page.goto('/api-spec?ns=auth&q=remaining_seconds')
+  await expect(page.getByTestId('api-spec-page')).toBeVisible()
+  await expect(page.getByTestId('api-spec-search')).toHaveValue(/remaining_seconds/i)
   await expect(page.getByTestId('api-spec-admin-last')).toBeVisible()
   await expect(page.getByTestId('api-spec-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
   await expect(page.getByTestId('api-spec-admin-last-copy')).toBeVisible()
@@ -2604,6 +2610,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-commercial-handoff-password')).toBeVisible()
   await expect(page.getByTestId('readiness-commercial-handoff-session')).toBeVisible()
   await expect(page.getByTestId('readiness-copy-commercial-handoff')).toBeVisible()
+  await expect(page.getByTestId('readiness-handoff-jump-session-spec')).toBeVisible()
   // P445: 就绪中心降采样健康卡片 + 错误深链
   if (await page.getByTestId('readiness-downsample-summary').count()) {
     await expect(page.getByTestId('readiness-downsample-total')).toBeVisible()
