@@ -168,7 +168,7 @@ func operationCatalog() []operation {
 			Name:         "query_stats",
 			Namespace:    "data",
 			Description:  "latest query stats (includes admin_op_busy/last)",
-			ResponseHint: "queryStatsResponse{...admin_op_busy,last}",
+			ResponseHint: "queryStatsResponse{stats,path,admin_op_busy,op,started_at_unix,last}",
 			Auth:         authDataToken,
 			HTTPMethods:  []string{http.MethodGet},
 			HTTPPaths:    []string{routeDataQueryStats},

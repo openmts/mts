@@ -105,6 +105,7 @@ type queryExplainResponse struct {
 
 type queryStatsResponse struct {
 	Stats         mts.QueryStats        `json:"stats"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`

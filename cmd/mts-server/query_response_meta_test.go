@@ -48,3 +48,16 @@ func TestHTTPQueryResponsesReportMetaAndAdminOp(t *testing.T) {
 		t.Fatalf("explain scope db=%q meas=%q", explainResp.Database, explainResp.Measurement)
 	}
 }
+
+func TestHTTPQueryStatsReportsPath(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	var statsResp queryStatsResponse
+	getJSONWithHeaders(t, server.URL+routeDataQueryStats, nil, http.StatusOK, &statsResp)
+	if statsResp.Path != routeDataQueryStats {
+		t.Fatalf("stats path = %q", statsResp.Path)
+	}
+	_ = statsResp.AdminOpBusy
+}

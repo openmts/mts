@@ -3,6 +3,7 @@ import type { QueryStatsData } from './types'
 
 export interface EngineQueryStatsResult {
   stats: QueryStatsData
+  path: string
   adminOp?: {
     admin_op_busy?: boolean
     op?: string
@@ -11,10 +12,11 @@ export interface EngineQueryStatsResult {
   }
 }
 
-/** 引擎最近一次查询 stats 快照（GET /api/v1/data/query/stats，含 admin_op_busy/last） */
+/** 引擎最近一次查询 stats 快照（GET /api/v1/data/query/stats，含 path/admin_op） */
 export async function fetchEngineQueryStats(init: RequestInit = {}): Promise<EngineQueryStatsResult> {
   const data = await apiGet<{
     stats?: QueryStatsData
+    path?: string
     admin_op_busy?: boolean
     op?: string
     started_at_unix?: number
@@ -22,6 +24,7 @@ export async function fetchEngineQueryStats(init: RequestInit = {}): Promise<Eng
   }>('/api/v1/data/query/stats', init)
   return {
     stats: data.stats ?? {},
+    path: String(data.path || '').trim() || '/api/v1/data/query/stats',
     adminOp: {
       admin_op_busy: data.admin_op_busy,
       op: data.op,

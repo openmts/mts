@@ -732,6 +732,7 @@ func (r *serverRuntime) queryStatsPayload() queryStatsResponse {
 	busy, op, started := r.adminHeavyState()
 	return queryStatsResponse{
 		Stats:         r.queryStats(),
+		Path:          routeDataQueryStats,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -932,6 +933,7 @@ func (r *serverRuntime) dataContractPayload() dataContractResponse {
 			{ID: "write_accepted_points", Path: routeDataWrite, Description: "write responses include points/path/mode/database", Enabled: true},
 			{ID: "write_response_mode", Path: routeDataWrite, Description: "write responses include mode (points|typed|points_typed) and database", Enabled: true},
 			{ID: "query_result_meta", Path: routeDataQueryRows, Description: "query rows/columns/explain include path/count/database/measurement/admin_op", Enabled: true},
+			{ID: "query_stats_path", Path: routeDataQueryStats, Description: "GET query/stats includes path and admin_op", Enabled: true},
 			{ID: "query_stream_end_meta", Path: routeDataQueryStream, Description: "stream end frame includes path/format/record_count/database/measurement/admin_op", Enabled: true},
 			{ID: "delete_response_meta", Path: routeDataDelete, Description: "delete response includes path/database/measurement/admin_op", Enabled: true},
 			{ID: "data_limits", Path: routeDataLimits, Description: "GET data/limits exposes write/query caps", Enabled: true},

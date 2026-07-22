@@ -26,6 +26,7 @@ func TestHTTPDataContractReportsLimitsAndFeatures(t *testing.T) {
 		"write_accepted_points": false,
 		"write_response_mode":   false,
 		"query_result_meta":     false,
+		"query_stats_path":      false,
 		"query_stream_end_meta": false,
 		"delete_response_meta":  false,
 		"data_limits":           false,

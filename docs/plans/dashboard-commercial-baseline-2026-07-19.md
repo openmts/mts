@@ -2606,3 +2606,17 @@
 | query meta | path/count/database/measurement | 结果导出 JSON | 与 P475 衔接 |
 | 分享深链 | — | mode 预填 | 不自动 run |
 | stream end 清单 | database/measurement | stream-delete-meta 文案 | 运维对照 |
+
+## P477（2026-07-23）
+- Server：`GET /api/v1/data/query/stats` 响应补 `path`；数据面契约 feature `query_stats_path`
+- Dashboard：引擎 Stats 快照展示 path 徽章；`fetchEngineQueryStats` 返回 path
+- Dashboard：范围删除结果导出 `mts.delete.result` v1（path/database/measurement/时间窗）
+- 清单：`query-stats-path`、`delete-result-export-meta`；命令面板深链；e2e 校验 stats path
+
+### 前后端对齐（P477）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| query/stats | path + admin_op | Stats 区 path 徽章 | 与 write/query path 对称 |
+| data contract | query_stats_path | REQUIRED_FEATURE_IDS | 交接/验收包 |
+| range delete | path/database/measurement | mts.delete.result 导出 | 对齐 write/query export |
+

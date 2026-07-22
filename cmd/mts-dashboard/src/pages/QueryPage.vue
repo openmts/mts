@@ -40,6 +40,7 @@ import { latencyFromNanos } from '@/utils/queryLatency'
 import { filterSeriesList, seriesLabel } from '@/utils/seriesMeta'
 import { buildQueryDeleteScope, formatQueryDeleteScopeMessage } from '@/utils/queryDeleteScope'
 import { buildQueryResultExport } from '@/utils/queryExport'
+import { buildDeleteResultExport } from '@/utils/deleteExport'
 import { formatDeleteSuccessMessage } from '@/utils/deleteResultSummary'
 import type { DeleteResponse } from '@/api/types'
 import { detailStatCards, primaryStatCards, toneClass } from '@/utils/queryStatsView'
@@ -67,7 +68,7 @@ const {
   loadMeasurementMeta, refreshSeriesWithTags, applySeriesTags,
   queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, lastQueryErrorCode, lastQueryMeta, loading,
   queryStartedAt,
-  engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, loadEngineStats,
+  engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, engineStatsPath, loadEngineStats,
   loadDatabases, loadDbChildren, hasQuerySnapshot, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
 const history = useQueryHistory()
@@ -166,6 +167,7 @@ const deleteOpen = ref(false)
 const deleteLoading = ref(false)
 const deleteStartedAt = ref<number | null>(null)
 const deleteResult = ref('')
+const deleteMeta = ref<{ ok: boolean; path: string; database: string; measurement: string; start_time: string; end_time: string; message: string } | null>(null)
 let deleteAbort: AbortController | null = null
 const PREFS_KEY = 'mts_query_prefs'
 const initialPrefs = loadQueryPrefs(typeof localStorage !== 'undefined' ? localStorage : null, PREFS_KEY)
@@ -678,6 +680,7 @@ async function doRangeDelete() {
   deleteLoading.value = true
   deleteStartedAt.value = Date.now()
   deleteResult.value = ''
+  deleteMeta.value = null
   try {
     const query = buildQuery()
     const delResp = await apiPost<DeleteResponse>('/api/v1/data/delete', {
@@ -697,6 +700,15 @@ async function doRangeDelete() {
       template: t.value('queryDeleteSubmittedDetail' as MessageKey),
       format: formatMessage,
     })
+    deleteMeta.value = {
+      ok: true,
+      path: String(delResp?.path || '/api/v1/data/delete'),
+      database: String(delResp?.database || query.database || ''),
+      measurement: String(delResp?.measurement || query.measurement || ''),
+      start_time: String(query.start_time ?? ''),
+      end_time: String(query.end_time ?? ''),
+      message: deleteResult.value,
+    }
     success(deleteResult.value)
     deleteOpen.value = false
   } catch (e) {
@@ -797,6 +809,26 @@ async function exportResultJSON() {
   else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
+
+async function exportDeleteResult() {
+  if (!deleteMeta.value || exportBusy.value) return
+  const payload = buildDeleteResultExport(deleteMeta.value)
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-delete-result', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('queryDeleteExported'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
+}
+
 
 const HISTORY_ROW_HEIGHT = 56
 const HISTORY_LIST_HEIGHT = 320
@@ -1249,7 +1281,19 @@ const columnRows = computed(() => {
       @retry="runQuery"
       @dismiss="actionError = ''; actionErrorCause = null; lastQueryErrorCode = ''"
     />
-    <p v-if="deleteResult" class="mts-alert-ok" role="status" aria-live="polite" data-testid="query-delete-result">{{ deleteResult }}</p>
+    <div v-if="deleteResult" class="flex flex-wrap items-center gap-2" data-testid="query-delete-result-row">
+      <p class="mts-alert-ok flex-1" role="status" aria-live="polite" data-testid="query-delete-result">{{ deleteResult }}</p>
+      <button
+        v-if="deleteMeta"
+        type="button"
+        class="mts-btn text-xs"
+        data-testid="query-delete-export"
+        :disabled="exportBusy"
+        @click="exportDeleteResult"
+      >
+        <Download class="h-3.5 w-3.5" /> {{ t('queryDeleteExport') }}
+      </button>
+    </div>
 
     <div id="query-stats" class="scroll-mt-20 space-y-2" data-testid="query-stats-panel">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -1268,6 +1312,12 @@ const columnRows = computed(() => {
           <span v-if="engineStatsSource === 'engine' && engineStatsAtLabel" class="text-[11px] mts-muted" data-testid="query-stats-at">
             {{ engineStatsAtLabel }}
           </span>
+          <span
+            v-if="engineStatsSource === 'engine' && engineStatsPath"
+            class="max-w-[14rem] truncate rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-stats-path"
+            :title="engineStatsPath"
+          >{{ engineStatsPath }}</span>
         </div>
         <button
           type="button"

@@ -431,6 +431,28 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/query#query-results',
   },
   {
+    id: 'query-stats-path',
+    severity: 'recommended',
+    title: { zh: '查询 Stats 展示服务端 path', en: 'Query stats show server path' },
+    detail: {
+      zh: 'GET /api/v1/data/query/stats 返回 path；引擎快照成功后 Stats 区展示 path 徽章；数据面契约含 query_stats_path。',
+      en: 'GET /api/v1/data/query/stats returns path; after engine snapshot, stats panel shows path badge; data contract includes query_stats_path.',
+    },
+    automated: true,
+    jump: '/query#query-stats',
+  },
+  {
+    id: 'delete-result-export-meta',
+    severity: 'recommended',
+    title: { zh: '删除结果导出含 path/scope', en: 'Delete result export includes path/scope' },
+    detail: {
+      zh: '范围删除成功后可导出 mts.delete.result v1（path/database/measurement/时间窗）。',
+      en: 'After range delete, export mts.delete.result v1 with path/database/measurement/time range.',
+    },
+    automated: true,
+    jump: '/query#query-stats',
+  },
+  {
     id: 'data-contract-endpoint',
     severity: 'required',
     title: { zh: '数据面契约快照可交接', en: 'Data-plane contract snapshot for handoff' },

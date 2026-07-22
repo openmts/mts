@@ -38,6 +38,8 @@ test('production checklist has required commercial gates', () => {
     'query-result-path-visible',
     'query-result-scope',
     'query-result-export-meta',
+    'query-stats-path',
+    'delete-result-export-meta',
     'data-limits-endpoint',
     'stream-delete-meta',
     'data-contract-endpoint',
@@ -235,6 +237,24 @@ test('query-result-path-visible is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('query-results'))
+})
+
+
+test('query-stats-path is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'query-stats-path')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('query-stats'))
+})
+
+
+test('delete-result-export-meta is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'delete-result-export-meta')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/query'))
 })
 
 

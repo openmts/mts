@@ -485,6 +485,8 @@ test('commercial browser smoke path', async ({ page }) => {
   // P244: 引擎统计错误区默认不出现
   await expect(page.getByTestId('query-engine-stats-error')).toHaveCount(0)
   await expect(page.getByTestId('query-stats-source-engine')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('query-stats-path')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('query-stats-path')).toContainText('/api/v1/data/query/stats')
   // 若有结果则校验虚拟列表；冷启动无结果时跳过
   if (await page.getByTestId('query-results-virtual-list').count()) {
     await expect(page.getByTestId('query-results-virtual-list')).toBeVisible()
@@ -871,6 +873,7 @@ test('commercial browser smoke path', async ({ page }) => {
       contentType: 'application/json',
       body: JSON.stringify({
         stats: {},
+        path: '/api/v1/data/query/stats',
         ...failLastPayload,
       }),
     })

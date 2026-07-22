@@ -88,6 +88,7 @@ export function useQueryWorkbench() {
   const engineStatsLoading = ref(false)
   const engineStatsError = ref('')
   const engineStatsAt = ref<number | null>(null)
+  const engineStatsPath = ref('')
   const rawOutput = ref('')
   const columnSeries = ref<unknown[]>([])
   const streamMeta = ref({ lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 })
@@ -589,6 +590,7 @@ export function useQueryWorkbench() {
     try {
       const result = await fetchEngineQueryStats()
       queryStats.value = result.stats
+      engineStatsPath.value = result.path || '/api/v1/data/query/stats'
       if (result.adminOp) {
         applyGlobalAdminOpStatus(parseAdminOpStatusPayload(result.adminOp))
       }
@@ -637,6 +639,7 @@ export function useQueryWorkbench() {
     engineStatsLoading,
     engineStatsError,
     engineStatsAt,
+    engineStatsPath,
     loadEngineStats,
     rawOutput,
     streamMeta,

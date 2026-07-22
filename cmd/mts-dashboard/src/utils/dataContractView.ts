@@ -36,6 +36,7 @@ const REQUIRED_FEATURE_IDS = [
   'write_accepted_points',
   'write_response_mode',
   'query_result_meta',
+  'query_stats_path',
   'query_stream_end_meta',
   'delete_response_meta',
   'data_limits',

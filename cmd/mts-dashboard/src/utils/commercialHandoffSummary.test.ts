@@ -98,6 +98,7 @@ test('commercial handoff includes data_contract view', () => {
         { id: 'write_accepted_points', enabled: true },
         { id: 'write_response_mode', enabled: true },
         { id: 'query_result_meta', enabled: true },
+        { id: 'query_stats_path', enabled: true },
         { id: 'query_stream_end_meta', enabled: true },
         { id: 'delete_response_meta', enabled: true },
         { id: 'data_limits', enabled: true },
