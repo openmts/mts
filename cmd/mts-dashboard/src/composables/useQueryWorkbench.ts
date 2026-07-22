@@ -3,9 +3,7 @@ import { formatCaughtError, resolveCaughtErrorCode } from '@/utils/apiError'
 import { apiPost, apiPostNDJSONStream } from '@/api/client'
 import {
   listDatabasesDetailed,
-  listFields,
   listFieldsDetailed,
-  listMeasurements,
   listMeasurementsDetailed,
   listRetentionPoliciesDetailed,
   listSeriesDetailed,

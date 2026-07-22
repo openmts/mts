@@ -12,9 +12,7 @@ import { applyGlobalAdminOpStatus } from '@/composables/useAdminOpBusy'
 import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import {
   listDatabasesDetailed,
-  listFields,
   listFieldsDetailed,
-  listMeasurements,
   listMeasurementsDetailed,
   listRetentionPoliciesDetailed,
   type MetaLoadSource,
