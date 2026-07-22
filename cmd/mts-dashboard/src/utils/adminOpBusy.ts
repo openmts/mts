@@ -4,6 +4,8 @@ import { formatElapsedSeconds } from './inFlightStatus.ts'
 import {
   type AdminHeavyLast,
   formatAdminHeavyLastSummary,
+  formatAdminHeavyLastDetail,
+  formatAdminHeavyLastCopyText,
   parseAdminHeavyLast,
   readDismissedAdminOpLastFinishedAt,
   readFailAckedAdminOpLastFinishedAt,
@@ -20,6 +22,8 @@ import {
 export type { AdminHeavyLast, CommandAdminOpLastDismissFeedback } from './adminOpLast.ts'
 export {
   formatAdminHeavyLastSummary,
+  formatAdminHeavyLastDetail,
+  formatAdminHeavyLastCopyText,
   parseAdminHeavyLast,
   readDismissedAdminOpLastFinishedAt,
   readFailAckedAdminOpLastFinishedAt,

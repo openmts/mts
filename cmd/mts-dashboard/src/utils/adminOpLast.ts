@@ -57,6 +57,23 @@ export function formatAdminHeavyLastSummary(
   return err ? `${base}: ${err}` : base
 }
 
+/** 失败 last 的错误详情（纯函数；成功或无错误时返回空） */
+export function formatAdminHeavyLastDetail(last: AdminHeavyLast | null | undefined): string {
+  if (!last || last.ok !== false) return ''
+  return (last.error || '').trim()
+}
+
+/** 运维条「复制最近一次」剪贴板文本（纯函数） */
+export function formatAdminHeavyLastCopyText(
+  last: AdminHeavyLast | null | undefined,
+  opLabel: string,
+): string {
+  const summary = formatAdminHeavyLastSummary(last, opLabel)
+  if (!summary) return ''
+  const detail = formatAdminHeavyLastDetail(last)
+  return detail ? `${summary}\n${detail}` : summary
+}
+
 export const ADMIN_OP_LAST_DISMISS_KEY = 'mts.admin-op-last-dismissed-finished-at'
 export const ADMIN_OP_LAST_FAIL_ACK_KEY = 'mts.admin-op-last-fail-acked-finished-at'
 

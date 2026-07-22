@@ -349,6 +349,22 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-page')).toBeVisible()
   await expect(page.getByTestId('audit-admin-last')).toBeVisible()
 
+  // P366: About / ApiSpec last 芯片（不在 h1 内）
+  await page.goto('/about')
+  await expect(page.getByTestId('about-page')).toBeVisible()
+  await expect(page.getByTestId('about-admin-last')).toBeVisible()
+  await expect(page.getByTestId('about-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
+  await page.goto('/api-spec')
+  await expect(page.getByTestId('api-spec-page')).toBeVisible()
+  await expect(page.getByTestId('api-spec-admin-last')).toBeVisible()
+  await expect(page.getByTestId('api-spec-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
+
+  // P368: Operations 复制最近一次
+  await page.goto('/operations')
+  await expect(page.getByTestId('ops-status-last')).toBeVisible()
+  await expect(page.getByTestId('ops-status-last-copy')).toBeVisible()
+  await page.getByTestId('ops-status-last-copy').click()
+
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')
   await expect(page.getByTestId('access-matrix-page')).toBeVisible()

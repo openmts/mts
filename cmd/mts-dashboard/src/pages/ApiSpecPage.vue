@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, inject, onMounted, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseApiSpecPrefill, apiSpecFormToPrefill } from '@/utils/routePrefill'
@@ -21,6 +21,7 @@ import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 
 interface APIEndpoint {
   method: string
@@ -39,6 +40,8 @@ interface APISpecResponse {
 }
 
 const { isAdmin } = useAuth()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const apiSpecAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const route = useRoute()
 useHashScroll()
 const { success, info, error: notifyError, warn } = useNotify()
@@ -220,7 +223,16 @@ async function exportMarkdown() {
     <div class="flex flex-wrap items-center justify-between gap-2">
       <div>
         <h1 class="mts-title" data-testid="api-spec-title">{{ t('apiSpec') }}</h1>
-        <p class="text-xs mts-muted">{{ formatMessage(t('apiSpecDesc'), { version: version || t('emptyValue'), count: totalEndpoints }) }}</p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs mts-muted">{{ formatMessage(t('apiSpecDesc'), { version: version || t('emptyValue'), count: totalEndpoints }) }}</p>
+          <span
+            v-if="apiSpecAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="api-spec-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="apiSpecAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ apiSpecAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex flex-wrap gap-2">
         <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />

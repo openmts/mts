@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { aboutFormToPrefill, parseAboutPrefill } from '@/utils/routePrefill'
@@ -19,6 +19,7 @@ import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { Download, Copy, Info } from 'lucide-vue-next'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 
 interface VersionResponse {
   version: string
@@ -29,6 +30,8 @@ interface VersionResponse {
 const route = useRoute()
 useHashScroll()
 const { isAdmin, currentUser } = useAuth()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const aboutAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const { t } = useI18n()
 const { success, info, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
@@ -139,7 +142,16 @@ onMounted(() => {
           <Info class="h-5 w-5" />
           {{ t('aboutTitle') }}
         </h1>
-        <p class="text-xs mts-muted">{{ t('aboutDesc') }}</p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs mts-muted">{{ t('aboutDesc') }}</p>
+          <span
+            v-if="isAdmin && aboutAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="about-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="aboutAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ aboutAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex flex-wrap gap-2">
         <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />

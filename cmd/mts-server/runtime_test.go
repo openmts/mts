@@ -317,6 +317,35 @@ func TestRuntimeAdminHeavyLastResultOnFlush(t *testing.T) {
 	}
 }
 
+func TestRuntimeAdminHeavyLastResultOnError(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.HTTP.Addr = "127.0.0.1:0"
+	cfg.HTTP.Enabled = true
+	cfg.GRPC.Enabled = false
+	runtime, err := openRuntime(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("openRuntime() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = runtime.engine.Close(context.Background())
+	})
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	runtime.finishAdminHeavy(errors.New("disk full"))
+	st := runtime.opsStatusPayload()
+	if st.AdminOpBusy {
+		t.Fatal("busy want false after failed heavy op")
+	}
+	if st.Last == nil || st.Last.Op != "compact" || st.Last.OK || st.Last.Error != "disk full" {
+		t.Fatalf("last after error = %+v", st.Last)
+	}
+	if st.Last.FinishedAtUnix <= 0 || st.Last.DurationMs < 0 {
+		t.Fatalf("last timestamps = %+v", st.Last)
+	}
+}
+
 func TestRuntimeAdminHeavySharedMutex(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.DataDir = t.TempDir()

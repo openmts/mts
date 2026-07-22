@@ -22,6 +22,8 @@ import {
   parseAdminOpStatusPayload,
   parseAdminHeavyLast,
   formatAdminHeavyLastSummary,
+  formatAdminHeavyLastDetail,
+  formatAdminHeavyLastCopyText,
   shouldShowAdminOpLastBanner,
   readDismissedAdminOpLastFinishedAt,
   writeDismissedAdminOpLastFinishedAt,
@@ -101,6 +103,34 @@ test('parseAdminHeavyLast and formatAdminHeavyLastSummary', () => {
     /ok/,
   )
 })
+
+test('formatAdminHeavyLastDetail and copy text', () => {
+  const okLast = parseAdminHeavyLast({
+    op: 'flush',
+    ok: true,
+    finished_at_unix: 100,
+    duration_ms: 12,
+  })
+  assert.equal(formatAdminHeavyLastDetail(okLast), '')
+  assert.match(formatAdminHeavyLastCopyText(okLast, 'Flush'), /ok/)
+  assert.equal(formatAdminHeavyLastCopyText(okLast, 'Flush').includes('\n'), false)
+
+  const failLast = parseAdminHeavyLast({
+    op: 'compact',
+    ok: false,
+    error: 'disk full',
+    finished_at_unix: 200,
+    duration_ms: 2500,
+  })
+  assert.equal(formatAdminHeavyLastDetail(failLast), 'disk full')
+  const copy = formatAdminHeavyLastCopyText(failLast, 'Compact')
+  assert.match(copy, /fail/)
+  assert.match(copy, /disk full/)
+  assert.ok(copy.includes('\n'))
+  assert.equal(formatAdminHeavyLastDetail(null), '')
+  assert.equal(formatAdminHeavyLastCopyText(null, 'x'), '')
+})
+
 
 test('adminOpKindLabelKey', () => {
   assert.equal(adminOpKindLabelKey('flush'), 'adminOpKindFlush')

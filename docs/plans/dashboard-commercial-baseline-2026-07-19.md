@@ -1528,3 +1528,15 @@
 
 ## P365（2026-07-22）
 - 进入 Operations 自动 ack 失败 last；e2e 覆盖 Metrics/Audit last 芯片
+
+## P366（2026-07-22）
+- About/ApiSpec：标题 desc 行展示 admin last 摘要芯片（不入 h1，避免 a11y 名称污染）
+
+## P367（2026-07-22）
+- Layout：失败 last 横幅展开 `error` 详情（`admin-op-last-error`）；provide `lastError`
+- 纯函数：`formatAdminHeavyLastDetail` / `formatAdminHeavyLastCopyText` + 单测
+
+## P368（2026-07-22）
+- Operations：运维状态条「复制最近一次」按钮（摘要 + 错误详情）
+- e2e：About/ApiSpec last 芯片 + ops-status-last-copy
+- Server：补齐 `finishAdminHeavy` 失败路径 `last.error` 单测（协议字段已有）

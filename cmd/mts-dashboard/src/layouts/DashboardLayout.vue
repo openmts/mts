@@ -37,6 +37,7 @@ import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import {
   adminOpKindLabelKey,
   formatAdminHeavyLastSummary,
+  formatAdminHeavyLastDetail,
   formatAdminOpElapsed,
   readDismissedAdminOpLastFinishedAt,
   shouldShowAdminOpLastBanner,
@@ -133,6 +134,8 @@ const adminOpLastSummary = computed(() => {
   return formatAdminHeavyLastSummary(last, kind)
 })
 
+const adminOpLastDetail = computed(() => formatAdminHeavyLastDetail(adminOpLast.value))
+
 const canDismissLastBanner = computed(() =>
   canDismissAdminOpLast({
     lastOk: adminOpLast.value ? adminOpLast.value.ok : null,
@@ -193,6 +196,7 @@ provide('adminOpBusySummary', computed(() => ({
   detail: adminOpBusyDetail.value,
   pollError: adminOpBusyPollErrorLabel.value,
   lastSummary: adminOpLastSummary.value,
+  lastError: adminOpLastDetail.value,
   lastOk: adminOpLast.value ? adminOpLast.value.ok : null,
   lastFinishedAtUnix: adminOpLast.value?.finishedAtUnix ?? null,
 })))
@@ -586,6 +590,11 @@ function onSkipToMain(e: Event) {
         <div class="min-w-0">
           <span class="font-semibold">{{ t('adminOpLastBannerTitle') }}</span>
           <span class="ml-1" data-testid="admin-op-last-summary">{{ adminOpLastSummary }}</span>
+          <p
+            v-if="adminOpLastDetail"
+            class="mt-1 break-all font-mono text-[11px] opacity-90"
+            data-testid="admin-op-last-error"
+          >{{ adminOpLastDetail }}</p>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-2">
           <span

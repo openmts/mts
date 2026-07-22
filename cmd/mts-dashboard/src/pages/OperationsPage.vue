@@ -37,7 +37,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, adminHeavyBusyOpFromError, adminOpLastToneClass, formatAdminHeavyLastSummary, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, adminHeavyBusyOpFromError, adminOpLastToneClass, formatAdminHeavyLastSummary, formatAdminHeavyLastCopyText, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -104,6 +104,24 @@ const adminOpLastLabel = computed(() => {
   const kind = t.value(key) || last.op
   return formatAdminHeavyLastSummary(last, kind)
 })
+
+async function copyAdminOpLast() {
+  const last = adminOpLast.value
+  if (!last || !last.op) {
+    notifyError(t.value('opsStatusLastEmpty'))
+    return
+  }
+  const key = adminOpKindLabelKey(last.op) as import('@/i18n/messages').MessageKey
+  const kind = t.value(key) || last.op
+  const textToCopy = formatAdminHeavyLastCopyText(last, kind)
+  if (!textToCopy) {
+    notifyError(t.value('opsStatusLastEmpty'))
+    return
+  }
+  const res = await copyText(textToCopy)
+  if (res.ok) success(t.value('opsStatusLastCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
 
 type OpsActionKey = 'flush' | 'compact' | 'retention'
 const {
@@ -760,16 +778,30 @@ watch(
           class="text-xs text-sky-800 dark:text-sky-200"
           data-testid="ops-status-busy-hint"
         >{{ t('opsStatusBusyHint') }}</p>
-        <p
+        <div
           v-if="adminOpLastLabel"
-          :class="adminOpLastToneClass(adminOpLast?.ok)"
-          data-testid="ops-status-last"
-          :data-ok="adminOpLast?.ok === true ? 'true' : (adminOpLast?.ok === false ? 'false' : undefined)"
-          :title="adminOpLast?.error || adminOpLastLabel"
+          class="flex flex-wrap items-start gap-2"
+          data-testid="ops-status-last-row"
         >
-          <span class="font-medium text-slate-700 dark:text-slate-200">{{ t('opsStatusLastLabel') }}:</span>
-          {{ adminOpLastLabel }}
-        </p>
+          <p
+            :class="adminOpLastToneClass(adminOpLast?.ok)"
+            data-testid="ops-status-last"
+            :data-ok="adminOpLast?.ok === true ? 'true' : (adminOpLast?.ok === false ? 'false' : undefined)"
+            :title="adminOpLast?.error || adminOpLastLabel"
+          >
+            <span class="font-medium text-slate-700 dark:text-slate-200">{{ t('opsStatusLastLabel') }}:</span>
+            {{ adminOpLastLabel }}
+          </p>
+          <button
+            type="button"
+            class="mts-btn py-0.5 text-[11px]"
+            data-testid="ops-status-last-copy"
+            :title="t('opsStatusLastCopy')"
+            @click="copyAdminOpLast"
+          >
+            <Copy class="h-3 w-3" /> {{ t('opsStatusLastCopy') }}
+          </button>
+        </div>
         <p
           v-else-if="!adminOpBusy"
           class="text-xs mts-muted"
