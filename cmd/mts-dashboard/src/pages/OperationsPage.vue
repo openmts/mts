@@ -36,7 +36,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminOpBusyOpenAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -315,6 +315,12 @@ const statsLoadedLabel = computed(() => {
   return formatMessage(t.value('opsStatsLastLoaded'), { time: formatAt(statsLoadedAt.value) })
 })
 
+function notifyAdminBusy(message?: string) {
+  notifyError(message || t.value('opsAdminBusy'), {
+    action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')),
+  })
+}
+
 function openConfirm(kind: 'flush' | 'compact' | 'retention') {
   if (confirmLoading.value) return
   if (writeBlocked.value) {
@@ -322,7 +328,7 @@ function openConfirm(kind: 'flush' | 'compact' | 'retention') {
     return
   }
   if (adminOpBusy.value) {
-    notifyError(t.value('opsAdminBusy'))
+    notifyAdminBusy()
     return
   }
   confirmKind.value = kind
@@ -335,7 +341,8 @@ function reportActionError(kind: OpsActionKey, e: unknown) {
   }
   reportRetryError(kind, e)
   const msg = actionResult.value?.message || formatCaughtError(e)
-  notifyError(msg)
+  if (isAdminHeavyBusyError(e)) notifyAdminBusy(msg)
+  else notifyError(msg)
   recordAction(kind, 'error', msg)
 }
 
@@ -348,7 +355,7 @@ async function retryLastOpsAction() {
     return
   }
   if (adminOpBusy.value) {
-    notifyError(t.value('opsAdminBusy'))
+    notifyAdminBusy()
     return
   }
   confirmKind.value = kind as OpsActionKey
@@ -368,7 +375,7 @@ async function runConfirmed() {
     return
   }
   if (adminOpBusy.value) {
-    notifyError(t.value('opsAdminBusy'))
+    notifyAdminBusy()
     return
   }
   const kind = confirmKind.value

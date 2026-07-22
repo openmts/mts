@@ -2,6 +2,13 @@
 
 export type NotifyKind = 'success' | 'error' | 'info' | 'warn'
 
+export interface NotifyAction {
+  /** 按钮文案 */
+  label: string
+  /** 路由 path，可含 hash */
+  path: string
+}
+
 export interface NotifyItem {
   id: number
   kind: NotifyKind
@@ -9,6 +16,7 @@ export interface NotifyItem {
   count: number
   createdAt: number
   updatedAt: number
+  action?: NotifyAction
 }
 
 export const DEFAULT_NOTIFY_CAPACITY = 5
@@ -21,6 +29,7 @@ export interface PushNotifyInput {
   capacity?: number
   dedupeWindowMs?: number
   nextId: number
+  action?: NotifyAction
 }
 
 export interface PushNotifyResult {
@@ -51,8 +60,13 @@ export function pushNotifyItem(
   let id = nextId
   let next = items.slice()
 
+  const actionPath = (input.action?.path || '').trim()
   const existingIdx = next.findIndex(
-    (n) => n.kind === kind && n.message === message && now - n.updatedAt <= windowMs,
+    (n) =>
+      n.kind === kind &&
+      n.message === message &&
+      (n.action?.path || '') === actionPath &&
+      now - n.updatedAt <= windowMs,
   )
   if (existingIdx >= 0) {
     const cur = next[existingIdx]
@@ -66,17 +80,21 @@ export function pushNotifyItem(
     merged = true
   } else {
     id = nextId++
-    next = [
-      ...next,
-      {
-        id,
-        kind,
-        message,
-        count: 1,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ]
+    const created: NotifyItem = {
+      id,
+      kind,
+      message,
+      count: 1,
+      createdAt: now,
+      updatedAt: now,
+    }
+    if (input.action?.label && input.action?.path) {
+      created.action = {
+        label: String(input.action.label).trim() || input.action.path,
+        path: String(input.action.path).trim(),
+      }
+    }
+    next = [...next, created]
   }
 
   if (next.length > capacity) {

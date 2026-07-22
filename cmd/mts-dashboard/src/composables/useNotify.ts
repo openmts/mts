@@ -5,6 +5,7 @@ import {
   defaultTtlMs,
   dismissNotifyItem,
   pushNotifyItem,
+  type NotifyAction,
   type NotifyItem,
   type NotifyKind,
 } from '@/utils/notifyQueue'
@@ -43,13 +44,25 @@ function refreshHistory() {
 }
 
 export function useNotify() {
-  function push(kind: NotifyKind, message: string, ttlMs = defaultTtlMs(kind)) {
+  function push(
+    kind: NotifyKind,
+    message: string,
+    ttlOrOpts?: number | { ttlMs?: number; action?: NotifyAction },
+  ) {
+    const opts = typeof ttlOrOpts === 'object' && ttlOrOpts != null ? ttlOrOpts : undefined
+    const ttlMs =
+      typeof ttlOrOpts === 'number'
+        ? ttlOrOpts
+        : opts?.ttlMs != null
+          ? opts.ttlMs
+          : defaultTtlMs(kind)
     const result = pushNotifyItem(items.value, {
       kind,
       message,
       nextId: seq,
       capacity: DEFAULT_NOTIFY_CAPACITY,
       dedupeWindowMs: DEFAULT_DEDUPE_WINDOW_MS,
+      action: opts?.action,
     })
     seq = result.nextId
     items.value = result.items
@@ -70,11 +83,23 @@ export function useNotify() {
   function success(message: string) {
     return push('success', message)
   }
-  function error(message: string) {
-    return push('error', message, defaultTtlMs('error'))
+  function error(
+    message: string,
+    opts?: { action?: NotifyAction; ttlMs?: number },
+  ) {
+    return push('error', message, {
+      ttlMs: opts?.ttlMs ?? defaultTtlMs('error'),
+      action: opts?.action,
+    })
   }
-  function warn(message: string) {
-    return push('warn', message, defaultTtlMs('warn'))
+  function warn(
+    message: string,
+    opts?: { action?: NotifyAction; ttlMs?: number },
+  ) {
+    return push('warn', message, {
+      ttlMs: opts?.ttlMs ?? defaultTtlMs('warn'),
+      action: opts?.action,
+    })
   }
   function info(message: string) {
     return push('info', message)
@@ -108,4 +133,4 @@ export function useNotify() {
 }
 
 // 兼容旧类型导出
-export type { NotifyItem, NotifyKind }
+export type { NotifyAction, NotifyItem, NotifyKind }

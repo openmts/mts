@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useNotify } from '@/composables/useNotify'
 import { useI18n } from '@/composables/useI18n'
 import { notifyDisplayText } from '@/utils/notifyQueue'
@@ -10,6 +11,7 @@ import {
 
 const { items, dismiss } = useNotify()
 const { t } = useI18n()
+const router = useRouter()
 // items 变化时重算，确保 DashboardLayout 挂载后按钮出现
 const canOpenHistory = computed(() => {
   void items.value.length
@@ -19,6 +21,13 @@ const canOpenHistory = computed(() => {
 function openHistory(id: number) {
   dismiss(id)
   requestOpenNotifyHistory()
+}
+
+function runAction(id: number, path: string) {
+  dismiss(id)
+  const target = String(path || '').trim()
+  if (!target) return
+  void router.push(target)
 }
 </script>
 
@@ -53,6 +62,14 @@ function openHistory(id: number) {
             data-testid="notify-dismiss"
             @click="dismiss(n.id)"
           >{{ t('close') }}</button>
+          <button
+            v-if="n.action?.path"
+            type="button"
+            class="mts-focus-ring rounded text-[11px] font-medium underline-offset-2 hover:underline opacity-80 hover:opacity-100"
+            data-testid="notify-action"
+            :aria-label="n.action.label"
+            @click="runAction(n.id, n.action.path)"
+          >{{ n.action.label }}</button>
           <button
             v-if="canOpenHistory && (n.kind === 'error' || n.kind === 'warn')"
             type="button"

@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  ADMIN_OP_BUSY_OPS_PATH,
+  adminHeavyBusyOpFromError,
+  adminOpBusyOpenAction,
   adminOpKindLabelKey,
   formatAdminOpElapsed,
-  adminHeavyBusyOpFromError,
   isAdminHeavyBusyError,
   isAdminHeavyBusyMessage,
-  parseAdminHeavyBusyOp,
   joinAdminOpChip,
+  parseAdminHeavyBusyOp,
   parseAdminOpBusyPayload,
   parseAdminOpStatusPayload,
   shouldPollAdminOpBusy,
@@ -85,3 +87,13 @@ test('parseAdminHeavyBusyOp', () => {
     'data_snapshot',
   )
 })
+
+test('adminOpBusyOpenAction', () => {
+  assert.equal(ADMIN_OP_BUSY_OPS_PATH, '/operations#ops-status-strip')
+  assert.deepEqual(adminOpBusyOpenAction('打开运维'), {
+    label: '打开运维',
+    path: ADMIN_OP_BUSY_OPS_PATH,
+  })
+  assert.equal(adminOpBusyOpenAction('').path, ADMIN_OP_BUSY_OPS_PATH)
+})
+

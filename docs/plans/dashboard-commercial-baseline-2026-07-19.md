@@ -1406,3 +1406,10 @@
 ## P327（2026-07-22）
 - Server：admin heavy 互斥冲突 message 附带当前 `op`
 - Dashboard：错误文案/乐观 busy 解析并展示占用 op
+
+## P328（2026-07-22）
+- Notify：toast 支持可选 action（label+path）；合并键含 action.path
+- NotifyHost：展示 `notify-action`，点击 router.push 并 dismiss
+- adminOpBusy：`ADMIN_OP_BUSY_OPS_PATH` / `adminOpBusyOpenAction`
+- Ops/Storage：本地 busy 门禁与互斥错误 toast 附带「打开运维」跳转 `/operations#ops-status-strip`
+

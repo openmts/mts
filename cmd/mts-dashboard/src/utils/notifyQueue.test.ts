@@ -46,3 +46,38 @@ test('dismissNotifyItem removes by id', () => {
   const r = pushNotifyItem([], { kind: 'info', message: 'x', nextId: 1, now: 1 })
   assert.equal(dismissNotifyItem(r.items, r.id).length, 0)
 })
+
+test('pushNotifyItem keeps action and does not merge different action paths', () => {
+  let nextId = 1
+  let items: ReturnType<typeof pushNotifyItem>['items'] = []
+  let r = pushNotifyItem(items, {
+    kind: 'error',
+    message: 'busy',
+    nextId,
+    now: 1000,
+    action: { label: 'Ops', path: '/operations#a' },
+  })
+  items = r.items
+  nextId = r.nextId
+  assert.equal(items[0].action?.path, '/operations#a')
+  r = pushNotifyItem(items, {
+    kind: 'error',
+    message: 'busy',
+    nextId,
+    now: 1100,
+    action: { label: 'Ops', path: '/operations#b' },
+  })
+  items = r.items
+  assert.equal(r.merged, false)
+  assert.equal(items.length, 2)
+  r = pushNotifyItem(items, {
+    kind: 'error',
+    message: 'busy',
+    nextId: r.nextId,
+    now: 1200,
+    action: { label: 'Ops', path: '/operations#a' },
+  })
+  items = r.items
+  assert.equal(r.merged, true)
+  assert.equal(items.find((x) => x.id === r.id)?.count, 2)
+})

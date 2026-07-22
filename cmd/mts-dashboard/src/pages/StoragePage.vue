@@ -5,7 +5,7 @@ import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { adminOpBusyOpenAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -200,10 +200,17 @@ async function reloadStorageLists() {
   await loadDataSnapshots()
 }
 
+function notifyAdminBusy(message?: string) {
+  notifyError(message || t.value('storageAdminBusy'), {
+    action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')),
+  })
+}
+
 function reportActionError(key: StorageActionKey, e: unknown) {
   reportRetryError(key, e)
   const msg = actionResult.value?.message || formatCaughtError(e)
-  notifyError(msg)
+  if (isAdminHeavyBusyError(e)) notifyAdminBusy(msg)
+  else notifyError(msg)
 }
 
 async function retryLastStorageAction() {
@@ -262,7 +269,7 @@ function guardAdminHeavy(): boolean {
   }
   if (loading.value) return false
   if (adminOpBusy.value) {
-    notifyError(t.value('storageAdminBusy'))
+    notifyAdminBusy()
     return false
   }
   return true

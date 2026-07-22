@@ -126,3 +126,16 @@ export function adminHeavyBusyOpFromError(err: unknown): string {
   const e = err as { message?: string }
   return parseAdminHeavyBusyOp(e.message)
 }
+
+/** 运维占用状态条深链（toast / 横幅统一） */
+export const ADMIN_OP_BUSY_OPS_PATH = '/operations#ops-status-strip'
+
+/** toast 快捷动作：打开运维状态条 */
+export function adminOpBusyOpenAction(label: string): { label: string; path: string } {
+  const lab = String(label || '').trim()
+  return {
+    label: lab || 'Open Operations',
+    path: ADMIN_OP_BUSY_OPS_PATH,
+  }
+}
+
