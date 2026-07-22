@@ -666,7 +666,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', '禁用会话'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', '批量 last', '禁用会话'],
     adminOnly: true,
   },
   {
@@ -700,6 +700,19 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
       'user-enable-active',
       'active filter',
       '恢复用户',
+    ],
+    adminOnly: true,
+  },
+  {
+    id: 'readiness-batch-admin-last',
+    path: '/users#users-filter-bar',
+    labelKey: 'cmdReadinessBatchAdminLast',
+    keywords: [
+      'batch admin last',
+      '批量 last',
+      'batch-admin-last',
+      'users admin last',
+      'downsample batch last',
     ],
     adminOnly: true,
   },

@@ -117,6 +117,7 @@ func (r *serverRuntime) handleBatchDownsamplePolicies(writer http.ResponseWriter
 		writeAPIError(writer, err)
 		return
 	}
+	r.recordBatchDownsampleLast(req.Action, resp)
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToBatch(resp))
 }
 
@@ -197,10 +198,12 @@ func grpcBatchUpdateUserDisabled(r *serverRuntime, ctx context.Context, req any)
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	resp, err := r.batchUpdateUserDisabled(ctx, *req.(*batchUserDisabledRequest), r.grpcActor(ctx))
+	body := *req.(*batchUserDisabledRequest)
+	resp, err := r.batchUpdateUserDisabled(ctx, body, r.grpcActor(ctx))
 	if err != nil {
 		return nil, err
 	}
+	r.recordBatchUserDisabledLast(body.Disabled, resp)
 	return r.attachAdminOpToBatch(resp), nil
 }
 
@@ -208,10 +211,12 @@ func grpcBatchDownsamplePolicies(r *serverRuntime, ctx context.Context, req any)
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	resp, err := r.batchDownsamplePolicies(ctx, *req.(*batchDownsampleRequest), r.grpcActor(ctx))
+	body := *req.(*batchDownsampleRequest)
+	resp, err := r.batchDownsamplePolicies(ctx, body, r.grpcActor(ctx))
 	if err != nil {
 		return nil, err
 	}
+	r.recordBatchDownsampleLast(body.Action, resp)
 	return r.attachAdminOpToBatch(resp), nil
 }
 
@@ -237,6 +242,20 @@ func (r *serverRuntime) recordBatchUserDisabledLast(disabled bool, resp batchMut
 	errMsg := ""
 	if !ok {
 		errMsg = "batch user disabled partial failure"
+	}
+	r.recordAdminOpLast(op, ok, errMsg)
+}
+
+func (r *serverRuntime) recordBatchDownsampleLast(action string, resp batchMutationResponse) {
+	a := strings.ToLower(strings.TrimSpace(action))
+	op := "batch_downsample_enable"
+	if a == "disable" {
+		op = "batch_downsample_disable"
+	}
+	ok := resp.Fail == 0
+	errMsg := ""
+	if !ok {
+		errMsg = "batch downsample partial failure"
 	}
 	r.recordAdminOpLast(op, ok, errMsg)
 }

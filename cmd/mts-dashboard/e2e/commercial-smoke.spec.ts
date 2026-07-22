@@ -1316,6 +1316,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('command-item-users-status-active').click()
   await expect(page).toHaveURL(/status=active/)
   await expect(page.getByTestId('users-status-filter')).toHaveValue('active')
+  // P430: 命令面板批量 last 就绪入口
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('批量 last')
+  await expect(page.getByTestId('command-item-readiness-batch-admin-last')).toBeVisible()
+  await page.getByTestId('command-item-readiness-batch-admin-last').click()
+  await expect(page).toHaveURL(/\/users/)
+  await expect(page.getByTestId('users-page')).toBeVisible()
   // P428: 命令面板就绪清单「禁用用户撤销会话」深链
   await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()
@@ -2767,6 +2775,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('confirm-dialog-confirm').click()
   await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('users-action-result')).toContainText(/启用|enabled|batch|批量|ok/i)
+  // P430: 批量启用后 last 芯片仍可见（batch_user_enable 或先前 batch_user_disable）
+  await expect(page.getByTestId('users-admin-last')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('users-admin-last-copy')).toBeVisible()
   await page.getByTestId('users-open-grant-reader-e2e').click()
   await expect(page.getByTestId('user-grant-panel')).toBeVisible()
   // 仅匹配库名 checkbox，排除 count/filter 等

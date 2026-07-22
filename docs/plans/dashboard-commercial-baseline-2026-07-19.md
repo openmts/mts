@@ -1970,3 +1970,15 @@
 | 启用用户命令 | — | status=active 深链 | 与 disabled 对称 |
 | API Spec 搜索 | ResponseHint | 跨 ns fallback 单测 | 默认首 ns 不漏契约 |
 
+## P430（2026-07-22）
+- 服务端：降采样批量启停写入轻量 last（`batch_downsample_enable` / `batch_downsample_disable`）；gRPC 批量用户/降采样同步 record
+- Dashboard：批量 op 文案 i18n；就绪清单 `batch-admin-last`；命令面板就绪入口
+- e2e：批量启用后 last 芯片；命令面板「批量 last」深链 Users
+
+### 前后端对齐（P430）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 降采样批量 last | recordAdminOpLast | Downsample 芯片 | 与用户批量对称 |
+| gRPC 批量 | 同步 record | — | 与 HTTP 一致 |
+| 就绪清单 | — | batch-admin-last | 可勾选自动化项 |
+

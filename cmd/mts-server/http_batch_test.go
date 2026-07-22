@@ -98,6 +98,12 @@ func TestHTTPBatchDownsamplePolicies(t *testing.T) {
 	if resp.Skip < 1 {
 		t.Fatalf("skip_count=%d want >=1; resp=%#v", resp.Skip, resp)
 	}
+	if resp.AdminOpBusy {
+		t.Fatal("downsample batch should not set admin_op_busy")
+	}
+	if resp.Last == nil || resp.Last.Op != "batch_downsample_disable" || !resp.Last.OK {
+		t.Fatalf("downsample batch last=%#v", resp.Last)
+	}
 
 	// bad action
 	postJSONWithHeaders(t, server.URL+routeAdminDownsampleBatch, batchDownsampleRequest{

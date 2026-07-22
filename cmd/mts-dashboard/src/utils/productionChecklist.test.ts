@@ -17,6 +17,7 @@ test('production checklist has required commercial gates', () => {
     'smoke-login-query-write',
     'admin-op-visibility',
     'user-disable-revokes-tokens',
+    'batch-admin-last',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -57,5 +58,13 @@ test('production checklist items expose jump targets', () => {
   const disableRevoke = PRODUCTION_CHECKLIST.find((x) => x.id === 'user-disable-revokes-tokens')
   assert.equal(productionChecklistJump(disableRevoke!), '/users?status=disabled#users-filter-bar')
   assert.equal(productionChecklistJump({}), null)
+})
+
+test('batch-admin-last is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'batch-admin-last')
+  assert.ok(item)
+  assert.equal(item?.automated, true)
+  assert.equal(item?.severity, 'recommended')
+  assert.equal(productionChecklistJump(item!), '/users#users-filter-bar')
 })
 

@@ -300,6 +300,8 @@ test('command palette has readiness production checklist and admin-op jumps', ()
   assert.ok(
     filterCommandItems(all, '启用用户筛选', (k) => k).some((i) => i.id === 'readiness-user-enable-active'),
   )
+  assert.ok(all.some((i) => i.id === 'readiness-batch-admin-last' && i.path.includes('/users')))
+  assert.ok(filterCommandItems(all, '批量 last', (k) => k).some((i) => i.id === 'readiness-batch-admin-last'))
 })
 
 test('command palette has reset-nav-order action', () => {

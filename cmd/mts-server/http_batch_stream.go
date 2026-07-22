@@ -60,7 +60,18 @@ func (r *serverRuntime) streamBatchDownsamplePolicies(
 	}
 	streamBatchItems(request.Context(), enc, flusher, names, func(ctx context.Context, name string) batchItemResult {
 		return r.applyDownsampleAction(ctx, name, action, actor)
-	}, r.attachBatchProgressSummary)
+	}, func(event *batchProgressEvent) {
+		if event != nil && event.Type == "summary" && !event.Cancelled {
+			r.recordBatchDownsampleLast(action, batchMutationResponse{
+				OK:      event.OK,
+				OKCount: event.OKCount,
+				Skip:    event.Skip,
+				Fail:    event.Fail,
+				Items:   event.Items,
+			})
+		}
+		r.attachBatchProgressSummary(event)
+	})
 }
 
 func streamBatchItems(
