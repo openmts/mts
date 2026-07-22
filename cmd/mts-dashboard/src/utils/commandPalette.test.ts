@@ -285,3 +285,10 @@ test('command palette has readiness production checklist and admin-op jumps', ()
   assert.ok(all.some((i) => i.id === 'readiness-admin-op-visibility' && i.path.includes('ops-status-strip')))
 })
 
+test('command palette has reset-nav-order action', () => {
+  assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-reset-nav-order' && i.action === 'reset-nav-order'))
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'action-reset-nav-order'))
+  assert.ok(filterCommandItems(all, 'nav order', (k) => k).some((i) => i.id === 'action-reset-nav-order'))
+})
+

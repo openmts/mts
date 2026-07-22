@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, type ComputedRef,  ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiDelete, apiGet, apiPost, apiPostNDJSONStream, apiPut } from '@/api/client'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
@@ -76,6 +76,7 @@ interface PermissionsResponse {
 }
 
 const route = useRoute()
+const router = useRouter()
 useHashScroll()
 const users = ref<User[]>([])
 const userFilter = ref('')
@@ -126,7 +127,7 @@ const usersAdminLastErrorDetail = computed(() => {
   if (adminOpBusySummary?.value?.lastOk !== false) return ''
   return (adminOpBusySummary?.value?.lastError || '').trim()
 })
-const { currentUser, isAdmin } = useAuth()
+const { currentUser, isAdmin, changePassword, logout } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
 const { applyAdminOpStatus } = useAdminOpBusy()
@@ -375,10 +376,21 @@ async function doSetPassword() {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    const pwdResp = await apiPut<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(setPasswordUser.value)}/password`, { password: setPasswordValue.value }, { signal })
-    applyAdminOpStatus(parseAdminOpStatusPayload(pwdResp))
+    const target = setPasswordUser.value
+    const pwdResp = await apiPut<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(target)}/password`, { password: setPasswordValue.value }, { signal })
     showSetPassword.value = false
     setPasswordValue.value = ''
+    // SetPassword 会撤销目标用户全部 token；若改的是当前登录用户须重新登录
+    if (target && target === (currentUser.value || '').trim()) {
+      await logout()
+      success(t.value('usersPasswordChangedRelogin'))
+      await router.replace({
+        name: 'Login',
+        query: { reason: 'password_changed', user: target },
+      })
+      return
+    }
+    applyAdminOpStatus(parseAdminOpStatusPayload(pwdResp))
     setActionOk(t.value('usersPasswordSet'))
     success(t.value('usersPasswordSet'))
   } catch (e) {
@@ -403,18 +415,23 @@ async function doChangeSelfPassword() {
   usersWriteLoading.value = true
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
+  const userName = (currentUser.value || '').trim()
   try {
-        const chg = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/auth/password', {
-      user_name: currentUser.value,
-      old_password: selfOldPassword.value,
-      new_password: selfNewPassword.value,
-    }, { signal })
-    applyAdminOpStatus(parseAdminOpStatusPayload(chg))
+    // 走 useAuth.changePassword：成功后服务端撤销 token，前端 clearAuth
+    const err = await changePassword(selfOldPassword.value, selfNewPassword.value, { signal })
+    if (err) {
+      setActionError(err)
+      notifyError(err)
+      return
+    }
     showChangeSelfPassword.value = false
     selfOldPassword.value = ''
     selfNewPassword.value = ''
-    setActionOk(t.value('usersPasswordChanged'))
-    success(t.value('usersPasswordChanged'))
+    success(t.value('usersPasswordChangedRelogin'))
+    await router.replace({
+      name: 'Login',
+      query: { reason: 'password_changed', user: userName },
+    })
   } catch (e) {
     reportUsersCatch('change-self-password', e)
   } finally {

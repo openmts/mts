@@ -1844,3 +1844,20 @@
 | auth/password 成功 | ok+must_change=false+adminOp | 同左 | clearAuth 后登录 | 表单清脏 |
 | readiness prod jump admin-op | — | — | 是 | → /operations#ops-status-strip |
 | write admin busy 429 | 既有 | 既有 | e2e mock | 友好文案 |
+
+## P421（2026-07-22）
+- Dashboard Users：自改密改走 `useAuth.changePassword`，成功后 clearAuth 并跳转登录（修复成功改密仍停留已撤销会话的缺陷）
+- Dashboard Users：管理员 `set_password` 若目标为当前用户，同步 logout 并要求重登
+- 登录页：支持 `?user=` 预填；`password_changed` 自动聚焦密码框
+- Account / ForceChange / Users 改密成功跳转携带 `user` query
+- 命令面板：`reset-nav-order` 重置侧栏排序（派发 prefs 变更事件）
+- Server：`set_user_password` 契约描述对齐（撤销 token / 清 must_change / adminOp）
+- e2e：强制改密旧密码错误保会话、登录预填、命令面板重置排序入口
+
+### 会话边界（P421 增量）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| Users 自改密成功 | 撤销 token | clearAuth → Login | 原先未清会话 |
+| Users 设密当前用户 | 撤销 token | logout → Login | 与 SetPassword 语义一致 |
+| 强制改密旧密码错误 | bad_request | 留在 force-change | 与 P420 对齐 |
+| 登录 password_changed | — | 预填 user + 焦点密码 | 减少重登摩擦 |

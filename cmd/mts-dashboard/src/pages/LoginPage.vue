@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
@@ -29,9 +29,17 @@ const { t, locale } = useI18n()
 
 const storage = typeof localStorage !== 'undefined' ? localStorage : null
 const remembered = loadLoginUsernamePref(storage)
-const username = ref(remembered || 'admin')
+const queryUser = (() => {
+  try {
+    const q = router.currentRoute.value.query.user
+    return String(Array.isArray(q) ? q[0] : q || '').trim()
+  } catch {
+    return ''
+  }
+})()
+const username = ref(queryUser || remembered || 'admin')
 const password = ref('')
-const rememberUsername = ref(!!remembered)
+const rememberUsername = ref(!!remembered || !!queryUser)
 const ttlSeconds = ref(loadLoginTTLPref(storage))
 const loading = ref(false)
 const loginStartedAt = ref<number | null>(null)
@@ -41,6 +49,16 @@ const errorRetryable = ref(false)
 const reasonHint = computed(() =>
   loginReasonMessage(router.currentRoute.value.query.reason, locale.value),
 )
+
+onMounted(() => {
+  const reason = String(router.currentRoute.value.query.reason || '')
+  if (reason !== 'password_changed') return
+  void nextTick(() => {
+    const el = document.getElementById('password') as HTMLInputElement | null
+    el?.focus()
+    el?.select()
+  })
+})
 const pendingRedirect = computed(() =>
   sanitizeRedirect(router.currentRoute.value.query.redirect),
 )

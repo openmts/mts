@@ -83,6 +83,7 @@ async function submit() {
   actionStartedAt.value = Date.now()
   const signal = actionAbort.begin()
   try {
+    const userForRelogin = currentUser.value || ''
     const err = await changePassword(oldPassword.value, newPassword.value, { signal })
     if (err) {
       if (isCanceledError(err)) {
@@ -108,7 +109,10 @@ async function submit() {
     errorRetryable.value = false
     await router.replace({
       name: 'Login',
-      query: withRedirectQuery({ reason: 'password_changed' }, route.query.redirect),
+      query: withRedirectQuery(
+        { reason: 'password_changed', ...(userForRelogin ? { user: userForRelogin } : {}) },
+        route.query.redirect,
+      ),
     })
   } finally {
     actionAbort.end()

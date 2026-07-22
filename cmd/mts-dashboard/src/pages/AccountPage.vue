@@ -541,6 +541,7 @@ async function submit() {
   accountActionStartedAt.value = Date.now()
   const signal = accountActionAbort.begin()
   try {
+    const userForRelogin = currentUser.value || ''
     const err = await changePassword(oldPassword.value, newPassword.value, { signal })
     if (err) {
       const mapped = mapAccountActionError(err)
@@ -560,7 +561,10 @@ async function submit() {
     error.value = ''
     passwordRetryable.value = false
     success(t.value('accountPasswordChanged'))
-    await router.replace({ name: 'Login', query: { reason: 'password_changed' } })
+    await router.replace({
+      name: 'Login',
+      query: { reason: 'password_changed', ...(userForRelogin ? { user: userForRelogin } : {}) },
+    })
   } finally {
     accountActionAbort.end()
     loading.value = false

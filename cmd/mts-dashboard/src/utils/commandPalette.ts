@@ -34,6 +34,7 @@ export type CommandActionId =
   | 'refresh-admin-op-busy'
   | 'dismiss-admin-op-last'
   | 'copy-admin-op-last'
+  | 'reset-nav-order'
 
 /** 页内快捷动作（不离开当前路由，除非动作本身导航） */
 export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
@@ -208,6 +209,13 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
     kind: 'action',
     adminOnly: true,
     action: 'copy-admin-op-last',
+  },
+  {
+    id: 'action-reset-nav-order',
+    path: 'action:reset-nav-order',
+    labelKey: 'cmdActionResetNavOrder',
+    keywords: ['reset nav order', 'sidebar order', '重置侧栏排序', '导航排序', 'nav order'],
+    action: 'reset-nav-order',
   },
 ]
 

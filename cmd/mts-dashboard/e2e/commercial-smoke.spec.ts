@@ -83,12 +83,23 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('force-password-error-dismiss')).toBeVisible()
   await page.getByTestId('force-password-error-dismiss').click()
   await expect(page.getByTestId('force-password-error')).toHaveCount(0)
+  // P421: 强制改密旧密码错误 — 保持强制改密页，不清会话
+  await page.getByTestId('force-old').fill('definitely-wrong-old')
+  await page.getByTestId('force-new').fill(NEW_PASSWORD)
+  await page.getByTestId('force-confirm').fill(NEW_PASSWORD)
+  await page.getByTestId('force-password-submit').click()
+  await expect(page.getByTestId('force-password-error')).toBeVisible({ timeout: 10_000 })
+  await expect(page).toHaveURL(/force-change-password/)
+  await expect(page.getByTestId('force-password-panel')).toBeVisible()
+
   await page.getByTestId('force-old').fill('admin')
   await page.getByTestId('force-new').fill(NEW_PASSWORD)
   await page.getByTestId('force-confirm').fill(NEW_PASSWORD)
   await page.getByTestId('force-password-submit').click()
   await expect(page).toHaveURL(/login/)
   await expect(page.getByText(/密码已更新|new password/i)).toBeVisible()
+  await expect(page.getByTestId('login-reason')).toBeVisible()
+  await expect(page.getByTestId('login-username')).toHaveValue(/admin/)
 
   // 2) 新密码登录
   await login(page, 'admin', NEW_PASSWORD)
@@ -1214,6 +1225,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-item-audit')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('刷新占用')
   await expect(page.getByTestId('command-item-action-refresh-admin-op-busy')).toBeVisible()
+  // P421: 命令面板重置侧栏排序（独立筛选；执行后面板关闭）
+  await page.getByTestId('command-palette-input').fill('nav order')
+  await expect(page.getByTestId('command-item-action-reset-nav-order')).toBeVisible()
+  await page.getByTestId('command-item-action-reset-nav-order').click()
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('复制最近一次')
   await expect(page.getByTestId('command-item-action-copy-admin-op-last')).toBeVisible()
   await page.getByTestId('command-item-action-copy-admin-op-last').click()

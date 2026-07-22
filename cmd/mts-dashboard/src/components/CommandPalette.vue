@@ -38,6 +38,8 @@ import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
+import { saveNavOrderMap } from '@/utils/navOrder'
+import { CLIENT_PREFS_CHANGED_EVENT } from '@/utils/clientPrefs'
 import {
   clickShareLinkButton,
   pickShareLinkButton,
@@ -301,6 +303,19 @@ function runAction(action: CommandActionId) {
       }
       dismissAdminOpLastBanner?.()
       success(t.value('cmdActionDismissAdminOpLastDone'))
+      break
+    }
+    case 'reset-nav-order': {
+      try {
+        const storage = typeof localStorage !== 'undefined' ? localStorage : null
+        saveNavOrderMap(storage, {})
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent(CLIENT_PREFS_CHANGED_EVENT))
+        }
+        success(t.value('cmdActionResetNavOrderDone'))
+      } catch (e) {
+        notifyError(t.value('cmdActionResetNavOrderFailed'))
+      }
       break
     }
     case 'copy-admin-op-last': {
