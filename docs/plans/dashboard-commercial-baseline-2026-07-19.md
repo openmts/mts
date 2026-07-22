@@ -2409,3 +2409,17 @@
 | 深链处置 | dashboard_path | Query/Write action / 命令面板 | 只读跳转 |
 | 就绪门禁 | — | error-codes-remediation | required |
 
+
+## P464（2026-07-23）
+- Server：`writeResponse` 增加 `points` / `path`（HTTP+gRPC 三写路径）
+- Server：ApiSpec ResponseHint 对齐 write / error-codes 可操作字段
+- Dashboard：`WriteResponse` 类型 + `writeResultSummary`；Write 成功文案优先服务端 accepted points/path
+- 就绪清单：`write-accepted-points`（required）
+
+### 前后端对齐（P464）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 行点写入 | points/path | writeSuccessPoints | 含 points-typed |
+| TypedBatch | points/path | writeTypedSuccess | 计数以 timestamps 为准 |
+| 契约 | ResponseHint | ApiSpec 可读 | 运维对照 |
+

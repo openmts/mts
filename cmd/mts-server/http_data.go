@@ -31,7 +31,11 @@ func (r *serverRuntime) handleWrite(writer http.ResponseWriter, request *http.Re
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{
+		OK:     true,
+		Points: len(req.Points),
+		Path:   routeDataWrite,
+	}))
 }
 
 func (r *serverRuntime) handleWriteTyped(writer http.ResponseWriter, request *http.Request) {
@@ -56,7 +60,11 @@ func (r *serverRuntime) handleWriteTyped(writer http.ResponseWriter, request *ht
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{
+		OK:     true,
+		Points: len(req.Batch.Timestamps),
+		Path:   routeDataWriteTyped,
+	}))
 }
 
 func (r *serverRuntime) handleQueryRows(writer http.ResponseWriter, request *http.Request) {
@@ -255,7 +263,11 @@ func (r *serverRuntime) handleWritePointsTyped(writer http.ResponseWriter, reque
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{
+		OK:     true,
+		Points: len(req.Points),
+		Path:   routeDataWritePointsTyped,
+	}))
 }
 
 func (r *serverRuntime) handleDelete(writer http.ResponseWriter, request *http.Request) {

@@ -274,6 +274,17 @@ export interface AdminAPISpecResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** POST /api/v1/data/write|write/typed|write/points-typed 成功响应 */
+export interface WriteResponse {
+  ok?: boolean
+  points?: number
+  path?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
 /** GET /api/v1/admin/error-codes（含 busy/last + 可操作元数据） */
 export interface AdminErrorCodeSpec {
   code: string

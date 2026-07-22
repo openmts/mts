@@ -45,6 +45,8 @@ type writeRequest struct {
 
 type writeResponse struct {
 	OK            bool                  `json:"ok"`
+	Points        int                   `json:"points,omitempty"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`

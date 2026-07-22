@@ -142,7 +142,11 @@ func grpcWriteHandler(service any, ctx context.Context, decode func(any) error, 
 		if err := service.(*grpcService).runtime.write(ctx, *writeReq); err != nil {
 			return nil, grpcError(ctx, err)
 		}
-		return service.(*grpcService).runtime.attachAdminOpToWrite(writeResponse{OK: true}), nil
+		return service.(*grpcService).runtime.attachAdminOpToWrite(writeResponse{
+			OK:     true,
+			Points: len(writeReq.Points),
+			Path:   routeDataWrite,
+		}), nil
 	}
 	return invokeGRPCUnary(ctx, &writeRequest{}, decode, interceptor, grpcFullMethod(grpcMethodWrite), handler)
 }
@@ -224,7 +228,11 @@ func grpcWriteTypedBatch(r *serverRuntime, ctx context.Context, req any) (any, e
 	if err := r.writeTypedBatch(ctx, *request); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToWrite(writeResponse{OK: true}), nil
+	return r.attachAdminOpToWrite(writeResponse{
+		OK:     true,
+		Points: len(request.Batch.Timestamps),
+		Path:   routeDataWriteTyped,
+	}), nil
 }
 
 func grpcWritePointsAsTypedBatch(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -241,7 +249,11 @@ func grpcWritePointsAsTypedBatch(r *serverRuntime, ctx context.Context, req any)
 	if err := r.writePointsAsTyped(ctx, *request); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToWrite(writeResponse{OK: true}), nil
+	return r.attachAdminOpToWrite(writeResponse{
+		OK:     true,
+		Points: len(request.Points),
+		Path:   routeDataWritePointsTyped,
+	}), nil
 }
 
 func grpcDelete(r *serverRuntime, ctx context.Context, req any) (any, error) {

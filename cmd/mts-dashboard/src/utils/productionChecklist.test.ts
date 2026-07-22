@@ -33,6 +33,7 @@ test('production checklist has required commercial gates', () => {
     'api-spec-password-policy',
     'api-spec-auth-session-seed',
     'error-codes-remediation',
+    'write-accepted-points',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -192,4 +193,14 @@ test('error-codes-remediation is automated required gate', () => {
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('error-codes'))
   assert.ok(requiredChecklist().some((x) => x.id === 'error-codes-remediation'))
+})
+
+
+test('write-accepted-points is automated required gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'write-accepted-points')
+  assert.ok(item)
+  assert.equal(item!.severity, 'required')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/write'))
+  assert.ok(requiredChecklist().some((x) => x.id === 'write-accepted-points'))
 })

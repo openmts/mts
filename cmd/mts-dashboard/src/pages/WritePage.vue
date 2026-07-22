@@ -25,6 +25,8 @@ import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError, resolveCaughtErrorCode } from '@/utils/apiError'
+import { formatWriteSuccessMessage } from '@/utils/writeResultSummary'
+import type { WriteResponse } from '@/api/types'
 import { configErrorCodeDeepLink, remediationPathForCode } from '@/utils/errorCodeContract'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
@@ -596,9 +598,20 @@ async function submit() {
   try {
     if (writeMode.value === 'typed') {
       const batch = buildTypedBatch()
-      const typedResp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } }, { signal })
+      const typedResp = await apiPost<WriteResponse>('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } }, { signal })
       applyGlobalAdminOpStatus(parseAdminOpStatusPayload(typedResp))
-      result.value = { ok: true, message: formatMessage(t.value('writeTypedSuccess'), { count: (batch.timestamps as number[]).length }) }
+      result.value = {
+        ok: true,
+        message: formatWriteSuccessMessage({
+          mode: 'typed',
+          server: typedResp,
+          clientCount: (batch.timestamps as number[]).length,
+          clientPath: '/api/v1/data/write/typed',
+          typedTemplate: t.value('writeTypedSuccess'),
+          pointsTemplate: t.value('writeSuccessPoints'),
+          format: formatMessage,
+        }),
+      }
       success(result.value.message)
       markWriteClean()
       return
@@ -623,9 +636,20 @@ async function submit() {
       p.retention_policy = retentionPolicy.value
     }
     const writePath = usePointsTyped.value ? '/api/v1/data/write/points-typed' : '/api/v1/data/write'
-    const writeResp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(writePath, { points, options: { sync: syncWrite.value } }, { signal })
+    const writeResp = await apiPost<WriteResponse>(writePath, { points, options: { sync: syncWrite.value } }, { signal })
     applyGlobalAdminOpStatus(parseAdminOpStatusPayload(writeResp))
-    result.value = { ok: true, message: formatMessage(t.value('writeSuccessPoints'), { count: points.length, path: writePath }) }
+    result.value = {
+      ok: true,
+      message: formatWriteSuccessMessage({
+        mode: 'points',
+        server: writeResp,
+        clientCount: points.length,
+        clientPath: writePath,
+        typedTemplate: t.value('writeTypedSuccess'),
+        pointsTemplate: t.value('writeSuccessPoints'),
+        format: formatMessage,
+      }),
+    }
     success(result.value.message)
     markWriteClean()
   } catch (e) {

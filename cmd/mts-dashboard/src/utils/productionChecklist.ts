@@ -375,6 +375,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
     jump: '/config?error_q=resource_exhausted#config-error-codes',
   },
+  {
+    id: 'write-accepted-points',
+    severity: 'required',
+    title: { zh: '写入响应返回 accepted points', en: 'Write response reports accepted points' },
+    detail: {
+      zh: 'POST /data/write|write/typed|write/points-typed 成功响应含 points/path；Dashboard 成功文案优先使用服务端计数与路径。',
+      en: 'Successful POST /data/write|write/typed|write/points-typed responses include points/path; Dashboard success copy prefers server-accepted count and path.',
+    },
+    automated: true,
+    jump: '/write#write-mode-tabs',
+  },
 ]
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {
