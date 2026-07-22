@@ -574,6 +574,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/ops#ops-status-strip',
   },
   {
+    id: 'storage-auth-path',
+    severity: 'recommended',
+    title: { zh: '存储快照/导出与 logout 响应含 path', en: 'Storage snapshot/export and logout responses include path' },
+    detail: {
+      zh: 'storage snapshots list/delete、data-snapshots、export、auth/logout、change-password 返回 path；Storage 删除成功文案展示。',
+      en: 'storage snapshots list/delete, data-snapshots, export, auth/logout, change-password return path; Storage delete success surfaces it.',
+    },
+    automated: true,
+    jump: '/storage',
+  },
+  {
     id: 'meta-downsample-path',
     severity: 'recommended',
     title: { zh: '库表/RP/降采样写路径响应含 path', en: 'Database/RP/downsample mutation responses include path' },

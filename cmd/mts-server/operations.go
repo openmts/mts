@@ -67,6 +67,7 @@ type storageSnapshotInfo struct {
 
 type storageSnapshotsResponse struct {
 	Snapshots     []storageSnapshotInfo `json:"snapshots"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -82,7 +83,7 @@ func (r *serverRuntime) listStorageSnapshots() (storageSnapshotsResponse, error)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return storageSnapshotsResponse{Snapshots: []storageSnapshotInfo{}}, nil
+			return storageSnapshotsResponse{Snapshots: []storageSnapshotInfo{}, Path: routeAdminStorageSnapshots}, nil
 		}
 		return storageSnapshotsResponse{}, err
 	}
@@ -107,7 +108,7 @@ func (r *serverRuntime) listStorageSnapshots() (storageSnapshotsResponse, error)
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
-	return storageSnapshotsResponse{Snapshots: out}, nil
+	return storageSnapshotsResponse{Snapshots: out, Path: routeAdminStorageSnapshots}, nil
 }
 
 func (r *serverRuntime) deleteStorageSnapshot(name string) error {

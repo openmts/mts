@@ -180,7 +180,7 @@ func (r *serverRuntime) listDataSnapshots() (storageDataSnapshotsResponse, error
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return storageDataSnapshotsResponse{Snapshots: []storageDataSnapshotInfo{}}, nil
+			return storageDataSnapshotsResponse{Snapshots: []storageDataSnapshotInfo{}, Path: routeAdminStorageDataSnapshots}, nil
 		}
 		return storageDataSnapshotsResponse{}, err
 	}
@@ -212,7 +212,7 @@ func (r *serverRuntime) listDataSnapshots() (storageDataSnapshotsResponse, error
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
-	return storageDataSnapshotsResponse{Snapshots: out}, nil
+	return storageDataSnapshotsResponse{Snapshots: out, Path: routeAdminStorageDataSnapshots}, nil
 }
 
 func dirSize(root string) (int64, error) {

@@ -2708,3 +2708,15 @@
 | downsample mutations | path | create/delete/enable/disable/reset | okResponse |
 | downsample list/status | path | 契约/列表 | GET |
 | batch downsample | path (P483) | batch 成功文案 | stream summary |
+
+## P485（2026-07-23）
+- Server：storage snapshots list/delete、data-snapshots list、export、auth logout、change-password 补 `path`（HTTP+gRPC）
+- Dashboard：Storage 删除快照成功文案含 path
+- 清单：`storage-auth-path`；ApiSpec ResponseHint 对齐
+
+### 前后端对齐（P485）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| snapshots list/delete | path | 删除成功文案 | API path |
+| data-snapshots / export | path | 契约/运维 | GET |
+| logout / change-password | path | 会话边界 | ok/changePasswordResponse |

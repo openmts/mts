@@ -573,6 +573,7 @@ func (r *serverRuntime) storageExportPayload(ctx context.Context) storageExportR
 	busy, op, started := r.adminHeavyState()
 	return storageExportResponse{
 		Export:        r.storageExport(ctx),
+		Path:          routeAdminStorageExport,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,

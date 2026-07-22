@@ -368,7 +368,7 @@ func grpcLogout(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.engine.RevokeToken(ctx, token); err != nil {
 		return nil, newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err)
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAuthLogout}), nil
 }
 
 func grpcGetSession(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -419,6 +419,7 @@ func grpcChangePassword(r *serverRuntime, ctx context.Context, req any) (any, er
 	}
 	return r.attachAdminOpToChangePassword(changePasswordResponse{
 		OK:                 true,
+		Path:               routeAuthPassword,
 		MustChangePassword: false,
 	}), nil
 }
@@ -1022,5 +1023,5 @@ func grpcDeleteStorageSnapshot(r *serverRuntime, ctx context.Context, req any) (
 	if err := r.deleteStorageSnapshot(request.Name); err != nil {
 		return nil, grpcError(ctx, err)
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminStorageSnapshots}), nil
 }

@@ -628,7 +628,7 @@ func (r *serverRuntime) handleDeleteStorageSnapshot(writer http.ResponseWriter, 
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "delete_storage_snapshot", Detail: name})
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminStorageSnapshots}))
 }
 
 func (r *serverRuntime) handleStorageSnapshots(writer http.ResponseWriter, request *http.Request) {

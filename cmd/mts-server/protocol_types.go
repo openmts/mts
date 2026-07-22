@@ -341,6 +341,7 @@ type changePasswordRequest struct {
 // changePasswordResponse 改密成功体：会话已撤销，客户端须重新登录；must_change 恒为 false。
 type changePasswordResponse struct {
 	OK                 bool                  `json:"ok"`
+	Path               string                `json:"path,omitempty"`
 	MustChangePassword bool                  `json:"must_change_password"`
 	AdminOpBusy        bool                  `json:"admin_op_busy,omitempty"`
 	Op                 string                `json:"op,omitempty"`
@@ -646,6 +647,7 @@ type storageDataSnapshotInfo struct {
 
 type storageDataSnapshotsResponse struct {
 	Snapshots     []storageDataSnapshotInfo `json:"snapshots"`
+	Path          string                    `json:"path,omitempty"`
 	AdminOpBusy   bool                      `json:"admin_op_busy,omitempty"`
 	Op            string                    `json:"op,omitempty"`
 	StartedAtUnix int64                     `json:"started_at_unix,omitempty"`
@@ -654,6 +656,7 @@ type storageDataSnapshotsResponse struct {
 
 type storageExportResponse struct {
 	Export        storageExport         `json:"export"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
