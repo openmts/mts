@@ -67,6 +67,13 @@ export function useAuth() {
       mustChangePassword.value = !!data.must_change_password
       isAuthenticated.value = true
       resetAuthRedirect()
+      if (data.token.expires_at) {
+        const exp = Date.parse(data.token.expires_at)
+        if (Number.isFinite(exp)) {
+          lastSessionRemainingSeconds.value = Math.max(0, Math.floor((exp - Date.now()) / 1000))
+          lastSessionCheckedAt.value = Date.now()
+        }
+      }
       return null
     } catch (e) {
       return formatCaughtError(e)

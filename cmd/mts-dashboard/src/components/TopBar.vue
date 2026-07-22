@@ -6,7 +6,12 @@ import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Menu, Moon, Sun, Languages, Search, Keyboard, Bell } from 'lucide-vue-next'
-import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
+import {
+  effectiveSessionRemainingMs,
+  parseExpiresAt,
+  sessionExpiryView,
+  sessionViewFromRemainingMs,
+} from '@/utils/sessionExpiry'
 import { sessionClockTickMs } from '@/utils/sessionClock'
 import { buildSessionBadgeMeta, sessionBadgeTitleText, sessionBadgeAriaText } from '@/utils/sessionBadgeTitle'
 import { connectivityBadgeClass as connClass, connectivityBadgeLabelKey, sessionUrgencyBadgeClass } from '@/utils/connectivityBadge'
@@ -43,7 +48,17 @@ const pageTitle = computed(() => {
 
 const sessionView = computed(() => {
   const exp = parseExpiresAt(getTokenExpiresAt())
-  return sessionExpiryView(exp, nowMs.value, undefined, undefined, locale.value === 'en' ? 'en' : 'zh')
+  const loc = locale.value === 'en' ? 'en' : 'zh'
+  const local = sessionExpiryView(exp, nowMs.value, undefined, undefined, loc)
+  if (exp == null) return local
+  if (lastSessionRemainingSeconds.value == null || lastSessionCheckedAt.value == null) return local
+  const effective = effectiveSessionRemainingMs(
+    local.remainingMs,
+    lastSessionRemainingSeconds.value,
+    lastSessionCheckedAt.value,
+    nowMs.value,
+  )
+  return sessionViewFromRemainingMs(effective, true, undefined, undefined, loc)
 })
 
 const sessionBadgeMeta = computed(() =>

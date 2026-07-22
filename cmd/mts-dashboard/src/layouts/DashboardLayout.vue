@@ -56,6 +56,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { shouldSyncOnVisibility } from '@/utils/pageVisibilitySync'
+import { nextSessionProbe } from '@/utils/sessionProbe'
 import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
 import { copyText } from '@/utils/clipboard'
 import { useNotify } from '@/composables/useNotify'
@@ -77,7 +78,7 @@ import {
 const { t } = useI18n()
 const { offline, sessionWriteBlocked, sessionRemainingLabel, sessionUrgency } = useMutationGuard()
 const { sync: syncNetworkStatus } = useNetworkStatus()
-const { logout, isAdmin } = useAuth()
+const { logout, isAdmin, refreshSession, isAuthenticated } = useAuth()
 const { success, error: notifyError } = useNotify()
 const {
   adminOpBusy,
@@ -523,8 +524,47 @@ function onPrefsChanged() {
   ).collapsed
 }
 
+let sessionProbeTimer: ReturnType<typeof setTimeout> | null = null
+let lastSessionProbeAt = 0
+
+function clearSessionProbeTimer() {
+  if (sessionProbeTimer) {
+    clearTimeout(sessionProbeTimer)
+    sessionProbeTimer = null
+  }
+}
+
+function armSessionProbe() {
+  clearSessionProbeTimer()
+  if (!isAuthenticated.value) return
+  const age = lastSessionProbeAt > 0 ? Date.now() - lastSessionProbeAt : Number.POSITIVE_INFINITY
+  const decision = nextSessionProbe(sessionUrgency.value, age)
+  const delay = decision.shouldProbe ? 1_000 : decision.nextDelayMs
+  sessionProbeTimer = setTimeout(() => {
+    void (async () => {
+      if (!isAuthenticated.value) return
+      const ageNow = lastSessionProbeAt > 0 ? Date.now() - lastSessionProbeAt : Number.POSITIVE_INFINITY
+      const d = nextSessionProbe(sessionUrgency.value, ageNow)
+      if (d.shouldProbe) {
+        lastSessionProbeAt = Date.now()
+        try {
+          await refreshSession()
+        } catch {
+          /* 静默：可见性/鉴权失败由全局处理 */
+        }
+      }
+      armSessionProbe()
+    })()
+  }, delay)
+}
+
+watch(sessionUrgency, () => {
+  armSessionProbe()
+})
+
 onMounted(() => {
   document.addEventListener('visibilitychange', onVisibilitySync)
+  armSessionProbe()
   window.addEventListener('keydown', onGlobalKey)
   window.addEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
   unregisterNotifyHistoryBridge = registerOpenNotifyHistory(openNotifyHistory)
@@ -533,6 +573,7 @@ onBeforeUnmount(() => {
   disarmAdminOpTick()
   disarmDownsampleHealthPoll()
   document.removeEventListener('visibilitychange', onVisibilitySync)
+  clearSessionProbeTimer()
   window.removeEventListener('keydown', onGlobalKey)
   window.removeEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
   unregisterNotifyHistoryBridge?.()

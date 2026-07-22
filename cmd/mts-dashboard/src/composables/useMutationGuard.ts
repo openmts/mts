@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getTokenExpiresAt } from '@/api/client'
+import { useAuth } from '@/composables/useAuth'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import {
   mutationBlockReason,
@@ -8,7 +9,13 @@ import {
   type MutationBlockReason,
 } from '@/utils/mutationGuard'
 import type { MessageKey } from '@/i18n/messages'
-import { parseExpiresAt, sessionExpiryView, type SessionUrgency } from '@/utils/sessionExpiry'
+import {
+  effectiveSessionRemainingMs,
+  parseExpiresAt,
+  sessionExpiryView,
+  sessionViewFromRemainingMs,
+  type SessionUrgency,
+} from '@/utils/sessionExpiry'
 import { sessionClockTickMs } from '@/utils/sessionClock'
 
 function createSessionClock(opts?: { tickMs?: number; fineTickMs?: number }) {
@@ -17,10 +24,26 @@ function createSessionClock(opts?: { tickMs?: number; fineTickMs?: number }) {
   const fineTickMs = opts?.fineTickMs ?? 1_000
   let timer: ReturnType<typeof setInterval> | null = null
   let currentIntervalMs = 0
+  const { lastSessionRemainingSeconds, lastSessionCheckedAt } = useAuth()
 
   const sessionView = computed(() => {
     const exp = parseExpiresAt(getTokenExpiresAt())
-    return sessionExpiryView(exp, nowMs.value)
+    const local = sessionExpiryView(exp, nowMs.value)
+    if (exp == null) return local
+    const effective = effectiveSessionRemainingMs(
+      local.remainingMs,
+      lastSessionRemainingSeconds.value,
+      lastSessionCheckedAt.value,
+      nowMs.value,
+    )
+    // 无服务端样本时 effective===local；有样本时按有效剩余重算 urgency
+    if (
+      lastSessionRemainingSeconds.value == null ||
+      lastSessionCheckedAt.value == null
+    ) {
+      return local
+    }
+    return sessionViewFromRemainingMs(effective, true)
   })
 
   function clearTimer() {
@@ -61,6 +84,7 @@ function createSessionClock(opts?: { tickMs?: number; fineTickMs?: number }) {
  * 页面级变更写门禁：浏览器离线 或 会话 critical/expired。
  * 登录/会话密码续期应继续仅用 offline，勿使用 writeBlocked。
  * 临界态时钟默认 1s 刷新，其它态 15s。
+ * 有服务端 remaining 时取 min(本地, 推演服务端) 决定 urgency。
  */
 export function useMutationGuard(opts?: { tickMs?: number; fineTickMs?: number }) {
   const { offline } = useNetworkStatus()

@@ -7,7 +7,13 @@ import { buildLoginLocation } from '@/utils/redirect'
 import { useAuth } from '@/composables/useAuth'
 
 import { getTokenExpiresAt } from '@/api/client'
-import { parseExpiresAt, sessionExpiryView, formatRemaining } from '@/utils/sessionExpiry'
+import {
+  effectiveSessionRemainingMs,
+  formatRemaining,
+  parseExpiresAt,
+  sessionExpiryView,
+  sessionViewFromRemainingMs,
+} from '@/utils/sessionExpiry'
 import { sessionClockTickMs } from '@/utils/sessionClock'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
@@ -79,15 +85,25 @@ const { t, locale, setLocale } = useI18n()
 const nowMs = ref(Date.now())
 let sessionClock: ReturnType<typeof setInterval> | null = null
 const expiresAt = computed(() => parseExpiresAt(getTokenExpiresAt()))
-const sessionView = computed(() =>
-  sessionExpiryView(
+const sessionView = computed(() => {
+  const loc = locale.value === 'en' ? 'en' : 'zh'
+  const local = sessionExpiryView(
     expiresAt.value,
     nowMs.value,
     10 * 60_000,
     2 * 60_000,
-    locale.value === 'en' ? 'en' : 'zh',
-  ),
-)
+    loc,
+  )
+  if (expiresAt.value == null) return local
+  if (lastSessionRemainingSeconds.value == null || lastSessionCheckedAt.value == null) return local
+  const effective = effectiveSessionRemainingMs(
+    local.remainingMs,
+    lastSessionRemainingSeconds.value,
+    lastSessionCheckedAt.value,
+    nowMs.value,
+  )
+  return sessionViewFromRemainingMs(effective, true, 10 * 60_000, 2 * 60_000, loc)
+})
 const remainingText = computed(() => {
   if (expiresAt.value == null) return t.value('accountSessionNone')
   if (sessionView.value.urgency === 'expired') return t.value('sessionExpiredLabel')

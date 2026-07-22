@@ -2249,3 +2249,16 @@
 | 策略展示 | password-policy v2 | Account 卡片 | 只读 |
 | 续期 TTL | login clamp | renew options | ≤ max |
 
+## P452（2026-07-22）
+- 会话 remaining：`effectiveSessionRemainingMs` 取 min(本地 expires, 服务端推演 remaining)
+- MutationGuard / TopBar / Account：写门禁与 badge 使用校准后 urgency
+- Layout：warn/critical 周期 `refreshSession` 探测；登录成功种子 remaining
+- 纯函数 `nextSessionProbe` 控制探测节奏
+
+### 前后端对齐（P452）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| session remaining | remaining_seconds | 推演到 now + min | 时钟偏差防护 |
+| 临界探测 | GET /auth/session | layout probe | warn 60s / critical 20s |
+| 登录校准 | expires_at | seed + visibility refresh | 无 refresh token |
+
