@@ -32,6 +32,9 @@ export interface SessionCalibrationHandoffSummary {
   local_remaining_seconds: number | null
   server_remaining_seconds: number | null
   server_checked_at: string | null
+  server_time_unix: number | null
+  /** 客户端校验时刻 - 服务端时间（秒）；正值表示本机时钟偏快 */
+  clock_skew_seconds: number | null
   calibrated_remaining_seconds: number | null
   urgency: SessionUrgency
   calibration_source: 'local_only' | 'merged' | 'unknown'
@@ -55,60 +58,100 @@ export function buildPasswordPolicyHandoffSummary(): PasswordPolicyHandoffSummar
   }
 }
 
-export function buildSessionCalibrationHandoffSummary(input: {
-  expiresAtIso?: string | null
-  serverRemainingSec?: number | null
+function resolveServerTimeUnix(input: {
+  serverTimeUnix?: number | null
   checkedAtMs?: number | null
-  nowMs?: number
-}): SessionCalibrationHandoffSummary {
-  const now = input.nowMs ?? Date.now()
-  const exp = parseExpiresAt(input.expiresAtIso)
-  if (exp == null) {
-    return {
-      has_local_expiry: false,
-      local_remaining_seconds: null,
-      server_remaining_seconds:
-        typeof input.serverRemainingSec === 'number' ? Math.max(0, Math.floor(input.serverRemainingSec)) : null,
-      server_checked_at:
-        typeof input.checkedAtMs === 'number' && Number.isFinite(input.checkedAtMs)
-          ? new Date(input.checkedAtMs).toISOString()
-          : null,
-      calibrated_remaining_seconds: null,
-      urgency: 'unknown',
-      calibration_source: 'unknown',
-    }
+}): { serverTimeUnix: number | null; clockSkewSeconds: number | null } {
+  const hasServerTime =
+    typeof input.serverTimeUnix === 'number' && Number.isFinite(input.serverTimeUnix)
+  const hasChecked =
+    typeof input.checkedAtMs === 'number' && Number.isFinite(input.checkedAtMs)
+  if (!hasServerTime) return { serverTimeUnix: null, clockSkewSeconds: null }
+  const serverTimeUnix = Math.floor(input.serverTimeUnix as number)
+  if (!hasChecked) return { serverTimeUnix, clockSkewSeconds: null }
+  return {
+    serverTimeUnix,
+    clockSkewSeconds: Math.round((input.checkedAtMs as number) / 1000 - serverTimeUnix),
   }
+}
+
+function emptySessionCalibration(
+  input: {
+    serverRemainingSec?: number | null
+    checkedAtMs?: number | null
+  },
+  timeMeta: { serverTimeUnix: number | null; clockSkewSeconds: number | null },
+): SessionCalibrationHandoffSummary {
+  return {
+    has_local_expiry: false,
+    local_remaining_seconds: null,
+    server_remaining_seconds:
+      typeof input.serverRemainingSec === 'number' ? Math.max(0, Math.floor(input.serverRemainingSec)) : null,
+    server_checked_at:
+      typeof input.checkedAtMs === 'number' && Number.isFinite(input.checkedAtMs)
+        ? new Date(input.checkedAtMs).toISOString()
+        : null,
+    server_time_unix: timeMeta.serverTimeUnix,
+    clock_skew_seconds: timeMeta.clockSkewSeconds,
+    calibrated_remaining_seconds: null,
+    urgency: 'unknown',
+    calibration_source: 'unknown',
+  }
+}
+
+function filledSessionCalibration(
+  exp: number,
+  input: {
+    serverRemainingSec?: number | null
+    checkedAtMs?: number | null
+  },
+  timeMeta: { serverTimeUnix: number | null; clockSkewSeconds: number | null },
+  now: number,
+): SessionCalibrationHandoffSummary {
   const localMs = Math.max(0, exp - now)
-  const localSec = Math.floor(localMs / 1000)
   const hasServer =
     typeof input.serverRemainingSec === 'number' &&
     Number.isFinite(input.serverRemainingSec) &&
     typeof input.checkedAtMs === 'number' &&
     Number.isFinite(input.checkedAtMs)
-  const effectiveMs = effectiveSessionRemainingMs(
-    localMs,
-    input.serverRemainingSec,
-    input.checkedAtMs,
-    now,
+  const view = sessionViewFromRemainingMs(
+    effectiveSessionRemainingMs(localMs, input.serverRemainingSec, input.checkedAtMs, now),
+    true,
   )
-  const view = sessionViewFromRemainingMs(effectiveMs, true)
   return {
     has_local_expiry: true,
-    local_remaining_seconds: localSec,
+    local_remaining_seconds: Math.floor(localMs / 1000),
     server_remaining_seconds: hasServer
       ? Math.max(0, Math.floor(input.serverRemainingSec as number))
       : null,
     server_checked_at: hasServer ? new Date(input.checkedAtMs as number).toISOString() : null,
+    server_time_unix: timeMeta.serverTimeUnix,
+    clock_skew_seconds: timeMeta.clockSkewSeconds,
     calibrated_remaining_seconds: Math.floor(view.remainingMs / 1000),
     urgency: view.urgency,
     calibration_source: hasServer ? 'merged' : 'local_only',
   }
 }
 
+export function buildSessionCalibrationHandoffSummary(input: {
+  expiresAtIso?: string | null
+  serverRemainingSec?: number | null
+  checkedAtMs?: number | null
+  serverTimeUnix?: number | null
+  nowMs?: number
+}): SessionCalibrationHandoffSummary {
+  const now = input.nowMs ?? Date.now()
+  const exp = parseExpiresAt(input.expiresAtIso)
+  const timeMeta = resolveServerTimeUnix(input)
+  if (exp == null) return emptySessionCalibration(input, timeMeta)
+  return filledSessionCalibration(exp, input, timeMeta, now)
+}
+
 export function buildCommercialHandoffSummary(input?: {
   expiresAtIso?: string | null
   serverRemainingSec?: number | null
   checkedAtMs?: number | null
+  serverTimeUnix?: number | null
   nowMs?: number
 }): CommercialHandoffSummary {
   return {
@@ -123,11 +166,20 @@ export function formatPasswordPolicyHandoffLine(p: PasswordPolicyHandoffSummary)
 }
 
 export function formatSessionCalibrationHandoffLine(s: SessionCalibrationHandoffSummary): string {
-  if (!s.has_local_expiry) return 'no local expiry'
+  if (!s.has_local_expiry) {
+    const skewOnly =
+      s.clock_skew_seconds == null
+        ? ''
+        : ` · skew: ${s.clock_skew_seconds >= 0 ? '+' : ''}${s.clock_skew_seconds}s`
+    return `no local expiry${skewOnly}`
+  }
   const cal =
     s.calibrated_remaining_seconds == null
       ? '—'
       : formatRemaining(Math.max(0, s.calibrated_remaining_seconds) * 1000)
-  const src = s.calibration_source
-  return `urgency: ${s.urgency} · calibrated: ${cal} · source: ${src}`
+  const skew =
+    s.clock_skew_seconds == null
+      ? ''
+      : ` · skew: ${s.clock_skew_seconds >= 0 ? '+' : ''}${s.clock_skew_seconds}s`
+  return `urgency: ${s.urgency} · calibrated: ${cal} · source: ${s.calibration_source}${skew}`
 }

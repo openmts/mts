@@ -53,6 +53,7 @@ export interface ReadinessArchiveInput {
   session_expires_at?: string | null
   session_remaining_seconds?: number | null
   session_checked_at_ms?: number | null
+  session_server_time_unix?: number | null
 }
 
 export interface ReadinessArchivePayload {
@@ -232,6 +233,7 @@ export function buildReadinessArchive(input: ReadinessArchiveInput): ReadinessAr
         expiresAtIso: input.session_expires_at,
         serverRemainingSec: input.session_remaining_seconds,
         checkedAtMs: input.session_checked_at_ms,
+        serverTimeUnix: input.session_server_time_unix,
       }),
   }
 }

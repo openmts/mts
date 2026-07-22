@@ -78,8 +78,10 @@ test('buildReadinessArchive commercial handoff session merge', () => {
     session_expires_at: new Date(now + 600_000).toISOString(),
     session_remaining_seconds: 90,
     session_checked_at_ms: now,
+    session_server_time_unix: Math.floor(now / 1000) - 2,
   })
   assert.equal(a.commercial_handoff?.session_calibration.calibration_source, 'merged')
+  assert.equal(a.commercial_handoff?.session_calibration.clock_skew_seconds, 2)
   const md = formatReadinessArchiveMarkdown(a)
   assert.match(md, /session_calibration/)
 })

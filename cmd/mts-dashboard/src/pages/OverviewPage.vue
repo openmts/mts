@@ -17,7 +17,12 @@ import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats, DownsampleStatusSummary } from '@/api/types'
 import { normalizeDownsampleStatusSummary, downsampleStatusSummaryTone, downsampleStatusSummaryJump, downsampleStatusHealthJump } from '@/utils/downsampleStatusSummary'
 import { clientBuildInfo } from '@/utils/buildInfo'
-import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
+import {
+  effectiveSessionRemainingMs,
+  parseExpiresAt,
+  sessionExpiryView,
+  sessionViewFromRemainingMs,
+} from '@/utils/sessionExpiry'
 import { completedIds, loadReadinessState } from '@/utils/readinessState'
 import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import { requiredChecklist } from '@/utils/productionChecklist'
@@ -72,7 +77,7 @@ interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; read
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 
-const { isAdmin, getTokenExpiresAt, lastSessionRemainingSeconds, lastSessionCheckedAt } = useAuth()
+const { isAdmin, getTokenExpiresAt, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix } = useAuth()
 const { adminOpBusy, adminOpKind, setAdminOpBusy, applyAdminOpStatus, refreshAdminOpBusy } = useAdminOpBusy()
 const router = useRouter()
 const route = useRoute()
@@ -287,7 +292,17 @@ function goExportPreflight() {
 
 const sessionSummary = computed(() => {
   const exp = parseExpiresAt(getTokenExpiresAt())
-  return sessionExpiryView(exp, nowMs.value, undefined, undefined, locale.value === 'en' ? 'en' : 'zh')
+  const loc = locale.value === 'en' ? 'en' : 'zh'
+  const local = sessionExpiryView(exp, nowMs.value, undefined, undefined, loc)
+  if (exp == null) return local
+  if (lastSessionRemainingSeconds.value == null || lastSessionCheckedAt.value == null) return local
+  const effective = effectiveSessionRemainingMs(
+    local.remainingMs,
+    lastSessionRemainingSeconds.value,
+    lastSessionCheckedAt.value,
+    nowMs.value,
+  )
+  return sessionViewFromRemainingMs(effective, true, undefined, undefined, loc)
 })
 
 function memoryLabel(key: string): string {
@@ -677,6 +692,7 @@ function healthReportInput() {
     session_expires_at: getTokenExpiresAt() || null,
     session_remaining_seconds: lastSessionRemainingSeconds.value,
     session_checked_at_ms: lastSessionCheckedAt.value,
+    session_server_time_unix: lastSessionServerTimeUnix.value,
   }
 }
 
@@ -685,6 +701,7 @@ async function copyCommercialHandoff() {
     expiresAtIso: getTokenExpiresAt() || null,
     serverRemainingSec: lastSessionRemainingSeconds.value,
     checkedAtMs: lastSessionCheckedAt.value,
+    serverTimeUnix: lastSessionServerTimeUnix.value,
   })
   const res = await copyText(formatCommercialHandoffClipboardText(handoff))
   if (res.ok) success(t.value('overviewCommercialHandoffCopied'))
@@ -867,6 +884,7 @@ async function copyOverview() {
           <span class="mts-muted">{{ t('sessionExpiry') }}</span>
           <span
             class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+            data-testid="overview-session-calibrated"
             :class="{
               'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200': sessionSummary.urgency === 'ok',
               'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200': sessionSummary.urgency === 'warn',

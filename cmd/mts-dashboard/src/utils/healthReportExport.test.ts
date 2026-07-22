@@ -30,6 +30,7 @@ test('buildHealthReport aggregates overview downsample and handoff', () => {
       session_expires_at: new Date(now + 600_000).toISOString(),
       session_remaining_seconds: 90,
       session_checked_at_ms: now,
+      session_server_time_unix: Math.floor(now / 1000) - 3,
     },
     new Date(now),
   )
@@ -41,6 +42,7 @@ test('buildHealthReport aggregates overview downsample and handoff', () => {
   assert.equal(out.downsample_tone, 'bad')
   assert.equal((out.ops_stats as { compaction_active: number }).compaction_active, 0)
   assert.equal(out.commercial_handoff.session_calibration.calibration_source, 'merged')
+  assert.equal(out.commercial_handoff.session_calibration.clock_skew_seconds, 3)
   assert.equal(out.commercial_handoff.password_policy.server_synced, true)
   assert.match(out.disclaimer, /健康报告/)
   resetPasswordPolicyRuntime()

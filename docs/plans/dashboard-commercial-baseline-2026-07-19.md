@@ -2302,3 +2302,16 @@
 | Overview 复制 | remaining_seconds | clipboard 摘要 | 运维扫视 |
 | Readiness 复制 | — | 交接卡片按钮 | 不计分 |
 
+
+## P456（2026-07-23）
+- Overview 会话徽章与 TopBar/Account 对齐：`effectiveSessionRemainingMs` 校准 remaining
+- 交接摘要 / 健康报告 / 就绪归档：写入 `server_time_unix` 与 `clock_skew_seconds`
+- 纯函数：`formatSessionCalibrationHandoffLine` 输出 skew
+
+### 前后端对齐（P456）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| session remaining | remaining_seconds | Overview 徽章校准 | 与写门禁同源 |
+| 时钟偏差 | server_time_unix | handoff skew | 运维交接可见 |
+| 健康报告 v2 | session 字段 | commercial_handoff | 只读 |
+

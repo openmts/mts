@@ -54,6 +54,18 @@ test('session calibration handoff merges server remaining', () => {
   // 10 分钟 remaining 处于 warn 阈值（默认 10m）边界，urgency 为 warn
   assert.equal(localOnly.urgency, 'warn')
   assert.equal(localOnly.calibrated_remaining_seconds, 600)
+  assert.equal(localOnly.clock_skew_seconds, null)
+
+  const withSkew = buildSessionCalibrationHandoffSummary({
+    expiresAtIso: expires,
+    serverRemainingSec: 90,
+    checkedAtMs: now + 5_000,
+    serverTimeUnix: Math.floor(now / 1000),
+    nowMs: now + 5_000,
+  })
+  assert.equal(withSkew.clock_skew_seconds, 5)
+  assert.equal(withSkew.server_time_unix, Math.floor(now / 1000))
+  assert.match(formatSessionCalibrationHandoffLine(withSkew), /skew: \+5s/)
 })
 
 test('buildCommercialHandoffSummary bundles both', () => {

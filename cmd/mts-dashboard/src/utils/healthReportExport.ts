@@ -46,6 +46,7 @@ export interface HealthReportInput {
   session_expires_at?: string | null
   session_remaining_seconds?: number | null
   session_checked_at_ms?: number | null
+  session_server_time_unix?: number | null
 }
 
 export function buildHealthReport(input: HealthReportInput, at = new Date()) {
@@ -79,6 +80,7 @@ export function buildHealthReport(input: HealthReportInput, at = new Date()) {
       expiresAtIso: input.session_expires_at,
       serverRemainingSec: input.session_remaining_seconds,
       checkedAtMs: input.session_checked_at_ms,
+      serverTimeUnix: input.session_server_time_unix,
       nowMs: at.getTime(),
     })
   return {
