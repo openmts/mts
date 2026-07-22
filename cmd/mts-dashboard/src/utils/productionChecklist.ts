@@ -541,6 +541,28 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/write',
   },
   {
+    id: 'write-response-retention',
+    severity: 'recommended',
+    title: { zh: '写入响应含 retention_policy', en: 'Write responses include retention_policy' },
+    detail: {
+      zh: 'write 响应在单 RP 批次返回 retention_policy；Write 结果区徽章与导出优先服务端值；契约 feature write_response_retention。',
+      en: 'Write responses include retention_policy for single-policy batches; Write result badges/export prefer server value; contract feature write_response_retention.',
+    },
+    automated: true,
+    jump: '/write#write-result-ok-wrap',
+  },
+  {
+    id: 'databases-meas-path',
+    severity: 'recommended',
+    title: { zh: '库表页展示 measurements path', en: 'Databases page shows measurements path' },
+    detail: {
+      zh: '展开 database 后 measurements 列表展示服务端 path 徽章。',
+      en: 'Expanded database shows server path badge for measurements list.',
+    },
+    automated: true,
+    jump: '/databases',
+  },
+  {
     id: 'write-result-export-meta',
     severity: 'recommended',
     title: { zh: '写入结果导出含服务端 meta', en: 'Write result export includes server meta' },

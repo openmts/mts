@@ -110,6 +110,7 @@ test('acceptance pack data_contract reflects commercial handoff features', () =>
       features: [
         { id: 'write_accepted_points', path: '/api/v1/data/write', enabled: true, description: '' },
         { id: 'write_response_mode', path: '/api/v1/data/write', enabled: true, description: '' },
+        { id: 'write_response_retention', path: '/api/v1/data/write', enabled: true, description: '' },
         { id: 'query_result_meta', path: '/api/v1/data/query/rows', enabled: true, description: '' },
         { id: 'query_stats_path', path: '/api/v1/data/query/stats', enabled: true, description: '' },
         { id: 'query_stream_end_meta', path: '/api/v1/data/query/stream', enabled: true, description: '' },

@@ -359,6 +359,7 @@ export interface WriteResponse {
   /** points | typed | points_typed */
   mode?: string
   database?: string
+  retention_policy?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number

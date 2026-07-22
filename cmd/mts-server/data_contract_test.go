@@ -23,14 +23,15 @@ func TestHTTPDataContractReportsLimitsAndFeatures(t *testing.T) {
 		t.Fatalf("unexpected limits: %#v", resp)
 	}
 	wantIDs := map[string]bool{
-		"write_accepted_points": false,
-		"write_response_mode":   false,
-		"query_result_meta":     false,
-		"query_stats_path":      false,
-		"query_stream_end_meta": false,
-		"delete_response_meta":  false,
-		"data_limits":           false,
-		"meta_list_path":        false,
+		"write_accepted_points":    false,
+		"write_response_mode":      false,
+		"write_response_retention": false,
+		"query_result_meta":        false,
+		"query_stats_path":         false,
+		"query_stream_end_meta":    false,
+		"delete_response_meta":     false,
+		"data_limits":              false,
+		"meta_list_path":           false,
 	}
 	for _, f := range resp.Features {
 		if _, ok := wantIDs[f.ID]; ok {

@@ -320,6 +320,9 @@ test('commercial browser smoke path', async ({ page }) => {
   if (await page.getByTestId('write-result-database').count()) {
     await expect(page.getByTestId('write-result-database')).toBeVisible()
   }
+  if (await page.getByTestId('write-result-retention').count()) {
+    await expect(page.getByTestId('write-result-retention')).toBeVisible()
+  }
   await expect(page.getByRole('main').getByRole('button', { name: /表单写入|Form write/i })).toBeVisible()
   await expect(page.getByTestId('write-mode-tabs')).toBeVisible()
   await expect(page.getByTestId('write-mode-typed')).toBeVisible()
@@ -553,6 +556,9 @@ test('commercial browser smoke path', async ({ page }) => {
   }
   if (await page.getByTestId('databases-rp-path').count()) {
     await expect(page.getByTestId('databases-rp-path')).toContainText('retention-policies')
+  }
+  if (await page.getByTestId('databases-meas-path').count()) {
+    await expect(page.getByTestId('databases-meas-path')).toContainText('measurements')
   }
   await expect(page.getByTestId('databases-admin-last')).toBeVisible()
   await expect(page.getByTestId('databases-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)

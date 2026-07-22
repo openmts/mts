@@ -2644,3 +2644,16 @@
 | series list | path+scope | Databases series path | 展开 measurement |
 | RP list | path+database | databases-rp-path | 展开 database |
 | RP 客户端 | path/database | listRetentionPoliciesDetailed | data/admin |
+
+## P480（2026-07-23）
+- Server：`writeResponse.retention_policy`（单 RP 批次）；HTTP+gRPC；契约 `write_response_retention`
+- Dashboard：Write 结果区 RP 徽章；导出优先服务端 retention_policy
+- Dashboard：Databases measurements path 徽章
+- 清单：`write-response-retention`、`databases-meas-path`
+
+### 前后端对齐（P480）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| write 响应 | retention_policy | 结果徽章 + 导出 | 单 RP 批次 |
+| measurements list | path (P478) | databases-meas-path | 展开 database |
+| 契约 | write_response_retention | REQUIRED_FEATURE_IDS | 交接/验收包 |

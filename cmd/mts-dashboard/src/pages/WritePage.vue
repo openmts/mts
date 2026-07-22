@@ -109,7 +109,7 @@ async function loadDataLimits() {
 }
 
 const formRowCapReached = computed(() => formRows.value.length >= WRITE_FORM_ROW_MAX)
-const result = ref<{ ok: boolean; message: string; path?: string; mode?: string; database?: string; points?: number } | null>(null)
+const result = ref<{ ok: boolean; message: string; path?: string; mode?: string; database?: string; retention_policy?: string; points?: number } | null>(null)
 const loading = ref(false)
 const writeStartedAt = ref<number | null>(null)
 let writeAbort: AbortController | null = null
@@ -632,6 +632,7 @@ async function submit() {
         path: acceptedWritePath(typedResp, '/api/v1/data/write/typed'),
         mode: String(typedResp?.mode || 'typed'),
         database: String(typedResp?.database || selectedDb.value || ''),
+        retention_policy: String(typedResp?.retention_policy || retentionPolicy.value || ''),
         points: Number(typedResp?.points ?? (batch.timestamps as number[]).length) || 0,
         message: formatWriteSuccessMessage({
           mode: 'typed',
@@ -681,6 +682,7 @@ async function submit() {
       path: acceptedWritePath(writeResp, writePath),
       mode: String(writeResp?.mode || (usePointsTyped.value ? 'points_typed' : 'points')),
       database: String(writeResp?.database || selectedDb.value || ''),
+      retention_policy: String(writeResp?.retention_policy || retentionPolicy.value || ''),
       points: Number(writeResp?.points ?? points.length) || 0,
       message: formatWriteSuccessMessage({
         mode: 'points',
@@ -760,7 +762,7 @@ async function exportWriteResult() {
     mode: writeMode.value,
     server_mode: result.value.mode || '',
     database: result.value.database || selectedDb.value,
-    retention_policy: retentionPolicy.value,
+    retention_policy: result.value.retention_policy || retentionPolicy.value,
     sync: syncWrite.value,
     use_points_typed: usePointsTyped.value,
     path: result.value.path || '',
@@ -1108,7 +1110,7 @@ async function exportWriteDraft() {
     />
     <div v-if="result?.ok" class="space-y-2" data-testid="write-result-ok-wrap">
       <p class="mts-alert-ok" data-testid="write-result-ok" role="status" aria-live="polite">{{ result.message }}</p>
-      <div v-if="result.path || result.mode || result.database || result.points != null" class="flex flex-wrap items-center gap-2">
+      <div v-if="result.path || result.mode || result.database || result.retention_policy || result.points != null" class="flex flex-wrap items-center gap-2">
         <p
           v-if="result.path"
           class="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
@@ -1126,6 +1128,12 @@ async function exportWriteDraft() {
           data-testid="write-result-database"
           :title="result.database"
         >{{ result.database }}</span>
+        <span
+          v-if="result.retention_policy"
+          class="rounded bg-violet-50 px-1.5 py-0.5 font-mono text-[10px] text-violet-700 dark:bg-violet-950/40 dark:text-violet-200"
+          data-testid="write-result-retention"
+          :title="result.retention_policy"
+        >{{ result.retention_policy }}</span>
         <span
           v-if="result.points != null"
           class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"

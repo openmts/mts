@@ -930,8 +930,9 @@ func (r *serverRuntime) dataContractPayload() dataContractResponse {
 		DefaultQueryLimit: cfg.Limits.DefaultQueryLimit,
 		MaxQueryLimit:     cfg.Limits.MaxQueryLimit,
 		Features: []dataContractFeature{
-			{ID: "write_accepted_points", Path: routeDataWrite, Description: "write responses include points/path/mode/database", Enabled: true},
-			{ID: "write_response_mode", Path: routeDataWrite, Description: "write responses include mode (points|typed|points_typed) and database", Enabled: true},
+			{ID: "write_accepted_points", Path: routeDataWrite, Description: "write responses include points/path/mode/database/retention_policy", Enabled: true},
+			{ID: "write_response_mode", Path: routeDataWrite, Description: "write responses include mode (points|typed|points_typed), database and retention_policy", Enabled: true},
+			{ID: "write_response_retention", Path: routeDataWrite, Description: "write responses include retention_policy when single-policy batch", Enabled: true},
 			{ID: "query_result_meta", Path: routeDataQueryRows, Description: "query rows/columns/explain include path/count/database/measurement/admin_op", Enabled: true},
 			{ID: "query_stats_path", Path: routeDataQueryStats, Description: "GET query/stats includes path and admin_op", Enabled: true},
 			{ID: "query_stream_end_meta", Path: routeDataQueryStream, Description: "stream end frame includes path/format/record_count/database/measurement/admin_op", Enabled: true},

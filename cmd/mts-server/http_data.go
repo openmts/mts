@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	mts "github.com/openmts/mts"
 )
@@ -32,11 +33,12 @@ func (r *serverRuntime) handleWrite(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{
-		OK:       true,
-		Points:   len(req.Points),
-		Path:     routeDataWrite,
-		Mode:     "points",
-		Database: writePrimaryDatabase(req),
+		OK:              true,
+		Points:          len(req.Points),
+		Path:            routeDataWrite,
+		Mode:            "points",
+		Database:        writePrimaryDatabase(req),
+		RetentionPolicy: writePrimaryRetention(req),
 	}))
 }
 
@@ -63,11 +65,12 @@ func (r *serverRuntime) handleWriteTyped(writer http.ResponseWriter, request *ht
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{
-		OK:       true,
-		Points:   len(req.Batch.Timestamps),
-		Path:     routeDataWriteTyped,
-		Mode:     "typed",
-		Database: req.Batch.Database,
+		OK:              true,
+		Points:          len(req.Batch.Timestamps),
+		Path:            routeDataWriteTyped,
+		Mode:            "typed",
+		Database:        req.Batch.Database,
+		RetentionPolicy: strings.TrimSpace(req.Batch.RetentionPolicy),
 	}))
 }
 
@@ -307,11 +310,12 @@ func (r *serverRuntime) handleWritePointsTyped(writer http.ResponseWriter, reque
 		return
 	}
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToWrite(writeResponse{
-		OK:       true,
-		Points:   len(req.Points),
-		Path:     routeDataWritePointsTyped,
-		Mode:     "points_typed",
-		Database: writePrimaryDatabase(req),
+		OK:              true,
+		Points:          len(req.Points),
+		Path:            routeDataWritePointsTyped,
+		Mode:            "points_typed",
+		Database:        writePrimaryDatabase(req),
+		RetentionPolicy: writePrimaryRetention(req),
 	}))
 }
 
@@ -371,6 +375,20 @@ func writePrimaryDatabase(req writeRequest) string {
 		return ""
 	}
 	return dbs[0]
+}
+
+// writePrimaryRetention 返回单批统一的 retention_policy；多值或不一致时返回空串。
+func writePrimaryRetention(req writeRequest) string {
+	if len(req.Points) == 0 {
+		return ""
+	}
+	first := strings.TrimSpace(req.Points[0].RetentionPolicy)
+	for _, p := range req.Points[1:] {
+		if strings.TrimSpace(p.RetentionPolicy) != first {
+			return ""
+		}
+	}
+	return first
 }
 
 func queryScope(req queryRequest) (database, measurement string) {

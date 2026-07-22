@@ -15,6 +15,7 @@ func TestHTTPWriteResponsesReportAcceptedPoints(t *testing.T) {
 
 	point := testPoint()
 	point.Database = "default"
+	point.RetentionPolicy = "autogen"
 	var writeResp writeResponse
 	postJSON(t, server.URL+routeDataWrite, writeRequest{Points: []mts.Point{point}}, http.StatusOK, &writeResp)
 	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWrite || writeResp.Mode != "points" {
@@ -23,10 +24,14 @@ func TestHTTPWriteResponsesReportAcceptedPoints(t *testing.T) {
 	if writeResp.Database != "default" {
 		t.Fatalf("write database = %q want default", writeResp.Database)
 	}
+	if writeResp.RetentionPolicy != "autogen" {
+		t.Fatalf("write retention_policy = %q want autogen", writeResp.RetentionPolicy)
+	}
 
 	batch := mts.TypedBatch{
-		Database:    "default",
-		Measurement: point.Measurement,
+		Database:        "default",
+		RetentionPolicy: "autogen",
+		Measurement:     point.Measurement,
 		Tags: []mts.TagColumn{{
 			Name:   "host",
 			Values: []string{"api-1"},
@@ -46,6 +51,9 @@ func TestHTTPWriteResponsesReportAcceptedPoints(t *testing.T) {
 	if writeResp.Database != "default" {
 		t.Fatalf("typed database = %q want default", writeResp.Database)
 	}
+	if writeResp.RetentionPolicy != "autogen" {
+		t.Fatalf("typed retention_policy = %q want autogen", writeResp.RetentionPolicy)
+	}
 
 	writeResp = writeResponse{}
 	postJSON(t, server.URL+routeDataWritePointsTyped, writeRequest{Points: []mts.Point{point}}, http.StatusOK, &writeResp)
@@ -54,5 +62,8 @@ func TestHTTPWriteResponsesReportAcceptedPoints(t *testing.T) {
 	}
 	if writeResp.Database != "default" {
 		t.Fatalf("points-typed database = %q want default", writeResp.Database)
+	}
+	if writeResp.RetentionPolicy != "autogen" {
+		t.Fatalf("points-typed retention_policy = %q want autogen", writeResp.RetentionPolicy)
 	}
 }

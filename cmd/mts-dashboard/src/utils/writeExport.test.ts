@@ -10,6 +10,7 @@ test('buildWriteResultExport', () => {
       mode: 'line',
       server_mode: 'points',
       database: 'db',
+      retention_policy: 'autogen',
       path: '/api/v1/data/write',
       points: 3,
     },
@@ -22,6 +23,7 @@ test('buildWriteResultExport', () => {
   assert.equal(out.path, '/api/v1/data/write')
   assert.equal(out.server_mode, 'points')
   assert.equal(out.points, 3)
+  assert.equal(out.retention_policy, 'autogen')
 })
 
 test('buildWriteDraftExport', () => {

@@ -35,6 +35,7 @@ export interface DataContractView {
 const REQUIRED_FEATURE_IDS = [
   'write_accepted_points',
   'write_response_mode',
+  'write_response_retention',
   'query_result_meta',
   'query_stats_path',
   'query_stream_end_meta',

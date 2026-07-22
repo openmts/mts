@@ -51,6 +51,8 @@ test('production checklist has required commercial gates', () => {
     'write-empty-aligned',
     'write-response-mode',
     'write-result-export-meta',
+    'write-response-retention',
+    'databases-meas-path',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -329,6 +331,24 @@ test('meta-list-path is automated recommended gate', () => {
 
 test('databases-meta-path is automated recommended gate', () => {
   const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'databases-meta-path')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/databases'))
+})
+
+
+test('write-response-retention is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'write-response-retention')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/write'))
+})
+
+
+test('databases-meas-path is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'databases-meas-path')
   assert.ok(item)
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)

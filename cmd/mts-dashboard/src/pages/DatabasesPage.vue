@@ -976,6 +976,12 @@ onBeforeUnmount(() => {
         <div v-else-if="activeDatabase.loaded" class="px-6 py-3">
           <div class="mb-2 flex flex-wrap items-end justify-between gap-2">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t('databasesMeasurements') }}</p>
+            <p
+              v-if="activeDatabase.measurementsPath"
+              class="mb-1 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+              data-testid="databases-meas-path"
+              :title="activeDatabase.measurementsPath"
+            >{{ activeDatabase.measurementsPath }}</p>
             <label v-if="activeDatabase.measurements.length" class="text-[11px] mts-muted">
               {{ t('filter') }}
               <input
