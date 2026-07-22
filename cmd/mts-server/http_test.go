@@ -687,6 +687,40 @@ func TestHTTPAdminHealthBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPStorageMemoryAndCompactionBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var memBusy storageMemoryResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStatsStorageMemory, nil, http.StatusOK, &memBusy)
+	if !memBusy.AdminOpBusy || memBusy.Op != "compact" || memBusy.StartedAtUnix <= 0 {
+		t.Fatalf("storage-memory busy = %+v", memBusy)
+	}
+	var compBusy compactionStatsResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStatsCompaction, nil, http.StatusOK, &compBusy)
+	if !compBusy.AdminOpBusy || compBusy.Op != "compact" || compBusy.StartedAtUnix <= 0 {
+		t.Fatalf("compaction busy = %+v", compBusy)
+	}
+	runtime.finishAdminHeavy(errors.New("stats probe fail"))
+	var memDone storageMemoryResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStatsStorageMemory, nil, http.StatusOK, &memDone)
+	if memDone.AdminOpBusy {
+		t.Fatal("storage-memory want not busy")
+	}
+	if memDone.Last == nil || memDone.Last.Op != "compact" || memDone.Last.OK || memDone.Last.Error != "stats probe fail" {
+		t.Fatalf("storage-memory last = %+v", memDone.Last)
+	}
+	var compDone compactionStatsResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStatsCompaction, nil, http.StatusOK, &compDone)
+	if compDone.Last == nil || compDone.Last.Op != "compact" || compDone.Last.OK || compDone.Last.Error != "stats probe fail" {
+		t.Fatalf("compaction last = %+v", compDone.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

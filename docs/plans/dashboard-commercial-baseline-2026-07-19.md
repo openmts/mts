@@ -1634,3 +1634,6 @@
 
 ## P399（2026-07-22）
 - Server `GET /api/v1/admin/version` 附带 `admin_op_busy/op/started_at_unix/last`；Overview/Readiness/About 加载时 `applyAdminOpStatus`；HTTP 单测 busy/last
+
+## P400（2026-07-22）
+- Server `stats/compaction` 与 `stats/storage-memory`（HTTP/gRPC）附带 `admin_op_busy/op/started_at_unix/last`；Overview/Operations 加载时 `applyAdminOpStatus`；HTTP 单测 busy/last；e2e fail-last 场景同步 mock

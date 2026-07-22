@@ -55,8 +55,8 @@ interface StorageMemorySnapshot {
   num_gc?: number
   [key: string]: unknown
 }
-interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
-interface CompactionStatsResponse { stats: CompactionStats }
+interface StorageMemoryResponse { snapshot: StorageMemorySnapshot; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
+interface CompactionStatsResponse { stats: CompactionStats; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 interface MaintenanceStatsResponse { stats: MaintenanceStats; admin_op_busy?: boolean }
 interface MaintenanceErrorsResponse { errors?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks']; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
@@ -326,11 +326,13 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
     case 'memory': {
       const v = await apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory')
       memorySnapshot.value = v.snapshot
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'compaction': {
       const v = await apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction')
       compactionStats.value = v.stats
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'maintenance': {

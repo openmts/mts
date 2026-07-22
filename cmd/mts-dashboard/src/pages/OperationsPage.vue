@@ -41,9 +41,9 @@ import { actionResultAdminBusyAction, adminOpKindLabelKey, adminHeavyBusyOpFromE
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
-interface CompactionStatsResponse { stats: CompactionStats }
+interface CompactionStatsResponse { stats: CompactionStats; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 interface MaintenanceErrorsResponse { errors: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: { op?: string; ok?: boolean; error?: string } }
-interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
+interface StorageMemoryResponse { snapshot: StorageMemorySnapshot; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 
 const { isAdmin } = useAuth()
 const route = useRoute()
@@ -225,6 +225,7 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
     case 'compaction': {
       const v = await apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction')
       compactionStats.value = v.stats
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'maintErrors': {
@@ -237,6 +238,7 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
     case 'memory': {
       const v = await apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory')
       memorySnapshot.value = v.snapshot ?? null
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
   }

@@ -415,6 +415,28 @@ test('commercial browser smoke path', async ({ page }) => {
       })
       return
     }
+    if (url.includes('/stats/compaction')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          stats: { active: 0, backlog: 0, total: 0, success: 0, failure: 0, last_error: '' },
+          ...failLastPayload,
+        }),
+      })
+      return
+    }
+    if (url.includes('/stats/storage-memory')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          snapshot: {},
+          ...failLastPayload,
+        }),
+      })
+      return
+    }
     if (url.includes('/maintenance/errors')) {
       await route.fulfill({
         status: 200,
@@ -434,6 +456,8 @@ test('commercial browser smoke path', async ({ page }) => {
   }
   await page.route('**/api/v1/admin/ops-status', fulfillFailLast)
   await page.route('**/api/v1/admin/stats/maintenance', fulfillFailLast)
+  await page.route('**/api/v1/admin/stats/compaction', fulfillFailLast)
+  await page.route('**/api/v1/admin/stats/storage-memory', fulfillFailLast)
   await page.route('**/api/v1/admin/maintenance/errors', fulfillFailLast)
   // doctor / admin health 加载也会 applyAdminOpStatus，需与 fail last 一致
   await page.route('**/api/v1/admin/doctor', async (route) => {
@@ -504,6 +528,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-score-reasons')).toContainText(/最近管理重操作失败|Last admin heavy op failed/)
   await page.unroute('**/api/v1/admin/ops-status', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/stats/maintenance', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/stats/compaction', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/stats/storage-memory', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/maintenance/errors', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/doctor').catch(() => {})
   await page.unroute('**/api/v1/admin/health').catch(() => {})

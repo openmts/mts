@@ -605,14 +605,14 @@ func grpcStorageMemory(r *serverRuntime, ctx context.Context, _ any) (any, error
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return storageMemoryResponse{Snapshot: r.storageMemory()}, nil
+	return r.storageMemoryPayload(), nil
 }
 
 func grpcCompactionStats(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return compactionStatsResponse{Stats: r.compactionStats()}, nil
+	return r.compactionStatsPayload(), nil
 }
 
 func grpcStorageValidate(r *serverRuntime, ctx context.Context, _ any) (any, error) {

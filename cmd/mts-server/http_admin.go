@@ -248,14 +248,14 @@ func (r *serverRuntime) handleStorageMemory(writer http.ResponseWriter, request 
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, storageMemoryResponse{Snapshot: r.storageMemory()})
+	writeHTTPJSON(writer, http.StatusOK, r.storageMemoryPayload())
 }
 
 func (r *serverRuntime) handleCompactionStats(writer http.ResponseWriter, request *http.Request) {
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, compactionStatsResponse{Stats: r.compactionStats()})
+	writeHTTPJSON(writer, http.StatusOK, r.compactionStatsPayload())
 }
 
 func (r *serverRuntime) handleMaintenanceStats(writer http.ResponseWriter, request *http.Request) {

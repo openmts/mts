@@ -419,11 +419,19 @@ type storageExport struct {
 }
 
 type storageMemoryResponse struct {
-	Snapshot mts.StorageMemorySnapshot `json:"snapshot"`
+	Snapshot      mts.StorageMemorySnapshot `json:"snapshot"`
+	AdminOpBusy   bool                      `json:"admin_op_busy,omitempty"`
+	Op            string                    `json:"op,omitempty"`
+	StartedAtUnix int64                     `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult     `json:"last,omitempty"`
 }
 
 type compactionStatsResponse struct {
-	Stats mts.CompactionStats `json:"stats"`
+	Stats         mts.CompactionStats   `json:"stats"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type downsamplePoliciesResponse struct {

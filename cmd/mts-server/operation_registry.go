@@ -611,7 +611,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "storage_memory",
 			Namespace:   "admin",
-			Description: "storage memory snapshot",
+			Description: "storage memory snapshot (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminStatsStorageMemory},
@@ -623,7 +623,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "compaction_stats",
 			Namespace:   "admin",
-			Description: "compaction stats",
+			Description: "compaction stats (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminStatsCompaction},

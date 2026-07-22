@@ -197,6 +197,25 @@ export interface CompactionStats {
   last_error: string
 }
 
+/** GET /api/v1/admin/stats/compaction */
+export interface CompactionStatsResponse {
+  stats: CompactionStats
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/stats/storage-memory */
+export interface StorageMemoryResponse {
+  snapshot: StorageMemorySnapshot
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+
 export interface UserInfo {
   name: string
   role?: string

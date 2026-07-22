@@ -498,6 +498,28 @@ func (r *serverRuntime) adminVersionPayload() versionResponse {
 	}
 }
 
+func (r *serverRuntime) storageMemoryPayload() storageMemoryResponse {
+	busy, op, started := r.adminHeavyState()
+	return storageMemoryResponse{
+		Snapshot:      r.storageMemory(),
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
+	}
+}
+
+func (r *serverRuntime) compactionStatsPayload() compactionStatsResponse {
+	busy, op, started := r.adminHeavyState()
+	return compactionStatsResponse{
+		Stats:         r.compactionStats(),
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
+	}
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {
