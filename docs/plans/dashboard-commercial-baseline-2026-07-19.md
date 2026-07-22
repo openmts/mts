@@ -2006,3 +2006,15 @@
 | 单条启用 last | user_enable | e2e 芯片 | 与禁用对称 |
 | 运维文档 | — | Runbook 5.x | 可商用操作说明 |
 
+## P433（2026-07-22）
+- Users：单条启用/禁用确认框（禁用文案含 token 撤销）
+- Downsample：真实创建策略 + 批量禁用后 `downsample-admin-last` e2e
+- Storage：last 展示统一为 `AdminOpLastChip`（testid 保持 `storage-admin-last`）
+
+### 前后端对齐（P433）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 单条禁用确认 | user_disable last | ConfirmDialog + 撤销文案 | 与批量口径一致 |
+| 降采样批量 last | batch_downsample_* | e2e 芯片 | 真实写路径 |
+| Storage last | ops-status last | AdminOpLastChip | 复制/跳转运维一致 |
+

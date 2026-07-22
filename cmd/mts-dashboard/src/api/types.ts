@@ -58,6 +58,9 @@ export interface DownsamplePolicy {
   target_measurement: string
   target_retention?: string
   interval: number
+  refresh_interval?: number
+  lookback?: number
+  batch_size?: number
   functions: DownsampleFunction[]
   group_by_tags: string[]
   enabled: boolean

@@ -725,7 +725,8 @@ func grpcCreateDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) 
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	if err := r.engine.CreateDownsamplePolicy(ctx, *req.(*mts.DownsamplePolicy)); err != nil {
+	policy := applyDownsamplePolicyRequestDefaults(*req.(*mts.DownsamplePolicy))
+	if err := r.engine.CreateDownsamplePolicy(ctx, policy); err != nil {
 		return nil, err
 	}
 	return r.attachAdminOpToOK(okResponse{OK: true}), nil

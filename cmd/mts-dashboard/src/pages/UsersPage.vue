@@ -219,6 +219,8 @@ const deleteLoading = ref(false)
 const batchOpen = ref(false)
 const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
+const toggleOpen = ref(false)
+const toggleTarget = ref<User | null>(null)
 const batchProgress = ref<BatchProgressState>(emptyBatchProgress())
 const usersActionStartedAt = ref<number | null>(null)
 const usersActionAbort = createActionAbort()
@@ -513,6 +515,8 @@ function requestDelete(name: string) {
 
 function cancelUsersAction() {
   usersActionAbort.cancel()
+  toggleOpen.value = false
+  toggleTarget.value = null
 }
 
 function reportUsersCatch(key: UsersActionKey, e: unknown, ctx?: Record<string, string>) {
@@ -561,25 +565,30 @@ async function confirmDelete() {
   }
 }
 
-async function toggleDisable(user: User) {
+function requestToggleDisable(user: User) {
   if (writeBlocked.value) {
     const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
     setActionError(msg)
     notifyError(msg)
     return
   }
+  toggleTarget.value = user
+  toggleOpen.value = true
+}
+
+async function toggleDisable(user: User) {
   usersToggleLoading.value = true
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    // 供重试定位用户
-    // context set on failure via reportAndNotify
     const upd = await apiPut<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled }, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(upd))
     await loadUsers()
     const okMsg = user.disabled ? t.value('usersEnabled') : t.value('usersDisabled')
     setActionOk(okMsg)
     success(okMsg)
+    toggleOpen.value = false
+    toggleTarget.value = null
   } catch (e) {
     reportUsersCatch('toggle', e, { name: user.name })
   } finally {
@@ -587,6 +596,18 @@ async function toggleDisable(user: User) {
     usersToggleLoading.value = false
     usersActionStartedAt.value = null
   }
+}
+
+async function confirmToggleDisable() {
+  const user = toggleTarget.value
+  if (!user) return
+  if (writeBlocked.value) {
+    const msg = t.value(blockedMessageKey('offlineAdminBlocked'))
+    setActionError(msg)
+    notifyError(msg)
+    return
+  }
+  await toggleDisable(user)
 }
 
 async function selectUser(user: User) {
@@ -1116,7 +1137,7 @@ onBeforeUnmount(() => {
               <div class="px-4">
                 <div class="flex items-center gap-1">
                   <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : t('usersSetPassword')" :disabled="writeBlocked" :data-testid="`users-set-password-${u.name}`" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
-                  <button type="button" class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`users-toggle-${u.name}`" @click="toggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
+                  <button type="button" class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`users-toggle-${u.name}`" @click="requestToggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
                   <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`users-delete-${u.name}`" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
                 </div>
               </div>
@@ -1193,6 +1214,25 @@ onBeforeUnmount(() => {
       :loading="deleteLoading"
       allow-cancel-while-loading
       @confirm="confirmDelete"
+      @cancel="cancelUsersAction"
+    />
+    <ConfirmDialog
+      v-model:open="toggleOpen"
+      :write-blocked="writeBlocked"
+      :block-reason="blockReason"
+      :offline-message-key="'offlineAdminBlocked'"
+      :title="toggleTarget && !toggleTarget.disabled ? t('usersDisableTitle') : t('usersEnableTitle')"
+      :message="toggleTarget
+        ? formatMessage(
+            toggleTarget.disabled ? t('usersEnableMsg') : t('usersDisableMsg'),
+            { name: toggleTarget.name },
+          )
+        : ''"
+      :confirm-label="toggleTarget && !toggleTarget.disabled ? t('usersDisable') : t('usersEnable')"
+      :danger="!!(toggleTarget && !toggleTarget.disabled)"
+      :loading="usersToggleLoading"
+      allow-cancel-while-loading
+      @confirm="confirmToggleDisable"
       @cancel="cancelUsersAction"
     />
   </div>

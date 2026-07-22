@@ -681,6 +681,23 @@ async function createPolicy() {
     notifyError(msg)
     return
   }
+  // POC 默认补齐 retention / 运行参数，避免 source incomplete
+  if (!newPolicy.value.source_retention) newPolicy.value.source_retention = 'autogen'
+  if (!newPolicy.value.target_database) newPolicy.value.target_database = newPolicy.value.source_database
+  if (!newPolicy.value.target_retention) newPolicy.value.target_retention = newPolicy.value.source_retention || 'autogen'
+  if (!newPolicy.value.target_measurement) {
+    newPolicy.value.target_measurement = `${newPolicy.value.source_measurement}_ds`
+  }
+  const intervalNs = newPolicy.value.interval
+  if (!newPolicy.value.refresh_interval || newPolicy.value.refresh_interval <= 0) {
+    newPolicy.value.refresh_interval = intervalNs
+  }
+  if (newPolicy.value.lookback == null || newPolicy.value.lookback < 0) {
+    newPolicy.value.lookback = intervalNs
+  }
+  if (!newPolicy.value.batch_size || newPolicy.value.batch_size <= 0) {
+    newPolicy.value.batch_size = 100
+  }
   createLoading.value = true
   dsActionStartedAt.value = Date.now()
   const signal = dsActionAbort.begin()
@@ -1288,11 +1305,11 @@ onBeforeUnmount(() => {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="mb-1 block text-xs mts-muted">{{ t('downsampleColName') }}</label>
-            <input v-model="newPolicy.name" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
+            <input v-model="newPolicy.name" data-testid="downsample-create-name" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
           </div>
           <div>
             <label class="mb-1 block text-xs mts-muted">{{ t('downsampleColInterval') }}</label>
-            <input v-model="intervalHuman" :placeholder="t('downsamplePhInterval')" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
+            <input v-model="intervalHuman" data-testid="downsample-create-interval" :placeholder="t('downsamplePhInterval')" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600" />
             <p class="mt-1 text-[11px] mts-muted">{{ t('downsampleIntervalHint') }}</p>
           </div>
           <div>

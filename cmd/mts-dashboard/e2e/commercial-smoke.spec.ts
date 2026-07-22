@@ -2451,6 +2451,25 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('downsample-clear-select')).toBeVisible()
   await expect(page.getByTestId('downsample-batch-enable')).toBeVisible()
   await expect(page.getByTestId('downsample-status-panel')).toBeVisible()
+  // P433: 创建策略并真实批量禁用，核对 downsample-admin-last
+  await page.getByTestId('downsample-open-create').click()
+  await expect(page.getByTestId('downsample-create-dialog')).toBeVisible()
+  await page.getByTestId('downsample-create-name').fill('e2e-batch-ds')
+  await page.getByTestId('downsample-create-interval').fill('1m')
+  await page.getByTestId('downsample-source-db').fill('default')
+  await page.getByTestId('downsample-source-measurement').fill('cpu')
+  await page.getByTestId('downsample-target-db').fill('default')
+  await page.getByTestId('downsample-target-measurement').fill('cpu_1m_e2e')
+  await page.getByTestId('downsample-fn-field').fill('usage')
+  await page.getByTestId('downsample-create-submit').click()
+  await expect(page.getByTestId('downsample-select-e2e-batch-ds')).toBeVisible({ timeout: 20_000 })
+  await page.getByTestId('downsample-select-e2e-batch-ds').check()
+  await expect(page.getByTestId('downsample-batch-disable')).toBeEnabled()
+  await page.getByTestId('downsample-batch-disable').click()
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+  await page.getByTestId('confirm-dialog-confirm').click()
+  await expect(page.getByTestId('downsample-admin-last')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('downsample-admin-last-copy')).toBeVisible()
   if (await page.getByTestId('downsample-virtual-list').count()) {
     await expect(page.getByTestId('downsample-virtual-list')).toBeVisible()
   }
@@ -2726,6 +2745,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('users-page')).toBeVisible()
   // P426: 禁用用户后登录失败（安全统一 invalid credentials 友好文案），再启用并继续授权路径
   await page.getByTestId('users-toggle-reader-e2e').click()
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+  await expect(page.getByTestId('confirm-dialog')).toContainText(/撤销|token|会话|revoke/i)
+  await page.getByTestId('confirm-dialog-confirm').click()
   await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('users-action-result')).toContainText(/禁用|disabled|Disabled/i)
   // P431: 单条禁用写入轻量 last，Users 芯片可见
@@ -2743,6 +2765,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/users')
   await expect(page.getByTestId('users-row-reader-e2e')).toBeVisible({ timeout: 15_000 })
   await page.getByTestId('users-toggle-reader-e2e').click()
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+  await page.getByTestId('confirm-dialog-confirm').click()
   await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('users-action-result')).toContainText(/启用|enabled|Enabled|active/i)
   // P432: 单条启用同样写入轻量 last

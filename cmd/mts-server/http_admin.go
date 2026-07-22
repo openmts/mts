@@ -315,6 +315,7 @@ func (r *serverRuntime) handleDownsamplePolicies(writer http.ResponseWriter, req
 			writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 			return
 		}
+		policy = applyDownsamplePolicyRequestDefaults(policy)
 		if err := r.engine.CreateDownsamplePolicy(request.Context(), policy); err != nil {
 			writeAPIError(writer, err)
 			return

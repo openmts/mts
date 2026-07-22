@@ -5,10 +5,11 @@ import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { actionResultAdminBusyAction, ADMIN_OP_BUSY_OPS_PATH, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, formatAdminHeavyLastCopyText, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -38,7 +39,7 @@ import {
 import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
 import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
 import { completedIds, loadReadinessState, setReadinessFlag } from '@/utils/readinessState'
-import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList, Copy } from 'lucide-vue-next'
+import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList } from 'lucide-vue-next'
 
 interface ValidateResponse {
   ok: boolean
@@ -140,42 +141,6 @@ const storageAdminLastErrorDetail = computed(() => {
   if (adminOpBusySummary?.value?.lastOk !== false) return ''
   return (adminOpBusySummary?.value?.lastError || '').trim()
 })
-function openStorageAdminLastOps() {
-  const path = ADMIN_OP_BUSY_OPS_PATH
-  const hashIdx = path.indexOf('#')
-  if (hashIdx >= 0) {
-    void router.push({ path: path.slice(0, hashIdx) || '/operations', hash: path.slice(hashIdx) })
-    return
-  }
-  void router.push(path)
-}
-async function copyStorageAdminLast(ev?: Event) {
-  ev?.stopPropagation()
-  const raw = adminOpLast.value
-  if (!raw || !raw.op) {
-    const label = storageAdminLastLabel.value
-    const err = storageAdminLastErrorDetail.value
-    const textToCopy = err ? `${label}\nerror=${err}` : label
-    if (!textToCopy) {
-      notifyError(t.value('opsStatusLastEmpty'))
-      return
-    }
-    const res = await copyText(textToCopy)
-    if (res.ok) success(t.value('opsStatusLastCopied'))
-    else notifyError(res.error || t.value('failed'))
-    return
-  }
-  const key = adminOpKindLabelKey(raw.op) as MessageKey
-  const kind = t.value(key) || raw.op
-  const textToCopy = formatAdminHeavyLastCopyText(raw, kind)
-  if (!textToCopy) {
-    notifyError(t.value('opsStatusLastEmpty'))
-    return
-  }
-  const res = await copyText(textToCopy)
-  if (res.ok) success(t.value('opsStatusLastCopied'))
-  else notifyError(res.error || t.value('failed'))
-}
 
 
 const storageAdminBusyChipLabel = computed(() => {
@@ -990,41 +955,18 @@ async function copyStorageShareLink() {
     </div>
     <div
       v-else-if="!loading && storageAdminLastLabel"
-      class="flex cursor-pointer flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs"
-      :class="adminOpBusySummary?.lastOk === false
-        ? 'border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100'
-        : (adminOpBusySummary?.lastOk === true
-          ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100'
-          : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-200')"
-      data-testid="storage-admin-last"
-      role="link"
-      tabindex="0"
-      :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-      :title="`${storageAdminLastLabel} · ${t('adminOpBusyOpenOps')}`"
-      @click="openStorageAdminLastOps"
-      @keydown.enter.prevent="openStorageAdminLastOps"
-      @keydown.space.prevent="openStorageAdminLastOps"
+      class="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-800 dark:bg-slate-900/40"
+      data-testid="storage-admin-last-wrap"
     >
-      <div class="min-w-0">
-        <span class="min-w-0 truncate">
-          <span class="font-medium">{{ t('opsStatusLastLabel') }}:</span>
-          {{ storageAdminLastLabel }}
-        </span>
-        <p
-          v-if="storageAdminLastErrorDetail"
-          class="mt-1 break-all font-mono text-[11px] opacity-90"
-          data-testid="storage-admin-last-error"
-        >{{ t('adminOpLastErrorLabel') }}: {{ storageAdminLastErrorDetail }}</p>
-      </div>
-      <button
-        type="button"
-        class="mts-btn py-0.5 text-[11px] shrink-0"
-        data-testid="storage-admin-last-copy"
-        :title="t('opsStatusLastCopy')"
-        @click="copyStorageAdminLast"
-      >
-        <Copy class="h-3 w-3" /> {{ t('opsStatusLastCopy') }}
-      </button>
+      <AdminOpLastChip
+        :label="storageAdminLastLabel"
+        :last-ok="adminOpBusySummary?.lastOk"
+        :last-error="storageAdminLastErrorDetail"
+        test-id="storage-admin-last"
+        show-copy
+        copy-test-id="storage-admin-last-copy"
+        error-test-id="storage-admin-last-error"
+      />
     </div>
     <InFlightBanner
       :active="!!loading"
