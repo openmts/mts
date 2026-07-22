@@ -289,6 +289,25 @@ export interface AdminAuditResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/admin/downsample/policies（列表；含 busy/last） */
+export interface DownsamplePoliciesResponse {
+  policies?: unknown[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/downsample/statuses（含 busy/last） */
+export interface DownsampleStatusesResponse {
+  statuses?: unknown[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+
 
 
 export interface UserInfo {

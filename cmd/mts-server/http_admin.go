@@ -327,7 +327,7 @@ func (r *serverRuntime) handleDownsamplePolicies(writer http.ResponseWriter, req
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, downsamplePoliciesResponse{Policies: policies})
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsamplePolicies(downsamplePoliciesResponse{Policies: policies}))
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
@@ -342,7 +342,7 @@ func (r *serverRuntime) handleDownsampleStatuses(writer http.ResponseWriter, req
 		writeAPIError(writer, err)
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, downsampleStatusesResponse{Statuses: statuses})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleStatuses(downsampleStatusesResponse{Statuses: statuses}))
 }
 
 func (r *serverRuntime) handleDownsamplePolicyResource(writer http.ResponseWriter, request *http.Request) {

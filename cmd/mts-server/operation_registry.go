@@ -764,7 +764,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "downsample_policies",
 			Namespace:   "admin",
-			Description: "list or upsert downsample policies",
+			Description: "list or upsert downsample policies (GET includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut},
 			HTTPPaths:   []string{routeAdminDownsamplePolicies},
@@ -783,7 +783,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "downsample_statuses",
 			Namespace:   "admin",
-			Description: "downsample policy statuses",
+			Description: "downsample policy statuses (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminDownsampleStatuses},
@@ -804,7 +804,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "list_downsample_policies",
 			Namespace:   "admin",
-			Description: "list downsample policies",
+			Description: "list downsample policies (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodListDownsamplePolicies,
 			GRPCRequest: &emptyRequest{},

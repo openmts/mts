@@ -521,6 +521,22 @@ test('commercial browser smoke path', async ({ page }) => {
       })
       return
     }
+    if (url.includes('/downsample/policies')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ policies: [], ...failLastPayload }),
+      })
+      return
+    }
+    if (url.includes('/downsample/statuses')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ statuses: [], ...failLastPayload }),
+      })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -540,6 +556,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.route('**/api/v1/admin/api-spec', fulfillFailLast)
   await page.route('**/api/v1/admin/error-codes', fulfillFailLast)
   await page.route('**/api/v1/admin/audit', fulfillFailLast)
+  await page.route('**/api/v1/admin/downsample/policies', fulfillFailLast)
+  await page.route('**/api/v1/admin/downsample/statuses', fulfillFailLast)
   await page.route('**/api/v1/admin/maintenance/errors', fulfillFailLast)
   // doctor / admin health 加载也会 applyAdminOpStatus，需与 fail last 一致
   await page.route('**/api/v1/admin/doctor', async (route) => {
@@ -624,6 +642,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/admin/api-spec', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/error-codes', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/audit', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/downsample/policies', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/downsample/statuses', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/maintenance/errors', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/doctor').catch(() => {})
   await page.unroute('**/api/v1/admin/health').catch(() => {})

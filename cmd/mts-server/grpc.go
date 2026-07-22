@@ -648,7 +648,10 @@ func grpcListDownsamplePolicies(r *serverRuntime, ctx context.Context, _ any) (a
 		return nil, err
 	}
 	policies, err := r.engine.ListDownsamplePolicies(ctx)
-	return downsamplePoliciesResponse{Policies: policies}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToDownsamplePolicies(downsamplePoliciesResponse{Policies: policies}), nil
 }
 
 func grpcEnableDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -693,7 +696,10 @@ func grpcDownsamplePolicyStatuses(r *serverRuntime, ctx context.Context, _ any) 
 		return nil, err
 	}
 	statuses, err := r.engine.DownsamplePolicyStatuses(ctx, timeNow())
-	return downsampleStatusesResponse{Statuses: statuses}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToDownsampleStatuses(downsampleStatusesResponse{Statuses: statuses}), nil
 }
 
 func grpcRunDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {

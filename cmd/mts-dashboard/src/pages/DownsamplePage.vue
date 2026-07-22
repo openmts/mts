@@ -5,6 +5,8 @@ import { useRoute } from 'vue-router'
 import { parseDownsamplePrefill, downsampleFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { apiGet, apiPost, apiDelete, apiPostNDJSONStream } from '@/api/client'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import {
   isDownsampleCreateDraftDirty,
@@ -62,14 +64,27 @@ import type {
   DownsamplePolicy, DownsampleStatus, DownsampleRunResult, DownsampleDryRunResult,
 } from '@/api/types'
 
-interface PoliciesResponse { policies: DownsamplePolicy[] }
-interface StatusesResponse { statuses: DownsampleStatus[] }
+interface PoliciesResponse {
+  policies: DownsamplePolicy[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
+interface StatusesResponse {
+  statuses: DownsampleStatus[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 
 useHashScroll()
 const route = useRoute()
 const { isAdmin } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t, locale } = useI18n()
+const { applyAdminOpStatus } = useAdminOpBusy()
 const { success, info, error: notifyError, warn } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
@@ -336,6 +351,7 @@ async function loadData() {
     apiGet<StatusesResponse>('/api/v1/admin/downsample/statuses'),
   ])
   if (results[0].status === 'fulfilled') {
+    applyAdminOpStatus(parseAdminOpStatusPayload(results[0].value))
     policies.value = results[0].value.policies ?? []
     policiesError.value = ''
   } else {
@@ -347,6 +363,7 @@ async function loadData() {
     }
   }
   if (results[1].status === 'fulfilled') {
+    applyAdminOpStatus(parseAdminOpStatusPayload(results[1].value))
     statuses.value = results[1].value.statuses ?? []
     statusesError.value = ''
   } else {

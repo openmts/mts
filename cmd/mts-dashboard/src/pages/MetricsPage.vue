@@ -5,6 +5,7 @@ import { useHashScroll } from '@/composables/useHashScroll'
 import { parseMetricsPrefill, metricsFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { apiGetText } from '@/api/client'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
@@ -41,6 +42,7 @@ const metricsAdminLastErrorDetail = computed(() => {
 const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
+const { refreshAdminOpBusy } = useAdminOpBusy()
 const { success, info, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
@@ -88,6 +90,8 @@ async function load(opts?: { background?: boolean }) {
     lastRefreshed.value = new Date().toLocaleTimeString()
     refreshError.value = ''
     refreshFailStreak.value = 0
+    // /metrics 无 JSON busy/last；刷新后联动 ops-status 保持管理重操作可见
+    void refreshAdminOpBusy()
   } catch (e) {
     const msg = formatCaughtError(e)
     const hasData = !!raw.value || families.value.length > 0

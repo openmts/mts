@@ -600,6 +600,24 @@ func (r *serverRuntime) attachAdminOpToAudit(resp auditListResponse) auditListRe
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToDownsamplePolicies(resp downsamplePoliciesResponse) downsamplePoliciesResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToDownsampleStatuses(resp downsampleStatusesResponse) downsampleStatusesResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {

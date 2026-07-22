@@ -819,6 +819,40 @@ func TestHTTPConfigAPISpecAuditBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPDownsampleListBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var polBusy downsamplePoliciesResponse
+	getJSONWithHeaders(t, server.URL+routeAdminDownsamplePolicies, nil, http.StatusOK, &polBusy)
+	if !polBusy.AdminOpBusy || polBusy.Op != "compact" || polBusy.StartedAtUnix <= 0 {
+		t.Fatalf("policies busy = %+v", polBusy)
+	}
+	var stBusy downsampleStatusesResponse
+	getJSONWithHeaders(t, server.URL+routeAdminDownsampleStatuses, nil, http.StatusOK, &stBusy)
+	if !stBusy.AdminOpBusy || stBusy.Op != "compact" || stBusy.StartedAtUnix <= 0 {
+		t.Fatalf("statuses busy = %+v", stBusy)
+	}
+	runtime.finishAdminHeavy(errors.New("downsample probe fail"))
+	var polDone downsamplePoliciesResponse
+	getJSONWithHeaders(t, server.URL+routeAdminDownsamplePolicies, nil, http.StatusOK, &polDone)
+	if polDone.AdminOpBusy {
+		t.Fatal("policies want not busy")
+	}
+	if polDone.Last == nil || polDone.Last.Op != "compact" || polDone.Last.OK || polDone.Last.Error != "downsample probe fail" {
+		t.Fatalf("policies last = %+v", polDone.Last)
+	}
+	var stDone downsampleStatusesResponse
+	getJSONWithHeaders(t, server.URL+routeAdminDownsampleStatuses, nil, http.StatusOK, &stDone)
+	if stDone.Last == nil || stDone.Last.Op != "compact" || stDone.Last.OK || stDone.Last.Error != "downsample probe fail" {
+		t.Fatalf("statuses last = %+v", stDone.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

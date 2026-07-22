@@ -459,11 +459,19 @@ type compactionStatsResponse struct {
 }
 
 type downsamplePoliciesResponse struct {
-	Policies []mts.DownsamplePolicy `json:"policies"`
+	Policies      []mts.DownsamplePolicy `json:"policies"`
+	AdminOpBusy   bool                   `json:"admin_op_busy,omitempty"`
+	Op            string                 `json:"op,omitempty"`
+	StartedAtUnix int64                  `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult  `json:"last,omitempty"`
 }
 
 type downsampleStatusesResponse struct {
-	Statuses []mts.DownsamplePolicyStatus `json:"statuses"`
+	Statuses      []mts.DownsamplePolicyStatus `json:"statuses"`
+	AdminOpBusy   bool                         `json:"admin_op_busy,omitempty"`
+	Op            string                       `json:"op,omitempty"`
+	StartedAtUnix int64                        `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult        `json:"last,omitempty"`
 }
 
 type downsampleResetRequest struct {

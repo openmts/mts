@@ -1654,3 +1654,8 @@
 - Dashboard Config/ApiSpec/Audit 加载时 `applyAdminOpStatus`；types/registry 描述对齐
 - `AdminOpLastChip` a11y：芯片/复制钮/错误明细 `aria-label` + 错误 `role=status`
 - e2e fail-last mock 同步；overview 复制钮与芯片 aria 断言
+
+## P405（2026-07-22）
+- Server：downsample policies/statuses 列表附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）
+- Dashboard Downsample 加载时 `applyAdminOpStatus`；Metrics 拉取 `/metrics` 后联动 `refreshAdminOpBusy`
+- types/registry 描述对齐；HTTP 单测；e2e fail-last mock 同步
