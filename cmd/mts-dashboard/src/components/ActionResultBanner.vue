@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   actionResultClass,
   actionResultLabel,
@@ -17,6 +18,9 @@ const props = withDefaults(defineProps<{
   /** 显示重试按钮（加载失败等） */
   retryable?: boolean
   retryLabel?: string
+  /** 可选快捷动作（如跳转运维状态条） */
+  actionLabel?: string
+  actionPath?: string
 }>(), {
   result: null,
   kind: 'info',
@@ -24,10 +28,13 @@ const props = withDefaults(defineProps<{
   dismissible: true,
   retryable: false,
   retryLabel: '',
+  actionLabel: '',
+  actionPath: '',
 })
 
 const emit = defineEmits<{ dismiss: []; retry: [] }>()
 const { t, locale } = useI18n()
+const router = useRouter()
 
 const view = computed(() => {
   if (props.result?.message) return props.result
@@ -48,6 +55,13 @@ const label = computed(() =>
     : '',
 )
 const liveRole = computed(() => (view.value?.kind === 'error' ? 'alert' : 'status'))
+const showAction = computed(() => Boolean((props.actionPath || '').trim() && (props.actionLabel || '').trim()))
+
+function goAction() {
+  const path = (props.actionPath || '').trim()
+  if (!path) return
+  void router.push(path)
+}
 </script>
 
 <template>
@@ -63,6 +77,13 @@ const liveRole = computed(() => (view.value?.kind === 'error' ? 'alert' : 'statu
       <p class="whitespace-pre-wrap break-words text-sm">{{ view.message }}</p>
     </div>
     <div class="flex shrink-0 items-center gap-1">
+      <button
+        v-if="showAction"
+        type="button"
+        class="mts-btn text-xs"
+        data-testid="action-result-action"
+        @click="goAction"
+      >{{ actionLabel }}</button>
       <button
         v-if="retryable"
         type="button"

@@ -665,6 +665,16 @@ onMounted(() => {
   applyOperationsPrefillFromRoute()
 })
 
+// 页内刷新到新的失败 last 时也确认，避免 dismiss 永久锁死
+watch(
+  () => adminOpLast.value?.finishedAtUnix,
+  () => {
+    if (adminOpLast.value && adminOpLast.value.ok === false) {
+      ackAdminOpLastFail?.()
+    }
+  },
+)
+
 watch(
   () => route.fullPath,
   (path, prev) => {

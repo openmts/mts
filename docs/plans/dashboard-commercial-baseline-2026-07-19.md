@@ -1576,3 +1576,12 @@
 
 ## P380（2026-07-22）
 - Server：`maintenance/errors` 附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）
+
+## P381（2026-07-22）
+- ActionResultBanner 支持 action 跳转；Write/Query 命中 admin busy 时结果条一键打开运维
+
+## P382（2026-07-22）
+- Overview：失败 last 展示 `lastError` 明细行
+
+## P383（2026-07-22）
+- e2e：mock 失败 last（横幅 error + dismiss/ack）；mock 写入 busy 结果条跳转运维

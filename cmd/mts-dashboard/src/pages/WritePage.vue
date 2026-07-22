@@ -20,7 +20,7 @@ import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
@@ -88,6 +88,7 @@ const loading = ref(false)
 const writeStartedAt = ref<number | null>(null)
 let writeAbort: AbortController | null = null
 const actionError = ref('')
+const actionErrorCause = ref<unknown>(null)
 const writeWasCanceled = ref(false)
 const metaHint = ref('')
 const rpMetaHint = ref('')
@@ -156,6 +157,13 @@ const writeAdminBusyLabel = computed(() => {
   if (op && elapsed) return `${op} · ${elapsed}`
   return op || t.value('opsAdminBusyChip')
 })
+const writeAdminBusyAction = computed(() =>
+  actionResultAdminBusyAction({
+    message: actionError.value,
+    err: actionErrorCause.value,
+    openLabel: t.value('adminOpBusyOpenOps'),
+  }),
+)
 const authzHint = ref('')
 
 // TypedBatch builder（多 tag 列 + 多 field 列）
@@ -539,6 +547,7 @@ function cancelWrite() {
 async function submit() {
   if (loading.value) return
   if (writeBlocked.value) {
+    actionErrorCause.value = null
     actionError.value = t.value(blockedMessageKey('offlineWriteBlocked'))
     notifyError(actionError.value)
     result.value = { ok: false, message: actionError.value }
@@ -588,6 +597,7 @@ async function submit() {
   } catch (e) {
     if (isCanceledError(e)) {
       writeWasCanceled.value = true
+      actionErrorCause.value = null
       actionError.value = t.value('writeCancelled')
       // 取消不抹掉上次成功写入提示
       if (!result.value?.ok) {
@@ -596,6 +606,7 @@ async function submit() {
       info(actionError.value)
     } else if (isTimeoutError(e)) {
       writeWasCanceled.value = false
+      actionErrorCause.value = null
       actionError.value = t.value('writeTimedOut')
       notifyError(actionError.value)
       if (!result.value?.ok) {
@@ -603,6 +614,7 @@ async function submit() {
       }
     } else {
       writeWasCanceled.value = false
+      actionErrorCause.value = e
       actionError.value = formatCaughtError(e)
       notifyMaybeAdminBusy(actionError.value, e)
       if (!result.value?.ok) {
@@ -961,10 +973,12 @@ async function exportWriteDraft() {
       :message="result?.ok && !writeWasCanceled
         ? `${t('writeFailedKeepLastSuccess')}：${actionError}`
         : actionError"
+      :action-label="writeAdminBusyAction?.label || ''"
+      :action-path="writeAdminBusyAction?.path || ''"
       retryable
       data-testid="write-action-error"
       @retry="submit"
-      @dismiss="actionError = ''; writeWasCanceled = false"
+      @dismiss="actionError = ''; actionErrorCause = null; writeWasCanceled = false"
     />
     <p v-if="result?.ok" class="mts-alert-ok" data-testid="write-result-ok" role="status" aria-live="polite">{{ result.message }}</p>
     <div v-else-if="!loading && !actionError && !result" class="mts-card" data-testid="write-empty">

@@ -262,6 +262,27 @@ export function adminOpBusyOpenAction(label: string): { label: string; path: str
   }
 }
 
+/** 结果条是否展示「打开运维」快捷动作（纯函数） */
+export function actionResultAdminBusyAction(opts: {
+  message?: string | null
+  err?: unknown
+  openLabel: string
+}): { label: string; path: string } | null {
+  const msg = String(opts.message || '').trim()
+  let errMsg = ''
+  if (opts.err != null && typeof opts.err === 'object') {
+    errMsg = String((opts.err as { message?: string }).message || '').trim()
+  } else if (typeof opts.err === 'string') {
+    errMsg = opts.err.trim()
+  }
+  const busy =
+    (opts.err != null && isAdminHeavyBusyError(opts.err)) ||
+    (msg !== '' && isAdminHeavyBusyMessage(msg)) ||
+    (errMsg !== '' && isAdminHeavyBusyMessage(errMsg))
+  if (!busy) return null
+  return adminOpBusyOpenAction(opts.openLabel)
+}
+
 /** 供 useNotify.error 的 action 选项（调用方传入已翻译 label） */
 export function buildAdminBusyNotifyOptions(label: string): { action: { label: string; path: string } } {
   return { action: adminOpBusyOpenAction(label) }

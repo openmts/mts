@@ -10,7 +10,7 @@ import { useQueryHistory } from '@/composables/useQueryHistory'
 import { filterQueryHistory } from '@/utils/queryHistory'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
@@ -68,6 +68,7 @@ useHashScroll()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, info, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
+const actionErrorCause = ref<unknown>(null)
 const {
   exportJob,
   exportBusy,
@@ -91,6 +92,13 @@ const queryAdminBusyLabel = computed(() => {
   if (op && elapsed) return `${op} · ${elapsed}`
   return op || t.value('opsAdminBusyChip')
 })
+const queryAdminBusyAction = computed(() =>
+  actionResultAdminBusyAction({
+    message: actionError.value,
+    err: actionErrorCause.value,
+    openLabel: t.value('adminOpBusyOpenOps'),
+  }),
+)
 const authzHint = ref('')
 const authzChecking = ref(false)
 
@@ -278,7 +286,10 @@ onMounted(async () => {
   window.addEventListener('keydown', onQueryKeydown)
   window.addEventListener('beforeunload', onBeforeUnload)
   try { await loadDatabases() }
-  catch (e) { actionError.value = formatCaughtError(e) }
+  catch (e) {
+    actionErrorCause.value = e
+    actionError.value = formatCaughtError(e)
+  }
   // 初始 meta 加载可能改 database/measurement，完成后记为 clean
   markFormClean()
 })
@@ -294,7 +305,10 @@ onBeforeUnmount(() => {
 watch([showChart, showRawFields, showHistory, resultColumns], () => { persistPrefs() }, { deep: true })
 watch(() => queryForm.value.database, async (db) => {
   try { await loadDbChildren(db) }
-  catch (e) { actionError.value = formatCaughtError(e) }
+  catch (e) {
+    actionErrorCause.value = e
+    actionError.value = formatCaughtError(e)
+  }
 })
 watch(
   () => [queryForm.value.database, queryForm.value.measurement] as const,
@@ -303,6 +317,7 @@ watch(
     try {
       await loadMeasurementMeta(db, measurement)
     } catch (e) {
+      actionErrorCause.value = e
       actionError.value = formatCaughtError(e)
     }
   },
@@ -403,11 +418,13 @@ async function runQuery() {
     return
   }
   if (lastQueryErrorCode.value === 'canceled') {
+    actionErrorCause.value = null
     actionError.value = t.value('queryCancelled')
     info(actionError.value)
     return
   }
   if (lastQueryErrorCode.value === 'timeout') {
+    actionErrorCause.value = null
     actionError.value = t.value('queryTimedOut')
     notifyError(actionError.value)
     return
@@ -1055,10 +1072,12 @@ const columnRows = computed(() => {
       :message="hasQuerySnapshot() && lastQueryErrorCode !== 'canceled'
         ? `${t('queryFailedKeepSnapshot')}：${actionError}`
         : actionError"
+      :action-label="queryAdminBusyAction?.label || ''"
+      :action-path="queryAdminBusyAction?.path || ''"
       retryable
       data-testid="query-action-error"
       @retry="runQuery"
-      @dismiss="actionError = ''; lastQueryErrorCode = ''"
+      @dismiss="actionError = ''; actionErrorCause = null; lastQueryErrorCode = ''"
     />
     <p v-if="deleteResult" class="mts-alert-ok" role="status" aria-live="polite" data-testid="query-delete-result">{{ deleteResult }}</p>
 

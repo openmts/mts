@@ -386,6 +386,100 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('write-page')).toBeVisible()
   await expect(page.getByTestId('write-admin-last')).toBeVisible()
 
+  // P383: mock ops-status / stats/maintenance 失败 last → 横幅 error + Overview 明细
+  const failLastPayload = {
+    admin_op_busy: false,
+    last: {
+      op: 'compact',
+      ok: false,
+      error: 'e2e disk full',
+      started_at_unix: 1700000000,
+      finished_at_unix: Math.floor(Date.now() / 1000),
+      duration_ms: 42,
+    },
+  }
+  const fulfillFailLast = async (route: import('@playwright/test').Route) => {
+    const url = route.request().url()
+    if (url.includes('/stats/maintenance')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          stats: {
+            compaction_active: 0,
+            retention_active: 0,
+            flush_active: 0,
+          },
+          ...failLastPayload,
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(failLastPayload),
+    })
+  }
+  await page.route('**/api/v1/admin/ops-status', fulfillFailLast)
+  await page.route('**/api/v1/admin/stats/maintenance', fulfillFailLast)
+  await page.goto('/operations')
+  await page.getByTestId('ops-status-refresh-busy').click()
+  await expect(page.getByTestId('ops-status-last')).toContainText(/fail|失败|compact|压缩/i)
+  await expect(page.getByTestId('admin-op-last-banner')).toBeVisible()
+  await expect(page.getByTestId('admin-op-last-banner')).toHaveAttribute('data-ok', 'false')
+  await expect(page.getByTestId('admin-op-last-error')).toContainText(/e2e disk full/i)
+  // 运维页对失败 last 自动 ack 后可关闭
+  await expect(page.getByTestId('admin-op-last-dismiss')).toBeEnabled({ timeout: 5_000 })
+  await page.getByTestId('admin-op-last-dismiss').click()
+  await expect(page.getByTestId('admin-op-last-banner')).toHaveCount(0)
+  await page.goto('/')
+  await expect(page.getByTestId('overview-admin-last')).toBeVisible()
+  await expect(page.getByTestId('overview-admin-last')).toHaveAttribute('data-ok', 'false')
+  await expect(page.getByTestId('overview-admin-last-error')).toContainText(/e2e disk full/i)
+  await page.unroute('**/api/v1/admin/ops-status', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/stats/maintenance', fulfillFailLast).catch(() => {})
+
+  // P381: mock 写入命中 admin busy → 结果条可跳转运维
+  await page.route('**/api/v1/data/write', async (route) => {
+    await route.fulfill({
+      status: 429,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: false,
+        code: 'resource_exhausted',
+        message: 'admin heavy op already in progress: flush',
+        admin_op_busy: true,
+        op: 'flush',
+      }),
+    })
+  })
+  await page.route('**/api/v1/data/write/**', async (route) => {
+    await route.fulfill({
+      status: 429,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: false,
+        code: 'resource_exhausted',
+        message: 'admin heavy op already in progress: flush',
+        admin_op_busy: true,
+        op: 'flush',
+      }),
+    })
+  })
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible()
+  await page.getByTestId('write-mode-line').click()
+  await page.getByRole('main').locator('textarea').first().fill('cpu,host=e2e-busy usage=1 1000')
+  await page.getByTestId('write-submit').click()
+  await expect(page.getByTestId('write-action-error')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('action-result-action')).toBeVisible()
+  await page.getByTestId('action-result-action').click()
+  await expect(page).toHaveURL(/\/operations/)
+  await expect(page.getByTestId('ops-status-strip')).toBeVisible()
+  await page.unroute('**/api/v1/data/write').catch(() => {})
+  await page.unroute('**/api/v1/data/write/**').catch(() => {})
+
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')
   await expect(page.getByTestId('access-matrix-page')).toBeVisible()

@@ -32,6 +32,7 @@ import {
   adminOpLastChipSurfaceClass,
   commandAdminOpLastDismissFeedback,
   commandAdminOpLastCopyFeedback,
+  actionResultAdminBusyAction,
   canDismissAdminOpLast,
   readFailAckedAdminOpLastFinishedAt,
   writeFailAckedAdminOpLastFinishedAt,
@@ -412,4 +413,27 @@ test('commandAdminOpLastCopyFeedback', () => {
   assert.deepEqual(commandAdminOpLastCopyFeedback({ isAdmin: false, hasLastSummary: true }), { kind: 'denied' })
   assert.deepEqual(commandAdminOpLastCopyFeedback({ isAdmin: true, hasLastSummary: false }), { kind: 'empty' })
   assert.deepEqual(commandAdminOpLastCopyFeedback({ isAdmin: true, hasLastSummary: true }), { kind: 'copy' })
+})
+
+test('actionResultAdminBusyAction', () => {
+  assert.equal(actionResultAdminBusyAction({ message: 'plain fail', openLabel: 'Open' }), null)
+  const a = actionResultAdminBusyAction({
+    message: 'admin heavy op already in progress: flush',
+    openLabel: '打开运维',
+  })
+  assert.ok(a)
+  assert.equal(a!.path, ADMIN_OP_BUSY_OPS_PATH)
+  assert.match(a!.label, /运维|Open|Operations/)
+  const b = actionResultAdminBusyAction({
+    err: { message: 'admin heavy op already in progress: compact' },
+    openLabel: 'Ops',
+  })
+  assert.ok(b)
+  assert.equal(b!.path, ADMIN_OP_BUSY_OPS_PATH)
+  const c = actionResultAdminBusyAction({
+    err: { code: 'resource_exhausted', status: 429, message: 'admin heavy op already in progress: flush', op: 'flush' },
+    openLabel: 'Ops',
+  })
+  assert.ok(c)
+  assert.equal(c!.path, ADMIN_OP_BUSY_OPS_PATH)
 })
