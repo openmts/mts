@@ -319,6 +319,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByRole('main').getByRole('button', { name: /Flush/ }).first().click()
   await page.getByRole('button', { name: '执行', exact: true }).click()
   await expect(page.getByRole('main').getByText('Flush 已完成').first()).toBeVisible({ timeout: 20_000 })
+  // P350–P351: flush 后展示最近一次管理重操作
+  await expect(page.getByTestId('ops-status-last')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('ops-status-last')).toContainText(/flush|Flush|刷盘/i)
+  await expect(page.getByTestId('admin-op-last-banner')).toBeVisible()
+  await expect(page.getByTestId('admin-op-last-summary')).toContainText(/flush|Flush|刷盘|ok/i)
+  await page.getByTestId('admin-op-last-open-ops').click()
+  await expect(page).toHaveURL(/\/operations#ops-status-strip/)
+  await expect(page.getByTestId('ops-status-strip')).toBeVisible()
 
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')

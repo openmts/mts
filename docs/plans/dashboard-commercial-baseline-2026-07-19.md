@@ -1480,3 +1480,9 @@
 
 ## P349（2026-07-22）
 - Overview：空闲时展示最近一次管理重操作摘要芯片（复用 Layout lastSummary）
+
+## P350（2026-07-22）
+- Layout：空闲且有 last 时展示全局最近管理重操作条（可跳转运维状态条）
+
+## P351（2026-07-22）
+- e2e：flush 完成后校验 ops-status-last 与 admin-op-last-banner

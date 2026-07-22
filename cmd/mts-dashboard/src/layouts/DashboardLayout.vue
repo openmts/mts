@@ -498,6 +498,26 @@ function onSkipToMain(e: Event) {
         </div>
       </div>
       <div
+        v-if="isAdmin && !adminOpBusy && adminOpLastSummary && !offline && !adminOpBusyPollErrorLabel"
+        class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-100 sm:px-6"
+        role="status"
+        aria-live="polite"
+        data-testid="admin-op-last-banner"
+      >
+        <div class="min-w-0">
+          <span class="font-semibold">{{ t('adminOpLastBannerTitle') }}</span>
+          <span class="ml-1" data-testid="admin-op-last-summary">{{ adminOpLastSummary }}</span>
+        </div>
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring"
+            data-testid="admin-op-last-open-ops"
+            @click="goAdminOpBusyOps"
+          >{{ t('adminOpLastOpenOps') }}</button>
+        </div>
+      </div>
+      <div
         v-if="!offline && showUnreachableBanner"
         class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100 sm:px-6"
         role="alert"
