@@ -149,6 +149,7 @@ func (r *serverRuntime) storageRestoreDrill(ctx context.Context, sourcePath stri
 		CheckIssues: len(report.Issues),
 		CheckFatals: fatal,
 		CheckRoot:   report.Root,
+		Path:        routeAdminStorageRestoreDrill,
 	}
 	return resp, nil
 }

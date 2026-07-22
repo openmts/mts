@@ -237,6 +237,7 @@ func (r *serverRuntime) handleMaintenanceErrors(writer http.ResponseWriter, requ
 	busy, op, started := r.adminHeavyState()
 	writeHTTPJSON(writer, http.StatusOK, maintenanceErrorsResponse{
 		Errors:        r.maintenanceErrors(request.Context()),
+		Path:          routeAdminMaintenanceErrors,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -485,7 +486,7 @@ func (r *serverRuntime) handleDownsampleAction(
 				writeAPIError(writer, err)
 				return
 			}
-			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleDryRun(downsampleDryRunResponse{Result: result}))
+			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleDryRun(downsampleDryRunResponse{Result: result, Path: request.URL.Path}))
 		}
 	default:
 		writeAPIError(writer, newAPIError(errorCodeNotFound, "downsample action not found", nil))

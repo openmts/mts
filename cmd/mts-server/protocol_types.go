@@ -201,6 +201,7 @@ type adminHeavyLastResult struct {
 
 type maintenanceStatsResponse struct {
 	Stats         mts.MaintenanceStats  `json:"stats"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -209,6 +210,7 @@ type maintenanceStatsResponse struct {
 
 // opsStatusResponse 轻量运维互斥状态，供 Dashboard 高频轮询。
 type opsStatusResponse struct {
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -217,6 +219,7 @@ type opsStatusResponse struct {
 
 type userResponse struct {
 	User mts.User `json:"user"`
+	Path string   `json:"path,omitempty"`
 }
 
 type userNameRequest struct {
@@ -458,6 +461,7 @@ type seriesResponse struct {
 
 type configResponse struct {
 	Config        config                `json:"config"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -466,6 +470,7 @@ type configResponse struct {
 
 type configSchemaResponse struct {
 	Fields        []configFieldSchema   `json:"fields"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -517,6 +522,7 @@ type retentionApplyRequest struct {
 
 type maintenanceErrorsResponse struct {
 	Errors        []string              `json:"errors"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -537,6 +543,7 @@ type versionResponse struct {
 type apiSpecResponse struct {
 	Version       string                `json:"version"`
 	Namespaces    []apiNamespace        `json:"namespaces"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -560,6 +567,7 @@ type apiEndpoint struct {
 
 type errorCodesResponse struct {
 	Codes         []errorCodeSpec       `json:"codes"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -635,6 +643,7 @@ type storageRestoreDrillResponse struct {
 	CheckIssues   int                   `json:"check_issues"`
 	CheckFatals   int                   `json:"check_fatals"`
 	CheckRoot     string                `json:"check_root"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -677,6 +686,7 @@ type storageExport struct {
 
 type storageMemoryResponse struct {
 	Snapshot      mts.StorageMemorySnapshot `json:"snapshot"`
+	Path          string                    `json:"path,omitempty"`
 	AdminOpBusy   bool                      `json:"admin_op_busy,omitempty"`
 	Op            string                    `json:"op,omitempty"`
 	StartedAtUnix int64                     `json:"started_at_unix,omitempty"`
@@ -685,6 +695,7 @@ type storageMemoryResponse struct {
 
 type compactionStatsResponse struct {
 	Stats         mts.CompactionStats   `json:"stats"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -787,6 +798,7 @@ type downsampleRunResponse struct {
 
 type downsampleDryRunResponse struct {
 	Result        mts.DownsampleDryRunResult `json:"result"`
+	Path          string                     `json:"path,omitempty"`
 	AdminOpBusy   bool                       `json:"admin_op_busy,omitempty"`
 	Op            string                     `json:"op,omitempty"`
 	StartedAtUnix int64                      `json:"started_at_unix,omitempty"`

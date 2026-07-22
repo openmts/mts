@@ -585,6 +585,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/account#account-password-policy',
   },
   {
+    id: 'ops-config-stats-path',
+    severity: 'recommended',
+    title: { zh: '运维统计/配置/契约响应含 path', en: 'Ops stats/config/spec responses include path' },
+    detail: {
+      zh: 'maintenance/ops-status/memory/compaction/errors、config/schema/error-codes、api-spec 返回 path；Operations/Config/ApiSpec 徽章展示。',
+      en: 'maintenance/ops-status/memory/compaction/errors, config/schema/error-codes, api-spec return path; Operations/Config/ApiSpec surface badges.',
+    },
+    automated: true,
+    jump: '/operations',
+  },
+
+  {
     id: 'storage-auth-path',
     severity: 'recommended',
     title: { zh: '存储快照/导出与 logout 响应含 path', en: 'Storage snapshot/export and logout responses include path' },

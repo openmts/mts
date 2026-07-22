@@ -604,6 +604,29 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-admin-last')).toBeVisible()
   await expect(page.getByTestId('audit-admin-last-copy')).toBeVisible()
 
+  // P487: ops/config/api-spec path 徽章（有则校验）
+  await page.goto('/operations')
+  await expect(page.getByTestId('ops-status-strip')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('ops-stats-paths').count()) {
+    await expect(page.getByTestId('ops-stats-paths')).toContainText('/api/v1/admin/stats/')
+  }
+  if (await page.getByTestId('ops-maintenance-stats-path').count()) {
+    await expect(page.getByTestId('ops-maintenance-stats-path')).toContainText('/api/v1/admin/stats/maintenance')
+  }
+  await page.goto('/config')
+  await expect(page.getByTestId('config-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('config-effective-path').count()) {
+    await expect(page.getByTestId('config-effective-path')).toContainText('/api/v1/admin/config')
+  }
+  if (await page.getByTestId('config-schema-path').count()) {
+    await expect(page.getByTestId('config-schema-path')).toContainText('/api/v1/admin/config/schema')
+  }
+  await page.goto('/api-spec')
+  await expect(page.getByTestId('api-spec-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('api-spec-path').count()) {
+    await expect(page.getByTestId('api-spec-path')).toContainText('/api/v1/admin/api-spec')
+  }
+
   // P366: About / ApiSpec last 芯片（不在 h1 内）
   await page.goto('/about')
   await expect(page.getByTestId('about-page')).toBeVisible()

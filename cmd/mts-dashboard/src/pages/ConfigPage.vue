@@ -38,6 +38,7 @@ import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
 interface ConfigResponse {
+  path?: string
   config: Record<string, unknown>
   admin_op_busy?: boolean
   op?: string
@@ -73,6 +74,7 @@ interface ErrorCodeSpec {
   dashboard_path?: string
 }
 interface ErrorCodesResponse {
+  path?: string
   codes: ErrorCodeSpec[]
   admin_op_busy?: boolean
   op?: string
@@ -107,6 +109,7 @@ function normalizeErrorCodeList(list: unknown): ErrorCodeSpec[] {
 
 interface SchemaField { name: string; description: string }
 interface SchemaResponse {
+  path?: string
   fields: SchemaField[]
   admin_op_busy?: boolean
   op?: string
@@ -144,6 +147,9 @@ const validateResult = ref<ValidateResponse | null>(null)
 const reloadResult = ref<ReloadResponse | null>(null)
 const errorCodes = ref<ErrorCodeSpec[]>([])
 const schemaFields = ref<SchemaField[]>([])
+const configEffectivePath = ref('')
+const configSchemaPath = ref('')
+const configErrorCodesPath = ref('')
 const schemaFilter = ref('')
 const SCHEMA_ROW_HEIGHT = 40
 const ERROR_ROW_HEIGHT = 44
@@ -265,6 +271,7 @@ async function reloadConfigSchema() {
     const schemaData = await apiGet<SchemaResponse>('/api/v1/admin/config/schema')
     applyAdminOpStatus(parseAdminOpStatusPayload(schemaData))
     schemaFields.value = schemaData.fields ?? []
+    configSchemaPath.value = String(schemaData.path || '/api/v1/admin/config/schema')
     schemaError.value = ''
   } catch (e) {
     const msg = formatCaughtError(e)
@@ -281,6 +288,7 @@ async function reloadErrorCodes() {
     const data = await apiGet<ErrorCodesResponse>('/api/v1/admin/error-codes')
     applyAdminOpStatus(parseAdminOpStatusPayload(data))
     errorCodes.value = normalizeErrorCodeList(data.codes)
+    configErrorCodesPath.value = String(data.path || '/api/v1/admin/error-codes')
     errorCodesError.value = ''
   } catch (e) {
     const msg = formatCaughtError(e)
@@ -303,9 +311,11 @@ async function loadConfig() {
   if (results[0].status !== 'fulfilled') throw results[0].reason
   applyAdminOpStatus(parseAdminOpStatusPayload(results[0].value))
   config.value = results[0].value.config
+  configEffectivePath.value = String(results[0].value.path || '/api/v1/admin/config/effective')
   if (results[1].status === 'fulfilled') {
     applyAdminOpStatus(parseAdminOpStatusPayload(results[1].value))
     errorCodes.value = normalizeErrorCodeList(results[1].value.codes)
+    configErrorCodesPath.value = String(results[1].value.path || '/api/v1/admin/error-codes')
     errorCodesError.value = ''
   } else {
     // 保留上次 error-codes，分项提示
@@ -315,6 +325,7 @@ async function loadConfig() {
   if (results[2].status === 'fulfilled') {
     applyAdminOpStatus(parseAdminOpStatusPayload(results[2].value))
     schemaFields.value = results[2].value.fields ?? []
+    configSchemaPath.value = String(results[2].value.path || '/api/v1/admin/config/schema')
     schemaError.value = ''
   } else {
     if (!schemaFields.value.length) schemaFields.value = []
@@ -590,7 +601,12 @@ onBeforeUnmount(() => {
             copy-test-id="config-admin-last-copy"
             error-test-id="config-admin-last-error"
           />
-
+          <p
+            v-if="configEffectivePath"
+            class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+            data-testid="config-effective-path"
+            :title="configEffectivePath"
+          >{{ configEffectivePath }}</p>
         </div>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -693,13 +709,29 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="config" class="mts-panel">
-      <h2 class="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configEffective') }}</h2>
+      <h2 class="mb-4 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+        <span>{{ t('configEffective') }}</span>
+        <span
+          v-if="configEffectivePath"
+          class="max-w-[20rem] truncate font-mono text-[10px] font-normal text-slate-500 dark:text-slate-400"
+          data-testid="config-effective-panel-path"
+          :title="configEffectivePath"
+        >{{ configEffectivePath }}</span>
+      </h2>
       <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400" id="config-effective" data-testid="config-effective-json">{{ JSON.stringify(config, null, 2) }}</pre>
     </div>
 
     <div class="mts-panel">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configSchema') }}</h2>
+        <h2 class="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <span>{{ t('configSchema') }}</span>
+          <span
+            v-if="configSchemaPath"
+            class="max-w-[20rem] truncate font-mono text-[10px] font-normal text-slate-500 dark:text-slate-400"
+            data-testid="config-schema-path"
+            :title="configSchemaPath"
+          >{{ configSchemaPath }}</span>
+        </h2>
         <div class="flex flex-wrap items-center gap-2">
           <input v-model="schemaFilter" class="mts-input max-w-xs text-xs" data-testid="config-schema-filter" :placeholder="t('configSchemaFilter')" />
           <button type="button" class="mts-btn" data-testid="config-export-schema" :disabled="exportBusy || (!filteredSchema.length)" @click="exportSchema">
@@ -757,7 +789,15 @@ onBeforeUnmount(() => {
 
     <div class="mts-panel">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('configErrorCodes') }}</h2>
+        <h2 class="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <span>{{ t('configErrorCodes') }}</span>
+          <span
+            v-if="configErrorCodesPath"
+            class="max-w-[20rem] truncate font-mono text-[10px] font-normal text-slate-500 dark:text-slate-400"
+            data-testid="config-error-codes-path"
+            :title="configErrorCodesPath"
+          >{{ configErrorCodesPath }}</span>
+        </h2>
         <div class="flex flex-wrap items-center gap-2">
           <input
             v-model="errorCodeFilter"

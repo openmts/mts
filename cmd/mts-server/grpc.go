@@ -488,7 +488,7 @@ func grpcGetUser(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if !ok {
 		return nil, mts.ErrUserNotFound
 	}
-	return userResponse{User: user}, nil
+	return userResponse{User: user, Path: routeUsersPrefix + user.Name}, nil
 }
 
 func grpcListUsers(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -729,6 +729,7 @@ func grpcMaintenanceErrors(r *serverRuntime, ctx context.Context, _ any) (any, e
 	busy, op, started := r.adminHeavyState()
 	return maintenanceErrorsResponse{
 		Errors:        r.maintenanceErrors(ctx),
+		Path:          routeAdminMaintenanceErrors,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -929,7 +930,8 @@ func grpcDryRunDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) 
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToDownsampleDryRun(downsampleDryRunResponse{Result: result}), nil
+	path := routeAdminDownsamplePrefix + request.Name + "/dry-run"
+	return r.attachAdminOpToDownsampleDryRun(downsampleDryRunResponse{Result: result, Path: path}), nil
 }
 
 func invokeGRPCUnary(ctx context.Context, req any, decode func(any) error, interceptor grpc.UnaryServerInterceptor, method string, handler grpc.UnaryHandler) (any, error) {

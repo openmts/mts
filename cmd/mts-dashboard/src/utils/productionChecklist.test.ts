@@ -59,6 +59,7 @@ test('production checklist has required commercial gates', () => {
     'meta-downsample-path',
     'storage-auth-path',
     'session-policy-audit-path',
+    'ops-config-stats-path',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -409,4 +410,12 @@ test('session-policy-audit-path is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('/account'))
+})
+
+test('ops-config-stats-path is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'ops-config-stats-path')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/operations'))
 })

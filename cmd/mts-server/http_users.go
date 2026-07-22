@@ -111,7 +111,7 @@ func (r *serverRuntime) handleSingleUser(
 			writeAPIError(writer, newAPIError(errorCodeNotFound, "user not found", mts.ErrUserNotFound))
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, userResponse{User: user})
+		writeHTTPJSON(writer, http.StatusOK, userResponse{User: user, Path: request.URL.Path})
 	case http.MethodPut:
 		var user mts.User
 		if err := decodeHTTPJSON(request, &user); err != nil {

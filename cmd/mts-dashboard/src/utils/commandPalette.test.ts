@@ -426,6 +426,7 @@ test('query result scope palette entries', () => {
   assert.ok(all.some((i) => i.id === 'meta-downsample-path' && i.path.includes('/databases')))
   assert.ok(all.some((i) => i.id === 'storage-auth-path' && i.path.includes('/storage')))
   assert.ok(all.some((i) => i.id === 'session-policy-audit-path' && i.path.includes('/account')))
+  assert.ok(all.some((i) => i.id === 'ops-config-stats-path' && i.path.includes('/operations')))
   assert.ok(all.some((i) => i.id === 'api-spec-query-rows-scope' && i.path.includes('queryRowsResponse')))
 })
 

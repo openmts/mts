@@ -48,9 +48,9 @@ import { actionResultAdminBusyAction, adminOpKindLabelKey, adminHeavyBusyOpFromE
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
-interface CompactionStatsResponse { stats: CompactionStats; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
-interface MaintenanceErrorsResponse { errors: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: { op?: string; ok?: boolean; error?: string } }
-interface StorageMemoryResponse { snapshot: StorageMemorySnapshot; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
+interface CompactionStatsResponse { stats: CompactionStats; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
+interface MaintenanceErrorsResponse { errors: string[]; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: { op?: string; ok?: boolean; error?: string } }
+interface StorageMemoryResponse { snapshot: StorageMemorySnapshot; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 
 const { isAdmin } = useAuth()
 const route = useRoute()
@@ -145,6 +145,13 @@ const downsampleLaggingJump = computed(() => downsampleStatusHealthJump('lagging
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
+const opsStatsPaths = ref({
+  maintenance: '',
+  compaction: '',
+  maintErrors: '',
+  memory: '',
+  opsStatus: '',
+})
 type OpsSectionKey = 'maintenance' | 'compaction' | 'maintErrors' | 'memory'
 const sectionRetrying = ref<Partial<Record<OpsSectionKey, boolean>>>({})
 const sectionErrors = ref<Partial<Record<OpsSectionKey, string>>>({})
@@ -220,6 +227,7 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
     case 'maintenance': {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
+      opsStatsPaths.value = { ...opsStatsPaths.value, maintenance: String(v.path || '/api/v1/admin/stats/maintenance') }
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       try {
         const st = await apiGet<{ summary?: DownsampleStatusSummary; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
@@ -235,12 +243,14 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
     case 'compaction': {
       const v = await apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction')
       compactionStats.value = v.stats
+      opsStatsPaths.value = { ...opsStatsPaths.value, compaction: String(v.path || '/api/v1/admin/stats/compaction') }
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'maintErrors': {
       const v = await apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors')
       maintenanceErrors.value = v.errors ?? []
+      opsStatsPaths.value = { ...opsStatsPaths.value, maintErrors: String(v.path || '/api/v1/admin/maintenance/errors') }
       // 与 stats/maintenance 对齐：单请求也可刷新 busy/last
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
@@ -248,6 +258,7 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
     case 'memory': {
       const v = await apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory')
       memorySnapshot.value = v.snapshot ?? null
+      opsStatsPaths.value = { ...opsStatsPaths.value, memory: String(v.path || '/api/v1/admin/stats/storage-memory') }
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
@@ -804,6 +815,12 @@ watch(
             :title="adminOpBusyDetailTitle"
           >{{ adminOpBusyChipLabel }}</span>
           <span class="text-xs mts-muted" data-testid="ops-status-stats-at">{{ statsLoadedLabel }}</span>
+          <p
+            v-if="opsStatsPaths.maintenance || opsStatsPaths.compaction || opsStatsPaths.memory || opsStatsPaths.maintErrors"
+            class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+            data-testid="ops-stats-paths"
+            :title="[opsStatsPaths.maintenance, opsStatsPaths.compaction, opsStatsPaths.memory, opsStatsPaths.maintErrors].filter(Boolean).join(' · ')"
+          >{{ [opsStatsPaths.maintenance, opsStatsPaths.compaction, opsStatsPaths.memory, opsStatsPaths.maintErrors].filter(Boolean).join(' · ') }}</p>
           <span
             v-if="loading || reachChecking"
             class="text-xs mts-muted"
@@ -863,6 +880,12 @@ watch(
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <AlertTriangle class="h-4 w-4" /> {{ t('maintenanceErrors') }} ({{ maintenanceErrors.length }})
+          <span
+            v-if="opsStatsPaths.maintErrors"
+            class="ml-2 max-w-[18rem] truncate font-mono text-[10px] font-normal text-slate-500 dark:text-slate-400"
+            data-testid="ops-maint-errors-path"
+            :title="opsStatsPaths.maintErrors"
+          >{{ opsStatsPaths.maintErrors }}</span>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <input
@@ -1000,7 +1023,15 @@ watch(
 
     <div class="grid gap-4 lg:grid-cols-2">
       <div class="mts-card p-5" data-testid="ops-maint-stats">
-        <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('maintenanceStats') }}</h2>
+        <h2 class="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <span>{{ t('maintenanceStats') }}</span>
+          <span
+            v-if="opsStatsPaths.maintenance"
+            class="max-w-[20rem] truncate font-mono text-[10px] font-normal text-slate-500 dark:text-slate-400"
+            data-testid="ops-maintenance-stats-path"
+            :title="opsStatsPaths.maintenance"
+          >{{ opsStatsPaths.maintenance }}</span>
+        </h2>
         <EmptyState
           v-if="!maintenanceStats"
           compact
@@ -1024,7 +1055,15 @@ watch(
         </dl>
       </div>
       <div class="mts-card p-5" data-testid="ops-compact-stats">
-        <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('compactionStats') }}</h2>
+        <h2 class="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <span>{{ t('compactionStats') }}</span>
+          <span
+            v-if="opsStatsPaths.compaction"
+            class="max-w-[20rem] truncate font-mono text-[10px] font-normal text-slate-500 dark:text-slate-400"
+            data-testid="ops-compaction-stats-path"
+            :title="opsStatsPaths.compaction"
+          >{{ opsStatsPaths.compaction }}</span>
+        </h2>
         <EmptyState
           v-if="!compactionStats"
           compact
@@ -1048,7 +1087,15 @@ watch(
         <p v-if="compactionStats?.last_error" class="mt-2 text-xs text-red-600 dark:text-red-300">{{ compactionStats.last_error }}</p>
       </div>
       <div class="mts-card p-5 lg:col-span-2" data-testid="ops-memory-stats">
-        <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsMemoryStats') }}</h2>
+                <h2 class="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <span>{{ t('opsMemoryStats') }}</span>
+          <span
+            v-if="opsStatsPaths.memory"
+            class="max-w-[20rem] truncate font-mono text-[10px] font-normal text-slate-500 dark:text-slate-400"
+            data-testid="ops-storage-memory-path"
+            :title="opsStatsPaths.memory"
+          >{{ opsStatsPaths.memory }}</span>
+        </h2>
         <EmptyState
           v-if="!memorySnapshot"
           compact

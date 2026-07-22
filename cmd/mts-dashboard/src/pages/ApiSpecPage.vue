@@ -42,6 +42,7 @@ interface APINamespace {
 interface APISpecResponse {
   version?: string
   namespaces: APINamespace[]
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -74,6 +75,7 @@ const { applyAdminOpStatus } = useAdminOpBusy()
 const loading = ref(false)
 const loadError = ref('')
 const version = ref('')
+const apiSpecPath = ref('')
 const namespaces = ref<APINamespace[]>([])
 const q = ref('')
 const nsFilter = ref('')
@@ -87,6 +89,7 @@ async function load() {
     const data = await apiGet<APISpecResponse>('/api/v1/admin/api-spec')
     applyAdminOpStatus(parseAdminOpStatusPayload(data))
     version.value = data.version || 'v1'
+    apiSpecPath.value = String(data.path || '/api/v1/admin/api-spec')
     namespaces.value = data.namespaces || []
     if (!nsFilter.value && namespaces.value.length) {
       nsFilter.value = namespaces.value[0].name
@@ -235,6 +238,13 @@ async function exportMarkdown() {
             copy-test-id="api-spec-admin-last-copy"
             error-test-id="api-spec-admin-last-error"
           />
+          <p
+                v-if="apiSpecPath"
+                class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+                data-testid="api-spec-path"
+                :title="apiSpecPath"
+              >{{ apiSpecPath }}</p>
+
 
         </div>
       </div>
@@ -265,9 +275,7 @@ async function exportMarkdown() {
           <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" /> {{ t('refresh') }}
         </button>
       </div>
-    </div>
-
-        <div v-if="loadError && !namespaces.length" data-testid="api-spec-error">
+    </div><div v-if="loadError && !namespaces.length" data-testid="api-spec-error">
       <ActionResultBanner
         kind="error"
         :message="loadError"

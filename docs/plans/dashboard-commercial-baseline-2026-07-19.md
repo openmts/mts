@@ -2734,3 +2734,19 @@
 | authz check | path | 契约 | allowed+path |
 | admin/user audit | path | audit-list-path | GET |
 | users list (Access) | path (P483) | access-grants-users-path | 授权总览 |
+
+## P487（2026-07-23）
+- Server：ops/config/stats 相关响应补 `path`（maintenance/ops-status/memory/compaction/errors、config/schema、api-spec/error-codes、restore-drill、downsample dry-run）
+- Dashboard：Operations/Config/ApiSpec 展示 path 徽章
+- 清单：`ops-config-stats-path`；ApiSpec ResponseHint 对齐
+
+### 前后端对齐（P487）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| maintenance stats | path | ops-maintenance-stats-path / ops-stats-paths | GET |
+| ops-status | path | ops-status 轮询 | 轻量 |
+| compaction/memory/errors | path | 面板徽章 | GET |
+| config/schema/error-codes | path | config-*-path | GET |
+| api-spec | path | api-spec-path | GET |
+| restore-drill / dry-run | path | 契约 | POST |
+

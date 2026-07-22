@@ -131,6 +131,7 @@ export interface AdminHeavyLastResult {
 /** GET /api/v1/admin/stats/maintenance 响应；admin_op_busy 表示服务端管理重操作（运维/快照/恢复）互斥占用中 */
 export interface MaintenanceStatsResponse {
   stats: MaintenanceStats
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -139,6 +140,7 @@ export interface MaintenanceStatsResponse {
 
 /** GET /api/v1/admin/ops-status 轻量互斥状态，供 Dashboard 高频轮询 */
 export interface OpsStatusResponse {
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -147,6 +149,7 @@ export interface OpsStatusResponse {
 
 /** GET /api/v1/admin/maintenance/errors */
 export interface MaintenanceErrorsResponse {
+  path?: string
   errors?: string[]
   admin_op_busy?: boolean
   op?: string
@@ -206,6 +209,7 @@ export interface CompactionStats {
 
 /** GET /api/v1/admin/stats/compaction */
 export interface CompactionStatsResponse {
+  path?: string
   stats: CompactionStats
   admin_op_busy?: boolean
   op?: string
@@ -215,6 +219,7 @@ export interface CompactionStatsResponse {
 
 /** GET /api/v1/admin/stats/storage-memory */
 export interface StorageMemoryResponse {
+  path?: string
   snapshot: StorageMemorySnapshot
   admin_op_busy?: boolean
   op?: string

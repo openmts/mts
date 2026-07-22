@@ -486,6 +486,7 @@ func (r *serverRuntime) maintenanceStatsPayload() maintenanceStatsResponse {
 	busy, op, started := r.adminHeavyState()
 	return maintenanceStatsResponse{
 		Stats:         r.maintenanceStats(),
+		Path:          routeAdminStatsMaintenance,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -496,6 +497,7 @@ func (r *serverRuntime) maintenanceStatsPayload() maintenanceStatsResponse {
 func (r *serverRuntime) opsStatusPayload() opsStatusResponse {
 	busy, op, started := r.adminHeavyState()
 	return opsStatusResponse{
+		Path:          routeAdminOpsStatus,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -533,6 +535,7 @@ func (r *serverRuntime) storageMemoryPayload() storageMemoryResponse {
 	busy, op, started := r.adminHeavyState()
 	return storageMemoryResponse{
 		Snapshot:      r.storageMemory(),
+		Path:          routeAdminStatsStorageMemory,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -544,6 +547,7 @@ func (r *serverRuntime) compactionStatsPayload() compactionStatsResponse {
 	busy, op, started := r.adminHeavyState()
 	return compactionStatsResponse{
 		Stats:         r.compactionStats(),
+		Path:          routeAdminStatsCompaction,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -585,6 +589,7 @@ func (r *serverRuntime) configPayload() configResponse {
 	busy, op, started := r.adminHeavyState()
 	return configResponse{
 		Config:        r.effectiveConfig(),
+		Path:          routeAdminConfigEffective,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -596,6 +601,7 @@ func (r *serverRuntime) configSchemaPayload() configSchemaResponse {
 	busy, op, started := r.adminHeavyState()
 	return configSchemaResponse{
 		Fields:        configSchema(),
+		Path:          routeAdminConfigSchema,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -606,6 +612,7 @@ func (r *serverRuntime) configSchemaPayload() configSchemaResponse {
 func (r *serverRuntime) apiSpecPayload() apiSpecResponse {
 	busy, op, started := r.adminHeavyState()
 	resp := apiSpec()
+	resp.Path = routeAdminAPISpec
 	resp.AdminOpBusy = busy
 	resp.Op = op
 	resp.StartedAtUnix = started
@@ -616,6 +623,7 @@ func (r *serverRuntime) apiSpecPayload() apiSpecResponse {
 func (r *serverRuntime) errorCodesPayload() errorCodesResponse {
 	busy, op, started := r.adminHeavyState()
 	resp := errorCodeSpecs()
+	resp.Path = routeAdminErrorCodes
 	resp.AdminOpBusy = busy
 	resp.Op = op
 	resp.StartedAtUnix = started
