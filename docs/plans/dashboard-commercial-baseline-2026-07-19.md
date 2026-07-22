@@ -2157,3 +2157,18 @@
 | 一键健康深链 | statuses?health= | Overview 按钮 | 只读筛选 |
 | 导出归档摘要 | summary 字段 | overview/readiness/acceptance | 交接核对 |
 
+## P445（2026-07-22）
+- Readiness：降采样健康卡片 + error/lagging 一键深链（`#downsample-health-panel`）
+- Metrics：降采样健康摘要条 + 深链（`summary_only=1` 轻量拉取）
+- Overview 导出契约 `mts.overview.snapshot` **version: 2**（含 `downsample_status_summary`）
+- 就绪清单 `readiness-downsample-health-card` + 命令面板入口（Readiness/Metrics）
+- e2e：Readiness 错误深链、Metrics 摘要可见
+
+### 前后端对齐（P445）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| summary_only | statuses?summary_only=1 | Readiness/Metrics/Overview | 轻量摘要 |
+| 就绪健康卡片 | summary | Readiness 卡片+归档 | 只读 |
+| Metrics 摘要条 | summary | Metrics 页 | 运维扫视 |
+| Overview 导出 v2 | — | version=2 + summary | 交接契约 |
+

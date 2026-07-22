@@ -248,11 +248,22 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     severity: 'recommended',
     title: { zh: '降采样状态健康可扫视', en: 'Downsample status health scannable' },
     detail: {
-      zh: '状态表支持 error/active/lagging 筛选，服务端 statuses 返回 summary；Overview 展示健康摘要并可下钻。',
-      en: 'Status table supports error/active/lagging filters; server statuses include summary; Overview shows health and deep-links.',
+      zh: '状态表支持 error/active/lagging 筛选，服务端 statuses 返回 summary；Overview/Readiness/Metrics 展示健康摘要并可一键深链。',
+      en: 'Status table supports error/active/lagging filters; server statuses include summary; Overview/Readiness/Metrics show health with deep-links.',
     },
     automated: true,
     jump: '/downsample?health=error#downsample-status',
+  },
+  {
+    id: 'readiness-downsample-health-card',
+    severity: 'recommended',
+    title: { zh: '就绪中心降采样健康卡片', en: 'Readiness downsample health card' },
+    detail: {
+      zh: '就绪页展示 statuses summary 与 error/lagging 深链；归档/验收包可带摘要；只读不自动 run。',
+      en: 'Readiness page shows statuses summary and error/lagging deep-links; archive/pack may include summary; read-only, no auto run.',
+    },
+    automated: true,
+    jump: '/ops/readiness#downsample-health-panel',
   },
 ]
 

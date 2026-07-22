@@ -4,7 +4,13 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseMetricsPrefill, metricsFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { apiGetText } from '@/api/client'
+import { apiGet, apiGetText } from '@/api/client'
+import {
+  normalizeDownsampleStatusSummary,
+  downsampleStatusSummaryTone,
+  downsampleStatusHealthJump,
+  type DownsampleStatusSummaryInput,
+} from '@/utils/downsampleStatusSummary'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
@@ -65,6 +71,16 @@ const families = ref<PrometheusFamily[]>([])
 const q = ref('')
 const activeFamilyName = ref('')
 const lastRefreshed = ref('')
+const downsampleStatusSummary = ref<Required<DownsampleStatusSummaryInput> | null>(null)
+const downsampleSummaryView = computed(() => downsampleStatusSummary.value || normalizeDownsampleStatusSummary(null))
+const downsampleSummaryToneClass = computed(() => {
+  const tone = downsampleStatusSummaryTone(downsampleSummaryView.value)
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+})
+const downsampleErrorJump = computed(() => downsampleStatusHealthJump('error'))
+const downsampleLaggingJump = computed(() => downsampleStatusHealthJump('lagging'))
 const autoRefreshMs = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
 
@@ -92,6 +108,17 @@ async function load(opts?: { background?: boolean }) {
     refreshFailStreak.value = 0
     // /metrics 无 JSON busy/last；刷新后联动 ops-status 保持管理重操作可见
     void refreshAdminOpBusy()
+    // 降采样健康摘要：失败不阻断 metrics；summary_only 减少载荷
+    try {
+      const st = await apiGet<{ summary?: DownsampleStatusSummaryInput }>(
+        '/api/v1/admin/downsample/statuses?summary_only=1',
+      )
+      downsampleStatusSummary.value = normalizeDownsampleStatusSummary(st.summary)
+    } catch {
+      if (!downsampleStatusSummary.value) {
+        downsampleStatusSummary.value = normalizeDownsampleStatusSummary(null)
+      }
+    }
   } catch (e) {
     const msg = formatCaughtError(e)
     const hasData = !!raw.value || families.value.length > 0
@@ -304,7 +331,31 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="loadError" data-testid="metrics-error">
-      <ActionResultBanner kind="error" :message="loadError" retryable data-testid="metrics-load-error" @retry="() => load()" @dismiss="loadError = ''" />
+      <div
+      v-if="downsampleStatusSummary"
+      class="rounded-lg border p-3"
+      :class="downsampleSummaryToneClass"
+      data-testid="metrics-downsample-summary"
+    >
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('metricsDownsampleSummaryTitle') }}</p>
+          <p class="text-[11px] mts-muted">{{ t('metricsDownsampleSummaryDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" :to="downsampleErrorJump" data-testid="metrics-downsample-jump-error">{{ t('overviewDownsampleJumpError') }}</router-link>
+          <router-link class="mts-btn text-xs" :to="downsampleLaggingJump" data-testid="metrics-downsample-jump-lagging">{{ t('overviewDownsampleJumpLagging') }}</router-link>
+        </div>
+      </div>
+      <div class="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+        <div data-testid="metrics-downsample-total">{{ t('overviewDownsampleTotal') }}: <span class="font-semibold">{{ downsampleSummaryView.total }}</span></div>
+        <div data-testid="metrics-downsample-errors">{{ t('overviewDownsampleErrors') }}: <span class="font-semibold">{{ downsampleSummaryView.error }}</span></div>
+        <div data-testid="metrics-downsample-lagging">{{ t('overviewDownsampleLagging') }}: <span class="font-semibold">{{ downsampleSummaryView.lagging }}</span></div>
+        <div data-testid="metrics-downsample-max-lag">{{ t('overviewDownsampleMaxLag') }}: <span class="font-semibold">{{ downsampleSummaryView.max_lag_seconds }}s</span></div>
+      </div>
+    </div>
+
+    <ActionResultBanner kind="error" :message="loadError" retryable data-testid="metrics-load-error" @retry="() => load()" @dismiss="loadError = ''" />
     </div>
     <PartialErrorBanner
       v-else-if="refreshError"

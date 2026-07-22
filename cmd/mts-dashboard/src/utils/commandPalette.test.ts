@@ -308,6 +308,8 @@ test('command palette has readiness production checklist and admin-op jumps', ()
   assert.ok(all.some((i) => i.id === 'readiness-downsample-policy-deep-link' && i.path.includes('policy=')))
   assert.ok(all.some((i) => i.id === 'readiness-downsample-status-health' && i.path.includes('health=error')))
   assert.ok(all.some((i) => i.id === 'overview-downsample-health'))
+  assert.ok(all.some((i) => i.id === 'readiness-downsample-health-card' && i.path.includes('downsample-health-panel')))
+  assert.ok(all.some((i) => i.id === 'metrics-downsample-health' && i.path.includes('/observability/metrics')))
   assert.ok(filterCommandItems(all, '策略详情', (k) => k).some((i) => i.id === 'readiness-downsample-policy-detail'))
 })
 

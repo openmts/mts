@@ -14,6 +14,7 @@ test('buildOverviewExport', () => {
     new Date('2026-07-20T00:00:00.000Z'),
   )
   assert.equal(out.kind, 'mts.overview.snapshot')
+  assert.equal(out.version, 2)
   assert.equal(out.healthy, true)
   assert.equal(out.readiness_total, 80)
   assert.equal(out.downsample_status_summary?.total, 2)

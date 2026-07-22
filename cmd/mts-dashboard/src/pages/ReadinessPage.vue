@@ -4,7 +4,13 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { snapshotForm } from '@/utils/formDirty'
 import { useRoute, useRouter } from 'vue-router'
 import { apiGet } from '@/api/client'
-import { normalizeDownsampleStatusSummary, type DownsampleStatusSummaryInput } from '@/utils/downsampleStatusSummary'
+import {
+  normalizeDownsampleStatusSummary,
+  downsampleStatusSummaryTone,
+  downsampleStatusSummaryJump,
+  downsampleStatusHealthJump,
+  type DownsampleStatusSummaryInput,
+} from '@/utils/downsampleStatusSummary'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
@@ -238,6 +244,16 @@ const signoffProgress = computed(() => signoffProgressPercent(state.value.signof
 
 const doctorWarns = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'warn'))
 const doctorOKs = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'ok'))
+const downsampleSummaryView = computed(() => downsampleStatusSummary.value || normalizeDownsampleStatusSummary(null))
+const downsampleSummaryToneClass = computed(() => {
+  const tone = downsampleStatusSummaryTone(downsampleSummaryView.value)
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+})
+const downsampleSummaryPath = computed(() => downsampleStatusSummaryJump(downsampleSummaryView.value))
+const downsampleErrorJump = computed(() => downsampleStatusHealthJump('error'))
+const downsampleLaggingJump = computed(() => downsampleStatusHealthJump('lagging'))
 
 const scoreBreakdown = computed(() => {
   const requiredRatio =
@@ -1564,6 +1580,32 @@ watch(
       <p v-if="doctorOKs.length" class="mt-2 text-[11px] mts-muted">
         {{ formatMessage(t('readinessDoctorOkChecks'), { count: doctorOKs.length }) }}
       </p>
+    </div>
+
+    <div
+      v-if="downsampleStatusSummary"
+      id="downsample-health-panel"
+      class="mts-panel scroll-mt-20 rounded-lg border p-4"
+      :class="downsampleSummaryToneClass"
+      data-testid="readiness-downsample-summary"
+    >
+      <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('readinessDownsampleSummaryTitle') }}</h2>
+          <p class="text-[11px] mts-muted">{{ t('readinessDownsampleSummaryDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" :to="downsampleSummaryPath" data-testid="readiness-go-downsample">{{ t('overviewDownsampleGo') }}</router-link>
+          <router-link class="mts-btn text-xs" :to="downsampleErrorJump" data-testid="readiness-downsample-jump-error">{{ t('overviewDownsampleJumpError') }}</router-link>
+          <router-link class="mts-btn text-xs" :to="downsampleLaggingJump" data-testid="readiness-downsample-jump-lagging">{{ t('overviewDownsampleJumpLagging') }}</router-link>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+        <div data-testid="readiness-downsample-total">{{ t('overviewDownsampleTotal') }}: <span class="font-semibold">{{ downsampleSummaryView.total }}</span></div>
+        <div data-testid="readiness-downsample-errors">{{ t('overviewDownsampleErrors') }}: <span class="font-semibold">{{ downsampleSummaryView.error }}</span></div>
+        <div data-testid="readiness-downsample-lagging">{{ t('overviewDownsampleLagging') }}: <span class="font-semibold">{{ downsampleSummaryView.lagging }}</span></div>
+        <div data-testid="readiness-downsample-max-lag">{{ t('overviewDownsampleMaxLag') }}: <span class="font-semibold">{{ downsampleSummaryView.max_lag_seconds }}s</span></div>
+      </div>
     </div>
 
     <div id="production-checklist" class="mts-card p-4 scroll-mt-20" data-testid="readiness-production-checklist">

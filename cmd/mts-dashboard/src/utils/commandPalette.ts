@@ -782,6 +782,29 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     adminOnly: true,
   },
   {
+    id: 'readiness-downsample-health-card',
+    path: '/ops/readiness#downsample-health-panel',
+    labelKey: 'cmdReadinessDownsampleHealthCard',
+    keywords: [
+      'readiness downsample health',
+      '就绪降采样健康',
+      'readiness-downsample-health-card',
+      'downsample-health-panel',
+    ],
+    adminOnly: true,
+  },
+  {
+    id: 'metrics-downsample-health',
+    path: '/observability/metrics',
+    labelKey: 'cmdMetricsDownsampleHealth',
+    keywords: [
+      'metrics downsample health',
+      '指标页降采样健康',
+      'metrics-downsample-summary',
+    ],
+    adminOnly: true,
+  },
+  {
     id: 'notify-history',
     path: notifyHistoryFormToPrefill({ kind: 'all', range: 'all' }, { path: '/' }),
     labelKey: 'cmdNotifyHistory',

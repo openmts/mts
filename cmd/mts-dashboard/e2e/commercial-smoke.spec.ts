@@ -418,6 +418,11 @@ test('commercial browser smoke path', async ({ page }) => {
 
   await page.goto('/observability/metrics')
   await expect(page.getByTestId('metrics-page')).toBeVisible()
+  // P445: Metrics 降采样健康摘要（admin）
+  if (await page.getByTestId('metrics-downsample-summary').count()) {
+    await expect(page.getByTestId('metrics-downsample-total')).toBeVisible()
+    await expect(page.getByTestId('metrics-downsample-jump-error')).toBeVisible()
+  }
   await expect(page.getByTestId('metrics-admin-last')).toBeVisible()
   await expect(page.getByTestId('metrics-admin-last-copy')).toBeVisible()
   await page.goto('/audit')
@@ -2565,6 +2570,16 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('overview-go-preflight').click()
   await expect(page).toHaveURL(/ops\/readiness/)
   await expect(page.getByTestId('readiness-export-preflight')).toBeVisible()
+  // P445: 就绪中心降采样健康卡片 + 错误深链
+  if (await page.getByTestId('readiness-downsample-summary').count()) {
+    await expect(page.getByTestId('readiness-downsample-total')).toBeVisible()
+    await expect(page.getByTestId('readiness-downsample-jump-error')).toBeVisible()
+    await page.getByTestId('readiness-downsample-jump-error').click()
+    await expect(page).toHaveURL(/health=error/)
+    await expect(page.getByTestId('downsample-status-health-filter')).toHaveValue('error', { timeout: 15_000 })
+    await page.goto('/ops/readiness')
+    await expect(page.getByTestId('readiness-export-preflight')).toBeVisible()
+  }
   await page.goto('/')
   await expect(page.getByTestId('overview-go-signoff')).toBeVisible()
   await page.getByTestId('overview-go-signoff').click()

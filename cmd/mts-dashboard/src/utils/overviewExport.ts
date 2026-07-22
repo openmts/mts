@@ -42,7 +42,7 @@ export function buildOverviewExport(
   at = new Date(),
 ): {
   kind: 'mts.overview.snapshot'
-  version: 1
+  version: 2
   generated_at: string
   connectivity: string
   healthy: boolean | null
@@ -64,7 +64,7 @@ export function buildOverviewExport(
 } {
   return {
     kind: 'mts.overview.snapshot',
-    version: 1,
+    version: 2,
     generated_at: at.toISOString(),
     connectivity: input.connectivity || '',
     healthy: input.healthy ?? null,
