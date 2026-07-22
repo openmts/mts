@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseMetricsPrefill, metricsFormToPrefill } from '@/utils/routePrefill'
@@ -27,9 +27,12 @@ import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { Activity, RefreshCw, Download } from 'lucide-vue-next'
 
 const { isAdmin } = useAuth()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const metricsAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
@@ -248,10 +251,19 @@ onBeforeUnmount(() => {
           <Activity class="h-5 w-5" />
           {{ t('metricsTitle') }}
         </h1>
-        <p class="text-xs mts-muted">
-          {{ t('metricsDesc') }}
-          <span v-if="lastRefreshed" data-testid="metrics-refreshed">{{ formatMessage(t('metricsRefreshedAt'), { time: lastRefreshed }) }}</span>
-        </p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs mts-muted">
+            {{ t('metricsDesc') }}
+            <span v-if="lastRefreshed" data-testid="metrics-refreshed">{{ formatMessage(t('metricsRefreshedAt'), { time: lastRefreshed }) }}</span>
+          </p>
+          <span
+            v-if="metricsAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="metrics-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="metricsAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ metricsAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <label class="flex items-center gap-1 text-xs mts-muted">

@@ -342,6 +342,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('users-page')).toBeVisible()
   await expect(page.getByTestId('users-admin-last')).toBeVisible()
 
+  await page.goto('/observability/metrics')
+  await expect(page.getByTestId('metrics-page')).toBeVisible()
+  await expect(page.getByTestId('metrics-admin-last')).toBeVisible()
+  await page.goto('/audit')
+  await expect(page.getByTestId('audit-page')).toBeVisible()
+  await expect(page.getByTestId('audit-admin-last')).toBeVisible()
+
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')
   await expect(page.getByTestId('access-matrix-page')).toBeVisible()

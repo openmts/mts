@@ -29,6 +29,9 @@ import {
   adminOpLastBannerSurfaceClass,
   adminOpLastChipSurfaceClass,
   commandAdminOpLastDismissFeedback,
+  canDismissAdminOpLast,
+  readFailAckedAdminOpLastFinishedAt,
+  writeFailAckedAdminOpLastFinishedAt,
   shouldPollAdminOpBusy,
 } from './adminOpBusy.ts'
 
@@ -275,8 +278,36 @@ test('shouldShowAdminOpLastBanner and dismiss storage', () => {
       busy: false,
       offline: false,
       lastSummary: 'Flush · ok',
+      lastOk: true,
       lastFinishedAtUnix: 100,
       dismissedFinishedAtUnix: 100,
+    }),
+    false,
+  )
+  // fail: dismiss alone is not enough
+  assert.equal(
+    shouldShowAdminOpLastBanner({
+      isAdmin: true,
+      busy: false,
+      offline: false,
+      lastSummary: 'Flush · fail',
+      lastOk: false,
+      lastFinishedAtUnix: 200,
+      dismissedFinishedAtUnix: 200,
+      failAckedFinishedAtUnix: null,
+    }),
+    true,
+  )
+  assert.equal(
+    shouldShowAdminOpLastBanner({
+      isAdmin: true,
+      busy: false,
+      offline: false,
+      lastSummary: 'Flush · fail',
+      lastOk: false,
+      lastFinishedAtUnix: 200,
+      dismissedFinishedAtUnix: 200,
+      failAckedFinishedAtUnix: 200,
     }),
     false,
   )
@@ -315,7 +346,33 @@ test('commandAdminOpLastDismissFeedback', () => {
   assert.deepEqual(commandAdminOpLastDismissFeedback({ isAdmin: true, hasLastSummary: true, alreadyDismissed: true }), {
     kind: 'already_dismissed',
   })
+  assert.deepEqual(
+    commandAdminOpLastDismissFeedback({
+      isAdmin: true,
+      hasLastSummary: true,
+      alreadyDismissed: false,
+      lastOk: false,
+      failAcked: false,
+    }),
+    { kind: 'require_ack' },
+  )
+  assert.deepEqual(
+    commandAdminOpLastDismissFeedback({
+      isAdmin: true,
+      hasLastSummary: true,
+      alreadyDismissed: false,
+      lastOk: false,
+      failAcked: true,
+    }),
+    { kind: 'dismissed' },
+  )
   assert.deepEqual(commandAdminOpLastDismissFeedback({ isAdmin: true, hasLastSummary: true, alreadyDismissed: false }), {
     kind: 'dismissed',
   })
+})
+
+test('canDismissAdminOpLast', () => {
+  assert.equal(canDismissAdminOpLast({ lastOk: true }), true)
+  assert.equal(canDismissAdminOpLast({ lastOk: false, lastFinishedAtUnix: 1, failAckedFinishedAtUnix: null }), false)
+  assert.equal(canDismissAdminOpLast({ lastOk: false, lastFinishedAtUnix: 1, failAckedFinishedAtUnix: 1 }), true)
 })

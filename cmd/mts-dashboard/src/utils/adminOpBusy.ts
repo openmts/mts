@@ -6,11 +6,14 @@ import {
   formatAdminHeavyLastSummary,
   parseAdminHeavyLast,
   readDismissedAdminOpLastFinishedAt,
+  readFailAckedAdminOpLastFinishedAt,
   shouldShowAdminOpLastBanner,
   writeDismissedAdminOpLastFinishedAt,
+  writeFailAckedAdminOpLastFinishedAt,
   adminOpLastToneClass,
   adminOpLastBannerSurfaceClass,
   adminOpLastChipSurfaceClass,
+  canDismissAdminOpLast,
   commandAdminOpLastDismissFeedback,
 } from './adminOpLast.ts'
 
@@ -19,11 +22,14 @@ export {
   formatAdminHeavyLastSummary,
   parseAdminHeavyLast,
   readDismissedAdminOpLastFinishedAt,
+  readFailAckedAdminOpLastFinishedAt,
   shouldShowAdminOpLastBanner,
   writeDismissedAdminOpLastFinishedAt,
+  writeFailAckedAdminOpLastFinishedAt,
   adminOpLastToneClass,
   adminOpLastBannerSurfaceClass,
   adminOpLastChipSurfaceClass,
+  canDismissAdminOpLast,
   commandAdminOpLastDismissFeedback,
 } from './adminOpLast.ts'
 

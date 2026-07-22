@@ -58,6 +58,7 @@ export function formatAdminHeavyLastSummary(
 }
 
 export const ADMIN_OP_LAST_DISMISS_KEY = 'mts.admin-op-last-dismissed-finished-at'
+export const ADMIN_OP_LAST_FAIL_ACK_KEY = 'mts.admin-op-last-fail-acked-finished-at'
 
 /** 是否展示全局「最近管理重操作」条（纯函数） */
 export function shouldShowAdminOpLastBanner(opts: {
@@ -66,23 +67,29 @@ export function shouldShowAdminOpLastBanner(opts: {
   offline: boolean
   pollError?: string | null
   lastSummary?: string | null
+  lastOk?: boolean | null
   lastFinishedAtUnix?: number | null
   dismissedFinishedAtUnix?: number | null
+  failAckedFinishedAtUnix?: number | null
 }): boolean {
   if (!opts.isAdmin || opts.busy || opts.offline) return false
   if ((opts.pollError || '').trim()) return false
   if (!(opts.lastSummary || '').trim()) return false
   const finished = opts.lastFinishedAtUnix
-  const dismissed = opts.dismissedFinishedAtUnix
-  if (
-    finished != null &&
-    Number.isFinite(finished) &&
-    dismissed != null &&
-    Number.isFinite(dismissed) &&
-    Math.floor(finished) === Math.floor(dismissed)
-  ) {
-    return false
+  const sameFinished = (a: number | null | undefined, b: number | null | undefined) =>
+    a != null &&
+    b != null &&
+    Number.isFinite(a) &&
+    Number.isFinite(b) &&
+    Math.floor(a) === Math.floor(b)
+  // 失败结果：必须先到运维页确认，才能被 dismiss 隐藏
+  if (opts.lastOk === false) {
+    if (sameFinished(finished, opts.failAckedFinishedAtUnix) && sameFinished(finished, opts.dismissedFinishedAtUnix)) {
+      return false
+    }
+    return true
   }
+  if (sameFinished(finished, opts.dismissedFinishedAtUnix)) return false
   return true
 }
 
@@ -156,6 +163,7 @@ export type CommandAdminOpLastDismissFeedback =
   | { kind: 'denied' }
   | { kind: 'empty' }
   | { kind: 'already_dismissed' }
+  | { kind: 'require_ack' }
   | { kind: 'dismissed' }
 
 /** 命令面板「关闭最近管理重操作条」反馈（纯函数） */
@@ -163,9 +171,45 @@ export function commandAdminOpLastDismissFeedback(opts: {
   isAdmin: boolean
   hasLastSummary: boolean
   alreadyDismissed: boolean
+  lastOk?: boolean | null
+  failAcked?: boolean
 }): CommandAdminOpLastDismissFeedback {
   if (!opts.isAdmin) return { kind: 'denied' }
   if (!opts.hasLastSummary) return { kind: 'empty' }
   if (opts.alreadyDismissed) return { kind: 'already_dismissed' }
+  if (opts.lastOk === false && !opts.failAcked) return { kind: 'require_ack' }
   return { kind: 'dismissed' }
+}
+
+export function readFailAckedAdminOpLastFinishedAt(
+  storage: { getItem(key: string): string | null } | null | undefined,
+  key: string = ADMIN_OP_LAST_FAIL_ACK_KEY,
+): number | null {
+  return readDismissedAdminOpLastFinishedAt(storage, key)
+}
+
+export function writeFailAckedAdminOpLastFinishedAt(
+  storage: { setItem(key: string, value: string): void } | null | undefined,
+  finishedAtUnix: number | null | undefined,
+  key: string = ADMIN_OP_LAST_FAIL_ACK_KEY,
+): boolean {
+  return writeDismissedAdminOpLastFinishedAt(storage, finishedAtUnix, key)
+}
+
+/** 失败 last 是否允许关闭（需已 ack） */
+export function canDismissAdminOpLast(opts: {
+  lastOk?: boolean | null
+  lastFinishedAtUnix?: number | null
+  failAckedFinishedAtUnix?: number | null
+}): boolean {
+  if (opts.lastOk !== false) return true
+  const finished = opts.lastFinishedAtUnix
+  const acked = opts.failAckedFinishedAtUnix
+  return (
+    finished != null &&
+    acked != null &&
+    Number.isFinite(finished) &&
+    Number.isFinite(acked) &&
+    Math.floor(finished) === Math.floor(acked)
+  )
 }

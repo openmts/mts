@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, inject, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import EmptyState from '@/components/EmptyState.vue'
@@ -14,7 +14,7 @@ import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError } from '@/utils/apiError'
-import { isAdminHeavyBusyError } from '@/utils/adminOpBusy'
+import { adminOpLastChipSurfaceClass, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import {
   auditRangeToLocalInputs,
   filterAuditEvents,
@@ -54,6 +54,8 @@ interface AuditResponse { events: AuditEvent[]; total?: number }
 
 useHashScroll()
 const route = useRoute()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const auditAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
 const { success, info, error: notifyError, warn } = useNotify()
@@ -401,7 +403,16 @@ watch(
         <ScrollText class="h-5 w-5" />
         {{ t('auditTitle') }}
       </h1>
-      <p class="text-xs mts-muted">{{ isAdmin ? t('auditDesc') : t('auditSelfDesc') }}</p>
+      <div class="mt-1 flex flex-wrap items-center gap-2">
+        <p class="text-xs mts-muted">{{ isAdmin ? t('auditDesc') : t('auditSelfDesc') }}</p>
+        <span
+          v-if="isAdmin && auditAdminLastLabel"
+          :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+          data-testid="audit-admin-last"
+          :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+          :title="auditAdminLastLabel"
+        >{{ t('opsStatusLastLabel') }}: {{ auditAdminLastLabel }}</span>
+      </div>
     </div>
     <p
       v-if="!isAdmin"

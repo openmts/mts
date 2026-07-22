@@ -82,6 +82,7 @@ async function refreshOpsBusyOnly() {
   }
 }
 const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const ackAdminOpLastFail = inject<(() => void) | undefined>('ackAdminOpLastFail', undefined)
 const adminOpBusyDetailTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('opsAdminBusy'))
 const adminOpBusyChipLabel = computed(() => {
   if (confirmLoading.value) return t.value('opsAdminBusyChip')
@@ -639,6 +640,7 @@ onBeforeUnmount(() => {
 })
 
 onMounted(() => {
+  ackAdminOpLastFail?.()
   void loadStats()
   applyOperationsPrefillFromRoute()
 })

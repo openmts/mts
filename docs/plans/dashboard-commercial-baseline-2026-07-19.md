@@ -1519,3 +1519,12 @@
 
 ## P362（2026-07-22）
 - e2e：flush 后 Databases/Users 可见 last 芯片
+
+## P363（2026-07-22）
+- Metrics/Audit：admin last 摘要芯片
+
+## P364（2026-07-22）
+- 失败 last：需打开运维确认（ack）后才可关闭；命令面板 require_ack
+
+## P365（2026-07-22）
+- 进入 Operations 自动 ack 失败 last；e2e 覆盖 Metrics/Audit last 芯片

@@ -383,6 +383,8 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
       '最近一次',
       '最近管理重操作',
       'admin last',
+      '失败最近',
+      'failed last op',
     ],
     adminOnly: true,
   },

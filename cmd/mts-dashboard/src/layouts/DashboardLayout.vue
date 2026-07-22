@@ -41,6 +41,9 @@ import {
   readDismissedAdminOpLastFinishedAt,
   shouldShowAdminOpLastBanner,
   writeDismissedAdminOpLastFinishedAt,
+  writeFailAckedAdminOpLastFinishedAt,
+  readFailAckedAdminOpLastFinishedAt,
+  canDismissAdminOpLast,
   adminOpLastBannerSurfaceClass,
 } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
@@ -65,6 +68,9 @@ const {
 } = useAdminOpBusy()
 const dismissedAdminOpLastFinishedAt = ref<number | null>(
   typeof localStorage !== 'undefined' ? readDismissedAdminOpLastFinishedAt(localStorage) : null,
+)
+const failAckedAdminOpLastFinishedAt = ref<number | null>(
+  typeof localStorage !== 'undefined' ? readFailAckedAdminOpLastFinishedAt(localStorage) : null,
 )
 
 /** busy 期间 1s tick，让横幅 elapsed 实时跳动 */
@@ -127,6 +133,14 @@ const adminOpLastSummary = computed(() => {
   return formatAdminHeavyLastSummary(last, kind)
 })
 
+const canDismissLastBanner = computed(() =>
+  canDismissAdminOpLast({
+    lastOk: adminOpLast.value ? adminOpLast.value.ok : null,
+    lastFinishedAtUnix: adminOpLast.value?.finishedAtUnix ?? null,
+    failAckedFinishedAtUnix: failAckedAdminOpLastFinishedAt.value,
+  }),
+)
+
 const showAdminOpLastBanner = computed(() =>
   shouldShowAdminOpLastBanner({
     isAdmin: isAdmin.value,
@@ -134,17 +148,41 @@ const showAdminOpLastBanner = computed(() =>
     offline: offline.value,
     pollError: adminOpBusyError.value,
     lastSummary: adminOpLastSummary.value,
+    lastOk: adminOpLast.value ? adminOpLast.value.ok : null,
     lastFinishedAtUnix: adminOpLast.value?.finishedAtUnix ?? null,
     dismissedFinishedAtUnix: dismissedAdminOpLastFinishedAt.value,
+    failAckedFinishedAtUnix: failAckedAdminOpLastFinishedAt.value,
   }),
 )
 
+function ackAdminOpLastFailIfNeeded() {
+  const last = adminOpLast.value
+  if (!last || last.ok !== false) return
+  const finished = last.finishedAtUnix ?? null
+  if (typeof localStorage !== 'undefined') {
+    writeFailAckedAdminOpLastFinishedAt(localStorage, finished)
+  }
+  failAckedAdminOpLastFinishedAt.value =
+    finished != null && finished > 0 ? Math.floor(finished) : null
+}
+
 function dismissAdminOpLastBanner() {
-  const finished = adminOpLast.value?.finishedAtUnix ?? null
+  const last = adminOpLast.value
+  const finished = last?.finishedAtUnix ?? null
+  if (
+    !canDismissAdminOpLast({
+      lastOk: last ? last.ok : null,
+      lastFinishedAtUnix: finished,
+      failAckedFinishedAtUnix: failAckedAdminOpLastFinishedAt.value,
+    })
+  ) {
+    return false
+  }
   if (typeof localStorage !== 'undefined') {
     writeDismissedAdminOpLastFinishedAt(localStorage, finished)
   }
   dismissedAdminOpLastFinishedAt.value = finished != null && finished > 0 ? Math.floor(finished) : null
+  return true
 }
 
 provide('adminOpBusySummary', computed(() => ({
@@ -159,10 +197,12 @@ provide('adminOpBusySummary', computed(() => ({
   lastFinishedAtUnix: adminOpLast.value?.finishedAtUnix ?? null,
 })))
 provide('dismissAdminOpLastBanner', dismissAdminOpLastBanner)
+provide('ackAdminOpLastFail', ackAdminOpLastFailIfNeeded)
 provide(
   'showAdminOpLastBanner',
   computed(() => showAdminOpLastBanner.value),
 )
+provide('canDismissAdminOpLastBanner', canDismissLastBanner)
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 
 function retryNetworkStatus() {
@@ -206,6 +246,7 @@ function goSessionRenew() {
   void router.push({ path: '/account', hash: '#account-session' })
 }
 function goAdminOpBusyOps() {
+  ackAdminOpLastFailIfNeeded()
   void router.push({ path: '/operations', hash: '#ops-status-strip' })
 }
 async function goSessionRelogin() {
@@ -547,6 +588,11 @@ function onSkipToMain(e: Event) {
           <span class="ml-1" data-testid="admin-op-last-summary">{{ adminOpLastSummary }}</span>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <span
+            v-if="adminOpLast?.ok === false && !canDismissLastBanner"
+            class="text-[11px] opacity-90"
+            data-testid="admin-op-last-fail-ack-hint"
+          >{{ t('adminOpLastFailAckHint') }}</span>
           <button
             type="button"
             class="mts-btn mts-focus-ring"
@@ -557,6 +603,8 @@ function onSkipToMain(e: Event) {
             type="button"
             class="mts-btn mts-focus-ring"
             data-testid="admin-op-last-dismiss"
+            :disabled="!canDismissLastBanner"
+            :title="t('adminOpLastDismiss')"
             @click="dismissAdminOpLastBanner"
           >{{ t('adminOpLastDismiss') }}</button>
         </div>

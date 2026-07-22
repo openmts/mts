@@ -57,7 +57,7 @@ let trap: FocusTrapHandle | null = null
 const router = useRouter()
 const { isAdmin } = useAuth()
 const { adminOpBusy, adminOpKind, refreshAdminOpBusy } = useAdminOpBusy()
-const injectedAdminOpSummary = inject<ComputedRef<{ busy: boolean; op: string; opLabel: string; elapsed?: string; detail: string; lastSummary?: string }> | undefined>('adminOpBusySummary', undefined)
+const injectedAdminOpSummary = inject<ComputedRef<{ busy: boolean; op: string; opLabel: string; elapsed?: string; detail: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const { t, toggleLocale } = useI18n()
 const { toggleTheme } = useTheme()
 const { density, toggleDensity } = useDensity()
@@ -68,6 +68,7 @@ const focusSidebarFilter = inject<(() => void) | undefined>('focusSidebarFilter'
 const openNotifyHistory = inject<(() => void) | undefined>('openNotifyHistory', undefined)
 const dismissAdminOpLastBanner = inject<(() => void) | undefined>('dismissAdminOpLastBanner', undefined)
 const showAdminOpLastBanner = inject<import('vue').ComputedRef<boolean> | undefined>('showAdminOpLastBanner', undefined)
+const canDismissAdminOpLastBanner = inject<import('vue').ComputedRef<boolean> | undefined>('canDismissAdminOpLastBanner', undefined)
 const openShortcutsHelp = inject<(() => void) | undefined>('openShortcutsHelp', undefined)
 const toggleSidebarCollapse = inject<(() => void) | undefined>('toggleSidebarCollapse', undefined)
 const scrollMainToTop = inject<(() => void) | undefined>('scrollMainToTop', undefined)
@@ -272,10 +273,13 @@ function runAction(action: CommandActionId) {
     case 'dismiss-admin-op-last': {
       const hasLast = Boolean((injectedAdminOpSummary?.value?.lastSummary || '').trim())
       const showing = Boolean(showAdminOpLastBanner?.value)
+      const lastOk = injectedAdminOpSummary?.value?.lastOk
       const fb = commandAdminOpLastDismissFeedback({
         isAdmin: isAdmin.value,
         hasLastSummary: hasLast || showing,
         alreadyDismissed: hasLast && !showing,
+        lastOk: lastOk ?? null,
+        failAcked: Boolean(canDismissAdminOpLastBanner?.value),
       })
       if (fb.kind === 'denied') {
         notifyError(t.value('permissionDenied') || 'admin only')
@@ -287,6 +291,10 @@ function runAction(action: CommandActionId) {
       }
       if (fb.kind === 'already_dismissed') {
         success(t.value('cmdActionDismissAdminOpLastAlready'))
+        break
+      }
+      if (fb.kind === 'require_ack') {
+        notifyError(t.value('cmdActionDismissAdminOpLastNeedAck'))
         break
       }
       dismissAdminOpLastBanner?.()
