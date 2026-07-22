@@ -2288,3 +2288,17 @@
 | 会话校准交接 | session remaining | archive 推演 | 只读 |
 | 验收包 | — | acceptance pack MD | 运维交接 |
 
+
+## P455（2026-07-23）
+- 健康报告 v2：JSON/MD 附带 `commercial_handoff`（密码策略 + 会话校准）
+- Overview：会话字段写入健康报告；一键复制交接摘要（`overview-copy-commercial-handoff`）
+- Readiness：交接卡片一键复制（`readiness-copy-commercial-handoff`）
+- 纯函数：`formatCommercialHandoffClipboardText`
+
+### 前后端对齐（P455）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 健康报告交接 | password-policy / session | health report v2 | 只读汇总 |
+| Overview 复制 | remaining_seconds | clipboard 摘要 | 运维扫视 |
+| Readiness 复制 | — | 交接卡片按钮 | 不计分 |
+

@@ -31,6 +31,7 @@ import {
   formatPasswordPolicyHandoffLine,
   formatSessionCalibrationHandoffLine,
 } from '@/utils/commercialHandoffSummary'
+import { formatCommercialHandoffClipboardText } from '@/utils/healthReportExport'
 import { buildOpsNextSteps } from '@/utils/opsNextSteps'
 import { copyText } from '@/utils/clipboard'
 import {
@@ -542,6 +543,13 @@ function archiveSessionFields() {
     session_remaining_seconds: lastSessionRemainingSeconds.value,
     session_checked_at_ms: lastSessionCheckedAt.value,
   }
+}
+
+async function copyCommercialHandoff() {
+  const text = formatCommercialHandoffClipboardText(commercialHandoffView.value)
+  const res = await copyText(text)
+  if (res.ok) success(t.value('readinessCommercialHandoffCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 function doctorArchiveSummary() {
@@ -1651,6 +1659,7 @@ watch(
         </div>
       </dl>
       <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" class="mts-btn text-xs" data-testid="readiness-copy-commercial-handoff" @click="copyCommercialHandoff">{{ t('readinessCommercialHandoffCopy') }}</button>
         <router-link class="mts-btn text-xs" to="/account#account-password-policy" data-testid="readiness-handoff-jump-policy">{{ t('readinessCommercialHandoffJumpPolicy') }}</router-link>
         <router-link class="mts-btn text-xs" to="/account#account-session" data-testid="readiness-handoff-jump-session">{{ t('readinessCommercialHandoffJumpSession') }}</router-link>
         <router-link class="mts-btn text-xs" to="/api-spec?ns=auth&q=password-policy#api-spec-filters" data-testid="readiness-handoff-jump-spec">{{ t('readinessCommercialHandoffJumpSpec') }}</router-link>

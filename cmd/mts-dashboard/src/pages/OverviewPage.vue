@@ -36,7 +36,14 @@ import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, C
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { buildOverviewExport, formatOverviewExportPretty } from '@/utils/overviewExport'
-import { buildHealthReport, formatHealthReportMarkdown, healthReportFilename, healthReportFilenames } from '@/utils/healthReportExport'
+import {
+  buildHealthReport,
+  formatCommercialHandoffClipboardText,
+  formatHealthReportMarkdown,
+  healthReportFilename,
+  healthReportFilenames,
+} from '@/utils/healthReportExport'
+import { buildCommercialHandoffSummary } from '@/utils/commercialHandoffSummary'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -65,7 +72,7 @@ interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; read
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 
-const { isAdmin, getTokenExpiresAt } = useAuth()
+const { isAdmin, getTokenExpiresAt, lastSessionRemainingSeconds, lastSessionCheckedAt } = useAuth()
 const { adminOpBusy, adminOpKind, setAdminOpBusy, applyAdminOpStatus, refreshAdminOpBusy } = useAdminOpBusy()
 const router = useRouter()
 const route = useRoute()
@@ -667,7 +674,21 @@ function healthReportInput() {
     last_refreshed: lastRefreshed.value,
     downsample_status_summary: downsampleSummary.value,
     ops_stats: maintenanceStats.value as object | null,
+    session_expires_at: getTokenExpiresAt() || null,
+    session_remaining_seconds: lastSessionRemainingSeconds.value,
+    session_checked_at_ms: lastSessionCheckedAt.value,
   }
+}
+
+async function copyCommercialHandoff() {
+  const handoff = buildCommercialHandoffSummary({
+    expiresAtIso: getTokenExpiresAt() || null,
+    serverRemainingSec: lastSessionRemainingSeconds.value,
+    checkedAtMs: lastSessionCheckedAt.value,
+  })
+  const res = await copyText(formatCommercialHandoffClipboardText(handoff))
+  if (res.ok) success(t.value('overviewCommercialHandoffCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 async function exportHealthReport() {
@@ -876,6 +897,9 @@ async function copyOverview() {
         </button>
         <button type="button" class="mts-btn" data-testid="overview-copy-health-report" @click="copyHealthReport">
           <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopyHealthReport') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-copy-commercial-handoff" @click="copyCommercialHandoff">
+          <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopyCommercialHandoff') }}
         </button>
         <button type="button" class="mts-btn" data-testid="overview-copy-snapshot" @click="copyOverview">
           <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopySnapshot') }}

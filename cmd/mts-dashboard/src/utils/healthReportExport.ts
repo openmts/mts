@@ -1,4 +1,4 @@
-/** Overview 一键健康报告（聚合 overview + downsample + 可选 ops 字段，纯函数） */
+/** Overview 一键健康报告（聚合 overview + downsample + 可商用交接 + 可选 ops，纯函数） */
 
 import {
   buildOverviewExport,
@@ -8,12 +8,18 @@ import {
 import {
   downsampleStatusSummaryTone,
   formatDownsampleStatusSummaryLine,
-  normalizeDownsampleStatusSummary,
   type DownsampleStatusSummaryInput,
 } from './downsampleStatusSummary.ts'
+import {
+  buildCommercialHandoffSummary,
+  formatPasswordPolicyHandoffLine,
+  formatSessionCalibrationHandoffLine,
+  type CommercialHandoffSummary,
+} from './commercialHandoffSummary.ts'
 
 export const HEALTH_REPORT_KIND = 'mts.health.report' as const
-export const HEALTH_REPORT_VERSION = 1 as const
+/** v2：附带 commercial_handoff（密码策略 + 会话校准） */
+export const HEALTH_REPORT_VERSION = 2 as const
 
 export interface HealthReportInput {
   connectivity?: string
@@ -35,6 +41,11 @@ export interface HealthReportInput {
   downsample_status_summary?: DownsampleStatusSummaryInput | null
   /** 可选：运维统计快照片段 */
   ops_stats?: object | null
+  /** 可选：直接传入交接摘要；否则按会话字段构造 */
+  commercial_handoff?: CommercialHandoffSummary | null
+  session_expires_at?: string | null
+  session_remaining_seconds?: number | null
+  session_checked_at_ms?: number | null
 }
 
 export function buildHealthReport(input: HealthReportInput, at = new Date()) {
@@ -62,6 +73,14 @@ export function buildHealthReport(input: HealthReportInput, at = new Date()) {
   )
   const ds = overview.downsample_status_summary
   const tone = ds ? downsampleStatusSummaryTone(ds) : 'ok'
+  const commercial_handoff =
+    input.commercial_handoff ??
+    buildCommercialHandoffSummary({
+      expiresAtIso: input.session_expires_at,
+      serverRemainingSec: input.session_remaining_seconds,
+      checkedAtMs: input.session_checked_at_ms,
+      nowMs: at.getTime(),
+    })
   return {
     kind: HEALTH_REPORT_KIND,
     version: HEALTH_REPORT_VERSION,
@@ -72,6 +91,7 @@ export function buildHealthReport(input: HealthReportInput, at = new Date()) {
     downsample_status_summary: ds,
     downsample_tone: tone,
     ops_stats: input.ops_stats ?? null,
+    commercial_handoff,
   }
 }
 
@@ -100,12 +120,21 @@ export function formatHealthReportMarkdown(
     `- readiness: ${o.readiness_total == null ? '—' : `${o.readiness_total}%`} (${o.readiness_level || '—'})`,
   ]
   if (o.server_version?.version) {
-    lines.push(`- server: ${o.server_version.version}${o.server_version.commit ? ` @ ${o.server_version.commit}` : ''}`)
+    lines.push(
+      `- server: ${o.server_version.version}${o.server_version.commit ? ` @ ${o.server_version.commit}` : ''}`,
+    )
   }
   if (r.downsample_status_summary) {
     lines.push('', '## Downsample', '')
     lines.push(`- tone: ${r.downsample_tone}`)
     lines.push(`- ${formatDownsampleStatusSummaryLine(r.downsample_status_summary)}`)
+  }
+  if (r.commercial_handoff) {
+    lines.push('', '## Commercial handoff', '')
+    lines.push(`- password_policy: ${formatPasswordPolicyHandoffLine(r.commercial_handoff.password_policy)}`)
+    lines.push(
+      `- session_calibration: ${formatSessionCalibrationHandoffLine(r.commercial_handoff.session_calibration)}`,
+    )
   }
   if (Array.isArray(o.health_reasons) && o.health_reasons.length) {
     lines.push('', '## Health reasons', '')
@@ -117,6 +146,19 @@ export function formatHealthReportMarkdown(
   }
   lines.push('', '---', '', `_${r.disclaimer}_`, '')
   return lines.join('\n')
+}
+
+export function formatCommercialHandoffClipboardText(
+  handoff: CommercialHandoffSummary,
+  at = new Date(),
+): string {
+  return [
+    'MTS commercial handoff',
+    `generated_at: ${at.toISOString()}`,
+    `password_policy: ${formatPasswordPolicyHandoffLine(handoff.password_policy)}`,
+    `session_calibration: ${formatSessionCalibrationHandoffLine(handoff.session_calibration)}`,
+    '',
+  ].join('\n')
 }
 
 export function healthReportFilenames(at = new Date()): { json: string; md: string } {

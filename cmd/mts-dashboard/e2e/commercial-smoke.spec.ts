@@ -221,6 +221,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-export-health-report')).toBeVisible()
   await expect(page.getByTestId('overview-export-health-md')).toBeVisible()
   await expect(page.getByTestId('overview-copy-health-report')).toBeVisible()
+  await expect(page.getByTestId('overview-copy-commercial-handoff')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('overview-share-link')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
@@ -2600,6 +2601,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-commercial-handoff')).toBeVisible()
   await expect(page.getByTestId('readiness-commercial-handoff-password')).toBeVisible()
   await expect(page.getByTestId('readiness-commercial-handoff-session')).toBeVisible()
+  await expect(page.getByTestId('readiness-copy-commercial-handoff')).toBeVisible()
   // P445: 就绪中心降采样健康卡片 + 错误深链
   if (await page.getByTestId('readiness-downsample-summary').count()) {
     await expect(page.getByTestId('readiness-downsample-total')).toBeVisible()
