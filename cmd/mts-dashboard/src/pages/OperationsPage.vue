@@ -42,7 +42,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
 interface CompactionStatsResponse { stats: CompactionStats }
-interface MaintenanceErrorsResponse { errors: string[] }
+interface MaintenanceErrorsResponse { errors: string[]; last?: { op?: string; ok?: boolean; error?: string } }
 interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
 
 const { isAdmin } = useAuth()

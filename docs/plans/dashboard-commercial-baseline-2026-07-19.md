@@ -1561,3 +1561,12 @@
 
 ## P375（2026-07-22）
 - e2e：横幅复制、Account last、命令面板复制最近一次
+
+## P376（2026-07-22）
+- Query/Write：admin last 摘要芯片（工作台可见最近运维结果）
+
+## P377（2026-07-22）
+- e2e：Query/Write last 芯片
+
+## P378（2026-07-22）
+- Server：`maintenance/errors` 响应附带 `last`（HTTP/gRPC 对齐），便于运维页单请求关联最近重操作结果

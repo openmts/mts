@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
@@ -20,6 +20,7 @@ import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
@@ -145,6 +146,8 @@ function writeFormT() {
   })
 }
 const { currentUser, isAdmin } = useAuth()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const writeAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const authzHint = ref('')
 
 // TypedBatch builder（多 tag 列 + 多 field 列）
@@ -690,6 +693,14 @@ async function exportWriteDraft() {
 <template>
   <div class="space-y-4" data-testid="write-page">
     <div class="space-y-2">
+      <div v-if="isAdmin && writeAdminLastLabel" class="flex flex-wrap items-center gap-2">
+        <span
+          :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+          data-testid="write-admin-last"
+          :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+          :title="writeAdminLastLabel"
+        >{{ t('opsStatusLastLabel') }}: {{ writeAdminLastLabel }}</span>
+      </div>
       <div id="write-mode-tabs" class="scroll-mt-20 flex flex-wrap gap-2" data-testid="write-mode-tabs">
         <button
           v-for="m in (['form','line','prometheus','typed'] as const)"

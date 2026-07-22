@@ -234,7 +234,7 @@ func (r *serverRuntime) handleMaintenanceErrors(writer http.ResponseWriter, requ
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, maintenanceErrorsResponse{Errors: r.maintenanceErrors(request.Context())})
+	writeHTTPJSON(writer, http.StatusOK, maintenanceErrorsResponse{Errors: r.maintenanceErrors(request.Context()), Last: r.lastAdminHeavySnapshot()})
 }
 
 func (r *serverRuntime) handleStorageMemory(writer http.ResponseWriter, request *http.Request) {

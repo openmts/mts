@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, computed, nextTick } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch, computed, inject, nextTick, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { parseQueryPrefill, timeRangeToQueryFormTimes, queryFormToPrefill } from '@/utils/routePrefill'
 import { useHashScroll } from '@/composables/useHashScroll'
@@ -10,6 +10,7 @@ import { useQueryHistory } from '@/composables/useQueryHistory'
 import { filterQueryHistory } from '@/utils/queryHistory'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
@@ -80,6 +81,8 @@ const {
 const { t, locale } = useI18n()
 
 const { currentUser, isAdmin } = useAuth()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const queryAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const authzHint = ref('')
 const authzChecking = ref(false)
 
@@ -671,6 +674,13 @@ const columnRows = computed(() => {
           class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
           :title="t('queryDirtyTitle')"
         >{{ t('queryDirtyBadge') }}</span>
+        <span
+          v-if="isAdmin && queryAdminLastLabel"
+          :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+          data-testid="query-admin-last"
+          :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+          :title="queryAdminLastLabel"
+        >{{ t('opsStatusLastLabel') }}: {{ queryAdminLastLabel }}</span>
       </div>
       <div class="flex gap-2">
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showHistory = !showHistory" :title="t('queryHistoryShortcutTitle')"><History class="h-3.5 w-3.5" />{{ t('queryHistoryBtn') }}</button>

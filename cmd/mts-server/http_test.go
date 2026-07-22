@@ -631,6 +631,12 @@ func TestHTTPOpsStatusLastErrorAfterFailedHeavy(t *testing.T) {
 	if maint.Last == nil || maint.Last.Op != "compact" || maint.Last.OK || maint.Last.Error != "disk full" {
 		t.Fatalf("maintenance last after error = %+v", maint.Last)
 	}
+
+	var maintErrs maintenanceErrorsResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/maintenance/errors", nil, http.StatusOK, &maintErrs)
+	if maintErrs.Last == nil || maintErrs.Last.Op != "compact" || maintErrs.Last.OK || maintErrs.Last.Error != "disk full" {
+		t.Fatalf("maintenance/errors last after error = %+v", maintErrs.Last)
+	}
 }
 
 func openTestRuntime(t *testing.T) *serverRuntime {

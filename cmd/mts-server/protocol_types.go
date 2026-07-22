@@ -302,7 +302,8 @@ type retentionApplyRequest struct {
 }
 
 type maintenanceErrorsResponse struct {
-	Errors []string `json:"errors"`
+	Errors []string              `json:"errors"`
+	Last   *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type versionResponse struct {

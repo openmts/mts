@@ -570,7 +570,7 @@ func grpcMaintenanceErrors(r *serverRuntime, ctx context.Context, _ any) (any, e
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return maintenanceErrorsResponse{Errors: r.maintenanceErrors(ctx)}, nil
+	return maintenanceErrorsResponse{Errors: r.maintenanceErrors(ctx), Last: r.lastAdminHeavySnapshot()}, nil
 }
 
 func grpcMaintenanceStats(r *serverRuntime, ctx context.Context, _ any) (any, error) {
