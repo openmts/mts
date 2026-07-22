@@ -41,6 +41,7 @@ import {
   readDismissedAdminOpLastFinishedAt,
   shouldShowAdminOpLastBanner,
   writeDismissedAdminOpLastFinishedAt,
+  adminOpLastBannerSurfaceClass,
 } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { buildLoginLocation } from '@/utils/redirect'
@@ -147,7 +148,6 @@ function dismissAdminOpLastBanner() {
 }
 
 provide('adminOpBusySummary', computed(() => ({
-
   busy: adminOpBusy.value,
   op: adminOpKind.value,
   opLabel: adminOpKindLabel.value,
@@ -155,6 +155,8 @@ provide('adminOpBusySummary', computed(() => ({
   detail: adminOpBusyDetail.value,
   pollError: adminOpBusyPollErrorLabel.value,
   lastSummary: adminOpLastSummary.value,
+  lastOk: adminOpLast.value ? adminOpLast.value.ok : null,
+  lastFinishedAtUnix: adminOpLast.value?.finishedAtUnix ?? null,
 })))
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 
@@ -529,10 +531,11 @@ function onSkipToMain(e: Event) {
       </div>
       <div
         v-if="showAdminOpLastBanner"
-        class="no-print flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-100 sm:px-6"
+        :class="adminOpLastBannerSurfaceClass(adminOpLast?.ok)"
         role="status"
         aria-live="polite"
         data-testid="admin-op-last-banner"
+        :data-ok="adminOpLast?.ok === true ? 'true' : (adminOpLast?.ok === false ? 'false' : undefined)"
       >
         <div class="min-w-0">
           <span class="font-semibold">{{ t('adminOpLastBannerTitle') }}</span>

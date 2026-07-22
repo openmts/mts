@@ -86,7 +86,7 @@ const {
   runJSONExport,
 } = useExportJob()
 const { t , locale } = useI18n()
-const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const storageAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const storageAdminBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('storageAdminBusyChip')
@@ -881,9 +881,15 @@ async function copyStorageShareLink() {
     </div>
     <div
       v-else-if="!loading && storageAdminLastLabel"
-      class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-200"
+      class="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs"
+      :class="adminOpBusySummary?.lastOk === false
+        ? 'border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100'
+        : (adminOpBusySummary?.lastOk === true
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100'
+          : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-200')"
       data-testid="storage-admin-last"
       role="status"
+      :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
       :title="storageAdminLastLabel"
     >
       <span class="min-w-0 truncate">

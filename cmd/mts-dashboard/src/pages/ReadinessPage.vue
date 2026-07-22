@@ -7,7 +7,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, isAdminHeavyBusyMessage, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, adminOpLastChipSurfaceClass, isAdminHeavyBusyMessage, joinAdminOpChip } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
@@ -129,7 +129,8 @@ async function refreshReadinessBusyOnly() {
 }
 const { isAdmin, currentUser } = useAuth()
 const { t, locale } = useI18n()
-const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail?: string }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail?: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const readinessAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const adminOpKindDisplay = computed(() => {
   if (!adminOpBusy.value) return ''
   const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
@@ -1001,16 +1002,25 @@ watch(
       <div class="mts-card p-4">
         <p class="text-xs mts-muted">{{ t('readinessScore') }}</p>
         <div
-          v-if="adminOpBusy"
+          v-if="adminOpBusy || readinessAdminLastLabel"
           class="mt-1 flex flex-wrap items-center gap-2"
           data-testid="readiness-admin-busy-row"
         >
           <span
+            v-if="adminOpBusy"
             class="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
             data-testid="readiness-admin-busy"
             :title="readinessAdminBusyTitle"
           >{{ readinessAdminBusyChipLabel }}</span>
+          <span
+            v-else-if="readinessAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="readiness-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="readinessAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ readinessAdminLastLabel }}</span>
           <button
+            v-if="adminOpBusy"
             type="button"
             class="mts-btn text-[11px] !px-2 !py-0.5"
             data-testid="readiness-admin-busy-refresh"

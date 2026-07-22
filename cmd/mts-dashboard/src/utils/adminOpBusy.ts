@@ -9,6 +9,8 @@ import {
   shouldShowAdminOpLastBanner,
   writeDismissedAdminOpLastFinishedAt,
   adminOpLastToneClass,
+  adminOpLastBannerSurfaceClass,
+  adminOpLastChipSurfaceClass,
 } from './adminOpLast.ts'
 
 export type { AdminHeavyLast } from './adminOpLast.ts'
@@ -19,6 +21,8 @@ export {
   shouldShowAdminOpLastBanner,
   writeDismissedAdminOpLastFinishedAt,
   adminOpLastToneClass,
+  adminOpLastBannerSurfaceClass,
+  adminOpLastChipSurfaceClass,
 } from './adminOpLast.ts'
 
 export type AdminOpKind =

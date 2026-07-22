@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, inject, onMounted, onBeforeUnmount, watch, nextTick, type ComputedRef } from 'vue'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useRoute } from 'vue-router'
 import { parseDownsamplePrefill, downsampleFormToPrefill } from '@/utils/routePrefill'
@@ -24,6 +24,7 @@ import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
@@ -70,6 +71,8 @@ const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGua
 const { t, locale } = useI18n()
 const { success, info, error: notifyError, warn } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const downsampleAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 
 const {
   exportJob,
@@ -976,7 +979,16 @@ onBeforeUnmount(() => {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('downsampleTitle') }}</h1>
-        <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('downsampleDesc') }}</p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('downsampleDesc') }}</p>
+          <span
+            v-if="downsampleAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="downsample-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="downsampleAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ downsampleAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex gap-2">
         <button class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900" @click="loadData">

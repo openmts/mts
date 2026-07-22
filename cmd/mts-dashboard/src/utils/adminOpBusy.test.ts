@@ -26,6 +26,8 @@ import {
   readDismissedAdminOpLastFinishedAt,
   writeDismissedAdminOpLastFinishedAt,
   adminOpLastToneClass,
+  adminOpLastBannerSurfaceClass,
+  adminOpLastChipSurfaceClass,
   shouldPollAdminOpBusy,
 } from './adminOpBusy.ts'
 
@@ -292,4 +294,12 @@ test('adminOpLastToneClass', () => {
   assert.match(adminOpLastToneClass(true), /emerald/)
   assert.match(adminOpLastToneClass(false), /red/)
   assert.match(adminOpLastToneClass(null), /mts-muted|muted/)
+})
+
+test('adminOpLast banner/chip surface classes', () => {
+  assert.match(adminOpLastBannerSurfaceClass(false), /border-red/)
+  assert.match(adminOpLastBannerSurfaceClass(true), /emerald/)
+  assert.match(adminOpLastBannerSurfaceClass(null), /slate/)
+  assert.match(adminOpLastChipSurfaceClass(false), /red/)
+  assert.match(adminOpLastChipSurfaceClass(true), /emerald/)
 })

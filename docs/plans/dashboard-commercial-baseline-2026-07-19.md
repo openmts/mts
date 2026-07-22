@@ -1501,3 +1501,12 @@
 
 ## P356（2026-07-22）
 - 命令面板：运维状态支持「最近一次/last op」关键词检索
+
+## P357（2026-07-22）
+- Layout：最近管理重操作条按 ok/fail 换肤（红/绿），并 provide lastOk
+
+## P358（2026-07-22）
+- Overview/Storage：last 芯片/条带 ok/fail 色调对齐
+
+## P359（2026-07-22）
+- Config/Downsample/Readiness：标题区展示 last 摘要芯片

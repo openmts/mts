@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, inject, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseConfigPrefill, configFormToPrefill } from '@/utils/routePrefill'
@@ -9,6 +9,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import { useI18n } from '@/composables/useI18n'
@@ -49,6 +50,8 @@ const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGua
 const { t } = useI18n()
 const { success, info, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
+const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const configAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 
 const {
   exportJob,
@@ -472,7 +475,16 @@ onBeforeUnmount(() => {
             class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
           >{{ t('configTokenDirtyBadge') }}</span>
         </h1>
-        <p class="text-xs mts-muted">{{ t('configDesc') }}</p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs mts-muted">{{ t('configDesc') }}</p>
+          <span
+            v-if="configAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="config-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="configAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ configAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="mts-btn" data-testid="config-share-link" @click="copyConfigShareLink">

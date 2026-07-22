@@ -7,7 +7,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminHeavyBusyOpFromError, adminOpKindLabelKey, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminHeavyBusyOpFromError, adminOpKindLabelKey, adminOpLastChipSurfaceClass, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
@@ -68,7 +68,7 @@ const router = useRouter()
 const route = useRoute()
 useHashScroll()
 const { t, locale } = useI18n()
-const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const adminOpBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('opsAdminBusyChip')
   const key = adminOpKindLabelKey(adminOpKind.value) as import('@/i18n/messages').MessageKey
@@ -1163,8 +1163,9 @@ async function copyOverview() {
           >{{ adminOpBusyChipLabel }}</span>
           <span
             v-else-if="adminOpLastSummaryLabel"
-            class="inline-flex max-w-full truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
             data-testid="overview-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="adminOpLastSummaryLabel"
           >{{ t('opsStatusLastLabel') }}: {{ adminOpLastSummaryLabel }}</span>
         </div>

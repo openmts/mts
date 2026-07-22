@@ -81,7 +81,7 @@ async function refreshOpsBusyOnly() {
     opsStatusRefreshing.value = false
   }
 }
-const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const adminOpBusyDetailTitle = computed(() => adminOpBusySummary?.value?.detail || t.value('opsAdminBusy'))
 const adminOpBusyChipLabel = computed(() => {
   if (confirmLoading.value) return t.value('opsAdminBusyChip')

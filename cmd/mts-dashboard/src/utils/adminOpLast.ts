@@ -127,3 +127,27 @@ export function adminOpLastToneClass(ok: boolean | null | undefined): string {
   }
   return 'text-xs mts-muted'
 }
+
+/** 全局 last 横幅容器 class（纯函数） */
+export function adminOpLastBannerSurfaceClass(ok: boolean | null | undefined): string {
+  const base =
+    'no-print flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-xs sm:px-6'
+  if (ok === false) {
+    return `${base} border-red-300 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100`
+  }
+  if (ok === true) {
+    return `${base} border-emerald-200 bg-emerald-50/80 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100`
+  }
+  return `${base} border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-100`
+}
+
+/** 页内 last 芯片 class（纯函数） */
+export function adminOpLastChipSurfaceClass(ok: boolean | null | undefined): string {
+  if (ok === false) {
+    return 'inline-flex max-w-full truncate rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-800 dark:bg-red-950/40 dark:text-red-200'
+  }
+  if (ok === true) {
+    return 'inline-flex max-w-full truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100'
+  }
+  return 'inline-flex max-w-full truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+}
