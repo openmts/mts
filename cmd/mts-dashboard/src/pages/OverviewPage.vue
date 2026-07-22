@@ -60,7 +60,7 @@ interface MaintenanceStatsResponse { stats: MaintenanceStats; admin_op_busy?: bo
 interface MaintenanceErrorsResponse { errors: string[] }
 interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks'] }
 interface DoctorCheck { level: string; code: string; message: string }
-interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[] }
+interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 
 const { isAdmin, getTokenExpiresAt } = useAuth()
 const { adminOpBusy, adminOpKind, setAdminOpBusy, applyAdminOpStatus, refreshAdminOpBusy } = useAdminOpBusy()
@@ -188,6 +188,7 @@ const localReadinessScore = computed(() => {
     doctorLoaded,
     doctorOk,
     doctorWarnCount,
+    adminOpLastFailed: adminOpBusySummary?.value?.lastOk === false,
     httpTlsEnabled: doctorTLS.value,
   })
 })
@@ -346,6 +347,7 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
       const v = await apiGet<DoctorResponse>('/api/v1/admin/doctor')
       doctorChecks.value = v.checks ?? []
       doctorTLS.value = !!v.http_tls_enabled
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'version': {

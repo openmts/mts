@@ -3,6 +3,8 @@ import test from 'node:test'
 import {
   computeReadinessScore,
   doctorScorePart,
+  formatReadinessReason,
+  formatReadinessReasons,
   readinessLevel,
 } from './readinessScore.ts'
 
@@ -80,4 +82,37 @@ test('computeReadinessScore flags admin_op_busy without tanking total alone', ()
   assert.equal(base.total, 100)
   assert.ok(base.reasons.includes('admin_op_busy'))
   assert.equal(readinessLevel(base.total), 'good')
+})
+
+test('computeReadinessScore flags admin_op_last_failed and deducts lightly', () => {
+  const ok = computeReadinessScore({
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+  })
+  const failed = computeReadinessScore({
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    adminOpLastFailed: true,
+  })
+  assert.equal(ok.total, 100)
+  assert.equal(failed.total, 95)
+  assert.ok(failed.reasons.includes('admin_op_last_failed'))
+  assert.equal(readinessLevel(failed.total), 'good')
+})
+
+test('formatReadinessReason localizes known codes', () => {
+  assert.match(formatReadinessReason('admin_op_last_failed', 'zh'), /失败/)
+  assert.match(formatReadinessReason('admin_op_busy', 'en'), /busy/i)
+  assert.match(formatReadinessReason('doctor_warns:3', 'zh'), /3/)
+  assert.match(formatReadinessReasons(['admin_op_busy', 'checklist_incomplete'], 'zh'), /；/)
 })

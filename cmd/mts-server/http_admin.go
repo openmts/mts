@@ -281,6 +281,11 @@ func (r *serverRuntime) handleAdminDoctor(writer http.ResponseWriter, request *h
 		writeAPIError(writer, newAPIError(errorCodeInternal, err.Error(), err))
 		return
 	}
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
 	writeHTTPJSON(writer, http.StatusOK, resp)
 }
 

@@ -7,7 +7,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, adminOpLastChipSurfaceClass, isAdminHeavyBusyMessage, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, adminOpLastChipSurfaceClass, isAdminHeavyBusyMessage, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
@@ -72,7 +72,7 @@ import {
   formatSignoffMissingClipboard,
   type SignoffNoteField,
 } from '@/utils/signoffExport'
-import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
+import { computeReadinessScore, formatReadinessReasons, readinessLevel } from '@/utils/readinessScore'
 import {
   buildReadinessExport,
   parseReadinessImport,
@@ -108,6 +108,10 @@ interface DoctorResponse {
   http_tls_enabled?: boolean
   checks?: DoctorCheck[]
   lines?: string[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
 }
 
 interface VersionResponse {
@@ -116,7 +120,7 @@ interface VersionResponse {
   built_at: string
 }
 
-const { adminOpBusy, adminOpKind, adminOpBusyChecking, refreshAdminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, adminOpBusyChecking, refreshAdminOpBusy, applyAdminOpStatus } = useAdminOpBusy()
 const readinessBusyRefreshing = ref(false)
 async function refreshReadinessBusyOnly() {
   if (readinessBusyRefreshing.value || adminOpBusyChecking.value) return
@@ -129,8 +133,13 @@ async function refreshReadinessBusyOnly() {
 }
 const { isAdmin, currentUser } = useAuth()
 const { t, locale } = useI18n()
-const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail?: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail?: string; lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const readinessAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const readinessAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
+const readinessAdminLastFailed = computed(() => adminOpBusySummary?.value?.lastOk === false)
 const adminOpKindDisplay = computed(() => {
   if (!adminOpBusy.value) return ''
   const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
@@ -242,8 +251,12 @@ const scoreBreakdown = computed(() => {
     doctorWarnCount: doctorWarns.value.length,
     httpTlsEnabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
     adminOpBusy: adminOpBusy.value,
+    adminOpLastFailed: readinessAdminLastFailed.value,
   })
 })
+const scoreReasonsLabel = computed(() =>
+  formatReadinessReasons(scoreBreakdown.value.reasons, uiLocale.value),
+)
 const readinessScore = computed(() => scoreBreakdown.value.total)
 const scoreLevel = computed(() => readinessLevel(readinessScore.value))
 
@@ -395,6 +408,7 @@ async function loadDoctor() {
   loadingDoctor.value = true
   try {
     doctor.value = await apiGet<DoctorResponse>('/api/v1/admin/doctor')
+    applyAdminOpStatus(parseAdminOpStatusPayload(doctor.value))
     doctorError.value = ''
   } catch (e) {
     const msg = formatCaughtError(e)
@@ -799,7 +813,7 @@ watch(
 
 <template>
   <PermissionDenied v-if="!isAdmin" />
-  <div v-else class="space-y-6">
+  <div v-else class="space-y-6" data-testid="readiness-page">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="mts-title flex items-center gap-2">
@@ -1019,6 +1033,11 @@ watch(
             :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
             :title="readinessAdminLastLabel"
           >{{ t('opsStatusLastLabel') }}: {{ readinessAdminLastLabel }}</span>
+          <span
+            v-if="readinessAdminLastErrorDetail && !adminOpBusy"
+            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
+            data-testid="readiness-admin-last-error"
+          >{{ t('adminOpLastErrorLabel') }}: {{ readinessAdminLastErrorDetail }}</span>
           <button
             v-if="adminOpBusy"
             type="button"
@@ -1051,8 +1070,12 @@ watch(
           {{ t('readinessBackupSchedule') }} {{ scoreBreakdown.backupSchedule }}% ·
           {{ t('readinessScoreDoctor') }} {{ scoreBreakdown.doctor }}%
         </p>
-        <p v-if="scoreBreakdown.reasons.length" class="mt-1 text-[11px] text-amber-700 dark:text-amber-200">
-          {{ t('readinessScoreReasons') }}: {{ scoreBreakdown.reasons.join(', ') }}
+        <p
+          v-if="scoreBreakdown.reasons.length"
+          class="mt-1 text-[11px] text-amber-700 dark:text-amber-200"
+          data-testid="readiness-score-reasons"
+        >
+          {{ t('readinessScoreReasons') }}: {{ scoreReasonsLabel || scoreBreakdown.reasons.join(', ') }}
         </p>
       </div>
       <div class="mts-card p-4">

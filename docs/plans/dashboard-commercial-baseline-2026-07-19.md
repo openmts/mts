@@ -1591,3 +1591,12 @@
 
 ## P385（2026-07-22）
 - Storage：失败 last 展示 error 明细；e2e 覆盖
+
+## P386（2026-07-22）
+- Readiness 评分纳入 `admin_op_last_failed`（总分 −5 + reasons）；`formatReadinessReason(s)` 本地化扣分原因；失败 last error 明细行
+
+## P387（2026-07-22）
+- Config 页 ActionResultBanner 绑定 busy 运维跳转（`configAdminBusyAction`）
+
+## P388（2026-07-22）
+- Server `GET /api/v1/admin/doctor` 附带 `admin_op_busy`/`op`/`started_at_unix`/`last`，与 maintenance/errors 对齐；Readiness/Overview 加载 doctor 时 `applyAdminOpStatus`；HTTP 单测 busy/last

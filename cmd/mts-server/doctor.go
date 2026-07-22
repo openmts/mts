@@ -20,6 +20,11 @@ type doctorResponse struct {
 	HTTPTLSEnabled bool          `json:"http_tls_enabled"`
 	Checks         []doctorCheck `json:"checks"`
 	Lines          []string      `json:"lines"`
+	// 与 maintenance/errors、ops-status 对齐的管理重操作状态（仅 HTTP 填充）。
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 // evaluateDoctor 执行部署前检查；致命错误返回 error，warn 仍 ok=true。

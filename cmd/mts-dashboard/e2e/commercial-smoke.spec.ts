@@ -423,6 +423,20 @@ test('commercial browser smoke path', async ({ page }) => {
   }
   await page.route('**/api/v1/admin/ops-status', fulfillFailLast)
   await page.route('**/api/v1/admin/stats/maintenance', fulfillFailLast)
+  // doctor 加载也会 applyAdminOpStatus，需与 fail last 一致，避免真实服务 last 覆盖 mock
+  await page.route('**/api/v1/admin/doctor', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        http_tls_enabled: false,
+        checks: [{ level: 'ok', code: 'data_dir', message: 'data_dir ready' }],
+        lines: ['ok: data_dir ready'],
+        ...failLastPayload,
+      }),
+    })
+  })
   await page.goto('/operations')
   await page.getByTestId('ops-status-refresh-busy').click()
   await expect(page.getByTestId('ops-status-last')).toContainText(/fail|失败|compact|压缩/i)
@@ -441,8 +455,16 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-admin-last')).toHaveAttribute('data-ok', 'false')
   await expect(page.getByTestId('storage-admin-last-error')).toContainText(/e2e disk full/i)
+  // P386: 失败 last 进入就绪评分原因（本地化文案）
+  await page.goto('/ops/readiness')
+  await expect(page.getByRole('main').getByRole('heading', { name: /就绪中心|Commercial readiness|可商用就绪/ })).toBeVisible()
+  await expect(page.getByTestId('readiness-admin-last')).toHaveAttribute('data-ok', 'false')
+  await expect(page.getByTestId('readiness-admin-last-error')).toContainText(/e2e disk full/i)
+  await expect(page.getByTestId('readiness-score-reasons')).toBeVisible()
+  await expect(page.getByTestId('readiness-score-reasons')).toContainText(/最近管理重操作失败|Last admin heavy op failed/)
   await page.unroute('**/api/v1/admin/ops-status', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/stats/maintenance', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/doctor').catch(() => {})
 
   // P381: mock 写入命中 admin busy → 结果条可跳转运维
   await page.route('**/api/v1/data/write', async (route) => {

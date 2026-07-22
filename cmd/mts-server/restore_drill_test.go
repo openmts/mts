@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -145,11 +146,39 @@ func TestAdminDoctorHTTP(t *testing.T) {
 	if len(body.Checks) == 0 {
 		t.Fatal("doctor checks empty")
 	}
+	if body.AdminOpBusy {
+		t.Fatal("doctor want idle admin_op_busy=false")
+	}
 	// 有 admin_token 时 auth_hardening 不应再出现 warn
 	for _, c := range body.Checks {
 		if c.Code == "auth_hardening" {
 			t.Fatalf("unexpected auth_hardening check: %#v", c)
 		}
+	}
+}
+
+func TestAdminDoctorHTTPBusyAndLast(t *testing.T) {
+	runtime := openTestRuntimeWithAdminToken(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	t.Cleanup(server.Close)
+	headers := map[string]string{"Authorization": "Bearer test-admin-token"}
+
+	if err := runtime.tryBeginAdminHeavy("flush"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var busy doctorResponse
+	getJSONWithHeaders(t, server.URL+routeAdminDoctor, headers, http.StatusOK, &busy)
+	if !busy.OK || !busy.AdminOpBusy || busy.Op != "flush" || busy.StartedAtUnix <= 0 {
+		t.Fatalf("doctor busy = %#v", busy)
+	}
+	runtime.finishAdminHeavy(errors.New("doctor probe fail"))
+	var done doctorResponse
+	getJSONWithHeaders(t, server.URL+routeAdminDoctor, headers, http.StatusOK, &done)
+	if done.AdminOpBusy {
+		t.Fatal("doctor want not busy after finish")
+	}
+	if done.Last == nil || done.Last.Op != "flush" || done.Last.OK || done.Last.Error != "doctor probe fail" {
+		t.Fatalf("doctor last after fail = %+v", done.Last)
 	}
 }
 

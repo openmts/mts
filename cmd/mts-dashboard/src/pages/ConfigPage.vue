@@ -9,7 +9,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import { useI18n } from '@/composables/useI18n'
@@ -116,6 +116,13 @@ function reportAndNotify(key: ConfigActionKey, e: unknown) {
   reportActionError(key, e)
   if (actionResult.value?.message) notifyMaybeAdminBusy(actionResult.value.message, e)
 }
+
+const configAdminBusyAction = computed(() =>
+  actionResultAdminBusyAction({
+    message: actionResult.value?.message || '',
+    openLabel: t.value('adminOpBusyOpenOps'),
+  }),
+)
 async function retryLastConfigAction() {
   const key = lastFailedAction.value
   if (key === 'validate') return handleValidate()
@@ -525,6 +532,8 @@ onBeforeUnmount(() => {
     <ActionResultBanner
       :result="actionResult"
       :retryable="canRetryAction"
+      :action-label="configAdminBusyAction?.label || ''"
+      :action-path="configAdminBusyAction?.path || ''"
       data-testid="config-action-result"
       @retry="retryLastConfigAction"
       @dismiss="clearActionResult"
