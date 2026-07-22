@@ -10,7 +10,14 @@ import { textForLocale } from './localizedText.ts'
 
 test('production checklist has required commercial gates', () => {
   const ids = PRODUCTION_CHECKLIST.map((x) => x.id)
-  for (const need of ['https-edge', 'security-headers', 'change-default-admin', 'smoke-login-query-write', 'admin-op-visibility']) {
+  for (const need of [
+    'https-edge',
+    'security-headers',
+    'change-default-admin',
+    'smoke-login-query-write',
+    'admin-op-visibility',
+    'user-disable-revokes-tokens',
+  ]) {
     assert.ok(ids.includes(need), need)
   }
   assert.ok(requiredChecklist().length >= 4)
@@ -47,6 +54,8 @@ test('production checklist items expose jump targets', () => {
   }
   const adminOp = PRODUCTION_CHECKLIST.find((x) => x.id === 'admin-op-visibility')
   assert.equal(productionChecklistJump(adminOp!), '/operations#ops-status-strip')
+  const disableRevoke = PRODUCTION_CHECKLIST.find((x) => x.id === 'user-disable-revokes-tokens')
+  assert.equal(productionChecklistJump(disableRevoke!), '/users?status=disabled#users-filter-bar')
   assert.equal(productionChecklistJump({}), null)
 })
 

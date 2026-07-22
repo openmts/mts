@@ -188,6 +188,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: false,
     jump: '/access/grants',
   },
+  {
+    id: 'user-disable-revokes-tokens',
+    severity: 'recommended',
+    title: { zh: '禁用用户撤销会话', en: 'Disable user revokes sessions' },
+    detail: {
+      zh: '禁用用户（单条/批量）会主动撤销其全部 bearer token；登录失败仍返回 invalid credentials（不泄露账户状态）。可在 Users 状态筛选核对。',
+      en: 'Disabling a user (single/batch) actively revokes all of their bearer tokens; failed logins still return invalid credentials (no account-state leak). Verify via Users status filter.',
+    },
+    automated: true,
+    jump: '/users?status=disabled#users-filter-bar',
+  },
 ]
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {

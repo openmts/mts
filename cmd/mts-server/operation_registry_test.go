@@ -170,13 +170,25 @@ func TestAPISpecFromRegistryIncludesWriteAndAdmin(t *testing.T) {
 	}
 	foundWrite := false
 	foundAPISpec := false
+	foundWriteResp := false
+	foundFlushResp := false
+	foundBatchDisabledResp := false
 	for _, ns := range spec.Namespaces {
 		for _, ep := range ns.Endpoints {
 			if ep.Method == http.MethodPost && ep.Path == routeDataWrite {
 				foundWrite = true
+				if ep.Response != "" {
+					foundWriteResp = true
+				}
 			}
 			if ep.Method == http.MethodGet && ep.Path == routeAdminAPISpec {
 				foundAPISpec = true
+			}
+			if ep.Method == http.MethodPost && ep.Path == routeAdminFlush && ep.Response != "" {
+				foundFlushResp = true
+			}
+			if ep.Method == http.MethodPost && ep.Path == routeUsersBatchDisabled && ep.Response != "" {
+				foundBatchDisabledResp = true
 			}
 		}
 	}
@@ -185,5 +197,14 @@ func TestAPISpecFromRegistryIncludesWriteAndAdmin(t *testing.T) {
 	}
 	if !foundAPISpec {
 		t.Fatal("api spec missing admin api-spec endpoint")
+	}
+	if !foundWriteResp {
+		t.Fatal("api spec write endpoint missing response hint")
+	}
+	if !foundFlushResp {
+		t.Fatal("api spec flush endpoint missing response hint")
+	}
+	if !foundBatchDisabledResp {
+		t.Fatal("api spec batch-disabled endpoint missing response hint")
 	}
 }

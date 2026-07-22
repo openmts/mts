@@ -148,22 +148,33 @@ watch(
 
 const filtered = computed(() => {
   const text = q.value.trim().toLowerCase()
-  return namespaces.value
+  const matchEp = (ep: APIEndpoint) => {
+    if (!text) return true
+    return (
+      ep.method.toLowerCase().includes(text) ||
+      ep.path.toLowerCase().includes(text) ||
+      (ep.description || '').toLowerCase().includes(text) ||
+      (ep.response || '').toLowerCase().includes(text) ||
+      (ep.auth || '').toLowerCase().includes(text)
+    )
+  }
+  const scoped = namespaces.value
     .filter((ns) => !nsFilter.value || ns.name === nsFilter.value)
     .map((ns) => ({
       ...ns,
-      endpoints: (ns.endpoints || []).filter((ep) => {
-        if (!text) return true
-        return (
-          ep.method.toLowerCase().includes(text) ||
-          ep.path.toLowerCase().includes(text) ||
-          (ep.description || '').toLowerCase().includes(text) ||
-          (ep.response || '').toLowerCase().includes(text) ||
-          (ep.auth || '').toLowerCase().includes(text)
-        )
-      }),
+      endpoints: (ns.endpoints || []).filter(matchEp),
     }))
     .filter((ns) => ns.endpoints.length || !text)
+  // 有搜索词且当前 namespace 无命中时，自动跨命名空间展示，避免默认首个 ns 漏结果
+  if (text && nsFilter.value && !scoped.some((ns) => ns.endpoints.length)) {
+    return namespaces.value
+      .map((ns) => ({
+        ...ns,
+        endpoints: (ns.endpoints || []).filter(matchEp),
+      }))
+      .filter((ns) => ns.endpoints.length)
+  }
+  return scoped
 })
 
 const totalEndpoints = computed(() =>

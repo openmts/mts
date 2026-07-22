@@ -999,6 +999,24 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('api-spec-export-json')).toBeVisible()
   await expect(page.getByTestId('api-spec-export-md')).toBeVisible()
   await expect(page.getByTestId('api-spec-share-link')).toBeVisible()
+  // P427: API Spec 响应说明可检索/可见（先清空 ns 过滤，避免默认首个 namespace 漏掉 users/admin）
+  const nsSelect = page.getByTestId('api-spec-ns-filter')
+  if (await nsSelect.count()) {
+    await nsSelect.selectOption('')
+  }
+  await page.getByTestId('api-spec-search').fill('batchMutationResponse')
+  await expect(
+    page.locator('[data-testid^="api-spec-ep-response-"]').filter({ hasText: /batchMutationResponse/i }).first(),
+  ).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('api-spec-search').fill('okResponse')
+  await expect(
+    page.locator('[data-testid^="api-spec-ep-response-"]').filter({ hasText: /okResponse/i }).first(),
+  ).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('api-spec-search').fill('setPasswordResponse')
+  await expect(
+    page.locator('[data-testid^="api-spec-ep-row-"]').filter({ hasText: /setPasswordResponse/i }).first(),
+  ).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('api-spec-search').fill('')
   await page.goto('/observability/metrics')
   await expect(page.getByTestId('metrics-page')).toBeVisible()
   await expect(page.getByTestId('metrics-load-error')).toHaveCount(0)
@@ -1133,6 +1151,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-doctor-panel')).toBeVisible()
   await expect(page.getByTestId('readiness-production-checklist')).toBeVisible()
   await expect(page.getByTestId('readiness-prod-jump-admin-op-visibility')).toBeVisible()
+  await expect(page.getByTestId('readiness-prod-jump-user-disable-revokes-tokens')).toBeVisible()
+  await page.getByTestId('readiness-prod-jump-user-disable-revokes-tokens').click()
+  await expect(page).toHaveURL(/\/users\?status=disabled/)
+  await expect(page.getByTestId('users-status-filter')).toHaveValue('disabled')
+  await page.goto('/ops/readiness')
+  await expect(page.getByTestId('readiness-production-checklist')).toBeVisible()
   await page.getByTestId('readiness-prod-jump-admin-op-visibility').click()
   await expect(page).toHaveURL(/operations/)
   await expect(page.getByTestId('ops-page')).toBeVisible({ timeout: 15_000 })

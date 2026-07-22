@@ -151,3 +151,7 @@ server {
 
 4. **改密会话边界**：Users 页自改密/管理员给当前用户设密成功后须重新登录；
    **改密会话边界（续）**：`POST /api/v1/auth/password` 旧密码错误返回 `bad_request`（非 401），Dashboard 不会清会话；仅成功改密后撤销 token 并要求重新登录。就绪清单 `admin-op-visibility` 可从就绪中心跳转运维状态条核对 busy/last。
+
+### 禁用用户与会话边界
+
+- 禁用用户会撤销其 token；登录失败保持 invalid credentials 口径。

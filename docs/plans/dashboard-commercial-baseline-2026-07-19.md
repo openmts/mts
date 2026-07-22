@@ -1931,3 +1931,17 @@
 | 用户状态筛选 | — | status 筛选+深链 | 与 role/q 组合 |
 | 设密契约 response | ResponseHint | API Spec 展示 | 对齐 P424 响应 |
 
+## P427（2026-07-22）
+- Server：全部 HTTP 登记操作补齐 `ResponseHint`，API Spec `endpoints[].response` 可浏览（flush/compact/write/batch-disabled 等）
+- Dashboard：批量启用/禁用确认文案标明 token 撤销 / 需重登
+- 就绪清单：新增 `user-disable-revokes-tokens`（跳转 Users `?status=disabled`）
+- Runbook：补充「禁用用户与会话边界」排障口径
+- e2e：API Spec response 检索；就绪清单跳转禁用用户筛选
+
+### 契约/会话边界（P427 增量）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| API Spec response | ResponseHint on HTTP ops | 行内 response + 搜索 | 对齐运维写接口 |
+| 批量禁用 | 撤 token（内核） | 确认文案提示 | i18n |
+| 就绪清单禁用会话 | — | jump → /users?status=disabled | automated |
+
