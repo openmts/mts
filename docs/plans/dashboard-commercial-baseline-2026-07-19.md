@@ -1600,3 +1600,12 @@
 
 ## P388（2026-07-22）
 - Server `GET /api/v1/admin/doctor` 附带 `admin_op_busy`/`op`/`started_at_unix`/`last`，与 maintenance/errors 对齐；Readiness/Overview 加载 doctor 时 `applyAdminOpStatus`；HTTP 单测 busy/last
+
+## P389（2026-07-22）
+- Storage / Operations / Downsample：ActionResultBanner 命中 admin busy 时提供运维跳转（与 Query/Write/Config 对齐）
+
+## P390（2026-07-22）
+- 共享 DTO：`MaintenanceErrorsResponse` / `DoctorResponse` 写入 `api/types.ts`；Overview `maintErrors` 加载时 `applyAdminOpStatus`
+
+## P391（2026-07-22）
+- Readiness 根节点 `data-testid="readiness-page"`；e2e 失败 last 场景 mock doctor 防覆盖

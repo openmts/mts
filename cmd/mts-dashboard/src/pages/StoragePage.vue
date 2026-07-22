@@ -5,7 +5,7 @@ import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -121,6 +121,12 @@ const {
   setActionResult,
   reportActionError: reportRetryError,
 } = useActionRetry<StorageActionKey>()
+const storageAdminBusyAction = computed(() =>
+  actionResultAdminBusyAction({
+    message: actionResult.value?.message || '',
+    openLabel: t.value('adminOpBusyOpenOps'),
+  }),
+)
 const snapshotListError = ref('')
 const dataListLoading = ref(false)
 const dataListError = ref('')
@@ -574,6 +580,8 @@ async function copyStorageShareLink() {
     <ActionResultBanner
       :result="actionResult"
       :retryable="canRetryAction"
+      :action-label="storageAdminBusyAction?.label || ''"
+      :action-path="storageAdminBusyAction?.path || ''"
       data-testid="storage-action-result"
       @retry="retryLastStorageAction"
       @dismiss="clearActionResult"

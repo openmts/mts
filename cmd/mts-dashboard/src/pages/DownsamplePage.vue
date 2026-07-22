@@ -24,7 +24,7 @@ import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
@@ -100,6 +100,12 @@ const {
   setActionResult,
   reportActionError: reportRetryError,
 } = useActionRetry<DsActionKey>()
+const dsAdminBusyAction = computed(() =>
+  actionResultAdminBusyAction({
+    message: actionResult.value?.message || '',
+    openLabel: t.value('adminOpBusyOpenOps'),
+  }),
+)
 const lastToggleName = ref('')
 const lastToggleWantEnabled = ref(false)
 const lastRunName = ref('')
@@ -1033,6 +1039,8 @@ onBeforeUnmount(() => {
     <ActionResultBanner
       :result="actionResult"
       :retryable="canRetryAction"
+      :action-label="dsAdminBusyAction?.label || ''"
+      :action-path="dsAdminBusyAction?.path || ''"
       data-testid="downsample-action-result"
       @retry="retryLastDownsampleAction"
       @dismiss="clearActionResult"

@@ -141,6 +141,27 @@ export interface OpsStatusResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/admin/maintenance/errors */
+export interface MaintenanceErrorsResponse {
+  errors?: string[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/doctor（含 HTTP 填充的 busy/last） */
+export interface DoctorResponse {
+  ok: boolean
+  http_tls_enabled?: boolean
+  checks?: Array<{ level: string; code: string; message: string }>
+  lines?: string[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
 export interface StorageMemorySnapshot {
   heap_alloc_bytes?: number
   heap_inuse_bytes?: number

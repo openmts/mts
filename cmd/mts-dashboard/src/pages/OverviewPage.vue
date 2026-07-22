@@ -57,7 +57,7 @@ interface StorageMemorySnapshot {
 interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
 interface CompactionStatsResponse { stats: CompactionStats }
 interface MaintenanceStatsResponse { stats: MaintenanceStats; admin_op_busy?: boolean }
-interface MaintenanceErrorsResponse { errors: string[] }
+interface MaintenanceErrorsResponse { errors?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks'] }
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
@@ -341,6 +341,7 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
     case 'maintErrors': {
       const v = await apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors')
       maintenanceErrors.value = v.errors ?? []
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'doctor': {

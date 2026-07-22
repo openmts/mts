@@ -37,7 +37,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, adminHeavyBusyOpFromError, adminOpLastToneClass, formatAdminHeavyLastSummary, formatAdminHeavyLastCopyText, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, adminOpLastToneClass, formatAdminHeavyLastSummary, formatAdminHeavyLastCopyText, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -133,6 +133,12 @@ const {
   setActionResult,
   reportActionError: reportRetryError,
 } = useActionRetry<OpsActionKey>()
+const opsAdminBusyAction = computed(() =>
+  actionResultAdminBusyAction({
+    message: actionResult.value?.message || '',
+    openLabel: t.value('adminOpBusyOpenOps'),
+  }),
+)
 const loading = ref(false)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
@@ -746,6 +752,8 @@ watch(
     <ActionResultBanner
       :result="actionResult"
       :retryable="canRetryAction"
+      :action-label="opsAdminBusyAction?.label || ''"
+      :action-path="opsAdminBusyAction?.path || ''"
       data-testid="ops-action-result"
       @retry="retryLastOpsAction"
       @dismiss="clearActionResult"
