@@ -67,7 +67,13 @@ interface UsersResponse {
   last?: unknown
 }
 interface DatabaseGrant { database: string; permission: string }
-interface PermissionsResponse { grants: DatabaseGrant[] }
+interface PermissionsResponse {
+  grants: Array<{ database: string; permission: string }>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 
 const route = useRoute()
 useHashScroll()
@@ -504,6 +510,7 @@ async function selectUser(user: User) {
   selectedUser.value = user
   try {
     const data = await apiGet<PermissionsResponse>(`/api/v1/users/${encodeURIComponent(user.name)}/database-permissions`)
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     userGrants.value = data.grants ?? []
   } catch (e) {
     reportAndNotify('select-grants', e, { name: user.name })

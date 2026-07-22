@@ -177,7 +177,7 @@ func operationCatalog() []operation {
 		{
 			Name:         "data_database_metadata",
 			Namespace:    "data",
-			Description:  "list measurements/fields/series/retention-policies under database prefix",
+			Description:  "list measurements/fields/series/retention-policies under database prefix (includes admin_op_busy/last on list responses)",
 			Auth:         authDataToken,
 			HTTPMethods:  []string{http.MethodGet},
 			HTTPPaths:    []string{routeDataDatabasesPrefix},
@@ -196,7 +196,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "list_fields",
 			Namespace:   "data",
-			Description: "list fields",
+			Description: "list fields (includes admin_op_busy/last)",
 			Auth:        authDataToken,
 			GRPCMethod:  grpcMethodListFields,
 			GRPCRequest: &metadataRequest{},
@@ -205,7 +205,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "list_series",
 			Namespace:   "data",
-			Description: "list series",
+			Description: "list series (includes admin_op_busy/last)",
 			Auth:        authDataToken,
 			GRPCMethod:  grpcMethodListSeries,
 			GRPCRequest: &metadataRequest{},
@@ -381,7 +381,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "list_database_permissions",
 			Namespace:   "users",
-			Description: "list DB permissions",
+			Description: "list DB permissions (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodListDatabasePermissions,
 			GRPCRequest: &userNameRequest{},

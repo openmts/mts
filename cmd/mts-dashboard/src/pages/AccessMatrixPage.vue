@@ -23,6 +23,7 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { useNotify } from '@/composables/useNotify'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { accessMatrixToCSV, buildAccessMatrixExport } from '@/utils/accessMatrixExport'
 import { parseAccessPrefill, accessFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
@@ -51,6 +52,7 @@ const accessMatrixAdminLastErrorDetail = computed(() => {
   return (adminOpBusySummary?.value?.lastError || '').trim()
 })
 const { t, locale } = useI18n()
+const { refreshAdminOpBusy } = useAdminOpBusy()
 const { success, info, warn, error: notifyError } = useNotify()
 const {
   exportJob,
@@ -187,6 +189,8 @@ async function copyAccessShareLink() {
 
 onMounted(() => {
   applyAccessPrefillFromRoute()
+  // 静态矩阵页无列表请求：进入时刷新 ops-status，保持 last 芯片新鲜
+  void refreshAdminOpBusy()
 })
 
 watch(

@@ -165,7 +165,11 @@ type createUserRequest struct {
 }
 
 type databasePermissionsResponse struct {
-	Grants []mts.DatabaseGrant `json:"grants"`
+	Grants        []mts.DatabaseGrant   `json:"grants"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type loginRequest struct {
@@ -264,7 +268,11 @@ type measurementsResponse struct {
 }
 
 type fieldsResponse struct {
-	Fields []mts.FieldSchema `json:"fields"`
+	Fields        []mts.FieldSchema     `json:"fields"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type metadataRequest struct {
@@ -274,11 +282,15 @@ type metadataRequest struct {
 }
 
 type seriesResponse struct {
-	Series    []mts.Series `json:"series"`
-	Total     int          `json:"total,omitempty"`
-	Truncated bool         `json:"truncated,omitempty"`
-	Limit     int          `json:"limit,omitempty"`
-	Offset    int          `json:"offset,omitempty"`
+	Series        []mts.Series          `json:"series"`
+	Total         int                   `json:"total,omitempty"`
+	Truncated     bool                  `json:"truncated,omitempty"`
+	Limit         int                   `json:"limit,omitempty"`
+	Offset        int                   `json:"offset,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type configResponse struct {

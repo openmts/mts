@@ -439,7 +439,10 @@ func grpcListDatabasePermissions(r *serverRuntime, ctx context.Context, req any)
 		return nil, err
 	}
 	grants, err := r.engine.ListDatabasePermissions(ctx, req.(*userNameRequest).Name)
-	return databasePermissionsResponse{Grants: grants}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToPermissions(databasePermissionsResponse{Grants: grants}), nil
 }
 
 func grpcCheckDatabasePermission(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -510,7 +513,10 @@ func grpcListFields(r *serverRuntime, ctx context.Context, req any) (any, error)
 		return nil, err
 	}
 	fields, err := r.engine.ListFields(ctx, request.Database, request.Measurement)
-	return fieldsResponse{Fields: fields}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToFields(fieldsResponse{Fields: fields}), nil
 }
 
 func grpcListSeries(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -519,7 +525,10 @@ func grpcListSeries(r *serverRuntime, ctx context.Context, req any) (any, error)
 		return nil, err
 	}
 	series, err := r.engine.ListSeries(ctx, request.Database, request.Measurement, request.Tags)
-	return seriesResponse{Series: series}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToSeries(seriesResponse{Series: series}), nil
 }
 
 func grpcGetConfig(r *serverRuntime, ctx context.Context, _ any) (any, error) {

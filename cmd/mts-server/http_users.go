@@ -167,7 +167,7 @@ func (r *serverRuntime) handleDatabasePermissionResource(
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, databasePermissionsResponse{Grants: grants})
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToPermissions(databasePermissionsResponse{Grants: grants}))
 		return
 	}
 	if len(parts) != 2 {

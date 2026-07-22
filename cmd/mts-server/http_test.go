@@ -887,6 +887,34 @@ func TestHTTPUsersAndDatabasesListBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPPermissionsAndMetaListBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	// create user for permissions list path
+	if err := runtime.engine.CreateUser(context.Background(), mts.User{Name: "busy-user"}); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var grantsBusy databasePermissionsResponse
+	getJSONWithHeaders(t, server.URL+routeUsers+"/busy-user/database-permissions", nil, http.StatusOK, &grantsBusy)
+	if !grantsBusy.AdminOpBusy || grantsBusy.Op != "compact" || grantsBusy.StartedAtUnix <= 0 {
+		t.Fatalf("permissions busy = %+v", grantsBusy)
+	}
+	runtime.finishAdminHeavy(errors.New("meta perm probe fail"))
+	var grantsDone databasePermissionsResponse
+	getJSONWithHeaders(t, server.URL+routeUsers+"/busy-user/database-permissions", nil, http.StatusOK, &grantsDone)
+	if grantsDone.AdminOpBusy {
+		t.Fatal("permissions want not busy")
+	}
+	if grantsDone.Last == nil || grantsDone.Last.Op != "compact" || grantsDone.Last.OK || grantsDone.Last.Error != "meta perm probe fail" {
+		t.Fatalf("permissions last = %+v", grantsDone.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

@@ -335,9 +335,36 @@ export interface RetentionPoliciesListResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/users/{name}/database-permissions（含 busy/last） */
+export interface DatabasePermissionsListResponse {
+  grants?: Array<{ database?: string; permission?: string }>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
 
+/** GET fields（含 busy/last） */
+export interface FieldsListResponse {
+  fields?: unknown[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
 
-
+/** GET series（含 busy/last） */
+export interface SeriesListResponse {
+  series?: unknown[]
+  total?: number
+  truncated?: boolean
+  limit?: number
+  offset?: number
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
 
 export interface UserInfo {
   name: string

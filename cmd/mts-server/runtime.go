@@ -654,6 +654,33 @@ func (r *serverRuntime) attachAdminOpToRetentionPolicies(resp retentionPoliciesR
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToPermissions(resp databasePermissionsResponse) databasePermissionsResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToFields(resp fieldsResponse) fieldsResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToSeries(resp seriesResponse) seriesResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {

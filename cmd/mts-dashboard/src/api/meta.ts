@@ -86,12 +86,44 @@ export async function listDatabasesDetailed(init: RequestInit = {}): Promise<Lis
 }
 
 export async function listMeasurements(database: string, init: RequestInit = {}): Promise<string[]> {
-  if (!database.trim()) return []
-  const data = await apiGet<MeasurementsPayload>(
-    `/api/v1/data/databases/${encodeURIComponent(database)}/measurements`,
-    init,
-  )
-  return [...(data.measurements ?? [])].sort()
+  const result = await listMeasurementsDetailed(database, init)
+  if (result.error && !result.names.length) throw new Error(result.error)
+  return result.names
+}
+
+export interface ListMeasurementsResult {
+  names: string[]
+  adminOp?: {
+    admin_op_busy?: boolean
+    op?: string
+    started_at_unix?: number
+    last?: unknown
+  }
+  error?: string
+}
+
+export async function listMeasurementsDetailed(
+  database: string,
+  init: RequestInit = {},
+): Promise<ListMeasurementsResult> {
+  if (!database.trim()) return { names: [] }
+  try {
+    const data = await apiGet<MeasurementsPayload>(
+      `/api/v1/data/databases/${encodeURIComponent(database)}/measurements`,
+      init,
+    )
+    return {
+      names: [...(data.measurements ?? [])].sort(),
+      adminOp: {
+        admin_op_busy: data.admin_op_busy,
+        op: data.op,
+        started_at_unix: data.started_at_unix,
+        last: data.last,
+      },
+    }
+  } catch (e) {
+    return { names: [], error: formatCaughtError(e) }
+  }
 }
 
 export type RetentionPolicyMeta = { name: string; duration?: number }
@@ -188,12 +220,52 @@ export async function listFields(
   measurement: string,
   init: RequestInit = {},
 ): Promise<FieldMeta[]> {
-  if (!database.trim() || !measurement.trim()) return []
-  const data = await apiGet<{ fields?: FieldMeta[] }>(
-    `/api/v1/data/databases/${encodeURIComponent(database)}/measurements/${encodeURIComponent(measurement)}/fields`,
-    init,
-  )
-  return [...(data.fields ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  const result = await listFieldsDetailed(database, measurement, init)
+  if (result.error && !result.fields.length) throw new Error(result.error)
+  return result.fields
+}
+
+export interface ListFieldsResult {
+  fields: FieldMeta[]
+  adminOp?: {
+    admin_op_busy?: boolean
+    op?: string
+    started_at_unix?: number
+    last?: unknown
+  }
+  error?: string
+}
+
+export async function listFieldsDetailed(
+  database: string,
+  measurement: string,
+  init: RequestInit = {},
+): Promise<ListFieldsResult> {
+  if (!database.trim() || !measurement.trim()) return { fields: [] }
+  try {
+    const data = await apiGet<{
+      fields?: FieldMeta[]
+      admin_op_busy?: boolean
+      op?: string
+      started_at_unix?: number
+      last?: unknown
+    }>(
+      `/api/v1/data/databases/${encodeURIComponent(database)}/measurements/${encodeURIComponent(measurement)}/fields`,
+      init,
+    )
+    const fields = [...(data.fields ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+    return {
+      fields,
+      adminOp: {
+        admin_op_busy: data.admin_op_busy,
+        op: data.op,
+        started_at_unix: data.started_at_unix,
+        last: data.last,
+      },
+    }
+  } catch (e) {
+    return { fields: [], error: formatCaughtError(e) }
+  }
 }
 
 export type SeriesMeta = {
@@ -208,6 +280,12 @@ export type ListSeriesResult = {
   truncated: boolean
   limit: number
   offset: number
+  adminOp?: {
+    admin_op_busy?: boolean
+    op?: string
+    started_at_unix?: number
+    last?: unknown
+  }
 }
 
 export type ListSeriesOptions = {
@@ -246,6 +324,10 @@ export async function listSeriesDetailed(
     truncated?: boolean
     limit?: number
     offset?: number
+    admin_op_busy?: boolean
+    op?: string
+    started_at_unix?: number
+    last?: unknown
   }>(path, opts.init)
   const series = data.series ?? []
   const total = typeof data.total === 'number' ? data.total : series.length
@@ -255,6 +337,12 @@ export async function listSeriesDetailed(
     truncated: !!data.truncated,
     limit: typeof data.limit === 'number' ? data.limit : opts.limit ?? 0,
     offset: typeof data.offset === 'number' ? data.offset : opts.offset ?? 0,
+    adminOp: {
+      admin_op_busy: data.admin_op_busy,
+      op: data.op,
+      started_at_unix: data.started_at_unix,
+      last: data.last,
+    },
   }
 }
 

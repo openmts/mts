@@ -58,7 +58,13 @@ interface UsersResponse {
   started_at_unix?: number
   last?: unknown
 }
-interface PermissionsResponse { grants: Array<{ database: string; permission: string }> }
+interface PermissionsResponse {
+  grants: Array<{ database: string; permission: string }>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 
 const route = useRoute()
 useHashScroll()
@@ -186,6 +192,7 @@ async function load() {
           const data = await apiGet<PermissionsResponse>(
             `/api/v1/users/${encodeURIComponent(u.name)}/database-permissions`,
           )
+          applyAdminOpStatus(parseAdminOpStatusPayload(data))
           bundles.push({
             user: u.name,
             role: u.role,

@@ -1664,3 +1664,8 @@
 - Server：users 列表、admin/data databases 列表、retention-policies 列表附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC 对齐）
 - Dashboard Users/Databases/AccessGrants/Audit 加载时 `applyAdminOpStatus`；`meta.listDatabasesDetailed`/`listRetentionPoliciesDetailed` 透传 adminOp
 - types/registry 描述对齐；HTTP 单测；e2e fail-last mock 同步
+
+## P407（2026-07-22）
+- Server：database-permissions、fields、series、measurements 列表附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）
+- Dashboard Users/AccessGrants/Databases 加载权限与 meta 时 `applyAdminOpStatus`；AccessMatrix 进入时 `refreshAdminOpBusy`
+- meta 透传 adminOp（measurements/fields/series）；types/registry/单测同步

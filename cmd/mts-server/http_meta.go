@@ -179,7 +179,7 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, measurementsResponse{Measurements: measurements})
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMeasurements(measurementsResponse{Measurements: measurements}))
 		return
 	}
 	// data 面只读 RP：有 database read 权限即可，避免非 admin 只能手填
@@ -201,14 +201,14 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 				writeAPIError(writer, err)
 				return
 			}
-			writeHTTPJSON(writer, http.StatusOK, fieldsResponse{Fields: fields})
+			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToFields(fieldsResponse{Fields: fields}))
 		case "series":
 			series, err := r.engine.ListSeries(request.Context(), database, measurement, queryTags(request))
 			if err != nil {
 				writeAPIError(writer, err)
 				return
 			}
-			writeHTTPJSON(writer, http.StatusOK, buildSeriesResponse(series, seriesPageOptions(request)))
+			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToSeries(buildSeriesResponse(series, seriesPageOptions(request))))
 		default:
 			writeAPIError(writer, newAPIError(errorCodeNotFound, "metadata resource not found", nil))
 		}

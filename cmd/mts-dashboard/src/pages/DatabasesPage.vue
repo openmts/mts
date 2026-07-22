@@ -11,7 +11,7 @@ import {
   isDatabaseCreateDraftDirty,
 } from '@/utils/adminFormDirty'
 import { registerDirtyChecker } from '@/utils/routeDirty'
-import { listDatabasesDetailed, listMeasurements, listRetentionPoliciesDetailed, listSeriesDetailed } from '@/api/meta'
+import { listDatabasesDetailed, listMeasurementsDetailed, listFieldsDetailed, listRetentionPoliciesDetailed, listSeriesDetailed } from '@/api/meta'
 import { seriesLabel } from '@/utils/seriesMeta'
 import { filterSeriesListLocal } from '@/utils/seriesFilter'
 import { formatMessage } from '@/utils/formatMessage'
@@ -60,7 +60,13 @@ import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 interface FieldSchema { measurement: string; name: string; type: number }
-interface FieldsResponse { fields: FieldSchema[] }
+interface FieldsResponse {
+  fields: FieldSchema[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface Series { id: number; measurement: string; tags: Record<string, string> }
 interface MeasurementEntry {
   name: string
@@ -270,7 +276,11 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
   clearActionResult()
   try {
     const [meas, rps] = await Promise.all([
-      listMeasurements(db.name),
+      listMeasurementsDetailed(db.name).then((r) => {
+        if (r.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(r.adminOp))
+        if (r.error && !r.names.length) throw new Error(r.error)
+        return r.names
+      }),
       listRetentionPoliciesDetailed(db.name).then((r) => {
         if (r.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(r.adminOp))
         if (r.error && !r.policies.length) throw new Error(r.error)
@@ -324,8 +334,15 @@ async function loadMeasurementDetails(meas: MeasurementEntry, dbName: string) {
   meas.loading = true
   try {
     const [fieldsData, seriesResult] = await Promise.all([
-      apiGet<FieldsResponse>(`/api/v1/data/databases/${encodeURIComponent(dbName)}/measurements/${encodeURIComponent(meas.name)}/fields`),
-      listSeriesDetailed(dbName, meas.name, { limit: SERIES_CAP, offset: 0, q: meas.seriesQuery || undefined }),
+      listFieldsDetailed(dbName, meas.name).then((r) => {
+        if (r.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(r.adminOp))
+        if (r.error && !r.fields.length) throw new Error(r.error)
+        return { fields: r.fields as FieldSchema[] }
+      }),
+      listSeriesDetailed(dbName, meas.name, { limit: SERIES_CAP, offset: 0, q: meas.seriesQuery || undefined }).then((r) => {
+        if (r.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(r.adminOp))
+        return r
+      }),
     ])
     meas.fields = fieldsData.fields ?? []
     meas.series = (seriesResult.series as Series[]).map((s) => ({
@@ -358,6 +375,7 @@ async function loadMoreSeries(meas: MeasurementEntry, dbName: string) {
       offset: meas.seriesOffset,
       q: meas.seriesQuery || undefined,
     })
+    if (seriesResult.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(seriesResult.adminOp))
     const mapped = (seriesResult.series as Series[]).map((s) => ({
       id: s.id ?? 0,
       measurement: s.measurement ?? meas.name,
