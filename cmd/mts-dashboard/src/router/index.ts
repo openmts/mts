@@ -42,6 +42,8 @@ const router = createRouter({
         { path: 'access', name: 'AccessMatrix', component: () => import('@/pages/AccessMatrixPage.vue') },
         { path: 'access/grants', name: 'AccessGrants', component: () => import('@/pages/AccessGrantsPage.vue'), meta: { admin: true } },
         { path: 'observability/metrics', name: 'Metrics', component: () => import('@/pages/MetricsPage.vue'), meta: { admin: true } },
+        // 兼容误用 /metrics 的深链/书签（抓取路径仍为服务端 /metrics）
+        { path: 'metrics', redirect: '/observability/metrics' },
         { path: ':pathMatch(.*)*', name: 'NotFound', component: () => import('@/pages/NotFoundPage.vue') },
       ],
     },

@@ -24,6 +24,7 @@ import {
   loadRecentRoutes,
   recordRecentRoute,
   setRecentRoutePinned,
+  RECENT_ROUTES_MAX,
   type RecentRouteEntry,
 } from '@/utils/recentRoutes'
 import { loadSidebarPrefs, saveSidebarPrefs } from '@/utils/sidebarPrefs'
@@ -675,7 +676,7 @@ function onSkipToMain(e: Event) {
       >
         <span class="text-[11px] mts-muted">{{ t('recentRoutes') }}</span>
         <span
-          v-for="r in recent.slice(0, 6)"
+          v-for="r in recent.slice(0, RECENT_ROUTES_MAX)"
           :key="r.path + r.at"
           class="inline-flex items-center gap-0.5 rounded-full border px-1 py-0.5 text-[11px]"
           :class="r.pinned

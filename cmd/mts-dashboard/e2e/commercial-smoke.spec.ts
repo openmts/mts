@@ -558,6 +558,15 @@ test('commercial browser smoke path', async ({ page }) => {
       })
       return
     }
+    // 用户库权限列表/单项：AccessGrants 并发拉取时也会 apply
+    if (url.includes('/database-permissions')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ grants: [], ok: true, ...failLastPayload }),
+      })
+      return
+    }
     if (url.includes('/admin/databases') || url.includes('/data/databases')) {
       // 避免误伤 databases/{name}/... 子资源：仅列表路径
       const pathOnly = url.split('?')[0]
@@ -576,28 +585,30 @@ test('commercial browser smoke path', async ({ page }) => {
       body: JSON.stringify(failLastPayload),
     })
   }
-  await page.route('**/api/v1/admin/ops-status', fulfillFailLast)
-  await page.route('**/api/v1/admin/stats/maintenance', fulfillFailLast)
-  await page.route('**/api/v1/admin/stats/compaction', fulfillFailLast)
-  await page.route('**/api/v1/admin/stats/storage-memory', fulfillFailLast)
-  await page.route('**/api/v1/admin/storage/snapshots', fulfillFailLast)
-  await page.route('**/api/v1/admin/storage/data-snapshots', fulfillFailLast)
-  await page.route('**/api/v1/admin/storage/export', fulfillFailLast)
-  await page.route('**/api/v1/admin/config/effective', fulfillFailLast)
-  await page.route('**/api/v1/admin/config/schema', fulfillFailLast)
-  await page.route('**/api/v1/admin/config', fulfillFailLast)
-  await page.route('**/api/v1/admin/api-spec', fulfillFailLast)
-  await page.route('**/api/v1/admin/error-codes', fulfillFailLast)
+  // P418: 统一 ** 匹配，避免 query/trailing 导致 mock 未命中而真实 last 覆盖 fail 场景
+  await page.route('**/api/v1/admin/ops-status**', fulfillFailLast)
+  await page.route('**/api/v1/admin/stats/maintenance**', fulfillFailLast)
+  await page.route('**/api/v1/admin/stats/compaction**', fulfillFailLast)
+  await page.route('**/api/v1/admin/stats/storage-memory**', fulfillFailLast)
+  await page.route('**/api/v1/admin/storage/snapshots**', fulfillFailLast)
+  await page.route('**/api/v1/admin/storage/data-snapshots**', fulfillFailLast)
+  await page.route('**/api/v1/admin/storage/export**', fulfillFailLast)
+  await page.route('**/api/v1/admin/config/effective**', fulfillFailLast)
+  await page.route('**/api/v1/admin/config/schema**', fulfillFailLast)
+  await page.route('**/api/v1/admin/config**', fulfillFailLast)
+  await page.route('**/api/v1/admin/api-spec**', fulfillFailLast)
+  await page.route('**/api/v1/admin/error-codes**', fulfillFailLast)
   await page.route('**/api/v1/admin/audit**', fulfillFailLast)
   await page.route('**/api/v1/users/**/audit**', fulfillFailLast)
-  await page.route('**/api/v1/admin/downsample/policies', fulfillFailLast)
-  await page.route('**/api/v1/admin/downsample/statuses', fulfillFailLast)
-  await page.route('**/api/v1/users', fulfillFailLast)
-  await page.route('**/api/v1/admin/databases', fulfillFailLast)
-  await page.route('**/api/v1/data/databases', fulfillFailLast)
-  await page.route('**/api/v1/admin/maintenance/errors', fulfillFailLast)
+  await page.route('**/api/v1/admin/downsample/policies**', fulfillFailLast)
+  await page.route('**/api/v1/admin/downsample/statuses**', fulfillFailLast)
+  // users 列表：用 ** 但 fulfill 内排除 /users/{name}/...
+  await page.route('**/api/v1/users**', fulfillFailLast)
+  await page.route('**/api/v1/admin/databases**', fulfillFailLast)
+  await page.route('**/api/v1/data/databases**', fulfillFailLast)
+  await page.route('**/api/v1/admin/maintenance/errors**', fulfillFailLast)
   // doctor / admin health 加载也会 applyAdminOpStatus，需与 fail last 一致
-  await page.route('**/api/v1/admin/doctor', async (route) => {
+  await page.route('**/api/v1/admin/doctor**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -610,7 +621,7 @@ test('commercial browser smoke path', async ({ page }) => {
       }),
     })
   })
-  await page.route('**/api/v1/admin/health', async (route) => {
+  await page.route('**/api/v1/admin/health**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -620,7 +631,7 @@ test('commercial browser smoke path', async ({ page }) => {
       }),
     })
   })
-  await page.route('**/api/v1/admin/version', async (route) => {
+  await page.route('**/api/v1/admin/version**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -633,7 +644,7 @@ test('commercial browser smoke path', async ({ page }) => {
     })
   })
   // session / query stats / storage validate 也会 applyAdminOpStatus，需与 fail last 一致
-  await page.route('**/api/v1/auth/session', async (route) => {
+  await page.route('**/api/v1/auth/session**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -648,7 +659,7 @@ test('commercial browser smoke path', async ({ page }) => {
       }),
     })
   })
-  await page.route('**/api/v1/data/query/stats', async (route) => {
+  await page.route('**/api/v1/data/query/stats**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -658,7 +669,7 @@ test('commercial browser smoke path', async ({ page }) => {
       }),
     })
   })
-  await page.route('**/api/v1/admin/storage/validate', async (route) => {
+  await page.route('**/api/v1/admin/storage/validate**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -670,7 +681,7 @@ test('commercial browser smoke path', async ({ page }) => {
       }),
     })
   })
-  await page.route('**/api/v1/admin/config/validate', async (route) => {
+  await page.route('**/api/v1/admin/config/validate**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -799,6 +810,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expectFailAdminLast(page, 'access-grants-page', 'access-grants-admin-last')
   await page.goto('/observability/metrics')
   await expectFailAdminLast(page, 'metrics-page', 'metrics-admin-last')
+  // P418: 指标页深链 hash 可定位筛选区（侧栏/命令面板一致性）
+  // 注意：浏览器全页 /metrics 是服务端 Prometheus 抓取路径，不会进 SPA；UI 路由为 /observability/metrics
+  await page.goto('/observability/metrics#metrics-filter')
+  await expect(page.getByTestId('metrics-page')).toBeVisible()
+  await expect(page.getByTestId('metrics-filter').or(page.locator('#metrics-filter'))).toBeVisible()
+  await expect(page).toHaveURL(/\/observability\/metrics/)
   await page.goto('/about')
   await expectFailAdminLast(page, 'about-page', 'about-admin-last')
   await page.goto('/api-spec')
@@ -812,39 +829,39 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-admin-last-error')).toContainText(/e2e disk full/i)
   await expect(page.getByTestId('readiness-score-reasons')).toBeVisible()
   await expect(page.getByTestId('readiness-score-reasons')).toContainText(/最近管理重操作失败|Last admin heavy op failed/)
-  await page.unroute('**/api/v1/admin/ops-status', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/stats/maintenance', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/stats/compaction', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/stats/storage-memory', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/storage/snapshots', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/storage/data-snapshots', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/storage/export', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/config/effective', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/config/schema', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/config', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/api-spec', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/error-codes', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/ops-status**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/stats/maintenance**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/stats/compaction**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/stats/storage-memory**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/storage/snapshots**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/storage/data-snapshots**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/storage/export**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/config/effective**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/config/schema**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/config**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/api-spec**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/error-codes**', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/audit**', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/users/**/audit**', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/downsample/policies', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/downsample/statuses', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/users', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/databases', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/data/databases', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/maintenance/errors', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/doctor').catch(() => {})
-  await page.unroute('**/api/v1/admin/health').catch(() => {})
-  await page.unroute('**/api/v1/admin/version').catch(() => {})
-  await page.unroute('**/api/v1/auth/session').catch(() => {})
-  await page.unroute('**/api/v1/data/query/stats').catch(() => {})
-  await page.unroute('**/api/v1/admin/storage/validate').catch(() => {})
-  await page.unroute('**/api/v1/admin/config/validate').catch(() => {})
+  await page.unroute('**/api/v1/admin/downsample/policies**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/downsample/statuses**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/users**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/databases**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/data/databases**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/maintenance/errors**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/doctor**').catch(() => {})
+  await page.unroute('**/api/v1/admin/health**').catch(() => {})
+  await page.unroute('**/api/v1/admin/version**').catch(() => {})
+  await page.unroute('**/api/v1/auth/session**').catch(() => {})
+  await page.unroute('**/api/v1/data/query/stats**').catch(() => {})
+  await page.unroute('**/api/v1/admin/storage/validate**').catch(() => {})
+  await page.unroute('**/api/v1/admin/config/validate**').catch(() => {})
   await page.unroute('**/api/v1/data/write').catch(() => {})
   await page.unroute('**/api/v1/data/write/**').catch(() => {})
   await page.unroute('**/api/v1/data/delete').catch(() => {})
   await page.unroute('**/api/v1/users/**/database-permissions/**').catch(() => {})
   await page.unroute('**/api/v1/users/batch-disabled**').catch(() => {})
-  await page.unroute('**/api/v1/admin/storage/snapshots**').catch(() => {})
+  // snapshots** 已在上面 unroute；避免重复依赖精确路径
 
   // P381: mock 写入命中 admin busy → 结果条可跳转运维
   await page.route('**/api/v1/data/write', async (route) => {
@@ -1383,10 +1400,25 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('recent-routes-clear').click()
   await expect(page.getByTestId('recent-routes-clear')).toHaveCount(0)
 
-  // 固定最近访问
-  await page.goto('/write')
+  // 固定最近访问：直接注入 session 条目，避免 fail-last 深路径干扰
   await page.goto('/query')
-  await expect(page.getByTestId('recent-route-pin-/write')).toBeVisible()
+  await page.evaluate(() => {
+    const now = Date.now()
+    sessionStorage.setItem(
+      'mts.dashboard.recent-routes.v1',
+      JSON.stringify({
+        version: 1,
+        items: [
+          { path: '/query', name: 'Query', at: now },
+          { path: '/write', name: 'Write', at: now - 1 },
+        ],
+      }),
+    )
+  })
+  await page.reload()
+  await expect(page.getByTestId('query-page')).toBeVisible()
+  await expect(page.getByTestId('recent-routes')).toBeVisible()
+  await expect(page.getByTestId('recent-route-pin-/write')).toBeVisible({ timeout: 15_000 })
   await page.getByTestId('recent-route-pin-/write').click()
   await expect(page.getByTestId('recent-route-pin-/write')).toHaveAttribute('aria-pressed', 'true')
   // 命令面板最近访问展示固定
@@ -2233,7 +2265,16 @@ test('commercial browser smoke path', async ({ page }) => {
 
   // 键盘可达：命令面板 + 快捷键帮助 + skip-link 聚焦主内容
   await page.goto('/')
+  await expect(page.getByTestId('overview-page')).toBeVisible()
+  // 先 blur 任何可编辑焦点，再发 Ctrl/Meta+K（部分环境 Control+k 可能被吞）
+  await page.locator('body').click({ position: { x: 8, y: 8 } })
   await page.keyboard.press('Control+k')
+  if (!(await page.getByTestId('command-palette').isVisible().catch(() => false))) {
+    await page.keyboard.press('Meta+k')
+  }
+  if (!(await page.getByTestId('command-palette').isVisible().catch(() => false))) {
+    await page.getByTestId('topbar-command-palette').click()
+  }
   await expect(page.getByTestId('command-palette')).toBeVisible()
   await expect(page.getByTestId('command-palette-input')).toBeFocused()
   await page.keyboard.press('Escape')

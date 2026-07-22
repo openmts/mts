@@ -1805,3 +1805,16 @@
 | fail-last 管理页芯片 | mock | — | 是 | 验收可见性 |
 | batch cancelled summary | 是（P415） | — | 是 | 取消路径不丢 last |
 
+## P418（2026-07-22）
+- e2e fail-last：路由统一 `**` 匹配（含 query），补齐 `database-permissions` 列表 mock，降低真实 last 覆盖失败场景
+- Dashboard：SPA 内 `/metrics` 兼容重定向到 `/observability/metrics`（浏览器全页 `/metrics` 仍为 Prometheus 抓取，不进 SPA）
+- e2e：指标页 `#metrics-filter` 深链验收（UI 路由 `/observability/metrics`）
+- 最近访问条展示上限与 `RECENT_ROUTES_MAX` 对齐，避免 fail-last 深路径挤掉 pin 目标
+
+### busy/last 覆盖矩阵（P418 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| fail-last route ** | mock | — | 是 | 防 query 漏 mock |
+| users database-permissions GET | mock | — | 是 | AccessGrants 并发拉取 |
+| SPA `/metrics` → observability | — | — | — | 仅客户端路由；抓取路径不变 |
+
