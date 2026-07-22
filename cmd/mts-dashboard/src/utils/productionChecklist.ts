@@ -464,6 +464,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/query',
   },
   {
+    id: 'databases-meta-path',
+    severity: 'recommended',
+    title: { zh: '库表页展示元数据 path', en: 'Databases page shows meta path' },
+    detail: {
+      zh: 'Databases 页 series/RP 列表展示服务端 path；RP 客户端解析 path/database。',
+      en: 'Databases page surfaces series/RP server path; RP client parses path/database.',
+    },
+    automated: true,
+    jump: '/databases',
+  },
+  {
     id: 'data-contract-endpoint',
     severity: 'required',
     title: { zh: '数据面契约快照可交接', en: 'Data-plane contract snapshot for handoff' },

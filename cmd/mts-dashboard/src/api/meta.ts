@@ -141,6 +141,8 @@ export interface ListRetentionPoliciesResult {
   policies: RetentionPolicyMeta[]
   /** data 面优先；admin 回退；均失败则为 manual */
   source: 'data' | 'admin' | 'manual'
+  path?: string
+  database?: string
   error?: string
   adminOp?: {
     admin_op_busy?: boolean
@@ -164,6 +166,8 @@ export async function listRetentionPoliciesDetailed(
   try {
     const data = await apiGet<{
       policies?: RetentionPolicyMeta[]
+      path?: string
+      database?: string
       admin_op_busy?: boolean
       op?: string
       started_at_unix?: number
@@ -172,6 +176,8 @@ export async function listRetentionPoliciesDetailed(
     return {
       policies: data.policies ?? [],
       source: 'data',
+      path: String(data.path || dataPath).trim() || dataPath,
+      database: String(data.database || database).trim(),
       adminOp: {
         admin_op_busy: data.admin_op_busy,
         op: data.op,
@@ -185,6 +191,8 @@ export async function listRetentionPoliciesDetailed(
     try {
       const data = await apiGet<{
         policies?: RetentionPolicyMeta[]
+        path?: string
+        database?: string
         admin_op_busy?: boolean
         op?: string
         started_at_unix?: number
@@ -193,6 +201,8 @@ export async function listRetentionPoliciesDetailed(
       return {
         policies: data.policies ?? [],
         source: 'admin',
+        path: String(data.path || adminPath).trim() || adminPath,
+        database: String(data.database || database).trim(),
         adminOp: {
           admin_op_busy: data.admin_op_busy,
           op: data.op,

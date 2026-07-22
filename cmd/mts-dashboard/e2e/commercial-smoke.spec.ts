@@ -547,6 +547,13 @@ test('commercial browser smoke path', async ({ page }) => {
   // P360: 其它管理页可看到 last 摘要芯片
   await page.goto('/databases')
   await expect(page.getByTestId('databases-page')).toBeVisible()
+  // P479: 库表 meta path 徽章（展开后才有；有则校验）
+  if (await page.getByTestId('databases-series-path').count()) {
+    await expect(page.getByTestId('databases-series-path').first()).toContainText('/series')
+  }
+  if (await page.getByTestId('databases-rp-path').count()) {
+    await expect(page.getByTestId('databases-rp-path')).toContainText('retention-policies')
+  }
   await expect(page.getByTestId('databases-admin-last')).toBeVisible()
   await expect(page.getByTestId('databases-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
   await expect(page.getByTestId('databases-admin-last-copy')).toBeVisible()

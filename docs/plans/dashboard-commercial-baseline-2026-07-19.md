@@ -2633,3 +2633,14 @@
 | fields/series | path+database+measurement | series path 徽章 | Query/Databases |
 | 契约 | meta_list_path | REQUIRED_FEATURE_IDS | 交接/验收包 |
 
+## P479（2026-07-23）
+- Dashboard：RP 客户端解析 path/database；Databases 页 series/RP path 徽章
+- 清单：`databases-meta-path`；命令面板深链；e2e 可选校验 path
+- 依赖 P478 服务端 meta list path/scope
+
+### 前后端对齐（P479）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| series list | path+scope | Databases series path | 展开 measurement |
+| RP list | path+database | databases-rp-path | 展开 database |
+| RP 客户端 | path/database | listRetentionPoliciesDetailed | data/admin |

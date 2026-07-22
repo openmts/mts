@@ -41,6 +41,7 @@ test('production checklist has required commercial gates', () => {
     'query-stats-path',
     'delete-result-export-meta',
     'meta-list-path',
+    'databases-meta-path',
     'data-limits-endpoint',
     'stream-delete-meta',
     'data-contract-endpoint',
@@ -323,4 +324,13 @@ test('meta-list-path is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('/query'))
+})
+
+
+test('databases-meta-path is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'databases-meta-path')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/databases'))
 })

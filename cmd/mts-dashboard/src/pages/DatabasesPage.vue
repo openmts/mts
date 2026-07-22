@@ -82,6 +82,7 @@ interface MeasurementEntry {
   seriesLoadingMore: boolean
   seriesQuery: string
   seriesLocalFilter: string
+  seriesPath: string
 }
 interface DatabaseEntry {
   name: string
@@ -90,7 +91,9 @@ interface DatabaseEntry {
   loaded: boolean
   detailError: string
   measurements: MeasurementEntry[]
+  measurementsPath: string
   retentionPolicies: { name: string; duration: number }[]
+  retentionPath: string
   newRpName: string
   newRpDuration: string
 }
@@ -213,7 +216,9 @@ async function loadDatabasesList() {
         loaded: false,
         detailError: '',
         measurements: [],
+        measurementsPath: '',
         retentionPolicies: [],
+        retentionPath: '',
         newRpName: '',
         newRpDuration: '',
       }
@@ -279,15 +284,17 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
       listMeasurementsDetailed(db.name).then((r) => {
         if (r.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(r.adminOp))
         if (r.error && !r.names.length) throw new Error(r.error)
-        return r.names
+        return r
       }),
       listRetentionPoliciesDetailed(db.name).then((r) => {
         if (r.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(r.adminOp))
         if (r.error && !r.policies.length) throw new Error(r.error)
-        return r.policies
+        return r
       }),
     ])
-    db.measurements = meas.map((m) => ({
+    db.measurementsPath = String(meas.path || '').trim()
+    db.retentionPath = String(rps.path || '').trim()
+    db.measurements = meas.names.map((m) => ({
       name: m,
       expanded: false,
       loading: false,
@@ -300,9 +307,9 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
       seriesHasMore: false,
       seriesLoadingMore: false,
       seriesQuery: '',
-      seriesLocalFilter: '',
+      seriesLocalFilter: '', seriesPath: '',
     }))
-    db.retentionPolicies = rps.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
+    db.retentionPolicies = rps.policies.map((p) => ({ name: p.name, duration: p.duration ?? 0 }))
     db.loaded = true
     db.detailError = ''
   } catch (e) {
@@ -354,6 +361,7 @@ async function loadMeasurementDetails(meas: MeasurementEntry, dbName: string) {
     meas.seriesTruncated = seriesResult.truncated
     meas.seriesOffset = seriesResult.series.length
     meas.seriesHasMore = seriesResult.series.length < seriesResult.total
+    meas.seriesPath = String(seriesResult.path || '').trim()
     meas.loadError = ''
   } catch (e) {
     // 就地 soft-fail，避免与顶层 action banner 双重 toast
@@ -513,12 +521,14 @@ async function createDatabase() {
     applyAdminOpStatus(parseAdminOpStatusPayload(created))
     databases.value.push({
       name,
-      measurements: [],
-      retentionPolicies: [],
       expanded: false,
       loading: false,
       loaded: false,
       detailError: '',
+      measurements: [],
+      measurementsPath: '',
+      retentionPolicies: [],
+      retentionPath: '',
       newRpName: '',
       newRpDuration: '',
     })
@@ -1086,6 +1096,12 @@ onBeforeUnmount(() => {
                     class="text-[11px] text-amber-700 dark:text-amber-200"
                     data-testid="databases-series-truncated"
                   >{{ formatMessage(t('databasesSeriesTruncated'), { max: SERIES_CAP, total: meas.seriesTotal }) }}</p>
+                  <p
+                    v-if="meas.seriesPath"
+                    class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+                    data-testid="databases-series-path"
+                    :title="meas.seriesPath"
+                  >{{ meas.seriesPath }}</p>
                   <button
                     v-if="meas.seriesHasMore"
                     type="button"
@@ -1101,6 +1117,12 @@ onBeforeUnmount(() => {
           </div>
         <div class="border-t border-slate-200 px-6 py-3 dark:border-slate-700">
           <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t('databasesRetention') }}</p>
+          <p
+            v-if="activeDatabase.retentionPath"
+            class="mb-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+            data-testid="databases-rp-path"
+            :title="activeDatabase.retentionPath"
+          >{{ activeDatabase.retentionPath }}</p>
           <div v-if="activeDatabase.retentionPolicies.length" class="mb-3 space-y-1" data-testid="databases-rp-list">
             <div
               v-for="rp in activeDatabase.retentionPolicies"
