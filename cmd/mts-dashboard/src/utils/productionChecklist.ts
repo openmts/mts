@@ -690,6 +690,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'metrics-health-signals',
+    severity: 'recommended',
+    title: { zh: 'Metrics 健康信号 + 运维深链', en: 'Metrics health signals + ops deep links' },
+    detail: {
+      zh: '从 /metrics 提取 healthy/ready/积压/错误；深链 Operations/Readiness；降采样摘要不依赖 loadError。',
+      en: 'Extract healthy/ready/backlog/errors from /metrics; deep-link Operations/Readiness; downsample summary independent of loadError.',
+    },
+    automated: true,
+    jump: '/observability/metrics',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

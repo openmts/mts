@@ -2808,3 +2808,15 @@
 | 场景 | 服务端 | Dashboard | 备注 |
 |------|--------|-----------|------|
 | config effective | path + config | config-effective-summary | 扫视摘要 |
+
+## P493（2026-07-23）
+- Metrics：运行健康信号卡（healthy/ready/backlog/errors）+ Operations/Readiness 深链
+- 修复：降采样摘要不再嵌套在 loadError 分支
+- 清单：`metrics-health-signals`
+
+### 前后端对齐（P493）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| /metrics gauges | text exposition | metrics-health-signals | 纯解析扫视 |
+| ops-status / readiness | 既有 path | jump-ops / jump-readiness | 深链 |
+| downsample summary | statuses summary_only | metrics-downsample-summary | 独立展示 |

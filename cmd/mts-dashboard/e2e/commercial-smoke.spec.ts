@@ -683,6 +683,18 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('config-effective-json')).toBeVisible()
   }
 
+  // P493: Metrics 健康信号 + 运维深链；降采样摘要独立展示
+  await page.goto('/observability/metrics')
+  await expect(page.getByTestId('metrics-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('metrics-health-signals').count()) {
+    await expect(page.getByTestId('metrics-health-signals')).toBeVisible()
+    await expect(page.getByTestId('metrics-jump-ops')).toBeVisible()
+    await expect(page.getByTestId('metrics-jump-readiness')).toBeVisible()
+  }
+  if (await page.getByTestId('metrics-downsample-summary').count()) {
+    await expect(page.getByTestId('metrics-downsample-summary')).toBeVisible()
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

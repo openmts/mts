@@ -30,6 +30,7 @@ import {
   type PrometheusFamily,
 } from '@/utils/prometheus'
 import { metricsFamiliesToJSON, metricsRefreshIntervalsMs } from '@/utils/metricsExport'
+import { extractMetricsHealthSignals } from '@/utils/metricsHealthSignals'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -92,6 +93,14 @@ const METRICS_LIST_HEIGHT = 480
 
 const filtered = computed(() => filterPrometheusFamilies(families.value, q.value))
 const summary = computed(() => summarizeFamilies(filtered.value))
+const healthSignals = computed(() => extractMetricsHealthSignals(families.value))
+const healthSignalsToneClass = computed(() => {
+  const tone = healthSignals.value.tone
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+  return 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/40'
+})
 const refreshOptions = metricsRefreshIntervalsMs()
 const activeFamily = computed(() => filtered.value.find((f) => f.name === activeFamilyName.value) ?? null)
 
@@ -294,15 +303,17 @@ onBeforeUnmount(() => {
           {{ t('metricsTitle') }}
         </h1>
         <div class="mt-1 flex flex-wrap items-center gap-2">
-          <p class="text-xs mts-muted">
-            {{ t('metricsDesc') }}
-            <span v-if="lastRefreshed" data-testid="metrics-refreshed">{{ formatMessage(t('metricsRefreshedAt'), { time: lastRefreshed }) }}</span>
+          <div class="text-xs mts-muted">
+            <p>
+              {{ t('metricsDesc') }}
+              <span v-if="lastRefreshed" data-testid="metrics-refreshed">{{ formatMessage(t('metricsRefreshedAt'), { time: lastRefreshed }) }}</span>
+            </p>
             <p
               class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
               data-testid="metrics-source-paths"
               :title="[metricsSourcePath, opsStatusPath, downsampleStatusesPath].join(' · ')"
             >{{ [metricsSourcePath, opsStatusPath, downsampleStatusesPath].join(' · ') }}</p>
-          </p>
+          </div>
           <AdminOpLastChip
             v-if="metricsAdminLastLabel"
             :label="metricsAdminLastLabel"
@@ -341,8 +352,50 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="loadError" data-testid="metrics-error">
-      <div
+    <ActionResultBanner
+      v-if="loadError"
+      kind="error"
+      :message="loadError"
+      retryable
+      data-testid="metrics-load-error"
+      @retry="() => load()"
+      @dismiss="loadError = ''"
+    />
+    <PartialErrorBanner
+      v-else-if="refreshError"
+      :message="`${t('metricsRefreshFailed')}：${refreshError}`"
+      test-id="metrics-refresh-error"
+      @retry="() => load({ background: true })"
+      @dismiss="refreshError = ''"
+    />
+
+    <div
+      v-if="families.length"
+      class="rounded-lg border p-3"
+      :class="healthSignalsToneClass"
+      data-testid="metrics-health-signals"
+    >
+      <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('metricsHealthSignalsTitle') }}</p>
+          <p class="text-[11px] mts-muted">{{ t('metricsHealthSignalsDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" to="/operations#ops-status-strip" data-testid="metrics-jump-ops">{{ t('metricsJumpOps') }}</router-link>
+          <router-link class="mts-btn text-xs" to="/ops/readiness" data-testid="metrics-jump-readiness">{{ t('metricsJumpReadiness') }}</router-link>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+        <div data-testid="metrics-health-healthy">{{ t('healthy') }}: <span class="font-semibold">{{ healthSignals.healthy === null ? t('emptyValue') : healthSignals.healthy }}</span></div>
+        <div data-testid="metrics-health-ready">{{ t('ready') }}: <span class="font-semibold">{{ healthSignals.ready === null ? t('emptyValue') : healthSignals.ready }}</span></div>
+        <div data-testid="metrics-health-backlog">{{ t('metricsCompactionBacklog') }}: <span class="font-semibold">{{ healthSignals.compaction_backlog === null ? t('emptyValue') : healthSignals.compaction_backlog }}</span></div>
+        <div data-testid="metrics-health-maint-errors">{{ t('metricsMaintenanceErrors') }}: <span class="font-semibold">{{ healthSignals.maintenance_errors === null ? t('emptyValue') : healthSignals.maintenance_errors }}</span></div>
+        <div data-testid="metrics-health-req-errors">{{ t('metricsRequestErrors') }}: <span class="font-semibold">{{ healthSignals.request_errors_total === null ? t('emptyValue') : healthSignals.request_errors_total }}</span></div>
+        <div data-testid="metrics-health-req-total">{{ t('metricsRequestTotal') }}: <span class="font-semibold">{{ healthSignals.request_total === null ? t('emptyValue') : healthSignals.request_total }}</span></div>
+      </div>
+    </div>
+
+    <div
       v-if="downsampleStatusSummary"
       class="rounded-lg border p-3"
       :class="downsampleSummaryToneClass"
@@ -365,16 +418,6 @@ onBeforeUnmount(() => {
         <div data-testid="metrics-downsample-max-lag">{{ t('overviewDownsampleMaxLag') }}: <span class="font-semibold">{{ downsampleSummaryView.max_lag_seconds }}s</span></div>
       </div>
     </div>
-
-    <ActionResultBanner kind="error" :message="loadError" retryable data-testid="metrics-load-error" @retry="() => load()" @dismiss="loadError = ''" />
-    </div>
-    <PartialErrorBanner
-      v-else-if="refreshError"
-      :message="`${t('metricsRefreshFailed')}：${refreshError}`"
-      test-id="metrics-refresh-error"
-      @retry="() => load({ background: true })"
-      @dismiss="refreshError = ''"
-    />
 
     <div class="grid gap-3 sm:grid-cols-2">
       <div class="mts-card p-3" id="metrics-summary" data-testid="metrics-summary-families">
