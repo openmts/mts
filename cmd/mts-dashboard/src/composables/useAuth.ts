@@ -30,6 +30,16 @@ const loggingOut = ref(false)
 const lastSessionRemainingSeconds = ref<number | null>(null)
 const lastSessionCheckedAt = ref<number | null>(null)
 const lastSessionServerTimeUnix = ref<number | null>(null)
+/** 最近一次服务端 remaining/时间样本来源：登录响应或 GET /auth/session */
+export type SessionSampleSource = 'login' | 'session'
+const lastSessionSampleSource = ref<SessionSampleSource | null>(null)
+
+function clearSessionCalibration() {
+  lastSessionRemainingSeconds.value = null
+  lastSessionCheckedAt.value = null
+  lastSessionServerTimeUnix.value = null
+  lastSessionSampleSource.value = null
+}
 
 export function useAuth() {
   const isAdmin = computed(() => currentRole.value === 'admin')
@@ -84,6 +94,15 @@ export function useAuth() {
       } else {
         lastSessionServerTimeUnix.value = null
       }
+      // 有 remaining 或 server_time 即视为 login 种子样本
+      if (
+        lastSessionRemainingSeconds.value != null ||
+        lastSessionServerTimeUnix.value != null
+      ) {
+        lastSessionSampleSource.value = 'login'
+      } else {
+        lastSessionSampleSource.value = null
+      }
       return null
     } catch (e) {
       return formatCaughtError(e)
@@ -122,9 +141,7 @@ export function useAuth() {
       currentRole.value = ''
       mustChangePassword.value = false
       isAuthenticated.value = false
-      lastSessionRemainingSeconds.value = null
-      lastSessionCheckedAt.value = null
-      lastSessionServerTimeUnix.value = null
+      clearSessionCalibration()
       loggingOut.value = false
     }
   }
@@ -138,9 +155,7 @@ export function useAuth() {
       currentUser.value = ''
       currentRole.value = ''
       mustChangePassword.value = false
-      lastSessionRemainingSeconds.value = null
-      lastSessionCheckedAt.value = null
-      lastSessionServerTimeUnix.value = null
+      clearSessionCalibration()
       return false
     }
     try {
@@ -173,6 +188,14 @@ export function useAuth() {
         lastSessionServerTimeUnix.value = null
       }
       lastSessionCheckedAt.value = Date.now()
+      if (
+        lastSessionRemainingSeconds.value != null ||
+        lastSessionServerTimeUnix.value != null
+      ) {
+        lastSessionSampleSource.value = 'session'
+      } else {
+        lastSessionSampleSource.value = null
+      }
       setMustChangePassword(!!session.must_change_password)
       mustChangePassword.value = !!session.must_change_password
       isAuthenticated.value = true
@@ -218,6 +241,7 @@ export function useAuth() {
     lastSessionRemainingSeconds,
     lastSessionCheckedAt,
     lastSessionServerTimeUnix,
+    lastSessionSampleSource,
     getTokenExpiresAt,
   }
 }

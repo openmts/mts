@@ -41,10 +41,21 @@ test('session calibration handoff merges server remaining', () => {
     checkedAtMs: now,
     nowMs: now + 30_000,
   })
-  assert.equal(merged.calibration_source, 'merged')
+  assert.equal(merged.calibration_source, 'session')
+  assert.equal(merged.sample_source, 'session')
+  const fromLogin = buildSessionCalibrationHandoffSummary({
+    expiresAtIso: expires,
+    serverRemainingSec: 90,
+    checkedAtMs: now,
+    sampleSource: 'login',
+    nowMs: now + 30_000,
+  })
+  assert.equal(fromLogin.calibration_source, 'login')
+  assert.equal(fromLogin.sample_source, 'login')
+  assert.match(formatSessionCalibrationHandoffLine(fromLogin), /sample: login/)
   assert.equal(merged.calibrated_remaining_seconds, 60)
   assert.equal(merged.urgency, 'critical')
-  assert.match(formatSessionCalibrationHandoffLine(merged), /source: merged/)
+  assert.match(formatSessionCalibrationHandoffLine(merged), /source: session/)
 
   const localOnly = buildSessionCalibrationHandoffSummary({
     expiresAtIso: expires,

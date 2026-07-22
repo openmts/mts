@@ -54,6 +54,7 @@ export interface ReadinessArchiveInput {
   session_remaining_seconds?: number | null
   session_checked_at_ms?: number | null
   session_server_time_unix?: number | null
+  session_sample_source?: 'login' | 'session' | null
 }
 
 export interface ReadinessArchivePayload {
@@ -234,6 +235,7 @@ export function buildReadinessArchive(input: ReadinessArchiveInput): ReadinessAr
         serverRemainingSec: input.session_remaining_seconds,
         checkedAtMs: input.session_checked_at_ms,
         serverTimeUnix: input.session_server_time_unix,
+        sampleSource: input.session_sample_source,
       }),
   }
 }

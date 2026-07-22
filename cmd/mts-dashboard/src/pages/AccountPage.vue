@@ -75,7 +75,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 const router = useRouter()
 const route = useRoute()
 useHashScroll()
-const { currentUser, currentRole, changePassword, isAdmin, logout, login, refreshSession, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix } = useAuth()
+const { currentUser, currentRole, changePassword, isAdmin, logout, login, refreshSession, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix, lastSessionSampleSource } = useAuth()
 const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const accountAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const accountAdminLastErrorDetail = computed(() => {
@@ -204,10 +204,16 @@ const calibratedRemainingText = computed(() => {
   return formatRemaining(Math.max(0, sessionView.value.remainingMs))
 })
 const calibrationSourceText = computed(() => {
-  if (lastSessionRemainingSeconds.value != null && lastSessionCheckedAt.value != null) {
-    return t.value('accountSessionCalibrationMerged')
+  if (lastSessionRemainingSeconds.value == null || lastSessionCheckedAt.value == null) {
+    return t.value('accountSessionCalibrationLocal')
   }
-  return t.value('accountSessionCalibrationLocal')
+  if (lastSessionSampleSource.value === 'login') {
+    return t.value('accountSessionCalibrationLogin')
+  }
+  if (lastSessionSampleSource.value === 'session') {
+    return t.value('accountSessionCalibrationSession')
+  }
+  return t.value('accountSessionCalibrationMerged')
 })
 
 const serverCheckedAtText = computed(() => {

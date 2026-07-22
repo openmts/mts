@@ -2364,3 +2364,17 @@
 | 会话探测 | GET /auth/session | refreshSession | 持续校准 |
 | 就绪门禁 | — | login-session-seed | required |
 
+## P461（2026-07-23）
+- useAuth：`lastSessionSampleSource`（login | session）记录校准样本端点
+- 交接摘要：`calibration_source` / `sample_source` 区分登录种子与 session 探测
+- Account：校准来源文案区分 login / session
+- API Spec：session ResponseHint 显式 remaining_seconds / server_time_unix
+- 就绪清单：`session-sample-source`
+
+### 前后端对齐（P461）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 登录种子 | login remaining/server_time | sample_source=login | P460 延续 |
+| 会话探测 | GET /auth/session | sample_source=session | 周期/手动校验 |
+| 契约可读 | ResponseHint | ApiSpec 检索 | 运维对照 |
+

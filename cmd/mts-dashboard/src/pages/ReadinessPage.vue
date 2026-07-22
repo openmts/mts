@@ -151,7 +151,7 @@ async function refreshReadinessBusyOnly() {
     readinessBusyRefreshing.value = false
   }
 }
-const { isAdmin, currentUser, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix } = useAuth()
+const { isAdmin, currentUser, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix, lastSessionSampleSource } = useAuth()
 const { t, locale } = useI18n()
 const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail?: string; lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const readinessAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
@@ -265,6 +265,7 @@ const commercialHandoffView = computed(() =>
     serverRemainingSec: lastSessionRemainingSeconds.value,
     checkedAtMs: lastSessionCheckedAt.value,
     serverTimeUnix: lastSessionServerTimeUnix.value,
+    sampleSource: lastSessionSampleSource.value,
   }),
 )
 const commercialHandoffPasswordLine = computed(() =>
@@ -553,6 +554,7 @@ function archiveSessionFields() {
     session_remaining_seconds: lastSessionRemainingSeconds.value,
     session_checked_at_ms: lastSessionCheckedAt.value,
     session_server_time_unix: lastSessionServerTimeUnix.value,
+    session_sample_source: lastSessionSampleSource.value,
   }
 }
 

@@ -270,7 +270,7 @@ func operationCatalog() []operation {
 			Name:         "get_session",
 			Namespace:    "auth",
 			Description:  "inspect current user bearer session (includes admin_op_busy/last)",
-			ResponseHint: "sessionResponse{user_name,role,expires_at,...,admin_op_busy,last}",
+			ResponseHint: "sessionResponse{user_name,role,expires_at,remaining_seconds,server_time_unix,must_change_password,admin_op_busy,last}",
 			Auth:         authUserToken,
 			HTTPMethods:  []string{http.MethodGet},
 			HTTPPaths:    []string{routeAuthSession},

@@ -79,7 +79,7 @@ interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; read
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 
-const { isAdmin, getTokenExpiresAt, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix } = useAuth()
+const { isAdmin, getTokenExpiresAt, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix, lastSessionSampleSource } = useAuth()
 const { adminOpBusy, adminOpKind, setAdminOpBusy, applyAdminOpStatus, refreshAdminOpBusy } = useAdminOpBusy()
 const router = useRouter()
 const route = useRoute()
@@ -724,6 +724,7 @@ function healthReportInput() {
     session_remaining_seconds: lastSessionRemainingSeconds.value,
     session_checked_at_ms: lastSessionCheckedAt.value,
     session_server_time_unix: lastSessionServerTimeUnix.value,
+    session_sample_source: lastSessionSampleSource.value,
   }
 }
 
@@ -733,6 +734,7 @@ async function copyCommercialHandoff() {
     serverRemainingSec: lastSessionRemainingSeconds.value,
     checkedAtMs: lastSessionCheckedAt.value,
     serverTimeUnix: lastSessionServerTimeUnix.value,
+    sampleSource: lastSessionSampleSource.value,
   })
   const res = await copyText(formatCommercialHandoffClipboardText(handoff))
   if (res.ok) success(t.value('overviewCommercialHandoffCopied'))

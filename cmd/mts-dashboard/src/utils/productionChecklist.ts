@@ -310,6 +310,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/account#account-session',
   },
   {
+    id: 'session-sample-source',
+    severity: 'recommended',
+    title: { zh: '会话样本来源可区分', en: 'Session sample source distinguishable' },
+    detail: {
+      zh: 'Account/交接摘要区分 login 种子与 GET /auth/session 探测；API Spec 列出 login/session 的 remaining_seconds 与 server_time_unix。',
+      en: 'Account/handoff distinguish login seed vs GET /auth/session probe; API Spec lists remaining_seconds and server_time_unix on login/session.',
+    },
+    automated: true,
+    jump: '/account#account-session',
+  },
+  {
     id: 'overview-session-server-hint',
     severity: 'recommended',
     title: { zh: 'Overview 会话服务端提示', en: 'Overview session server hint' },

@@ -16,6 +16,8 @@ import {
   type SessionUrgency,
 } from './sessionExpiry.ts'
 
+export type SessionSampleSource = 'login' | 'session'
+
 export interface PasswordPolicyHandoffSummary {
   version: number
   min_length: number
@@ -37,7 +39,15 @@ export interface SessionCalibrationHandoffSummary {
   clock_skew_seconds: number | null
   calibrated_remaining_seconds: number | null
   urgency: SessionUrgency
-  calibration_source: 'local_only' | 'merged' | 'unknown'
+  /**
+   * remaining 合成来源：
+   * - login/session：有服务端 remaining 样本（样本端点见 sample_source）
+   * - local_only：仅本地 expires
+   * - unknown：无本地 expires
+   */
+  calibration_source: 'local_only' | 'login' | 'session' | 'merged' | 'unknown'
+  /** 服务端样本端点来源（login 响应 vs GET /auth/session） */
+  sample_source: SessionSampleSource | null
 }
 
 export interface CommercialHandoffSummary {
@@ -75,18 +85,42 @@ function resolveServerTimeUnix(input: {
   }
 }
 
+function resolveSampleSource(
+  sampleSource: SessionSampleSource | null | undefined,
+  hasServer: boolean,
+): SessionSampleSource | null {
+  if (!hasServer) return null
+  if (sampleSource === 'login' || sampleSource === 'session') return sampleSource
+  return 'session'
+}
+
+function resolveCalibrationSource(
+  hasServer: boolean,
+  sampleSource: SessionSampleSource | null,
+): SessionCalibrationHandoffSummary['calibration_source'] {
+  if (!hasServer) return 'local_only'
+  if (sampleSource === 'login') return 'login'
+  if (sampleSource === 'session') return 'session'
+  return 'merged'
+}
+
 function emptySessionCalibration(
   input: {
     serverRemainingSec?: number | null
     checkedAtMs?: number | null
+    sampleSource?: SessionSampleSource | null
   },
   timeMeta: { serverTimeUnix: number | null; clockSkewSeconds: number | null },
 ): SessionCalibrationHandoffSummary {
+  const hasServer =
+    typeof input.serverRemainingSec === 'number' && Number.isFinite(input.serverRemainingSec)
+  const sample = resolveSampleSource(input.sampleSource, hasServer)
   return {
     has_local_expiry: false,
     local_remaining_seconds: null,
-    server_remaining_seconds:
-      typeof input.serverRemainingSec === 'number' ? Math.max(0, Math.floor(input.serverRemainingSec)) : null,
+    server_remaining_seconds: hasServer
+      ? Math.max(0, Math.floor(input.serverRemainingSec as number))
+      : null,
     server_checked_at:
       typeof input.checkedAtMs === 'number' && Number.isFinite(input.checkedAtMs)
         ? new Date(input.checkedAtMs).toISOString()
@@ -96,6 +130,7 @@ function emptySessionCalibration(
     calibrated_remaining_seconds: null,
     urgency: 'unknown',
     calibration_source: 'unknown',
+    sample_source: sample,
   }
 }
 
@@ -104,6 +139,7 @@ function filledSessionCalibration(
   input: {
     serverRemainingSec?: number | null
     checkedAtMs?: number | null
+    sampleSource?: SessionSampleSource | null
   },
   timeMeta: { serverTimeUnix: number | null; clockSkewSeconds: number | null },
   now: number,
@@ -114,6 +150,7 @@ function filledSessionCalibration(
     Number.isFinite(input.serverRemainingSec) &&
     typeof input.checkedAtMs === 'number' &&
     Number.isFinite(input.checkedAtMs)
+  const sample = resolveSampleSource(input.sampleSource, hasServer)
   const view = sessionViewFromRemainingMs(
     effectiveSessionRemainingMs(localMs, input.serverRemainingSec, input.checkedAtMs, now),
     true,
@@ -129,7 +166,8 @@ function filledSessionCalibration(
     clock_skew_seconds: timeMeta.clockSkewSeconds,
     calibrated_remaining_seconds: Math.floor(view.remainingMs / 1000),
     urgency: view.urgency,
-    calibration_source: hasServer ? 'merged' : 'local_only',
+    calibration_source: resolveCalibrationSource(hasServer, sample),
+    sample_source: sample,
   }
 }
 
@@ -138,6 +176,7 @@ export function buildSessionCalibrationHandoffSummary(input: {
   serverRemainingSec?: number | null
   checkedAtMs?: number | null
   serverTimeUnix?: number | null
+  sampleSource?: SessionSampleSource | null
   nowMs?: number
 }): SessionCalibrationHandoffSummary {
   const now = input.nowMs ?? Date.now()
@@ -152,6 +191,7 @@ export function buildCommercialHandoffSummary(input?: {
   serverRemainingSec?: number | null
   checkedAtMs?: number | null
   serverTimeUnix?: number | null
+  sampleSource?: SessionSampleSource | null
   nowMs?: number
 }): CommercialHandoffSummary {
   return {
@@ -171,7 +211,8 @@ export function formatSessionCalibrationHandoffLine(s: SessionCalibrationHandoff
       s.clock_skew_seconds == null
         ? ''
         : ` · skew: ${s.clock_skew_seconds >= 0 ? '+' : ''}${s.clock_skew_seconds}s`
-    return `no local expiry${skewOnly}`
+    const sample = s.sample_source ? ` · sample: ${s.sample_source}` : ''
+    return `no local expiry${sample}${skewOnly}`
   }
   const cal =
     s.calibrated_remaining_seconds == null
@@ -181,5 +222,6 @@ export function formatSessionCalibrationHandoffLine(s: SessionCalibrationHandoff
     s.clock_skew_seconds == null
       ? ''
       : ` · skew: ${s.clock_skew_seconds >= 0 ? '+' : ''}${s.clock_skew_seconds}s`
-  return `urgency: ${s.urgency} · calibrated: ${cal} · source: ${s.calibration_source}${skew}`
+  const sample = s.sample_source ? ` · sample: ${s.sample_source}` : ''
+  return `urgency: ${s.urgency} · calibrated: ${cal} · source: ${s.calibration_source}${sample}${skew}`
 }
