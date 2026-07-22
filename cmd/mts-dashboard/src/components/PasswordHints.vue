@@ -19,6 +19,8 @@ const props = withDefaults(
     newPassword?: string
     confirmPassword?: string
     password?: string
+    /** assigned 模式下是否展示确认匹配项 */
+    showConfirmHint?: boolean
   }>(),
   {
     mode: 'change',
@@ -26,12 +28,17 @@ const props = withDefaults(
     newPassword: '',
     confirmPassword: '',
     password: '',
+    showConfirmHint: false,
   },
 )
 
 const { t } = useI18n()
 const hints = computed((): PasswordHintItem[] => {
-  if (props.mode === 'assigned') return assignedPasswordHints(props.password || props.newPassword || '', props.confirmPassword)
+  if (props.mode === 'assigned') {
+    const pwd = props.password || props.newPassword || ''
+    if (props.showConfirmHint) return assignedPasswordHints(pwd, props.confirmPassword)
+    return assignedPasswordHints(pwd)
+  }
   if (props.mode === 'change-no-confirm') {
     return passwordRequirementHints(props.oldPassword || '', props.newPassword || '', props.newPassword || '').filter(
       (h) => h.id !== 'confirm_match',

@@ -1875,3 +1875,16 @@
 | auth/password | 8 | 是 | Account/Force 有；Users 现有 | bad_request |
 | users/:name/password | 8 | 是 | 是 | 撤销 token |
 | users create password | 8（若填写） | 是 | — | 空密码仍允许 |
+
+## P423（2026-07-22）
+- Dashboard：登录/续期 `invalid credentials` 友好文案（密码不正确；续期时会话仍有效）
+- Account：续期失败清空密码输入，便于重试
+- e2e：会话续期错误密码保会话 → 再成功续期；Users 自改密/创建用户弱密码拦截
+
+### 会话续期边界（P423 增量）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| renew 密码错误 | unauthenticated | 留在账户页 | 不清会话 |
+| renew 成功 | 新 token | 更新会话 | 密码输入清空 |
+| Users 自改密弱密码 | —（前端） | action-result 错误 | 不提交 |
+| create 弱密码 | —（前端） | action-result 错误 | 不提交 |

@@ -188,6 +188,7 @@ onBeforeUnmount(() => {
         />
         <PasswordHints
           mode="assigned"
+          show-confirm-hint
           :password="setPasswordValue"
           :confirm-password="setPasswordConfirm"
         />

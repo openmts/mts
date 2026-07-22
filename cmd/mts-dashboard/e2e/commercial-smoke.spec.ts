@@ -1573,6 +1573,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('users-create-open').click()
   await expect(page.getByTestId('users-create-password-toggle')).toBeVisible()
   await page.getByTestId('users-create-name').fill('draft-user-e2e')
+  // P423: 创建用户弱密码前端拦截
+  await page.getByTestId('users-create-password').fill('admin')
+  await page.getByTestId('users-create-submit').click()
+  await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('users-action-result')).toContainText(/默认|admin|至少|password|8/i)
   await expect(page.getByTestId('users-dirty-badge')).toBeVisible()
   await page.getByTestId('users-create-cancel').click()
   // P422: Users 设密弱密码前端拦截
@@ -1586,6 +1591,18 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTestId('users-action-result')).toContainText(/默认|admin|至少|password|8/i)
     await page.getByTestId('users-set-password-cancel').click()
+  // P423: Users 自改密弱密码前端拦截
+  await page.getByTestId('users-change-self-open').click()
+  await expect(page.getByTestId('users-self-old-password')).toBeVisible()
+  await page.getByTestId('users-self-old-password').fill(NEW_PASSWORD)
+  await page.getByTestId('users-self-new-password').fill('admin')
+  await page.getByTestId('users-self-confirm-password').fill('admin')
+  await page.getByTestId('users-change-self-submit').click()
+  await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('users-action-result')).toContainText(/默认|admin|至少|password|8/i)
+  await expect(page).toHaveURL(/\/users/)
+  await page.getByTestId('users-change-self-cancel').click()
+
   }
 
   // P198/P213: Users 创建入口离线禁用（不再打开弹层）
@@ -1892,7 +1909,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('account-session')).toBeVisible()
   await expect(page.getByTestId('account-session-renew-form')).toBeVisible()
   await expect(page.getByTestId('account-session-renew-submit')).toBeDisabled()
-  // P422: 会话续期成功路径
+  // P423: 会话续期错误密码 — 保持账户页与会话
+  await page.getByTestId('account-session-renew-password').fill('definitely-wrong-renew')
+  await expect(page.getByTestId('account-session-renew-submit')).toBeEnabled()
+  await page.getByTestId('account-session-renew-submit').click()
+  await expect(page.getByTestId('account-session-renew-error')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('account-session-renew-error')).toContainText(/密码|incorrect|credentials|会话/i)
+  await expect(page).toHaveURL(/\/account/)
+  await expect(page.getByTestId('account-page')).toBeVisible()
+  // P422/P423: 会话续期成功路径
   await page.getByTestId('account-session-renew-password').fill(NEW_PASSWORD)
   await expect(page.getByTestId('account-session-renew-submit')).toBeEnabled()
   await page.getByTestId('account-session-renew-submit').click()

@@ -228,6 +228,8 @@ async function renewSessionWithPassword() {
       const mapped = mapAccountActionError(err)
       renewError.value = mapped.message
       renewRetryable.value = mapped.retryable
+      // 错误密码时清空输入，避免重复提交；会话仍有效
+      renewPassword.value = ''
       if (mapped.retryable) notifyError(mapped.message)
       else notifyInfo(mapped.message)
       return

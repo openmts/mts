@@ -118,6 +118,14 @@ export function friendlyApiError(
         ? 'Current password is incorrect; session remains valid'
         : '当前密码不正确；会话仍然有效，可重试'
   }
+  // 登录/会话续期密码错误：unauthenticated + invalid credentials（不清理会话）
+  if (code === 'unauthenticated' && /invalid credentials/i.test(raw)) {
+    title = locale === 'en' ? 'Incorrect password' : '密码不正确'
+    hint =
+      locale === 'en'
+        ? 'Username or password is incorrect; if renewing, your current session remains valid'
+        : '用户名或密码不正确；若在续期，当前会话仍然有效'
+  }
   const structuredBusy = Boolean(input?.adminOpBusy || input?.admin_op_busy || (input?.op || '').trim())
   // 管理重操作互斥：resource_exhausted 但语义是 admin busy，文案对齐运维占用
   if (code === 'resource_exhausted' && (structuredBusy || isAdminHeavyBusyMessage(raw))) {

@@ -146,3 +146,17 @@ test('friendlyApiError change password invalid credentials', () => {
   assert.match(en.display, /incorrect|session remains/i)
 })
 
+test('friendlyApiError login/renew invalid credentials', () => {
+  const e = friendlyApiError(
+    { code: 'unauthenticated', status: 401, message: 'invalid credentials' },
+    'zh',
+  )
+  assert.match(e.title, /密码不正确/)
+  assert.match(e.display, /会话仍然有效|用户名或密码/)
+  const en = friendlyApiError(
+    { code: 'unauthenticated', status: 401, message: 'invalid credentials' },
+    'en',
+  )
+  assert.match(en.display, /incorrect|session remains/i)
+})
+
