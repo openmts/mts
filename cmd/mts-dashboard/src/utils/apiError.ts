@@ -9,10 +9,11 @@ export interface FriendlyApiError {
   status?: number
   title: string
   message: string
-  /** 适合 toast / banner 的用户主文案（不含裸 code 前缀） */
   display: string
-  /** 诊断用 code，可放在 title/aria 次要位置 */
   technicalCode: string
+  remediation?: string
+  category?: string
+  retryable?: boolean
 }
 
 const TITLES: Record<string, { zh: string; en: string }> = {
@@ -100,6 +101,9 @@ export function friendlyApiError(
     adminOpBusy?: boolean
     admin_op_busy?: boolean
     op?: string
+    remediation?: string
+    category?: string
+    retryable?: boolean
   } | null | undefined,
   locale: ApiErrorLocale = 'zh',
 ): FriendlyApiError {
@@ -198,7 +202,12 @@ export function friendlyApiError(
     message = hint
   }
   // 主文案不以 [code] 开头；诊断 code 放 technicalCode
-  const display = `${title}：${message}`
+  const remediation = String(input?.remediation || '').trim()
+  let display = `${title}：${message}`
+  if (remediation && !display.includes(remediation)) {
+    const remLine = locale === 'en' ? remediation : `建议：${remediation}`
+    display = `${display}\n${remLine}`
+  }
   return {
     code,
     status: input?.status,
@@ -206,6 +215,9 @@ export function friendlyApiError(
     message,
     display,
     technicalCode: technicalCode === 'internal' && code !== 'internal' ? code : technicalCode,
+    remediation: remediation || undefined,
+    category: String(input?.category || '').trim() || undefined,
+    retryable: typeof input?.retryable === 'boolean' ? input.retryable : undefined,
   }
 }
 
@@ -261,6 +273,9 @@ export function formatCaughtError(err: unknown, locale?: ApiErrorLocale | null):
       adminOpBusy?: boolean
       admin_op_busy?: boolean
       op?: string
+      remediation?: string
+      category?: string
+      retryable?: boolean
     }
     if (e.name === 'APIClientError' || e.code || e.status) {
       return friendlyApiError(
@@ -271,6 +286,9 @@ export function formatCaughtError(err: unknown, locale?: ApiErrorLocale | null):
           adminOpBusy: e.adminOpBusy,
           admin_op_busy: e.admin_op_busy,
           op: e.op,
+          remediation: e.remediation,
+          category: e.category,
+          retryable: e.retryable,
         },
         loc,
       ).display

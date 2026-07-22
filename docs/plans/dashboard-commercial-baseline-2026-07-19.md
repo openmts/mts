@@ -2391,3 +2391,21 @@
 | 样本来源 UI | login seed / session | Account 可见 | e2e 断言 |
 | 就绪交接 | — | handoff 深链 | 不计分 |
 
+
+## P463（2026-07-23）
+- Server：`errorCodeSpec` / `errorResponse` 增补 `retryable`、`category`、`remediation`、`dashboard_path`
+- Server：`apiErrorResponse` 按契约回填可操作元数据；admin heavy busy 强制 retryable
+- Dashboard：Config 错误码表展示可重试/处置建议；筛选覆盖 category/remediation
+- Dashboard：API client 透传 remediation；`formatCaughtError` 展示处置建议
+- Query/Write：错误横幅在无 admin-busy 动作时深链错误码处置入口
+- 命令面板：`config-error-codes-remediation`；就绪清单 `error-codes-remediation`（required）
+- 纯函数：`errorCodeContract`（深链/回落路径/索引）
+
+### 前后端对齐（P463）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| error-codes 契约 | retryable/category/remediation/dashboard_path | Config 表 + 导出 | 运维可读 |
+| 错误响应 | errorResponse 附带 meta | APIClientError + friendly 文案 | 查询/写入可操作 |
+| 深链处置 | dashboard_path | Query/Write action / 命令面板 | 只读跳转 |
+| 就绪门禁 | — | error-codes-remediation | required |
+

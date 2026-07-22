@@ -10,6 +10,10 @@ export interface ConfigErrorCode {
   http_status: number
   grpc_code: string
   description: string
+  retryable?: boolean
+  category?: string
+  remediation?: string
+  dashboard_path?: string
 }
 
 export function buildEffectiveConfigExport(

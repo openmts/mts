@@ -32,6 +32,7 @@ test('production checklist has required commercial gates', () => {
     'clock-skew-banner',
     'api-spec-password-policy',
     'api-spec-auth-session-seed',
+    'error-codes-remediation',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -181,4 +182,14 @@ test('api-spec-auth-session-seed is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('remaining_seconds'))
+})
+
+
+test('error-codes-remediation is automated required gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'error-codes-remediation')
+  assert.ok(item)
+  assert.equal(item!.severity, 'required')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('error-codes'))
+  assert.ok(requiredChecklist().some((x) => x.id === 'error-codes-remediation'))
 })

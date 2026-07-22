@@ -364,6 +364,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
     jump: '/api-spec?ns=auth&q=remaining_seconds#api-spec-filters',
   },
+  {
+    id: 'error-codes-remediation',
+    severity: 'required',
+    title: { zh: '错误码契约含可操作处置', en: 'Error-code contract is actionable' },
+    detail: {
+      zh: 'GET /admin/error-codes 返回 retryable/category/remediation/dashboard_path；错误响应附带 remediation；Config 表与 Query/Write 错误横幅可深链对照。',
+      en: 'GET /admin/error-codes returns retryable/category/remediation/dashboard_path; error responses include remediation; Config table and Query/Write banners deep-link to the contract.',
+    },
+    automated: true,
+    jump: '/config?error_q=resource_exhausted#config-error-codes',
+  },
 ]
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {

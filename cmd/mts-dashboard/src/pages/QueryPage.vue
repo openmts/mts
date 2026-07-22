@@ -13,7 +13,8 @@ import { filterQueryHistory } from '@/utils/queryHistory'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
-import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError, resolveCaughtErrorCode } from '@/utils/apiError'
+import { configErrorCodeDeepLink, remediationPathForCode } from '@/utils/errorCodeContract'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
 import { useI18n } from '@/composables/useI18n'
@@ -106,6 +107,14 @@ const queryAdminBusyAction = computed(() =>
     openLabel: t.value('adminOpBusyOpenOps'),
   }),
 )
+
+const queryErrorContractAction = computed(() => {
+  if (queryAdminBusyAction.value?.path) return queryAdminBusyAction.value
+  const code = (lastQueryErrorCode.value || resolveCaughtErrorCode(actionErrorCause.value) || '').trim()
+  if (!code || code === 'canceled') return null
+  const path = remediationPathForCode(code) || configErrorCodeDeepLink(code)
+  return { label: t.value('queryErrorOpenContract'), path }
+})
 const authzHint = ref('')
 const authzChecking = ref(false)
 
@@ -1084,8 +1093,8 @@ const columnRows = computed(() => {
       :message="hasQuerySnapshot() && lastQueryErrorCode !== 'canceled'
         ? `${t('queryFailedKeepSnapshot')}：${actionError}`
         : actionError"
-      :action-label="queryAdminBusyAction?.label || ''"
-      :action-path="queryAdminBusyAction?.path || ''"
+      :action-label="queryErrorContractAction?.label || ''"
+      :action-path="queryErrorContractAction?.path || ''"
       retryable
       data-testid="query-action-error"
       @retry="runQuery"

@@ -476,6 +476,13 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['error codes', '错误码', 'error code'],
     adminOnly: true,
   },
+  {
+    id: 'config-error-codes-remediation',
+    path: '/config?error_q=resource_exhausted#config-error-codes',
+    labelKey: 'cmdConfigErrorCodesRemediation',
+    keywords: ['error codes', 'remediation', 'retryable', '错误码', '处置', '可重试', 'resource_exhausted'],
+    adminOnly: true,
+  },
   { id: 'operations', path: '/operations', labelKey: 'operations', keywords: ['flush', 'compact', '运维'], adminOnly: true },
   {
     id: 'operations-status',

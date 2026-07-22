@@ -22,6 +22,9 @@ interface APIError {
   code: string
   message: string
   error?: string
+  retryable?: boolean
+  category?: string
+  remediation?: string
   admin_op_busy?: boolean
   op?: string
 }
@@ -31,12 +34,21 @@ export class APIClientError extends Error {
   status: number
   adminOpBusy?: boolean
   op?: string
+  retryable?: boolean
+  category?: string
+  remediation?: string
 
   constructor(
     status: number,
     code: string,
     message: string,
-    extras?: { adminOpBusy?: boolean; op?: string },
+    extras?: {
+      adminOpBusy?: boolean
+      op?: string
+      retryable?: boolean
+      category?: string
+      remediation?: string
+    },
   ) {
     super(message)
     this.name = 'APIClientError'
@@ -44,6 +56,9 @@ export class APIClientError extends Error {
     this.status = status
     if (extras?.adminOpBusy) this.adminOpBusy = true
     if (extras?.op) this.op = extras.op
+    if (typeof extras?.retryable === 'boolean') this.retryable = extras.retryable
+    if (extras?.category) this.category = extras.category
+    if (extras?.remediation) this.remediation = extras.remediation
   }
 }
 
@@ -247,6 +262,13 @@ async function readAPIError(response: Response, fallbackText = ''): Promise<APIE
       code: parsed.code || err.code,
       message: parsed.message || parsed.error || err.message,
       error: parsed.error,
+      retryable: typeof parsed.retryable === 'boolean' ? parsed.retryable : err.retryable,
+      category: typeof parsed.category === 'string' && parsed.category.trim()
+        ? parsed.category.trim()
+        : err.category,
+      remediation: typeof parsed.remediation === 'string' && parsed.remediation.trim()
+        ? parsed.remediation.trim()
+        : err.remediation,
       admin_op_busy: Boolean(parsed.admin_op_busy) || hdr.busy || Boolean(err.admin_op_busy),
       op: (typeof parsed.op === 'string' && parsed.op.trim()) ? parsed.op.trim() : (hdr.op || err.op),
     }
@@ -297,6 +319,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       throw new APIClientError(response.status, err.code, err.message, {
         adminOpBusy: Boolean(err.admin_op_busy),
         op: err.op,
+        retryable: err.retryable,
+        category: err.category,
+        remediation: err.remediation,
       })
     }
     if (response.status === 204) {
@@ -354,6 +379,9 @@ export async function apiGetSilent<T>(path: string, init: RequestInit = {}): Pro
       throw new APIClientError(response.status, err.code, err.message, {
         adminOpBusy: Boolean(err.admin_op_busy),
         op: err.op,
+        retryable: err.retryable,
+        category: err.category,
+        remediation: err.remediation,
       })
     }
     if (response.status === 204) return undefined as T
@@ -426,6 +454,9 @@ export async function apiGetText(path: string, init: RequestInit = {}): Promise<
       throw new APIClientError(response.status, err.code, err.message, {
         adminOpBusy: Boolean(err.admin_op_busy),
         op: err.op,
+        retryable: err.retryable,
+        category: err.category,
+        remediation: err.remediation,
       })
     }
     return await response.text()
@@ -491,6 +522,9 @@ export async function apiPostNDJSONStream(
       throw new APIClientError(response.status, err.code, err.message, {
         adminOpBusy: Boolean(err.admin_op_busy),
         op: err.op,
+        retryable: err.retryable,
+        category: err.category,
+        remediation: err.remediation,
       })
     }
     if (!response.body) {

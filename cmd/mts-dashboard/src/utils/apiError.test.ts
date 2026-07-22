@@ -197,3 +197,28 @@ test('friendlyApiError user not found', () => {
   assert.match(en.display, /User not found|does not exist/i)
 })
 
+
+
+test('friendlyApiError appends remediation from server', () => {
+  const e = friendlyApiError(
+    { code: 'permission_denied', message: 'no grant', remediation: 'open access matrix', category: 'authz', retryable: false },
+    'zh',
+  )
+  assert.match(e.display, /权限不足/)
+  assert.match(e.display, /建议：open access matrix/)
+  assert.equal(e.remediation, 'open access matrix')
+  assert.equal(e.category, 'authz')
+  assert.equal(e.retryable, false)
+})
+
+test('formatCaughtError surfaces APIClientError remediation', () => {
+  const api = {
+    name: 'APIClientError',
+    code: 'resource_exhausted',
+    message: 'limit',
+    status: 429,
+    remediation: 'narrow the query',
+    retryable: true,
+  }
+  assert.match(formatCaughtError(api, 'en'), /narrow the query/)
+})

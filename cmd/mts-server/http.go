@@ -99,11 +99,21 @@ func apiErrorResponse(err error) (int, errorResponse) {
 		Message: classified.Message,
 		Error:   classified.Message,
 	}
+	if meta, ok := errorCodeMetaByCode(classified.Code); ok {
+		resp.Retryable = meta.Retryable
+		resp.Category = meta.Category
+		resp.Remediation = meta.Remediation
+	}
 	var apiErr apiError
 	if errors.As(err, &apiErr) {
 		if apiErr.AdminOpBusy || apiErr.Op != "" {
 			resp.AdminOpBusy = true
 			resp.Op = apiErr.Op
+			// Admin heavy busy is always safe to retry after the op finishes.
+			resp.Retryable = true
+			if resp.Remediation == "" {
+				resp.Remediation = "Wait for the admin heavy operation to finish, then retry"
+			}
 		}
 	}
 	return httpStatusForErrorCode(classified.Code), resp

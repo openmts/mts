@@ -60,7 +60,16 @@ interface ReloadResponse {
   started_at_unix?: number
   last?: unknown
 }
-interface ErrorCodeSpec { code: string; http_status: number; grpc_code: string; description: string }
+interface ErrorCodeSpec {
+  code: string
+  http_status: number
+  grpc_code: string
+  description: string
+  retryable?: boolean
+  category?: string
+  remediation?: string
+  dashboard_path?: string
+}
 interface ErrorCodesResponse {
   codes: ErrorCodeSpec[]
   admin_op_busy?: boolean
@@ -68,6 +77,32 @@ interface ErrorCodesResponse {
   started_at_unix?: number
   last?: unknown
 }
+
+function normalizeErrorCodeSpec(raw: Partial<ErrorCodeSpec> | null | undefined): ErrorCodeSpec | null {
+  const code = String(raw?.code || '').trim()
+  if (!code) return null
+  return {
+    code,
+    http_status: Number(raw?.http_status) || 0,
+    grpc_code: String(raw?.grpc_code || ''),
+    description: String(raw?.description || ''),
+    retryable: Boolean(raw?.retryable),
+    category: String(raw?.category || '') || undefined,
+    remediation: String(raw?.remediation || '') || undefined,
+    dashboard_path: String(raw?.dashboard_path || '') || undefined,
+  }
+}
+
+function normalizeErrorCodeList(list: unknown): ErrorCodeSpec[] {
+  if (!Array.isArray(list)) return []
+  const out: ErrorCodeSpec[] = []
+  for (const item of list) {
+    const n = normalizeErrorCodeSpec(item as Partial<ErrorCodeSpec>)
+    if (n) out.push(n)
+  }
+  return out
+}
+
 interface SchemaField { name: string; description: string }
 interface SchemaResponse {
   fields: SchemaField[]
@@ -207,7 +242,10 @@ const filteredErrorCodes = computed(() => {
     ec.code.toLowerCase().includes(q)
     || String(ec.http_status).includes(q)
     || (ec.grpc_code || '').toLowerCase().includes(q)
-    || (ec.description || '').toLowerCase().includes(q),
+    || (ec.description || '').toLowerCase().includes(q)
+    || (ec.category || '').toLowerCase().includes(q)
+    || (ec.remediation || '').toLowerCase().includes(q)
+    || (ec.retryable ? 'retryable' : 'non-retryable').includes(q),
   )
 })
 
@@ -240,7 +278,7 @@ async function reloadErrorCodes() {
   try {
     const data = await apiGet<ErrorCodesResponse>('/api/v1/admin/error-codes')
     applyAdminOpStatus(parseAdminOpStatusPayload(data))
-    errorCodes.value = data.codes ?? []
+    errorCodes.value = normalizeErrorCodeList(data.codes)
     errorCodesError.value = ''
   } catch (e) {
     const msg = formatCaughtError(e)
@@ -265,7 +303,7 @@ async function loadConfig() {
   config.value = results[0].value.config
   if (results[1].status === 'fulfilled') {
     applyAdminOpStatus(parseAdminOpStatusPayload(results[1].value))
-    errorCodes.value = results[1].value.codes ?? []
+    errorCodes.value = normalizeErrorCodeList(results[1].value.codes)
     errorCodesError.value = ''
   } else {
     // 保留上次 error-codes，分项提示
@@ -722,13 +760,15 @@ onBeforeUnmount(() => {
       </div>
       <div class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800 scroll-mt-20" id="config-error-codes" data-testid="config-error-codes-table">
         <div
-          class="grid grid-cols-[minmax(8rem,0.9fr)_minmax(7rem,0.7fr)_minmax(7rem,0.7fr)_minmax(12rem,1.4fr)] border-b border-slate-200 text-left dark:border-slate-700"
+          class="grid grid-cols-[minmax(7rem,0.8fr)_minmax(5.5rem,0.55fr)_minmax(5.5rem,0.55fr)_minmax(4.5rem,0.45fr)_minmax(10rem,1fr)_minmax(11rem,1.2fr)] border-b border-slate-200 text-left dark:border-slate-700"
           data-testid="config-error-codes-header"
         >
           <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColCode') }}</div>
           <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColHTTP') }}</div>
           <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColGRPC') }}</div>
+          <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColRetryable') }}</div>
           <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColDescription') }}</div>
+          <div class="px-2 py-2 text-xs font-medium mts-muted">{{ t('configColRemediation') }}</div>
         </div>
         <EmptyState
           v-if="!filteredErrorCodes.length"
@@ -752,15 +792,22 @@ onBeforeUnmount(() => {
         >
           <template #default="{ item: ec }">
             <div
-              class="grid h-full grid-cols-[minmax(8rem,0.9fr)_minmax(7rem,0.7fr)_minmax(7rem,0.7fr)_minmax(12rem,1.4fr)] items-center border-b border-slate-100 dark:border-slate-800"
+              class="grid h-full grid-cols-[minmax(7rem,0.8fr)_minmax(5.5rem,0.55fr)_minmax(5.5rem,0.55fr)_minmax(4.5rem,0.45fr)_minmax(10rem,1fr)_minmax(11rem,1.2fr)] items-center border-b border-slate-100 dark:border-slate-800"
               :data-testid="`config-error-code-row-${ec.code}`"
             >
-              <div class="truncate px-2 font-mono text-xs" :title="ec.code">{{ ec.code }}</div>
+              <div class="truncate px-2 font-mono text-xs" :title="ec.code">
+                {{ ec.code }}
+                <span v-if="ec.category" class="ml-1 rounded bg-slate-100 px-1 text-[10px] mts-muted dark:bg-slate-800" :data-testid="`config-error-code-cat-${ec.code}`">{{ ec.category }}</span>
+              </div>
               <div class="px-2">
                 <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">{{ ec.http_status }} {{ statusLabel(ec.http_status) }}</span>
               </div>
               <div class="truncate px-2 font-mono text-xs" :title="ec.grpc_code">{{ ec.grpc_code }}</div>
+              <div class="px-2 text-xs" :data-testid="`config-error-code-retry-${ec.code}`">
+                <span :class="ec.retryable ? 'text-emerald-700 dark:text-emerald-300' : 'mts-muted'">{{ ec.retryable ? t('yes') : t('no') }}</span>
+              </div>
               <div class="truncate px-2 text-xs mts-muted" :title="ec.description">{{ ec.description }}</div>
+              <div class="truncate px-2 text-xs mts-muted" :title="ec.remediation || ''" :data-testid="`config-error-code-remediation-${ec.code}`">{{ ec.remediation || '—' }}</div>
             </div>
           </template>
         </VirtualTable>

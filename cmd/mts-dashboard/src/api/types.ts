@@ -274,9 +274,21 @@ export interface AdminAPISpecResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/admin/error-codes（含 busy/last + 可操作元数据） */
+export interface AdminErrorCodeSpec {
+  code: string
+  http_status: number
+  grpc_code: string
+  description: string
+  retryable?: boolean
+  category?: string
+  remediation?: string
+  dashboard_path?: string
+}
+
 /** GET /api/v1/admin/error-codes（含 busy/last） */
 export interface AdminErrorCodesResponse {
-  codes?: unknown[]
+  codes?: AdminErrorCodeSpec[]
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number

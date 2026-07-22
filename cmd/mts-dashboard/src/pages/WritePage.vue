@@ -24,7 +24,8 @@ import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
-import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { formatCaughtError, isCanceledError, isTimeoutError, resolveCaughtErrorCode } from '@/utils/apiError'
+import { configErrorCodeDeepLink, remediationPathForCode } from '@/utils/errorCodeContract'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
@@ -171,6 +172,14 @@ const writeAdminBusyAction = computed(() =>
     openLabel: t.value('adminOpBusyOpenOps'),
   }),
 )
+const writeErrorContractAction = computed(() => {
+  if (writeAdminBusyAction.value?.path) return writeAdminBusyAction.value
+  if (writeWasCanceled.value) return null
+  const code = resolveCaughtErrorCode(actionErrorCause.value)
+  if (!code || code === 'canceled') return null
+  const path = remediationPathForCode(code) || configErrorCodeDeepLink(code)
+  return { label: t.value('writeErrorOpenContract'), path }
+})
 const authzHint = ref('')
 
 // TypedBatch builder（多 tag 列 + 多 field 列）
@@ -1002,8 +1011,8 @@ async function exportWriteDraft() {
       :message="result?.ok && !writeWasCanceled
         ? `${t('writeFailedKeepLastSuccess')}：${actionError}`
         : actionError"
-      :action-label="writeAdminBusyAction?.label || ''"
-      :action-path="writeAdminBusyAction?.path || ''"
+      :action-label="writeErrorContractAction?.label || ''"
+      :action-path="writeErrorContractAction?.path || ''"
       retryable
       data-testid="write-action-error"
       @retry="submit"

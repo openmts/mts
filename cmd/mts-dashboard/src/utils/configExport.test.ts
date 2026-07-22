@@ -20,10 +20,21 @@ test('buildConfigSchemaExport and error codes', () => {
   const schema = buildConfigSchemaExport([{ name: 'x', description: 'd' }], at)
   assert.equal(schema.count, 1)
   const codes = buildErrorCodesExport(
-    [{ code: 'bad_request', http_status: 400, grpc_code: 'InvalidArgument', description: 'x' }],
+    [{
+      code: 'bad_request',
+      http_status: 400,
+      grpc_code: 'InvalidArgument',
+      description: 'x',
+      retryable: false,
+      category: 'client',
+      remediation: 'check params',
+      dashboard_path: '/config?error_q=bad_request#config-error-codes',
+    }],
     at,
   )
   assert.equal(codes.count, 1)
+  assert.equal(codes.codes[0].category, 'client')
+  assert.equal(codes.codes[0].retryable, false)
 })
 
 test('formatConfigPretty', () => {

@@ -31,6 +31,9 @@ type errorResponse struct {
 	Code        errorCode `json:"code"`
 	Message     string    `json:"message"`
 	Error       string    `json:"error,omitempty"`
+	Retryable   bool      `json:"retryable,omitempty"`
+	Category    string    `json:"category,omitempty"`
+	Remediation string    `json:"remediation,omitempty"`
 	AdminOpBusy bool      `json:"admin_op_busy,omitempty"`
 	Op          string    `json:"op,omitempty"`
 }
@@ -454,10 +457,14 @@ type errorCodesResponse struct {
 }
 
 type errorCodeSpec struct {
-	Code        errorCode `json:"code"`
-	HTTPStatus  int       `json:"http_status"`
-	GRPCCode    string    `json:"grpc_code"`
-	Description string    `json:"description"`
+	Code          errorCode `json:"code"`
+	HTTPStatus    int       `json:"http_status"`
+	GRPCCode      string    `json:"grpc_code"`
+	Description   string    `json:"description"`
+	Retryable     bool      `json:"retryable"`
+	Category      string    `json:"category"`
+	Remediation   string    `json:"remediation"`
+	DashboardPath string    `json:"dashboard_path,omitempty"`
 }
 
 type storageValidateResponse struct {

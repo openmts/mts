@@ -1175,6 +1175,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByRole('main').getByRole('heading', { level: 1, name: /^(配置|Config)$/ })).toBeVisible()
   await expect(page.getByTestId('config-schema-table').getByText(/^(名称|Name)$/)).toBeVisible()
   await expect(page.getByTestId('config-error-codes-table').getByText(/^(错误码|Code)$/)).toBeVisible()
+  await expect(page.getByTestId('config-error-codes-table').getByText(/^(可重试|Retryable)$/)).toBeVisible()
+  await expect(page.getByTestId('config-error-codes-table').getByText(/^(处置建议|Remediation)$/)).toBeVisible()
+  await page.getByTestId('config-error-codes-filter').fill('resource_exhausted')
+  await expect(page.getByTestId('config-error-code-row-resource_exhausted')).toBeVisible()
+  await expect(page.getByTestId('config-error-code-retry-resource_exhausted')).toContainText(/^(是|Yes)$/)
+  await expect(page.getByTestId('config-error-code-remediation-resource_exhausted')).not.toHaveText('—')
 
   // 8) 就绪中心：勾选持久化 + 导出/归档入口
   await page.goto('/ops/readiness')
