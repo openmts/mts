@@ -541,7 +541,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "flush",
 			Namespace:   "admin",
-			Description: "flush memtables",
+			Description: "flush memtables (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAdminFlush},
@@ -552,7 +552,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "compact",
 			Namespace:   "admin",
-			Description: "run compaction",
+			Description: "run compaction (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAdminCompact},
@@ -677,7 +677,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "storage_data_snapshot",
 			Namespace:   "admin",
-			Description: "snapshot live data_dir into backup root",
+			Description: "snapshot live data_dir into backup root (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAdminStorageDataSnapshot},
@@ -686,7 +686,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "storage_restore_drill",
 			Namespace:   "admin",
-			Description: "restore data-snapshot to side-path under backup root",
+			Description: "restore data-snapshot to side-path under backup root (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAdminStorageRestoreDrill},
@@ -704,7 +704,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "storage_snapshot",
 			Namespace:   "admin",
-			Description: "write local manifest snapshot",
+			Description: "write local manifest snapshot (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAdminStorageSnapshot},

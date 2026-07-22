@@ -711,6 +711,42 @@ func (r *serverRuntime) storageValidatePayload() storageValidateResponse {
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToMaintenance(resp maintenanceResponse) maintenanceResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToStorageSnapshot(resp storageSnapshotResponse) storageSnapshotResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToDataSnapshot(resp storageDataSnapshotResponse) storageDataSnapshotResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToRestoreDrill(resp storageRestoreDrillResponse) storageRestoreDrillResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {

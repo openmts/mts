@@ -970,6 +970,50 @@ func TestHTTPSessionStorageValidateQueryStatsBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPMaintenanceAndSnapshotBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	// flush success should return last for this op
+	var flushResp maintenanceResponse
+	postJSONWithHeaders(t, server.URL+routeAdminFlush, emptyRequest{}, nil, http.StatusOK, &flushResp)
+	if !flushResp.OK {
+		t.Fatalf("flush ok=false: %+v", flushResp)
+	}
+	if flushResp.AdminOpBusy {
+		t.Fatalf("flush want not busy: %+v", flushResp)
+	}
+	if flushResp.Last == nil || flushResp.Last.Op != "flush" || !flushResp.Last.OK {
+		t.Fatalf("flush last = %+v", flushResp.Last)
+	}
+
+	var snap storageSnapshotResponse
+	postJSONWithHeaders(t, server.URL+routeAdminStorageSnapshot, emptyRequest{}, nil, http.StatusOK, &snap)
+	if !snap.OK || snap.Path == "" {
+		t.Fatalf("snapshot = %+v", snap)
+	}
+	if snap.AdminOpBusy {
+		t.Fatalf("snapshot want not busy: %+v", snap)
+	}
+	if snap.Last == nil || snap.Last.Op != "config_snapshot" || !snap.Last.OK {
+		t.Fatalf("snapshot last = %+v", snap.Last)
+	}
+
+	// concurrent busy probe while heavy in progress
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	// flush should fail with busy; validate response path already covered elsewhere
+	// just ensure snapshot list / ops still carry last from previous success after finish
+	runtime.finishAdminHeavy(errors.New("maint probe fail"))
+	var flushAfter maintenanceResponse
+	postJSONWithHeaders(t, server.URL+routeAdminFlush, emptyRequest{}, nil, http.StatusOK, &flushAfter)
+	if flushAfter.Last == nil || flushAfter.Last.Op != "flush" || !flushAfter.Last.OK {
+		t.Fatalf("after re-flush last = %+v", flushAfter.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

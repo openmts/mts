@@ -1693,3 +1693,18 @@
 | 写路径/重操作启动本身 | 互斥错误体 | 互斥错误体 | 是 | busy 即时 chip |
 | SQL/expr 树等 | — | — | — | 非目标 |
 
+## P409（2026-07-22）
+- Server：flush/compact、storage snapshot / data-snapshot / restore-drill 成功响应附带 `admin_op_busy/op/started_at_unix/last`（HTTP；snapshot gRPC 对齐）
+- Dashboard：Operations 执行 flush/compact 后即时 `applyAdminOpStatus`；Storage 执行 snapshot/data-snapshot/restore-drill 后即时 apply
+- types/registry 描述对齐；HTTP 单测；覆盖矩阵更新
+
+### busy/last 覆盖矩阵（P409 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| flush / compact | 是 | 是 | 是 | 成功响应 last=本次结果 |
+| storage snapshot | 是 | 是 | 是 | config_snapshot |
+| storage data-snapshot | 是 | HTTP 主路径 | 是 | data_snapshot |
+| storage restore-drill | 是 | HTTP 主路径 | 是 | restore_drill |
+| retention/apply | ok 体（无 last） | 有 | loadStats 回读 | 仍走 finally 刷新 |
+
+

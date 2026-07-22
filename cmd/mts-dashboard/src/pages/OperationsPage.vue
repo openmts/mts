@@ -423,10 +423,12 @@ async function runConfirmed() {
   try {
     let msg = ''
     if (kind === 'flush') {
-      await apiPost('/api/v1/admin/flush', {}, { signal })
+      const resp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/flush', {}, { signal })
+      applyAdminOpStatus(parseAdminOpStatusPayload(resp))
       msg = t.value('opsFlushDone')
     } else if (kind === 'compact') {
-      await apiPost('/api/v1/admin/compact', {}, { signal })
+      const resp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/compact', {}, { signal })
+      applyAdminOpStatus(parseAdminOpStatusPayload(resp))
       msg = t.value('opsCompactDone')
     } else {
       await apiPost('/api/v1/admin/retention/apply', {}, { signal })

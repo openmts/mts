@@ -91,7 +91,7 @@ func (r *serverRuntime) handleStorageDataSnapshot(writer http.ResponseWriter, re
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "storage_data_snapshot", Detail: resp.Path})
-	writeHTTPJSON(writer, http.StatusOK, resp)
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDataSnapshot(resp))
 }
 
 func (r *serverRuntime) handleStorageRestoreDrill(writer http.ResponseWriter, request *http.Request) {
@@ -114,7 +114,7 @@ func (r *serverRuntime) handleStorageRestoreDrill(writer http.ResponseWriter, re
 		Action:   "storage_restore_drill",
 		Detail:   resp.Source + " -> " + resp.Target,
 	})
-	writeHTTPJSON(writer, http.StatusOK, resp)
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToRestoreDrill(resp))
 }
 
 func (r *serverRuntime) handleListStorageDataSnapshots(writer http.ResponseWriter, request *http.Request) {
@@ -139,7 +139,7 @@ func (r *serverRuntime) handleStorageSnapshot(writer http.ResponseWriter, reques
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "storage_snapshot"})
-	writeHTTPJSON(writer, http.StatusOK, resp)
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToStorageSnapshot(resp))
 }
 
 func (r *serverRuntime) handleStorageExport(writer http.ResponseWriter, request *http.Request) {
@@ -197,7 +197,7 @@ func (r *serverRuntime) handleFlush(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "flush"})
-	writeHTTPJSON(writer, http.StatusOK, maintenanceResponse{OK: true})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMaintenance(maintenanceResponse{OK: true}))
 }
 
 func (r *serverRuntime) handleCompact(writer http.ResponseWriter, request *http.Request) {
@@ -210,7 +210,7 @@ func (r *serverRuntime) handleCompact(writer http.ResponseWriter, request *http.
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "compact"})
-	writeHTTPJSON(writer, http.StatusOK, maintenanceResponse{OK: true, Result: result})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMaintenance(maintenanceResponse{OK: true, Result: result}))
 }
 
 func (r *serverRuntime) handleApplyRetention(writer http.ResponseWriter, request *http.Request) {

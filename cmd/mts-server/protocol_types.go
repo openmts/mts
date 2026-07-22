@@ -337,8 +337,12 @@ type configFieldSchema struct {
 }
 
 type maintenanceResponse struct {
-	OK     bool                 `json:"ok"`
-	Result mts.CompactionResult `json:"result,omitempty"`
+	OK            bool                  `json:"ok"`
+	Result        mts.CompactionResult  `json:"result,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type retentionApplyRequest struct {
@@ -419,8 +423,12 @@ type adminHealthResponse struct {
 }
 
 type storageSnapshotResponse struct {
-	OK   bool   `json:"ok"`
-	Path string `json:"path"`
+	OK            bool                  `json:"ok"`
+	Path          string                `json:"path"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type storageDataSnapshotRequest struct {
@@ -428,11 +436,15 @@ type storageDataSnapshotRequest struct {
 }
 
 type storageDataSnapshotResponse struct {
-	OK     bool   `json:"ok"`
-	Path   string `json:"path"`
-	Source string `json:"source"`
-	Files  int    `json:"files"`
-	Bytes  int64  `json:"bytes"`
+	OK            bool                  `json:"ok"`
+	Path          string                `json:"path"`
+	Source        string                `json:"source"`
+	Files         int                   `json:"files"`
+	Bytes         int64                 `json:"bytes"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type storageRestoreDrillRequest struct {
@@ -440,14 +452,18 @@ type storageRestoreDrillRequest struct {
 }
 
 type storageRestoreDrillResponse struct {
-	OK          bool   `json:"ok"`
-	Source      string `json:"source"`
-	Target      string `json:"target"`
-	Files       int    `json:"files"`
-	Bytes       int64  `json:"bytes"`
-	CheckIssues int    `json:"check_issues"`
-	CheckFatals int    `json:"check_fatals"`
-	CheckRoot   string `json:"check_root"`
+	OK            bool                  `json:"ok"`
+	Source        string                `json:"source"`
+	Target        string                `json:"target"`
+	Files         int                   `json:"files"`
+	Bytes         int64                 `json:"bytes"`
+	CheckIssues   int                   `json:"check_issues"`
+	CheckFatals   int                   `json:"check_fatals"`
+	CheckRoot     string                `json:"check_root"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type storageDataSnapshotInfo struct {

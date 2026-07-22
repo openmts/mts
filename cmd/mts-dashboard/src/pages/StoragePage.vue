@@ -49,8 +49,25 @@ interface ValidateResponse {
   started_at_unix?: number
   last?: unknown
 }
-interface SnapshotResponse { ok: boolean; path: string }
-interface DataSnapshotResponse { ok: boolean; path: string; source?: string; files?: number; bytes?: number }
+interface SnapshotResponse {
+  ok: boolean
+  path: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
+interface DataSnapshotResponse {
+  ok: boolean
+  path: string
+  source?: string
+  files?: number
+  bytes?: number
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface RestoreDrillResponse {
   ok: boolean
   source: string
@@ -60,6 +77,10 @@ interface RestoreDrillResponse {
   check_issues?: number
   check_fatals?: number
   check_root?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
 }
 interface DataSnapshotInfo { name: string; kind: string; path: string; size_bytes: number; mod_time: string }
 interface DataSnapshotsResponse {
@@ -415,6 +436,7 @@ async function doSnapshot() {
   const signal = beginStorageAction('snapshot')
   try {
     snapshotResult.value = await apiPost<SnapshotResponse>('/api/v1/admin/storage/snapshot', undefined, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(snapshotResult.value))
     drillDone.value = { ...drillDone.value, snapshot: true }
     const msg = `${t.value('createSnapshot')}：${snapshotResult.value.path || 'ok'}`
     setActionOk(msg)
@@ -431,6 +453,7 @@ async function doDataSnapshot() {
   const signal = beginStorageAction('data-snapshot')
   try {
     dataSnapshotResult.value = await apiPost<DataSnapshotResponse>('/api/v1/admin/storage/data-snapshot', { flush: true }, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(dataSnapshotResult.value))
     if (dataSnapshotResult.value.path) selectedDataSnapshotPath.value = dataSnapshotResult.value.path
     drillDone.value = { ...drillDone.value, 'data-snapshot': true }
     const msg = formatMessage(t.value('storageDataSnapshotMsg'), { path: dataSnapshotResult.value.path || 'ok', files: dataSnapshotResult.value.files ?? 0 })
@@ -450,6 +473,7 @@ async function doRestoreDrill() {
     const source = selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || ''
     const body = source ? { source_path: source } : {}
     restoreDrillResult.value = await apiPost<RestoreDrillResponse>('/api/v1/admin/storage/restore-drill', body, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(restoreDrillResult.value))
     const ok = !!restoreDrillResult.value.ok && (restoreDrillResult.value.check_fatals ?? 0) === 0
     drillDone.value = { ...drillDone.value, 'restore-side': ok }
     const msg = ok

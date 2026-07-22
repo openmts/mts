@@ -174,7 +174,7 @@ func grpcFlushHandler(service any, ctx context.Context, decode func(any) error, 
 		if err := service.(*grpcService).runtime.flush(ctx); err != nil {
 			return nil, grpcError(ctx, err)
 		}
-		return maintenanceResponse{OK: true}, nil
+		return service.(*grpcService).runtime.attachAdminOpToMaintenance(maintenanceResponse{OK: true}), nil
 	}
 	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, grpcFullMethod(grpcMethodFlush), handler)
 }
@@ -188,7 +188,7 @@ func grpcCompactHandler(service any, ctx context.Context, decode func(any) error
 		if err != nil {
 			return nil, grpcError(ctx, err)
 		}
-		return maintenanceResponse{OK: true, Result: result}, nil
+		return service.(*grpcService).runtime.attachAdminOpToMaintenance(maintenanceResponse{OK: true, Result: result}), nil
 	}
 	return invokeGRPCUnary(ctx, &emptyRequest{}, decode, interceptor, grpcFullMethod(grpcMethodCompact), handler)
 }
@@ -644,7 +644,11 @@ func grpcStorageSnapshot(r *serverRuntime, ctx context.Context, _ any) (any, err
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return r.storageSnapshot(ctx)
+	resp, err := r.storageSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToStorageSnapshot(resp), nil
 }
 
 func grpcStorageExport(r *serverRuntime, ctx context.Context, _ any) (any, error) {
