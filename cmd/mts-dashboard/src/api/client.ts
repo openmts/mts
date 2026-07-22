@@ -21,17 +21,28 @@ interface APIError {
   code: string
   message: string
   error?: string
+  admin_op_busy?: boolean
+  op?: string
 }
 
 export class APIClientError extends Error {
   code: string
   status: number
+  adminOpBusy?: boolean
+  op?: string
 
-  constructor(status: number, code: string, message: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    extras?: { adminOpBusy?: boolean; op?: string },
+  ) {
     super(message)
     this.name = 'APIClientError'
     this.code = code
     this.status = status
+    if (extras?.adminOpBusy) this.adminOpBusy = true
+    if (extras?.op) this.op = extras.op
   }
 }
 
@@ -230,6 +241,8 @@ async function readAPIError(response: Response, fallbackText = ''): Promise<APIE
       code: parsed.code || err.code,
       message: parsed.message || parsed.error || err.message,
       error: parsed.error,
+      admin_op_busy: Boolean(parsed.admin_op_busy),
+      op: typeof parsed.op === 'string' ? parsed.op : undefined,
     }
   } catch (_) {
     err.message = text
@@ -274,7 +287,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (!response.ok) {
       const err = await readAPIError(response)
       handleAuthFailure(path, response.status, err.code)
-      throw new APIClientError(response.status, err.code, err.message)
+      throw new APIClientError(response.status, err.code, err.message, {
+        adminOpBusy: Boolean(err.admin_op_busy),
+        op: err.op,
+      })
     }
     if (response.status === 204) {
       return undefined as T
@@ -328,7 +344,10 @@ export async function apiGetSilent<T>(path: string, init: RequestInit = {}): Pro
     if (!response.ok) {
       const err = await readAPIError(response)
       handleAuthFailure(path, response.status, err.code)
-      throw new APIClientError(response.status, err.code, err.message)
+      throw new APIClientError(response.status, err.code, err.message, {
+        adminOpBusy: Boolean(err.admin_op_busy),
+        op: err.op,
+      })
     }
     if (response.status === 204) return undefined as T
     const body = await response.text()
@@ -397,7 +416,10 @@ export async function apiGetText(path: string, init: RequestInit = {}): Promise<
     if (!response.ok) {
       const err = await readAPIError(response)
       handleAuthFailure(path, response.status, err.code)
-      throw new APIClientError(response.status, err.code, err.message)
+      throw new APIClientError(response.status, err.code, err.message, {
+        adminOpBusy: Boolean(err.admin_op_busy),
+        op: err.op,
+      })
     }
     return await response.text()
   } finally {
@@ -459,7 +481,10 @@ export async function apiPostNDJSONStream(
     if (!response.ok) {
       const err = await readAPIError(response)
       handleAuthFailure(path, response.status, err.code)
-      throw new APIClientError(response.status, err.code, err.message)
+      throw new APIClientError(response.status, err.code, err.message, {
+        adminOpBusy: Boolean(err.admin_op_busy),
+        op: err.op,
+      })
     }
     if (!response.body) {
       const text = await response.text()

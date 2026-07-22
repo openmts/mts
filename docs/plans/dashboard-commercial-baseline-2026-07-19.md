@@ -1413,3 +1413,7 @@
 - adminOpBusy：`ADMIN_OP_BUSY_OPS_PATH` / `adminOpBusyOpenAction`
 - Ops/Storage：本地 busy 门禁与互斥错误 toast 附带「打开运维」跳转 `/operations#ops-status-strip`
 
+## P329（2026-07-22）
+- Server：互斥错误响应结构化 `admin_op_busy` + `op`（`newAdminHeavyBusyError`）
+- Dashboard：`APIClientError` 透传字段；busy 识别/文案优先结构化 op；兼容 message 解析
+

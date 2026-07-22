@@ -323,11 +323,7 @@ func (r *serverRuntime) tryBeginAdminHeavy(op string) error {
 		if v := r.maintenanceOp.Load(); v != nil {
 			cur, _ = v.(string)
 		}
-		msg := "admin heavy operation already in progress"
-		if cur != "" {
-			msg = "admin heavy operation already in progress: " + cur
-		}
-		return newAPIError(errorCodeResourceExhausted, msg, mts.ErrEngineBusy)
+		return newAdminHeavyBusyError(cur)
 	}
 	if op == "" {
 		op = "admin_heavy"

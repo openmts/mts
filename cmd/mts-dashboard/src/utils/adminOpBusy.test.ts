@@ -97,3 +97,26 @@ test('adminOpBusyOpenAction', () => {
   assert.equal(adminOpBusyOpenAction('').path, ADMIN_OP_BUSY_OPS_PATH)
 })
 
+test('structured adminOpBusy flag and op', () => {
+  assert.equal(
+    isAdminHeavyBusyError({
+      code: 'resource_exhausted',
+      status: 429,
+      message: 'anything',
+      adminOpBusy: true,
+      op: 'flush',
+    }),
+    true,
+  )
+  assert.equal(
+    adminHeavyBusyOpFromError({
+      code: 'resource_exhausted',
+      status: 429,
+      adminOpBusy: true,
+      op: 'compact',
+      message: 'admin heavy operation already in progress: flush',
+    }),
+    'compact',
+  )
+})
+

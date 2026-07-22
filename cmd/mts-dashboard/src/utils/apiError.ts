@@ -93,7 +93,14 @@ export function resolveApiErrorLocale(explicit?: ApiErrorLocale | null): ApiErro
 }
 
 export function friendlyApiError(
-  input: { code?: string; message?: string; status?: number } | null | undefined,
+  input: {
+    code?: string
+    message?: string
+    status?: number
+    adminOpBusy?: boolean
+    admin_op_busy?: boolean
+    op?: string
+  } | null | undefined,
   locale: ApiErrorLocale = 'zh',
 ): FriendlyApiError {
   const technicalCode = normalizeErrorCode(input?.code)
@@ -103,10 +110,11 @@ export function friendlyApiError(
   let title = titleMap[locale]
   let hint = hintMap[locale]
   const raw = String(input?.message || '').trim()
+  const structuredBusy = Boolean(input?.adminOpBusy || input?.admin_op_busy || (input?.op || '').trim())
   // 管理重操作互斥：resource_exhausted 但语义是 admin busy，文案对齐运维占用
-  if (code === 'resource_exhausted' && isAdminHeavyBusyMessage(raw)) {
+  if (code === 'resource_exhausted' && (structuredBusy || isAdminHeavyBusyMessage(raw))) {
     title = locale === 'en' ? 'Admin operation busy' : '管理重操作占用中'
-    const busyOp = parseAdminHeavyBusyOp(raw)
+    const busyOp = String(input?.op || '').trim() || parseAdminHeavyBusyOp(raw)
     hint =
       locale === 'en'
         ? busyOp
@@ -132,7 +140,7 @@ export function friendlyApiError(
       message = locale === 'en' ? `${hint} (${raw})` : `${hint}（${raw}）`
     }
   }
-  if (code === 'resource_exhausted' && isAdminHeavyBusyMessage(raw)) {
+  if (code === 'resource_exhausted' && (structuredBusy || isAdminHeavyBusyMessage(raw))) {
     message = hint
   }
   // 主文案不以 [code] 开头；诊断 code 放 technicalCode
@@ -191,10 +199,25 @@ export function isTimeoutError(err: unknown): boolean {
 export function formatCaughtError(err: unknown, locale?: ApiErrorLocale | null): string {
   const loc = resolveApiErrorLocale(locale)
   if (err && typeof err === 'object') {
-    const e = err as { code?: string; message?: string; status?: number; name?: string }
+    const e = err as {
+      code?: string
+      message?: string
+      status?: number
+      name?: string
+      adminOpBusy?: boolean
+      admin_op_busy?: boolean
+      op?: string
+    }
     if (e.name === 'APIClientError' || e.code || e.status) {
       return friendlyApiError(
-        { code: e.code, message: e.message, status: e.status },
+        {
+          code: e.code,
+          message: e.message,
+          status: e.status,
+          adminOpBusy: e.adminOpBusy,
+          admin_op_busy: e.admin_op_busy,
+          op: e.op,
+        },
         loc,
       ).display
     }

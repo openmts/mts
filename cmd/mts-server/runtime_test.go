@@ -313,6 +313,13 @@ func TestRuntimeAdminHeavySharedMutex(t *testing.T) {
 		if !strings.Contains(apiErr.Message, "test") {
 			t.Fatalf("busy message want current op, got %q", apiErr.Message)
 		}
+		if !apiErr.AdminOpBusy || apiErr.Op != "test" {
+			t.Fatalf("structured busy fields = %+v", apiErr)
+		}
+		_, resp := apiErrorResponse(err)
+		if !resp.AdminOpBusy || resp.Op != "test" {
+			t.Fatalf("errorResponse busy fields = %+v", resp)
+		}
 	}
 	// flush also busy
 	if err := runtime.flush(context.Background()); err == nil {

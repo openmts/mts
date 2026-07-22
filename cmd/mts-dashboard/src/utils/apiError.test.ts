@@ -119,3 +119,16 @@ test('friendlyApiError admin heavy resource_exhausted', () => {
   )
   assert.match(en.display, /Admin operation busy/i)
 })
+
+test('friendlyApiError structured adminOpBusy prefers op field', () => {
+  const f = friendlyApiError({
+    code: 'resource_exhausted',
+    status: 429,
+    message: 'admin heavy operation already in progress',
+    adminOpBusy: true,
+    op: 'retention',
+  })
+  assert.match(f.display, /retention/)
+  assert.match(f.title, /管理|Admin/)
+})
+

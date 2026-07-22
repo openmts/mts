@@ -99,9 +99,19 @@ export function isAdminHeavyBusyMessage(message: string | null | undefined): boo
 
 export function isAdminHeavyBusyError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
-  const e = err as { code?: string; message?: string; status?: number; name?: string }
+  const e = err as {
+    code?: string
+    message?: string
+    status?: number
+    name?: string
+    adminOpBusy?: boolean
+    admin_op_busy?: boolean
+    op?: string
+  }
+  if (e.adminOpBusy || e.admin_op_busy) return true
   const code = String(e.code || '').toLowerCase()
   if (code !== 'resource_exhausted' && e.status !== 429) return false
+  if ((e.op || '').trim()) return true
   return isAdminHeavyBusyMessage(e.message)
 }
 
@@ -123,7 +133,9 @@ export function parseAdminHeavyBusyOp(message: string | null | undefined): strin
 
 export function adminHeavyBusyOpFromError(err: unknown): string {
   if (!isAdminHeavyBusyError(err)) return ''
-  const e = err as { message?: string }
+  const e = err as { message?: string; op?: string }
+  const structured = String(e.op || '').trim()
+  if (structured) return structured
   return parseAdminHeavyBusyOp(e.message)
 }
 

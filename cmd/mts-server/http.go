@@ -87,12 +87,20 @@ func writeAPIError(writer http.ResponseWriter, err error) {
 
 func apiErrorResponse(err error) (int, errorResponse) {
 	classified := classifyAPIError(err)
-	return httpStatusForErrorCode(classified.Code), errorResponse{
+	resp := errorResponse{
 		OK:      false,
 		Code:    classified.Code,
 		Message: classified.Message,
 		Error:   classified.Message,
 	}
+	var apiErr apiError
+	if errors.As(err, &apiErr) {
+		if apiErr.AdminOpBusy || apiErr.Op != "" {
+			resp.AdminOpBusy = true
+			resp.Op = apiErr.Op
+		}
+	}
+	return httpStatusForErrorCode(classified.Code), resp
 }
 
 type apiErrorClass struct {
@@ -158,13 +166,29 @@ func httpStatusForErrorCode(code errorCode) int {
 }
 
 type apiError struct {
-	Code    errorCode
-	Message string
-	Cause   error
+	Code        errorCode
+	Message     string
+	Cause       error
+	Op          string
+	AdminOpBusy bool
 }
 
 func newAPIError(code errorCode, message string, cause error) error {
 	return apiError{Code: code, Message: message, Cause: cause}
+}
+
+func newAdminHeavyBusyError(op string) error {
+	msg := "admin heavy operation already in progress"
+	if op != "" {
+		msg = "admin heavy operation already in progress: " + op
+	}
+	return apiError{
+		Code:        errorCodeResourceExhausted,
+		Message:     msg,
+		Cause:       mts.ErrEngineBusy,
+		Op:          op,
+		AdminOpBusy: true,
+	}
 }
 
 func (e apiError) Error() string {

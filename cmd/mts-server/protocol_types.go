@@ -23,10 +23,12 @@ type okResponse struct {
 }
 
 type errorResponse struct {
-	OK      bool      `json:"ok"`
-	Code    errorCode `json:"code"`
-	Message string    `json:"message"`
-	Error   string    `json:"error,omitempty"`
+	OK          bool      `json:"ok"`
+	Code        errorCode `json:"code"`
+	Message     string    `json:"message"`
+	Error       string    `json:"error,omitempty"`
+	AdminOpBusy bool      `json:"admin_op_busy,omitempty"`
+	Op          string    `json:"op,omitempty"`
 }
 
 type writeRequest struct {
