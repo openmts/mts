@@ -15,6 +15,7 @@ import {
   sessionViewFromRemainingMs,
 } from '@/utils/sessionExpiry'
 import { sessionClockTickMs } from '@/utils/sessionClock'
+import { clockSkewView, shouldShowClockSkewBanner } from '@/utils/clockSkew'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -229,15 +230,19 @@ const serverTimeText = computed(() => {
   }
 })
 
+const accountClockSkew = computed(() =>
+  clockSkewView(lastSessionServerTimeUnix.value, lastSessionCheckedAt.value),
+)
 const serverClockSkewText = computed(() => {
-  const serverUnix = lastSessionServerTimeUnix.value
-  const checkedAt = lastSessionCheckedAt.value
-  if (serverUnix == null || checkedAt == null) return t.value('accountSessionServerNone')
-  const skewSec = Math.round(checkedAt / 1000 - serverUnix)
-  if (Math.abs(skewSec) < 2) return t.value('accountSessionSkewOk')
-  const sign = skewSec > 0 ? '+' : ''
-  return `${sign}${skewSec}s`
+  const view = accountClockSkew.value
+  if (!view.hasSample) return t.value('accountSessionServerNone')
+  if (Math.abs(view.skewSeconds ?? 0) < 2) return t.value('accountSessionSkewOk')
+  return view.label
 })
+const showAccountClockSkewAlert = computed(() => shouldShowClockSkewBanner(accountClockSkew.value))
+const accountClockSkewAlertText = computed(() =>
+  formatMessage(t.value('clockSkewBanner'), { skew: accountClockSkew.value.label || '—' }),
+)
 
 
 function cancelAccountAction() {
@@ -841,6 +846,15 @@ async function submit() {
 
     <div id="account-session" class="mts-card scroll-mt-20 p-4" data-testid="account-session">
       <h2 class="mb-3 text-sm font-semibold">{{ t('accountSessionCard') }}</h2>
+      <div
+        v-if="showAccountClockSkewAlert"
+        class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+        role="status"
+        data-testid="account-clock-skew-alert"
+      >
+        <div class="font-medium">{{ t('clockSkewBannerTitle') }}</div>
+        <div class="mt-0.5 opacity-90">{{ accountClockSkewAlertText }}</div>
+      </div>
       <dl class="space-y-2 text-sm">
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('accountSessionExpiresAt') }}</dt>
@@ -868,7 +882,11 @@ async function submit() {
         </div>
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('accountSessionClockSkew') }}</dt>
-          <dd class="font-mono" data-testid="account-session-clock-skew">{{ serverClockSkewText }}</dd>
+          <dd
+            class="font-mono"
+            data-testid="account-session-clock-skew"
+            :class="showAccountClockSkewAlert ? 'text-amber-800 dark:text-amber-200' : ''"
+          >{{ serverClockSkewText }}</dd>
         </div>
         <div class="flex justify-between gap-3">
           <dt class="mts-muted">{{ t('accountSessionCalibratedRemaining') }}</dt>

@@ -115,3 +115,36 @@ test('buildOpsNextSteps prioritizes large clock skew', () => {
   assert.match(steps[0]?.message ?? '', /45s/)
   assert.ok(steps[0]?.target?.includes('account-session'))
 })
+
+test('buildOpsNextSteps does not duplicate clockSkew from preflight', () => {
+  const preflight = buildExportPreflight({
+    locale: 'en',
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    signoffNotes: {
+      edgeHttps: 'a',
+      backupOffsite: 'b',
+      backupAlert: 'c',
+    },
+    deployKitReviewed: true,
+    clockSkewSeconds: 60,
+  })
+  const steps = buildOpsNextSteps({
+    locale: 'en',
+    preflight,
+    signoffNotes: {
+      edgeHttps: 'a',
+      backupOffsite: 'b',
+      backupAlert: 'c',
+    },
+    clockSkewSeconds: 60,
+    limit: 3,
+  })
+  assert.equal(steps.filter((s) => s.id === 'clockSkew').length, 1)
+  assert.equal(steps[0]?.id, 'clockSkew')
+})

@@ -2340,3 +2340,15 @@
 | 偏差异常横幅 | — | clock-skew-banner | 阈值 30s |
 | 运维下一步 | — | opsNextSteps.clockSkew | 优先于签核 |
 
+## P459（2026-07-23）
+- 导出预检：`clockSkew` 项（ok/warn/info）写入 preflight；跳转 `/account#account-session`
+- Overview/Readiness：预检传入 `clockSkewSeconds`；下一步与预检同源去重
+- Account：大偏差告警条 + 偏差行强调色；复用 `clockSkew` 纯函数
+
+### 前后端对齐（P459）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 导出预检偏差 | server_time_unix | preflight.clockSkew | 不阻断导出 |
+| Account 告警 | session 样本 | account-clock-skew-alert | 运维可操作 |
+| 下一步去重 | — | opsNextSteps | 避免双条 |
+

@@ -257,6 +257,10 @@ const overviewPreflight = computed(() => {
     httpTlsEnabled: doctorTLS.value,
     signoffNotes: state.signoffNotes,
     deployKitReviewed: !!state.deployKit?.reviewed,
+    clockSkewSeconds: computeClockSkewSeconds(
+      lastSessionServerTimeUnix.value,
+      lastSessionCheckedAt.value,
+    ),
   })
 })
 

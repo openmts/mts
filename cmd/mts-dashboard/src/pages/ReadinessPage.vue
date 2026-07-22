@@ -330,6 +330,10 @@ const exportPreflight = computed(() => {
     adminOpKindLabel: adminOpKindDisplay.value || '',
     signoffNotes: state.value.signoffNotes,
     deployKitReviewed: !!state.value.deployKit?.reviewed,
+    clockSkewSeconds: computeClockSkewSeconds(
+      lastSessionServerTimeUnix.value,
+      lastSessionCheckedAt.value,
+    ),
   })
 })
 const readinessNextSteps = computed(() =>

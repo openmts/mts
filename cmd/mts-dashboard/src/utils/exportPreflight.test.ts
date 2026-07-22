@@ -142,3 +142,71 @@ test('buildExportPreflight admin op busy info', () => {
   })
   assert.ok(idle.items.some((i) => i.id === 'admin-op-busy' && i.level === 'ok'))
 })
+
+test('buildExportPreflight clock skew warn and ok', () => {
+  const warn = buildExportPreflight({
+    locale: 'zh',
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    signoffNotes: {
+      edgeHttps: 'a',
+      backupOffsite: 'b',
+      backupAlert: 'c',
+    },
+    deployKitReviewed: true,
+    clockSkewSeconds: 45,
+  })
+  const item = warn.items.find((i) => i.id === 'clockSkew')
+  assert.ok(item)
+  assert.equal(item?.level, 'warn')
+  assert.match(item?.message ?? '', /45s/)
+  assert.equal(item?.target, '/account#account-session')
+  assert.ok(warn.warnCount >= 1)
+
+  const ok = buildExportPreflight({
+    locale: 'en',
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    signoffNotes: {
+      edgeHttps: 'a',
+      backupOffsite: 'b',
+      backupAlert: 'c',
+    },
+    deployKitReviewed: true,
+    clockSkewSeconds: 5,
+  })
+  assert.ok(ok.items.some((i) => i.id === 'clockSkew' && i.level === 'ok'))
+
+  const unknown = buildExportPreflight({
+    locale: 'en',
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    signoffNotes: {
+      edgeHttps: 'a',
+      backupOffsite: 'b',
+      backupAlert: 'c',
+    },
+    deployKitReviewed: true,
+    clockSkewSeconds: null,
+  })
+  assert.ok(unknown.items.some((i) => i.id === 'clockSkew' && i.level === 'info'))
+})
+
+test('preflightItemTarget clockSkew', () => {
+  assert.equal(preflightItemTarget('clockSkew')?.target, '/account#account-session')
+})

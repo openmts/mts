@@ -314,8 +314,8 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     severity: 'recommended',
     title: { zh: '大时钟偏差全局提示', en: 'Large clock skew global banner' },
     detail: {
-      zh: '有 server_time_unix 样本且 |skew|>=30s 时 Layout 展示偏差异常横幅；下一步建议与就绪清单可跳转账户会话。',
-      en: 'When server_time_unix is sampled and |skew|>=30s, Layout shows a skew banner; next-steps and readiness jump to account session.',
+      zh: '有 server_time_unix 样本且 |skew|>=30s 时 Layout 横幅 + 导出预检 warn + Account 告警；下一步/预检可跳转账户会话。',
+      en: 'When server_time_unix is sampled and |skew|>=30s: Layout banner, export preflight warn, Account alert; next-steps/preflight jump to account session.',
     },
     automated: true,
     jump: '/account#account-session',

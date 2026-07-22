@@ -115,8 +115,11 @@ export function buildOpsNextSteps(input: BuildOpsNextStepsInput): OpsNextStep[] 
     })
   }
 
-  const skew = clockSkewStep(locale, input.clockSkewSeconds, input.clockSkewWarnAbsSec)
-  if (skew) candidates.push(skew)
+  // 预检已含 clockSkew 项时不再重复注入
+  if (!candidates.some((c) => c.id === 'clockSkew')) {
+    const skew = clockSkewStep(locale, input.clockSkewSeconds, input.clockSkewWarnAbsSec)
+    if (skew) candidates.push(skew)
+  }
 
   candidates.sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id))
   const sliced = candidates.slice(0, limit)

@@ -36,6 +36,9 @@ export interface ExportPreflightInput {
   adminOpKindLabel?: string | null
   signoffNotes?: SignoffNotes | null
   deployKitReviewed?: boolean
+  /** 客户端相对服务端时钟偏差（秒）；|skew|>=阈值时 warn */
+  clockSkewSeconds?: number | null
+  clockSkewWarnAbsSec?: number
 }
 
 export interface ExportPreflightResult {
@@ -66,6 +69,9 @@ const copy = {
     adminBusy: '服务端管理重操作占用中（运维/快照/恢复）；建议空闲后再做验收导出',
     adminBusyWithOp: '服务端管理重操作占用中：{op}；建议空闲后再做验收导出',
     adminIdle: '服务端无管理重操作占用',
+    clockSkewOk: '客户端与服务端时钟偏差正常',
+    clockSkewWarn: '客户端与服务端时钟偏差较大（{skew}，阈值 {threshold}s）；验收前请核对 NTP',
+    clockSkewUnknown: '尚未取得服务端时间样本，无法评估时钟偏差',
     footer: '预检不阻止导出；完成项不代表生产人工验收已签字',
   },
   en: {
@@ -87,6 +93,9 @@ const copy = {
     adminBusy: 'Server admin heavy op busy (ops/snapshot/restore); prefer idle before acceptance export',
     adminBusyWithOp: 'Server admin heavy op busy: {op}; prefer idle before acceptance export',
     adminIdle: 'No server admin heavy op in progress',
+    clockSkewOk: 'Client/server clock skew is within tolerance',
+    clockSkewWarn: 'Client/server clock skew is large ({skew}, threshold {threshold}s); verify NTP before acceptance',
+    clockSkewUnknown: 'No server time sample yet; clock skew not evaluated',
     footer: 'Preflight does not block export; done items do not mean production acceptance is signed',
   },
 } as const
@@ -125,6 +134,8 @@ export function preflightItemTarget(id: string): { target: string; actionKey: 'p
       return { target: '/storage#edge-https', actionKey: 'preflightJumpStorage' }
     case 'admin-op-busy':
       return { target: '/operations#ops-status-strip', actionKey: 'preflightJumpLocal' }
+    case 'clockSkew':
+      return { target: '/account#account-session', actionKey: 'preflightJumpLocal' }
     default:
       return null
   }
@@ -134,6 +145,37 @@ function withTarget(item: ExportPreflightItem): ExportPreflightItem {
   const mapped = preflightItemTarget(item.id)
   if (!mapped) return item
   return { ...item, target: mapped.target, actionKey: mapped.actionKey }
+}
+
+
+function pushClockSkewItem(
+  items: ExportPreflightItem[],
+  t: (typeof copy)[LocaleCode],
+  skew: number | null | undefined,
+  warnAbsSec?: number,
+): void {
+  const threshold =
+    typeof warnAbsSec === 'number' && Number.isFinite(warnAbsSec) && warnAbsSec > 0
+      ? Math.floor(warnAbsSec)
+      : 30
+  if (typeof skew === 'number' && Number.isFinite(skew)) {
+    const abs = Math.abs(skew)
+    const sign = skew > 0 ? '+' : ''
+    const label = `${sign}${Math.round(skew)}s`
+    if (abs >= threshold) {
+      items.push({
+        id: 'clockSkew',
+        level: 'warn',
+        message: fill(t.clockSkewWarn, { skew: label, threshold }),
+      })
+    } else {
+      items.push({ id: 'clockSkew', level: 'ok', message: t.clockSkewOk })
+    }
+    return
+  }
+  if (skew === null) {
+    items.push({ id: 'clockSkew', level: 'info', message: t.clockSkewUnknown })
+  }
 }
 
 export function buildExportPreflight(input: ExportPreflightInput): ExportPreflightResult {
@@ -211,6 +253,8 @@ export function buildExportPreflight(input: ExportPreflightInput): ExportPreflig
   } else if (input.adminOpBusy === false) {
     items.push({ id: 'admin-op-busy', level: 'ok', message: t.adminIdle })
   }
+
+  pushClockSkewItem(items, t, input.clockSkewSeconds, input.clockSkewWarnAbsSec)
 
   items.push({ id: 'footer', level: 'info', message: t.footer })
 
