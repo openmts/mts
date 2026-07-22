@@ -3,9 +3,10 @@ import test from 'node:test'
 import {
   buildAuditPrefillPath,
   buildQueryPrefillPath,
+  parseQueryPrefill,
+  queryFormToPrefill,
   buildWritePrefillPath,
   parseWritePrefill,
-  queryFormToPrefill,
   writeFormToPrefill,
   auditFormToPrefill,
   parseDatabasesPrefill,
@@ -39,7 +40,6 @@ import {
   aboutFormToPrefill,
   isPrefillTimeRange,
   parseAuditPrefill,
-  parseQueryPrefill,
   timeRangeToMsBounds,
   timeRangeToQueryFormTimes,
 } from './routePrefill.ts'
@@ -283,4 +283,14 @@ test('overview and about prefill helpers', () => {
   assert.equal(overviewFormToPrefill({ section: 'overview-workspace' }), '/#overview-workspace')
   assert.deepEqual(parseAboutPrefill({}, '#about-server'), { section: 'about-server' })
   assert.equal(aboutFormToPrefill({ section: 'about-client' }), '/about#about-client')
+})
+
+test('query prefill mode roundtrip', () => {
+  const path = buildQueryPrefillPath({ database: 'db', measurement: 'cpu', mode: 'columns' })
+  assert.match(path, /mode=columns/)
+  const q = Object.fromEntries(new URL(path, 'http://x').searchParams.entries())
+  const pre = parseQueryPrefill(q)
+  assert.equal(pre.mode, 'columns')
+  const share = queryFormToPrefill({ database: 'db', measurement: 'cpu' }, { mode: 'explain', hash: '#query-form' })
+  assert.match(share, /mode=explain/)
 })

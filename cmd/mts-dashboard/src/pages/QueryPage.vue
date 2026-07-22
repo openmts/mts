@@ -39,6 +39,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { latencyFromNanos } from '@/utils/queryLatency'
 import { filterSeriesList, seriesLabel } from '@/utils/seriesMeta'
 import { buildQueryDeleteScope, formatQueryDeleteScopeMessage } from '@/utils/queryDeleteScope'
+import { buildQueryResultExport } from '@/utils/queryExport'
 import { formatDeleteSuccessMessage } from '@/utils/deleteResultSummary'
 import type { DeleteResponse } from '@/api/types'
 import { detailStatCards, primaryStatCards, toneClass } from '@/utils/queryStatsView'
@@ -228,6 +229,12 @@ function applyQueryPrefillFromRoute() {
   assignStr('aggregates', pre.aggregates)
   assignStr('group_tags', pre.group_tags)
   assignStr('predicates', pre.predicates)
+  const modeRaw = String(pre.mode || '').trim()
+  const modes = ['rows', 'columns', 'explain', 'stream-row', 'stream-column'] as const
+  if ((modes as readonly string[]).includes(modeRaw) && queryMode.value !== modeRaw) {
+    queryMode.value = modeRaw as (typeof modes)[number]
+    changed = true
+  }
   if (changed) {
     formBaseline.value = snapshotForm({ mode: queryMode.value, form: queryForm.value })
     success(t.value('queryPrefillApplied'))
@@ -235,7 +242,7 @@ function applyQueryPrefillFromRoute() {
 }
 
 async function copyShareLink() {
-  const path = queryFormToPrefill(queryForm.value, { hash: '#query-form' })
+  const path = queryFormToPrefill(queryForm.value, { hash: '#query-form', mode: queryMode.value })
   const url = `${window.location.origin}${path}`
   const res = await copyText(url)
   if (res.ok) success(t.value('queryShareCopied'))
@@ -745,6 +752,52 @@ async function exportCSV() {
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
+async function exportResultJSON() {
+  if (!hasQuerySnapshot() && !rows.value.length && !columnSeries.value.length && !rawOutput.value) {
+    actionError.value = t.value('queryExportEmpty')
+    notifyError(actionError.value)
+    return
+  }
+  if (exportBusy.value) return
+  let querySnap: Record<string, unknown> | null = null
+  try {
+    querySnap = buildQuery() as Record<string, unknown>
+  } catch {
+    querySnap = {
+      database: queryForm.value.database,
+      measurement: queryForm.value.measurement,
+    }
+  }
+  const payload = buildQueryResultExport({
+    mode: queryMode.value,
+    path: lastQueryMeta.value.path,
+    database: lastQueryMeta.value.database,
+    measurement: lastQueryMeta.value.measurement,
+    row_count: lastQueryMeta.value.rowCount || rows.value.length || null,
+    series_count: lastQueryMeta.value.seriesCount || columnSeries.value.length || null,
+    query: querySnap,
+    rows: rows.value.length ? rows.value : null,
+    columns: columnSeries.value.length ? columnSeries.value : null,
+    raw: rawOutput.value || null,
+    stats: queryStats.value,
+    preview_only: streamMeta.value.previewOnly,
+  })
+  const outcome = await runJSONExport({
+    label: 'JSON',
+    filename: stampFilename('mts-query-result', 'json'),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('queryResultExported'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
+}
+
 const HISTORY_ROW_HEIGHT = 56
 const HISTORY_LIST_HEIGHT = 320
 const historyFilter = ref('')
@@ -1165,6 +1218,15 @@ const columnRows = computed(() => {
       <button class="mts-btn" data-testid="query-export-csv" :disabled="!rows.length || exportBusy" @click="exportCSV">
           <Download class="h-3.5 w-3.5" /> CSV
         </button>
+      <button
+        type="button"
+        class="mts-btn"
+        data-testid="query-export-json"
+        :disabled="exportBusy || (!rows.length && !columnSeries.length && !rawOutput)"
+        @click="exportResultJSON"
+      >
+        <Download class="h-3.5 w-3.5" /> JSON
+      </button>
     </div>
 
     <ExportJobBanner

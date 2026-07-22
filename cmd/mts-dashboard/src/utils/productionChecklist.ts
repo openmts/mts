@@ -391,8 +391,8 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     severity: 'required',
     title: { zh: '查询响应含 path/count/admin_op', en: 'Query responses include path/count/admin_op' },
     detail: {
-      zh: 'POST query/rows|columns|explain 返回 path 与 row_count/series_count，并附带 admin_op_busy/last；Dashboard 查询台消费并刷新全局管理占用状态。',
-      en: 'POST query/rows|columns|explain return path and row_count/series_count plus admin_op_busy/last; Query workbench consumes them and refreshes global admin-op state.',
+      zh: 'POST query/rows|columns|explain 返回 path/count/database/measurement 与 admin_op_busy/last；Dashboard 查询台消费并刷新全局管理占用状态。',
+      en: 'POST query/rows|columns|explain return path/count/database/measurement plus admin_op_busy/last; Query workbench consumes them and refreshes global admin-op state.',
     },
     automated: true,
     jump: '/query#query-form',
@@ -413,15 +413,25 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     severity: 'recommended',
     title: { zh: '查询响应含 database/measurement', en: 'Query responses include database/measurement' },
     detail: {
-      zh: 'POST query/rows|columns/explain 与 stream end 返回 database/measurement；Query 结果区徽章展示。',
-      en: 'POST query/rows|columns/explain and stream end return database/measurement; Query result badges surface them.',
+      zh: 'POST query/rows|columns|explain 与 stream end 返回 database/measurement；Query 结果区徽章展示。',
+      en: 'POST query/rows|columns|explain and stream end return database/measurement; Query result badges surface them.',
+    },
+    automated: true,
+    jump: '/query#query-results',
+  },
+  {
+    id: 'query-result-export-meta',
+    severity: 'recommended',
+    title: { zh: '查询结果导出含服务端 meta', en: 'Query result export includes server meta' },
+    detail: {
+      zh: '查询结果 JSON 导出 v1 含 path/database/measurement/row_count/series_count 与 query 快照；分享链接可带 mode。',
+      en: 'Query result JSON export v1 includes path/database/measurement/row_count/series_count and query snapshot; share links can carry mode.',
     },
     automated: true,
     jump: '/query#query-results',
   },
   {
     id: 'data-contract-endpoint',
-
     severity: 'required',
     title: { zh: '数据面契约快照可交接', en: 'Data-plane contract snapshot for handoff' },
     detail: {
@@ -502,8 +512,8 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     severity: 'required',
     title: { zh: '流式查询 end 与删除响应含 meta', en: 'Stream end and delete responses include meta' },
     detail: {
-      zh: 'POST /data/query/stream 的 end 帧含 path/format/record_count/admin_op；POST /data/delete 返回 path/database/measurement/admin_op；Query 页消费并展示。',
-      en: 'POST /data/query/stream end frames include path/format/record_count/admin_op; POST /data/delete returns path/database/measurement/admin_op; Query page consumes and surfaces them.',
+      zh: 'POST /data/query/stream 的 end 帧含 path/format/record_count/database/measurement/admin_op；POST /data/delete 返回 path/database/measurement/admin_op；Query 页消费并展示。',
+      en: 'POST /data/query/stream end frames include path/format/record_count/database/measurement/admin_op; POST /data/delete returns path/database/measurement/admin_op; Query page consumes and surfaces them.',
     },
     automated: true,
     jump: '/query#query-results',

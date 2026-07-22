@@ -403,6 +403,38 @@ test('commercial browser smoke path', async ({ page }) => {
     if (await page.getByTestId('query-result-measurement').count()) {
       await expect(page.getByTestId('query-result-measurement')).toBeVisible()
     }
+    // P476: 结果 JSON 导出入口
+    await expect(page.getByTestId('query-export-json')).toBeVisible()
+    if (await page.getByTestId('query-export-json').isEnabled()) {
+      const downloads: import('@playwright/test').Download[] = []
+      const onDown = (d: import('@playwright/test').Download) => { downloads.push(d) }
+      page.on('download', onDown)
+      try {
+        await page.getByTestId('query-export-json').click()
+        await expect.poll(() => downloads.some((d) => d.suggestedFilename().endsWith('.json')), {
+          timeout: 15_000,
+        }).toBe(true)
+      } finally {
+        page.off('download', onDown)
+      }
+      const jsonDl = downloads.find((d) => d.suggestedFilename().endsWith('.json'))
+      expect(jsonDl).toBeTruthy()
+      const fs = await import('node:fs/promises')
+      const pth = await jsonDl!.path()
+      let raw = ''
+      if (pth) raw = await fs.readFile(pth, 'utf8')
+      else {
+        const stream = await jsonDl!.createReadStream()
+        expect(stream).toBeTruthy()
+        const chunks: Buffer[] = []
+        for await (const c of stream!) chunks.push(Buffer.from(c))
+        raw = Buffer.concat(chunks).toString('utf8')
+      }
+      const pack = JSON.parse(raw) as { kind?: string; version?: number; path?: string; database?: string }
+      expect(pack.kind).toBe('mts.query.result')
+      expect(pack.version).toBe(1)
+      if (pack.path) expect(pack.path).toMatch(/query/)
+    }
   }
   // P134: 查询历史面板虚拟列表（有历史时）
   await page.goto('/query#query-history')

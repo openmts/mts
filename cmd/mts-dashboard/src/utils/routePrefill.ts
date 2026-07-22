@@ -43,6 +43,8 @@ export type QueryPrefill = {
   aggregates?: string
   group_tags?: string
   predicates?: string
+  /** 查询模式：rows|columns|explain|stream-row|stream-column（只预填，不自动执行） */
+  mode?: string
 }
 
 /** 从 route.query 解析查询页预填（不自动点「执行查询」） */
@@ -80,6 +82,8 @@ export function parseQueryPrefill(
   if (group_tags) out.group_tags = group_tags
   const predicates = firstQueryValue(query.predicates)
   if (predicates) out.predicates = predicates
+  const mode = firstQueryValue(query.mode)
+  if (mode) out.mode = mode
   return out
 }
 
@@ -121,6 +125,7 @@ export function buildQueryPrefillPath(opts: QueryPrefill & { hash?: string }): s
   if (opts.aggregates) params.set('aggregates', opts.aggregates)
   if (opts.group_tags) params.set('group_tags', opts.group_tags)
   if (opts.predicates) params.set('predicates', opts.predicates)
+  if (opts.mode) params.set('mode', opts.mode)
   const qs = params.toString()
   const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#query-form'
   return qs ? `/query?${qs}${hash}` : `/query${hash}`
@@ -141,7 +146,7 @@ export function queryFormToPrefill(form: {
   predicates?: string
   start_time?: string
   end_time?: string
-}, opts?: { range?: PrefillTimeRange; hash?: string }): string {
+}, opts?: { range?: PrefillTimeRange; hash?: string; mode?: string }): string {
   const start = form.start_time?.trim()
   const end = form.end_time?.trim()
   const absStart = start && isEpochMsString(start) ? start : undefined
@@ -161,6 +166,7 @@ export function queryFormToPrefill(form: {
     aggregates: form.aggregates?.trim() || undefined,
     group_tags: form.group_tags?.trim() || undefined,
     predicates: form.predicates?.trim() || undefined,
+    mode: opts?.mode?.trim() || undefined,
     hash: opts?.hash,
   })
 }

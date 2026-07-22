@@ -2592,3 +2592,17 @@
 | query rows/cols/explain | database/measurement | lastQueryMeta + 徽章 | 与 delete/write 对称 |
 | stream end | database/measurement | stream meta | NDJSON/gRPC |
 | 契约检索 | ResponseHint | ApiSpec + 命令面板 | 运维对照 |
+
+
+## P476（2026-07-23）
+- Dashboard：查询结果 JSON 导出 `mts.query.result` v1（path/database/measurement/counts + query 快照）
+- Dashboard：分享链接携带 `mode`（只预填不自动执行）
+- 清单：`query-result-export-meta`；`stream-delete-meta`/`query-result-meta` 文案同步 scope
+- e2e：query-export-json 下载校验 kind/version
+
+### 前后端对齐（P476）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| query meta | path/count/database/measurement | 结果导出 JSON | 与 P475 衔接 |
+| 分享深链 | — | mode 预填 | 不自动 run |
+| stream end 清单 | database/measurement | stream-delete-meta 文案 | 运维对照 |

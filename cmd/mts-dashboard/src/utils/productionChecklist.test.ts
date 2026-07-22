@@ -37,6 +37,7 @@ test('production checklist has required commercial gates', () => {
     'query-result-meta',
     'query-result-path-visible',
     'query-result-scope',
+    'query-result-export-meta',
     'data-limits-endpoint',
     'stream-delete-meta',
     'data-contract-endpoint',
