@@ -294,6 +294,12 @@ test('command palette has readiness production checklist and admin-op jumps', ()
       (i) => i.id === 'readiness-user-disable-revokes-tokens',
     ),
   )
+  assert.ok(
+    all.some((i) => i.id === 'readiness-user-enable-active' && i.path.includes('status=active')),
+  )
+  assert.ok(
+    filterCommandItems(all, '启用用户筛选', (k) => k).some((i) => i.id === 'readiness-user-enable-active'),
+  )
 })
 
 test('command palette has reset-nav-order action', () => {
@@ -326,5 +332,8 @@ test('command palette has users status filter deep links', () => {
   assert.ok(all.some((i) => i.id === 'users-status-disabled' && i.path.includes('status=disabled')))
   assert.ok(all.some((i) => i.id === 'users-status-active' && i.path.includes('status=active')))
   assert.ok(filterCommandItems(all, 'disabled users', (k) => k).some((i) => i.id === 'users-status-disabled'))
+  assert.ok(filterCommandItems(all, 'enable users', (k) => k).some((i) => i.id === 'users-status-active'))
+  assert.ok(filterCommandItems(all, '启用用户', (k) => k).some((i) => i.id === 'users-status-active'))
+  assert.ok(filterCommandItems(all, '正常用户', (k) => k).some((i) => i.id === 'users-status-active'))
 })
 

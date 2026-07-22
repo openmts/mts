@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -389,6 +390,34 @@ func (r *serverRuntime) lastAdminHeavySnapshot() *adminHeavyLastResult {
 	}
 	cp := *r.lastAdminHeavy
 	return &cp
+}
+
+// recordAdminOpLast 记录轻量管理操作结果（不占 maintenance 互斥）。
+// 用于批量用户/策略等非 heavy 路径，供 Dashboard last 芯片展示。
+func (r *serverRuntime) recordAdminOpLast(op string, ok bool, errMsg string) {
+	if r == nil {
+		return
+	}
+	op = strings.TrimSpace(op)
+	if op == "" {
+		op = "admin_op"
+	}
+	now := time.Now()
+	finishedUnix := now.Unix()
+	result := &adminHeavyLastResult{
+		Op:             op,
+		OK:             ok,
+		StartedAtUnix:  finishedUnix,
+		FinishedAtUnix: finishedUnix,
+		DurationMs:     0,
+	}
+	if !ok {
+		result.Error = strings.TrimSpace(errMsg)
+		result.OK = false
+	}
+	r.lastAdminHeavyMu.Lock()
+	r.lastAdminHeavy = result
+	r.lastAdminHeavyMu.Unlock()
 }
 
 // 兼容旧名（运维路径）。

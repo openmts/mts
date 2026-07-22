@@ -24,7 +24,18 @@ func (r *serverRuntime) streamBatchUserDisabled(
 	}
 	streamBatchItems(request.Context(), enc, flusher, names, func(ctx context.Context, name string) batchItemResult {
 		return r.applyUserDisabled(ctx, name, req.Disabled, actor)
-	}, r.attachBatchProgressSummary)
+	}, func(event *batchProgressEvent) {
+		if event != nil && event.Type == "summary" && !event.Cancelled {
+			r.recordBatchUserDisabledLast(req.Disabled, batchMutationResponse{
+				OK:      event.OK,
+				OKCount: event.OKCount,
+				Skip:    event.Skip,
+				Fail:    event.Fail,
+				Items:   event.Items,
+			})
+		}
+		r.attachBatchProgressSummary(event)
+	})
 }
 
 func (r *serverRuntime) streamBatchDownsamplePolicies(

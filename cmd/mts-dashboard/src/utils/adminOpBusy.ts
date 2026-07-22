@@ -108,6 +108,10 @@ export function adminOpKindLabelKey(op: string | null | undefined): string {
       return 'adminOpKindRestoreDrill'
     case 'maintenance':
       return 'adminOpKindMaintenance'
+    case 'batch_user_disable':
+      return 'adminOpKindBatchUserDisable'
+    case 'batch_user_enable':
+      return 'adminOpKindBatchUserEnable'
     default:
       return 'adminOpKindGeneric'
   }

@@ -1957,3 +1957,16 @@
 | API Spec 导出 response | ResponseHint | md 导出可见 | 单测 |
 | 批量禁用 reader | 撤 token | 确认框文案+状态筛选可见 | 真实 e2e |
 
+## P429（2026-07-22）
+- 服务端：批量用户禁用/启用写入轻量 `last`（`batch_user_disable` / `batch_user_enable`，不占 heavy 互斥）
+- Dashboard：批量禁用后 Users `users-admin-last` 芯片可见/可复制 e2e
+- 命令面板：`users-status-active` 关键词扩展 + `readiness-user-enable-active` 对称入口；e2e 点选 active 筛选
+- API Spec：抽出 `apiSpecFilter` 跨 ns 搜索纯函数并单测；ApiSpecPage 复用
+
+### 前后端对齐（P429）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 批量禁用 last | `recordAdminOpLast` | applyAdminOpStatus + 芯片 | stream summary 附 last |
+| 启用用户命令 | — | status=active 深链 | 与 disabled 对称 |
+| API Spec 搜索 | ResponseHint | 跨 ns fallback 单测 | 默认首 ns 不漏契约 |
+

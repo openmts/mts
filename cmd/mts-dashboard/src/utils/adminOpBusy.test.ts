@@ -437,3 +437,9 @@ test('actionResultAdminBusyAction', () => {
   assert.ok(c)
   assert.equal(c!.path, ADMIN_OP_BUSY_OPS_PATH)
 })
+
+test('adminOpKindLabelKey maps batch user ops', () => {
+  assert.equal(adminOpKindLabelKey('batch_user_disable'), 'adminOpKindBatchUserDisable')
+  assert.equal(adminOpKindLabelKey('batch_user_enable'), 'adminOpKindBatchUserEnable')
+})
+

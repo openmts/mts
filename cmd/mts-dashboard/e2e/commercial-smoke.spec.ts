@@ -1308,6 +1308,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('command-item-users-status-disabled').click()
   await expect(page).toHaveURL(/status=disabled/)
   await expect(page.getByTestId('users-status-filter')).toHaveValue('disabled')
+  // P429: 命令面板启用/active 用户筛选对称入口
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('enable users')
+  await expect(page.getByTestId('command-item-users-status-active')).toBeVisible()
+  await page.getByTestId('command-item-users-status-active').click()
+  await expect(page).toHaveURL(/status=active/)
+  await expect(page.getByTestId('users-status-filter')).toHaveValue('active')
   // P428: 命令面板就绪清单「禁用用户撤销会话」深链
   await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()
@@ -2744,6 +2752,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('confirm-dialog-confirm').click()
   await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('users-action-result')).toContainText(/禁用|disabled|batch|批量|ok/i)
+  // P429: 批量禁用后 Users 页 last 芯片可见/可复制（op 文案不硬绑 batch 专属）
+  await expect(page.getByTestId('users-admin-last')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('users-admin-last-copy')).toBeVisible()
+  await page.getByTestId('users-admin-last-copy').click()
   await page.getByTestId('users-status-filter').selectOption('disabled')
   await expect(page.getByTestId('users-row-reader-e2e')).toBeVisible({ timeout: 10_000 })
   await page.getByTestId('users-status-filter').selectOption('')

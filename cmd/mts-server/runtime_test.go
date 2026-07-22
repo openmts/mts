@@ -399,3 +399,27 @@ func TestRuntimeAdminHeavySharedMutex(t *testing.T) {
 		t.Fatalf("storageSnapshot after release: %v", err)
 	}
 }
+
+func TestRecordAdminOpLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	runtime.recordAdminOpLast("batch_user_disable", true, "")
+	last := runtime.lastAdminHeavySnapshot()
+	if last == nil {
+		t.Fatal("want last after recordAdminOpLast")
+	}
+	if last.Op != "batch_user_disable" || !last.OK {
+		t.Fatalf("last=%#v", last)
+	}
+	if last.FinishedAtUnix <= 0 {
+		t.Fatalf("finished_at_unix=%d", last.FinishedAtUnix)
+	}
+	// 不占 heavy 互斥
+	if runtime.maintenanceBusy.Load() {
+		t.Fatal("recordAdminOpLast must not set maintenanceBusy")
+	}
+	runtime.recordAdminOpLast("batch_user_enable", false, "partial")
+	last = runtime.lastAdminHeavySnapshot()
+	if last == nil || last.OK || last.Error != "partial" {
+		t.Fatalf("fail last=%#v", last)
+	}
+}

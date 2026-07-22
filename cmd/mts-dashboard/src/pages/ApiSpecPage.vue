@@ -20,6 +20,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import { apiSpecToMarkdown, buildApiSpecExport } from '@/utils/apiSpecExport'
+import { filterApiSpecNamespaces } from '@/utils/apiSpecFilter'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -146,36 +147,9 @@ watch(
   },
 )
 
-const filtered = computed(() => {
-  const text = q.value.trim().toLowerCase()
-  const matchEp = (ep: APIEndpoint) => {
-    if (!text) return true
-    return (
-      ep.method.toLowerCase().includes(text) ||
-      ep.path.toLowerCase().includes(text) ||
-      (ep.description || '').toLowerCase().includes(text) ||
-      (ep.response || '').toLowerCase().includes(text) ||
-      (ep.auth || '').toLowerCase().includes(text)
-    )
-  }
-  const scoped = namespaces.value
-    .filter((ns) => !nsFilter.value || ns.name === nsFilter.value)
-    .map((ns) => ({
-      ...ns,
-      endpoints: (ns.endpoints || []).filter(matchEp),
-    }))
-    .filter((ns) => ns.endpoints.length || !text)
-  // 有搜索词且当前 namespace 无命中时，自动跨命名空间展示，避免默认首个 ns 漏结果
-  if (text && nsFilter.value && !scoped.some((ns) => ns.endpoints.length)) {
-    return namespaces.value
-      .map((ns) => ({
-        ...ns,
-        endpoints: (ns.endpoints || []).filter(matchEp),
-      }))
-      .filter((ns) => ns.endpoints.length)
-  }
-  return scoped
-})
+const filtered = computed(() =>
+  filterApiSpecNamespaces(namespaces.value, { q: q.value, ns: nsFilter.value }),
+)
 
 const totalEndpoints = computed(() =>
   namespaces.value.reduce((n, ns) => n + (ns.endpoints?.length || 0), 0),

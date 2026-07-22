@@ -38,6 +38,7 @@ func (r *serverRuntime) handleBatchUserDisabled(writer http.ResponseWriter, requ
 		writeAPIError(writer, err)
 		return
 	}
+	r.recordBatchUserDisabledLast(req.Disabled, resp)
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToBatch(resp))
 }
 
@@ -225,4 +226,17 @@ func (r *serverRuntime) grpcActor(ctx context.Context) string {
 		return ""
 	}
 	return principal.UserName
+}
+
+func (r *serverRuntime) recordBatchUserDisabledLast(disabled bool, resp batchMutationResponse) {
+	op := "batch_user_enable"
+	if disabled {
+		op = "batch_user_disable"
+	}
+	ok := resp.Fail == 0
+	errMsg := ""
+	if !ok {
+		errMsg = "batch user disabled partial failure"
+	}
+	r.recordAdminOpLast(op, ok, errMsg)
 }

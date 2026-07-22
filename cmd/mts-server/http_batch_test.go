@@ -36,11 +36,19 @@ func TestHTTPBatchUpdateUserDisabled(t *testing.T) {
 	if resp.Skip < 2 {
 		t.Fatalf("skip_count=%d want >=2; resp=%#v", resp.Skip, resp)
 	}
-	// busy/last 字段应可反序列化（空闲时 busy=false，Last 可为 nil 或历史值）
-	_ = resp.AdminOpBusy
-	_ = resp.Op
-	_ = resp.StartedAtUnix
-	_ = resp.Last
+	// busy/last：批量用户禁用/启用会写入轻量 last（不占 heavy 互斥）
+	if resp.AdminOpBusy {
+		t.Fatal("batch disable should not set admin_op_busy")
+	}
+	if resp.Last == nil {
+		t.Fatal("batch disable want last snapshot")
+	}
+	if resp.Last.Op != "batch_user_disable" {
+		t.Fatalf("last.op=%q want batch_user_disable", resp.Last.Op)
+	}
+	if !resp.Last.OK {
+		t.Fatalf("last.ok want true; last=%#v", resp.Last)
+	}
 
 	// 禁用自己应 skip
 	self := batchMutationResponse{}
@@ -119,7 +127,7 @@ func TestHTTPBatchUserDisabledStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Do: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status=%d", resp.StatusCode)
 	}
@@ -188,7 +196,7 @@ func TestHTTPBatchUserDisabledStreamCancelPartial(t *testing.T) {
 		}
 		t.Fatalf("Do: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(resp.Body)
 	// if we got NDJSON, last event should prefer summary with cancelled when any item processed
 	body := strings.TrimSpace(string(raw))
