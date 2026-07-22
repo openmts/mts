@@ -2226,3 +2226,14 @@
 | 默认密码风险 | seed admin | Login 风险条 | 运维提示 |
 | 改密进度 | password_policy | 进度条 + 分项 | 不禁用 submit |
 
+## P450（2026-07-22）
+- Server：`GET /api/v1/auth/password-policy` 公开密码策略（min_length / forbidden_defaults / version）
+- Dashboard：`applyServerPasswordPolicy` + 启动/登录/强制改密拉取对齐；失败保留本地默认
+- PasswordHints / validate* 使用运行时 `getMinPasswordLength()`
+
+### 前后端对齐（P450）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 密码策略 | password-policy | runtime override | 无需登录 |
+| 强制改密 | validateUserPassword | hints + progress | 同源规则 |
+

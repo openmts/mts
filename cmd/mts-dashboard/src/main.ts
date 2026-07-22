@@ -8,6 +8,7 @@ import { loginReasonMessage } from './utils/authReason'
 import { isAuthStorageKey } from './utils/authStorageSync'
 import { shouldSyncOnVisibility } from './utils/pageVisibilitySync'
 import './index.css'
+import { bootstrapPasswordPolicy } from './utils/passwordPolicyBootstrap'
 
 function currentLocale(): 'zh' | 'en' {
   try {
@@ -22,6 +23,7 @@ function currentLocale(): 'zh' | 'en' {
 const app = createApp(App)
 app.use(router)
 app.mount('#app')
+void bootstrapPasswordPolicy()
 
 setOnAuthFailed(() => {
   clearAuth()

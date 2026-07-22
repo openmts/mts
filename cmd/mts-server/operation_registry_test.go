@@ -111,6 +111,7 @@ func TestOperationRegistryMountsCoreHTTPPaths(t *testing.T) {
 		routeAuthLogin,
 		routeAuthLogout,
 		routeAuthPassword,
+		routeAuthPasswordPolicy,
 		routeUsers,
 		routeUsersPrefix,
 		routeUsersBatchDisabled,

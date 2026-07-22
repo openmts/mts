@@ -116,3 +116,31 @@ func TestValidateUserPassword(t *testing.T) {
 		t.Fatalf("valid password error = %v", err)
 	}
 }
+
+func TestPasswordPolicyPublic(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	t.Cleanup(server.Close)
+
+	var got passwordPolicyResponse
+	getJSONWithHeaders(t, server.URL+routeAuthPasswordPolicy, nil, http.StatusOK, &got)
+	if !got.OK || got.MinLength != minUserPasswordLength {
+		t.Fatalf("policy = %+v", got)
+	}
+	if got.Version < 1 {
+		t.Fatalf("version = %d", got.Version)
+	}
+	found := false
+	for _, d := range got.ForbiddenDefaults {
+		if d == forbiddenDefaultPassword {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("forbidden defaults = %#v", got.ForbiddenDefaults)
+	}
+	if !got.RequireChangeBootstrap {
+		t.Fatal("expected require_change_bootstrap")
+	}
+}

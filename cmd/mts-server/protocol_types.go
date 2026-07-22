@@ -199,6 +199,15 @@ type authTokenResponse struct {
 	MustChangePassword bool          `json:"must_change_password,omitempty"`
 }
 
+// passwordPolicyResponse 公开密码策略（与 Dashboard 校验对齐，无需登录）。
+type passwordPolicyResponse struct {
+	OK                     bool     `json:"ok"`
+	MinLength              int      `json:"min_length"`
+	ForbiddenDefaults      []string `json:"forbidden_defaults"`
+	RequireChangeBootstrap bool     `json:"require_change_bootstrap"`
+	Version                int      `json:"version"`
+}
+
 type sessionResponse struct {
 	OK                 bool                  `json:"ok"`
 	UserName           string                `json:"user_name"`

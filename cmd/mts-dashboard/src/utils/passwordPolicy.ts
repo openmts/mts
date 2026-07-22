@@ -10,8 +10,71 @@ export const FORBIDDEN_DEFAULT_PASSWORD = 'admin'
 
 export type PasswordLocale = 'zh' | 'en'
 
+/** 服务端公开策略快照（GET /api/v1/auth/password-policy） */
+export interface ServerPasswordPolicy {
+  ok?: boolean
+  min_length?: number
+  forbidden_defaults?: string[]
+  require_change_bootstrap?: boolean
+  version?: number
+}
+
+let runtimeMinLength = MIN_PASSWORD_LENGTH
+let runtimeForbidden: string[] = [FORBIDDEN_DEFAULT_PASSWORD]
+let runtimeVersion = 0
+let runtimeRequireBootstrap = true
+
+export function getMinPasswordLength(): number {
+  return runtimeMinLength
+}
+
+export function getForbiddenDefaultPasswords(): string[] {
+  return runtimeForbidden.slice()
+}
+
+export function getPasswordPolicyVersion(): number {
+  return runtimeVersion
+}
+
+export function getRequireChangeBootstrap(): boolean {
+  return runtimeRequireBootstrap
+}
+
+/** 应用服务端策略；非法字段忽略并保留默认。测试可 resetPasswordPolicyRuntime。 */
+export function applyServerPasswordPolicy(input: ServerPasswordPolicy | null | undefined): void {
+  if (!input || typeof input !== 'object') return
+  const min = input.min_length
+  if (typeof min === 'number' && Number.isFinite(min)) {
+    const n = Math.floor(min)
+    if (n >= 4 && n <= 128) runtimeMinLength = n
+  }
+  if (Array.isArray(input.forbidden_defaults) && input.forbidden_defaults.length) {
+    const next = input.forbidden_defaults
+      .map((x) => String(x ?? '').trim())
+      .filter((x) => x.length > 0)
+    if (next.length) runtimeForbidden = next
+  }
+  if (typeof input.version === 'number' && Number.isFinite(input.version) && input.version > 0) {
+    runtimeVersion = Math.floor(input.version)
+  }
+  if (typeof input.require_change_bootstrap === 'boolean') {
+    runtimeRequireBootstrap = input.require_change_bootstrap
+  }
+}
+
+export function resetPasswordPolicyRuntime(): void {
+  runtimeMinLength = MIN_PASSWORD_LENGTH
+  runtimeForbidden = [FORBIDDEN_DEFAULT_PASSWORD]
+  runtimeVersion = 0
+  runtimeRequireBootstrap = true
+}
+
 function isZh(locale?: PasswordLocale): boolean {
   return (locale ?? 'zh') === 'zh'
+}
+
+function isForbiddenPassword(p: string): boolean {
+  return runtimeForbidden.includes(p)
 }
 
 /** 管理员设置 / 创建用户时的密码强度（allowEmpty 用于创建时可选密码） */
@@ -21,19 +84,20 @@ export function validateAssignedPassword(
 ): PasswordPolicyResult {
   const zh = isZh(opts?.locale)
   const p = password || ''
+  const minLen = getMinPasswordLength()
   if (!p) {
     if (opts?.allowEmpty) return { ok: true }
     return { ok: false, error: zh ? '请填写密码' : 'Password is required' }
   }
-  if (p === FORBIDDEN_DEFAULT_PASSWORD) {
+  if (isForbiddenPassword(p)) {
     return { ok: false, error: zh ? '不能使用默认密码 admin' : 'Cannot use default password admin' }
   }
-  if (p.length < MIN_PASSWORD_LENGTH) {
+  if (p.length < minLen) {
     return {
       ok: false,
       error: zh
-        ? `密码至少 ${MIN_PASSWORD_LENGTH} 位`
-        : `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+        ? `密码至少 ${minLen} 位`
+        : `Password must be at least ${minLen} characters`,
     }
   }
   return { ok: true }

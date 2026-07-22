@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { formatMessage } from '@/utils/formatMessage'
-import { MIN_PASSWORD_LENGTH } from '@/utils/passwordPolicy'
+import { getMinPasswordLength } from '@/utils/passwordPolicy'
 import {
   assignedPasswordHints,
   passwordHintsProgress,
@@ -55,7 +55,7 @@ const progress = computed(() => passwordHintsProgress(hints.value))
 
 function labelOf(key: string): string {
   if (key === 'passwordHintMinLength') {
-    return formatMessage(t.value(key as MessageKey), { n: MIN_PASSWORD_LENGTH })
+    return formatMessage(t.value(key as MessageKey), { n: getMinPasswordLength() })
   }
   return t.value(key as MessageKey)
 }

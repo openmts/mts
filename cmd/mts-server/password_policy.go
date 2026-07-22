@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 
 	mts "github.com/openmts/mts"
@@ -69,7 +70,7 @@ func (r *serverRuntime) enforcePasswordChangeGate(ctx context.Context, userName 
 
 func passwordChangeAllowedPath(path string) bool {
 	switch strings.TrimSpace(path) {
-	case routeAuthPassword, routeAuthLogout, routeAuthLogin, routeAuthSession:
+	case routeAuthPassword, routeAuthLogout, routeAuthLogin, routeAuthSession, routeAuthPasswordPolicy:
 		return true
 	default:
 		// health/metrics/ready 无用户 token 时不走此门禁
@@ -93,6 +94,7 @@ func mapChangePasswordError(err error) error {
 }
 
 const minUserPasswordLength = 8
+
 const forbiddenDefaultPassword = "admin"
 
 // validateUserPassword 与 Dashboard passwordPolicy 对齐：最短 8 位且禁止默认 admin。
@@ -108,4 +110,24 @@ func validateUserPassword(password string) error {
 		return newAPIError(errorCodeBadRequest, "password must be at least 8 characters", mts.ErrInvalidCredentials)
 	}
 	return nil
+}
+
+const passwordPolicyVersion = 1
+
+func publicPasswordPolicy() passwordPolicyResponse {
+	return passwordPolicyResponse{
+		OK:                     true,
+		MinLength:              minUserPasswordLength,
+		ForbiddenDefaults:      []string{forbiddenDefaultPassword},
+		RequireChangeBootstrap: true,
+		Version:                passwordPolicyVersion,
+	}
+}
+
+// handlePasswordPolicy 返回前端可对齐的密码策略（公开只读）。
+func (r *serverRuntime) handlePasswordPolicy(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodGet) {
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, publicPasswordPolicy())
 }

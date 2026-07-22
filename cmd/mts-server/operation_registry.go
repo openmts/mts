@@ -280,6 +280,16 @@ func operationCatalog() []operation {
 			GRPCFn:       grpcGetSession,
 		},
 		{
+			Name:         "password_policy",
+			Namespace:    "auth",
+			Description:  "public password policy for dashboard client-side validation alignment",
+			ResponseHint: "passwordPolicyResponse{ok,min_length,forbidden_defaults,version}",
+			Auth:         authNone,
+			HTTPMethods:  []string{http.MethodGet},
+			HTTPPaths:    []string{routeAuthPasswordPolicy},
+			HTTPHandler:  (*serverRuntime).handlePasswordPolicy,
+		},
+		{
 			Name:         "check_database_permission",
 			Namespace:    "authz",
 			Description:  "check database permission",

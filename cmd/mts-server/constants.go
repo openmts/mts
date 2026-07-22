@@ -31,6 +31,7 @@ const (
 	routeAuthLogout                = "/api/v1/auth/logout"
 	routeAuthPassword              = "/api/v1/auth/password"
 	routeAuthSession               = "/api/v1/auth/session"
+	routeAuthPasswordPolicy        = "/api/v1/auth/password-policy"
 	routeUsers                     = "/api/v1/users"
 	routeUsersPrefix               = "/api/v1/users/"
 	routeUsersBatchDisabled        = "/api/v1/users/batch-disabled"

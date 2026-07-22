@@ -621,6 +621,19 @@ export interface SessionResponse {
 }
 
 /** 服务端会话检视：校验 token 并回填 role/expires/must_change */
+export interface PasswordPolicyResponse {
+  ok?: boolean
+  min_length?: number
+  forbidden_defaults?: string[]
+  require_change_bootstrap?: boolean
+  version?: number
+}
+
+/** 公开密码策略（无需登录；失败时调用方应保留本地默认） */
+export async function fetchPasswordPolicy(init: RequestInit = {}): Promise<PasswordPolicyResponse> {
+  return apiGetSilent<PasswordPolicyResponse>('/api/v1/auth/password-policy', init)
+}
+
 export async function apiGetSession(init: RequestInit = {}): Promise<SessionResponse> {
   return apiGetSilent<SessionResponse>('/api/v1/auth/session', init)
 }

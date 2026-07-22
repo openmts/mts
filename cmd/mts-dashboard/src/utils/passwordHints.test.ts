@@ -6,8 +6,10 @@ import {
   passwordHintsProgress,
   passwordRequirementHints,
 } from './passwordHints.ts'
+import { resetPasswordPolicyRuntime } from './passwordPolicy.ts'
 
 test('passwordRequirementHints tracks rules', () => {
+  resetPasswordPolicyRuntime()
   const weak = passwordRequirementHints('admin', 'admin', 'admin')
   assert.equal(passwordHintsAllOk(weak), false)
   const strong = passwordRequirementHints('oldpass12', 'newpass12', 'newpass12')
@@ -15,6 +17,7 @@ test('passwordRequirementHints tracks rules', () => {
 })
 
 test('assignedPasswordHints', () => {
+  resetPasswordPolicyRuntime()
   const weak = assignedPasswordHints('admin')
   assert.equal(passwordHintsAllOk(weak), false)
   const strong = assignedPasswordHints('goodpass1')
@@ -25,6 +28,7 @@ test('assignedPasswordHints', () => {
 })
 
 test('passwordHintsProgress', () => {
+  resetPasswordPolicyRuntime()
   const hints = passwordRequirementHints('oldpass12', 'newpass12', 'newpass12')
   const p = passwordHintsProgress(hints)
   assert.equal(p.total, 4)

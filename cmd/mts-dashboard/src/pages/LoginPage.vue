@@ -21,6 +21,7 @@ import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { shouldBlockOfflineMutation } from '@/utils/offlineGuard'
 import { createActionAbort } from '@/utils/actionAbort'
 import { isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { bootstrapPasswordPolicy } from '@/utils/passwordPolicyBootstrap'
 
 const router = useRouter()
 const { login, mustChangePassword, isAdmin } = useAuth()
@@ -51,6 +52,7 @@ const reasonHint = computed(() =>
 )
 
 onMounted(() => {
+  void bootstrapPasswordPolicy()
   const reason = String(router.currentRoute.value.query.reason || '')
   if (reason !== 'password_changed') return
   void nextTick(() => {

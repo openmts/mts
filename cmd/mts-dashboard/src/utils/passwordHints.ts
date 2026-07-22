@@ -1,6 +1,9 @@
 /** 改密策略分项提示（纯函数，与 passwordPolicy 对齐） */
 
-import { FORBIDDEN_DEFAULT_PASSWORD, MIN_PASSWORD_LENGTH } from './passwordPolicy.ts'
+import {
+  getForbiddenDefaultPasswords,
+  getMinPasswordLength,
+} from './passwordPolicy.ts'
 
 export interface PasswordHintItem {
   id: string
@@ -19,12 +22,12 @@ export function passwordRequirementHints(
   return [
     {
       id: 'min_length',
-      ok: np.length >= MIN_PASSWORD_LENGTH,
+      ok: np.length >= getMinPasswordLength(),
       labelKey: 'passwordHintMinLength',
     },
     {
       id: 'not_default',
-      ok: np.length > 0 && np !== FORBIDDEN_DEFAULT_PASSWORD,
+      ok: np.length > 0 && !getForbiddenDefaultPasswords().includes(np),
       labelKey: 'passwordHintNotDefault',
     },
     {
@@ -54,12 +57,12 @@ export function assignedPasswordHints(
   const items: PasswordHintItem[] = [
     {
       id: 'min_length',
-      ok: np.length >= MIN_PASSWORD_LENGTH,
+      ok: np.length >= getMinPasswordLength(),
       labelKey: 'passwordHintMinLength',
     },
     {
       id: 'not_default',
-      ok: np.length > 0 && np !== FORBIDDEN_DEFAULT_PASSWORD,
+      ok: np.length > 0 && !getForbiddenDefaultPasswords().includes(np),
       labelKey: 'passwordHintNotDefault',
     },
   ]

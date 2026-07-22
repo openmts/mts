@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { validateNewPassword } from '@/utils/passwordPolicy'
+import { bootstrapPasswordPolicy } from '@/utils/passwordPolicyBootstrap'
 import { passwordRequirementHints, passwordHintsAllOk, passwordHintsProgress } from '@/utils/passwordHints'
 import { buildLoginLocation, formatRedirectLabel, sanitizeRedirect, withRedirectQuery } from '@/utils/redirect'
 import { KeyRound } from 'lucide-vue-next'
@@ -53,6 +54,7 @@ function onForceBeforeUnload(e: BeforeUnloadEvent) {
 let unregisterForceDirty: (() => void) | null = null
 
 onMounted(() => {
+  void bootstrapPasswordPolicy()
   unregisterForceDirty = registerDirtyChecker('force-password', () => passwordFormDirty.value)
   window.addEventListener('beforeunload', onForceBeforeUnload)
 })
