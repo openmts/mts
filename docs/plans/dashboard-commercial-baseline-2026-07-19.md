@@ -2041,3 +2041,14 @@
 | 导出契约 | — | export version 2 | retention/refresh/lookback/batch_size |
 | 就绪清单 | — | downsample-advanced-form | 可勾选 |
 
+## P436（2026-07-22）
+- Downsample：策略详情面板（retention/refresh/lookback/batch_size/functions + 水位摘要）
+- 纯函数 `downsamplePolicyDetail` 单测；就绪清单 `downsample-policy-detail`
+- e2e：打开/关闭详情并核对高级字段
+
+### 前后端对齐（P436）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 策略详情 | 列表/状态 API | detail panel | 只读核对 |
+| 就绪清单 | — | downsample-policy-detail | 可勾选 |
+

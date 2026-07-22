@@ -19,6 +19,7 @@ test('production checklist has required commercial gates', () => {
     'user-disable-revokes-tokens',
     'batch-admin-last',
     'downsample-advanced-form',
+    'downsample-policy-detail',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -74,6 +75,13 @@ test('downsample-advanced-form is automated recommended gate', () => {
   assert.ok(item)
   assert.equal(item?.automated, true)
   assert.equal(item?.severity, 'recommended')
+  assert.ok(productionChecklistJump(item!)?.includes('/downsample'))
+})
+
+test('downsample-policy-detail is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'downsample-policy-detail')
+  assert.ok(item)
+  assert.equal(item?.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('/downsample'))
 })
 

@@ -41,7 +41,9 @@ import { formatMessage } from '@/utils/formatMessage'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
+import type { MessageKey } from '@/i18n/messages'
 import { buildDownsampleExport, downsampleToCSV } from '@/utils/downsampleExport'
+import { buildDownsamplePolicyDetailFields } from '@/utils/downsamplePolicyDetail'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -58,7 +60,7 @@ import {
   type DownsampleRangeMode,
 } from '@/utils/downsampleRange'
 import {
-  Plus, Trash2, Play, Pause, RefreshCw, PlayCircle, RotateCcw, FlaskConical, Wrench, Timer, Download,
+  Plus, Trash2, Play, Pause, RefreshCw, PlayCircle, RotateCcw, FlaskConical, Wrench, Timer, Download, Eye
 } from 'lucide-vue-next'
 import type {
   DownsamplePolicy, DownsampleStatus, DownsampleRunResult, DownsampleDryRunResult,
@@ -133,6 +135,7 @@ const lastResetName = ref('')
 const policyFilter = ref('')
 const enabledFilter = ref<DownsampleEnabledFilter>('')
 const selectedNames = ref<string[]>([])
+const detailPolicyName = ref('')
 const batchOpen = ref(false)
 const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
@@ -894,6 +897,33 @@ async function resetPolicy(name: string) {
   }
 }
 
+const detailPolicy = computed(() => {
+  const name = detailPolicyName.value.trim()
+  if (!name) return null
+  return policies.value.find((x) => x.name === name) || null
+})
+const detailFields = computed(() =>
+  buildDownsamplePolicyDetailFields(
+    detailPolicy.value || undefined,
+    (ns) => formatDuration(ns || 0),
+    t.value('emptyValue'),
+  ).map((f) => ({ ...f, label: t.value(f.labelKey as MessageKey) })),
+)
+const detailStatus = computed(() => {
+  const name = detailPolicyName.value.trim()
+  if (!name) return null
+  return getStatus(name) || null
+})
+function openPolicyDetail(name: string) {
+  detailPolicyName.value = name
+}
+function closePolicyDetail() {
+  detailPolicyName.value = ''
+}
+function detailEnabledLabel(enabled: boolean | undefined): string {
+  return enabled ? t.value('downsampleEnabledOnly') : t.value('downsampleDisabledOnly')
+}
+
 function openRange(mode: DownsampleRangeMode, name: string) {
   if (writeBlocked.value) {
     notifyError(t.value(blockedMessageKey('offlineAdminBlocked')))
@@ -1225,7 +1255,13 @@ onBeforeUnmount(() => {
                 @change="toggleSelect(policy.name, ($event.target as HTMLInputElement).checked)"
               />
             </div>
-            <div class="truncate px-3 font-medium text-slate-700 dark:text-slate-200" :title="policy.name">{{ policy.name }}</div>
+            <button
+              type="button"
+              class="truncate px-3 text-left font-medium text-sky-700 hover:underline dark:text-sky-300"
+              :title="policy.name"
+              :data-testid="`downsample-open-detail-${policy.name}`"
+              @click="openPolicyDetail(policy.name)"
+            >{{ policy.name }}</button>
             <div
               class="truncate px-3 text-xs text-slate-600 dark:text-slate-300"
               :title="`${policy.source_database}/${policy.source_retention || 'autogen'}/${policy.source_measurement} → ${policy.target_database}/${policy.target_retention || 'autogen'}/${policy.target_measurement}`"
@@ -1267,6 +1303,9 @@ onBeforeUnmount(() => {
                 <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`downsample-toggle-${policy.name}`" @click="togglePolicy(policy)">
                   <component :is="policy.enabled ? Pause : Play" class="h-4 w-4" />
                 </button>
+                <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600" :title="t('downsampleDetailOpen')" :data-testid="`downsample-detail-${policy.name}`" @click="openPolicyDetail(policy.name)">
+                  <Eye class="h-4 w-4" />
+                </button>
                 <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`downsample-delete-${policy.name}`" @click="requestDelete(policy.name)">
                   <Trash2 class="h-4 w-4" />
                 </button>
@@ -1278,6 +1317,35 @@ onBeforeUnmount(() => {
       <p class="border-t border-slate-100 px-3 py-1.5 text-[11px] mts-muted dark:border-slate-800" data-testid="downsample-virtual-hint">
         {{ t('downsampleVirtualHint') }}
       </p>
+    </div>
+
+    <div
+      v-if="detailPolicy"
+      id="downsample-detail"
+      class="mts-card scroll-mt-20 overflow-hidden"
+      data-testid="downsample-detail-panel"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
+        <div class="min-w-0">
+          <p class="truncate font-mono text-sm font-medium text-slate-800 dark:text-slate-100" data-testid="downsample-detail-name">{{ detailPolicy.name }}</p>
+          <p class="text-xs mts-muted" data-testid="downsample-detail-enabled">{{ detailEnabledLabel(detailPolicy.enabled) }}</p>
+        </div>
+        <button type="button" class="mts-btn" data-testid="downsample-detail-close" @click="closePolicyDetail">{{ t('downsampleDetailClose') }}</button>
+      </div>
+      <dl class="grid gap-2 p-3 sm:grid-cols-2" data-testid="downsample-detail-fields">
+        <div v-for="f in detailFields" :key="f.key" class="min-w-0 rounded border border-slate-100 px-2 py-1.5 dark:border-slate-800" :data-testid="`downsample-detail-field-${f.key}`">
+          <dt class="text-[11px] mts-muted">{{ f.label }}</dt>
+          <dd class="mt-0.5 break-all text-xs text-slate-800 dark:text-slate-100" :class="f.mono ? 'font-mono' : ''">{{ f.key === 'enabled' ? detailEnabledLabel(detailPolicy.enabled) : f.value }}</dd>
+        </div>
+      </dl>
+      <div v-if="detailStatus" class="border-t border-slate-100 px-3 py-2 text-xs dark:border-slate-800" data-testid="downsample-detail-status">
+        <p class="mts-muted">{{ t('downsampleStatusPanel') }}</p>
+        <p class="mt-1 font-mono text-slate-700 dark:text-slate-200">
+          {{ t('downsampleColCompleted') }}: {{ formatUnix(detailStatus.completed_until_unix) }}
+          · {{ t('downsampleColLastRun') }}: {{ formatUnix(detailStatus.last_run_unix) }}
+        </p>
+        <p v-if="detailStatus.last_error" class="mt-1 text-red-600 dark:text-red-300" data-testid="downsample-detail-status-error">{{ detailStatus.last_error }}</p>
+      </div>
     </div>
 
     <div id="downsample-status" class="mts-card scroll-mt-20 overflow-hidden p-0" data-testid="downsample-status-panel">

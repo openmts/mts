@@ -219,8 +219,19 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     },
     automated: true,
     jump: '/downsample#downsample-filter-bar',
+  },  {
+    id: 'downsample-policy-detail',
+    severity: 'recommended',
+    title: { zh: '降采样策略详情可核对', en: 'Downsample policy detail inspectable' },
+    detail: {
+      zh: '策略列表可打开详情面板，核对 retention/refresh/lookback/batch_size/functions 与水位摘要。',
+      en: 'Open a policy detail panel from the list to verify retention/refresh/lookback/batch_size/functions and watermark summary.',
+    },
+    automated: true,
+    jump: '/downsample#downsample-detail',
   },
 ]
+
 
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {

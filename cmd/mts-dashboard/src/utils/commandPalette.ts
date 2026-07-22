@@ -668,7 +668,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', '批量 last', '禁用会话', '降采样高级'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', '批量 last', '禁用会话', '降采样高级', '策略详情'],
     adminOnly: true,
   },
   {
@@ -728,6 +728,18 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
       'downsample-advanced-form',
       'retention refresh lookback',
       'batch_size',
+    ],
+    adminOnly: true,
+  },
+  {
+    id: 'readiness-downsample-policy-detail',
+    path: '/downsample#downsample-detail',
+    labelKey: 'cmdReadinessDownsamplePolicyDetail',
+    keywords: [
+      'downsample policy detail',
+      '降采样策略详情',
+      'downsample-policy-detail',
+      'policy detail panel',
     ],
     adminOnly: true,
   },
