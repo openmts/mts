@@ -6,6 +6,7 @@ import {
   resolveApiTimeoutMs,
 } from '@/utils/requestTimeout'
 import { readAuthStorageSnapshot } from '@/utils/authStorageSync'
+import { parseAdminBusyFromHeaders } from '@/utils/adminOpBusy'
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 const API_TIMEOUT_MS = resolveApiTimeoutMs(import.meta.env.VITE_API_TIMEOUT_MS, DEFAULT_API_TIMEOUT_MS)
 const TOKEN_KEY = 'mts_bearer_token'
@@ -232,6 +233,11 @@ function triggerAuthFailed() {
 
 async function readAPIError(response: Response, fallbackText = ''): Promise<APIError> {
   let err: APIError = { ok: false, code: 'internal', message: response.statusText || 'request failed' }
+  const hdr = parseAdminBusyFromHeaders((name) => response.headers.get(name))
+  if (hdr.busy) {
+    err.admin_op_busy = true
+    if (hdr.op) err.op = hdr.op
+  }
   const text = fallbackText || await response.text().catch(() => '')
   if (!text) return err
   try {
@@ -241,8 +247,8 @@ async function readAPIError(response: Response, fallbackText = ''): Promise<APIE
       code: parsed.code || err.code,
       message: parsed.message || parsed.error || err.message,
       error: parsed.error,
-      admin_op_busy: Boolean(parsed.admin_op_busy),
-      op: typeof parsed.op === 'string' ? parsed.op : undefined,
+      admin_op_busy: Boolean(parsed.admin_op_busy) || hdr.busy || Boolean(err.admin_op_busy),
+      op: (typeof parsed.op === 'string' && parsed.op.trim()) ? parsed.op.trim() : (hdr.op || err.op),
     }
   } catch (_) {
     err.message = text

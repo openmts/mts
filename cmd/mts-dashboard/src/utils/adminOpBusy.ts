@@ -142,6 +142,22 @@ export function adminHeavyBusyOpFromError(err: unknown): string {
 /** 运维占用状态条深链（toast / 横幅统一） */
 export const ADMIN_OP_BUSY_OPS_PATH = '/operations#ops-status-strip'
 
+/** 从 HTTP 响应头解析 admin busy（大小写不敏感） */
+export function parseAdminBusyFromHeaders(getHeader: (name: string) => string | null | undefined): {
+  busy: boolean
+  op: string
+} {
+  const busyRaw = String(
+    getHeader('X-MTS-Admin-Op-Busy') || getHeader('x-mts-admin-op-busy') || '',
+  )
+    .trim()
+    .toLowerCase()
+  const busy = busyRaw === 'true' || busyRaw === '1' || busyRaw === 'yes'
+  const op = String(getHeader('X-MTS-Admin-Op') || getHeader('x-mts-admin-op') || '').trim()
+  return { busy, op }
+}
+
+
 /** toast 快捷动作：打开运维状态条 */
 export function adminOpBusyOpenAction(label: string): { label: string; path: string } {
   const lab = String(label || '').trim()
@@ -149,5 +165,10 @@ export function adminOpBusyOpenAction(label: string): { label: string; path: str
     label: lab || 'Open Operations',
     path: ADMIN_OP_BUSY_OPS_PATH,
   }
+}
+
+/** 供 useNotify.error 的 action 选项（调用方传入已翻译 label） */
+export function buildAdminBusyNotifyOptions(label: string): { action: { label: string; path: string } } {
+  return { action: adminOpBusyOpenAction(label) }
 }
 

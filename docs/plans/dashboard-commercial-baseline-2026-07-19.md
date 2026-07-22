@@ -1417,3 +1417,14 @@
 - Server：互斥错误响应结构化 `admin_op_busy` + `op`（`newAdminHeavyBusyError`）
 - Dashboard：`APIClientError` 透传字段；busy 识别/文案优先结构化 op；兼容 message 解析
 
+## P330（2026-07-22）
+- Server：互斥错误写 `X-MTS-Admin-Op-Busy` / `X-MTS-Admin-Op` 响应头
+- Dashboard：`parseAdminBusyFromHeaders` + `readAPIError` 头/体双通道解析
+
+## P331（2026-07-22）
+- Server：gRPC `grpcError(ctx,err)` 对 busy 写 header/trailer metadata（`x-mts-admin-op-busy` / `x-mts-admin-op`）
+
+## P332（2026-07-22）
+- Overview：刷新失败若 admin busy，toast 附带打开运维 action，并乐观置 busy
+- adminOpBusy：`buildAdminBusyNotifyOptions` 统一 action 构造
+

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -135,11 +136,11 @@ func grpcWriteHandler(service any, ctx context.Context, decode func(any) error, 
 				dbName,
 				mts.DatabasePermissionWrite,
 			); err != nil {
-				return nil, grpcError(err)
+				return nil, grpcError(ctx, err)
 			}
 		}
 		if err := service.(*grpcService).runtime.write(ctx, *writeReq); err != nil {
-			return nil, grpcError(err)
+			return nil, grpcError(ctx, err)
 		}
 		return writeResponse{OK: true}, nil
 	}
@@ -154,11 +155,11 @@ func grpcQueryRowsHandler(service any, ctx context.Context, decode func(any) err
 			queryReq.Query.Database,
 			mts.DatabasePermissionRead,
 		); err != nil {
-			return nil, grpcError(err)
+			return nil, grpcError(ctx, err)
 		}
 		rows, err := service.(*grpcService).runtime.queryRows(ctx, *queryReq)
 		if err != nil {
-			return nil, grpcError(err)
+			return nil, grpcError(ctx, err)
 		}
 		return queryRowsResponse{Rows: rows, Stats: service.(*grpcService).runtime.queryStats()}, nil
 	}
@@ -168,10 +169,10 @@ func grpcQueryRowsHandler(service any, ctx context.Context, decode func(any) err
 func grpcFlushHandler(service any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	handler := func(ctx context.Context, _ any) (any, error) {
 		if err := service.(*grpcService).runtime.requireGRPCAdmin(ctx); err != nil {
-			return nil, grpcError(err)
+			return nil, grpcError(ctx, err)
 		}
 		if err := service.(*grpcService).runtime.flush(ctx); err != nil {
-			return nil, grpcError(err)
+			return nil, grpcError(ctx, err)
 		}
 		return maintenanceResponse{OK: true}, nil
 	}
@@ -181,11 +182,11 @@ func grpcFlushHandler(service any, ctx context.Context, decode func(any) error, 
 func grpcCompactHandler(service any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	handler := func(ctx context.Context, _ any) (any, error) {
 		if err := service.(*grpcService).runtime.requireGRPCAdmin(ctx); err != nil {
-			return nil, grpcError(err)
+			return nil, grpcError(ctx, err)
 		}
 		result, err := service.(*grpcService).runtime.compact(ctx)
 		if err != nil {
-			return nil, grpcError(err)
+			return nil, grpcError(ctx, err)
 		}
 		return maintenanceResponse{OK: true, Result: result}, nil
 	}
@@ -199,7 +200,7 @@ func unaryHandler(methodName string, prototype any, fn func(*serverRuntime, cont
 		handler := func(ctx context.Context, decoded any) (any, error) {
 			resp, err := fn(service.(*grpcService).runtime, ctx, decoded)
 			if err != nil {
-				return nil, grpcError(err)
+				return nil, grpcError(ctx, err)
 			}
 			return resp, nil
 		}
@@ -735,12 +736,26 @@ func invokeGRPCUnary(ctx context.Context, req any, decode func(any) error, inter
 	return interceptor(ctx, req, info, handler)
 }
 
-func grpcError(err error) error {
+func grpcError(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
 	classified := classifyAPIError(err)
+	var apiErr apiError
+	if errors.As(err, &apiErr) && (apiErr.AdminOpBusy || apiErr.Op != "") {
+		pairs := []string{metadataAdminOpBusy, "true"}
+		if apiErr.Op != "" {
+			pairs = append(pairs, metadataAdminOp, apiErr.Op)
+		}
+		_ = grpc.SetHeader(ctx, metadata.Pairs(pairs...))
+		_ = grpc.SetTrailer(ctx, metadata.Pairs(pairs...))
+	}
 	return status.Error(grpcCodeForErrorCode(classified.Code), classified.Message)
+}
+
+// grpcErrorPlain 无上下文时的兼容包装（测试/内部）。
+func grpcErrorPlain(err error) error {
+	return grpcError(context.Background(), err)
 }
 
 func grpcCodeForErrorCode(code errorCode) codes.Code {
@@ -790,13 +805,13 @@ func grpcListStorageSnapshots(r *serverRuntime, _ context.Context, _ any) (any, 
 	return r.listStorageSnapshots()
 }
 
-func grpcDeleteStorageSnapshot(r *serverRuntime, _ context.Context, req any) (any, error) {
+func grpcDeleteStorageSnapshot(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	request, _ := req.(*storageSnapshotDeleteRequest)
 	if request == nil || strings.TrimSpace(request.Name) == "" {
-		return nil, grpcError(fmt.Errorf("name is required"))
+		return nil, grpcError(ctx, fmt.Errorf("name is required"))
 	}
 	if err := r.deleteStorageSnapshot(request.Name); err != nil {
-		return nil, grpcError(err)
+		return nil, grpcError(ctx, err)
 	}
 	return okResponse{OK: true}, nil
 }

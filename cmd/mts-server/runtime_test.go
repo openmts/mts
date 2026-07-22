@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -319,6 +320,14 @@ func TestRuntimeAdminHeavySharedMutex(t *testing.T) {
 		_, resp := apiErrorResponse(err)
 		if !resp.AdminOpBusy || resp.Op != "test" {
 			t.Fatalf("errorResponse busy fields = %+v", resp)
+		}
+		rec := httptest.NewRecorder()
+		writeAPIError(rec, err)
+		if rec.Header().Get(headerAdminOpBusy) != "true" {
+			t.Fatalf("header busy = %q", rec.Header().Get(headerAdminOpBusy))
+		}
+		if rec.Header().Get(headerAdminOp) != "test" {
+			t.Fatalf("header op = %q", rec.Header().Get(headerAdminOp))
 		}
 	}
 	// flush also busy

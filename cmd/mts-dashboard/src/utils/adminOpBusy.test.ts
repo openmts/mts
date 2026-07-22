@@ -9,6 +9,7 @@ import {
   isAdminHeavyBusyError,
   isAdminHeavyBusyMessage,
   joinAdminOpChip,
+  parseAdminBusyFromHeaders,
   parseAdminHeavyBusyOp,
   parseAdminOpBusyPayload,
   parseAdminOpStatusPayload,
@@ -118,5 +119,17 @@ test('structured adminOpBusy flag and op', () => {
     }),
     'compact',
   )
+})
+
+test('parseAdminBusyFromHeaders', () => {
+  const h = (name: string) => {
+    const m: Record<string, string> = {
+      'X-MTS-Admin-Op-Busy': 'true',
+      'X-MTS-Admin-Op': 'flush',
+    }
+    return m[name] || null
+  }
+  assert.deepEqual(parseAdminBusyFromHeaders(h), { busy: true, op: 'flush' })
+  assert.deepEqual(parseAdminBusyFromHeaders(() => null), { busy: false, op: '' })
 })
 

@@ -82,6 +82,12 @@ func writeHTTPJSON(writer http.ResponseWriter, status int, value any) {
 
 func writeAPIError(writer http.ResponseWriter, err error) {
 	status, response := apiErrorResponse(err)
+	if response.AdminOpBusy {
+		writer.Header().Set(headerAdminOpBusy, "true")
+		if response.Op != "" {
+			writer.Header().Set(headerAdminOp, response.Op)
+		}
+	}
 	writeHTTPJSON(writer, status, response)
 }
 

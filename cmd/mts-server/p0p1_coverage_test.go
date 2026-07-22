@@ -676,10 +676,10 @@ func TestP0P1DirectHelperBranches(t *testing.T) {
 	if (apiError{Code: errorCodeInternal}).Error() != string(errorCodeInternal) {
 		t.Fatal("apiError code string mismatch")
 	}
-	if status.Code(grpcError(newAPIError(errorCodeInternal, "internal", nil))) != codes.Internal {
+	if status.Code(grpcErrorPlain(newAPIError(errorCodeInternal, "internal", nil))) != codes.Internal {
 		t.Fatal("grpc internal code mismatch")
 	}
-	if status.Code(grpcError(errors.New("plain failure"))) != codes.Internal {
+	if status.Code(grpcErrorPlain(errors.New("plain failure"))) != codes.Internal {
 		t.Fatal("grpc plain error code mismatch")
 	}
 }

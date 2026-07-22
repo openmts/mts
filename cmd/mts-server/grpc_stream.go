@@ -32,7 +32,7 @@ func grpcQueryStreamHandler(service any, stream grpc.ServerStream) error {
 	}
 	ctx := stream.Context()
 	if err := r.authorizeGRPCDatabase(ctx, req.Query.Database, mts.DatabasePermissionRead); err != nil {
-		return grpcError(err)
+		return grpcError(ctx, err)
 	}
 	format, err := normalizeStreamFormat(req.Format, req.Mode)
 	if err != nil {
@@ -40,7 +40,7 @@ func grpcQueryStreamHandler(service any, stream grpc.ServerStream) error {
 	}
 	query, err := r.limitedQuery(req.Query)
 	if err != nil {
-		return grpcError(err)
+		return grpcError(ctx, err)
 	}
 	switch format {
 	case streamTypeColumn:
@@ -53,7 +53,7 @@ func grpcQueryStreamHandler(service any, stream grpc.ServerStream) error {
 func streamGRPCRows(r *serverRuntime, stream grpc.ServerStream, query mts.Query) error {
 	rows, err := r.engine.QueryRowIterator(stream.Context(), query)
 	if err != nil {
-		return grpcError(err)
+		return grpcError(stream.Context(), err)
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
@@ -63,7 +63,7 @@ func streamGRPCRows(r *serverRuntime, stream grpc.ServerStream, query mts.Query)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return grpcError(err)
+		return grpcError(stream.Context(), err)
 	}
 	stats := r.queryStats()
 	return stream.SendMsg(streamRecord{Type: streamTypeEnd, Stats: &stats})
@@ -72,7 +72,7 @@ func streamGRPCRows(r *serverRuntime, stream grpc.ServerStream, query mts.Query)
 func streamGRPCColumns(r *serverRuntime, stream grpc.ServerStream, query mts.Query) error {
 	columns, err := r.engine.QueryColumnIterator(stream.Context(), query)
 	if err != nil {
-		return grpcError(err)
+		return grpcError(stream.Context(), err)
 	}
 	defer func() { _ = columns.Close() }()
 	for columns.Next() {
@@ -82,7 +82,7 @@ func streamGRPCColumns(r *serverRuntime, stream grpc.ServerStream, query mts.Que
 		}
 	}
 	if err := columns.Err(); err != nil {
-		return grpcError(err)
+		return grpcError(stream.Context(), err)
 	}
 	stats := r.queryStats()
 	return stream.SendMsg(streamRecord{Type: streamTypeEnd, Stats: &stats})

@@ -7,7 +7,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, adminOpKindLabelKey, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
@@ -84,6 +84,18 @@ const overviewAdminBusyHintText = computed(() => {
   return t.value('overviewAdminBusyHintGeneric')
 })
 const { success, info, error: notifyError } = useNotify()
+
+function notifyAdminBusy(message?: string) {
+  notifyError(message || t.value('opsAdminBusy'), {
+    action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')),
+  })
+}
+
+function notifyMaybeAdminBusy(message: string, err?: unknown) {
+  if (err && isAdminHeavyBusyError(err)) notifyAdminBusy(message)
+  else if (adminOpBusy.value) notifyAdminBusy(message)
+  else notifyError(message)
+}
 const {
   exportJob,
   exportBusy,
@@ -444,11 +456,15 @@ async function loadOverview(opts?: { background?: boolean }) {
     refreshFailStreak.value = 0
   } catch (e) {
     const msg = formatCaughtError(e)
+    if (isAdminHeavyBusyError(e)) {
+      setAdminOpBusy(true, adminHeavyBusyOpFromError(e) || undefined)
+      void refreshAdminOpBusy()
+    }
     if (background && hasOverviewSnapshot()) {
       refreshError.value = msg
       refreshFailStreak.value += 1
       if (refreshFailStreak.value === 1) {
-        notifyError(`${t.value('overviewRefreshFailed')}：${msg}`)
+        notifyMaybeAdminBusy(`${t.value('overviewRefreshFailed')}：${msg}`, e)
       }
     } else {
       loadError.value = msg
