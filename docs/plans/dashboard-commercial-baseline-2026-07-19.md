@@ -2352,3 +2352,15 @@
 | Account 告警 | session 样本 | account-clock-skew-alert | 运维可操作 |
 | 下一步去重 | — | opsNextSteps | 避免双条 |
 
+## P460（2026-07-23）
+- Server：`POST /auth/login`（HTTP/gRPC）返回 `remaining_seconds` + `server_time_unix`（与 session 对齐）
+- Dashboard：登录成功立即种子化校准字段，时钟偏差/写门禁无需等待探测
+- 就绪清单：`login-session-seed`（required）
+
+### 前后端对齐（P460）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 登录校准 | remaining_seconds / server_time_unix | useAuth.login seed | 即时样本 |
+| 会话探测 | GET /auth/session | refreshSession | 持续校准 |
+| 就绪门禁 | — | login-session-seed | required |
+

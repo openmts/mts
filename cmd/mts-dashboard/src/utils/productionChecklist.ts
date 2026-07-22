@@ -299,6 +299,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/account#account-session',
   },
   {
+    id: 'login-session-seed',
+    severity: 'required',
+    title: { zh: '登录即会话校准种子', en: 'Login seeds session calibration' },
+    detail: {
+      zh: 'POST /auth/login 返回 remaining_seconds 与 server_time_unix；Dashboard 登录成功后立即种子化，无需等待周期探测。',
+      en: 'POST /auth/login returns remaining_seconds and server_time_unix; Dashboard seeds calibration immediately after login without waiting for probes.',
+    },
+    automated: true,
+    jump: '/account#account-session',
+  },
+  {
     id: 'overview-session-server-hint',
     severity: 'recommended',
     title: { zh: 'Overview 会话服务端提示', en: 'Overview session server hint' },

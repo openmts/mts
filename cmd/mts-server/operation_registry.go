@@ -231,7 +231,7 @@ func operationCatalog() []operation {
 			Name:         "login",
 			Namespace:    "auth",
 			Description:  "issue user bearer token",
-			ResponseHint: "authTokenResponse{token,must_change_password}",
+			ResponseHint: "authTokenResponse{token,must_change_password,remaining_seconds,server_time_unix}",
 			Auth:         authUserPass,
 			HTTPMethods:  []string{http.MethodPost},
 			HTTPPaths:    []string{routeAuthLogin},

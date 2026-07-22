@@ -668,7 +668,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
     adminOnly: true,
   },
   {

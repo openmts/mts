@@ -26,6 +26,7 @@ test('production checklist has required commercial gates', () => {
     'ops-downsample-health-card',
     'password-policy-public',
     'session-remaining-calibration',
+    'login-session-seed',
     'overview-session-server-hint',
     'clock-skew-banner',
     'api-spec-password-policy',
@@ -154,4 +155,13 @@ test('clock-skew-banner is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('account-session'))
+})
+
+test('login-session-seed is automated required gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'login-session-seed')
+  assert.ok(item)
+  assert.equal(item!.severity, 'required')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('account-session'))
+  assert.ok(requiredChecklist().some((x) => x.id === 'login-session-seed'))
 })

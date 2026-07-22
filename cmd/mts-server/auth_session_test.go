@@ -91,3 +91,33 @@ func TestDataSeriesOffsetAndQuery(t *testing.T) {
 		t.Fatalf("tags = %#v", filtered.Series[0].Tags)
 	}
 }
+
+func TestHTTPAuthLoginSessionSeed(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	seedUserWithPassword(t, runtime, mts.User{Name: "login-seed", Role: mts.UserRoleUser}, "secret12")
+	var login authTokenResponse
+	postJSONWithHeaders(t, server.URL+"/api/v1/auth/login", loginRequest{
+		UserName:   "login-seed",
+		Password:   "secret12",
+		TTLSeconds: 3600,
+	}, nil, http.StatusOK, &login)
+	if login.Token.Token == "" {
+		t.Fatalf("empty token")
+	}
+	if login.RemainingSeconds <= 0 {
+		t.Fatalf("remaining_seconds = %d", login.RemainingSeconds)
+	}
+	if login.RemainingSeconds > 3600 {
+		t.Fatalf("remaining_seconds = %d > ttl", login.RemainingSeconds)
+	}
+	if login.ServerTimeUnix <= 0 {
+		t.Fatalf("server_time_unix = %d", login.ServerTimeUnix)
+	}
+	skew := time.Now().Unix() - login.ServerTimeUnix
+	if skew < -2 || skew > 2 {
+		t.Fatalf("server_time_unix skew = %d", skew)
+	}
+}

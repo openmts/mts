@@ -13,6 +13,27 @@ const (
 	maxAuthTTL     = 30 * 24 * time.Hour
 )
 
+func remainingSecondsUntil(expiresAt time.Time) int64 {
+	if expiresAt.IsZero() {
+		return 0
+	}
+	sec := int64(time.Until(expiresAt).Seconds())
+	if sec < 0 {
+		return 0
+	}
+	return sec
+}
+
+func buildAuthTokenResponse(token mts.AuthToken, mustChange bool) authTokenResponse {
+	now := time.Now()
+	return authTokenResponse{
+		Token:              token,
+		MustChangePassword: mustChange,
+		RemainingSeconds:   remainingSecondsUntil(token.ExpiresAt),
+		ServerTimeUnix:     now.Unix(),
+	}
+}
+
 func (r *serverRuntime) handleLogin(writer http.ResponseWriter, request *http.Request) {
 	if !requireHTTPMethod(writer, request, http.MethodPost) {
 		return
@@ -42,7 +63,7 @@ func (r *serverRuntime) handleLogin(writer http.ResponseWriter, request *http.Re
 		mustChange = userMustChangePassword(user)
 	}
 	r.audit.record(auditEvent{UserName: req.UserName, Action: "login"})
-	writeHTTPJSON(writer, http.StatusOK, authTokenResponse{Token: token, MustChangePassword: mustChange})
+	writeHTTPJSON(writer, http.StatusOK, buildAuthTokenResponse(token, mustChange))
 }
 
 func (r *serverRuntime) handleLogout(writer http.ResponseWriter, request *http.Request) {
@@ -140,20 +161,13 @@ func (r *serverRuntime) handleSession(writer http.ResponseWriter, request *http.
 	if user, ok, getErr := r.engine.GetUser(request.Context(), principal.UserName); getErr == nil && ok {
 		mustChange = userMustChangePassword(user)
 	}
-	remaining := int64(0)
-	if !principal.ExpiresAt.IsZero() {
-		sec := int64(time.Until(principal.ExpiresAt).Seconds())
-		if sec > 0 {
-			remaining = sec
-		}
-	}
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToSession(sessionResponse{
 		OK:                 true,
 		UserName:           principal.UserName,
 		Role:               principal.Role,
 		ExpiresAt:          principal.ExpiresAt,
 		MustChangePassword: mustChange,
-		RemainingSeconds:   remaining,
+		RemainingSeconds:   remainingSecondsUntil(principal.ExpiresAt),
 		ServerTimeUnix:     time.Now().Unix(),
 	}))
 }

@@ -67,12 +67,22 @@ export function useAuth() {
       mustChangePassword.value = !!data.must_change_password
       isAuthenticated.value = true
       resetAuthRedirect()
-      if (data.token.expires_at) {
+      const checkedAt = Date.now()
+      lastSessionCheckedAt.value = checkedAt
+      if (typeof data.remaining_seconds === 'number' && Number.isFinite(data.remaining_seconds)) {
+        lastSessionRemainingSeconds.value = Math.max(0, Math.floor(data.remaining_seconds))
+      } else if (data.token.expires_at) {
         const exp = Date.parse(data.token.expires_at)
-        if (Number.isFinite(exp)) {
-          lastSessionRemainingSeconds.value = Math.max(0, Math.floor((exp - Date.now()) / 1000))
-          lastSessionCheckedAt.value = Date.now()
-        }
+        lastSessionRemainingSeconds.value = Number.isFinite(exp)
+          ? Math.max(0, Math.floor((exp - checkedAt) / 1000))
+          : null
+      } else {
+        lastSessionRemainingSeconds.value = null
+      }
+      if (typeof data.server_time_unix === 'number' && Number.isFinite(data.server_time_unix)) {
+        lastSessionServerTimeUnix.value = Math.floor(data.server_time_unix)
+      } else {
+        lastSessionServerTimeUnix.value = null
       }
       return null
     } catch (e) {

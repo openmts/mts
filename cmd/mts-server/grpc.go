@@ -297,7 +297,7 @@ func grpcLogin(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if user, ok, getErr := r.engine.GetUser(ctx, request.UserName); getErr == nil && ok {
 		mustChange = userMustChangePassword(user)
 	}
-	return authTokenResponse{Token: token, MustChangePassword: mustChange}, nil
+	return buildAuthTokenResponse(token, mustChange), nil
 }
 
 func grpcLogout(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -327,20 +327,13 @@ func grpcGetSession(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 	if user, ok, getErr := r.engine.GetUser(ctx, principal.UserName); getErr == nil && ok {
 		mustChange = userMustChangePassword(user)
 	}
-	remaining := int64(0)
-	if !principal.ExpiresAt.IsZero() {
-		sec := int64(time.Until(principal.ExpiresAt).Seconds())
-		if sec > 0 {
-			remaining = sec
-		}
-	}
 	return r.attachAdminOpToSession(sessionResponse{
 		OK:                 true,
 		UserName:           principal.UserName,
 		Role:               principal.Role,
 		ExpiresAt:          principal.ExpiresAt,
 		MustChangePassword: mustChange,
-		RemainingSeconds:   remaining,
+		RemainingSeconds:   remainingSecondsUntil(principal.ExpiresAt),
 		ServerTimeUnix:     time.Now().Unix(),
 	}), nil
 }

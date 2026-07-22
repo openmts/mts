@@ -566,6 +566,9 @@ export interface LoginResponse {
     expires_at: string
   }
   must_change_password?: boolean
+  /** 与 GET /auth/session 对齐，登录即校准 remaining / 时钟 */
+  remaining_seconds?: number
+  server_time_unix?: number
 }
 
 export async function apiLogin(

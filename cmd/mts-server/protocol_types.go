@@ -197,6 +197,9 @@ type loginRequest struct {
 type authTokenResponse struct {
 	Token              mts.AuthToken `json:"token"`
 	MustChangePassword bool          `json:"must_change_password,omitempty"`
+	// RemainingSeconds / ServerTimeUnix 与 GET /auth/session 对齐，供登录即校准。
+	RemainingSeconds int64 `json:"remaining_seconds"`
+	ServerTimeUnix   int64 `json:"server_time_unix"`
 }
 
 // passwordPolicyResponse 公开密码策略（与 Dashboard 校验对齐，无需登录）。
