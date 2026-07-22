@@ -509,7 +509,8 @@ async function createDatabase() {
   const signal = dbActionAbort.begin()
   try {
     const name = newDbName.value.trim()
-    await apiPost('/api/v1/admin/databases', { name }, { signal })
+    const created = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/databases', { name }, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(created))
     databases.value.push({
       name,
       measurements: [],
@@ -556,7 +557,8 @@ async function confirmDeleteDatabase() {
   dbActionStartedAt.value = Date.now()
   const signal = dbActionAbort.begin()
   try {
-    await apiDelete(`/api/v1/admin/databases/${encodeURIComponent(name)}`, { signal })
+    const del = await apiDelete<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/databases/${encodeURIComponent(name)}`, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(del))
     databases.value = databases.value.filter((d) => d.name !== name)
     pruneTo(databases.value.map((d) => d.name))
     confirmOpen.value = false
@@ -600,9 +602,10 @@ async function createRetentionPolicy(db: DatabaseEntry) {
   dbActionStartedAt.value = Date.now()
   const signal = dbActionAbort.begin()
   try {
-    await apiPost(`/api/v1/admin/databases/${encodeURIComponent(db.name)}/retention-policies`, {
+    const rp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/databases/${encodeURIComponent(db.name)}/retention-policies`, {
       policy: { name, duration: durationNs },
     }, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(rp))
     db.retentionPolicies.push({ name, duration: durationNs })
     db.newRpName = ''
     db.newRpDuration = ''

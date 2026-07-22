@@ -683,7 +683,8 @@ async function createPolicy() {
   dsActionStartedAt.value = Date.now()
   const signal = dsActionAbort.begin()
   try {
-    await apiPost('/api/v1/admin/downsample/policies', newPolicy.value, { signal })
+    const created = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/downsample/policies', newPolicy.value, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(created))
     showCreate.value = false
     newPolicy.value = {
       name: '', source_database: '', source_measurement: '',
@@ -724,7 +725,8 @@ async function confirmDelete() {
   dsActionStartedAt.value = Date.now()
   const signal = dsActionAbort.begin()
   try {
-    await apiDelete(`/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`, { signal })
+    const del = await apiDelete<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(del))
     deleteOpen.value = false
     await loadData()
     setActionOk(t.value('downsampleDeleted'))
@@ -752,7 +754,8 @@ async function togglePolicy(policy: DownsamplePolicy) {
   dsActionStartedAt.value = Date.now()
   const signal = dsActionAbort.begin()
   try {
-    await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`, undefined, { signal })
+    const act = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`, undefined, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(act))
     await loadData()
     lastFailedAction.value = null
     const msg = policy.enabled ? t.value('downsampleDisabledOk') : t.value('downsampleEnabledOk')
@@ -829,9 +832,10 @@ async function resetPolicy(name: string) {
   const signal = dsActionAbort.begin()
   clearActionResult()
   try {
-    await apiPost(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/reset`, {
+    const reset = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/reset`, {
       reset: { allow_policy_replace: true },
     }, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(reset))
     await loadData()
     const msg = `${t.value('downsampleResetOk')}: ${name}`
     setActionOk(msg)

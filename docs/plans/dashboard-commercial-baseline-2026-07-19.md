@@ -1721,5 +1721,17 @@
 | downsample dry-run | 是 | 是 | 是 | 预览不写库 |
 | downsample enable/disable/reset | 是 | 部分 | loadData 回读 | ok 体带 last |
 
+## P411（2026-07-22）
+- Server：统一剩余 admin mutation 的 `ok` 响应附带 `admin_op_busy/op/started_at_unix/last`（users/databases/RP/downsample create-drop/permissions/delete 等 HTTP + gRPC）
+- Dashboard：Users / Databases / Downsample 写操作成功后即时 `applyAdminOpStatus`
+- HTTP 单测覆盖 create/drop database busy/last；全量 mts-server 测试通过
 
+### busy/last 覆盖矩阵（P411 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| users create/update/delete/password | 是 | 是 | 是 | ok 体 |
+| databases create/drop + RP create | 是 | 是 | 是 | ok 体 |
+| downsample create/drop/enable/disable/reset | 是 | 是 | 是 | ok 体 |
+| data delete | 是 | 是 | 列表/查询侧回读 | ok 体 |
+| auth password/logout 等 | 是 | 是 | 会话刷新 | ok 体 |
 

@@ -340,12 +340,13 @@ async function createUser() {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    await apiPost('/api/v1/users', {
+        const created = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/users', {
       name: newUser.value.name.trim(),
       display_name: newUser.value.display_name,
       role: newUser.value.role,
       password: newUser.value.password || undefined,
     }, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(created))
     showCreate.value = false
     newUser.value = { name: '', display_name: '', role: 'user', password: '' }
     await loadUsers()
@@ -374,7 +375,8 @@ async function doSetPassword() {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    await apiPut(`/api/v1/users/${encodeURIComponent(setPasswordUser.value)}/password`, { password: setPasswordValue.value }, { signal })
+    const pwdResp = await apiPut<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(setPasswordUser.value)}/password`, { password: setPasswordValue.value }, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(pwdResp))
     showSetPassword.value = false
     setPasswordValue.value = ''
     setActionOk(t.value('usersPasswordSet'))
@@ -402,11 +404,12 @@ async function doChangeSelfPassword() {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    await apiPost('/api/v1/auth/password', {
+        const chg = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/auth/password', {
       user_name: currentUser.value,
       old_password: selfOldPassword.value,
       new_password: selfNewPassword.value,
     }, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(chg))
     showChangeSelfPassword.value = false
     selfOldPassword.value = ''
     selfNewPassword.value = ''
@@ -463,7 +466,8 @@ async function confirmDelete() {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    await apiDelete(`/api/v1/users/${encodeURIComponent(name)}`, { signal })
+    const del = await apiDelete<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(name)}`, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(del))
     await loadUsers()
     if (selectedUser.value?.name === name) selectedUser.value = null
     deleteOpen.value = false
@@ -492,7 +496,8 @@ async function toggleDisable(user: User) {
   try {
     // 供重试定位用户
     // context set on failure via reportAndNotify
-    await apiPut(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled }, { signal })
+    const upd = await apiPut<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled }, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(upd))
     await loadUsers()
     const okMsg = user.disabled ? t.value('usersEnabled') : t.value('usersDisabled')
     setActionOk(okMsg)

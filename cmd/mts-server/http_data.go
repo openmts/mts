@@ -280,7 +280,7 @@ func (r *serverRuntime) handleDelete(writer http.ResponseWriter, request *http.R
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 }
 
 func writeRequestDatabases(req writeRequest) []string {

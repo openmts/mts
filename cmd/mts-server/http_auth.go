@@ -72,7 +72,7 @@ func (r *serverRuntime) handleLogout(writer http.ResponseWriter, request *http.R
 		return
 	}
 	r.audit.record(auditEvent{UserName: principal.UserName, Action: "logout"})
-	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 }
 
 func (r *serverRuntime) handleChangePassword(writer http.ResponseWriter, request *http.Request) {
@@ -112,7 +112,7 @@ func (r *serverRuntime) handleChangePassword(writer http.ResponseWriter, request
 		return
 	}
 	r.audit.record(auditEvent{UserName: principal.UserName, Action: "change_password"})
-	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 }
 
 func (r *serverRuntime) handleSession(writer http.ResponseWriter, request *http.Request) {

@@ -1093,6 +1093,48 @@ func TestHTTPRetentionReloadDownsampleBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPUserDatabaseMutationOKBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("flush"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var createBusy okResponse
+	postJSONWithHeaders(t, server.URL+routeAdminDatabases, databaseRequest{Name: "p411db"}, nil, http.StatusOK, &createBusy)
+	if !createBusy.OK || !createBusy.AdminOpBusy || createBusy.Op != "flush" {
+		t.Fatalf("create db busy = %+v", createBusy)
+	}
+	runtime.finishAdminHeavy(errors.New("p411 probe fail"))
+
+	postJSONWithHeaders(t, server.URL+routeAdminDatabases, databaseRequest{Name: "p411db2"}, nil, http.StatusOK, &okResponse{})
+	var drop okResponse
+	// deleteHTTP may not decode; use raw
+	req, err := http.NewRequest(http.MethodDelete, server.URL+"/api/v1/admin/databases/p411db2", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("delete status = %d", resp.StatusCode)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&drop); err != nil {
+		t.Fatalf("decode drop: %v", err)
+	}
+	if drop.AdminOpBusy {
+		t.Fatalf("drop want not busy: %+v", drop)
+	}
+	if drop.Last == nil || drop.Last.Op != "flush" || drop.Last.OK || drop.Last.Error != "p411 probe fail" {
+		t.Fatalf("drop last = %+v", drop.Last)
+	}
+}
+
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

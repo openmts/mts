@@ -243,7 +243,10 @@ func grpcDelete(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.authorizeGRPCDatabase(ctx, request.Request.Database, mts.DatabasePermissionWrite); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.deleteData(ctx, request.Request)
+	if err := r.deleteData(ctx, request.Request); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcQueryColumns(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -302,7 +305,7 @@ func grpcLogout(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.engine.RevokeToken(ctx, token); err != nil {
 		return nil, newAPIError(errorCodeUnauthenticated, "invalid user bearer token", err)
 	}
-	return okResponse{OK: true}, nil
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcGetSession(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -355,7 +358,7 @@ func grpcChangePassword(r *serverRuntime, ctx context.Context, req any) (any, er
 	if err := r.clearMustChangePassword(ctx, principal.UserName); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, nil
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcSetUserPassword(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -369,21 +372,27 @@ func grpcSetUserPassword(r *serverRuntime, ctx context.Context, req any) (any, e
 	if err := r.clearMustChangePassword(ctx, request.UserName); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, nil
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcCreateUser(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.createUserWithInitialPassword(ctx, *req.(*createUserRequest))
+	if err := r.createUserWithInitialPassword(ctx, *req.(*createUserRequest)); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcUpdateUser(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.engine.UpdateUser(ctx, *req.(*mts.User))
+	if err := r.engine.UpdateUser(ctx, *req.(*mts.User)); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcGetUser(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -415,7 +424,10 @@ func grpcDeleteUser(r *serverRuntime, ctx context.Context, req any) (any, error)
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.engine.DeleteUser(ctx, req.(*userNameRequest).Name)
+	if err := r.engine.DeleteUser(ctx, req.(*userNameRequest).Name); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcGrantDatabasePermission(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -423,7 +435,10 @@ func grpcGrantDatabasePermission(r *serverRuntime, ctx context.Context, req any)
 		return nil, err
 	}
 	request := req.(*databasePermissionRequest)
-	return okResponse{OK: true}, r.engine.GrantDatabasePermission(ctx, request.UserName, request.Database, request.Permission)
+	if err := r.engine.GrantDatabasePermission(ctx, request.UserName, request.Database, request.Permission); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcRevokeDatabasePermission(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -431,7 +446,10 @@ func grpcRevokeDatabasePermission(r *serverRuntime, ctx context.Context, req any
 		return nil, err
 	}
 	request := req.(*databasePermissionRequest)
-	return okResponse{OK: true}, r.engine.RevokeDatabasePermission(ctx, request.UserName, request.Database, request.Permission)
+	if err := r.engine.RevokeDatabasePermission(ctx, request.UserName, request.Database, request.Permission); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcListDatabasePermissions(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -458,7 +476,10 @@ func grpcCreateDatabase(r *serverRuntime, ctx context.Context, req any) (any, er
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.engine.CreateDatabase(ctx, req.(*databaseRequest).Name)
+	if err := r.engine.CreateDatabase(ctx, req.(*databaseRequest).Name); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcListDatabases(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -476,7 +497,10 @@ func grpcDropDatabase(r *serverRuntime, ctx context.Context, req any) (any, erro
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.engine.DropDatabase(ctx, req.(*databaseRequest).Name)
+	if err := r.engine.DropDatabase(ctx, req.(*databaseRequest).Name); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcCreateRetentionPolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -484,7 +508,10 @@ func grpcCreateRetentionPolicy(r *serverRuntime, ctx context.Context, req any) (
 		return nil, err
 	}
 	request := req.(*grpcRetentionPolicyRequest)
-	return okResponse{OK: true}, r.engine.CreateRetentionPolicy(ctx, request.Database, request.Policy)
+	if err := r.engine.CreateRetentionPolicy(ctx, request.Database, request.Policy); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcListRetentionPolicies(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -669,7 +696,10 @@ func grpcCreateDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) 
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.engine.CreateDownsamplePolicy(ctx, *req.(*mts.DownsamplePolicy))
+	if err := r.engine.CreateDownsamplePolicy(ctx, *req.(*mts.DownsamplePolicy)); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcListDownsamplePolicies(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -687,14 +717,20 @@ func grpcEnableDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) 
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.engine.EnableDownsamplePolicy(ctx, req.(*downsamplePolicyRequest).Name)
+	if err := r.engine.EnableDownsamplePolicy(ctx, req.(*downsamplePolicyRequest).Name); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcDisableDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.engine.DisableDownsamplePolicy(ctx, req.(*downsamplePolicyRequest).Name)
+	if err := r.engine.DisableDownsamplePolicy(ctx, req.(*downsamplePolicyRequest).Name); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcDropDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -703,10 +739,16 @@ func grpcDropDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (a
 	}
 	switch request := req.(type) {
 	case *grpcDownsampleDropRequest:
-		return okResponse{OK: true}, r.engine.DropDownsamplePolicyWithOptions(ctx, request.Name, request.Options)
+		if err := r.engine.DropDownsamplePolicyWithOptions(ctx, request.Name, request.Options); err != nil {
+			return nil, err
+		}
+		return r.attachAdminOpToOK(okResponse{OK: true}), nil
 	case *downsamplePolicyRequest:
 		// 兼容仅传 name 的旧请求。
-		return okResponse{OK: true}, r.engine.DropDownsamplePolicy(ctx, request.Name)
+		if err := r.engine.DropDownsamplePolicy(ctx, request.Name); err != nil {
+			return nil, err
+		}
+		return r.attachAdminOpToOK(okResponse{OK: true}), nil
 	default:
 		return nil, newAPIError(errorCodeBadRequest, "invalid drop downsample request", nil)
 	}
@@ -717,7 +759,10 @@ func grpcResetDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (
 		return nil, err
 	}
 	request := req.(*grpcDownsampleResetRequest)
-	return okResponse{OK: true}, r.engine.ResetDownsamplePolicy(ctx, request.Name, request.Reset)
+	if err := r.engine.ResetDownsamplePolicy(ctx, request.Name, request.Reset); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcDownsamplePolicyStatuses(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -871,5 +916,5 @@ func grpcDeleteStorageSnapshot(r *serverRuntime, ctx context.Context, req any) (
 	if err := r.deleteStorageSnapshot(request.Name); err != nil {
 		return nil, grpcError(ctx, err)
 	}
-	return okResponse{OK: true}, nil
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }

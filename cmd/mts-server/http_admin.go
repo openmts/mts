@@ -320,7 +320,7 @@ func (r *serverRuntime) handleDownsamplePolicies(writer http.ResponseWriter, req
 			return
 		}
 		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "upsert_downsample_policy", Detail: policy.Name})
-		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 	case http.MethodGet:
 		policies, err := r.engine.ListDownsamplePolicies(request.Context())
 		if err != nil {
@@ -368,7 +368,7 @@ func (r *serverRuntime) handleDownsamplePolicyResource(writer http.ResponseWrite
 			return
 		}
 		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "drop_downsample_policy", Detail: name})
-		writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 		return
 	}
 	if request.Method != http.MethodPost {
@@ -591,7 +591,7 @@ func (r *serverRuntime) handleDeleteStorageSnapshot(writer http.ResponseWriter, 
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "delete_storage_snapshot", Detail: name})
-	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 }
 
 func (r *serverRuntime) handleStorageSnapshots(writer http.ResponseWriter, request *http.Request) {
