@@ -420,6 +420,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/ops/readiness#commercial-handoff-panel',
   },
   {
+    id: 'overview-data-contract',
+    severity: 'recommended',
+    title: { zh: '概览健康报告含数据面契约', en: 'Overview health report includes data contract' },
+    detail: {
+      zh: 'Overview 加载 GET /data/contract；健康报告/交接复制与导出预检纳入 data_contract；摘要行可见。',
+      en: 'Overview loads GET /data/contract; health report/handoff copy and export preflight include data_contract; summary line is visible.',
+    },
+    automated: true,
+    jump: '/#overview-summary',
+  },
+  {
     id: 'stream-delete-meta',
     severity: 'required',
     title: { zh: '流式查询 end 与删除响应含 meta', en: 'Stream end and delete responses include meta' },

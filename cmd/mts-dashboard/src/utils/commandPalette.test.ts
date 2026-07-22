@@ -395,3 +395,9 @@ test('palette includes data contract handoff and api-spec', () => {
   assert.ok(all.some((i) => i.id === 'api-spec-data-contract' && i.path.includes('dataContractResponse')))
   assert.ok(all.some((i) => i.id === 'readiness-data-contract-handoff' && i.path.includes('commercial-handoff')))
 })
+
+
+test('palette includes overview data contract deep link', () => {
+  const all = allVisibleCommandItems(false)
+  assert.ok(all.some((i) => i.id === 'overview-data-contract' && i.path.includes('overview-summary')))
+})

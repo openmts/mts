@@ -2500,3 +2500,18 @@
 | 契约检索 | ResponseHint | ApiSpec + 命令面板 | 只读深链 |
 | 就绪门禁 | — | data-contract-endpoint | required |
 
+
+## P470（2026-07-23）
+- Overview：加载 `GET /data/contract`；健康报告/交接复制纳入 live `data_contract`；导出预检消费契约 complete/missing
+- Overview：摘要区展示 data contract 行（`overview-data-contract-line`）
+- e2e：Readiness 交接 data-contract 强断言；Overview 契约摘要行可见
+- 就绪清单：`overview-data-contract`（recommended）；命令面板深链
+
+### 前后端对齐（P470）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 契约快照 | /data/contract | Overview + Readiness | P469 延续 |
+| 健康报告 | features/limits | commercial_handoff.data_contract | 导出/复制 |
+| 导出预检 | — | data-contract ok/warn | Overview 同步 |
+| 冒烟 | — | commercial-smoke 强断言 | required path |
+

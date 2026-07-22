@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { overviewFormToPrefill, parseOverviewPrefill } from '@/utils/routePrefill'
 import { apiGet } from '@/api/client'
+import { fetchDataContract } from '@/api/dataContract'
+import type { DataContractResponse } from '@/api/types'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
@@ -50,7 +52,8 @@ import {
   healthReportFilename,
   healthReportFilenames,
 } from '@/utils/healthReportExport'
-import { buildCommercialHandoffSummary } from '@/utils/commercialHandoffSummary'
+import { buildCommercialHandoffSummary, formatDataContractHandoffLine } from '@/utils/commercialHandoffSummary'
+import { buildDataContractView } from '@/utils/dataContractView'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -149,6 +152,8 @@ const downsampleLaggingJump = computed(() => downsampleStatusHealthJump('lagging
 const downsampleActiveJump = computed(() => downsampleStatusHealthJump('active'))
 const doctorChecks = ref<DoctorCheck[]>([])
 const doctorTLS = ref<boolean | null>(null)
+const dataContractRaw = ref<DataContractResponse | null>(null)
+const dataContractError = ref('')
 const loadError = ref('')
 /** 自动刷新失败：保留已有快照，避免整页错误态覆盖 */
 const refreshError = ref('')
@@ -246,6 +251,7 @@ const overviewPreflight = computed(() => {
     scheduleStats.requiredTotal === 0 ? 1 : scheduleStats.requiredDone / scheduleStats.requiredTotal
   const doctorWarnCount = doctorChecks.value.filter((c) => c.level === 'warn').length
   const doctorLoaded = showAdminPanels.value && doctorTLS.value != null
+  const contractView = buildDataContractView(dataContractRaw.value)
   return buildExportPreflight({
     locale: uiLocale.value,
     requiredChecklistRatio: requiredRatio,
@@ -261,6 +267,9 @@ const overviewPreflight = computed(() => {
       lastSessionServerTimeUnix.value,
       lastSessionCheckedAt.value,
     ),
+    dataContractLoaded: dataContractRaw.value != null,
+    dataContractComplete: contractView.complete,
+    dataContractMissing: contractView.missingRequired,
   })
 })
 
@@ -276,6 +285,20 @@ const overviewNextSteps = computed(() =>
     limit: 4,
     clockSkewSeconds: overviewClockSkewSeconds.value,
   }),
+)
+
+const overviewCommercialHandoff = computed(() =>
+  buildCommercialHandoffSummary({
+    expiresAtIso: getTokenExpiresAt() || null,
+    serverRemainingSec: lastSessionRemainingSeconds.value,
+    checkedAtMs: lastSessionCheckedAt.value,
+    serverTimeUnix: lastSessionServerTimeUnix.value,
+    sampleSource: lastSessionSampleSource.value,
+    dataContract: dataContractRaw.value,
+  }),
+)
+const overviewDataContractLine = computed(() =>
+  formatDataContractHandoffLine(overviewCommercialHandoff.value.data_contract),
 )
 
 function readinessLevelLabel(level: string): string {
@@ -525,6 +548,21 @@ async function loadAdminBundle(softKeep: boolean) {
   }
 }
 
+
+async function loadDataContract() {
+  try {
+    const { contract, adminOp } = await fetchDataContract()
+    dataContractRaw.value = contract
+    if (adminOp) applyAdminOpStatus(adminOp)
+    dataContractError.value = ''
+  } catch (e) {
+    dataContractError.value = formatCaughtError(e)
+    if (!dataContractRaw.value) {
+      notifyMaybeAdminBusy(dataContractError.value, e)
+    }
+  }
+}
+
 async function loadOverview(opts?: { background?: boolean }) {
   const background = !!opts?.background
   if (!background) {
@@ -535,7 +573,7 @@ async function loadOverview(opts?: { background?: boolean }) {
   try {
     const healthData = await apiGet<HealthResponse>('/healthz')
     applyHealth(healthData)
-    await loadAdminBundle(background)
+    await Promise.all([loadAdminBundle(background), loadDataContract()])
     lastRefreshed.value = new Date().toLocaleTimeString()
     readinessTick.value += 1
     loadError.value = ''
@@ -725,18 +763,13 @@ function healthReportInput() {
     session_checked_at_ms: lastSessionCheckedAt.value,
     session_server_time_unix: lastSessionServerTimeUnix.value,
     session_sample_source: lastSessionSampleSource.value,
+    data_contract: dataContractRaw.value,
+    commercial_handoff: overviewCommercialHandoff.value,
   }
 }
 
 async function copyCommercialHandoff() {
-  const handoff = buildCommercialHandoffSummary({
-    expiresAtIso: getTokenExpiresAt() || null,
-    serverRemainingSec: lastSessionRemainingSeconds.value,
-    checkedAtMs: lastSessionCheckedAt.value,
-    serverTimeUnix: lastSessionServerTimeUnix.value,
-    sampleSource: lastSessionSampleSource.value,
-  })
-  const res = await copyText(formatCommercialHandoffClipboardText(handoff))
+  const res = await copyText(formatCommercialHandoffClipboardText(overviewCommercialHandoff.value))
   if (res.ok) success(t.value('overviewCommercialHandoffCopied'))
   else notifyError(res.error || t.value('failed'))
 }
@@ -959,6 +992,11 @@ async function copyOverview() {
         <button type="button" class="mts-btn" data-testid="overview-copy-commercial-handoff" @click="copyCommercialHandoff">
           <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopyCommercialHandoff') }}
         </button>
+        <span
+          class="font-mono text-[11px] mts-muted max-w-full truncate"
+          data-testid="overview-data-contract-line"
+          :title="overviewDataContractLine"
+        >{{ overviewDataContractLine }}</span>
         <button type="button" class="mts-btn" data-testid="overview-copy-snapshot" @click="copyOverview">
           <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopySnapshot') }}
         </button>
