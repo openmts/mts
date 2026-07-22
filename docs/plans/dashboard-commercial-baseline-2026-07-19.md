@@ -1585,3 +1585,9 @@
 
 ## P383（2026-07-22）
 - e2e：mock 失败 last（横幅 error + dismiss/ack）；mock 写入 busy 结果条跳转运维
+
+## P384（2026-07-22）
+- PartialErrorBanner：message 命中 admin busy 时自动提供运维跳转
+
+## P385（2026-07-22）
+- Storage：失败 last 展示 error 明细；e2e 覆盖

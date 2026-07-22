@@ -86,8 +86,12 @@ const {
   runJSONExport,
 } = useExportJob()
 const { t , locale } = useI18n()
-const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail: string; lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const storageAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const storageAdminLastErrorDetail = computed(() => {
+  if (adminOpBusySummary?.value?.lastOk !== false) return ''
+  return (adminOpBusySummary?.value?.lastError || '').trim()
+})
 const storageAdminBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('storageAdminBusyChip')
   const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
@@ -892,10 +896,17 @@ async function copyStorageShareLink() {
       :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
       :title="storageAdminLastLabel"
     >
-      <span class="min-w-0 truncate">
-        <span class="font-medium">{{ t('opsStatusLastLabel') }}:</span>
-        {{ storageAdminLastLabel }}
-      </span>
+      <div class="min-w-0">
+        <span class="min-w-0 truncate">
+          <span class="font-medium">{{ t('opsStatusLastLabel') }}:</span>
+          {{ storageAdminLastLabel }}
+        </span>
+        <p
+          v-if="storageAdminLastErrorDetail"
+          class="mt-1 break-all font-mono text-[11px] opacity-90"
+          data-testid="storage-admin-last-error"
+        >{{ t('adminOpLastErrorLabel') }}: {{ storageAdminLastErrorDetail }}</p>
+      </div>
     </div>
     <InFlightBanner
       :active="!!loading"

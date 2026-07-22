@@ -437,6 +437,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-admin-last')).toBeVisible()
   await expect(page.getByTestId('overview-admin-last')).toHaveAttribute('data-ok', 'false')
   await expect(page.getByTestId('overview-admin-last-error')).toContainText(/e2e disk full/i)
+  await page.goto('/storage')
+  await expect(page.getByTestId('storage-page')).toBeVisible()
+  await expect(page.getByTestId('storage-admin-last')).toHaveAttribute('data-ok', 'false')
+  await expect(page.getByTestId('storage-admin-last-error')).toContainText(/e2e disk full/i)
   await page.unroute('**/api/v1/admin/ops-status', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/stats/maintenance', fulfillFailLast).catch(() => {})
 
