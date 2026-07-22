@@ -4,19 +4,45 @@ import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { formatMessage } from '@/utils/formatMessage'
 import { MIN_PASSWORD_LENGTH } from '@/utils/passwordPolicy'
-import { passwordRequirementHints } from '@/utils/passwordHints'
+import {
+  assignedPasswordHints,
+  passwordRequirementHints,
+  type PasswordHintItem,
+} from '@/utils/passwordHints'
 import { Check, Circle } from 'lucide-vue-next'
 
-const props = defineProps<{
-  oldPassword: string
-  newPassword: string
-  confirmPassword: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** change: 自助改密；assigned: 管理员设密/创建；change-no-confirm: 无确认框改密 */
+    mode?: 'change' | 'assigned' | 'change-no-confirm'
+    oldPassword?: string
+    newPassword?: string
+    confirmPassword?: string
+    password?: string
+  }>(),
+  {
+    mode: 'change',
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+    password: '',
+  },
+)
 
 const { t } = useI18n()
-const hints = computed(() =>
-  passwordRequirementHints(props.oldPassword, props.newPassword, props.confirmPassword),
-)
+const hints = computed((): PasswordHintItem[] => {
+  if (props.mode === 'assigned') return assignedPasswordHints(props.password || props.newPassword || '', props.confirmPassword)
+  if (props.mode === 'change-no-confirm') {
+    return passwordRequirementHints(props.oldPassword || '', props.newPassword || '', props.newPassword || '').filter(
+      (h) => h.id !== 'confirm_match',
+    )
+  }
+  return passwordRequirementHints(
+    props.oldPassword || '',
+    props.newPassword || '',
+    props.confirmPassword || '',
+  )
+})
 
 function labelOf(key: string): string {
   if (key === 'passwordHintMinLength') {

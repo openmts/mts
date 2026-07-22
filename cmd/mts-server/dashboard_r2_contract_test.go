@@ -36,12 +36,12 @@ func TestHTTPLoginReturnsRole(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "role-admin", Role: mts.UserRoleAdmin}, "secret")
-	seedUserWithPassword(t, runtime, mts.User{Name: "role-user", Role: mts.UserRoleUser}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "role-admin", Role: mts.UserRoleAdmin}, "secret12")
+	seedUserWithPassword(t, runtime, mts.User{Name: "role-user", Role: mts.UserRoleUser}, "secret12")
 
 	var adminLogin authTokenResponse
 	postJSON(t, server.URL+"/api/v1/auth/login", loginRequest{
-		UserName: "role-admin", Password: "secret", TTLSeconds: 60,
+		UserName: "role-admin", Password: "secret12", TTLSeconds: 60,
 	}, http.StatusOK, &adminLogin)
 	if adminLogin.Token.Role != mts.UserRoleAdmin {
 		t.Fatalf("admin role = %q, want admin", adminLogin.Token.Role)
@@ -49,7 +49,7 @@ func TestHTTPLoginReturnsRole(t *testing.T) {
 
 	var userLogin authTokenResponse
 	postJSON(t, server.URL+"/api/v1/auth/login", loginRequest{
-		UserName: "role-user", Password: "secret", TTLSeconds: 60,
+		UserName: "role-user", Password: "secret12", TTLSeconds: 60,
 	}, http.StatusOK, &userLogin)
 	if userLogin.Token.Role != mts.UserRoleUser {
 		t.Fatalf("user role = %q, want user", userLogin.Token.Role)

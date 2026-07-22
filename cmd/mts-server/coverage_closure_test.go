@@ -19,8 +19,8 @@ func TestHTTPAuthLogoutBranches(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "logout-user"}, "secret")
-	token := loginHTTPUser(t, server.URL, "logout-user", "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "logout-user"}, "secret12")
+	token := loginHTTPUser(t, server.URL, "logout-user", "secret12")
 
 	postJSON(t, server.URL+"/api/v1/auth/logout", logoutRequest{}, http.StatusUnauthorized, &errorResponse{})
 	postJSON(t, server.URL+"/api/v1/auth/logout", logoutRequest{Token: "bad-token"}, http.StatusUnauthorized, &errorResponse{})
@@ -52,9 +52,9 @@ func TestGRPCLogoutBranches(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	seedUserWithPassword(t, runtime, mts.User{Name: "grpc-logout"}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "grpc-logout"}, "secret12")
 	var login authTokenResponse
-	invokeOK(t, ctx, conn, "Login", &loginRequest{UserName: "grpc-logout", Password: "secret"}, &login)
+	invokeOK(t, ctx, conn, "Login", &loginRequest{UserName: "grpc-logout", Password: "secret12"}, &login)
 
 	err := invokeGRPC(ctx, conn, "Logout", &logoutRequest{}, &okResponse{})
 	if status.Code(err) != codes.Unauthenticated {
@@ -227,7 +227,7 @@ func TestHTTPUserManagementErrorBranches(t *testing.T) {
 	putJSONWithHeaders(
 		t,
 		server.URL+"/api/v1/users/branch-user/password",
-		passwordRequest{Password: "secret"},
+		passwordRequest{Password: "secret12"},
 		nil,
 		http.StatusOK,
 		&okResponse{},
@@ -318,8 +318,8 @@ func TestHTTPChangePasswordErrorBranches(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "change-user"}, "secret")
-	token := loginHTTPUser(t, server.URL, "change-user", "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "change-user"}, "secret12")
+	token := loginHTTPUser(t, server.URL, "change-user", "secret12")
 	headers := map[string]string{"Authorization": "Bearer " + token}
 
 	postJSONWithHeaders(
@@ -333,7 +333,7 @@ func TestHTTPChangePasswordErrorBranches(t *testing.T) {
 	postJSONWithHeaders(
 		t,
 		server.URL+"/api/v1/auth/password",
-		changePasswordRequest{UserName: "change-user", OldPassword: "wrong", NewPassword: "next"},
+		changePasswordRequest{UserName: "change-user", OldPassword: "wrong", NewPassword: "nextpass1"},
 		headers,
 		http.StatusBadRequest,
 		&errorResponse{},
@@ -370,8 +370,8 @@ func TestAdminUserBearerRejectsDisabledAndMissingUsers(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "disabled-admin", Role: mts.UserRoleAdmin}, "secret")
-	token := loginHTTPUser(t, server.URL, "disabled-admin", "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "disabled-admin", Role: mts.UserRoleAdmin}, "secret12")
+	token := loginHTTPUser(t, server.URL, "disabled-admin", "secret12")
 	ctx := context.Background()
 	if err := runtime.engine.UpdateUser(ctx, mts.User{Name: "disabled-admin", Role: mts.UserRoleAdmin, Disabled: true}); err != nil {
 		t.Fatalf("UpdateUser(disable admin) error = %v", err)

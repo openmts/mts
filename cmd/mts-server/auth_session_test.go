@@ -15,8 +15,8 @@ func TestHTTPAuthSession(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "session-user", Role: mts.UserRoleUser}, "secret")
-	token := loginHTTPUser(t, server.URL, "session-user", "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "session-user", Role: mts.UserRoleUser}, "secret12")
+	token := loginHTTPUser(t, server.URL, "session-user", "secret12")
 	headers := map[string]string{"Authorization": "Bearer " + token}
 
 	var session sessionResponse

@@ -98,6 +98,10 @@ func (r *serverRuntime) handleChangePassword(writer http.ResponseWriter, request
 		writeAPIError(writer, mts.ErrPermissionDenied)
 		return
 	}
+	if err := validateUserPassword(req.NewPassword); err != nil {
+		writeAPIError(writer, err)
+		return
+	}
 	if err := r.engine.ChangePassword(
 		request.Context(),
 		req.UserName,

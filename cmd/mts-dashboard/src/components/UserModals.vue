@@ -4,6 +4,7 @@ import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
+import PasswordHints from '@/components/PasswordHints.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -19,6 +20,8 @@ const props = withDefaults(
     showChangeSelfPassword: boolean
     selfOldPassword: string
     selfNewPassword: string
+    selfConfirmPassword: string
+    setPasswordConfirm: string
     loading?: boolean
   }>(),
   { offline: false, writeBlocked: undefined, blockReason: null, loading: false },
@@ -30,9 +33,11 @@ const emit = defineEmits<{
   'update:showSetPassword': [boolean]
   'update:setPasswordUser': [string]
   'update:setPasswordValue': [string]
+  'update:setPasswordConfirm': [string]
   'update:showChangeSelfPassword': [boolean]
   'update:selfOldPassword': [string]
   'update:selfNewPassword': [string]
+  'update:selfConfirmPassword': [string]
   'create-user': []
   'set-password': []
   'change-password': []
@@ -135,6 +140,9 @@ onBeforeUnmount(() => {
           autocomplete="new-password"
           @update:model-value="emit('update:newUser', { ...newUser, password: $event })"
         />
+        <div v-if="newUser.password" data-testid="users-create-password-hints">
+          <PasswordHints mode="assigned" :password="newUser.password" />
+        </div>
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
         <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" data-testid="users-create-cancel" @click="emit('update:showCreate', false)">{{ t('cancel') }}</button>
@@ -158,18 +166,35 @@ onBeforeUnmount(() => {
       data-dialog-panel
     >
       <h3 id="set-password-title" class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ formatMessage(t('usersSetPasswordTitle'), { name: setPasswordUser }) }}</h3>
-      <PasswordInputWithToggle
-        :model-value="setPasswordValue"
-        test-id="users-set-password-input"
-        toggle-test-id="users-set-password-toggle"
-        :placeholder="t('usersNewPasswordPlaceholder')"
-        input-class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 pr-10"
-        autocomplete="new-password"
-        @update:model-value="emit('update:setPasswordValue', $event)"
-        @enter="emit('set-password')"
-      />
+      <div class="space-y-2">
+        <PasswordInputWithToggle
+          :model-value="setPasswordValue"
+          test-id="users-set-password-input"
+          toggle-test-id="users-set-password-toggle"
+          :placeholder="t('usersNewPasswordPlaceholder')"
+          input-class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 pr-10"
+          autocomplete="new-password"
+          @update:model-value="emit('update:setPasswordValue', $event)"
+        />
+        <PasswordInputWithToggle
+          :model-value="setPasswordConfirm"
+          test-id="users-set-password-confirm"
+          toggle-test-id="users-set-password-confirm-toggle"
+          :placeholder="t('accountConfirmPassword')"
+          input-class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 pr-10"
+          autocomplete="new-password"
+          @update:model-value="emit('update:setPasswordConfirm', $event)"
+          @enter="emit('set-password')"
+        />
+        <PasswordHints
+          mode="assigned"
+          :password="setPasswordValue"
+          :confirm-password="setPasswordConfirm"
+        />
+        <p class="text-[11px] mts-muted">{{ t('usersSetPasswordHint') }}</p>
+      </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
-        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showSetPassword', false)">{{ t('cancel') }}</button>
+        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" data-testid="users-set-password-cancel" @click="emit('update:showSetPassword', false)">{{ t('cancel') }}</button>
         <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-set-password-submit" :disabled="blocked()" :title="blockedTitle()" :aria-busy="loading ? 'true' : undefined" @click="emit('set-password')">{{ loading ? t('loading') : t('usersSetAction') }}</button>
       </div>
     </div>
@@ -208,11 +233,27 @@ onBeforeUnmount(() => {
           input-class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 pr-10"
           autocomplete="new-password"
           @update:model-value="emit('update:selfNewPassword', $event)"
+        />
+        <PasswordInputWithToggle
+          :model-value="selfConfirmPassword"
+          test-id="users-self-confirm-password"
+          toggle-test-id="users-self-confirm-toggle"
+          :placeholder="t('accountConfirmPassword')"
+          input-class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 pr-10"
+          autocomplete="new-password"
+          @update:model-value="emit('update:selfConfirmPassword', $event)"
           @enter="emit('change-password')"
         />
+        <PasswordHints
+          mode="change"
+          :old-password="selfOldPassword"
+          :new-password="selfNewPassword"
+          :confirm-password="selfConfirmPassword"
+        />
+        <p class="text-[11px] mts-muted">{{ t('usersChangeSelfHint') }}</p>
       </div>
       <div class="mt-4 flex flex-wrap justify-end gap-2">
-        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" @click="emit('update:showChangeSelfPassword', false)">{{ t('cancel') }}</button>
+        <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-700" data-testid="users-change-self-cancel" @click="emit('update:showChangeSelfPassword', false)">{{ t('cancel') }}</button>
         <button type="button" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-change-self-submit" :disabled="blocked()" :title="blockedTitle()" :aria-busy="loading ? 'true' : undefined" @click="emit('change-password')">{{ loading ? t('loading') : t('usersConfirmChange') }}</button>
       </div>
     </div>

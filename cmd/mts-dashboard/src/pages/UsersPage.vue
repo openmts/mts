@@ -31,6 +31,7 @@ import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { validateAssignedPassword, validateNewPassword } from '@/utils/passwordPolicy'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
   applyBatchProgressEvent,
@@ -129,7 +130,7 @@ const usersAdminLastErrorDetail = computed(() => {
 })
 const { currentUser, isAdmin, changePassword, logout } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { applyAdminOpStatus } = useAdminOpBusy()
 function roleLabel(role?: string): string {
   if (role === 'admin') return t.value('roleAdmin')
@@ -206,6 +207,8 @@ const setPasswordValue = ref('')
 const showChangeSelfPassword = ref(false)
 const selfOldPassword = ref('')
 const selfNewPassword = ref('')
+const selfConfirmPassword = ref('')
+const setPasswordConfirm = ref('')
 const userGrants = ref<DatabaseGrant[]>([])
 const grantDbs = ref<string[]>([])
 const grantPerms = ref<string[]>([])
@@ -309,7 +312,7 @@ async function loadUsers() {
 
 const usersFormDirty = computed(() => {
   if (shouldBlockLeaveAdminCreate(showCreate.value, isUserCreateDraftDirty(newUser.value))) return true
-  if (showSetPassword.value && isPasswordDraftDirty(setPasswordValue.value)) return true
+  if (showSetPassword.value && isPasswordDraftDirty(setPasswordValue.value, setPasswordConfirm.value)) return true
   if (
     showChangeSelfPassword.value &&
     isPasswordDraftDirty(selfNewPassword.value, selfOldPassword.value)
@@ -336,6 +339,16 @@ async function createUser() {
     return
   }
   if (!newUser.value.name.trim()) return
+  const pwdCheck = validateAssignedPassword(newUser.value.password || '', {
+    locale: locale.value,
+    allowEmpty: true,
+  })
+  if (!pwdCheck.ok) {
+    const msg = pwdCheck.error || t.value('failed')
+    setActionError(msg)
+    notifyError(msg)
+    return
+  }
   clearActionResult()
   usersWriteLoading.value = true
   usersActionStartedAt.value = Date.now()
@@ -371,6 +384,21 @@ async function doSetPassword() {
     return
   }
   if (!setPasswordValue.value) return
+  {
+    const strength = validateAssignedPassword(setPasswordValue.value, { locale: locale.value })
+    if (!strength.ok) {
+      const msg = strength.error || t.value('failed')
+      setActionError(msg)
+      notifyError(msg)
+      return
+    }
+    if (setPasswordValue.value !== setPasswordConfirm.value) {
+      const msg = locale.value === 'en' ? 'Password confirmation does not match' : '两次输入的新密码不一致'
+      setActionError(msg)
+      notifyError(msg)
+      return
+    }
+  }
   clearActionResult()
   usersWriteLoading.value = true
   usersActionStartedAt.value = Date.now()
@@ -380,6 +408,7 @@ async function doSetPassword() {
     const pwdResp = await apiPut<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(target)}/password`, { password: setPasswordValue.value }, { signal })
     showSetPassword.value = false
     setPasswordValue.value = ''
+    setPasswordConfirm.value = ''
     // SetPassword 会撤销目标用户全部 token；若改的是当前登录用户须重新登录
     if (target && target === (currentUser.value || '').trim()) {
       await logout()
@@ -411,6 +440,20 @@ async function doChangeSelfPassword() {
     return
   }
   if (!selfOldPassword.value || !selfNewPassword.value) return
+  {
+    const check = validateNewPassword(
+      selfOldPassword.value,
+      selfNewPassword.value,
+      selfConfirmPassword.value,
+      { locale: locale.value },
+    )
+    if (!check.ok) {
+      const msg = check.error || t.value('failed')
+      setActionError(msg)
+      notifyError(msg)
+      return
+    }
+  }
   clearActionResult()
   usersWriteLoading.value = true
   usersActionStartedAt.value = Date.now()
@@ -427,6 +470,7 @@ async function doChangeSelfPassword() {
     showChangeSelfPassword.value = false
     selfOldPassword.value = ''
     selfNewPassword.value = ''
+    selfConfirmPassword.value = ''
     success(t.value('usersPasswordChangedRelogin'))
     await router.replace({
       name: 'Login',
@@ -631,6 +675,7 @@ function openSetPassword(name: string) {
   }
   setPasswordUser.value = name
   setPasswordValue.value = ''
+  setPasswordConfirm.value = ''
   showSetPassword.value = true
 }
 
@@ -1088,9 +1133,11 @@ onBeforeUnmount(() => {
       v-model:show-set-password="showSetPassword"
       v-model:set-password-user="setPasswordUser"
       v-model:set-password-value="setPasswordValue"
+      v-model:set-password-confirm="setPasswordConfirm"
       v-model:show-change-self-password="showChangeSelfPassword"
       v-model:self-old-password="selfOldPassword"
       v-model:self-new-password="selfNewPassword"
+      v-model:self-confirm-password="selfConfirmPassword"
       @create-user="createUser"
       @set-password="doSetPassword"
       @change-password="doChangeSelfPassword"

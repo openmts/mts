@@ -358,6 +358,9 @@ func grpcChangePassword(r *serverRuntime, ctx context.Context, req any) (any, er
 	if strings.TrimSpace(request.UserName) != principal.UserName {
 		return nil, mts.ErrPermissionDenied
 	}
+	if err := validateUserPassword(request.NewPassword); err != nil {
+		return nil, err
+	}
 	if err := r.engine.ChangePassword(ctx, request.UserName, request.OldPassword, request.NewPassword); err != nil {
 		return nil, mapChangePasswordError(err)
 	}
@@ -375,6 +378,9 @@ func grpcSetUserPassword(r *serverRuntime, ctx context.Context, req any) (any, e
 		return nil, err
 	}
 	request := req.(*setUserPasswordRequest)
+	if err := validateUserPassword(request.Password); err != nil {
+		return nil, err
+	}
 	if err := r.engine.SetPassword(ctx, request.UserName, request.Password); err != nil {
 		return nil, err
 	}

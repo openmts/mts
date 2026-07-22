@@ -131,11 +131,11 @@ func TestHTTPDataListRetentionPoliciesForReadUser(t *testing.T) {
 		Policy: mts.RetentionPolicy{Name: "short", Duration: time.Hour},
 	}, http.StatusOK, &okResponse{})
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "rp-reader", Role: mts.UserRoleUser}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "rp-reader", Role: mts.UserRoleUser}, "secret12")
 	if err := runtime.engine.GrantDatabasePermission(context.Background(), "rp-reader", "rpdb", mts.DatabasePermissionRead); err != nil {
 		t.Fatalf("grant read: %v", err)
 	}
-	token := loginHTTPUser(t, server.URL, "rp-reader", "secret")
+	token := loginHTTPUser(t, server.URL, "rp-reader", "secret12")
 	headers := map[string]string{"Authorization": "Bearer " + token}
 
 	// admin path should be forbidden for non-admin
@@ -171,11 +171,11 @@ func TestHTTPDataListDatabasesForReadUser(t *testing.T) {
 	postJSON(t, server.URL+"/api/v1/admin/databases", databaseRequest{Name: "visibledb"}, http.StatusOK, &okResponse{})
 	postJSON(t, server.URL+"/api/v1/admin/databases", databaseRequest{Name: "hiddendb"}, http.StatusOK, &okResponse{})
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "db-reader", Role: mts.UserRoleUser}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "db-reader", Role: mts.UserRoleUser}, "secret12")
 	if err := runtime.engine.GrantDatabasePermission(context.Background(), "db-reader", "visibledb", mts.DatabasePermissionRead); err != nil {
 		t.Fatalf("grant read: %v", err)
 	}
-	token := loginHTTPUser(t, server.URL, "db-reader", "secret")
+	token := loginHTTPUser(t, server.URL, "db-reader", "secret12")
 	headers := map[string]string{"Authorization": "Bearer " + token}
 
 	// admin path forbidden
@@ -252,8 +252,8 @@ func TestHTTPUserSelfAudit(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "audit-self", Role: mts.UserRoleUser}, "secret")
-	token := loginHTTPUser(t, server.URL, "audit-self", "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "audit-self", Role: mts.UserRoleUser}, "secret12")
+	token := loginHTTPUser(t, server.URL, "audit-self", "secret12")
 	headers := map[string]string{"Authorization": "Bearer " + token}
 
 	var mine userAuditResponse
@@ -264,7 +264,7 @@ func TestHTTPUserSelfAudit(t *testing.T) {
 	}
 
 	// 不能读他人
-	seedUserWithPassword(t, runtime, mts.User{Name: "audit-other", Role: mts.UserRoleUser}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "audit-other", Role: mts.UserRoleUser}, "secret12")
 	getJSONWithHeaders(t, server.URL+"/api/v1/users/audit-other/audit", headers, http.StatusForbidden, &errorResponse{})
 
 	// 自身审计支持 action/limit 查询参数（服务端过滤）

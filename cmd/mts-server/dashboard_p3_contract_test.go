@@ -112,11 +112,11 @@ func TestHTTPAuthzSelfCheckAllowsCurrentUser(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "authz-self", Role: mts.UserRoleUser}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "authz-self", Role: mts.UserRoleUser}, "secret12")
 	if err := runtime.engine.GrantDatabasePermission(context.Background(), "authz-self", "default", mts.DatabasePermissionRead); err != nil {
 		t.Fatalf("grant error = %v", err)
 	}
-	token := loginHTTPUser(t, server.URL, "authz-self", "secret")
+	token := loginHTTPUser(t, server.URL, "authz-self", "secret12")
 	headers := map[string]string{"Authorization": "Bearer " + token}
 
 	var allowed authzDatabaseCheckResponse

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { passwordHintsAllOk, passwordRequirementHints } from './passwordHints.ts'
+import { assignedPasswordHints, passwordHintsAllOk, passwordRequirementHints } from './passwordHints.ts'
 
 test('passwordRequirementHints tracks rules', () => {
   const weak = passwordRequirementHints('admin', 'admin', 'admin')
@@ -9,3 +9,16 @@ test('passwordRequirementHints tracks rules', () => {
   assert.equal(passwordHintsAllOk(strong), true)
   assert.ok(strong.every((h) => h.ok))
 })
+
+test('assignedPasswordHints', () => {
+  const weak = assignedPasswordHints('admin')
+  assert.equal(passwordHintsAllOk(weak), false)
+  const strong = assignedPasswordHints('goodpass1')
+  assert.equal(passwordHintsAllOk(strong), true)
+  assert.equal(assignedPasswordHints('').length, 2)
+  const withConfirm = assignedPasswordHints('goodpass1', 'goodpass1')
+  assert.equal(withConfirm.length, 3)
+  assert.equal(passwordHintsAllOk(withConfirm), true)
+  assert.equal(passwordHintsAllOk(assignedPasswordHints('goodpass1', 'other')), false)
+})
+

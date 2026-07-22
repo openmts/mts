@@ -42,7 +42,7 @@ func TestHTTPRequireUserAuthenticatesBearerToken(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "alice"}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "alice"}, "secret12")
 	seedDatabasePermission(t, runtime, "alice", "default", mts.DatabasePermissionWrite)
 
 	point := testPoint()
@@ -56,7 +56,7 @@ func TestHTTPRequireUserAuthenticatesBearerToken(t *testing.T) {
 	var login authTokenResponse
 	postJSON(t, server.URL+"/api/v1/auth/login", loginRequest{
 		UserName:   "alice",
-		Password:   "secret",
+		Password:   "secret12",
 		TTLSeconds: 60,
 	}, http.StatusOK, &login)
 	if login.Token.Token == "" {
@@ -91,10 +91,10 @@ func TestHTTPCreateUserAcceptsInitialPassword(t *testing.T) {
 
 	postJSON(t, server.URL+"/api/v1/users", createUserRequest{
 		User:     mts.User{Name: "created-user", Role: mts.UserRoleUser},
-		Password: "secret",
+		Password: "secret12",
 	}, http.StatusOK, &okResponse{})
 
-	if token := loginHTTPUser(t, server.URL, "created-user", "secret"); token == "" {
+	if token := loginHTTPUser(t, server.URL, "created-user", "secret12"); token == "" {
 		t.Fatal("login token is empty")
 	}
 	resp, err := http.Get(server.URL + "/api/v1/users/created-user")
@@ -106,7 +106,7 @@ func TestHTTPCreateUserAcceptsInitialPassword(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Get(user) status = %d, want 200, body = %s", resp.StatusCode, body)
 	}
-	if strings.Contains(body, "secret") || strings.Contains(body, `"password"`) {
+	if strings.Contains(body, "secret12") || strings.Contains(body, `"password"`) {
 		t.Fatalf("Get(user) leaked password material: %s", body)
 	}
 }
@@ -119,7 +119,7 @@ func TestHTTPCreateUserRollsBackWhenInitialPasswordInvalid(t *testing.T) {
 	postJSON(t, server.URL+"/api/v1/users", createUserRequest{
 		User:     mts.User{Name: "rollback-user"},
 		Password: " ",
-	}, http.StatusUnauthorized, &errorResponse{})
+	}, http.StatusBadRequest, &errorResponse{})
 
 	getJSONWithHeaders(t, server.URL+"/api/v1/users/rollback-user", nil, http.StatusNotFound, &errorResponse{})
 }
@@ -137,7 +137,7 @@ func TestRuntimeDoesNotResetExistingDefaultAdminPassword(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openRuntime(first) error = %v", err)
 	}
-	if err := runtime.engine.ChangePassword(ctx, "admin", "admin", "changed"); err != nil {
+	if err := runtime.engine.ChangePassword(ctx, "admin", "admin", "changed1"); err != nil {
 		t.Fatalf("ChangePassword(admin) error = %v", err)
 	}
 	if err := runtime.shutdown(ctx); err != nil {
@@ -156,7 +156,7 @@ func TestRuntimeDoesNotResetExistingDefaultAdminPassword(t *testing.T) {
 	if _, err := reopened.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "admin"}, time.Minute); err != mts.ErrInvalidCredentials {
 		t.Fatalf("Authenticate(admin/default) error = %v, want ErrInvalidCredentials", err)
 	}
-	if _, err := reopened.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "changed"}, time.Minute); err != nil {
+	if _, err := reopened.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "changed1"}, time.Minute); err != nil {
 		t.Fatalf("Authenticate(admin/changed) error = %v", err)
 	}
 }
@@ -229,7 +229,7 @@ func TestHTTPUserRoleControlsUserManagement(t *testing.T) {
 	aliceHeaders := map[string]string{"Authorization": "Bearer " + aliceToken}
 	deleteHTTPWithHeaders(t, server.URL+"/api/v1/users/bob", nil, http.StatusUnauthorized)
 	deleteHTTPWithHeaders(t, server.URL+"/api/v1/users/bob", aliceHeaders, http.StatusForbidden)
-	putJSONWithHeaders(t, server.URL+"/api/v1/users/bob/password", passwordRequest{Password: "next"}, aliceHeaders, http.StatusForbidden, &errorResponse{})
+	putJSONWithHeaders(t, server.URL+"/api/v1/users/bob/password", passwordRequest{Password: "nextpass1"}, aliceHeaders, http.StatusForbidden, &errorResponse{})
 	putJSONWithHeaders(
 		t,
 		server.URL+"/api/v1/users/bob/database-permissions/default/read",
@@ -240,7 +240,7 @@ func TestHTTPUserRoleControlsUserManagement(t *testing.T) {
 	)
 
 	adminHeaders := map[string]string{"Authorization": "Bearer " + adminToken}
-	putJSONWithHeaders(t, server.URL+"/api/v1/users/bob/password", passwordRequest{Password: "next"}, adminHeaders, http.StatusOK, &okResponse{})
+	putJSONWithHeaders(t, server.URL+"/api/v1/users/bob/password", passwordRequest{Password: "nextpass1"}, adminHeaders, http.StatusOK, &okResponse{})
 	putJSONWithHeaders(
 		t,
 		server.URL+"/api/v1/users/bob/database-permissions/default/read",
@@ -272,7 +272,7 @@ func TestHTTPUserCanOnlyChangeOwnPassword(t *testing.T) {
 	postJSONWithHeaders(
 		t,
 		server.URL+"/api/v1/auth/password",
-		changePasswordRequest{UserName: "bob", OldPassword: "bob-secret", NewPassword: "blocked"},
+		changePasswordRequest{UserName: "bob", OldPassword: "bob-secret", NewPassword: "blocked12"},
 		aliceHeaders,
 		http.StatusForbidden,
 		&errorResponse{},
@@ -948,8 +948,8 @@ func TestHTTPSessionStorageValidateQueryStatsBusyAndLast(t *testing.T) {
 		t.Fatalf("storage validate last = %+v", vDone.Last)
 	}
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "session-busy", Role: mts.UserRoleUser}, "secret")
-	token := loginHTTPUser(t, server.URL, "session-busy", "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "session-busy", Role: mts.UserRoleUser}, "secret12")
+	token := loginHTTPUser(t, server.URL, "session-busy", "secret12")
 	headers := map[string]string{"Authorization": "Bearer " + token}
 	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
 		t.Fatalf("begin2: %v", err)

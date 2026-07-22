@@ -91,3 +91,21 @@ func mapChangePasswordError(err error) error {
 	}
 	return err
 }
+
+const minUserPasswordLength = 8
+const forbiddenDefaultPassword = "admin"
+
+// validateUserPassword 与 Dashboard passwordPolicy 对齐：最短 8 位且禁止默认 admin。
+func validateUserPassword(password string) error {
+	password = strings.TrimSpace(password)
+	if password == "" {
+		return newAPIError(errorCodeBadRequest, "password is required", mts.ErrInvalidCredentials)
+	}
+	if password == forbiddenDefaultPassword {
+		return newAPIError(errorCodeBadRequest, "default password admin is not allowed", mts.ErrInvalidCredentials)
+	}
+	if len(password) < minUserPasswordLength {
+		return newAPIError(errorCodeBadRequest, "password must be at least 8 characters", mts.ErrInvalidCredentials)
+	}
+	return nil
+}

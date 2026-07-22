@@ -20,8 +20,8 @@ func TestHTTPBatchUpdateUserDisabled(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	t.Cleanup(server.Close)
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "u1", Role: mts.UserRoleUser}, "secret")
-	seedUserWithPassword(t, runtime, mts.User{Name: "u2", Role: mts.UserRoleUser}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "u1", Role: mts.UserRoleUser}, "secret12")
+	seedUserWithPassword(t, runtime, mts.User{Name: "u2", Role: mts.UserRoleUser}, "secret12")
 	adminToken := loginHTTPUser(t, server.URL, "admin", "admin")
 	headers := map[string]string{"Authorization": "Bearer " + adminToken}
 
@@ -103,8 +103,8 @@ func TestHTTPBatchUserDisabledStream(t *testing.T) {
 	server := httptest.NewServer(runtime.httpHandler())
 	t.Cleanup(server.Close)
 
-	seedUserWithPassword(t, runtime, mts.User{Name: "s1", Role: mts.UserRoleUser}, "secret")
-	seedUserWithPassword(t, runtime, mts.User{Name: "s2", Role: mts.UserRoleUser}, "secret")
+	seedUserWithPassword(t, runtime, mts.User{Name: "s1", Role: mts.UserRoleUser}, "secret12")
+	seedUserWithPassword(t, runtime, mts.User{Name: "s2", Role: mts.UserRoleUser}, "secret12")
 	adminToken := loginHTTPUser(t, server.URL, "admin", "admin")
 
 	body := `{"names":["s1","s2","missing"],"disabled":true}`
@@ -153,7 +153,7 @@ func TestHTTPBatchUserDisabledStreamCancelPartial(t *testing.T) {
 
 	// seed enough users so cancel mid-stream is observable
 	for i := 0; i < 8; i++ {
-		seedUserWithPassword(t, runtime, mts.User{Name: fmt.Sprintf("c%d", i), Role: mts.UserRoleUser}, "secret")
+		seedUserWithPassword(t, runtime, mts.User{Name: fmt.Sprintf("c%d", i), Role: mts.UserRoleUser}, "secret12")
 	}
 	adminToken := loginHTTPUser(t, server.URL, "admin", "admin")
 

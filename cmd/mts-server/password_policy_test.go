@@ -101,3 +101,18 @@ func TestMapChangePasswordError(t *testing.T) {
 		t.Fatalf("passthrough = %v", got)
 	}
 }
+
+func TestValidateUserPassword(t *testing.T) {
+	if err := validateUserPassword(""); err == nil {
+		t.Fatal("empty password should fail")
+	}
+	if err := validateUserPassword("short"); err == nil {
+		t.Fatal("short password should fail")
+	}
+	if err := validateUserPassword("admin"); err == nil {
+		t.Fatal("default admin password should fail")
+	}
+	if err := validateUserPassword("goodpass1"); err != nil {
+		t.Fatalf("valid password error = %v", err)
+	}
+}

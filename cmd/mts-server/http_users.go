@@ -47,6 +47,13 @@ func (r *serverRuntime) createUserWithInitialPassword(ctx context.Context, req c
 	if req.Password == "" {
 		return nil
 	}
+	if err := validateUserPassword(req.Password); err != nil {
+		rollbackErr := r.engine.DeleteUser(ctx, req.Name)
+		if rollbackErr != nil {
+			return rollbackErr
+		}
+		return err
+	}
 	if err := r.engine.SetPassword(ctx, req.Name, req.Password); err != nil {
 		rollbackErr := r.engine.DeleteUser(ctx, req.Name)
 		if rollbackErr != nil {
@@ -137,6 +144,10 @@ func (r *serverRuntime) handleUserPassword(writer http.ResponseWriter, request *
 	var req passwordRequest
 	if err := decodeHTTPJSON(request, &req); err != nil {
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
+		return
+	}
+	if err := validateUserPassword(req.Password); err != nil {
+		writeAPIError(writer, err)
 		return
 	}
 	if err := r.engine.SetPassword(request.Context(), userName, req.Password); err != nil {

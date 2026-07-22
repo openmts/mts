@@ -176,11 +176,11 @@ func TestHTTPProductionHardening(t *testing.T) {
 
 	adminHeaders := map[string]string{"Authorization": "Bearer admin-token"}
 	postJSONWithHeaders(t, server.URL+"/api/v1/users", mts.User{Name: "prod"}, adminHeaders, http.StatusOK, &okResponse{})
-	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod/password", passwordRequest{Password: "secret"}, adminHeaders, http.StatusOK, &okResponse{})
+	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod/password", passwordRequest{Password: "secret12"}, adminHeaders, http.StatusOK, &okResponse{})
 	postJSONWithHeaders(t, server.URL+"/api/v1/users/prod/database-permissions/default/write", emptyRequest{}, adminHeaders, http.StatusOK, &okResponse{})
 	postJSONWithHeaders(t, server.URL+"/api/v1/users/prod/database-permissions/default/read", emptyRequest{}, adminHeaders, http.StatusOK, &okResponse{})
 	var login authTokenResponse
-	postJSON(t, server.URL+"/api/v1/auth/login", loginRequest{UserName: "prod", Password: "secret", TTLSeconds: 60}, http.StatusOK, &login)
+	postJSON(t, server.URL+"/api/v1/auth/login", loginRequest{UserName: "prod", Password: "secret12", TTLSeconds: 60}, http.StatusOK, &login)
 
 	point := testPoint()
 	postJSON(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, http.StatusUnauthorized, &errorResponse{})
@@ -284,11 +284,11 @@ func TestGRPCProductionHardening(t *testing.T) {
 	defer func() { _ = conn.Close() }()
 	adminCtx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer admin-token"))
 	invokeOK(t, adminCtx, conn, "CreateUser", &mts.User{Name: "grpc-prod"}, &okResponse{})
-	invokeOK(t, adminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "grpc-prod", Password: "secret"}, &okResponse{})
+	invokeOK(t, adminCtx, conn, "SetUserPassword", &setUserPasswordRequest{UserName: "grpc-prod", Password: "secret12"}, &okResponse{})
 	invokeOK(t, adminCtx, conn, "GrantDatabasePermission", &databasePermissionRequest{UserName: "grpc-prod", Database: "default", Permission: mts.DatabasePermissionWrite}, &okResponse{})
 	invokeOK(t, adminCtx, conn, "GrantDatabasePermission", &databasePermissionRequest{UserName: "grpc-prod", Database: "default", Permission: mts.DatabasePermissionRead}, &okResponse{})
 	var login authTokenResponse
-	invokeOK(t, context.Background(), conn, "Login", &loginRequest{UserName: "grpc-prod", Password: "secret", TTLSeconds: 60}, &login)
+	invokeOK(t, context.Background(), conn, "Login", &loginRequest{UserName: "grpc-prod", Password: "secret12", TTLSeconds: 60}, &login)
 	dataCtx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
 		"x-mts-data-token", "data-token",
 		"authorization", "Bearer "+login.Token.Token,

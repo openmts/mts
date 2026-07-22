@@ -1861,3 +1861,17 @@
 | Users 设密当前用户 | 撤销 token | logout → Login | 与 SetPassword 语义一致 |
 | 强制改密旧密码错误 | bad_request | 留在 force-change | 与 P420 对齐 |
 | 登录 password_changed | — | 预填 user + 焦点密码 | 减少重登摩擦 |
+
+## P422（2026-07-22）
+- Server：`validateUserPassword`（≥8 且禁止 `admin`）接入 SetPassword / ChangePassword / CreateUser 初始密码（HTTP/gRPC）
+- Dashboard：`validateAssignedPassword` + Users 设密确认框 / 自改密确认框 + PasswordHints（assigned/change）
+- Users 创建用户可选密码走同一强度策略；弱密码前端拦截
+- e2e：账户会话续期成功、Users 设密弱密码拦截
+- 单测：passwordPolicy / passwordHints / server validateUserPassword
+
+### 密码策略对齐（P422）
+| 路径 | 最小长度 | 禁止默认 admin | 确认框 | 备注 |
+|------|----------|----------------|--------|------|
+| auth/password | 8 | 是 | Account/Force 有；Users 现有 | bad_request |
+| users/:name/password | 8 | 是 | 是 | 撤销 token |
+| users create password | 8（若填写） | 是 | — | 空密码仍允许 |
