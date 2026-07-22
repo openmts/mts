@@ -236,5 +236,5 @@ test('buildExportPreflight data contract complete/gap/missing', () => {
   assert.match(g?.message || '', /delete_response_meta/)
   const miss = buildExportPreflight({ ...base, dataContractLoaded: false })
   assert.ok(miss.items.some((i) => i.id === 'data-contract' && i.level === 'warn'))
-  assert.equal(preflightItemTarget('data-contract')?.target, '#commercial-handoff-panel')
+  assert.equal(preflightItemTarget('data-contract')?.target, '/ops/readiness#commercial-handoff-panel')
 })

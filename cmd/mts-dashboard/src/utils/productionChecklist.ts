@@ -431,6 +431,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/#overview-summary',
   },
   {
+    id: 'overview-data-contract-jump',
+    severity: 'recommended',
+    title: { zh: '概览契约可跳转就绪交接', en: 'Overview contract jumps to readiness handoff' },
+    detail: {
+      zh: 'Overview 契约芯片支持刷新与跳转就绪交接；导出预检 data-contract 缺口可一键打开 commercial-handoff。',
+      en: 'Overview contract chip supports refresh and jump to readiness handoff; export preflight data-contract gaps deep-link to commercial-handoff.',
+    },
+    automated: true,
+    jump: '/#overview-summary',
+  },
+  {
     id: 'stream-delete-meta',
     severity: 'required',
     title: { zh: '流式查询 end 与删除响应含 meta', en: 'Stream end and delete responses include meta' },

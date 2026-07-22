@@ -148,3 +148,37 @@ test('buildOpsNextSteps does not duplicate clockSkew from preflight', () => {
   assert.equal(steps.filter((s) => s.id === 'clockSkew').length, 1)
   assert.equal(steps[0]?.id, 'clockSkew')
 })
+
+
+test('buildOpsNextSteps includes data-contract warn with handoff jump', () => {
+  const preflight = buildExportPreflight({
+    locale: 'zh',
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+    signoffNotes: {
+      edgeHttps: 'a',
+      backupOffsite: 'b',
+      backupAlert: 'c',
+    },
+    deployKitReviewed: true,
+    dataContractLoaded: false,
+  })
+  const steps = buildOpsNextSteps({
+    locale: 'zh',
+    preflight,
+    signoffNotes: {
+      edgeHttps: 'a',
+      backupOffsite: 'b',
+      backupAlert: 'c',
+    },
+    limit: 5,
+  })
+  const dc = steps.find((s) => s.id === 'data-contract')
+  assert.ok(dc)
+  assert.ok(dc!.target?.includes('commercial-handoff'))
+})

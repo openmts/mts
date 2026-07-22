@@ -2515,3 +2515,19 @@
 | 导出预检 | — | data-contract ok/warn | Overview 同步 |
 | 冒烟 | — | commercial-smoke 强断言 | required path |
 
+
+## P471（2026-07-23）
+- Overview：data contract 芯片（状态色/刷新/跳转就绪交接）；错误软保留
+- 导出预检：`data-contract` 跳转改为 `/ops/readiness#commercial-handoff-panel`；下一步优先级 15
+- Overview 预检摘要：契约缺口时一键打开交接
+- e2e：Overview 芯片跳转 + 契约文案；Readiness 交接 complete/features 强断言
+- 清单：`overview-data-contract-jump`（recommended）
+
+### 前后端对齐（P471）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 契约快照 | /data/contract | Overview 芯片 + Readiness 交接 | P469/P470 延续 |
+| 预检跳转 | — | absolute readiness handoff | 跨页可用 |
+| 下一步 | — | data-contract priority=15 | 缺口优先于清单 |
+| 冒烟 | — | chip jump + complete 文案 | commercial-smoke |
+

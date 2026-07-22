@@ -35,6 +35,7 @@ export interface BuildOpsNextStepsInput {
 const priorityById: Record<string, number> = {
   clockSkew: 5,
   signoff: 10,
+  'data-contract': 15,
   checklist: 20,
   edgeHttps: 30,
   backupSchedule: 40,

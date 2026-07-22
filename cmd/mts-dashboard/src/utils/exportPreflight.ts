@@ -149,7 +149,7 @@ export function preflightItemTarget(id: string): { target: string; actionKey: 'p
     case 'clockSkew':
       return { target: '/account#account-session', actionKey: 'preflightJumpLocal' }
     case 'data-contract':
-      return { target: '#commercial-handoff-panel', actionKey: 'preflightJumpLocal' }
+      return { target: '/ops/readiness#commercial-handoff-panel', actionKey: 'preflightJumpLocal' }
     default:
       return null
   }

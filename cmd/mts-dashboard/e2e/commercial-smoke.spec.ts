@@ -222,9 +222,18 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-export-health-md')).toBeVisible()
   await expect(page.getByTestId('overview-copy-health-report')).toBeVisible()
   await expect(page.getByTestId('overview-copy-commercial-handoff')).toBeVisible()
-  // P470: Overview 展示 data contract 摘要行（加载后）
-  await expect(page.getByTestId('overview-data-contract-line')).toBeVisible({ timeout: 15_000 })
-  await expect.poll(async () => (await page.getByTestId('overview-data-contract-line').innerText()).trim().length).toBeGreaterThan(8)
+  // P470/P471: Overview data contract 芯片/摘要/跳转
+  await expect(page.getByTestId('overview-data-contract-chip')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('overview-data-contract-line')).toBeVisible()
+  await expect.poll(async () => (await page.getByTestId('overview-data-contract-line').innerText()).trim()).toMatch(/data_contract|complete|features=|max_write/)
+  await expect(page.getByTestId('overview-data-contract-jump')).toBeVisible()
+  await expect(page.getByTestId('overview-data-contract-refresh')).toBeVisible()
+  await page.getByTestId('overview-data-contract-jump').click()
+  await expect(page).toHaveURL(/ops\/readiness/)
+  await expect(page.getByTestId('readiness-commercial-handoff')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('readiness-commercial-handoff-data-contract')).toContainText(/data_contract|complete|max_write/)
+  await page.goto('/')
+  await expect(page.getByTestId('overview-page').or(page.getByTestId('overview-summary')).first()).toBeVisible()
   await expect(page.getByTestId('overview-session-calibrated')).toBeVisible()
   await expect(page.getByTestId('overview-session-server-hint')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
@@ -2654,7 +2663,13 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-commercial-handoff-password')).toBeVisible()
   await expect(page.getByTestId('readiness-commercial-handoff-session')).toBeVisible()
   await expect(page.getByTestId('readiness-commercial-handoff-data-contract')).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByTestId('readiness-commercial-handoff-data-contract')).toContainText(/data_contract|max_write|complete|features=/)
+  await expect(page.getByTestId('readiness-commercial-handoff-data-contract')).toContainText(/data_contract/)
+  await expect(page.getByTestId('readiness-commercial-handoff-data-contract')).toContainText(/complete|features=/)
+  // 预检 data-contract 项在契约齐全时应为 ok
+  const preflightDc = page.getByTestId('preflight-item-data-contract')
+  if (await preflightDc.count()) {
+    await expect(preflightDc).toBeVisible()
+  }
   await expect(page.getByTestId('readiness-copy-commercial-handoff')).toBeVisible()
   await expect(page.getByTestId('readiness-data-contract-refresh')).toBeVisible()
   await expect(page.getByTestId('readiness-handoff-jump-data-contract')).toBeVisible()

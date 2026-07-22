@@ -300,6 +300,20 @@ const overviewCommercialHandoff = computed(() =>
 const overviewDataContractLine = computed(() =>
   formatDataContractHandoffLine(overviewCommercialHandoff.value.data_contract),
 )
+const overviewDataContractLoaded = computed(() => overviewCommercialHandoff.value.data_contract.loaded)
+const overviewDataContractComplete = computed(() => overviewCommercialHandoff.value.data_contract.complete)
+const overviewDataContractToneClass = computed(() => {
+  if (dataContractError.value && !overviewDataContractLoaded.value) {
+    return 'border-amber-200 bg-amber-50/80 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100'
+  }
+  if (!overviewDataContractLoaded.value) {
+    return 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300'
+  }
+  if (overviewDataContractComplete.value) {
+    return 'border-emerald-200 bg-emerald-50/80 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100'
+  }
+  return 'border-amber-200 bg-amber-50/80 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100'
+})
 
 function readinessLevelLabel(level: string): string {
   if (level === 'good') return t.value('readinessLevelGood')
@@ -322,6 +336,19 @@ function goSignoffNotes() {
 
 function goExportPreflight() {
   router.push({ path: '/ops/readiness', hash: '#export-preflight' })
+}
+
+function goDataContractHandoff() {
+  router.push({ path: '/ops/readiness', hash: '#commercial-handoff-panel' })
+}
+
+async function refreshOverviewDataContract() {
+  await loadDataContract()
+  if (dataContractError.value && !dataContractRaw.value) {
+    notifyError(dataContractError.value)
+  } else if (dataContractRaw.value) {
+    success(t.value('overviewDataContractRefreshed'))
+  }
 }
 
 const sessionSummary = computed(() => {
@@ -992,11 +1019,34 @@ async function copyOverview() {
         <button type="button" class="mts-btn" data-testid="overview-copy-commercial-handoff" @click="copyCommercialHandoff">
           <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopyCommercialHandoff') }}
         </button>
-        <span
-          class="font-mono text-[11px] mts-muted max-w-full truncate"
-          data-testid="overview-data-contract-line"
-          :title="overviewDataContractLine"
-        >{{ overviewDataContractLine }}</span>
+        <div
+          class="flex max-w-full flex-wrap items-center gap-1.5 rounded-md border px-2 py-1"
+          :class="overviewDataContractToneClass"
+          data-testid="overview-data-contract-chip"
+        >
+          <span
+            class="font-mono text-[11px] max-w-[28rem] truncate"
+            data-testid="overview-data-contract-line"
+            :title="overviewDataContractLine"
+          >{{ overviewDataContractLine }}</span>
+          <button
+            type="button"
+            class="mts-btn !px-1.5 !py-0 text-[10px]"
+            data-testid="overview-data-contract-refresh"
+            @click="refreshOverviewDataContract"
+          >{{ t('overviewDataContractRefresh') }}</button>
+          <button
+            type="button"
+            class="mts-btn !px-1.5 !py-0 text-[10px]"
+            data-testid="overview-data-contract-jump"
+            @click="goDataContractHandoff"
+          >{{ t('overviewDataContractJump') }}</button>
+        </div>
+        <p
+          v-if="dataContractError"
+          class="basis-full text-[11px] text-amber-700 dark:text-amber-200"
+          data-testid="overview-data-contract-error"
+        >{{ dataContractError }}</p>
         <button type="button" class="mts-btn" data-testid="overview-copy-snapshot" @click="copyOverview">
           <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopySnapshot') }}
         </button>
@@ -1108,6 +1158,13 @@ async function copyOverview() {
         <button type="button" class="mts-btn !px-2 !py-0.5 text-[11px]" data-testid="overview-go-preflight" @click="goExportPreflight">
           {{ t('overviewGoPreflight') }}
         </button>
+        <button
+          v-if="overviewPreflight.items.some((i) => i.id === 'data-contract' && i.level !== 'ok')"
+          type="button"
+          class="mts-btn !px-2 !py-0.5 text-[11px]"
+          data-testid="overview-preflight-data-contract"
+          @click="goDataContractHandoff"
+        >{{ t('overviewPreflightDataContract') }}</button>
         <span class="mts-muted">{{ t('overviewPreflightHint') }}</span>
       </div>
       <div
