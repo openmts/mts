@@ -72,3 +72,16 @@ test('applyBatchProgressEvent summary carries admin op fields', () => {
   assert.equal(r.summary?.op, 'compact')
   assert.equal((r.summary?.last as { error?: string } | undefined)?.error, 'e2e disk full')
 })
+
+test('applyBatchProgressEvent summary carries path', () => {
+  const r = applyBatchProgressEvent(emptyBatchProgress(), {
+    type: 'summary',
+    ok: true,
+    path: '/api/v1/users/batch-disabled',
+    ok_count: 1,
+    skip_count: 0,
+    fail_count: 0,
+    items: [],
+  })
+  assert.equal(r.summary?.path, '/api/v1/users/batch-disabled')
+})

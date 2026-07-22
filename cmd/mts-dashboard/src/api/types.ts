@@ -157,6 +157,7 @@ export interface MaintenanceErrorsResponse {
 /** GET /api/v1/admin/doctor（含 HTTP 填充的 busy/last） */
 export interface DoctorResponse {
   ok: boolean
+  path?: string
   http_tls_enabled?: boolean
   checks?: Array<{ level: string; code: string; message: string }>
   lines?: string[]
@@ -169,6 +170,7 @@ export interface DoctorResponse {
 /** GET /api/v1/admin/health（包装 Health + busy/last） */
 export interface AdminHealthResponse {
   health: HealthSnapshot
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number

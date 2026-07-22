@@ -51,7 +51,7 @@ func (r *serverRuntime) batchUpdateUserDisabled(
 	if err := validateBatchNames(names); err != nil {
 		return batchMutationResponse{}, err
 	}
-	out := batchMutationResponse{OK: true, Items: make([]batchItemResult, 0, len(names))}
+	out := batchMutationResponse{OK: true, Path: routeUsersBatchDisabled, Items: make([]batchItemResult, 0, len(names))}
 	for _, name := range names {
 		item := r.applyUserDisabled(ctx, name, req.Disabled, actor)
 		out.Items = append(out.Items, item)
@@ -134,7 +134,7 @@ func (r *serverRuntime) batchDownsamplePolicies(
 	if err := validateBatchNames(names); err != nil {
 		return batchMutationResponse{}, err
 	}
-	out := batchMutationResponse{OK: true, Items: make([]batchItemResult, 0, len(names))}
+	out := batchMutationResponse{OK: true, Path: routeAdminDownsampleBatch, Items: make([]batchItemResult, 0, len(names))}
 	for _, name := range names {
 		item := r.applyDownsampleAction(ctx, name, action, actor)
 		out.Items = append(out.Items, item)

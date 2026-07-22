@@ -27,14 +27,14 @@ func (r *serverRuntime) handleUsers(writer http.ResponseWriter, request *http.Re
 			return
 		}
 		r.audit.record(auditEvent{UserName: req.Name, Action: "create_user"})
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true, Path: routeUsers}))
 	case http.MethodGet:
 		users, err := r.engine.ListUsers(request.Context())
 		if err != nil {
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToUsers(usersResponse{Users: users}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToUsers(usersResponse{Users: users, Path: routeUsers}))
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
@@ -132,14 +132,14 @@ func (r *serverRuntime) handleSingleUser(
 		if prevOK {
 			r.recordUserDisabledTransitionLast(prev.Disabled, user.Disabled)
 		}
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true, Path: request.URL.Path}))
 	case http.MethodDelete:
 		if err := r.engine.DeleteUser(request.Context(), userName); err != nil {
 			writeAPIError(writer, err)
 			return
 		}
 		r.audit.record(auditEvent{UserName: userName, Action: "delete_user"})
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true, Path: request.URL.Path}))
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
@@ -173,6 +173,7 @@ func (r *serverRuntime) handleUserPassword(writer http.ResponseWriter, request *
 	r.audit.record(auditEvent{UserName: userName, Action: "set_password"})
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToSetPassword(setPasswordResponse{
 		OK:       true,
+		Path:     request.URL.Path,
 		UserName: userName,
 	}))
 }
@@ -193,7 +194,7 @@ func (r *serverRuntime) handleDatabasePermissionResource(
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToPermissions(databasePermissionsResponse{Grants: grants}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToPermissions(databasePermissionsResponse{Grants: grants, Path: request.URL.Path, UserName: userName}))
 		return
 	}
 	if len(parts) != 2 {
@@ -223,7 +224,7 @@ func (r *serverRuntime) handleDatabasePermissionResource(
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true, Path: request.URL.Path}))
 }
 
 func (r *serverRuntime) handleUserAudit(writer http.ResponseWriter, request *http.Request, userName string) {

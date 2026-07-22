@@ -14,6 +14,7 @@ export interface BatchProgressState {
 
 export interface BatchMutationSummary {
   ok: boolean
+  path?: string
   ok_count: number
   skip_count: number
   fail_count: number
@@ -61,6 +62,7 @@ export function applyBatchProgressEvent(
       : []
     const summary: BatchMutationSummary = {
       ok: Boolean(r.ok),
+      path: typeof r.path === 'string' ? r.path : undefined,
       ok_count: Number(r.ok_count) || 0,
       skip_count: Number(r.skip_count) || 0,
       fail_count: Number(r.fail_count) || 0,

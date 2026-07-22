@@ -2681,3 +2681,16 @@
 | config validate/reload | path | 成功/失败文案 | Config 页 |
 | storage validate | path | 成功文案 + path 徽章 | Storage 页 |
 | admin/version | path | About path 行 | 运维交接 |
+
+## P483（2026-07-23）
+- Server：users 列表/创建/更新/删除/密码/授权/batch-disabled、doctor、admin/health 补 `path`（HTTP+gRPC；batch stream summary 含 path）
+- Dashboard：Users 成功文案含 path；列表 path 徽章；Overview/Readiness doctor path 徽章
+- 清单：`users-doctor-path`；ApiSpec ResponseHint 对齐
+
+### 前后端对齐（P483）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| users 列表/写 | path | 成功文案 + users-list-path | create/update/delete/password/grant/revoke |
+| batch-disabled | path / stream summary path | listBatchDone/Partial 含 path | NDJSON summary |
+| doctor / admin health | path | overview-doctor-path / readiness-doctor-path | GET |
+| 契约检索 | ResponseHint | 命令面板 | 运维对照 |

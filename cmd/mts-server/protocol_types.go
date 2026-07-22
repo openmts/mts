@@ -225,6 +225,7 @@ type userNameRequest struct {
 
 type usersResponse struct {
 	Users         []mts.User            `json:"users"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -247,6 +248,7 @@ type batchItemResult struct {
 // batchMutationResponse 批量写操作汇总。
 type batchMutationResponse struct {
 	OK            bool                  `json:"ok"`
+	Path          string                `json:"path,omitempty"`
 	OKCount       int                   `json:"ok_count"`
 	Skip          int                   `json:"skip_count"`
 	Fail          int                   `json:"fail_count"`
@@ -270,6 +272,8 @@ type createUserRequest struct {
 
 type databasePermissionsResponse struct {
 	Grants        []mts.DatabaseGrant   `json:"grants"`
+	Path          string                `json:"path,omitempty"`
+	UserName      string                `json:"user_name,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -347,6 +351,7 @@ type changePasswordResponse struct {
 // setPasswordResponse 管理员设置密码成功响应（含目标用户，便于 dashboard 对齐会话边界）
 type setPasswordResponse struct {
 	OK            bool                  `json:"ok"`
+	Path          string                `json:"path,omitempty"`
 	UserName      string                `json:"user_name,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
@@ -580,6 +585,7 @@ type storageValidateResponse struct {
 
 type adminHealthResponse struct {
 	Health        mts.HealthSnapshot    `json:"health"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`

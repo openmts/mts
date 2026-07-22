@@ -25,9 +25,13 @@ func (r *serverRuntime) streamBatchUserDisabled(
 	streamBatchItems(request.Context(), enc, flusher, names, func(ctx context.Context, name string) batchItemResult {
 		return r.applyUserDisabled(ctx, name, req.Disabled, actor)
 	}, func(event *batchProgressEvent) {
+		if event != nil {
+			event.Path = routeUsersBatchDisabled
+		}
 		if event != nil && event.Type == "summary" && !event.Cancelled {
 			r.recordBatchUserDisabledLast(req.Disabled, batchMutationResponse{
 				OK:      event.OK,
+				Path:    routeUsersBatchDisabled,
 				OKCount: event.OKCount,
 				Skip:    event.Skip,
 				Fail:    event.Fail,
@@ -61,9 +65,13 @@ func (r *serverRuntime) streamBatchDownsamplePolicies(
 	streamBatchItems(request.Context(), enc, flusher, names, func(ctx context.Context, name string) batchItemResult {
 		return r.applyDownsampleAction(ctx, name, action, actor)
 	}, func(event *batchProgressEvent) {
+		if event != nil {
+			event.Path = routeAdminDownsampleBatch
+		}
 		if event != nil && event.Type == "summary" && !event.Cancelled {
 			r.recordBatchDownsampleLast(action, batchMutationResponse{
 				OK:      event.OK,
+				Path:    routeAdminDownsampleBatch,
 				OKCount: event.OKCount,
 				Skip:    event.Skip,
 				Fail:    event.Fail,
@@ -162,6 +170,7 @@ func wantsBatchProgressStream(request *http.Request) bool {
 // batchProgressEvent 批量写进度 NDJSON 事件（item/summary/error）。
 type batchProgressEvent struct {
 	Type          string                `json:"type"`
+	Path          string                `json:"path,omitempty"`
 	Index         int                   `json:"index,omitempty"`
 	Total         int                   `json:"total,omitempty"`
 	Name          string                `json:"name,omitempty"`

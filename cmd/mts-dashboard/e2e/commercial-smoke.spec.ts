@@ -119,6 +119,9 @@ test('commercial browser smoke path', async ({ page }) => {
   if (await page.getByTestId('overview-doctor-virtual-list').count()) {
     await expect(page.getByTestId('overview-doctor-virtual-list')).toBeVisible()
   }
+  if (await page.getByTestId('overview-doctor-path').count()) {
+    await expect(page.getByTestId('overview-doctor-path')).toContainText('/api/v1/admin/doctor')
+  }
   await expect(page.getByTestId('overview-summary')).toBeVisible()
   await expect(page.getByTestId('overview-load-error')).toHaveCount(0)
   await expect(page.getByTestId('overview-refresh-error')).toHaveCount(0)
@@ -570,6 +573,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('users-page')).toBeVisible()
   await expect(page.getByTestId('users-admin-last')).toBeVisible()
   await expect(page.getByTestId('users-admin-last-copy')).toBeVisible()
+  if (await page.getByTestId('users-list-path').count()) {
+    await expect(page.getByTestId('users-list-path')).toContainText('/api/v1/users')
+  }
 
   await page.goto('/observability/metrics')
   await expect(page.getByTestId('metrics-page')).toBeVisible()
@@ -597,6 +603,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('about-page')).toBeVisible()
   await expect(page.getByTestId('about-admin-last')).toBeVisible()
   await expect(page.getByTestId('about-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
+  if (await page.getByTestId('overview-doctor-path').count()) {
+    await expect(page.getByTestId('overview-doctor-path')).toContainText('/api/v1/admin/doctor')
+  }
   if (await page.getByTestId('about-server-path').count()) {
     await expect(page.getByTestId('about-server-path')).toContainText('/api/v1/admin/version')
   }

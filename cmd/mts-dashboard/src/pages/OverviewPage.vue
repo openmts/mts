@@ -80,7 +80,7 @@ interface MaintenanceStatsResponse { stats: MaintenanceStats; admin_op_busy?: bo
 interface MaintenanceErrorsResponse { errors?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks']; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 interface DoctorCheck { level: string; code: string; message: string }
-interface DoctorResponse { ok: boolean; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
+interface DoctorResponse { ok: boolean; path?: string; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 
 const { isAdmin, getTokenExpiresAt, lastSessionRemainingSeconds, lastSessionCheckedAt, lastSessionServerTimeUnix, lastSessionSampleSource } = useAuth()
 const { adminOpBusy, adminOpKind, setAdminOpBusy, applyAdminOpStatus, refreshAdminOpBusy } = useAdminOpBusy()
@@ -152,6 +152,7 @@ const downsampleLaggingJump = computed(() => downsampleStatusHealthJump('lagging
 const downsampleActiveJump = computed(() => downsampleStatusHealthJump('active'))
 const doctorChecks = ref<DoctorCheck[]>([])
 const doctorTLS = ref<boolean | null>(null)
+const doctorPath = ref('')
 const dataContractRaw = ref<DataContractResponse | null>(null)
 const dataContractError = ref('')
 const loadError = ref('')
@@ -479,6 +480,7 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
       const v = await apiGet<DoctorResponse>('/api/v1/admin/doctor')
       doctorChecks.value = v.checks ?? []
       doctorTLS.value = !!v.http_tls_enabled
+      doctorPath.value = String(v.path || '/api/v1/admin/doctor')
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
@@ -518,6 +520,7 @@ function clearNonAdminSnapshots() {
   maintenanceErrors.value = []
   doctorChecks.value = []
   doctorTLS.value = null
+  doctorPath.value = ''
   serverVersion.value = null
 }
 
@@ -529,6 +532,7 @@ function nullAdminSectionData(key: AdminSectionKey) {
   else if (key === 'doctor') {
     doctorChecks.value = []
     doctorTLS.value = null
+    doctorPath.value = ''
   } else if (key === 'version') serverVersion.value = null
 }
 
@@ -1291,6 +1295,12 @@ async function copyOverview() {
         </span>
       </div>
       <p class="mb-3 text-xs mts-muted">{{ t('doctorDesc') }}</p>
+      <p
+        v-if="doctorPath"
+        class="mb-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="overview-doctor-path"
+        :title="doctorPath"
+      >{{ doctorPath }}</p>
       <EmptyState
         v-if="!doctorChecks.length"
         compact

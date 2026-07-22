@@ -63,6 +63,7 @@ import ExportJobBanner from '@/components/ExportJobBanner.vue'
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
 interface UsersResponse {
   users: User[]
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -71,6 +72,16 @@ interface UsersResponse {
 interface DatabaseGrant { database: string; permission: string }
 interface PermissionsResponse {
   grants: Array<{ database: string; permission: string }>
+  path?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
+interface UsersOkResponse {
+  ok?: boolean
+  path?: string
+  user_name?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -81,6 +92,7 @@ const route = useRoute()
 const router = useRouter()
 useHashScroll()
 const users = ref<User[]>([])
+const usersListPath = ref('')
 const userFilter = ref('')
 const roleFilter = ref('')
 const statusFilter = ref<UsersStatusFilter>('')
@@ -308,6 +320,7 @@ async function loadUsers() {
     const data = await apiGet<UsersResponse>('/api/v1/users')
     applyAdminOpStatus(parseAdminOpStatusPayload(data))
     users.value = data.users ?? []
+    usersListPath.value = String(data.path || '/api/v1/users')
     pruneTo(users.value.map((u) => u.name))
     loadError.value = ''
   } catch (e) {
@@ -366,7 +379,7 @@ async function createUser() {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-        const created = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/users', {
+        const created = await apiPost<UsersOkResponse>('/api/v1/users', {
       name: newUser.value.name.trim(),
       display_name: newUser.value.display_name,
       role: newUser.value.role,
@@ -376,8 +389,11 @@ async function createUser() {
     showCreate.value = false
     newUser.value = { name: '', display_name: '', role: 'user', password: '' }
     await loadUsers()
-    setActionOk(t.value('usersCreated'))
-    success(t.value('usersCreated'))
+    const okMsg = formatMessage(t.value('usersCreated'), {
+      path: String(created?.path || '/api/v1/users'),
+    })
+    setActionOk(okMsg)
+    success(okMsg)
   } catch (e) {
     reportUsersCatch('create', e)
   } finally {
@@ -417,14 +433,11 @@ async function doSetPassword() {
   const signal = usersActionAbort.begin()
   try {
     const target = setPasswordUser.value
-    const pwdResp = await apiPut<{
-      ok?: boolean
-      user_name?: string
-      admin_op_busy?: boolean
-      op?: string
-      started_at_unix?: number
-      last?: unknown
-    }>(`/api/v1/users/${encodeURIComponent(target)}/password`, { password: setPasswordValue.value }, { signal })
+    const pwdResp = await apiPut<UsersOkResponse>(
+      `/api/v1/users/${encodeURIComponent(target)}/password`,
+      { password: setPasswordValue.value },
+      { signal },
+    )
     showSetPassword.value = false
     setPasswordValue.value = ''
     setPasswordConfirm.value = ''
@@ -441,8 +454,11 @@ async function doSetPassword() {
       return
     }
     applyAdminOpStatus(parseAdminOpStatusPayload(pwdResp))
-    setActionOk(t.value('usersPasswordSet'))
-    success(t.value('usersPasswordSet'))
+    const okMsg = formatMessage(t.value('usersPasswordSet'), {
+      path: String(pwdResp?.path || `/api/v1/users/${encodeURIComponent(confirmedTarget)}/password`),
+    })
+    setActionOk(okMsg)
+    success(okMsg)
   } catch (e) {
     reportUsersCatch('set-password', e)
   } finally {
@@ -550,12 +566,15 @@ async function confirmDelete() {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    const del = await apiDelete<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(name)}`, { signal })
+    const del = await apiDelete<UsersOkResponse>(`/api/v1/users/${encodeURIComponent(name)}`, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(del))
     await loadUsers()
     if (selectedUser.value?.name === name) selectedUser.value = null
     deleteOpen.value = false
-    const okMsg = formatMessage(t.value('usersDeleted'), { name })
+    const okMsg = formatMessage(t.value('usersDeleted'), {
+      name,
+      path: String(del?.path || `/api/v1/users/${encodeURIComponent(name)}`),
+    })
     setActionOk(okMsg)
     success(okMsg)
   } catch (e) {
@@ -583,10 +602,14 @@ async function toggleDisable(user: User) {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    const upd = await apiPut<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled }, { signal })
+    const upd = await apiPut<UsersOkResponse>(`/api/v1/users/${encodeURIComponent(user.name)}`, { ...user, disabled: !user.disabled }, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(upd))
     await loadUsers()
-    const okMsg = user.disabled ? t.value('usersEnabled') : t.value('usersDisabled')
+    const path = String(upd?.path || `/api/v1/users/${encodeURIComponent(user.name)}`)
+    const okMsg = formatMessage(
+      t.value(user.disabled ? 'usersEnabled' : 'usersDisabled'),
+      { path },
+    )
     setActionOk(okMsg)
     success(okMsg)
     toggleOpen.value = false
@@ -661,14 +684,20 @@ async function grantPermission() {
     }
     const results = await Promise.all(tasks)
     // 批量授权：对最后一次成功响应 apply busy/last（各次响应 last 同源）
+    let grantPath = ''
     if (results.length) {
-      applyAdminOpStatus(parseAdminOpStatusPayload(results[results.length - 1]))
+      const last = results[results.length - 1] as UsersOkResponse
+      applyAdminOpStatus(parseAdminOpStatusPayload(last))
+      grantPath = String(last?.path || '')
     }
     grantDbs.value = []
     grantPerms.value = []
     await selectUser(selectedUser.value)
-    setActionOk(t.value('usersGrantOk'))
-    success(t.value('usersGrantOk'))
+    const okMsg = formatMessage(t.value('usersGrantOk'), {
+      path: grantPath || `/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions`,
+    })
+    setActionOk(okMsg)
+    success(okMsg)
   } catch (e) {
     reportUsersCatch('grant', e)
   } finally {
@@ -691,14 +720,15 @@ async function revokeGrant(g: DatabaseGrant) {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    const del = await apiDelete<Record<string, unknown>>(
-      `/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(g.database)}/${encodeURIComponent(g.permission)}`,
-      { signal },
-    )
+    const delPath = `/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(g.database)}/${encodeURIComponent(g.permission)}`
+    const del = await apiDelete<UsersOkResponse>(delPath, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(del))
     await selectUser(selectedUser.value)
-    setActionOk(t.value('usersRevokeOk'))
-    success(t.value('usersRevokeOk'))
+    const okMsg = formatMessage(t.value('usersRevokeOk'), {
+      path: String(del?.path || delPath),
+    })
+    setActionOk(okMsg)
+    success(okMsg)
   } catch (e) {
     reportUsersCatch('revoke', e, { database: g.database, permission: g.permission })
   } finally {
@@ -855,6 +885,7 @@ async function confirmBatch() {
     if (!data) {
       data = {
         ok: batchProgress.value.fail === 0,
+        path: '/api/v1/users/batch-disabled',
         ok_count: batchProgress.value.ok,
         skip_count: batchProgress.value.skip,
         fail_count: batchProgress.value.fail,
@@ -871,7 +902,8 @@ async function confirmBatch() {
       .filter((it) => it.status === 'error')
       .map((it) => it.name)
     const key = fail ? 'listBatchPartial' : 'listBatchDone'
-    let msg = formatMessage(t.value(key), { ok, skip, fail })
+    const batchPath = String((data as BatchMutationSummary).path || '/api/v1/users/batch-disabled')
+    let msg = formatMessage(t.value(key), { ok, skip, fail, path: batchPath })
     if (failNames.length) {
       const shown = failNames.slice(0, 8).join(', ')
       const more = failNames.length > 8 ? `…(+${failNames.length - 8})` : ''
@@ -990,6 +1022,12 @@ onBeforeUnmount(() => {
       @retry="retryLastUsersAction"
       @dismiss="clearActionResult"
     />
+    <p
+      v-if="usersListPath"
+      class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+      data-testid="users-list-path"
+      :title="usersListPath"
+    >{{ usersListPath }}</p>
     <InFlightBanner
       :active="deleteLoading || batchLoading || usersToggleLoading || usersWriteLoading"
       :started-at-ms="usersActionStartedAt"

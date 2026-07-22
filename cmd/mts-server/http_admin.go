@@ -282,6 +282,7 @@ func (r *serverRuntime) handleAdminDoctor(writer http.ResponseWriter, request *h
 		return
 	}
 	busy, op, started := r.adminHeavyState()
+	resp.Path = routeAdminDoctor
 	resp.AdminOpBusy = busy
 	resp.Op = op
 	resp.StartedAtUnix = started

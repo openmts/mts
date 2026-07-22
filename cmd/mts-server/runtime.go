@@ -507,6 +507,7 @@ func (r *serverRuntime) adminHealthPayload() adminHealthResponse {
 	busy, op, started := r.adminHeavyState()
 	return adminHealthResponse{
 		Health:        r.health(),
+		Path:          routeAdminHealth,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,

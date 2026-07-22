@@ -124,6 +124,7 @@ import {
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse {
   ok: boolean
+  path?: string
   http_tls_enabled?: boolean
   checks?: DoctorCheck[]
   lines?: string[]
@@ -1626,6 +1627,12 @@ watch(
           }) }}
         </span>
       </div>
+      <p
+        v-if="doctor?.path"
+        class="mb-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="readiness-doctor-path"
+        :title="doctor.path"
+      >{{ doctor.path }}</p>
       <div v-if="doctor && (doctor.checks ?? []).length" class="overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800" data-testid="readiness-doctor-checks">
         <div class="grid grid-cols-[minmax(5rem,0.6fr)_minmax(7rem,0.9fr)_minmax(8rem,1.3fr)] border-b border-slate-200 px-2 py-2 text-left text-[11px] uppercase mts-muted dark:border-slate-700">
           <span>{{ t('readinessDoctorColLevel') }}</span>

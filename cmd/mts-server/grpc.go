@@ -442,6 +442,7 @@ func grpcSetUserPassword(r *serverRuntime, ctx context.Context, req any) (any, e
 	}
 	return r.attachAdminOpToSetPassword(setPasswordResponse{
 		OK:       true,
+		Path:     routeUsersPrefix + request.UserName + "/password",
 		UserName: request.UserName,
 	}), nil
 }
@@ -453,7 +454,7 @@ func grpcCreateUser(r *serverRuntime, ctx context.Context, req any) (any, error)
 	if err := r.createUserWithInitialPassword(ctx, *req.(*createUserRequest)); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeUsers}), nil
 }
 
 func grpcUpdateUser(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -471,7 +472,7 @@ func grpcUpdateUser(r *serverRuntime, ctx context.Context, req any) (any, error)
 	if prevOK {
 		r.recordUserDisabledTransitionLast(prev.Disabled, body.Disabled)
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeUsersPrefix + body.Name}), nil
 }
 
 func grpcGetUser(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -496,17 +497,18 @@ func grpcListUsers(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToUsers(usersResponse{Users: users}), nil
+	return r.attachAdminOpToUsers(usersResponse{Users: users, Path: routeUsers}), nil
 }
 
 func grpcDeleteUser(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	if err := r.engine.DeleteUser(ctx, req.(*userNameRequest).Name); err != nil {
+	name := req.(*userNameRequest).Name
+	if err := r.engine.DeleteUser(ctx, name); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeUsersPrefix + name}), nil
 }
 
 func grpcGrantDatabasePermission(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -517,7 +519,7 @@ func grpcGrantDatabasePermission(r *serverRuntime, ctx context.Context, req any)
 	if err := r.engine.GrantDatabasePermission(ctx, request.UserName, request.Database, request.Permission); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeUsersPrefix + request.UserName + "/database-permissions"}), nil
 }
 
 func grpcRevokeDatabasePermission(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -528,7 +530,7 @@ func grpcRevokeDatabasePermission(r *serverRuntime, ctx context.Context, req any
 	if err := r.engine.RevokeDatabasePermission(ctx, request.UserName, request.Database, request.Permission); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeUsersPrefix + request.UserName + "/database-permissions"}), nil
 }
 
 func grpcListDatabasePermissions(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -539,7 +541,7 @@ func grpcListDatabasePermissions(r *serverRuntime, ctx context.Context, req any)
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToPermissions(databasePermissionsResponse{Grants: grants}), nil
+	return r.attachAdminOpToPermissions(databasePermissionsResponse{Grants: grants, Path: routeUsersPrefix + req.(*userNameRequest).Name + "/database-permissions", UserName: req.(*userNameRequest).Name}), nil
 }
 
 func grpcCheckDatabasePermission(r *serverRuntime, ctx context.Context, req any) (any, error) {

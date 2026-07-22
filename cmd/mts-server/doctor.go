@@ -17,6 +17,7 @@ type doctorCheck struct {
 // doctorResponse 供 HTTP admin/doctor 与 CLI 共用。
 type doctorResponse struct {
 	OK             bool          `json:"ok"`
+	Path           string        `json:"path,omitempty"`
 	HTTPTLSEnabled bool          `json:"http_tls_enabled"`
 	Checks         []doctorCheck `json:"checks"`
 	Lines          []string      `json:"lines"`

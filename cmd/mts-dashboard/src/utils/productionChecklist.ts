@@ -574,6 +574,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/ops#ops-status-strip',
   },
   {
+    id: 'users-doctor-path',
+    severity: 'recommended',
+    title: { zh: 'Users/批次与 doctor/health 响应含 path', en: 'Users/batch and doctor/health responses include path' },
+    detail: {
+      zh: 'users 列表/创建/更新/删除/密码/授权/batch-disabled、doctor、admin/health 返回 path；Users/Overview/Readiness 成功文案或徽章展示。',
+      en: 'users list/create/update/delete/password/grants/batch-disabled, doctor, admin/health return path; Users/Overview/Readiness surface it.',
+    },
+    automated: true,
+    jump: '/users',
+  },
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },
