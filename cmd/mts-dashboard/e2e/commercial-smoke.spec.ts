@@ -730,6 +730,15 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('ops-jump-readiness')).toBeVisible()
   }
 
+  // P498: Databases 列表 path/source 元数据对齐
+  await page.goto('/databases')
+  await expect(page.getByTestId('databases-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('databases-meta-align').count()) {
+    await expect(page.getByTestId('databases-meta-align')).toBeVisible()
+    await expect(page.getByTestId('databases-list-path')).toContainText('/api/v1/')
+    await expect(page.getByTestId('databases-jump-query')).toBeVisible()
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

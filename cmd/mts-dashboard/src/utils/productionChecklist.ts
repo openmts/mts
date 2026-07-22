@@ -750,6 +750,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'databases-meta-align',
+    severity: 'recommended',
+    title: { zh: 'Databases 列表 path/source 可观测', en: 'Databases list path/source observability' },
+    detail: {
+      zh: 'Databases 展示 list path、source、库数量/已展开详情，并深链 Query/Write；导出 inventory 含 path/source。',
+      en: 'Databases shows list path, source, counts, Query/Write deep links; inventory export includes path/source.',
+    },
+    automated: true,
+    jump: '/databases',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

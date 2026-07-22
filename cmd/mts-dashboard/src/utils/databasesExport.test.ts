@@ -18,3 +18,13 @@ test('databasesToCSV escapes', () => {
   assert.match(csv, /^name,measurement_count,retention_policy_count,loaded\n/)
   assert.match(csv, /"db,1"/)
 })
+
+test('buildDatabasesExport includes list_path meta', () => {
+  const out = buildDatabasesExport(rows, new Date('2026-07-20T00:00:00.000Z'), {
+    list_path: '/api/v1/data/databases',
+    source: 'data',
+  })
+  assert.equal(out.version, 2)
+  assert.equal(out.list_path, '/api/v1/data/databases')
+  assert.equal(out.source, 'data')
+})

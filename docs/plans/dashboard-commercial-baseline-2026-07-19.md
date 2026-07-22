@@ -2864,3 +2864,13 @@
 | flush/compact/retention | path | action log + summary | POST |
 | metrics health | /metrics | ops-jump-metrics | 深链 |
 | readiness | 既有 | ops-jump-readiness | 深链 |
+
+## P498（2026-07-23）
+- Databases：list path/source 元数据对齐卡；深链 Query/Write；导出 inventory v2 含 path/source
+- 清单：`databases-meta-align`
+
+### 前后端对齐（P498）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| data/admin databases | path + list | databases-list-path / source | GET |
+| inventory export | n/a | mts.databases.inventory v2 | 本地导出 |

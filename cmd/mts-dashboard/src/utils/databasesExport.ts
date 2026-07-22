@@ -10,11 +10,14 @@ export interface DatabaseExportRow {
 export function buildDatabasesExport(
   rows: DatabaseExportRow[] | null | undefined,
   at = new Date(),
+  meta?: { list_path?: string; source?: string } | null,
 ): {
   kind: 'mts.databases.inventory'
-  version: 1
+  version: 2
   generated_at: string
   count: number
+  list_path?: string
+  source?: string
   databases: Array<{
     name: string
     measurement_count?: number
@@ -23,11 +26,15 @@ export function buildDatabasesExport(
   }>
 } {
   const list = Array.isArray(rows) ? rows : []
+  const list_path = String(meta?.list_path || '').trim()
+  const source = String(meta?.source || '').trim()
   return {
     kind: 'mts.databases.inventory',
-    version: 1,
+    version: 2,
     generated_at: at.toISOString(),
     count: list.length,
+    ...(list_path ? { list_path } : {}),
+    ...(source ? { source } : {}),
     databases: list.map((r) => ({
       name: r.name,
       measurement_count: r.measurement_count,

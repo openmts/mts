@@ -70,6 +70,7 @@ test('production checklist has required commercial gates', () => {
     'write-contract-align',
     'query-contract-align',
     'ops-action-summary',
+    'databases-meta-align',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -508,4 +509,12 @@ test('ops-action-summary is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('/operations'))
+})
+
+test('databases-meta-align is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'databases-meta-align')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/databases'))
 })

@@ -12,6 +12,7 @@ import {
 } from '@/utils/adminFormDirty'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { listDatabasesDetailed, listMeasurementsDetailed, listFieldsDetailed, listRetentionPoliciesDetailed, listSeriesDetailed } from '@/api/meta'
+import { alignDatabasesMeta } from '@/utils/databasesMetaAlign'
 import { seriesLabel } from '@/utils/seriesMeta'
 import { filterSeriesListLocal } from '@/utils/seriesFilter'
 import { formatMessage } from '@/utils/formatMessage'
@@ -125,6 +126,23 @@ const {
   runJSONExport,
 } = useExportJob()
 const databases = ref<DatabaseEntry[]>([])
+const databasesListPath = ref('')
+const databasesListSource = ref('')
+const databasesMetaAlign = computed(() =>
+  alignDatabasesMeta({
+    listPath: databasesListPath.value,
+    source: databasesListSource.value,
+    databaseCount: databases.value.length,
+    loadedDetailCount: databases.value.filter((d) => d.loaded).length,
+  }),
+)
+const databasesMetaToneClass = computed(() => {
+  const tone = databasesMetaAlign.value.tone
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+  return 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/40'
+})
 const dbFilter = ref('')
 const measFilter = ref('')
 const DB_SORT_KEY = 'mts.dashboard.databases-sort.prefs.v1'
@@ -202,6 +220,8 @@ async function loadDatabasesList() {
   try {
     const listed = await listDatabasesDetailed()
     if (listed.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(listed.adminOp))
+    databasesListPath.value = String(listed.path || '').trim()
+    databasesListSource.value = String(listed.source || '').trim()
     const names = listed.names
     if (listed.error && !names.length) throw new Error(listed.error)
     // 刷新时尽量保留已展开/已加载详情，避免列表闪空后丢失上下文
@@ -722,7 +742,10 @@ async function exportJSON() {
           if (done < rows.length) await new Promise((r) => setTimeout(r, 0))
         }
       }
-      return buildDatabasesExport(rows)
+      return buildDatabasesExport(rows, new Date(), {
+        list_path: databasesListPath.value || databasesMetaAlign.value.list_path,
+        source: databasesListSource.value || databasesMetaAlign.value.source,
+      })
     },
   })
   if (outcome === 'done') success(t.value('inventoryExported'))
@@ -812,6 +835,39 @@ onBeforeUnmount(() => {
       class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
       data-testid="databases-readonly-hint"
     >{{ t('databasesReadOnlyHint') }}</p>
+    <div
+      class="rounded-xl border px-3 py-2 text-xs"
+      :class="databasesMetaToneClass"
+      data-testid="databases-meta-align"
+    >
+      <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <p class="font-semibold text-slate-800 dark:text-slate-100">{{ t('databasesMetaAlignTitle') }}</p>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" to="/query" data-testid="databases-jump-query">{{ t('databasesJumpQuery') }}</router-link>
+          <router-link class="mts-btn text-xs" to="/write" data-testid="databases-jump-write">{{ t('databasesJumpWrite') }}</router-link>
+          <button type="button" class="mts-btn text-xs" data-testid="databases-meta-refresh" @click="loadDatabasesList">{{ t('refresh') }}</button>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 text-slate-700 dark:text-slate-200">
+        <span data-testid="databases-meta-count">{{ formatMessage(t('databasesMetaCount'), { n: databasesMetaAlign.database_count }) }}</span>
+        <span data-testid="databases-meta-loaded">{{ formatMessage(t('databasesMetaLoaded'), { n: databasesMetaAlign.loaded_detail_count }) }}</span>
+        <span
+          class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          data-testid="databases-meta-source"
+        >{{ databasesMetaAlign.source || t('emptyValue') }}</span>
+        <span
+          class="max-w-full truncate rounded bg-white/80 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          data-testid="databases-list-path"
+          :title="databasesMetaAlign.list_path"
+        >{{ databasesMetaAlign.list_path }}</span>
+      </div>
+      <p
+        v-if="databasesMetaAlign.source === 'manual'"
+        class="mt-1 text-red-700 dark:text-red-300"
+        data-testid="databases-meta-manual-hint"
+      >{{ t('databasesMetaManualHint') }}</p>
+    </div>
+
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('databases') }}</h1>
