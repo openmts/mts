@@ -63,3 +63,40 @@ export function queryAdminOpPayload(server: QueryResultMetaInput | null | undefi
     last: server.last,
   }
 }
+
+/** 流式 end 帧 path/record_count（与 streamRecord type=end 对齐） */
+export interface StreamEndMetaInput {
+  path?: string
+  format?: string
+  record_count?: number
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
+
+export function streamEndPath(
+  server: StreamEndMetaInput | null | undefined,
+  clientFallback = '/api/v1/data/query/stream',
+): string {
+  return queryResultPath(server, clientFallback)
+}
+
+export function streamEndRecordCount(
+  server: StreamEndMetaInput | null | undefined,
+  clientFallback: number,
+): number {
+  const n = Number(server?.record_count)
+  if (Number.isFinite(n) && n >= 0) return Math.trunc(n)
+  const fb = Number(clientFallback)
+  return Number.isFinite(fb) && fb >= 0 ? Math.trunc(fb) : 0
+}
+
+export function streamAdminOpPayload(server: StreamEndMetaInput | null | undefined): {
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+} | null {
+  return queryAdminOpPayload(server)
+}

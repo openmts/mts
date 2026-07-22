@@ -409,6 +409,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/query#query-results',
   },
   {
+    id: 'stream-delete-meta',
+    severity: 'required',
+    title: { zh: '流式查询 end 与删除响应含 meta', en: 'Stream end and delete responses include meta' },
+    detail: {
+      zh: 'POST /data/query/stream 的 end 帧含 path/format/record_count/admin_op；POST /data/delete 返回 path/database/measurement/admin_op；Query 页消费并展示。',
+      en: 'POST /data/query/stream end frames include path/format/record_count/admin_op; POST /data/delete returns path/database/measurement/admin_op; Query page consumes and surfaces them.',
+    },
+    automated: true,
+    jump: '/query#query-results',
+  },
+  {
     id: 'data-limits-endpoint',
     severity: 'required',
     title: { zh: '数据面 limits 可对齐', en: 'Data-plane limits are exposed' },

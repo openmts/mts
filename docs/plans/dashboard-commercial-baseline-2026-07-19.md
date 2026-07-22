@@ -2466,3 +2466,20 @@
 | 查超限 | max_query_limit | 告警+裁剪 | 避免必失败请求 |
 | 配置 schema | limits.* | Config 页 | 运维对照 |
 
+
+## P468（2026-07-23）
+- Server：`POST /data/query/stream` end 帧对齐 `path`/`format`/`record_count`/`stats`/`admin_op_busy|op|started_at_unix|last`（HTTP NDJSON + gRPC stream）
+- Server：`POST /data/delete` 成功响应升级为 `deleteResponse{ok,path,database,measurement,admin_op_*}`（HTTP+gRPC）
+- Server：ApiSpec ResponseHint 同步；单测 `TestHTTPQueryStreamEndReportsMetaAndAdminOp` / `TestHTTPDeleteResponseReportsPathScopeAndAdminOp`
+- Dashboard：Query workbench 消费 stream end meta（path/count/admin_op）；范围删除成功文案优先服务端 path/measurement/database
+- 纯函数：`deleteResultSummary` + `streamEndPath/recordCount`；就绪清单 `stream-delete-meta`（required）
+- 命令面板：`api-spec-query-stream-end` / `api-spec-data-delete`；e2e 契约检索 record_count/deleteResponse
+
+### 前后端对齐（P468）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| query/stream end | path/format/record_count/admin_op | useQueryWorkbench lastQueryMeta | 与 rows/columns meta 一致 |
+| data/delete | path/database/measurement/admin_op | Query 范围删除结果条 | 优先服务端 scope |
+| 契约 | ResponseHint | ApiSpec 检索 + 命令面板 | 运维对照 |
+| 就绪门禁 | — | stream-delete-meta | required |
+

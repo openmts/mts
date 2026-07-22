@@ -270,7 +270,12 @@ func grpcDelete(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.deleteData(ctx, request.Request); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToDelete(deleteResponse{
+		OK:          true,
+		Path:        routeDataDelete,
+		Database:    request.Request.Database,
+		Measurement: request.Request.Measurement,
+	}), nil
 }
 
 func grpcQueryColumns(r *serverRuntime, ctx context.Context, req any) (any, error) {

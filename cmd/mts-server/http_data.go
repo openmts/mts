@@ -209,34 +209,36 @@ func normalizeStreamFormat(format string, mode string) (string, error) {
 
 func (r *serverRuntime) streamOpenedRows(encoder *json.Encoder, rows mts.RowIterator) {
 	defer func() { _ = rows.Close() }()
+	count := 0
 	for rows.Next() {
 		row := rows.Row()
 		if err := encoder.Encode(streamRecord{Type: streamTypeRow, Row: &row}); err != nil {
 			return
 		}
+		count++
 	}
 	if err := rows.Err(); err != nil {
 		_ = encoder.Encode(streamRecord{Type: streamTypeError, Error: errorPayload(err)})
 		return
 	}
-	stats := r.queryStats()
-	_ = encoder.Encode(streamRecord{Type: streamTypeEnd, Stats: &stats})
+	_ = encoder.Encode(r.streamEndRecord(streamTypeRow, count))
 }
 
 func (r *serverRuntime) streamOpenedColumns(encoder *json.Encoder, columns mts.ColumnIterator) {
 	defer func() { _ = columns.Close() }()
+	count := 0
 	for columns.Next() {
 		column := columns.Column()
 		if err := encoder.Encode(streamRecord{Type: streamTypeColumn, Column: &column}); err != nil {
 			return
 		}
+		count++
 	}
 	if err := columns.Err(); err != nil {
 		_ = encoder.Encode(streamRecord{Type: streamTypeError, Error: errorPayload(err)})
 		return
 	}
-	stats := r.queryStats()
-	_ = encoder.Encode(streamRecord{Type: streamTypeEnd, Stats: &stats})
+	_ = encoder.Encode(r.streamEndRecord(streamTypeColumn, count))
 }
 
 func (r *serverRuntime) decodeAuthorizedQuery(
@@ -312,7 +314,12 @@ func (r *serverRuntime) handleDelete(writer http.ResponseWriter, request *http.R
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDelete(deleteResponse{
+		OK:          true,
+		Path:        routeDataDelete,
+		Database:    req.Request.Database,
+		Measurement: req.Request.Measurement,
+	}))
 }
 
 func writeRequestDatabases(req writeRequest) []string {

@@ -794,6 +794,31 @@ func (r *serverRuntime) attachAdminOpToRestoreDrill(resp storageRestoreDrillResp
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToDelete(resp deleteResponse) deleteResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) streamEndRecord(format string, recordCount int) streamRecord {
+	busy, op, started := r.adminHeavyState()
+	stats := r.queryStats()
+	return streamRecord{
+		Type:          streamTypeEnd,
+		Stats:         &stats,
+		Path:          routeDataQueryStream,
+		Format:        format,
+		RecordCount:   recordCount,
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
+	}
+}
+
 func (r *serverRuntime) attachAdminOpToOK(resp okResponse) okResponse {
 	busy, op, started := r.adminHeavyState()
 	resp.AdminOpBusy = busy

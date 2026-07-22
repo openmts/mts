@@ -116,11 +116,18 @@ type dataLimitsResponse struct {
 }
 
 type streamRecord struct {
-	Type   string            `json:"type"`
-	Row    *mts.Row          `json:"row,omitempty"`
-	Column *mts.ColumnSeries `json:"column,omitempty"`
-	Error  *errorResponse    `json:"error,omitempty"`
-	Stats  *mts.QueryStats   `json:"stats,omitempty"`
+	Type          string                `json:"type"`
+	Row           *mts.Row              `json:"row,omitempty"`
+	Column        *mts.ColumnSeries     `json:"column,omitempty"`
+	Error         *errorResponse        `json:"error,omitempty"`
+	Stats         *mts.QueryStats       `json:"stats,omitempty"`
+	Path          string                `json:"path,omitempty"`
+	Format        string                `json:"format,omitempty"`
+	RecordCount   int                   `json:"record_count,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 // queryStreamRequest 控制 NDJSON 流式查询形态。
@@ -133,6 +140,18 @@ type queryStreamRequest struct {
 
 type deleteRequest struct {
 	Request mts.DeleteRequest `json:"request"`
+}
+
+// deleteResponse 数据面范围删除结果（含 path/scope 与 admin_op）。
+type deleteResponse struct {
+	OK            bool                  `json:"ok"`
+	Path          string                `json:"path,omitempty"`
+	Database      string                `json:"database,omitempty"`
+	Measurement   string                `json:"measurement,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 // adminHeavyLastResult 最近一次管理重操作结果（空闲时供 Dashboard 展示）。

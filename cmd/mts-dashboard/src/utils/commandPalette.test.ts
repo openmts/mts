@@ -381,3 +381,10 @@ test('command palette clock skew banner', () => {
   const all = allVisibleCommandItems(false)
   assert.ok(all.some((i) => i.id === 'clock-skew-banner' && i.path.includes('account-session')))
 })
+
+
+test('palette includes stream end and delete api-spec deep links', () => {
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'api-spec-query-stream-end' && i.path.includes('record_count')))
+  assert.ok(all.some((i) => i.id === 'api-spec-data-delete' && i.path.includes('deleteResponse')))
+})

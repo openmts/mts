@@ -335,6 +335,31 @@ export interface WriteResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** POST /api/v1/data/delete 成功响应 */
+export interface DeleteResponse {
+  ok?: boolean
+  path?: string
+  database?: string
+  measurement?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** NDJSON stream end 帧（与 mts-server streamRecord type=end 对齐） */
+export interface QueryStreamEndMeta {
+  type?: string
+  path?: string
+  format?: string
+  record_count?: number
+  stats?: QueryStatsData
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
 /** GET /api/v1/admin/error-codes（含 busy/last + 可操作元数据） */
 export interface AdminErrorCodeSpec {
   code: string

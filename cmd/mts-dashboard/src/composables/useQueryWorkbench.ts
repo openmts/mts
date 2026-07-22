@@ -5,6 +5,9 @@ import {
   queryResultPath,
   queryResultRowCount,
   queryResultSeriesCount,
+  streamAdminOpPayload,
+  streamEndPath,
+  streamEndRecordCount,
 } from '@/utils/queryResultMeta'
 import { apiPost, apiPostNDJSONStream } from '@/api/client'
 import {
@@ -32,6 +35,7 @@ import type {
   QueryResultRow,
   QueryRowsResponse,
   QueryStatsData,
+  QueryStreamEndMeta,
 } from '@/api/types'
 import { hasQueryResultSnapshot } from '@/utils/querySnapshot'
 
@@ -487,6 +491,7 @@ export function useQueryWorkbench() {
         let records = 0
         let errors = 0
         let endStats: QueryStatsData | null = null
+        let endMeta: QueryStreamEndMeta | null = null
         let streamError = ''
         await apiPostNDJSONStream(
           '/api/v1/data/query/stream',
@@ -499,15 +504,17 @@ export function useQueryWorkbench() {
               errors += 1
               return
             }
-            const obj = rec as {
+            const obj = rec as QueryStreamEndMeta & {
               type?: string
               stats?: QueryStatsData
               error?: { message?: string }
             }
             const type = obj.type ?? ''
             if (type === 'row' || type === 'column') records += 1
-            else if (type === 'end' && obj.stats) endStats = obj.stats
-            else if (type === 'error') {
+            else if (type === 'end') {
+              endMeta = obj
+              if (obj.stats) endStats = obj.stats
+            } else if (type === 'error') {
               errors += 1
               streamError = obj.error?.message || streamError || formatCaughtError({ code: 'internal', message: 'stream' })
             }
@@ -518,7 +525,8 @@ export function useQueryWorkbench() {
         const previewOnly = lines > preview.length
         rows.value = []
         columnSeries.value = []
-        streamMeta.value = { lines, records, errors, previewOnly, previewLimit: 200 }
+        const endCount = streamEndRecordCount(endMeta, records)
+        streamMeta.value = { lines, records: endCount, errors, previewOnly, previewLimit: 200 }
         rawOutput.value =
           preview.join('\n') +
           (previewOnly
@@ -530,10 +538,12 @@ export function useQueryWorkbench() {
             : '')
         queryStats.value = endStats
         engineStatsSource.value = 'query'
+        const streamAdmin = streamAdminOpPayload(endMeta)
+        if (streamAdmin) applyGlobalAdminOpStatus(parseAdminOpStatusPayload(streamAdmin))
         lastQueryMeta.value = {
-          path: '/api/v1/data/query/stream',
-          rowCount: queryMode.value === 'stream-row' ? records : 0,
-          seriesCount: queryMode.value === 'stream-column' ? records : 0,
+          path: streamEndPath(endMeta, '/api/v1/data/query/stream'),
+          rowCount: queryMode.value === 'stream-row' ? endCount : 0,
+          seriesCount: queryMode.value === 'stream-column' ? endCount : 0,
           mode: queryMode.value,
         }
         if (streamError) {

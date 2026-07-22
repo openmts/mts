@@ -56,17 +56,18 @@ func streamGRPCRows(r *serverRuntime, stream grpc.ServerStream, query mts.Query)
 		return grpcError(stream.Context(), err)
 	}
 	defer func() { _ = rows.Close() }()
+	count := 0
 	for rows.Next() {
 		row := rows.Row()
 		if err := stream.SendMsg(streamRecord{Type: streamTypeRow, Row: &row}); err != nil {
 			return err
 		}
+		count++
 	}
 	if err := rows.Err(); err != nil {
 		return grpcError(stream.Context(), err)
 	}
-	stats := r.queryStats()
-	return stream.SendMsg(streamRecord{Type: streamTypeEnd, Stats: &stats})
+	return stream.SendMsg(r.streamEndRecord(streamTypeRow, count))
 }
 
 func streamGRPCColumns(r *serverRuntime, stream grpc.ServerStream, query mts.Query) error {
@@ -75,15 +76,16 @@ func streamGRPCColumns(r *serverRuntime, stream grpc.ServerStream, query mts.Que
 		return grpcError(stream.Context(), err)
 	}
 	defer func() { _ = columns.Close() }()
+	count := 0
 	for columns.Next() {
 		column := columns.Column()
 		if err := stream.SendMsg(streamRecord{Type: streamTypeColumn, Column: &column}); err != nil {
 			return err
 		}
+		count++
 	}
 	if err := columns.Err(); err != nil {
 		return grpcError(stream.Context(), err)
 	}
-	stats := r.queryStats()
-	return stream.SendMsg(streamRecord{Type: streamTypeEnd, Stats: &stats})
+	return stream.SendMsg(r.streamEndRecord(streamTypeColumn, count))
 }

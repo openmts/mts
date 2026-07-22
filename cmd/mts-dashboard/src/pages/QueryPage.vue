@@ -39,6 +39,8 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { latencyFromNanos } from '@/utils/queryLatency'
 import { filterSeriesList, seriesLabel } from '@/utils/seriesMeta'
 import { buildQueryDeleteScope, formatQueryDeleteScopeMessage } from '@/utils/queryDeleteScope'
+import { formatDeleteSuccessMessage } from '@/utils/deleteResultSummary'
+import type { DeleteResponse } from '@/api/types'
 import { detailStatCards, primaryStatCards, toneClass } from '@/utils/queryStatsView'
 import type { MessageKey } from '@/i18n/messages'
 import {
@@ -664,7 +666,7 @@ async function doRangeDelete() {
   deleteResult.value = ''
   try {
     const query = buildQuery()
-    const delResp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/data/delete', {
+    const delResp = await apiPost<DeleteResponse>('/api/v1/data/delete', {
       request: {
         database: query.database,
         retention_policy: query.retention_policy,
@@ -676,7 +678,11 @@ async function doRangeDelete() {
       },
     }, { signal })
     applyGlobalAdminOpStatus(parseAdminOpStatusPayload(delResp))
-    deleteResult.value = t.value('queryDeleteSubmitted')
+    deleteResult.value = formatDeleteSuccessMessage({
+      server: delResp,
+      template: t.value('queryDeleteSubmittedDetail' as MessageKey),
+      format: formatMessage,
+    })
     success(deleteResult.value)
     deleteOpen.value = false
   } catch (e) {

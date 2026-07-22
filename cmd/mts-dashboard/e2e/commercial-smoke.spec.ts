@@ -312,6 +312,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('api-spec-search')).toHaveValue('row_count')
   await page.goto('/api-spec?ns=data&q=max_write_points#api-spec-filters')
   await expect(page.getByTestId('api-spec-search')).toHaveValue('max_write_points')
+  // P468: stream end + delete 契约字段
+  await page.goto('/api-spec?ns=data&q=record_count#api-spec-filters')
+  await expect(page.getByTestId('api-spec-search')).toHaveValue('record_count')
+  await page.goto('/api-spec?ns=data&q=deleteResponse#api-spec-filters')
+  await expect(page.getByTestId('api-spec-search')).toHaveValue('deleteResponse')
   await page.goto('/storage')
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
@@ -828,7 +833,13 @@ test('commercial browser smoke path', async ({ page }) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ ok: true, ...failLastPayload }),
+      body: JSON.stringify({
+        ok: true,
+        path: '/api/v1/data/delete',
+        measurement: 'cpu',
+        database: '',
+        ...failLastPayload,
+      }),
     })
   })
   // Users grant/revoke/batch 成功响应也会 apply；fail-last 场景需覆盖以免真实 last 覆盖
