@@ -1570,3 +1570,9 @@
 
 ## P378（2026-07-22）
 - Server：`maintenance/errors` 响应附带 `last`（HTTP/gRPC 对齐），便于运维页单请求关联最近重操作结果
+
+## P379（2026-07-22）
+- Query/Write：admin busy 芯片（占用中优先于 last）
+
+## P380（2026-07-22）
+- Server：`maintenance/errors` 附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）

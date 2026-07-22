@@ -81,8 +81,16 @@ const {
 const { t, locale } = useI18n()
 
 const { currentUser, isAdmin } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; opLabel?: string; elapsed?: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const queryAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const queryAdminBusy = computed(() => Boolean(adminOpBusySummary?.value?.busy))
+const queryAdminBusyLabel = computed(() => {
+  if (!queryAdminBusy.value) return ''
+  const op = (adminOpBusySummary?.value?.opLabel || '').trim()
+  const elapsed = (adminOpBusySummary?.value?.elapsed || '').trim()
+  if (op && elapsed) return `${op} · ${elapsed}`
+  return op || t.value('opsAdminBusyChip')
+})
 const authzHint = ref('')
 const authzChecking = ref(false)
 
@@ -675,7 +683,13 @@ const columnRows = computed(() => {
           :title="t('queryDirtyTitle')"
         >{{ t('queryDirtyBadge') }}</span>
         <span
-          v-if="isAdmin && queryAdminLastLabel"
+          v-if="isAdmin && queryAdminBusy"
+          class="inline-flex max-w-full truncate rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-100"
+          data-testid="query-admin-busy"
+          :title="queryAdminBusyLabel"
+        >{{ t('opsAdminBusyChip') }}{{ queryAdminBusyLabel ? `: ${queryAdminBusyLabel}` : '' }}</span>
+        <span
+          v-if="isAdmin && queryAdminLastLabel && !queryAdminBusy"
           :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
           data-testid="query-admin-last"
           :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"

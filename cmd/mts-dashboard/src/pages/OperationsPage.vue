@@ -42,7 +42,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
 interface CompactionStatsResponse { stats: CompactionStats }
-interface MaintenanceErrorsResponse { errors: string[]; last?: { op?: string; ok?: boolean; error?: string } }
+interface MaintenanceErrorsResponse { errors: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: { op?: string; ok?: boolean; error?: string } }
 interface StorageMemoryResponse { snapshot: StorageMemorySnapshot }
 
 const { isAdmin } = useAuth()
@@ -224,6 +224,8 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
     case 'maintErrors': {
       const v = await apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors')
       maintenanceErrors.value = v.errors ?? []
+      // 与 stats/maintenance 对齐：单请求也可刷新 busy/last
+      applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'memory': {

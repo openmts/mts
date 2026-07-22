@@ -146,8 +146,16 @@ function writeFormT() {
   })
 }
 const { currentUser, isAdmin } = useAuth()
-const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; opLabel?: string; elapsed?: string; lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const writeAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
+const writeAdminBusy = computed(() => Boolean(adminOpBusySummary?.value?.busy))
+const writeAdminBusyLabel = computed(() => {
+  if (!writeAdminBusy.value) return ''
+  const op = (adminOpBusySummary?.value?.opLabel || '').trim()
+  const elapsed = (adminOpBusySummary?.value?.elapsed || '').trim()
+  if (op && elapsed) return `${op} · ${elapsed}`
+  return op || t.value('opsAdminBusyChip')
+})
 const authzHint = ref('')
 
 // TypedBatch builder（多 tag 列 + 多 field 列）
@@ -693,8 +701,15 @@ async function exportWriteDraft() {
 <template>
   <div class="space-y-4" data-testid="write-page">
     <div class="space-y-2">
-      <div v-if="isAdmin && writeAdminLastLabel" class="flex flex-wrap items-center gap-2">
+      <div v-if="isAdmin && (writeAdminBusy || writeAdminLastLabel)" class="flex flex-wrap items-center gap-2">
         <span
+          v-if="writeAdminBusy"
+          class="inline-flex max-w-full truncate rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-100"
+          data-testid="write-admin-busy"
+          :title="writeAdminBusyLabel"
+        >{{ t('opsAdminBusyChip') }}{{ writeAdminBusyLabel ? `: ${writeAdminBusyLabel}` : '' }}</span>
+        <span
+          v-if="writeAdminLastLabel && !writeAdminBusy"
           :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
           data-testid="write-admin-last"
           :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"

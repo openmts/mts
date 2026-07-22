@@ -639,6 +639,30 @@ func TestHTTPOpsStatusLastErrorAfterFailedHeavy(t *testing.T) {
 	}
 }
 
+func TestHTTPMaintenanceErrorsBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("flush"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var busyResp maintenanceErrorsResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/maintenance/errors", nil, http.StatusOK, &busyResp)
+	if !busyResp.AdminOpBusy || busyResp.Op != "flush" || busyResp.StartedAtUnix <= 0 {
+		t.Fatalf("busy maintenance/errors = %+v", busyResp)
+	}
+	runtime.finishAdminHeavy(errors.New("wal fsync failed"))
+	var doneResp maintenanceErrorsResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/maintenance/errors", nil, http.StatusOK, &doneResp)
+	if doneResp.AdminOpBusy {
+		t.Fatal("want not busy after finish")
+	}
+	if doneResp.Last == nil || doneResp.Last.Op != "flush" || doneResp.Last.OK || doneResp.Last.Error != "wal fsync failed" {
+		t.Fatalf("last after fail = %+v", doneResp.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()
