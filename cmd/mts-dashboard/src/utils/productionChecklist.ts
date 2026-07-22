@@ -726,6 +726,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'query-contract-align',
+    severity: 'recommended',
+    title: { zh: 'Query 页对齐 data contract/limits', en: 'Query page aligns data contract/limits' },
+    detail: {
+      zh: 'Query 展示 contract/limits path、当前查询 API path、能力缺失与 columns 推荐。',
+      en: 'Query surfaces contract/limits paths, active query API path, missing features and columns recommendation.',
+    },
+    automated: true,
+    jump: '/query',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

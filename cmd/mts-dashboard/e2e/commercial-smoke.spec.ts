@@ -712,6 +712,15 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('write-active-path')).toContainText('/api/v1/data/write')
   }
 
+  // P496: Query 契约/limits 对齐 + 当前查询 API path
+  await page.goto('/query')
+  await expect(page.getByTestId('query-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('query-contract-align').count()) {
+    await expect(page.getByTestId('query-contract-align')).toBeVisible()
+    await expect(page.getByTestId('query-contract-path')).toContainText('/api/v1/data/contract')
+    await expect(page.getByTestId('query-active-path')).toContainText('/api/v1/data/query')
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

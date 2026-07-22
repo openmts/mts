@@ -2842,3 +2842,14 @@
 | data/contract | path + features + limits | write-contract-path | GET |
 | data/limits | path + max_write_points | write-limits-path | GET |
 | write typed path | writeResponse path | preferred + active path | 推荐 TypedBatch |
+
+## P496（2026-07-23）
+- Query：data/contract + limits 对齐卡；当前查询 API path；columns 推荐与能力缺失提示
+- 清单：`query-contract-align`
+
+### 前后端对齐（P496）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| data/contract | path + features | query-contract-path | GET |
+| data/limits | path + max_query_limit | query-limits-path | GET |
+| query rows/columns/stream | query*Response path | query-active-path | 随模式切换 |

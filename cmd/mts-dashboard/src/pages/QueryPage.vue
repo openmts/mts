@@ -16,7 +16,10 @@ import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError, resolveCaughtErrorCode } from '@/utils/apiError'
 import { configErrorCodeDeepLink, remediationPathForCode } from '@/utils/errorCodeContract'
 import { fetchDataLimits } from '@/api/dataLimits'
+import { fetchDataContract } from '@/api/dataContract'
 import { normalizeDataLimits, queryLimitExceedsMax, clampQueryLimitInput, type DataLimitsView } from '@/utils/dataLimitsView'
+import { buildDataContractView, type DataContractView } from '@/utils/dataContractView'
+import { alignQueryContract } from '@/utils/queryContractAlign'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
 import { useI18n } from '@/composables/useI18n'
@@ -71,6 +74,61 @@ const {
   engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, engineStatsPath, loadEngineStats,
   loadDatabases, loadDbChildren, hasQuerySnapshot, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
 } = useQueryWorkbench()
+
+const dataLimits = ref<DataLimitsView | null>(null)
+const dataLimitsError = ref('')
+const dataLimitsLoading = ref(false)
+const dataContract = ref<DataContractView | null>(null)
+const dataContractError = ref('')
+const dataContractLoading = ref(false)
+const queryContractAlign = computed(() =>
+  alignQueryContract({
+    contract: dataContract.value,
+    limits: dataLimits.value,
+    queryMode: queryMode.value,
+  }),
+)
+const queryContractToneClass = computed(() => {
+  const tone = queryContractAlign.value.tone
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+  return 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/40'
+})
+
+async function loadDataLimits() {
+  dataLimitsLoading.value = true
+  dataLimitsError.value = ''
+  try {
+    const result = await fetchDataLimits()
+    dataLimits.value = normalizeDataLimits(result.limits)
+    if (result.adminOp) applyGlobalAdminOpStatus(result.adminOp)
+  } catch (e) {
+    dataLimitsError.value = formatCaughtError(e)
+  } finally {
+    dataLimitsLoading.value = false
+  }
+}
+
+async function loadDataContract() {
+  dataContractLoading.value = true
+  dataContractError.value = ''
+  try {
+    const result = await fetchDataContract()
+    dataContract.value = buildDataContractView(result.contract)
+    if (result.adminOp) applyGlobalAdminOpStatus(result.adminOp)
+  } catch (e) {
+    dataContractError.value = formatCaughtError(e)
+    dataContract.value = buildDataContractView(null)
+  } finally {
+    dataContractLoading.value = false
+  }
+}
+
+async function refreshQueryContract() {
+  await Promise.all([loadDataLimits(), loadDataContract()])
+}
+
 const history = useQueryHistory()
 const seriesFilter = ref('')
 const route = useRoute()
@@ -114,23 +172,6 @@ const queryAdminBusyAction = computed(() =>
   }),
 )
 
-const dataLimits = ref<DataLimitsView | null>(null)
-const dataLimitsError = ref('')
-const dataLimitsLoading = ref(false)
-
-async function loadDataLimits() {
-  dataLimitsLoading.value = true
-  dataLimitsError.value = ''
-  try {
-    const result = await fetchDataLimits()
-    dataLimits.value = normalizeDataLimits(result.limits)
-    if (result.adminOp) applyGlobalAdminOpStatus(result.adminOp)
-  } catch (e) {
-    dataLimitsError.value = formatCaughtError(e)
-  } finally {
-    dataLimitsLoading.value = false
-  }
-}
 
 const queryLimitWarn = computed(() => {
   if (!dataLimits.value) return false
@@ -352,7 +393,7 @@ onMounted(async () => {
   window.addEventListener('keydown', onQueryKeydown)
   window.addEventListener('beforeunload', onBeforeUnload)
   try {
-    await Promise.all([loadDatabases(), loadDataLimits()])
+    await Promise.all([loadDatabases(), refreshQueryContract()])
   } catch (e) {
     actionErrorCause.value = e
     actionError.value = formatCaughtError(e)
@@ -856,6 +897,11 @@ const columnRows = computed(() => {
           :class="queryMode === m.value ? 'border-slate-800 bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'"
           @click="queryMode = m.value"
         >{{ m.label }}</button>
+        <p
+          class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+          data-testid="query-active-path"
+          :title="queryContractAlign.active_query_path"
+        >{{ t('queryActivePath') }}：{{ queryContractAlign.active_query_path }}</p>
         <span
           v-if="formDirty"
           class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
@@ -1023,18 +1069,35 @@ const columnRows = computed(() => {
     </div>
 
     <div
-      v-if="dataLimits || dataLimitsError"
-      class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
-      data-testid="query-limits-banner"
+      class="rounded-xl border px-3 py-2 text-xs"
+      :class="queryContractToneClass"
+      data-testid="query-contract-align"
     >
-      <template v-if="dataLimits">
-        <span data-testid="query-limits-default">{{ formatMessage(t('queryServerDefaultLimit'), { n: dataLimits.defaultQueryLimit || '—' }) }}</span>
-        <span data-testid="query-limits-max">{{ formatMessage(t('queryServerMaxLimit'), { n: dataLimits.maxQueryLimit || '∞' }) }}</span>
+      <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <p class="font-semibold text-slate-800 dark:text-slate-100">{{ t('queryContractAlignTitle') }}</p>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" to="/api-spec?ns=data&q=queryRowsResponse" data-testid="query-contract-jump-spec">{{ t('queryContractJumpSpec') }}</router-link>
+          <button type="button" class="mts-btn text-xs" data-testid="query-contract-refresh" :disabled="dataLimitsLoading || dataContractLoading" @click="refreshQueryContract">{{ t('refresh') }}</button>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 text-slate-700 dark:text-slate-200" data-testid="query-limits-banner">
+        <span data-testid="query-limits-default">{{ formatMessage(t('queryServerDefaultLimit'), { n: queryContractAlign.default_query_limit || dataLimits?.defaultQueryLimit || '—' }) }}</span>
+        <span data-testid="query-limits-max">{{ formatMessage(t('queryServerMaxLimit'), { n: queryContractAlign.max_query_limit || dataLimits?.maxQueryLimit || '∞' }) }}</span>
         <span
-          class="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
           data-testid="query-limits-path"
-          :title="dataLimits.path"
-        >{{ dataLimits.path }}</span>
+          :title="queryContractAlign.limits_path"
+        >{{ queryContractAlign.limits_path }}</span>
+        <span
+          class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          data-testid="query-contract-path"
+          :title="queryContractAlign.contract_path"
+        >{{ queryContractAlign.contract_path }}</span>
+        <span
+          class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          data-testid="query-contract-active-path"
+          :title="queryContractAlign.active_query_path"
+        >{{ queryContractAlign.active_query_path }}</span>
         <button type="button" class="mts-btn text-xs" data-testid="query-limits-apply-default" @click="applyDefaultQueryLimit">{{ t('queryApplyDefaultLimit') }}</button>
         <button
           v-if="queryLimitWarn"
@@ -1043,10 +1106,25 @@ const columnRows = computed(() => {
           data-testid="query-limits-clamp"
           @click="clampQueryLimitToServer"
         >{{ t('queryClampToMaxLimit') }}</button>
-      </template>
-      <span v-else-if="dataLimitsError" class="text-amber-700 dark:text-amber-200" data-testid="query-limits-error">{{ dataLimitsError }}</span>
-      <button type="button" class="mts-btn text-xs" data-testid="query-limits-refresh" :disabled="dataLimitsLoading" @click="loadDataLimits">{{ t('refresh') }}</button>
-      <span v-if="queryLimitWarn" class="text-amber-700 dark:text-amber-200" data-testid="query-limits-warn">{{ t('queryLimitExceedsServer') }}</span>
+      </div>
+      <p v-if="dataLimitsError" class="mt-1 text-amber-700 dark:text-amber-200" data-testid="query-limits-error">{{ dataLimitsError }}</p>
+      <p v-if="dataContractError" class="mt-1 text-amber-700 dark:text-amber-200" data-testid="query-contract-error">{{ dataContractError }}</p>
+      <p v-if="queryLimitWarn" class="mt-1 text-amber-700 dark:text-amber-200" data-testid="query-limits-warn">{{ t('queryLimitExceedsServer') }}</p>
+      <p
+        v-if="queryContractAlign.recommend_columns"
+        class="mt-1 text-amber-800 dark:text-amber-200"
+        data-testid="query-contract-recommend-columns"
+      >{{ t('queryContractRecommendColumns') }}</p>
+      <p
+        v-if="queryContractAlign.limits_match_contract === false"
+        class="mt-1 text-amber-800 dark:text-amber-200"
+        data-testid="query-contract-limits-mismatch"
+      >{{ t('queryContractLimitsMismatch') }}</p>
+      <p
+        v-if="queryContractAlign.missing_query_features.length"
+        class="mt-1 text-red-700 dark:text-red-300"
+        data-testid="query-contract-missing-features"
+      >{{ formatMessage(t('queryContractMissingFeatures'), { ids: queryContractAlign.missing_query_features.join(', ') }) }}</p>
     </div>
 
     <div id="query-form" data-testid="query-form" class="scroll-mt-20 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">
