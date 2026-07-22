@@ -34,7 +34,13 @@ import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
 import { buildMaintenanceErrorsExport, buildOpsStatsExport, formatOpsStatsPretty, maintenanceErrorsToText } from '@/utils/opsExport'
 import { RefreshCw, DatabaseBackup, Layers, Timer, AlertTriangle, Download, Eraser, Copy } from 'lucide-vue-next'
-import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, StorageMemorySnapshot } from '@/api/types'
+import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, StorageMemorySnapshot, DownsampleStatusSummary } from '@/api/types'
+import {
+  normalizeDownsampleStatusSummary,
+  downsampleStatusSummaryTone,
+  downsampleStatusSummaryJump,
+  downsampleStatusHealthJump,
+} from '@/utils/downsampleStatusSummary'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
@@ -125,6 +131,17 @@ const opsAdminBusyAction = computed(() =>
 )
 const loading = ref(false)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
+const downsampleStatusSummary = ref<ReturnType<typeof normalizeDownsampleStatusSummary> | null>(null)
+const downsampleSummaryView = computed(() => downsampleStatusSummary.value || normalizeDownsampleStatusSummary(null))
+const downsampleSummaryToneClass = computed(() => {
+  const tone = downsampleStatusSummaryTone(downsampleSummaryView.value)
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+})
+const downsampleSummaryPath = computed(() => downsampleStatusSummaryJump(downsampleSummaryView.value))
+const downsampleErrorJump = computed(() => downsampleStatusHealthJump('error'))
+const downsampleLaggingJump = computed(() => downsampleStatusHealthJump('lagging'))
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
@@ -204,6 +221,15 @@ async function loadOpsSection(key: OpsSectionKey): Promise<void> {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
+      try {
+        const st = await apiGet<{ summary?: DownsampleStatusSummary; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
+          '/api/v1/admin/downsample/statuses?summary_only=1',
+        )
+        applyAdminOpStatus(parseAdminOpStatusPayload(st))
+        downsampleStatusSummary.value = normalizeDownsampleStatusSummary(st.summary)
+      } catch {
+        if (!downsampleStatusSummary.value) downsampleStatusSummary.value = normalizeDownsampleStatusSummary(null)
+      }
       return
     }
     case 'compaction': {
@@ -943,6 +969,31 @@ watch(
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionRetention') }}</p>
         <p class="mt-1 text-xs mts-muted">{{ t('opsRetentionHint') }}</p>
       </button>
+    </div>
+
+    <div
+      v-if="downsampleStatusSummary"
+      class="rounded-lg border p-3"
+      :class="downsampleSummaryToneClass"
+      data-testid="ops-downsample-summary"
+    >
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsDownsampleSummaryTitle') }}</p>
+          <p class="text-[11px] mts-muted">{{ t('opsDownsampleSummaryDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" :to="downsampleSummaryPath" data-testid="ops-go-downsample">{{ t('overviewDownsampleGo') }}</router-link>
+          <router-link class="mts-btn text-xs" :to="downsampleErrorJump" data-testid="ops-downsample-jump-error">{{ t('overviewDownsampleJumpError') }}</router-link>
+          <router-link class="mts-btn text-xs" :to="downsampleLaggingJump" data-testid="ops-downsample-jump-lagging">{{ t('overviewDownsampleJumpLagging') }}</router-link>
+        </div>
+      </div>
+      <div class="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+        <div data-testid="ops-downsample-total">{{ t('overviewDownsampleTotal') }}: <span class="font-semibold">{{ downsampleSummaryView.total }}</span></div>
+        <div data-testid="ops-downsample-errors">{{ t('overviewDownsampleErrors') }}: <span class="font-semibold">{{ downsampleSummaryView.error }}</span></div>
+        <div data-testid="ops-downsample-lagging">{{ t('overviewDownsampleLagging') }}: <span class="font-semibold">{{ downsampleSummaryView.lagging }}</span></div>
+        <div data-testid="ops-downsample-max-lag">{{ t('overviewDownsampleMaxLag') }}: <span class="font-semibold">{{ downsampleSummaryView.max_lag_seconds }}s</span></div>
+      </div>
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">

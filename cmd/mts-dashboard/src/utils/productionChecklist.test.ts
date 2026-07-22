@@ -23,6 +23,7 @@ test('production checklist has required commercial gates', () => {
     'downsample-policy-deep-link',
     'downsample-status-health',
     'readiness-downsample-health-card',
+    'ops-downsample-health-card',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -113,4 +114,12 @@ test('readiness-downsample-health-card is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('downsample-health-panel'))
+})
+
+test('ops-downsample-health-card is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'ops-downsample-health-card')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/operations'))
 })

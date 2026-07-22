@@ -198,7 +198,9 @@ async function exportJSON() {
           if (done < list.length) await new Promise((r) => setTimeout(r, 0))
         }
       }
-      return metricsFamiliesToJSON(list)
+      return metricsFamiliesToJSON(list, {
+        downsample_status_summary: downsampleStatusSummary.value,
+      })
     },
   })
   if (outcome === 'done') success(t.value('metricsExported'))

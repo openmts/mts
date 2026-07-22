@@ -265,9 +265,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
     jump: '/ops/readiness#downsample-health-panel',
   },
+  {
+    id: 'ops-downsample-health-card',
+    severity: 'recommended',
+    title: { zh: '运维页降采样健康条', en: 'Operations downsample health strip' },
+    detail: {
+      zh: 'Operations 展示 statuses summary 与 error/lagging 深链；全局 admin 横幅在 error/lagging>0 时提示。',
+      en: 'Operations shows statuses summary and error/lagging deep-links; global admin banner when error/lagging > 0.',
+    },
+    automated: true,
+    jump: '/operations',
+  },
 ]
-
-
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {
   return items.filter((x) => x.severity === 'required')

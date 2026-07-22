@@ -805,6 +805,17 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     adminOnly: true,
   },
   {
+    id: 'ops-downsample-health',
+    path: '/operations',
+    labelKey: 'cmdOpsDownsampleHealth',
+    keywords: [
+      'operations downsample health',
+      '运维降采样健康',
+      'ops-downsample-summary',
+    ],
+    adminOnly: true,
+  },
+  {
     id: 'notify-history',
     path: notifyHistoryFormToPrefill({ kind: 'all', range: 'all' }, { path: '/' }),
     labelKey: 'cmdNotifyHistory',

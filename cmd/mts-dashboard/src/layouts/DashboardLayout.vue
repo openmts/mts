@@ -56,6 +56,13 @@ import { shouldSyncOnVisibility } from '@/utils/pageVisibilitySync'
 import { registerOpenNotifyHistory } from '@/utils/notifyHistoryBridge'
 import { copyText } from '@/utils/clipboard'
 import { useNotify } from '@/composables/useNotify'
+import { apiGet } from '@/api/client'
+import {
+  normalizeDownsampleStatusSummary,
+  downsampleStatusHealthJump,
+  downsampleStatusSummaryTone,
+  type DownsampleStatusSummaryInput,
+} from '@/utils/downsampleStatusSummary'
 
 const { t } = useI18n()
 const { offline, sessionWriteBlocked, sessionRemainingLabel, sessionUrgency } = useMutationGuard()
@@ -79,6 +86,54 @@ const failAckedAdminOpLastFinishedAt = ref<number | null>(
   typeof localStorage !== 'undefined' ? readFailAckedAdminOpLastFinishedAt(localStorage) : null,
 )
 
+/** 降采样健康（admin 全局告警；summary_only 轻量） */
+const downsampleHealthSummary = ref<ReturnType<typeof normalizeDownsampleStatusSummary> | null>(null)
+const downsampleHealthTone = computed(() => {
+  if (!downsampleHealthSummary.value) return 'ok' as const
+  return downsampleStatusSummaryTone(downsampleHealthSummary.value)
+})
+const showDownsampleHealthBanner = computed(() => {
+  if (!isAdmin.value || offline.value) return false
+  const s = downsampleHealthSummary.value
+  if (!s) return false
+  return s.error > 0 || s.lagging > 0
+})
+const downsampleHealthBannerClass = computed(() => {
+  if (downsampleHealthTone.value === 'bad') {
+    return 'border-red-300 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100'
+  }
+  return 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100'
+})
+const downsampleHealthErrorJump = computed(() => downsampleStatusHealthJump('error'))
+const downsampleHealthLaggingJump = computed(() => downsampleStatusHealthJump('lagging'))
+let downsampleHealthTimer: ReturnType<typeof setInterval> | null = null
+let downsampleHealthInflight = false
+async function refreshDownsampleHealth() {
+  if (!isAdmin.value || offline.value || downsampleHealthInflight) return
+  downsampleHealthInflight = true
+  try {
+    const st = await apiGet<{ summary?: DownsampleStatusSummaryInput }>(
+      '/api/v1/admin/downsample/statuses?summary_only=1',
+    )
+    downsampleHealthSummary.value = normalizeDownsampleStatusSummary(st.summary)
+  } catch {
+    // 全局告警失败静默；保留上次摘要
+  } finally {
+    downsampleHealthInflight = false
+  }
+}
+function armDownsampleHealthPoll() {
+  if (downsampleHealthTimer) return
+  void refreshDownsampleHealth()
+  downsampleHealthTimer = setInterval(() => {
+    void refreshDownsampleHealth()
+  }, 60_000)
+}
+function disarmDownsampleHealthPoll() {
+  if (downsampleHealthTimer) clearInterval(downsampleHealthTimer)
+  downsampleHealthTimer = null
+}
+
 /** busy 期间 1s tick，让横幅 elapsed 实时跳动 */
 const adminOpNowMs = ref(Date.now())
 let adminOpTickTimer: ReturnType<typeof setInterval> | null = null
@@ -98,6 +153,17 @@ watch(
   (busy) => {
     if (busy) armAdminOpTick()
     else disarmAdminOpTick()
+  },
+  { immediate: true },
+)
+watch(
+  isAdmin,
+  (ok) => {
+    if (ok) armDownsampleHealthPoll()
+    else {
+      disarmDownsampleHealthPoll()
+      downsampleHealthSummary.value = null
+    }
   },
   { immediate: true },
 )
@@ -241,7 +307,10 @@ function onVisibilitySync() {
   if (!shouldSyncOnVisibility(document.visibilityState, document.hidden)) return
   syncNetworkStatus()
   void retryReadyz()
-  if (isAdmin.value) void refreshAdminOpBusy()
+  if (isAdmin.value) {
+    void refreshAdminOpBusy()
+    void refreshDownsampleHealth()
+  }
 }
 const route = useRoute()
 const router = useRouter()
@@ -412,6 +481,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   disarmAdminOpTick()
+  disarmDownsampleHealthPoll()
   document.removeEventListener('visibilitychange', onVisibilitySync)
   window.removeEventListener('keydown', onGlobalKey)
   window.removeEventListener(CLIENT_PREFS_CHANGED_EVENT, onPrefsChanged)
@@ -646,6 +716,45 @@ function onSkipToMain(e: Event) {
             :title="t('adminOpLastDismiss')"
             @click="dismissAdminOpLastBanner"
           >{{ t('adminOpLastDismiss') }}</button>
+        </div>
+      </div>
+      <div
+        v-if="showDownsampleHealthBanner"
+        class="no-print flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-xs sm:px-6"
+        :class="downsampleHealthBannerClass"
+        role="status"
+        aria-live="polite"
+        data-testid="downsample-health-banner"
+      >
+        <div class="min-w-0">
+          <span class="font-semibold">{{ t('downsampleHealthBannerTitle') }}</span>
+          <span class="ml-1" data-testid="downsample-health-banner-detail">
+            {{ formatMessage(t('downsampleHealthBannerDetail'), {
+              error: String(downsampleHealthSummary?.error ?? 0),
+              lagging: String(downsampleHealthSummary?.lagging ?? 0),
+              maxLag: String(downsampleHealthSummary?.max_lag_seconds ?? 0),
+            }) }}
+          </span>
+        </div>
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <router-link
+            v-if="(downsampleHealthSummary?.error ?? 0) > 0"
+            class="mts-btn mts-focus-ring text-xs"
+            :to="downsampleHealthErrorJump"
+            data-testid="downsample-health-banner-error"
+          >{{ t('overviewDownsampleJumpError') }}</router-link>
+          <router-link
+            v-if="(downsampleHealthSummary?.lagging ?? 0) > 0"
+            class="mts-btn mts-focus-ring text-xs"
+            :to="downsampleHealthLaggingJump"
+            data-testid="downsample-health-banner-lagging"
+          >{{ t('overviewDownsampleJumpLagging') }}</router-link>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring text-xs"
+            data-testid="downsample-health-banner-refresh"
+            @click="refreshDownsampleHealth"
+          >{{ t('refresh') }}</button>
         </div>
       </div>
       <div

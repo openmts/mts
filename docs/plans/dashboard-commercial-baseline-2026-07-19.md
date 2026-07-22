@@ -2172,3 +2172,17 @@
 | Metrics 摘要条 | summary | Metrics 页 | 运维扫视 |
 | Overview 导出 v2 | — | version=2 + summary | 交接契约 |
 
+## P446（2026-07-22）
+- Operations：降采样健康条 + error/lagging 深链（`summary_only=1`）
+- Metrics 导出 JSON **version: 2** 含 `downsample_status_summary`
+- 全局 Admin 横幅：error/lagging>0 时提示 + 深链/刷新（60s 轮询，只读）
+- 就绪清单 `ops-downsample-health-card` + 命令面板运维入口
+- e2e：Operations 健康条；横幅软断言
+
+### 前后端对齐（P446）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| Ops 健康条 | summary_only | Operations 页 | 只读 |
+| Metrics 导出 v2 | summary | JSON 附带 summary | 交接 |
+| 全局告警横幅 | summary_only 轮询 | Layout banner | error/lag 触发 |
+

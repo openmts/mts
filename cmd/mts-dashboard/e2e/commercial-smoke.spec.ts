@@ -373,6 +373,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('ops-share-link')).toBeVisible()
 
   await expect(page.getByTestId('ops-status-strip')).toBeVisible()
+  // P446: Operations 降采样健康条
+  if (await page.getByTestId('ops-downsample-summary').count()) {
+    await expect(page.getByTestId('ops-downsample-total')).toBeVisible()
+    await expect(page.getByTestId('ops-downsample-jump-error')).toBeVisible()
+  }
   await expect(page.getByTestId('ops-status-refresh-busy')).toBeVisible()
   // P317/P321: 空闲时无全局 admin busy / 轮询失败横幅
   await expect(page.getByTestId('admin-op-busy-banner')).toHaveCount(0)
@@ -422,6 +427,11 @@ test('commercial browser smoke path', async ({ page }) => {
   if (await page.getByTestId('metrics-downsample-summary').count()) {
     await expect(page.getByTestId('metrics-downsample-total')).toBeVisible()
     await expect(page.getByTestId('metrics-downsample-jump-error')).toBeVisible()
+  }
+  // P446: 全局降采样告警横幅（仅 error/lagging>0 时出现，软断言）
+  if (await page.getByTestId('downsample-health-banner').count()) {
+    await expect(page.getByTestId('downsample-health-banner-detail')).toBeVisible()
+    await expect(page.getByTestId('downsample-health-banner-refresh')).toBeVisible()
   }
   await expect(page.getByTestId('metrics-admin-last')).toBeVisible()
   await expect(page.getByTestId('metrics-admin-last-copy')).toBeVisible()
