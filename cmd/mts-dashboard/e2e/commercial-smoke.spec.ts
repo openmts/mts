@@ -286,6 +286,13 @@ test('commercial browser smoke path', async ({ page }) => {
   // 3) Line Protocol 写入
   await page.goto('/write')
   await expect(page.getByTestId('write-page')).toBeVisible()
+  // P473: Write idle 空态与 Query 对齐（主 CTA 执行写入 + 回表单/Typed）
+  if (await page.getByTestId('write-empty').count()) {
+    await expect(page.getByTestId('write-empty')).toBeVisible()
+    await expect(page.getByTestId('write-empty-submit')).toBeVisible()
+    await expect(page.getByTestId('write-empty-goto-form')).toBeVisible()
+    await expect(page.getByTestId('write-empty-prefer-typed')).toBeVisible()
+  }
   // P467: 数据面 limits 横幅（服务可用时）
   if (await page.getByTestId('write-limits-banner').count()) {
     await expect(page.getByTestId('write-limits-banner')).toBeVisible()
@@ -302,6 +309,11 @@ test('commercial browser smoke path', async ({ page }) => {
   // P236: 成功结果 live region
   await expect(page.getByTestId('write-result-ok')).toHaveAttribute('role', 'status')
   await expect(page.getByRole('main').getByText(/写入成功/).first()).toBeVisible({ timeout: 20_000 })
+  // P473: 服务端 path/mode 徽章
+  await expect(page.getByTestId('write-result-path')).toContainText('/api/v1/data/write')
+  if (await page.getByTestId('write-result-mode').count()) {
+    await expect(page.getByTestId('write-result-mode')).toContainText(/points|typed/)
+  }
   await expect(page.getByRole('main').getByRole('button', { name: /表单写入|Form write/i })).toBeVisible()
   await expect(page.getByTestId('write-mode-tabs')).toBeVisible()
   await expect(page.getByTestId('write-mode-typed')).toBeVisible()
@@ -332,6 +344,9 @@ test('commercial browser smoke path', async ({ page }) => {
   // P469: data contract 契约
   await page.goto('/api-spec?ns=data&q=dataContractResponse#api-spec-filters')
   await expect(page.getByTestId('api-spec-search')).toHaveValue('dataContractResponse')
+  // P473: writeResponse.mode 可检索
+  await page.goto('/api-spec?ns=data&q=writeResponse#api-spec-filters')
+  await expect(page.getByTestId('api-spec-search')).toHaveValue('writeResponse')
   await page.goto('/storage')
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
@@ -1289,6 +1304,53 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-share-link')).toBeVisible()
   await expect(page.getByTestId('readiness-archive')).toBeVisible()
   await expect(page.getByTestId('readiness-acceptance-pack')).toBeVisible()
+  // P473: 验收包 JSON 强校验 data_contract（download 事件）
+  {
+    const downloads: import('@playwright/test').Download[] = []
+    const onDown = (d: import('@playwright/test').Download) => { downloads.push(d) }
+    page.on('download', onDown)
+    try {
+      await page.getByTestId('readiness-acceptance-pack').click()
+      await expect.poll(() => downloads.some((d) => d.suggestedFilename().endsWith('.json')), {
+        timeout: 20_000,
+      }).toBe(true)
+    } finally {
+      page.off('download', onDown)
+    }
+    const jsonDl = downloads.find((d) => d.suggestedFilename().endsWith('.json'))
+    expect(jsonDl).toBeTruthy()
+    const fs = await import('node:fs/promises')
+    let raw = ''
+    const pth = await jsonDl!.path()
+    if (pth) {
+      raw = await fs.readFile(pth, 'utf8')
+    } else {
+      const stream = await jsonDl!.createReadStream()
+      expect(stream).toBeTruthy()
+      const chunks: Buffer[] = []
+      for await (const c of stream!) chunks.push(Buffer.from(c))
+      raw = Buffer.concat(chunks).toString('utf8')
+    }
+    const pack = JSON.parse(raw) as {
+      version?: number
+      kind?: string
+      data_contract?: {
+        loaded?: boolean
+        complete?: boolean
+        path?: string
+        summary_line?: string
+      }
+    }
+    expect(pack.version).toBe(2)
+    expect(String(pack.kind || '')).toMatch(/acceptance/)
+    expect(pack.data_contract).toBeTruthy()
+    expect(typeof pack.data_contract?.loaded).toBe('boolean')
+    expect(typeof pack.data_contract?.summary_line).toBe('string')
+    if (pack.data_contract?.loaded) {
+      expect(pack.data_contract.summary_line).toMatch(/data_contract|complete|max_write|features=/)
+      expect(typeof pack.data_contract.complete).toBe('boolean')
+    }
+  }
   await expect(page.getByTestId('readiness-deploy-kit')).toBeVisible()
   await expect(page.getByTestId('deploy-kit-local-hints')).toBeVisible()
   await expect(page.getByTestId('deploy-kit-hint-reviewed')).toBeVisible()

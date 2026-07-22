@@ -2548,3 +2548,19 @@
 | 空态 | — | Query idle + Readiness empty | 可操作 |
 | 冒烟 | — | idle + empty=0 | commercial-smoke |
 
+
+## P473（2026-07-23）
+- Write：结果区空态与 Query idle 对齐（主 CTA `write-empty-submit` + 回到表单 + TypedBatch）
+- Write：成功结果展示服务端 `path` / `mode` 徽章（HTTP+gRPC write 响应补 `mode`）
+- Server：`writeResponse.mode` = points|typed|points_typed；ApiSpec ResponseHint 对齐
+- 验收包 e2e：下载 JSON 强校验 `version===2` 与顶层 `data_contract`
+- 清单：`write-empty-aligned` / `write-response-mode`（recommended）；命令面板深链
+
+### 前后端对齐（P473）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| write 响应 | path/points/mode | 结果 path+mode 徽章 | HTTP+gRPC |
+| Write 空态 | — | submit/form/typed CTA | 对齐 Query idle |
+| 验收包 | data_contract v2 | e2e download 解析 | commercial-smoke |
+| 契约检索 | writeResponse.mode | ApiSpec + 命令面板 | 运维对照 |
+| 就绪门禁 | — | write-empty-aligned / write-response-mode | recommended |

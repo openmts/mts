@@ -16,7 +16,7 @@ func TestHTTPWriteResponsesReportAcceptedPoints(t *testing.T) {
 	point := testPoint()
 	var writeResp writeResponse
 	postJSON(t, server.URL+routeDataWrite, writeRequest{Points: []mts.Point{point}}, http.StatusOK, &writeResp)
-	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWrite {
+	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWrite || writeResp.Mode != "points" {
 		t.Fatalf("write resp = %+v", writeResp)
 	}
 
@@ -35,13 +35,13 @@ func TestHTTPWriteResponsesReportAcceptedPoints(t *testing.T) {
 	}
 	writeResp = writeResponse{}
 	postJSON(t, server.URL+routeDataWriteTyped, typedWriteRequest{Batch: batch}, http.StatusOK, &writeResp)
-	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWriteTyped {
+	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWriteTyped || writeResp.Mode != "typed" {
 		t.Fatalf("typed write resp = %+v", writeResp)
 	}
 
 	writeResp = writeResponse{}
 	postJSON(t, server.URL+routeDataWritePointsTyped, writeRequest{Points: []mts.Point{point}}, http.StatusOK, &writeResp)
-	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWritePointsTyped {
+	if !writeResp.OK || writeResp.Points != 1 || writeResp.Path != routeDataWritePointsTyped || writeResp.Mode != "points_typed" {
 		t.Fatalf("points-typed write resp = %+v", writeResp)
 	}
 }

@@ -350,6 +350,8 @@ export interface WriteResponse {
   ok?: boolean
   points?: number
   path?: string
+  /** points | typed | points_typed */
+  mode?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number

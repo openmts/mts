@@ -146,6 +146,7 @@ func grpcWriteHandler(service any, ctx context.Context, decode func(any) error, 
 			OK:     true,
 			Points: len(writeReq.Points),
 			Path:   routeDataWrite,
+			Mode:   "points",
 		}), nil
 	}
 	return invokeGRPCUnary(ctx, &writeRequest{}, decode, interceptor, grpcFullMethod(grpcMethodWrite), handler)
@@ -238,6 +239,7 @@ func grpcWriteTypedBatch(r *serverRuntime, ctx context.Context, req any) (any, e
 		OK:     true,
 		Points: len(request.Batch.Timestamps),
 		Path:   routeDataWriteTyped,
+		Mode:   "typed",
 	}), nil
 }
 
@@ -259,6 +261,7 @@ func grpcWritePointsAsTypedBatch(r *serverRuntime, ctx context.Context, req any)
 		OK:     true,
 		Points: len(request.Points),
 		Path:   routeDataWritePointsTyped,
+		Mode:   "points_typed",
 	}), nil
 }
 

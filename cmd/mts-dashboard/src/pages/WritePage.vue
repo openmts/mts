@@ -25,7 +25,7 @@ import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError, resolveCaughtErrorCode } from '@/utils/apiError'
-import { formatWriteSuccessMessage } from '@/utils/writeResultSummary'
+import { acceptedWritePath, formatWriteSuccessMessage } from '@/utils/writeResultSummary'
 import { fetchDataLimits } from '@/api/dataLimits'
 import { normalizeDataLimits, writePointsExceedsMax, type DataLimitsView } from '@/utils/dataLimitsView'
 import type { WriteResponse } from '@/api/types'
@@ -109,7 +109,7 @@ async function loadDataLimits() {
 }
 
 const formRowCapReached = computed(() => formRows.value.length >= WRITE_FORM_ROW_MAX)
-const result = ref<{ ok: boolean; message: string } | null>(null)
+const result = ref<{ ok: boolean; message: string; path?: string; mode?: string } | null>(null)
 const loading = ref(false)
 const writeStartedAt = ref<number | null>(null)
 let writeAbort: AbortController | null = null
@@ -629,12 +629,15 @@ async function submit() {
       applyGlobalAdminOpStatus(parseAdminOpStatusPayload(typedResp))
       result.value = {
         ok: true,
+        path: acceptedWritePath(typedResp, '/api/v1/data/write/typed'),
+        mode: String(typedResp?.mode || 'typed'),
         message: formatWriteSuccessMessage({
           mode: 'typed',
           server: typedResp,
           clientCount: (batch.timestamps as number[]).length,
           clientPath: '/api/v1/data/write/typed',
           typedTemplate: t.value('writeTypedSuccess'),
+          typedWithPathTemplate: t.value('writeTypedSuccessWithPath'),
           pointsTemplate: t.value('writeSuccessPoints'),
           format: formatMessage,
         }),
@@ -673,12 +676,15 @@ async function submit() {
     applyGlobalAdminOpStatus(parseAdminOpStatusPayload(writeResp))
     result.value = {
       ok: true,
+      path: acceptedWritePath(writeResp, writePath),
+      mode: String(writeResp?.mode || (usePointsTyped.value ? 'points_typed' : 'points')),
       message: formatWriteSuccessMessage({
         mode: 'points',
         server: writeResp,
         clientCount: points.length,
         clientPath: writePath,
         typedTemplate: t.value('writeTypedSuccess'),
+        typedWithPathTemplate: t.value('writeTypedSuccessWithPath'),
         pointsTemplate: t.value('writeSuccessPoints'),
         format: formatMessage,
       }),
@@ -1093,16 +1099,38 @@ async function exportWriteDraft() {
       @retry="submit"
       @dismiss="actionError = ''; actionErrorCause = null; writeWasCanceled = false"
     />
-    <p v-if="result?.ok" class="mts-alert-ok" data-testid="write-result-ok" role="status" aria-live="polite">{{ result.message }}</p>
+    <div v-if="result?.ok" class="space-y-2" data-testid="write-result-ok-wrap">
+      <p class="mts-alert-ok" data-testid="write-result-ok" role="status" aria-live="polite">{{ result.message }}</p>
+      <div v-if="result.path || result.mode" class="flex flex-wrap items-center gap-2">
+        <p
+          v-if="result.path"
+          class="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+          data-testid="write-result-path"
+          :title="result.mode ? `${result.path} (${result.mode})` : result.path"
+        >{{ result.path }}</p>
+        <span
+          v-if="result.mode"
+          class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-800 dark:text-emerald-200"
+          data-testid="write-result-mode"
+        >{{ result.mode }}</span>
+      </div>
+    </div>
     <div v-else-if="!loading && !actionError && !result" class="mts-card" data-testid="write-empty">
       <EmptyState
-        compact
         :title="t('writeEmptyTitle')"
         :description="t('writeEmptyDesc')"
       >
         <template #action>
           <div class="flex flex-wrap justify-center gap-2">
-            <button type="button" class="mts-btn-primary" data-testid="write-empty-goto-form" @click="focusWriteForm">{{ t('writeEmptyGotoForm') }}</button>
+            <button
+              type="button"
+              class="mts-btn-primary"
+              data-testid="write-empty-submit"
+              :disabled="loading || writeBlocked"
+              :aria-busy="loading ? 'true' : 'false'"
+              @click="submit"
+            >{{ loading ? t('writeSubmitting') : t('writeEmptySubmit') }}</button>
+            <button type="button" class="mts-btn" data-testid="write-empty-goto-form" @click="focusWriteForm">{{ t('writeEmptyGotoForm') }}</button>
             <button type="button" class="mts-btn" data-testid="write-empty-prefer-typed" @click="preferTypedBatch">{{ t('writeEmptyPreferTyped') }}</button>
           </div>
         </template>

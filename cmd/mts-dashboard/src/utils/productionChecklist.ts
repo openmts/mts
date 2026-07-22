@@ -453,6 +453,28 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/ops/readiness#commercial-handoff-panel',
   },
   {
+    id: 'write-empty-aligned',
+    severity: 'recommended',
+    title: { zh: '写入空态与查询 idle 对齐', en: 'Write empty state aligns with query idle' },
+    detail: {
+      zh: 'Write 结果区空态提供执行写入 / 回到表单 / TypedBatch CTA；成功后展示服务端 path 与 mode。',
+      en: 'Write result empty state offers submit / back-to-form / TypedBatch CTAs; success surfaces server path and mode.',
+    },
+    automated: true,
+    jump: '/write',
+  },
+  {
+    id: 'write-response-mode',
+    severity: 'recommended',
+    title: { zh: '写入响应含 mode', en: 'Write response includes mode' },
+    detail: {
+      zh: 'POST write|typed|points-typed 返回 mode（points/typed/points_typed）与 path/points；Dashboard 结果区展示。',
+      en: 'POST write|typed|points-typed returns mode (points/typed/points_typed) with path/points; Write page surfaces them.',
+    },
+    automated: true,
+    jump: '/write',
+  },
+  {
     id: 'stream-delete-meta',
     severity: 'required',
     title: { zh: '流式查询 end 与删除响应含 meta', en: 'Stream end and delete responses include meta' },

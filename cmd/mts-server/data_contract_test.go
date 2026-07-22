@@ -24,6 +24,7 @@ func TestHTTPDataContractReportsLimitsAndFeatures(t *testing.T) {
 	}
 	wantIDs := map[string]bool{
 		"write_accepted_points": false,
+		"write_response_mode":   false,
 		"query_result_meta":     false,
 		"query_stream_end_meta": false,
 		"delete_response_meta":  false,

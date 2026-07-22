@@ -401,3 +401,10 @@ test('palette includes overview data contract deep link', () => {
   const all = allVisibleCommandItems(false)
   assert.ok(all.some((i) => i.id === 'overview-data-contract' && i.path.includes('overview-summary')))
 })
+
+test('write empty and writeResponse mode palette entries', () => {
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'write-empty-aligned' && i.path.includes('/write')))
+  assert.ok(all.some((i) => i.id === 'write-response-mode' && i.path.includes('/write')))
+  assert.ok(all.some((i) => i.id === 'api-spec-write-response-mode' && i.path.includes('writeResponse')))
+})

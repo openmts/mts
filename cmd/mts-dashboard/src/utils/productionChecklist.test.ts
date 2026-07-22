@@ -42,6 +42,8 @@ test('production checklist has required commercial gates', () => {
     'overview-data-contract',
     'overview-data-contract-jump',
     'acceptance-data-contract',
+    'write-empty-aligned',
+    'write-response-mode',
   ]) {
     assert.ok(ids.includes(need), need)
   }

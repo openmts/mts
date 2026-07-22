@@ -35,6 +35,7 @@ func (r *serverRuntime) handleWrite(writer http.ResponseWriter, request *http.Re
 		OK:     true,
 		Points: len(req.Points),
 		Path:   routeDataWrite,
+		Mode:   "points",
 	}))
 }
 
@@ -64,6 +65,7 @@ func (r *serverRuntime) handleWriteTyped(writer http.ResponseWriter, request *ht
 		OK:     true,
 		Points: len(req.Batch.Timestamps),
 		Path:   routeDataWriteTyped,
+		Mode:   "typed",
 	}))
 }
 
@@ -296,6 +298,7 @@ func (r *serverRuntime) handleWritePointsTyped(writer http.ResponseWriter, reque
 		OK:     true,
 		Points: len(req.Points),
 		Path:   routeDataWritePointsTyped,
+		Mode:   "points_typed",
 	}))
 }
 

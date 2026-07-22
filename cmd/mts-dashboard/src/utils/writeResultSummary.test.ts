@@ -42,3 +42,21 @@ test('formatWriteSuccessMessage', () => {
   })
   assert.equal(pts, '写入成功（2 点，/api/v1/data/write/points-typed）')
 })
+
+test('formatWriteSuccessMessage typed with path template', () => {
+  const fmt = (tpl: string, vars: Record<string, string | number>) =>
+    tpl.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''))
+  const typed = formatWriteSuccessMessage({
+    mode: 'typed',
+    server: { points: 3, path: '/api/v1/data/write/typed' },
+    clientCount: 1,
+    clientPath: '/fallback',
+    typedTemplate: 'Typed OK {count}',
+    typedWithPathTemplate: 'Typed OK {count} via {path}',
+    pointsTemplate: 'Points OK {count} {path}',
+    format: fmt,
+  })
+  assert.match(typed, /3/)
+  assert.match(typed, /write\/typed/)
+})
+

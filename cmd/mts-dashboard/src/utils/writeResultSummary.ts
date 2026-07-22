@@ -4,6 +4,7 @@ export interface WriteAcceptedMeta {
   ok?: boolean
   points?: number
   path?: string
+  mode?: string
 }
 
 export function acceptedWritePoints(
@@ -32,11 +33,16 @@ export function formatWriteSuccessMessage(input: {
   clientPath: string
   typedTemplate: string
   pointsTemplate: string
+  /** 可选：带 path 的 TypedBatch 模板（{count}/{path}） */
+  typedWithPathTemplate?: string
   format: (template: string, vars: Record<string, string | number>) => string
 }): string {
   const count = acceptedWritePoints(input.server, input.clientCount)
   const path = acceptedWritePath(input.server, input.clientPath)
   if (input.mode === 'typed') {
+    if (path && input.typedWithPathTemplate) {
+      return input.format(input.typedWithPathTemplate, { count, path })
+    }
     return input.format(input.typedTemplate, { count })
   }
   return input.format(input.pointsTemplate, { count, path })
