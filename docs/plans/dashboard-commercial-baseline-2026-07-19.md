@@ -1918,3 +1918,16 @@
 | 设密确认不一致 | —（前端） | action-result 错误 | e2e |
 | 命令面板 section 重置英文检索 | — | keywords + locale label | e2e |
 
+## P426（2026-07-22）
+- 内核：`UpdateUser` 在用户从启用变为禁用时主动撤销全部 token（对齐 SetPassword 会话边界）
+- Dashboard Users：状态筛选 `active|disabled` + 深链 `?status=` + 分享链接/清空筛选/命令面板入口
+- API Spec：`apiEndpoint.response` 可选字段；`set_user_password` 契约标注 setPasswordResponse；页面展示 response 行
+- e2e：状态深链、禁用用户登录失败友好文案、再启用后继续 reader 授权路径；命令面板跳转 disabled 筛选
+
+### 会话/筛选边界（P426 增量）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 禁用用户 | 撤销 token；登录仍 invalid credentials | 密码不正确（不泄露账户是否禁用） | 安全口径 |
+| 用户状态筛选 | — | status 筛选+深链 | 与 role/q 组合 |
+| 设密契约 response | ResponseHint | API Spec 展示 | 对齐 P424 响应 |
+

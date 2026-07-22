@@ -1276,6 +1276,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-item-action-reset-nav-order')).toBeVisible()
   await page.getByTestId('command-item-action-reset-nav-order').click()
   await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  // P426: 命令面板跳转禁用用户筛选
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('disabled users')
+  await expect(page.getByTestId('command-item-users-status-disabled')).toBeVisible()
+  await page.getByTestId('command-item-users-status-disabled').click()
+  await expect(page).toHaveURL(/status=disabled/)
+  await expect(page.getByTestId('users-status-filter')).toHaveValue('disabled')
   await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('复制最近一次')
@@ -2542,11 +2550,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('databases-share-link')).toBeVisible()
 
 
-  // P175: 用户筛选深链
+  // P175/P426: 用户筛选深链（角色 + 状态）
   await page.goto('/users?role=user#users-filter-bar')
   await expect(page.getByTestId('users-page')).toBeVisible()
   await expect(page.getByTestId('users-role-filter')).toHaveValue('user')
+  await expect(page.getByTestId('users-status-filter')).toBeVisible()
   await expect(page.getByTestId('users-share-link')).toBeVisible()
+  await page.goto('/users?status=disabled#users-filter-bar')
+  await expect(page.getByTestId('users-status-filter')).toHaveValue('disabled')
+  await expect(page.getByTestId('users-filter-bar')).toBeVisible()
   // P176: 能力矩阵筛选深链
   await page.goto('/access?role=admin&q=audit#access-matrix-filter-bar')
   await expect(page.getByTestId('access-matrix-role-filter')).toHaveValue('admin')
@@ -2664,6 +2676,24 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('users-action-result')).toContainText(/密码已设置|Password set/i)
   await expect(page).toHaveURL(/\/users/)
   await expect(page.getByTestId('users-page')).toBeVisible()
+  // P426: 禁用用户后登录失败（安全统一 invalid credentials 友好文案），再启用并继续授权路径
+  await page.getByTestId('users-toggle-reader-e2e').click()
+  await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('users-action-result')).toContainText(/禁用|disabled|Disabled/i)
+  await page.getByTestId('topbar-logout').click()
+  await expect(page).toHaveURL(/login/)
+  await page.getByTestId('login-username').fill('reader-e2e')
+  await page.getByTestId('login-password').fill('ReaderPass!2026b')
+  await page.getByTestId('login-submit').click()
+  await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('login-error')).toContainText(/密码不正确|Incorrect password|用户名或密码/i)
+  await login(page, 'admin', NEW_PASSWORD)
+  await expect(page).not.toHaveURL(/login|force-change/)
+  await page.goto('/users')
+  await expect(page.getByTestId('users-row-reader-e2e')).toBeVisible({ timeout: 15_000 })
+  await page.getByTestId('users-toggle-reader-e2e').click()
+  await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('users-action-result')).toContainText(/启用|enabled|Enabled|active/i)
   await page.getByTestId('users-open-grant-reader-e2e').click()
   await expect(page.getByTestId('user-grant-panel')).toBeVisible()
   // 仅匹配库名 checkbox，排除 count/filter 等

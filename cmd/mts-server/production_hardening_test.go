@@ -191,6 +191,10 @@ func TestHTTPProductionHardening(t *testing.T) {
 	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod", Disabled: true}, adminHeaders, http.StatusOK, &okResponse{})
 	postJSONWithHeaders(t, server.URL+"/api/v1/data/write", writeRequest{Points: []mts.Point{point}}, dataHeaders, http.StatusUnauthorized, &errorResponse{})
 	putJSONWithHeaders(t, server.URL+"/api/v1/users/prod", mts.User{Name: "prod"}, adminHeaders, http.StatusOK, &okResponse{})
+	// 禁用会撤销 token，重新启用后需重新登录再继续写读
+	var loginAfterEnable authTokenResponse
+	postJSON(t, server.URL+"/api/v1/auth/login", loginRequest{UserName: "prod", Password: "secret12", TTLSeconds: 60}, http.StatusOK, &loginAfterEnable)
+	dataHeaders = map[string]string{"X-MTS-Data-Token": "data-token", "Authorization": "Bearer " + loginAfterEnable.Token.Token}
 	query := testQuery()
 	query.Limit = 2
 	postJSONWithHeaders(t, server.URL+"/api/v1/data/query/rows", queryRequest{Query: query}, dataHeaders, http.StatusBadRequest, &errorResponse{})

@@ -427,6 +427,8 @@ type apiEndpoint struct {
 	Path        string `json:"path"`
 	Auth        string `json:"auth"`
 	Description string `json:"description"`
+	// Response 为人类可读响应说明（可选，便于 Dashboard/契约浏览对齐）
+	Response string `json:"response,omitempty"`
 }
 
 type errorCodesResponse struct {

@@ -5,6 +5,7 @@ export interface APISpecEndpoint {
   path: string
   auth?: string
   description?: string
+  response?: string
 }
 
 export interface APISpecNamespace {
@@ -61,7 +62,8 @@ export function apiSpecToMarkdown(
     if (ns.base_path) lines.push(`- base: \`${ns.base_path}\``)
     lines.push('')
     for (const ep of ns.endpoints || []) {
-      lines.push(`- \`${ep.method} ${ep.path}\`${ep.auth ? ` (${ep.auth})` : ''}${ep.description ? ` — ${ep.description}` : ''}`)
+      const resp = ep.response ? (locale === 'en' ? ` response=${ep.response}` : ` 响应=${ep.response}`) : ''
+      lines.push(`- \`${ep.method} ${ep.path}\`${ep.auth ? ` (${ep.auth})` : ''}${ep.description ? ` — ${ep.description}` : ''}${resp}`)
     }
     lines.push('')
   }

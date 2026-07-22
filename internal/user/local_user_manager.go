@@ -78,11 +78,16 @@ func (m *Manager) UpdateUser(ctx context.Context, user User) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.store.users[user.Name]; !ok {
+	existing, ok := m.store.users[user.Name]
+	if !ok {
 		return fmt.Errorf("%w: %s", ErrUserNotFound, user.Name)
 	}
 	users, grants, passwords, tokens := m.clonedStateLocked()
 	users[user.Name] = cloneUser(user)
+	// 禁用用户时主动撤销其全部 token，避免仅依赖 Verify 懒拒绝
+	if user.Disabled && !existing.Disabled {
+		tokens = removeUserTokens(tokens, user.Name)
+	}
 	return m.replaceStateLocked(users, grants, passwords, tokens)
 }
 

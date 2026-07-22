@@ -310,3 +310,10 @@ test('command palette has reset-nav-section-order actions', () => {
   )
 })
 
+test('command palette has users status filter deep links', () => {
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'users-status-disabled' && i.path.includes('status=disabled')))
+  assert.ok(all.some((i) => i.id === 'users-status-active' && i.path.includes('status=active')))
+  assert.ok(filterCommandItems(all, 'disabled users', (k) => k).some((i) => i.id === 'users-status-disabled'))
+})
+

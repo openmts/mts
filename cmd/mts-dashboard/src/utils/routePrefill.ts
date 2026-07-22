@@ -295,6 +295,8 @@ export function databasesFormToPrefill(form: {
 export type UsersPrefill = {
   q?: string
   role?: string
+  /** active | disabled */
+  status?: string
   user?: string
 }
 
@@ -307,6 +309,8 @@ export function parseUsersPrefill(
   if (q) out.q = q
   const role = firstQueryValue(query.role)
   if (role === 'admin' || role === 'user') out.role = role
+  const status = firstQueryValue(query.status)
+  if (status === 'active' || status === 'disabled') out.status = status
   const user = firstQueryValue(query.user ?? query.user_name)
   if (user) out.user = user
   return out
@@ -316,6 +320,7 @@ export function buildUsersPrefillPath(opts: UsersPrefill & { hash?: string }): s
   const params = new URLSearchParams()
   if (opts.q) params.set('q', opts.q)
   if (opts.role) params.set('role', opts.role)
+  if (opts.status) params.set('status', opts.status)
   if (opts.user) params.set('user', opts.user)
   const qs = params.toString()
   const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#users-filter-bar'
@@ -325,11 +330,13 @@ export function buildUsersPrefillPath(opts: UsersPrefill & { hash?: string }): s
 export function usersFormToPrefill(form: {
   q?: string
   role?: string
+  status?: string
   user?: string
 }, opts?: { hash?: string }): string {
   return buildUsersPrefillPath({
     q: form.q?.trim() || undefined,
     role: form.role?.trim() || undefined,
+    status: form.status?.trim() || undefined,
     user: form.user?.trim() || undefined,
     hash: opts?.hash,
   })

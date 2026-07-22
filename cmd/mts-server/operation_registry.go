@@ -34,7 +34,8 @@ type operation struct {
 	GRPCRequest  any
 	GRPCFn       func(*serverRuntime, context.Context, any) (any, error)
 	GRPCHandler  grpc.MethodHandler
-	ResourceOnly bool // 仅资源/前缀路由元数据，不自动挂载
+	ResourceOnly bool   // 仅资源/前缀路由元数据，不自动挂载
+	ResponseHint string // 契约响应说明（API Spec response 字段）
 }
 
 func operationCatalog() []operation {
@@ -287,7 +288,7 @@ func operationCatalog() []operation {
 		{
 			Name:         "users_resource",
 			Namespace:    "users",
-			Description:  "user resource and database permissions",
+			Description:  "user resource and database permissions (PUT .../password -> setPasswordResponse with user_name; disable via PUT user revokes tokens)",
 			Auth:         authAdmin,
 			HTTPMethods:  []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPost},
 			HTTPPaths:    []string{routeUsersPrefix},
@@ -306,7 +307,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "update_user",
 			Namespace:   "users",
-			Description: "update user",
+			Description: "update user (disabling revokes target tokens)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodUpdateUser,
 			GRPCRequest: &mts.User{},
@@ -333,7 +334,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "batch_update_user_disabled",
 			Namespace:   "users",
-			Description: "batch set user disabled flags",
+			Description: "batch set user disabled flags (disabling revokes target tokens; response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeUsersBatchDisabled},
@@ -352,13 +353,14 @@ func operationCatalog() []operation {
 			GRPCFn:      grpcDeleteUser,
 		},
 		{
-			Name:        "set_user_password",
-			Namespace:   "users",
-			Description: "admin set user password (revokes target tokens; clears must_change; response includes user_name and admin_op_busy/last)",
-			Auth:        authAdmin,
-			GRPCMethod:  grpcMethodSetUserPassword,
-			GRPCRequest: &setUserPasswordRequest{},
-			GRPCFn:      grpcSetUserPassword,
+			Name:         "set_user_password",
+			Namespace:    "users",
+			Description:  "admin set user password (revokes target tokens; clears must_change; response includes user_name and admin_op_busy/last)",
+			Auth:         authAdmin,
+			GRPCMethod:   grpcMethodSetUserPassword,
+			GRPCRequest:  &setUserPasswordRequest{},
+			GRPCFn:       grpcSetUserPassword,
+			ResponseHint: "setPasswordResponse{ok,user_name,admin_op_busy,op,started_at_unix,last}",
 		},
 		{
 			Name:        "grant_database_permission",
@@ -972,6 +974,7 @@ func apiSpecFromRegistry() apiSpecResponse {
 					Path:        path,
 					Auth:        string(op.Auth),
 					Description: op.Description,
+					Response:    op.ResponseHint,
 				})
 			}
 		}

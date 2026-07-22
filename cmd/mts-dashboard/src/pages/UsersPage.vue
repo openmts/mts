@@ -41,7 +41,7 @@ import {
   type BatchMutationSummary,
 } from '@/utils/batchProgress'
 import { formatMessage } from '@/utils/formatMessage'
-import { filterUsers } from '@/utils/listFilter'
+import { filterUsers, type UsersStatusFilter } from '@/utils/listFilter'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
 import {
@@ -82,6 +82,7 @@ useHashScroll()
 const users = ref<User[]>([])
 const userFilter = ref('')
 const roleFilter = ref('')
+const statusFilter = ref<UsersStatusFilter>('')
 const USERS_SORT_KEY = 'mts.dashboard.users-sort.prefs.v1'
 const USERS_SORT_KEYS = ['name', 'role', 'status'] as const
 type UserSortKey = (typeof USERS_SORT_KEYS)[number]
@@ -89,7 +90,7 @@ const storage = typeof localStorage !== 'undefined' ? localStorage : null
 const userSort = ref<SortState<UserSortKey>>(loadSortState(storage, USERS_SORT_KEY, USERS_SORT_KEYS))
 
 const filteredUsers = computed(() => {
-  const base = filterUsers(users.value, userFilter.value, roleFilter.value)
+  const base = filterUsers(users.value, userFilter.value, roleFilter.value, statusFilter.value)
   return sortByAccessor(base, userSort.value, {
     name: (u) => u.name,
     role: (u) => u.role || '',
@@ -254,6 +255,12 @@ async function applyUsersPrefillFromRoute() {
     roleFilter.value = pre.role
     changed = true
   }
+  if (pre.status === 'active' || pre.status === 'disabled') {
+    if (statusFilter.value !== pre.status) {
+      statusFilter.value = pre.status
+      changed = true
+    }
+  }
   if (pre.user) {
     const u = users.value.find((x) => x.name === pre.user)
     if (u && selectedUser.value?.name !== u.name) {
@@ -268,6 +275,7 @@ async function copyUsersShareLink() {
   const path = usersFormToPrefill({
     q: userFilter.value,
     role: roleFilter.value || undefined,
+    status: statusFilter.value || undefined,
     user: selectedUser.value?.name,
   }, { hash: selectedUser.value ? '#user-grant-panel' : '#users-filter-bar' })
   const url = `${window.location.origin}${path}`
@@ -997,6 +1005,13 @@ onBeforeUnmount(() => {
           <option value="user">{{ t('roleUser') }}</option>
         </select>
       </label>
+      <label class="text-xs mts-muted">{{ t('usersStatusFilter') }}
+        <select v-model="statusFilter" class="mts-input mt-1" data-testid="users-status-filter">
+          <option value="">{{ t('usersAllStatuses') }}</option>
+          <option value="active">{{ t('usersStatusActive') }}</option>
+          <option value="disabled">{{ t('usersStatusDisabled') }}</option>
+        </select>
+      </label>
       <span class="text-xs mts-muted" data-testid="users-filter-count">{{ filteredUsers.length }} / {{ users.length }}</span>
       <ListSelectionToolbar
         prefix="users"
@@ -1019,7 +1034,7 @@ onBeforeUnmount(() => {
         :description="users.length ? t('usersFilterEmptyDesc') : t('usersEmptyDesc')"
       >
         <template v-if="users.length" #action>
-          <button type="button" class="mts-btn-primary" data-testid="users-clear-filters" @click="userFilter = ''; roleFilter = ''">{{ t('clearFilters') }}</button>
+          <button type="button" class="mts-btn-primary" data-testid="users-clear-filters" @click="userFilter = ''; roleFilter = ''; statusFilter = ''">{{ t('clearFilters') }}</button>
         </template>
         <template v-else #action>
           <button type="button" class="mts-btn-primary" data-testid="users-empty-create" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" @click="showCreate = true">{{ t('usersCreate') }}</button>

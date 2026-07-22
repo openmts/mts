@@ -175,9 +175,17 @@ test('users and access prefill share helpers', () => {
     role: 'user',
     user: 'alice',
   })
+  assert.deepEqual(
+    parseUsersPrefill({ q: 'bob', role: 'user', status: 'disabled', user: 'bob' }),
+    { q: 'bob', role: 'user', status: 'disabled', user: 'bob' },
+  )
   assert.equal(
     usersFormToPrefill({ q: 'a', role: 'admin', user: 'root' }),
     '/users?q=a&role=admin&user=root#users-filter-bar',
+  )
+  assert.equal(
+    usersFormToPrefill({ q: 'x', role: 'user', status: 'active' }),
+    '/users?q=x&role=user&status=active#users-filter-bar',
   )
   assert.deepEqual(parseAccessPrefill({ role: 'admin', area: 'access', q: 'audit' }), {
     role: 'admin',

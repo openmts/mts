@@ -31,6 +31,7 @@ interface APIEndpoint {
   path: string
   auth?: string
   description?: string
+  response?: string
 }
 interface APINamespace {
   name: string
@@ -157,6 +158,7 @@ const filtered = computed(() => {
           ep.method.toLowerCase().includes(text) ||
           ep.path.toLowerCase().includes(text) ||
           (ep.description || '').toLowerCase().includes(text) ||
+          (ep.response || '').toLowerCase().includes(text) ||
           (ep.auth || '').toLowerCase().includes(text)
         )
       }),
@@ -348,7 +350,10 @@ async function exportMarkdown() {
               <span class="font-mono font-semibold">{{ ep.method }}</span>
               <span class="truncate font-mono" :title="ep.path">{{ ep.path }}</span>
               <span class="mts-muted truncate">{{ ep.auth || t('emptyValue') }}</span>
-              <span class="truncate" :title="ep.description || ''">{{ ep.description || t('emptyValue') }}</span>
+              <span class="min-w-0 truncate" :title="[ep.description, ep.response].filter(Boolean).join(' | ')">
+                <span>{{ ep.description || t('emptyValue') }}</span>
+                <span v-if="ep.response" class="mt-0.5 block truncate font-mono text-[10px] mts-muted" :data-testid="`api-spec-ep-response-${ns.name}-${index}`">{{ ep.response }}</span>
+              </span>
             </div>
           </template>
         </VirtualTable>

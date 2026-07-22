@@ -75,6 +75,9 @@ func TestManagerAuthenticationFailsClosed(t *testing.T) {
 	if _, err := manager.VerifyToken(ctx, token.Token); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("VerifyToken(disabled user) error = %v, want ErrInvalidCredentials", err)
 	}
+	if _, err := manager.Authenticate(ctx, Credentials{UserName: "alice", Password: "secret"}, time.Hour); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("Authenticate(disabled user) error = %v, want ErrInvalidCredentials", err)
+	}
 }
 
 func TestManagerVerifyTokenRejectsExpiredToken(t *testing.T) {

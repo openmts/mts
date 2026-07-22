@@ -13,6 +13,17 @@ test('filterUsers by text and role', () => {
   assert.equal(filterUsers(users, 'a', 'user').map((u) => u.name).join(','), 'carol')
 })
 
+test('filterUsers by status', () => {
+  const users = [
+    { name: 'alice', role: 'admin', disabled: false },
+    { name: 'bob', role: 'user', disabled: true },
+    { name: 'carol', role: 'user', disabled: false },
+  ]
+  assert.deepEqual(filterUsers(users, '', '', 'active').map((u) => u.name), ['alice', 'carol'])
+  assert.deepEqual(filterUsers(users, '', 'user', 'disabled').map((u) => u.name), ['bob'])
+  assert.equal(filterUsers(users, '', '', '').length, 3)
+})
+
 test('filterByName', () => {
   const dbs = [{ name: 'metrics' }, { name: 'logs' }]
   assert.deepEqual(filterByName(dbs, 'log').map((d) => d.name), ['logs'])

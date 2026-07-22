@@ -16,14 +16,16 @@ export function filterByTextFields<T>(
   )
 }
 
-export function filterUsers<T extends { name: string; display_name?: string; role?: string }>(
-  users: T[],
-  query: string,
-  role: string,
-): T[] {
+export type UsersStatusFilter = '' | 'active' | 'disabled'
+
+export function filterUsers<
+  T extends { name: string; display_name?: string; role?: string; disabled?: boolean },
+>(users: T[], query: string, role: string, status: UsersStatusFilter = ''): T[] {
   let list = filterByTextFields(users, query, (u) => [u.name, u.display_name, u.role])
   const r = normalizeFilterQuery(role)
   if (r) list = list.filter((u) => normalizeFilterQuery(u.role || '') === r)
+  if (status === 'active') list = list.filter((u) => !u.disabled)
+  if (status === 'disabled') list = list.filter((u) => !!u.disabled)
   return list
 }
 
