@@ -2029,3 +2029,15 @@
 | 创建默认值 | applyDownsamplePolicyRequestDefaults | 表单可见可改 | POC 可商用 |
 | Ops last | ops-status last | AdminOpLastChip | 与 Storage 一致 |
 
+## P435（2026-07-22）
+- Downsample：创建表单 batch_size；列表 path/interval 可核对 retention/refresh；导出 v2 含高级字段
+- 就绪清单 `downsample-advanced-form` + 命令面板入口
+- e2e：batch_size 字段与列表 path/interval testid
+
+### 前后端对齐（P435）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 创建 batch_size | 默认 100 | 表单可改 | 与 defaults 一致 |
+| 导出契约 | — | export version 2 | retention/refresh/lookback/batch_size |
+| 就绪清单 | — | downsample-advanced-form | 可勾选 |
+

@@ -209,8 +209,19 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     },
     automated: true,
     jump: '/users#users-filter-bar',
+  },  {
+    id: 'downsample-advanced-form',
+    severity: 'recommended',
+    title: { zh: '降采样高级字段可配置', en: 'Downsample advanced fields configurable' },
+    detail: {
+      zh: '创建策略表单可配置 retention / refresh / lookback / batch_size；服务端缺省补齐；列表/导出可见关键字段。',
+      en: 'Create form exposes retention/refresh/lookback/batch_size; server fills defaults; list/export include key fields.',
+    },
+    automated: true,
+    jump: '/downsample#downsample-filter-bar',
   },
 ]
+
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {
   return items.filter((x) => x.severity === 'required')

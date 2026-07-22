@@ -1199,7 +1199,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="px-3 py-2.5">{{ t('downsampleColName') }}</div>
         <div class="px-3 py-2.5">{{ t('downsampleColPath') }}</div>
-        <div class="px-3 py-2.5">{{ t('downsampleColInterval') }}</div>
+        <div class="px-3 py-2.5" :title="t('downsampleColIntervalHint')">{{ t('downsampleColInterval') }}</div>
         <div class="px-3 py-2.5">{{ t('downsampleStatusFilter') }}</div>
         <div class="px-3 py-2.5">{{ t('downsampleColCompleted') }}</div>
         <div class="px-3 py-2.5">{{ t('action') }}</div>
@@ -1226,10 +1226,18 @@ onBeforeUnmount(() => {
               />
             </div>
             <div class="truncate px-3 font-medium text-slate-700 dark:text-slate-200" :title="policy.name">{{ policy.name }}</div>
-            <div class="truncate px-3 text-xs text-slate-600 dark:text-slate-300" :title="`${policy.source_database}/${policy.source_measurement} → ${policy.target_database}/${policy.target_measurement}`">
+            <div
+              class="truncate px-3 text-xs text-slate-600 dark:text-slate-300"
+              :title="`${policy.source_database}/${policy.source_retention || 'autogen'}/${policy.source_measurement} → ${policy.target_database}/${policy.target_retention || 'autogen'}/${policy.target_measurement}`"
+              :data-testid="`downsample-path-${policy.name}`"
+            >
               {{ policy.source_database }}/{{ policy.source_measurement }} → {{ policy.target_database }}/{{ policy.target_measurement }}
             </div>
-            <div class="px-3 text-slate-600 dark:text-slate-300">{{ formatDuration(policy.interval) }}</div>
+            <div
+              class="px-3 text-slate-600 dark:text-slate-300"
+              :title="formatDuration(policy.interval) + (policy.refresh_interval ? ` · refresh ${formatDuration(policy.refresh_interval)}` : '')"
+              :data-testid="`downsample-interval-${policy.name}`"
+            >{{ formatDuration(policy.interval) }}</div>
             <div class="px-3">
               <span
                 class="rounded px-2 py-0.5 text-xs font-medium"
@@ -1405,6 +1413,16 @@ onBeforeUnmount(() => {
               v-model="lookbackHuman"
               data-testid="downsample-create-lookback"
               :placeholder="t('downsamplePhInterval')"
+              class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs mts-muted">{{ t('downsampleBatchSize') }}</label>
+            <input
+              v-model.number="newPolicy.batch_size"
+              type="number"
+              min="1"
+              data-testid="downsample-create-batch-size"
               class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600"
             />
           </div>
