@@ -4,7 +4,7 @@ const baseURL = process.env.MTS_E2E_BASE_URL || 'http://127.0.0.1:18086'
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 120_000,
+  timeout: 180_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,

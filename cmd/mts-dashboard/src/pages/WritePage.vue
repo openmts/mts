@@ -13,7 +13,9 @@ import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import {
   listDatabasesDetailed,
   listFields,
+  listFieldsDetailed,
   listMeasurements,
+  listMeasurementsDetailed,
   listRetentionPoliciesDetailed,
   type MetaLoadSource,
 } from '@/api/meta'
@@ -295,6 +297,9 @@ async function loadWriteDbChildren(db: string) {
     try {
       const rpResult = await listRetentionPoliciesDetailed(db)
       retentionPolicies.value = rpResult.policies.map((p) => p.name)
+      if (rpResult.adminOp) {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(rpResult.adminOp))
+      }
       if (retentionPolicies.value.length) {
         retentionPolicy.value = retentionPolicies.value[0]
         rpMetaHint.value = ''
@@ -308,8 +313,12 @@ async function loadWriteDbChildren(db: string) {
       writeMetaError.value = formatCaughtError(e)
     }
     try {
-      measurements.value = await listMeasurements(db)
-      writeMetaError.value = ''
+      const measResult = await listMeasurementsDetailed(db)
+      measurements.value = measResult.names
+      if (measResult.adminOp) {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(measResult.adminOp))
+      }
+      writeMetaError.value = measResult.error || ''
     } catch (e) {
       const msg = formatCaughtError(e)
       if (measurements.value.length) writeMetaError.value = msg
@@ -336,9 +345,15 @@ async function loadWriteFields(measurement: string) {
   if (!db || !m) return
   fieldsLoading.value = true
   try {
-    const fields = await listFields(db, m)
-    fieldOptions.value = fieldNames(fields)
-    writeMetaError.value = ''
+    const fieldsResult = await listFieldsDetailed(db, m)
+    if (fieldsResult.adminOp) {
+      applyGlobalAdminOpStatus(parseAdminOpStatusPayload(fieldsResult.adminOp))
+    }
+    if (fieldsResult.error && !fieldsResult.fields.length) {
+      throw new Error(fieldsResult.error)
+    }
+    fieldOptions.value = fieldNames(fieldsResult.fields)
+    writeMetaError.value = fieldsResult.error || ''
   } catch (e) {
     const msg = formatCaughtError(e)
     if (fieldOptions.value.length) writeMetaError.value = msg

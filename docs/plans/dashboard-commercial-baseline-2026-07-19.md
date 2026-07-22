@@ -1759,3 +1759,15 @@
 | write/query meta 加载 | 是 | — | 是 | databases/measurements/RP |
 | e2e fail-last write/query | mock | — | 是 | 防真实 last 覆盖失败场景 |
 
+## P414（2026-07-22）
+- Dashboard：Write 加载 RP/measurements/fields、Query 加载 fields/series 时透传 `adminOp` 并 `applyGlobalAdminOpStatus`
+- 统一 measurement meta 读取为 detailed API，补齐写路径/查询路径 busy/last 可见性
+- commercial-smoke 超时提升到 180s（覆盖 fail-last write/query 新增断言）
+- npm test / build / commercial-smoke 通过
+
+### busy/last 覆盖矩阵（P414 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| write RP/measurements/fields | 是 | — | 是 | Write 元数据加载 |
+| query fields/series | 是 | — | 是 | Query 元数据/序列列表 |
+

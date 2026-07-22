@@ -13,6 +13,7 @@ async function login(page: Page, user: string, password: string) {
 test.describe.configure({ mode: 'serial' })
 
 test('commercial browser smoke path', async ({ page }) => {
+  test.setTimeout(180_000)
   // 脏表单离开确认：冒烟路径自动接受，避免深链被 confirm 卡住
   page.on('dialog', async (dialog) => {
     await dialog.accept()

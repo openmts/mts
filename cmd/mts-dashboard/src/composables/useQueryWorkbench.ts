@@ -4,6 +4,7 @@ import { apiPost, apiPostNDJSONStream } from '@/api/client'
 import {
   listDatabasesDetailed,
   listFields,
+  listFieldsDetailed,
   listMeasurements,
   listMeasurementsDetailed,
   listRetentionPoliciesDetailed,
@@ -216,14 +217,20 @@ export function useQueryWorkbench() {
           tagFilter = parsed.tags
         }
       }
-      const [fields, seriesResult] = await Promise.all([
-        listFields(db, measurement).catch(() => [] as FieldMeta[]),
+      const [fieldsResult, seriesResult] = await Promise.all([
+        listFieldsDetailed(db, measurement).catch(() => ({ fields: [] as FieldMeta[], adminOp: undefined })),
         listSeriesDetailed(db, measurement, { tags: tagFilter, limit: SERIES_CAP, offset: 0 }).catch((e) => {
           seriesError.value = seriesError.value || formatCaughtError(e)
-          return { series: [] as SeriesMeta[], total: 0, truncated: false, limit: SERIES_CAP, offset: 0 }
+          return { series: [] as SeriesMeta[], total: 0, truncated: false, limit: SERIES_CAP, offset: 0, adminOp: undefined }
         }),
       ])
-      fieldOptions.value = fieldNames(fields)
+      if (fieldsResult.adminOp) {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(fieldsResult.adminOp))
+      }
+      if (seriesResult.adminOp) {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(seriesResult.adminOp))
+      }
+      fieldOptions.value = fieldNames(fieldsResult.fields)
       applySeriesPage(seriesResult, false)
     } finally {
       seriesLoading.value = false
@@ -249,6 +256,9 @@ export function useQueryWorkbench() {
         limit: SERIES_CAP,
         offset: 0,
       })
+      if (seriesResult.adminOp) {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(seriesResult.adminOp))
+      }
       applySeriesPage(seriesResult, false)
     } catch (e) {
       seriesError.value = formatCaughtError(e)
@@ -275,6 +285,9 @@ export function useQueryWorkbench() {
         offset: seriesOffset.value,
         q: opts?.q,
       })
+      if (seriesResult.adminOp) {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(seriesResult.adminOp))
+      }
       applySeriesPage(seriesResult, true)
     } catch (e) {
       seriesError.value = formatCaughtError(e)
@@ -302,6 +315,9 @@ export function useQueryWorkbench() {
         offset: 0,
         q: q.trim() || undefined,
       })
+      if (seriesResult.adminOp) {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(seriesResult.adminOp))
+      }
       applySeriesPage(seriesResult, false)
     } catch (e) {
       seriesError.value = formatCaughtError(e)
