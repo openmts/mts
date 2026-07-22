@@ -382,6 +382,9 @@ func grpcSetUserPassword(r *serverRuntime, ctx context.Context, req any) (any, e
 		return nil, err
 	}
 	if err := r.engine.SetPassword(ctx, request.UserName, request.Password); err != nil {
+		if errors.Is(err, mts.ErrUserNotFound) {
+			return nil, newAPIError(errorCodeNotFound, "user not found", err)
+		}
 		return nil, err
 	}
 	if err := r.clearMustChangePassword(ctx, request.UserName); err != nil {

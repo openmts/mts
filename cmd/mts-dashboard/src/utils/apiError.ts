@@ -126,6 +126,34 @@ export function friendlyApiError(
         ? 'Username or password is incorrect; if renewing, your current session remains valid'
         : '用户名或密码不正确；若在续期，当前会话仍然有效'
   }
+  // 服务端密码策略（创建/设密/改密绕过前端时）：bad_request + 策略原文
+  if (code === 'bad_request' && /default password admin is not allowed/i.test(raw)) {
+    title = locale === 'en' ? 'Weak password' : '密码不符合策略'
+    hint =
+      locale === 'en'
+        ? 'Cannot use default password admin'
+        : '不能使用默认密码 admin'
+  } else if (code === 'bad_request' && /password must be at least 8 characters/i.test(raw)) {
+    title = locale === 'en' ? 'Weak password' : '密码不符合策略'
+    hint =
+      locale === 'en'
+        ? 'Password must be at least 8 characters'
+        : '密码至少 8 位'
+  } else if (code === 'bad_request' && /password is required/i.test(raw)) {
+    title = locale === 'en' ? 'Password required' : '请填写密码'
+    hint =
+      locale === 'en'
+        ? 'Password is required'
+        : '请填写密码'
+  }
+  // 用户不存在：not_found + user not found
+  if (code === 'not_found' && /user not found/i.test(raw)) {
+    title = locale === 'en' ? 'User not found' : '用户不存在'
+    hint =
+      locale === 'en'
+        ? 'Target user does not exist or was removed'
+        : '目标用户不存在或已删除'
+  }
   const structuredBusy = Boolean(input?.adminOpBusy || input?.admin_op_busy || (input?.op || '').trim())
   // 管理重操作互斥：resource_exhausted 但语义是 admin busy，文案对齐运维占用
   if (code === 'resource_exhausted' && (structuredBusy || isAdminHeavyBusyMessage(raw))) {
@@ -157,6 +185,16 @@ export function friendlyApiError(
     }
   }
   if (code === 'resource_exhausted' && (structuredBusy || isAdminHeavyBusyMessage(raw))) {
+    message = hint
+  }
+  // 已映射的策略/用户文案：不追加英文 raw，避免中英混杂
+  if (
+    (code === 'bad_request' &&
+      /default password admin is not allowed|password must be at least 8 characters|password is required/i.test(
+        raw,
+      )) ||
+    (code === 'not_found' && /user not found/i.test(raw))
+  ) {
     message = hint
   }
   // 主文案不以 [code] 开头；诊断 code 放 technicalCode

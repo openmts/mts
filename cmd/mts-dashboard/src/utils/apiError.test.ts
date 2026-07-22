@@ -160,3 +160,40 @@ test('friendlyApiError login/renew invalid credentials', () => {
   assert.match(en.display, /incorrect|session remains/i)
 })
 
+test('friendlyApiError password policy weak/default/required', () => {
+  const admin = friendlyApiError(
+    { code: 'bad_request', status: 400, message: 'default password admin is not allowed' },
+    'zh',
+  )
+  assert.match(admin.title, /密码不符合策略/)
+  assert.match(admin.display, /不能使用默认密码 admin/)
+  assert.doesNotMatch(admin.display, /default password admin is not allowed/i)
+
+  const short = friendlyApiError(
+    { code: 'bad_request', status: 400, message: 'password must be at least 8 characters' },
+    'zh',
+  )
+  assert.match(short.display, /密码至少 8 位/)
+
+  const req = friendlyApiError(
+    { code: 'bad_request', status: 400, message: 'password is required' },
+    'en',
+  )
+  assert.match(req.display, /Password is required/i)
+})
+
+test('friendlyApiError user not found', () => {
+  const e = friendlyApiError(
+    { code: 'not_found', status: 404, message: 'user not found: bob' },
+    'zh',
+  )
+  assert.match(e.title, /用户不存在/)
+  assert.match(e.display, /目标用户不存在|已删除/)
+  assert.doesNotMatch(e.display, /user not found: bob/i)
+  const en = friendlyApiError(
+    { code: 'not_found', status: 404, message: 'user not found' },
+    'en',
+  )
+  assert.match(en.display, /User not found|does not exist/i)
+})
+

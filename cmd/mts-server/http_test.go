@@ -245,6 +245,14 @@ func TestHTTPUserRoleControlsUserManagement(t *testing.T) {
 	if !setPwd.OK || setPwd.UserName != "bob" {
 		t.Fatalf("set password response = %+v, want ok user_name=bob", setPwd)
 	}
+	var missingErr errorResponse
+	putJSONWithHeaders(t, server.URL+"/api/v1/users/no-such-user/password", passwordRequest{Password: "nextpass1"}, adminHeaders, http.StatusNotFound, &missingErr)
+	if missingErr.Code != errorCodeNotFound {
+		t.Fatalf("set password missing user code = %v, want not_found", missingErr.Code)
+	}
+	if missingErr.Message != "user not found" && missingErr.Error != "user not found" {
+		t.Fatalf("set password missing user message = %+v, want user not found", missingErr)
+	}
 	putJSONWithHeaders(
 		t,
 		server.URL+"/api/v1/users/bob/database-permissions/default/read",

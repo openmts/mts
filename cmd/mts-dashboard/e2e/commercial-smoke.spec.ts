@@ -198,6 +198,16 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-item-action-reset-nav-section-workspace')).toBeVisible()
   await page.getByTestId('command-item-action-reset-nav-section-workspace').click()
   await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  // P425: 英文 locale 下 section 重置可检索（随后恢复中文，避免干扰后续文案断言）
+  await page.getByTestId('topbar-lang').click()
+  await page.getByTestId('sidebar-order-up-query').click()
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('reset workspace')
+  await expect(page.getByTestId('command-item-action-reset-nav-section-workspace')).toBeVisible()
+  await page.getByTestId('command-item-action-reset-nav-section-workspace').click()
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  await page.getByTestId('topbar-lang').click()
   // 再次写入自定义序，避免清空后账户页 orderBefore 为空
   await page.getByTestId('sidebar-order-up-query').click()
   await expect.poll(async () => page.evaluate((k) => localStorage.getItem(k), navKeySmoke)).toBeTruthy()
@@ -1626,6 +1636,12 @@ test('commercial browser smoke path', async ({ page }) => {
     await page.getByTestId('users-set-password-submit').click()
     await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTestId('users-action-result')).toContainText(/默认|admin|至少|password|8/i)
+    // P425: 确认密码不一致前端拦截
+    await page.getByTestId('users-set-password-input').fill('StrongPass!2026')
+    await page.getByTestId('users-set-password-confirm').fill('StrongPass!2026x')
+    await page.getByTestId('users-set-password-submit').click()
+    await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('users-action-result')).toContainText(/不一致|does not match|confirm/i)
     await page.getByTestId('users-set-password-cancel').click()
   // P423: Users 自改密弱密码前端拦截
   await page.getByTestId('users-change-self-open').click()

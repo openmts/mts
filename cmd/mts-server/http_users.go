@@ -151,6 +151,10 @@ func (r *serverRuntime) handleUserPassword(writer http.ResponseWriter, request *
 		return
 	}
 	if err := r.engine.SetPassword(request.Context(), userName, req.Password); err != nil {
+		if errors.Is(err, mts.ErrUserNotFound) {
+			writeAPIError(writer, newAPIError(errorCodeNotFound, "user not found", err))
+			return
+		}
 		writeAPIError(writer, err)
 		return
 	}

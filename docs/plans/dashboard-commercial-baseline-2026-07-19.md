@@ -1904,3 +1904,17 @@
 | 设密当前用户 | 撤销 token | logout → Login | 既有 P421 |
 | 命令面板 section 重置 | — | reset-nav-section-order:* | 与侧栏按钮一致 |
 
+## P425（2026-07-22）
+- Dashboard：`friendlyApiError` 映射服务端密码策略（admin 禁用 / ≥8 / required）与 `user not found` 友好文案（不中英混杂）
+- Server：`set_user_password` 用户不存在统一 `not_found` + `user not found`（HTTP/gRPC）
+- e2e：Users 设密确认不一致拦截；命令面板英文 `reset workspace` section 重置
+- 单测：apiError 密码策略与用户不存在映射
+
+### 错误文案与设密边界（P425 增量）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 密码策略 bad_request | admin / ≥8 / required 英文 message | 中文/英文友好映射 | 绕过前端时可用 |
+| 设密目标不存在 | not_found + user not found | 用户不存在 | HTTP/gRPC 一致 |
+| 设密确认不一致 | —（前端） | action-result 错误 | e2e |
+| 命令面板 section 重置英文检索 | — | keywords + locale label | e2e |
+
