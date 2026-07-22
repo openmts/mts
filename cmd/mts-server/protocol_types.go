@@ -468,6 +468,7 @@ type configValidateRequest struct {
 
 type configValidateResponse struct {
 	OK            bool                  `json:"ok"`
+	Path          string                `json:"path,omitempty"`
 	Error         string                `json:"error,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
@@ -477,6 +478,7 @@ type configValidateResponse struct {
 
 type reloadConfigResponse struct {
 	OK            bool                  `json:"ok"`
+	Path          string                `json:"path,omitempty"`
 	Fields        []string              `json:"fields"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
@@ -515,6 +517,7 @@ type versionResponse struct {
 	Version       string                `json:"version"`
 	Commit        string                `json:"commit"`
 	BuiltAt       string                `json:"built_at"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -566,6 +569,7 @@ type errorCodeSpec struct {
 
 type storageValidateResponse struct {
 	OK            bool                  `json:"ok"`
+	Path          string                `json:"path,omitempty"`
 	DataDir       string                `json:"data_dir"`
 	Health        mts.HealthSnapshot    `json:"health"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`

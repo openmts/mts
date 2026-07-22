@@ -6,6 +6,7 @@ export interface ServerVersionInfo {
   version?: string
   commit?: string
   built_at?: string
+  path?: string
 }
 
 export function buildAboutExport(
@@ -33,6 +34,7 @@ export function buildAboutExport(
           version: input.server.version || '',
           commit: input.server.commit || '',
           built_at: input.server.built_at || '',
+          path: input.server.path || '',
         }
       : null,
     user: input.user || '',

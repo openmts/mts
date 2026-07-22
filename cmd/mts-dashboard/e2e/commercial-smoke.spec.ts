@@ -597,6 +597,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('about-page')).toBeVisible()
   await expect(page.getByTestId('about-admin-last')).toBeVisible()
   await expect(page.getByTestId('about-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
+  if (await page.getByTestId('about-server-path').count()) {
+    await expect(page.getByTestId('about-server-path')).toContainText('/api/v1/admin/version')
+  }
   await expect(page.getByTestId('about-admin-last-copy')).toBeVisible()
   await page.goto('/api-spec?ns=auth&q=password-policy')
   await expect(page.getByTestId('api-spec-page')).toBeVisible()

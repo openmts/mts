@@ -2669,3 +2669,15 @@
 | flush/compact | path | opsFlushDone/opsCompactDone | maintenanceResponse |
 | retention/apply | path | opsRetentionDone | okResponse |
 | 契约检索 | ResponseHint | 命令面板 | 运维对照 |
+
+## P482（2026-07-23）
+- Server：config validate/reload、storage validate、admin/version 响应补 `path`（HTTP 统一 payload）
+- Dashboard：Config/Storage 成功文案含 path；About 服务端 path 徽章；about 导出含 path
+- 清单：`admin-config-storage-path`；ApiSpec ResponseHint 对齐
+
+### 前后端对齐（P482）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| config validate/reload | path | 成功/失败文案 | Config 页 |
+| storage validate | path | 成功文案 + path 徽章 | Storage 页 |
+| admin/version | path | About path 行 | 运维交接 |

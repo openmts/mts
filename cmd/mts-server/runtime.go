@@ -520,6 +520,7 @@ func (r *serverRuntime) adminVersionPayload() versionResponse {
 		Version:       version,
 		Commit:        commit,
 		BuiltAt:       builtAt,
+		Path:          routeAdminVersion,
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
@@ -752,6 +753,7 @@ func (r *serverRuntime) attachAdminOpToSession(resp sessionResponse) sessionResp
 func (r *serverRuntime) storageValidatePayload() storageValidateResponse {
 	busy, op, started := r.adminHeavyState()
 	resp := r.storageValidate()
+	resp.Path = routeAdminStorageValidate
 	resp.AdminOpBusy = busy
 	resp.Op = op
 	resp.StartedAtUnix = started

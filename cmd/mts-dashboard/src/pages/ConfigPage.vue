@@ -46,6 +46,7 @@ interface ConfigResponse {
 }
 interface ValidateResponse {
   ok: boolean
+  path?: string
   error?: string
   admin_op_busy?: boolean
   op?: string
@@ -54,6 +55,7 @@ interface ValidateResponse {
 }
 interface ReloadResponse {
   ok: boolean
+  path?: string
   fields: string[]
   admin_op_busy?: boolean
   op?: string
@@ -384,10 +386,16 @@ async function handleValidate() {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/config/validate', { config: config.value }, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(validateResult.value))
     if (validateResult.value.ok) {
-      setActionOk(t.value('configValidateOk'))
-      success(t.value('configValidateOk'))
+      const msg = formatMessage(t.value('configValidateOk'), {
+        path: String(validateResult.value.path || '/api/v1/admin/config/validate'),
+      })
+      setActionOk(msg)
+      success(msg)
     } else {
-      const msg = formatMessage(t.value('configValidateFail'), { error: validateResult.value.error || '' })
+      const msg = formatMessage(t.value('configValidateFail'), {
+        error: validateResult.value.error || '',
+        path: String(validateResult.value.path || '/api/v1/admin/config/validate'),
+      })
       setActionError(msg)
       notifyError(msg)
     }
@@ -416,9 +424,13 @@ async function handleReload() {
   try {
     reloadResult.value = await apiPost<ReloadResponse>('/api/v1/admin/config/reload', undefined, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(reloadResult.value))
-    setActionOk(reloadResult.value.fields?.length ? formatMessage(t.value('configReloadOkFields'), { fields: reloadResult.value.fields.join(', ') }) : t.value('configReloadOk'))
+    const path = String(reloadResult.value.path || '/api/v1/admin/config/reload')
+    const okMsg = reloadResult.value.fields?.length
+      ? formatMessage(t.value('configReloadOkFields'), { fields: reloadResult.value.fields.join(', '), path })
+      : formatMessage(t.value('configReloadOk'), { path })
+    setActionOk(okMsg)
     await loadConfig()
-    success(t.value('configReloadToast'))
+    success(okMsg)
   } catch (e) {
     reportConfigCatch('reload', e)
   } finally {

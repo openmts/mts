@@ -574,6 +574,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/ops#ops-status-strip',
   },
   {
+    id: 'admin-config-storage-path',
+    severity: 'recommended',
+    title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },
+    detail: {
+      zh: 'config validate/reload、storage validate、admin/version 返回 path；Config/Storage/About 成功态或徽章展示。',
+      en: 'config validate/reload, storage validate, admin/version return path; Config/Storage/About surface it.',
+    },
+    automated: true,
+    jump: '/config',
+  },
+  {
     id: 'write-result-export-meta',
     severity: 'recommended',
     title: { zh: '写入结果导出含服务端 meta', en: 'Write result export includes server meta' },

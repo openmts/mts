@@ -43,6 +43,7 @@ import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList } from 
 
 interface ValidateResponse {
   ok: boolean
+  path?: string
   data_dir: string
   health: Record<string, unknown>
   admin_op_busy?: boolean
@@ -387,7 +388,10 @@ async function doValidate() {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/storage/validate', undefined, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(validateResult.value))
     drillDone.value = { ...drillDone.value, validate: true }
-    const msg = validateResult.value.ok ? t.value('storageValidateOk') : t.value('storageValidateDone')
+    const path = String(validateResult.value.path || '/api/v1/admin/storage/validate')
+    const msg = validateResult.value.ok
+      ? formatMessage(t.value('storageValidateOk'), { path })
+      : formatMessage(t.value('storageValidateDone'), { path })
     setActionResult(makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg))
     success(msg)
   } catch (e) {
@@ -737,6 +741,12 @@ async function copyStorageShareLink() {
       <div class="mts-panel">
         <div class="mb-3 flex items-center gap-2"><CheckCircle class="h-5 w-5 text-slate-500" /><h3 class="text-sm font-semibold">{{ t('storageValidateTitle') }}</h3></div>
         <button data-testid="storage-validate" :disabled="loading === 'validate' || writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" class="mts-btn-primary w-full justify-center py-2" @click="doValidate">{{ loading === 'validate' ? t('loading') : t('storageValidateRun') }}</button>
+        <p
+          v-if="validateResult?.path"
+          class="mt-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+          data-testid="storage-validate-path"
+          :title="validateResult.path"
+        >{{ validateResult.path }}</p>
         <pre v-if="validateResult" class="mt-3 max-h-40 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(validateResult, null, 2) }}</pre>
       </div>
       <div class="mts-panel">

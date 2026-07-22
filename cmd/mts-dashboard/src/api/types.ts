@@ -180,6 +180,7 @@ export interface AdminVersionResponse {
   version: string
   commit: string
   built_at: string
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number

@@ -27,6 +27,7 @@ interface VersionResponse {
   version: string
   commit?: string
   built_at?: string
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -260,6 +261,10 @@ onMounted(() => {
           <div class="flex justify-between gap-3">
             <dt class="mts-muted">{{ t('aboutBuiltAt') }}</dt>
             <dd class="font-mono">{{ server.built_at }}</dd>
+          </div>
+          <div v-if="server.path" class="flex justify-between gap-3">
+            <dt class="mts-muted">path</dt>
+            <dd class="max-w-[14rem] truncate font-mono text-[11px]" data-testid="about-server-path" :title="server.path">{{ server.path }}</dd>
           </div>
         </dl>
         <EmptyState

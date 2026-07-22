@@ -2,9 +2,9 @@ package main
 
 func (r *serverRuntime) validateConfigPayload(cfg config) configValidateResponse {
 	if err := cfg.validate(); err != nil {
-		return configValidateResponse{OK: false, Error: err.Error()}
+		return configValidateResponse{OK: false, Path: routeAdminConfigValidate, Error: err.Error()}
 	}
-	return configValidateResponse{OK: true}
+	return configValidateResponse{OK: true, Path: routeAdminConfigValidate}
 }
 
 func (r *serverRuntime) reloadConfig() (reloadConfigResponse, error) {
@@ -21,5 +21,5 @@ func (r *serverRuntime) reloadConfig() (reloadConfigResponse, error) {
 	r.config.Log = newCfg.Log
 	r.mu.Unlock()
 	r.applyLimitState(newCfg)
-	return reloadConfigResponse{OK: true, Fields: []string{"auth", "user", "limits", "observability", "log"}}, nil
+	return reloadConfigResponse{OK: true, Path: routeAdminConfigReload, Fields: []string{"auth", "user", "limits", "observability", "log"}}, nil
 }
