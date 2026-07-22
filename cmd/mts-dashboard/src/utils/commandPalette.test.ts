@@ -292,3 +292,21 @@ test('command palette has reset-nav-order action', () => {
   assert.ok(filterCommandItems(all, 'nav order', (k) => k).some((i) => i.id === 'action-reset-nav-order'))
 })
 
+test('command palette has reset-nav-section-order actions', () => {
+  const sections = ['workspace', 'access', 'admin', 'system']
+  for (const s of sections) {
+    const id = `action-reset-nav-section-${s}`
+    assert.ok(
+      COMMAND_ACTION_ITEMS.some(
+        (i) => i.id === id && i.action === 'reset-nav-section-order' && i.path.endsWith(`:${s}`),
+      ),
+      id,
+    )
+  }
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'action-reset-nav-section-workspace'))
+  assert.ok(
+    filterCommandItems(all, '重置工作区', (k) => k).some((i) => i.id === 'action-reset-nav-section-workspace'),
+  )
+})
+

@@ -240,7 +240,11 @@ func TestHTTPUserRoleControlsUserManagement(t *testing.T) {
 	)
 
 	adminHeaders := map[string]string{"Authorization": "Bearer " + adminToken}
-	putJSONWithHeaders(t, server.URL+"/api/v1/users/bob/password", passwordRequest{Password: "nextpass1"}, adminHeaders, http.StatusOK, &okResponse{})
+	var setPwd setPasswordResponse
+	putJSONWithHeaders(t, server.URL+"/api/v1/users/bob/password", passwordRequest{Password: "nextpass1"}, adminHeaders, http.StatusOK, &setPwd)
+	if !setPwd.OK || setPwd.UserName != "bob" {
+		t.Fatalf("set password response = %+v, want ok user_name=bob", setPwd)
+	}
 	putJSONWithHeaders(
 		t,
 		server.URL+"/api/v1/users/bob/database-permissions/default/read",

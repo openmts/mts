@@ -405,17 +405,26 @@ async function doSetPassword() {
   const signal = usersActionAbort.begin()
   try {
     const target = setPasswordUser.value
-    const pwdResp = await apiPut<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/users/${encodeURIComponent(target)}/password`, { password: setPasswordValue.value }, { signal })
+    const pwdResp = await apiPut<{
+      ok?: boolean
+      user_name?: string
+      admin_op_busy?: boolean
+      op?: string
+      started_at_unix?: number
+      last?: unknown
+    }>(`/api/v1/users/${encodeURIComponent(target)}/password`, { password: setPasswordValue.value }, { signal })
     showSetPassword.value = false
     setPasswordValue.value = ''
     setPasswordConfirm.value = ''
+    // 优先用服务端回传 user_name，避免前后端目标不一致
+    const confirmedTarget = (pwdResp?.user_name || target || '').trim()
     // SetPassword 会撤销目标用户全部 token；若改的是当前登录用户须重新登录
-    if (target && target === (currentUser.value || '').trim()) {
+    if (confirmedTarget && confirmedTarget === (currentUser.value || '').trim()) {
       await logout()
       success(t.value('usersPasswordChangedRelogin'))
       await router.replace({
         name: 'Login',
-        query: { reason: 'password_changed', user: target },
+        query: { reason: 'password_changed', user: confirmedTarget },
       })
       return
     }

@@ -38,7 +38,7 @@ import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
-import { saveNavOrderMap } from '@/utils/navOrder'
+import { loadNavOrderPrefs, saveNavOrderMap, setSectionOrder } from '@/utils/navOrder'
 import { CLIENT_PREFS_CHANGED_EVENT } from '@/utils/clientPrefs'
 import {
   clickShareLinkButton,
@@ -179,7 +179,7 @@ function closePalette() {
   trap = null
 }
 
-function runAction(action: CommandActionId) {
+function runAction(action: CommandActionId, item?: CommandNavItem) {
   switch (action) {
     case 'toggle-theme':
       toggleTheme()
@@ -318,6 +318,28 @@ function runAction(action: CommandActionId) {
       }
       break
     }
+    case 'reset-nav-section-order': {
+      try {
+        const storage = typeof localStorage !== 'undefined' ? localStorage : null
+        const path = String(item?.path || '')
+        const section = path.includes(':') ? path.split(':').pop() || '' : ''
+        const allowed = new Set(['workspace', 'access', 'admin', 'system'])
+        if (!allowed.has(section)) {
+          notifyError(t.value('cmdActionResetNavOrderFailed'))
+          break
+        }
+        const current = loadNavOrderPrefs(storage)
+        const next = setSectionOrder(current, section, [])
+        saveNavOrderMap(storage, next)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent(CLIENT_PREFS_CHANGED_EVENT))
+        }
+        success(t.value('cmdActionResetNavSectionDone'))
+      } catch (e) {
+        notifyError(t.value('cmdActionResetNavOrderFailed'))
+      }
+      break
+    }
     case 'copy-admin-op-last': {
       const summary = (injectedAdminOpSummary?.value?.lastSummary || '').trim()
       const fb = commandAdminOpLastCopyFeedback({
@@ -371,7 +393,7 @@ function runAction(action: CommandActionId) {
 function go(item: CommandNavItem) {
   closePalette()
   if (isCommandAction(item) && item.action) {
-    runAction(item.action)
+    runAction(item.action, item)
     return
   }
   // 同路径 router.push 不触发 watch：深链目标仍强制打开面板

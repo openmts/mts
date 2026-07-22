@@ -35,6 +35,7 @@ export type CommandActionId =
   | 'dismiss-admin-op-last'
   | 'copy-admin-op-last'
   | 'reset-nav-order'
+  | 'reset-nav-section-order'
 
 /** 页内快捷动作（不离开当前路由，除非动作本身导航） */
 export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
@@ -215,7 +216,64 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
     path: 'action:reset-nav-order',
     labelKey: 'cmdActionResetNavOrder',
     keywords: ['reset nav order', 'sidebar order', '重置侧栏排序', '导航排序', 'nav order'],
+    kind: 'action',
     action: 'reset-nav-order',
+  },
+  {
+    id: 'action-reset-nav-section-workspace',
+    path: 'action:reset-nav-section-order:workspace',
+    labelKey: 'cmdActionResetNavSectionWorkspace',
+    keywords: [
+      'reset workspace nav',
+      'reset section workspace',
+      '重置工作区排序',
+      '工作区导航',
+      'sidebar section workspace',
+    ],
+    kind: 'action',
+    action: 'reset-nav-section-order',
+  },
+  {
+    id: 'action-reset-nav-section-access',
+    path: 'action:reset-nav-section-order:access',
+    labelKey: 'cmdActionResetNavSectionAccess',
+    keywords: [
+      'reset access nav',
+      'reset section access',
+      '重置访问控制排序',
+      '访问控制导航',
+      'sidebar section access',
+    ],
+    kind: 'action',
+    action: 'reset-nav-section-order',
+  },
+  {
+    id: 'action-reset-nav-section-admin',
+    path: 'action:reset-nav-section-order:admin',
+    labelKey: 'cmdActionResetNavSectionAdmin',
+    keywords: [
+      'reset admin nav',
+      'reset section admin',
+      '重置运维管理排序',
+      '运维导航',
+      'sidebar section admin',
+    ],
+    kind: 'action',
+    action: 'reset-nav-section-order',
+  },
+  {
+    id: 'action-reset-nav-section-system',
+    path: 'action:reset-nav-section-order:system',
+    labelKey: 'cmdActionResetNavSectionSystem',
+    keywords: [
+      'reset system nav',
+      'reset section system',
+      '重置系统排序',
+      '系统导航',
+      'sidebar section system',
+    ],
+    kind: 'action',
+    action: 'reset-nav-section-order',
   },
 ]
 

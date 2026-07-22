@@ -354,7 +354,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "set_user_password",
 			Namespace:   "users",
-			Description: "admin set user password (revokes target tokens; clears must_change; response includes admin_op_busy/last)",
+			Description: "admin set user password (revokes target tokens; clears must_change; response includes user_name and admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodSetUserPassword,
 			GRPCRequest: &setUserPasswordRequest{},

@@ -46,10 +46,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('login-error')).toHaveCount(0)
   await expect(page.getByTestId('login-ttl')).toBeVisible()
 
-  // P279: 错误密码 -> 服务端失败可 retry/dismiss
+  // P279/P424: 错误密码 -> 服务端失败可 retry/dismiss，文案对齐密码不正确
   await page.getByTestId('login-password').fill('definitely-wrong-password')
   await page.getByTestId('login-submit').click()
   await expect(page.getByTestId('login-error')).toBeVisible()
+  await expect(page.getByTestId('login-error')).toContainText(/密码不正确|Incorrect password|用户名或密码/i)
   await expect(page.getByTestId('login-error-retry')).toBeVisible()
   await expect(page.getByTestId('login-error-dismiss')).toBeVisible()
   await page.getByTestId('login-error-dismiss').click()
@@ -165,6 +166,41 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('sidebar-filter-clear').click()
   await expect(page.getByTestId('sidebar-order-up-query')).toBeVisible()
   await expect(page.getByTestId('sidebar-drag-query')).toBeVisible()
+  // P424: 分组重置侧栏排序（workspace）；重置后重建自定义序，供后续账户偏好导出断言
+  await expect(page.getByTestId('sidebar-order-reset-workspace')).toBeVisible()
+  await page.getByTestId('sidebar-order-reset-workspace').click()
+  await expect.poll(async () => {
+    const raw = await page.evaluate((k) => localStorage.getItem(k), navKeySmoke)
+    if (!raw) return true
+    try {
+      const parsed = JSON.parse(raw) as { order?: { workspace?: string[] } }
+      const ws = parsed.order?.workspace
+      return !ws || ws.length === 0
+    } catch {
+      return false
+    }
+  }).toBe(true)
+  // 命令面板 section 重置入口
+  await page.getByTestId('sidebar-order-up-query').click()
+  await expect.poll(async () => {
+    const raw = await page.evaluate((k) => localStorage.getItem(k), navKeySmoke)
+    if (!raw) return false
+    try {
+      const parsed = JSON.parse(raw) as { order?: { workspace?: string[] } }
+      return Array.isArray(parsed.order?.workspace) && (parsed.order?.workspace?.length || 0) > 0
+    } catch {
+      return false
+    }
+  }).toBe(true)
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('重置工作区')
+  await expect(page.getByTestId('command-item-action-reset-nav-section-workspace')).toBeVisible()
+  await page.getByTestId('command-item-action-reset-nav-section-workspace').click()
+  await expect(page.getByTestId('command-palette')).toHaveCount(0)
+  // 再次写入自定义序，避免清空后账户页 orderBefore 为空
+  await page.getByTestId('sidebar-order-up-query').click()
+  await expect.poll(async () => page.evaluate((k) => localStorage.getItem(k), navKeySmoke)).toBeTruthy()
   await expect(page.getByTestId('overview-export-json')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('overview-share-link')).toBeVisible()
@@ -2602,6 +2638,16 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('users-create-password').fill('ReaderPass!2026')
   await page.getByTestId('users-create-submit').click()
   await expect(page.getByTestId('users-row-reader-e2e')).toBeVisible({ timeout: 15_000 })
+  // P424: 对非当前用户设密成功，admin 会话保持在 /users
+  await page.getByTestId('users-set-password-reader-e2e').click()
+  await expect(page.getByTestId('users-set-password-input')).toBeVisible()
+  await page.getByTestId('users-set-password-input').fill('ReaderPass!2026b')
+  await page.getByTestId('users-set-password-confirm').fill('ReaderPass!2026b')
+  await page.getByTestId('users-set-password-submit').click()
+  await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('users-action-result')).toContainText(/密码已设置|Password set/i)
+  await expect(page).toHaveURL(/\/users/)
+  await expect(page.getByTestId('users-page')).toBeVisible()
   await page.getByTestId('users-open-grant-reader-e2e').click()
   await expect(page.getByTestId('user-grant-panel')).toBeVisible()
   // 仅匹配库名 checkbox，排除 count/filter 等
@@ -2619,7 +2665,7 @@ test('commercial browser smoke path', async ({ page }) => {
   }
   await page.getByTestId('topbar-logout').click()
   await expect(page).toHaveURL(/login/)
-  await login(page, 'reader-e2e', 'ReaderPass!2026')
+  await login(page, 'reader-e2e', 'ReaderPass!2026b')
   await expect(page).not.toHaveURL(/login|force-change/)
   // 侧栏可见 databases，不可见 operations
   await expect(page.getByTestId('sidebar-nav-row-databases')).toBeVisible()
@@ -2709,7 +2755,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('login-redirect-hint')).toBeVisible()
   await expect(page.getByTestId('login-redirect-path')).toContainText('/query')
   await page.getByTestId('login-username').fill('reader-e2e')
-  await page.getByTestId('login-password').fill('ReaderPass!2026')
+  await page.getByTestId('login-password').fill('ReaderPass!2026b')
   await page.getByTestId('login-submit').click()
   await expect(page).toHaveURL(/\/query(?:\?|$)/)
   await expect(page).not.toHaveURL(/login/)

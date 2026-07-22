@@ -1888,3 +1888,19 @@
 | renew 成功 | 新 token | 更新会话 | 密码输入清空 |
 | Users 自改密弱密码 | —（前端） | action-result 错误 | 不提交 |
 | create 弱密码 | —（前端） | action-result 错误 | 不提交 |
+
+## P424（2026-07-22）
+- e2e：登录错误密码文案断言（密码不正确 / Incorrect password / 用户名或密码）
+- e2e：Users 对非当前用户 `reader-e2e` 设密成功，保留 admin 会话于 `/users`
+- Dashboard：命令面板补齐 section 级重置（workspace/access/admin/system）与侧栏 `sidebar-order-reset-*` 对齐
+- Server：`set_user_password` 成功响应 `setPasswordResponse{user_name, admin_op_*}`（HTTP/gRPC）
+- Dashboard Users：设密成功优先使用服务端 `user_name` 判定是否踢当前会话
+
+### 会话/导航边界（P424 增量）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| login 密码错误文案 | unauthenticated+invalid credentials | 密码不正确（友好文案） | e2e 断言 |
+| 设密非当前用户 | 撤销目标 token；返回 user_name | action-result 成功；留 /users | reader-e2e |
+| 设密当前用户 | 撤销 token | logout → Login | 既有 P421 |
+| 命令面板 section 重置 | — | reset-nav-section-order:* | 与侧栏按钮一致 |
+

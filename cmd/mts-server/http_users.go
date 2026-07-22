@@ -159,7 +159,10 @@ func (r *serverRuntime) handleUserPassword(writer http.ResponseWriter, request *
 		return
 	}
 	r.audit.record(auditEvent{UserName: userName, Action: "set_password"})
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToSetPassword(setPasswordResponse{
+		OK:       true,
+		UserName: userName,
+	}))
 }
 
 func (r *serverRuntime) handleDatabasePermissionResource(

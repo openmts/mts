@@ -387,7 +387,10 @@ func grpcSetUserPassword(r *serverRuntime, ctx context.Context, req any) (any, e
 	if err := r.clearMustChangePassword(ctx, request.UserName); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToSetPassword(setPasswordResponse{
+		OK:       true,
+		UserName: request.UserName,
+	}), nil
 }
 
 func grpcCreateUser(r *serverRuntime, ctx context.Context, req any) (any, error) {

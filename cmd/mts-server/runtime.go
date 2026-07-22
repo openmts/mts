@@ -756,6 +756,15 @@ func (r *serverRuntime) attachAdminOpToOK(resp okResponse) okResponse {
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToSetPassword(resp setPasswordResponse) setPasswordResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) attachAdminOpToChangePassword(resp changePasswordResponse) changePasswordResponse {
 	busy, op, started := r.adminHeavyState()
 	resp.AdminOpBusy = busy

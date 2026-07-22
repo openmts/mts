@@ -242,6 +242,16 @@ type changePasswordResponse struct {
 	Last               *adminHeavyLastResult `json:"last,omitempty"`
 }
 
+// setPasswordResponse 管理员设置密码成功响应（含目标用户，便于 dashboard 对齐会话边界）
+type setPasswordResponse struct {
+	OK            bool                  `json:"ok"`
+	UserName      string                `json:"user_name,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
+}
+
 type authzDatabaseCheckRequest struct {
 	UserName   string                 `json:"user_name"`
 	Database   string                 `json:"database"`
