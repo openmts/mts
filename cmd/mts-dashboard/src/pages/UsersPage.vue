@@ -3,6 +3,8 @@ import { inject, type ComputedRef,  ref, onMounted, onBeforeUnmount, computed, w
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiDelete, apiGet, apiPost, apiPostNDJSONStream, apiPut } from '@/api/client'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { useMutationGuard } from '@/composables/useMutationGuard'
@@ -57,7 +59,13 @@ import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 
 interface User { name: string; display_name?: string; role?: string; disabled?: boolean; metadata?: Record<string, string> }
-interface UsersResponse { users: User[] }
+interface UsersResponse {
+  users: User[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface DatabaseGrant { database: string; permission: string }
 interface PermissionsResponse { grants: DatabaseGrant[] }
 
@@ -115,6 +123,7 @@ const usersAdminLastErrorDetail = computed(() => {
 const { currentUser, isAdmin } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
+const { applyAdminOpStatus } = useAdminOpBusy()
 function roleLabel(role?: string): string {
   if (role === 'admin') return t.value('roleAdmin')
   return t.value('roleUser')
@@ -275,6 +284,7 @@ async function loadGrantDatabases() {
 async function loadUsers() {
   try {
     const data = await apiGet<UsersResponse>('/api/v1/users')
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     users.value = data.users ?? []
     pruneTo(users.value.map((u) => u.name))
     loadError.value = ''

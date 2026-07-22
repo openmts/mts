@@ -307,6 +307,35 @@ export interface DownsampleStatusesResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/users（列表；含 busy/last） */
+export interface UsersListResponse {
+  users?: Array<{ name?: string; role?: string; disabled?: boolean }>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/databases 或 data/databases（含 busy/last） */
+export interface DatabasesListResponse {
+  databases?: string[]
+  measurements?: string[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET retention-policies（含 busy/last） */
+export interface RetentionPoliciesListResponse {
+  policies?: Array<{ name?: string; duration?: number }>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+
 
 
 

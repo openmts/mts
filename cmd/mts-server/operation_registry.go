@@ -324,7 +324,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "list_users",
 			Namespace:   "users",
-			Description: "list users",
+			Description: "list users (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodListUsers,
 			GRPCRequest: &emptyRequest{},
@@ -392,7 +392,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "admin_databases",
 			Namespace:   "admin",
-			Description: "list or create databases",
+			Description: "list or create databases (GET includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet, http.MethodPost},
 			HTTPPaths:   []string{routeAdminDatabases},
@@ -420,7 +420,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "list_databases",
 			Namespace:   "admin",
-			Description: "list databases",
+			Description: "list databases (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodListDatabases,
 			GRPCRequest: &emptyRequest{},
@@ -447,7 +447,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "list_retention_policies",
 			Namespace:   "admin",
-			Description: "list retention policies",
+			Description: "list retention policies (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodListRetentionPolicies,
 			GRPCRequest: &databaseRequest{},

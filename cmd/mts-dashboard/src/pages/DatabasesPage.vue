@@ -3,13 +3,15 @@ import { ref, onMounted, computed, inject, watch, onBeforeUnmount, type Computed
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import {
   anyRetentionPolicyDraftDirty,
   isDatabaseCreateDraftDirty,
 } from '@/utils/adminFormDirty'
 import { registerDirtyChecker } from '@/utils/routeDirty'
-import { listDatabases, listMeasurements, listRetentionPolicies, listSeriesDetailed } from '@/api/meta'
+import { listDatabasesDetailed, listMeasurements, listRetentionPoliciesDetailed, listSeriesDetailed } from '@/api/meta'
 import { seriesLabel } from '@/utils/seriesMeta'
 import { filterSeriesListLocal } from '@/utils/seriesFilter'
 import { formatMessage } from '@/utils/formatMessage'
@@ -99,6 +101,7 @@ const router = useRouter()
 useHashScroll()
 const SERIES_CAP = 200
 const { t } = useI18n()
+const { applyAdminOpStatus } = useAdminOpBusy()
 const { success, info, error: notifyError, warn } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
@@ -188,7 +191,10 @@ const dbActionAbort = createActionAbort()
 
 async function loadDatabasesList() {
   try {
-    const names = await listDatabases()
+    const listed = await listDatabasesDetailed()
+    if (listed.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(listed.adminOp))
+    const names = listed.names
+    if (listed.error && !names.length) throw new Error(listed.error)
     // 刷新时尽量保留已展开/已加载详情，避免列表闪空后丢失上下文
     const prev = new Map(databases.value.map((d) => [d.name, d]))
     databases.value = names.map((name) => {
@@ -265,7 +271,11 @@ async function loadDatabaseDetails(db: DatabaseEntry) {
   try {
     const [meas, rps] = await Promise.all([
       listMeasurements(db.name),
-      listRetentionPolicies(db.name),
+      listRetentionPoliciesDetailed(db.name).then((r) => {
+        if (r.adminOp) applyAdminOpStatus(parseAdminOpStatusPayload(r.adminOp))
+        if (r.error && !r.policies.length) throw new Error(r.error)
+        return r.policies
+      }),
     ])
     db.measurements = meas.map((m) => ({
       name: m,

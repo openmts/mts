@@ -3,6 +3,8 @@ import { computed, inject, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet } from '@/api/client'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatCaughtError } from '@/utils/apiError'
 import { isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
@@ -49,7 +51,13 @@ interface User {
   role?: string
   disabled?: boolean
 }
-interface UsersResponse { users: User[] }
+interface UsersResponse {
+  users: User[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface PermissionsResponse { grants: Array<{ database: string; permission: string }> }
 
 const route = useRoute()
@@ -62,6 +70,7 @@ const accessGrantsAdminLastErrorDetail = computed(() => {
   return (adminOpBusySummary?.value?.lastError || '').trim()
 })
 const { t, locale } = useI18n()
+const { applyAdminOpStatus } = useAdminOpBusy()
 const { success, info, warn, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
@@ -162,6 +171,7 @@ async function load() {
   partialErrors.value = []
   try {
     const list = await apiGet<UsersResponse>('/api/v1/users')
+    applyAdminOpStatus(parseAdminOpStatusPayload(list))
     const usersList = list.users ?? []
     const bundles: UserGrantBundle[] = []
     const errs: string[] = []

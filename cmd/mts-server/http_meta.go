@@ -20,7 +20,7 @@ func (r *serverRuntime) handleAdminDatabases(writer http.ResponseWriter, request
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, measurementsResponse{Databases: databases, Measurements: databases})
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMeasurements(measurementsResponse{Databases: databases, Measurements: databases}))
 	case http.MethodPost:
 		var req databaseRequest
 		if err := decodeHTTPJSON(request, &req); err != nil {
@@ -93,7 +93,7 @@ func (r *serverRuntime) handleRetentionPolicies(
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, retentionPoliciesResponse{Policies: policies})
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToRetentionPolicies(retentionPoliciesResponse{Policies: policies}))
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
@@ -118,7 +118,7 @@ func (r *serverRuntime) handleDataDatabases(writer http.ResponseWriter, request 
 		writeAPIError(writer, err)
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, measurementsResponse{Databases: databases, Measurements: databases})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToMeasurements(measurementsResponse{Databases: databases, Measurements: databases}))
 }
 
 func (r *serverRuntime) listReadableDatabases(ctx context.Context, userName string) ([]string, error) {
@@ -189,7 +189,7 @@ func (r *serverRuntime) handleDataDatabase(writer http.ResponseWriter, request *
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, retentionPoliciesResponse{Policies: policies})
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToRetentionPolicies(retentionPoliciesResponse{Policies: policies}))
 		return
 	}
 	if len(parts) >= 4 && parts[1] == "measurements" {

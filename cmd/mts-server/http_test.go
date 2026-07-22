@@ -853,6 +853,40 @@ func TestHTTPDownsampleListBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPUsersAndDatabasesListBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("flush"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var usersBusy usersResponse
+	getJSONWithHeaders(t, server.URL+routeUsers, nil, http.StatusOK, &usersBusy)
+	if !usersBusy.AdminOpBusy || usersBusy.Op != "flush" || usersBusy.StartedAtUnix <= 0 {
+		t.Fatalf("users busy = %+v", usersBusy)
+	}
+	var dbsBusy measurementsResponse
+	getJSONWithHeaders(t, server.URL+routeAdminDatabases, nil, http.StatusOK, &dbsBusy)
+	if !dbsBusy.AdminOpBusy || dbsBusy.Op != "flush" || dbsBusy.StartedAtUnix <= 0 {
+		t.Fatalf("admin databases busy = %+v", dbsBusy)
+	}
+	runtime.finishAdminHeavy(errors.New("meta list probe fail"))
+	var usersDone usersResponse
+	getJSONWithHeaders(t, server.URL+routeUsers, nil, http.StatusOK, &usersDone)
+	if usersDone.AdminOpBusy {
+		t.Fatal("users want not busy")
+	}
+	if usersDone.Last == nil || usersDone.Last.Op != "flush" || usersDone.Last.OK || usersDone.Last.Error != "meta list probe fail" {
+		t.Fatalf("users last = %+v", usersDone.Last)
+	}
+	var dbsDone measurementsResponse
+	getJSONWithHeaders(t, server.URL+routeAdminDatabases, nil, http.StatusOK, &dbsDone)
+	if dbsDone.Last == nil || dbsDone.Last.Op != "flush" || dbsDone.Last.OK || dbsDone.Last.Error != "meta list probe fail" {
+		t.Fatalf("admin databases last = %+v", dbsDone.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

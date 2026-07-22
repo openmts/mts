@@ -45,7 +45,13 @@ import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { ScrollText, Download, RefreshCw, Eraser } from 'lucide-vue-next'
 
 interface User { name: string; display_name?: string }
-interface UsersResponse { users: User[] }
+interface UsersResponse {
+  users: User[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface AuditEvent {
   time: string
   user_name: string
@@ -176,6 +182,7 @@ async function loadUsersForFilter() {
   if (!isAdmin.value) return
   try {
     const data = await apiGet<UsersResponse>('/api/v1/users')
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     users.value = data.users ?? []
     usersLoadError.value = ''
   } catch (e) {

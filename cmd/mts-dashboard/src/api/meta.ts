@@ -5,6 +5,10 @@ import { formatCaughtError } from '@/utils/apiError'
 interface MeasurementsPayload {
   measurements?: string[]
   databases?: string[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
 }
 
 export type MetaLoadSource = 'admin' | 'data' | 'manual' | 'partial'
@@ -13,6 +17,12 @@ export interface ListDatabasesResult {
   names: string[]
   source: MetaLoadSource
   error?: string
+  adminOp?: {
+    admin_op_busy?: boolean
+    op?: string
+    started_at_unix?: number
+    last?: unknown
+  }
 }
 
 export async function listDatabases(init: RequestInit = {}): Promise<string[]> {
@@ -35,12 +45,30 @@ export async function listDatabasesDetailed(init: RequestInit = {}): Promise<Lis
   try {
     const data = await apiGet<MeasurementsPayload>(dataPath, init)
     const names = data.databases ?? data.measurements ?? []
-    return { names: [...names].sort(), source: 'data' as MetaLoadSource }
+    return {
+      names: [...names].sort(),
+      source: 'data' as MetaLoadSource,
+      adminOp: {
+        admin_op_busy: data.admin_op_busy,
+        op: data.op,
+        started_at_unix: data.started_at_unix,
+        last: data.last,
+      },
+    }
   } catch (e) {
     try {
       const data = await apiGet<MeasurementsPayload>(adminPath, init)
       const names = data.databases ?? data.measurements ?? []
-      return { names: [...names].sort(), source: 'admin' }
+      return {
+        names: [...names].sort(),
+        source: 'admin',
+        adminOp: {
+          admin_op_busy: data.admin_op_busy,
+          op: data.op,
+          started_at_unix: data.started_at_unix,
+          last: data.last,
+        },
+      }
     } catch (e2) {
       const denied =
         (e instanceof APIClientError && (e.status === 403 || e.code === 'permission_denied')) ||
@@ -73,6 +101,12 @@ export interface ListRetentionPoliciesResult {
   /** data 面优先；admin 回退；均失败则为 manual */
   source: 'data' | 'admin' | 'manual'
   error?: string
+  adminOp?: {
+    admin_op_busy?: boolean
+    op?: string
+    started_at_unix?: number
+    last?: unknown
+  }
 }
 
 /**
@@ -87,14 +121,44 @@ export async function listRetentionPoliciesDetailed(
   const dataPath = `/api/v1/data/databases/${encodeURIComponent(database)}/retention-policies`
   const adminPath = `/api/v1/admin/databases/${encodeURIComponent(database)}/retention-policies`
   try {
-    const data = await apiGet<{ policies?: RetentionPolicyMeta[] }>(dataPath, init)
-    return { policies: data.policies ?? [], source: 'data' }
+    const data = await apiGet<{
+      policies?: RetentionPolicyMeta[]
+      admin_op_busy?: boolean
+      op?: string
+      started_at_unix?: number
+      last?: unknown
+    }>(dataPath, init)
+    return {
+      policies: data.policies ?? [],
+      source: 'data',
+      adminOp: {
+        admin_op_busy: data.admin_op_busy,
+        op: data.op,
+        started_at_unix: data.started_at_unix,
+        last: data.last,
+      },
+    }
   } catch (e) {
     const denied = e instanceof APIClientError && (e.status === 403 || e.code === 'permission_denied')
     // 继续尝试 admin（admin token 且 data 路径异常时）
     try {
-      const data = await apiGet<{ policies?: RetentionPolicyMeta[] }>(adminPath, init)
-      return { policies: data.policies ?? [], source: 'admin' }
+      const data = await apiGet<{
+        policies?: RetentionPolicyMeta[]
+        admin_op_busy?: boolean
+        op?: string
+        started_at_unix?: number
+        last?: unknown
+      }>(adminPath, init)
+      return {
+        policies: data.policies ?? [],
+        source: 'admin',
+        adminOp: {
+          admin_op_busy: data.admin_op_busy,
+          op: data.op,
+          started_at_unix: data.started_at_unix,
+          last: data.last,
+        },
+      }
     } catch (e2) {
       const denied2 = e2 instanceof APIClientError && (e2.status === 403 || e2.code === 'permission_denied')
       if (denied || denied2) {

@@ -1659,3 +1659,8 @@
 - Server：downsample policies/statuses 列表附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）
 - Dashboard Downsample 加载时 `applyAdminOpStatus`；Metrics 拉取 `/metrics` 后联动 `refreshAdminOpBusy`
 - types/registry 描述对齐；HTTP 单测；e2e fail-last mock 同步
+
+## P406（2026-07-22）
+- Server：users 列表、admin/data databases 列表、retention-policies 列表附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC 对齐）
+- Dashboard Users/Databases/AccessGrants/Audit 加载时 `applyAdminOpStatus`；`meta.listDatabasesDetailed`/`listRetentionPoliciesDetailed` 透传 adminOp
+- types/registry 描述对齐；HTTP 单测；e2e fail-last mock 同步

@@ -537,6 +537,26 @@ test('commercial browser smoke path', async ({ page }) => {
       })
       return
     }
+    if (url.includes('/api/v1/users') && !url.includes('/users/')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ users: [], ...failLastPayload }),
+      })
+      return
+    }
+    if (url.includes('/admin/databases') || url.includes('/data/databases')) {
+      // 避免误伤 databases/{name}/... 子资源：仅列表路径
+      const pathOnly = url.split('?')[0]
+      if (pathOnly.endsWith('/admin/databases') || pathOnly.endsWith('/data/databases')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ databases: [], measurements: [], ...failLastPayload }),
+        })
+        return
+      }
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -558,6 +578,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.route('**/api/v1/admin/audit', fulfillFailLast)
   await page.route('**/api/v1/admin/downsample/policies', fulfillFailLast)
   await page.route('**/api/v1/admin/downsample/statuses', fulfillFailLast)
+  await page.route('**/api/v1/users', fulfillFailLast)
+  await page.route('**/api/v1/admin/databases', fulfillFailLast)
+  await page.route('**/api/v1/data/databases', fulfillFailLast)
   await page.route('**/api/v1/admin/maintenance/errors', fulfillFailLast)
   // doctor / admin health 加载也会 applyAdminOpStatus，需与 fail last 一致
   await page.route('**/api/v1/admin/doctor', async (route) => {
@@ -644,6 +667,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/admin/audit', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/downsample/policies', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/downsample/statuses', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/users', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/databases', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/data/databases', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/maintenance/errors', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/doctor').catch(() => {})
   await page.unroute('**/api/v1/admin/health').catch(() => {})

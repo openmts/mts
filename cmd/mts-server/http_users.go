@@ -34,7 +34,7 @@ func (r *serverRuntime) handleUsers(writer http.ResponseWriter, request *http.Re
 			writeAPIError(writer, err)
 			return
 		}
-		writeHTTPJSON(writer, http.StatusOK, usersResponse{Users: users})
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToUsers(usersResponse{Users: users}))
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}

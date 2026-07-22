@@ -405,7 +405,10 @@ func grpcListUsers(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 		return nil, err
 	}
 	users, err := r.engine.ListUsers(ctx)
-	return usersResponse{Users: users}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToUsers(usersResponse{Users: users}), nil
 }
 
 func grpcDeleteUser(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -460,7 +463,10 @@ func grpcListDatabases(r *serverRuntime, ctx context.Context, _ any) (any, error
 		return nil, err
 	}
 	databases, err := r.engine.ListDatabases(ctx)
-	return databasesResponse{Databases: databases}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToDatabases(databasesResponse{Databases: databases}), nil
 }
 
 func grpcDropDatabase(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -483,7 +489,10 @@ func grpcListRetentionPolicies(r *serverRuntime, ctx context.Context, req any) (
 		return nil, err
 	}
 	policies, err := r.engine.ListRetentionPolicies(ctx, req.(*databaseRequest).Name)
-	return retentionPoliciesResponse{Policies: policies}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToRetentionPolicies(retentionPoliciesResponse{Policies: policies}), nil
 }
 
 func grpcListMeasurements(r *serverRuntime, ctx context.Context, req any) (any, error) {

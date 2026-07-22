@@ -124,7 +124,11 @@ type userNameRequest struct {
 }
 
 type usersResponse struct {
-	Users []mts.User `json:"users"`
+	Users         []mts.User            `json:"users"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 // batchUserDisabledRequest 批量设置用户 disabled 状态。
@@ -225,7 +229,11 @@ type databaseRequest struct {
 }
 
 type databasesResponse struct {
-	Databases []string `json:"databases"`
+	Databases     []string              `json:"databases"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type retentionPolicyRequest struct {
@@ -238,13 +246,21 @@ type grpcRetentionPolicyRequest struct {
 }
 
 type retentionPoliciesResponse struct {
-	Policies []mts.RetentionPolicy `json:"policies"`
+	Policies      []mts.RetentionPolicy `json:"policies"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type measurementsResponse struct {
 	// Databases 为正式字段；Measurements 保留兼容历史客户端。
-	Databases    []string `json:"databases,omitempty"`
-	Measurements []string `json:"measurements,omitempty"`
+	Databases     []string              `json:"databases,omitempty"`
+	Measurements  []string              `json:"measurements,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type fieldsResponse struct {
