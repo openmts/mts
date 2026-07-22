@@ -169,10 +169,12 @@ func grpcQueryRowsHandler(service any, ctx context.Context, decode func(any) err
 		}
 		rt := service.(*grpcService).runtime
 		return rt.attachAdminOpToQueryRows(queryRowsResponse{
-			Rows:     rows,
-			Stats:    rt.queryStats(),
-			RowCount: len(rows),
-			Path:     routeDataQueryRows,
+			Rows:        rows,
+			Stats:       rt.queryStats(),
+			RowCount:    len(rows),
+			Path:        routeDataQueryRows,
+			Database:    queryReq.Query.Database,
+			Measurement: queryReq.Query.Measurement,
 		}), nil
 	}
 	return invokeGRPCUnary(ctx, &queryRowsRequest{}, decode, interceptor, grpcFullMethod(grpcMethodQueryRows), handler)
@@ -298,6 +300,8 @@ func grpcQueryColumns(r *serverRuntime, ctx context.Context, req any) (any, erro
 		Stats:       r.queryStats(),
 		SeriesCount: len(columns),
 		Path:        routeDataQueryColumns,
+		Database:    request.Query.Database,
+		Measurement: request.Query.Measurement,
 	}), nil
 }
 
@@ -311,8 +315,10 @@ func grpcQueryWithExplain(r *serverRuntime, ctx context.Context, req any) (any, 
 		return queryExplainResponse{}, err
 	}
 	return r.attachAdminOpToQueryExplain(queryExplainResponse{
-		Result: result,
-		Path:   routeDataQueryExplain,
+		Result:      result,
+		Path:        routeDataQueryExplain,
+		Database:    request.Query.Database,
+		Measurement: request.Query.Measurement,
 	}), nil
 }
 

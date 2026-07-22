@@ -409,3 +409,10 @@ test('write empty and writeResponse mode palette entries', () => {
   assert.ok(all.some((i) => i.id === 'write-result-export-meta' && i.path.includes('/write')))
   assert.ok(all.some((i) => i.id === 'api-spec-write-response-mode' && i.path.includes('writeResponse')))
 })
+
+test('query result scope palette entries', () => {
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'query-result-scope' && i.path.includes('/query')))
+  assert.ok(all.some((i) => i.id === 'api-spec-query-rows-scope' && i.path.includes('queryRowsResponse')))
+})
+

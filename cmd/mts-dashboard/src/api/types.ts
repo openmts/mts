@@ -313,6 +313,8 @@ export interface QueryRowsResponse {
   stats?: QueryStatsData
   row_count?: number
   path?: string
+  database?: string
+  measurement?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -325,6 +327,8 @@ export interface QueryColumnsResponse {
   stats?: QueryStatsData
   series_count?: number
   path?: string
+  database?: string
+  measurement?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -339,6 +343,8 @@ export interface QueryExplainResponse {
     stats?: QueryStatsData
   }
   path?: string
+  database?: string
+  measurement?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -377,6 +383,8 @@ export interface QueryStreamEndMeta {
   path?: string
   format?: string
   record_count?: number
+  database?: string
+  measurement?: string
   stats?: QueryStatsData
   admin_op_busy?: boolean
   op?: string

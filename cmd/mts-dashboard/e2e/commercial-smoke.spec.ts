@@ -340,6 +340,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/api-spec?ns=data&q=row_count#api-spec-filters')
   await expect(page.getByTestId('api-spec-search')).toBeVisible()
   await expect(page.getByTestId('api-spec-search')).toHaveValue('row_count')
+  // P475: queryRowsResponse.database/measurement
+  await page.goto('/api-spec?ns=data&q=queryRowsResponse#api-spec-filters')
+  await expect(page.getByTestId('api-spec-search')).toHaveValue('queryRowsResponse')
   await page.goto('/api-spec?ns=data&q=max_write_points#api-spec-filters')
   await expect(page.getByTestId('api-spec-search')).toHaveValue('max_write_points')
   // P468: stream end + delete 契约字段
@@ -392,6 +395,13 @@ test('commercial browser smoke path', async ({ page }) => {
     // P466: 服务端 path 徽章（有结果时）
     if (await page.getByTestId('query-result-path').count()) {
       await expect(page.getByTestId('query-result-path')).toContainText('/api/v1/data/query/rows')
+    }
+    // P475: 查询 scope 徽章
+    if (await page.getByTestId('query-result-database').count()) {
+      await expect(page.getByTestId('query-result-database')).toBeVisible()
+    }
+    if (await page.getByTestId('query-result-measurement').count()) {
+      await expect(page.getByTestId('query-result-measurement')).toBeVisible()
     }
   }
   // P134: 查询历史面板虚拟列表（有历史时）

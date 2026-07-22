@@ -675,7 +675,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', 'api-spec-auth-session-seed', 'query-result-meta', 'write-accepted-points', 'stream-delete-meta', 'data-contract-endpoint', 'overview-data-contract', 'acceptance-data-contract', 'write-empty-aligned', 'write-response-mode', 'write-result-export-meta', 'api-spec-query-rows-meta', 'api-spec-query-stream-end', 'api-spec-data-delete', 'api-spec-data-contract', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', 'api-spec-auth-session-seed', 'query-result-meta', 'query-result-scope', 'write-accepted-points', 'stream-delete-meta', 'data-contract-endpoint', 'overview-data-contract', 'acceptance-data-contract', 'write-empty-aligned', 'write-response-mode', 'write-result-export-meta', 'api-spec-query-rows-meta', 'api-spec-query-stream-end', 'api-spec-data-delete', 'api-spec-data-contract', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
     adminOnly: true,
   },
   {
@@ -899,6 +899,19 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
       '登录校准字段',
       'api-spec auth session',
     ],
+    adminOnly: true,
+  },
+  {
+    id: 'query-result-scope',
+    path: '/query#query-results',
+    labelKey: 'cmdQueryResultScope',
+    keywords: ['query database', 'measurement badge', '查询 scope', 'queryRowsResponse.database'],
+  },
+  {
+    id: 'api-spec-query-rows-scope',
+    path: '/api-spec?ns=data&q=queryRowsResponse#api-spec-filters',
+    labelKey: 'cmdApiSpecQueryRowsScope',
+    keywords: ['queryRowsResponse', 'database measurement', '查询契约 scope'],
     adminOnly: true,
   },
   {

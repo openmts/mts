@@ -71,6 +71,8 @@ type queryRowsResponse struct {
 	Stats         mts.QueryStats        `json:"stats"`
 	RowCount      int                   `json:"row_count,omitempty"`
 	Path          string                `json:"path,omitempty"`
+	Database      string                `json:"database,omitempty"`
+	Measurement   string                `json:"measurement,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -82,6 +84,8 @@ type queryColumnsResponse struct {
 	Stats         mts.QueryStats        `json:"stats"`
 	SeriesCount   int                   `json:"series_count,omitempty"`
 	Path          string                `json:"path,omitempty"`
+	Database      string                `json:"database,omitempty"`
+	Measurement   string                `json:"measurement,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -91,6 +95,8 @@ type queryColumnsResponse struct {
 type queryExplainResponse struct {
 	Result        mts.QueryResult       `json:"result"`
 	Path          string                `json:"path,omitempty"`
+	Database      string                `json:"database,omitempty"`
+	Measurement   string                `json:"measurement,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
@@ -148,6 +154,8 @@ type streamRecord struct {
 	Path          string                `json:"path,omitempty"`
 	Format        string                `json:"format,omitempty"`
 	RecordCount   int                   `json:"record_count,omitempty"`
+	Database      string                `json:"database,omitempty"`
+	Measurement   string                `json:"measurement,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`

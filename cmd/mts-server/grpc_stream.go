@@ -67,7 +67,7 @@ func streamGRPCRows(r *serverRuntime, stream grpc.ServerStream, query mts.Query)
 	if err := rows.Err(); err != nil {
 		return grpcError(stream.Context(), err)
 	}
-	return stream.SendMsg(r.streamEndRecord(streamTypeRow, count))
+	return stream.SendMsg(r.streamEndRecord(streamTypeRow, count, query.Database, query.Measurement))
 }
 
 func streamGRPCColumns(r *serverRuntime, stream grpc.ServerStream, query mts.Query) error {
@@ -87,5 +87,5 @@ func streamGRPCColumns(r *serverRuntime, stream grpc.ServerStream, query mts.Que
 	if err := columns.Err(); err != nil {
 		return grpcError(stream.Context(), err)
 	}
-	return stream.SendMsg(r.streamEndRecord(streamTypeColumn, count))
+	return stream.SendMsg(r.streamEndRecord(streamTypeColumn, count, query.Database, query.Measurement))
 }

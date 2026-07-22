@@ -2,6 +2,8 @@ import { ref } from 'vue'
 import { formatCaughtError, resolveCaughtErrorCode } from '@/utils/apiError'
 import {
   queryAdminOpPayload,
+  queryResultDatabase,
+  queryResultMeasurement,
   queryResultPath,
   queryResultRowCount,
   queryResultSeriesCount,
@@ -96,7 +98,9 @@ export function useQueryWorkbench() {
     rowCount: number
     seriesCount: number
     mode: QueryMode | ''
-  }>({ path: '', rowCount: 0, seriesCount: 0, mode: '' })
+    database: string
+    measurement: string
+  }>({ path: '', rowCount: 0, seriesCount: 0, mode: '', database: '', measurement: '' })
 
   const loading = ref(false)
   const queryStartedAt = ref<number | null>(null)
@@ -397,7 +401,7 @@ export function useQueryWorkbench() {
     engineStatsSource.value = 'query'
     rawOutput.value = ''
     streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
-    lastQueryMeta.value = { path: '', rowCount: 0, seriesCount: 0, mode: '' }
+    lastQueryMeta.value = { path: '', rowCount: 0, seriesCount: 0, mode: '', database: '', measurement: '' }
   }
 
   async function executeQuery() {
@@ -429,6 +433,8 @@ export function useQueryWorkbench() {
           rowCount: queryResultRowCount(data, (data.rows ?? []).length),
           seriesCount: 0,
           mode: 'rows',
+          database: queryResultDatabase(data, queryForm.value.database),
+          measurement: queryResultMeasurement(data, queryForm.value.measurement),
         }
         actionError.value = ''
         lastQueryErrorCode.value = ''
@@ -454,6 +460,8 @@ export function useQueryWorkbench() {
           rowCount: 0,
           seriesCount: Array.isArray(data.result?.columns) ? data.result!.columns!.length : 0,
           mode: 'explain',
+          database: queryResultDatabase(data, queryForm.value.database),
+          measurement: queryResultMeasurement(data, queryForm.value.measurement),
         }
         actionError.value = ''
         lastQueryErrorCode.value = ''
@@ -481,6 +489,8 @@ export function useQueryWorkbench() {
           rowCount: 0,
           seriesCount: queryResultSeriesCount(data, (data.columns ?? []).length),
           mode: 'columns',
+          database: queryResultDatabase(data, queryForm.value.database),
+          measurement: queryResultMeasurement(data, queryForm.value.measurement),
         }
         actionError.value = ''
         lastQueryErrorCode.value = ''
@@ -545,6 +555,8 @@ export function useQueryWorkbench() {
           rowCount: queryMode.value === 'stream-row' ? endCount : 0,
           seriesCount: queryMode.value === 'stream-column' ? endCount : 0,
           mode: queryMode.value,
+          database: queryResultDatabase(endMeta, queryForm.value.database),
+          measurement: queryResultMeasurement(endMeta, queryForm.value.measurement),
         }
         if (streamError) {
           actionError.value = streamError

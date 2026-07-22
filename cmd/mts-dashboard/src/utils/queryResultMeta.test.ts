@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   queryResultPath,
+  queryResultDatabase,
+  queryResultMeasurement,
   queryResultRowCount,
   queryResultSeriesCount,
   queryAdminOpPayload,
@@ -32,4 +34,11 @@ test('streamEndPath/record_count prefer server', () => {
   assert.equal(streamEndPath({}, '/api/v1/data/query/stream'), '/api/v1/data/query/stream')
   assert.equal(streamEndRecordCount({ record_count: 7 }, 1), 7)
   assert.equal(streamEndRecordCount({}, 3), 3)
+})
+
+test('queryResultDatabase and measurement', () => {
+  assert.equal(queryResultDatabase({ database: 'db1' }, 'x'), 'db1')
+  assert.equal(queryResultDatabase({}, 'fallback'), 'fallback')
+  assert.equal(queryResultMeasurement({ measurement: 'cpu' }, 'x'), 'cpu')
+  assert.equal(queryResultMeasurement({}, 'm'), 'm')
 })

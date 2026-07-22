@@ -2579,3 +2579,16 @@
 | 结果导出 | writeResponse meta | mts.write.result v2 | 机器可读 |
 | 契约 | write_response_mode 描述 | required feature | 运维对照 |
 | 冒烟 | — | path/mode/points | commercial-smoke |
+
+
+## P475（2026-07-23）
+- Server：query rows/columns/explain 与 stream end 补 `database`/`measurement`（HTTP+gRPC）
+- Dashboard：Query 结果区 scope 徽章；queryResultMeta 辅助函数
+- ApiSpec ResponseHint 对齐；e2e 检索 queryRowsResponse；清单 `query-result-scope`
+
+### 前后端对齐（P475）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| query rows/cols/explain | database/measurement | lastQueryMeta + 徽章 | 与 delete/write 对称 |
+| stream end | database/measurement | stream meta | NDJSON/gRPC |
+| 契约检索 | ResponseHint | ApiSpec + 命令面板 | 运维对照 |

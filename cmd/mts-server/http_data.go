@@ -84,11 +84,14 @@ func (r *serverRuntime) handleQueryRows(writer http.ResponseWriter, request *htt
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
+	db, meas := queryScope(req)
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToQueryRows(queryRowsResponse{
-		Rows:     rows,
-		Stats:    r.queryStats(),
-		RowCount: len(rows),
-		Path:     routeDataQueryRows,
+		Rows:        rows,
+		Stats:       r.queryStats(),
+		RowCount:    len(rows),
+		Path:        routeDataQueryRows,
+		Database:    db,
+		Measurement: meas,
 	}))
 }
 
@@ -105,11 +108,14 @@ func (r *serverRuntime) handleQueryColumns(writer http.ResponseWriter, request *
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
+	db, meas := queryScope(req)
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToQueryColumns(queryColumnsResponse{
 		Columns:     columns,
 		Stats:       r.queryStats(),
 		SeriesCount: len(columns),
 		Path:        routeDataQueryColumns,
+		Database:    db,
+		Measurement: meas,
 	}))
 }
 
@@ -126,9 +132,12 @@ func (r *serverRuntime) handleQueryExplain(writer http.ResponseWriter, request *
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
+	db, meas := queryScope(req)
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToQueryExplain(queryExplainResponse{
-		Result: result,
-		Path:   routeDataQueryExplain,
+		Result:      result,
+		Path:        routeDataQueryExplain,
+		Database:    db,
+		Measurement: meas,
 	}))
 }
 
@@ -181,6 +190,7 @@ func (r *serverRuntime) handleQueryStream(writer http.ResponseWriter, request *h
 		writeAPIError(writer, err)
 		return
 	}
+	db, meas := query.Database, query.Measurement
 	switch format {
 	case streamTypeColumn:
 		columns, err := r.engine.QueryColumnIterator(request.Context(), query)
@@ -190,7 +200,7 @@ func (r *serverRuntime) handleQueryStream(writer http.ResponseWriter, request *h
 		}
 		writer.Header().Set("Content-Type", contentTypeNDJSON)
 		writer.WriteHeader(http.StatusOK)
-		r.streamOpenedColumns(json.NewEncoder(writer), columns)
+		r.streamOpenedColumns(json.NewEncoder(writer), columns, db, meas)
 	default:
 		rows, err := r.engine.QueryRowIterator(request.Context(), query)
 		if err != nil {
@@ -199,7 +209,7 @@ func (r *serverRuntime) handleQueryStream(writer http.ResponseWriter, request *h
 		}
 		writer.Header().Set("Content-Type", contentTypeNDJSON)
 		writer.WriteHeader(http.StatusOK)
-		r.streamOpenedRows(json.NewEncoder(writer), rows)
+		r.streamOpenedRows(json.NewEncoder(writer), rows, db, meas)
 	}
 }
 
@@ -218,7 +228,7 @@ func normalizeStreamFormat(format string, mode string) (string, error) {
 	}
 }
 
-func (r *serverRuntime) streamOpenedRows(encoder *json.Encoder, rows mts.RowIterator) {
+func (r *serverRuntime) streamOpenedRows(encoder *json.Encoder, rows mts.RowIterator, database, measurement string) {
 	defer func() { _ = rows.Close() }()
 	count := 0
 	for rows.Next() {
@@ -232,10 +242,10 @@ func (r *serverRuntime) streamOpenedRows(encoder *json.Encoder, rows mts.RowIter
 		_ = encoder.Encode(streamRecord{Type: streamTypeError, Error: errorPayload(err)})
 		return
 	}
-	_ = encoder.Encode(r.streamEndRecord(streamTypeRow, count))
+	_ = encoder.Encode(r.streamEndRecord(streamTypeRow, count, database, measurement))
 }
 
-func (r *serverRuntime) streamOpenedColumns(encoder *json.Encoder, columns mts.ColumnIterator) {
+func (r *serverRuntime) streamOpenedColumns(encoder *json.Encoder, columns mts.ColumnIterator, database, measurement string) {
 	defer func() { _ = columns.Close() }()
 	count := 0
 	for columns.Next() {
@@ -249,7 +259,7 @@ func (r *serverRuntime) streamOpenedColumns(encoder *json.Encoder, columns mts.C
 		_ = encoder.Encode(streamRecord{Type: streamTypeError, Error: errorPayload(err)})
 		return
 	}
-	_ = encoder.Encode(r.streamEndRecord(streamTypeColumn, count))
+	_ = encoder.Encode(r.streamEndRecord(streamTypeColumn, count, database, measurement))
 }
 
 func (r *serverRuntime) decodeAuthorizedQuery(
@@ -361,6 +371,10 @@ func writePrimaryDatabase(req writeRequest) string {
 		return ""
 	}
 	return dbs[0]
+}
+
+func queryScope(req queryRequest) (database, measurement string) {
+	return req.Query.Database, req.Query.Measurement
 }
 
 func errorPayload(err error) *errorResponse {

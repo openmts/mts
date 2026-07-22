@@ -4,6 +4,8 @@ export interface QueryResultMetaInput {
   path?: string
   row_count?: number
   series_count?: number
+  database?: string
+  measurement?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -40,6 +42,22 @@ export function queryResultSeriesCount(
   return Number.isFinite(fb) && fb >= 0 ? Math.trunc(fb) : 0
 }
 
+export function queryResultDatabase(
+  server: QueryResultMetaInput | null | undefined,
+  clientFallback = '',
+): string {
+  const d = String(server?.database || '').trim()
+  return d || String(clientFallback || '').trim()
+}
+
+export function queryResultMeasurement(
+  server: QueryResultMetaInput | null | undefined,
+  clientFallback = '',
+): string {
+  const m = String(server?.measurement || '').trim()
+  return m || String(clientFallback || '').trim()
+}
+
 /** 供 applyGlobalAdminOpStatus / parseAdminOpStatusPayload 使用 */
 export function queryAdminOpPayload(server: QueryResultMetaInput | null | undefined): {
   admin_op_busy?: boolean
@@ -69,6 +87,8 @@ export interface StreamEndMetaInput {
   path?: string
   format?: string
   record_count?: number
+  database?: string
+  measurement?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number

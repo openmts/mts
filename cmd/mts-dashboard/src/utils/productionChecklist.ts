@@ -409,7 +409,19 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/query#query-results',
   },
   {
+    id: 'query-result-scope',
+    severity: 'recommended',
+    title: { zh: '查询响应含 database/measurement', en: 'Query responses include database/measurement' },
+    detail: {
+      zh: 'POST query/rows|columns/explain 与 stream end 返回 database/measurement；Query 结果区徽章展示。',
+      en: 'POST query/rows|columns/explain and stream end return database/measurement; Query result badges surface them.',
+    },
+    automated: true,
+    jump: '/query#query-results',
+  },
+  {
     id: 'data-contract-endpoint',
+
     severity: 'required',
     title: { zh: '数据面契约快照可交接', en: 'Data-plane contract snapshot for handoff' },
     detail: {

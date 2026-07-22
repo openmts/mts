@@ -1354,6 +1354,18 @@ const columnRows = computed(() => {
             data-testid="query-result-path"
             :title="lastQueryMeta.path"
           >{{ lastQueryMeta.path }}</span>
+          <span
+            v-if="lastQueryMeta.database && lastQueryMeta.mode === 'rows'"
+            class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-result-database"
+            :title="lastQueryMeta.database"
+          >{{ lastQueryMeta.database }}</span>
+          <span
+            v-if="lastQueryMeta.measurement && lastQueryMeta.mode === 'rows'"
+            class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-result-measurement"
+            :title="lastQueryMeta.measurement"
+          >{{ lastQueryMeta.measurement }}</span>
           <div class="relative">
             <button
               type="button"
@@ -1436,6 +1448,16 @@ const columnRows = computed(() => {
             data-testid="query-columns-path"
             :title="lastQueryMeta.path"
           >{{ lastQueryMeta.path }}</span>
+          <span
+            v-if="lastQueryMeta.database && lastQueryMeta.mode === 'columns'"
+            class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-result-database"
+          >{{ lastQueryMeta.database }}</span>
+          <span
+            v-if="lastQueryMeta.measurement && lastQueryMeta.mode === 'columns'"
+            class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-result-measurement"
+          >{{ lastQueryMeta.measurement }}</span>
         </div>
       </div>
       <div
@@ -1480,6 +1502,16 @@ const columnRows = computed(() => {
             data-testid="query-raw-path"
             :title="lastQueryMeta.path"
           >{{ lastQueryMeta.path }}</span>
+          <span
+            v-if="lastQueryMeta.database && (lastQueryMeta.mode === 'explain' || lastQueryMeta.mode === 'stream-row' || lastQueryMeta.mode === 'stream-column')"
+            class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-result-database"
+          >{{ lastQueryMeta.database }}</span>
+          <span
+            v-if="lastQueryMeta.measurement && (lastQueryMeta.mode === 'explain' || lastQueryMeta.mode === 'stream-row' || lastQueryMeta.mode === 'stream-column')"
+            class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-result-measurement"
+          >{{ lastQueryMeta.measurement }}</span>
           <span v-if="streamMeta.lines">{{ formatMessage(t('queryStreamLines'), { count: streamMeta.lines }) }}</span>
           <span v-if="streamMeta.previewOnly" class="text-amber-700 dark:text-amber-200">{{ formatMessage(t('queryStreamPreviewOnly'), { limit: streamMeta.previewLimit }) }}</span>
         </div>

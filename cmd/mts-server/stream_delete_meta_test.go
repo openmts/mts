@@ -64,6 +64,9 @@ func TestHTTPQueryStreamEndReportsMetaAndAdminOp(t *testing.T) {
 		if end.Stats == nil {
 			t.Fatalf("format %s missing stats", format)
 		}
+		if end.Database != "default" || end.Measurement != "cpu" {
+			t.Fatalf("format %s scope db=%q meas=%q", format, end.Database, end.Measurement)
+		}
 		_ = end.AdminOpBusy
 	}
 }
