@@ -343,6 +343,7 @@ func (r *serverRuntime) handleDownsampleStatuses(writer http.ResponseWriter, req
 		writeAPIError(writer, err)
 		return
 	}
+	statuses = filterDownsampleStatuses(statuses, request.URL.Query())
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleStatuses(downsampleStatusesResponse{Statuses: statuses}))
 }
 

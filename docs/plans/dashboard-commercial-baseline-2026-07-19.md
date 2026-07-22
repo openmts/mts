@@ -2091,3 +2091,17 @@
 |------|--------|-----------|------|
 | 单策略 status | GET .../status | 详情/深链补齐 | 列表仍用 statuses 批量 |
 | next_run/lag | status 字段 | 状态表+详情 | 运维扫视 |
+
+## P440（2026-07-22）
+- 导出 v3：JSON/CSV 含 functions、group_by_tags
+- 状态健康筛选：error/active/lagging（min_lag_seconds）
+- Server：`GET /admin/downsample/statuses?health=&q=&min_lag_seconds=`
+- 状态行点击打开策略详情
+- e2e：status filter、状态行点开详情
+
+### 前后端对齐（P440）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 状态筛选 | statuses query | health/min_lag + 本地二次过滤 | 可商用扫视 |
+| 导出 functions | policy.functions | export v3 | 交接核对 |
+| 状态→详情 | status/policy GET | 行点击 open detail | 只读 |

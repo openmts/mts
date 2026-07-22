@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { filterAccessMatrixRows, filterByName, filterDownsamplePolicies, filterUsers } from './listFilter.ts'
+import { filterAccessMatrixRows, filterByName, filterDownsamplePolicies, filterDownsampleStatuses, filterUsers } from './listFilter.ts'
 
 test('filterUsers by text and role', () => {
   const users = [
@@ -67,4 +67,18 @@ test('filterAccessMatrixRows text', () => {
   assert.equal(filterAccessMatrixRows(rows, '查询', pick).length, 1)
   assert.equal(filterAccessMatrixRows(rows, '/audit', pick)[0]!.areaKey, 'admin')
   assert.equal(filterAccessMatrixRows(rows, '', pick).length, 2)
+})
+
+
+test('filterDownsampleStatuses by health', () => {
+  const statuses = [
+    { policy_name: 'ok', last_error: '', active: false, lag_seconds: 0 },
+    { policy_name: 'err', last_error: 'boom', active: false, lag_seconds: 3 },
+    { policy_name: 'busy', last_error: '', active: true, lag_seconds: 0 },
+    { policy_name: 'lag', last_error: '', active: false, lag_seconds: 120 },
+  ]
+  assert.equal(filterDownsampleStatuses(statuses, '', 'error').map((s) => s.policy_name).join(','), 'err')
+  assert.equal(filterDownsampleStatuses(statuses, '', 'active').map((s) => s.policy_name).join(','), 'busy')
+  assert.equal(filterDownsampleStatuses(statuses, '', 'lagging', 60).map((s) => s.policy_name).join(','), 'lag')
+  assert.equal(filterDownsampleStatuses(statuses, 'err', '').length, 1)
 })

@@ -84,3 +84,29 @@ export function filterAccessMatrixRows<
     return fields.some((f) => String(f).toLowerCase().includes(q))
   })
 }
+
+export type DownsampleStatusHealthFilter = '' | 'error' | 'active' | 'lagging'
+
+/** 降采样运行状态筛选：错误 / 运行中 / 滞后（>0） */
+export function filterDownsampleStatuses<
+  T extends {
+    policy_name: string
+    last_error?: string
+    active?: boolean
+    lag_seconds?: number
+  },
+>(
+  items: T[],
+  query: string,
+  health: DownsampleStatusHealthFilter = '',
+  minLagSeconds = 0,
+): T[] {
+  let list = filterByTextFields(items, query, (s) => [s.policy_name, s.last_error])
+  if (health === 'error') list = list.filter((s) => Boolean(String(s.last_error || '').trim()))
+  if (health === 'active') list = list.filter((s) => !!s.active)
+  if (health === 'lagging') {
+    const min = Number.isFinite(minLagSeconds) ? Math.max(0, Number(minLagSeconds)) : 0
+    list = list.filter((s) => Number(s.lag_seconds ?? 0) > min)
+  }
+  return list
+}

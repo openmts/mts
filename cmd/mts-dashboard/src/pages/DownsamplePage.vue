@@ -39,7 +39,7 @@ import {
 } from '@/utils/batchProgress'
 import { formatMessage } from '@/utils/formatMessage'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
-import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/listFilter'
+import { filterDownsamplePolicies, filterDownsampleStatuses, type DownsampleEnabledFilter, type DownsampleStatusHealthFilter } from '@/utils/listFilter'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { buildDownsampleExport, downsampleToCSV } from '@/utils/downsampleExport'
@@ -134,11 +134,14 @@ const lastToggleWantEnabled = ref(false)
 const lastRunName = ref('')
 const lastResetName = ref('')
 const policyFilter = ref('')
+const statusHealthFilter = ref<DownsampleStatusHealthFilter>('')
+const statusMinLag = ref(0)
 const enabledFilter = ref<DownsampleEnabledFilter>('')
 const selectedNames = ref<string[]>([])
 const detailPolicyName = ref('')
 const detailMissingNotified = ref('')
 const detailListReady = ref(false)
+const loadDataInFlight = ref(false)
 const batchOpen = ref(false)
 const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
@@ -368,13 +371,28 @@ watch(
   },
 )
 
+watch(statusHealthFilter, () => {
+  if (!isAdmin.value) return
+  void loadData()
+})
+
 
 async function loadData() {
-  if (!isAdmin.value) return
+  if (!isAdmin.value || loadDataInFlight.value) return
+  loadDataInFlight.value = true
+  try {
   loadError.value = ''
+  const statusQS = new URLSearchParams()
+  if (statusHealthFilter.value) statusQS.set('health', statusHealthFilter.value)
+  if (statusHealthFilter.value === 'lagging' && Number(statusMinLag.value) > 0) {
+    statusQS.set('min_lag_seconds', String(Number(statusMinLag.value) || 0))
+  }
+  const statusPath = statusQS.toString()
+    ? `/api/v1/admin/downsample/statuses?${statusQS.toString()}`
+    : '/api/v1/admin/downsample/statuses'
   const results = await Promise.allSettled([
     apiGet<PoliciesResponse>('/api/v1/admin/downsample/policies'),
-    apiGet<StatusesResponse>('/api/v1/admin/downsample/statuses'),
+    apiGet<StatusesResponse>(statusPath),
   ])
   if (results[0].status === 'fulfilled') {
     applyAdminOpStatus(parseAdminOpStatusPayload(results[0].value))
@@ -415,6 +433,9 @@ async function loadData() {
   await fetchDetailPolicyIfNeeded()
   await fetchDetailStatusIfNeeded()
   maybeNotifyDetailMissing()
+  } finally {
+    loadDataInFlight.value = false
+  }
 }
 
 const filteredPolicies = computed(() =>
@@ -423,10 +444,17 @@ const filteredPolicies = computed(() =>
 
 const filteredStatuses = computed(() => {
   const names = new Set(filteredPolicies.value.map((p) => p.name))
-  // 若无策略列表过滤命中但 statuses 仍有数据，按同名过滤；无策略时展示全部 statuses
-  if (!policies.value.length) return statuses.value
-  if (!policyFilter.value && !enabledFilter.value) return statuses.value
-  return statuses.value.filter((s) => names.has(s.policy_name))
+  // 策略筛选命中名；无策略时展示全部 statuses
+  let list = statuses.value
+  if (policies.value.length && (policyFilter.value || enabledFilter.value)) {
+    list = list.filter((s) => names.has(s.policy_name))
+  }
+  return filterDownsampleStatuses(
+    list,
+    '',
+    statusHealthFilter.value,
+    Number(statusMinLag.value) || 0,
+  )
 })
 
 const statusByName = computed(() => {
@@ -1522,6 +1550,21 @@ onBeforeUnmount(() => {
       <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('downsampleStatusPanel') }}</h2>
         <p class="text-[11px] mts-muted">{{ t('downsampleStatusPanelHint') }}</p>
+        <div class="mt-2 flex flex-wrap items-end gap-3" data-testid="downsample-status-filter-bar">
+          <label class="text-xs mts-muted">{{ t('downsampleStatusHealthFilter') }}
+            <select v-model="statusHealthFilter" class="mts-input mt-1" data-testid="downsample-status-health-filter">
+              <option value="">{{ t('downsampleStatusHealthAll') }}</option>
+              <option value="error">{{ t('downsampleStatusHealthError') }}</option>
+              <option value="active">{{ t('downsampleStatusHealthActive') }}</option>
+              <option value="lagging">{{ t('downsampleStatusHealthLagging') }}</option>
+            </select>
+          </label>
+          <label v-if="statusHealthFilter === 'lagging'" class="text-xs mts-muted">{{ t('downsampleStatusMinLag') }}
+            <input v-model.number="statusMinLag" type="number" min="0" step="1" class="mts-input mt-1 w-28" data-testid="downsample-status-min-lag" />
+          </label>
+          <span class="text-xs mts-muted" data-testid="downsample-status-filter-count">{{ filteredStatuses.length }} / {{ statuses.length }}</span>
+          <button type="button" class="mts-btn" data-testid="downsample-status-clear-filters" @click="statusHealthFilter = ''; statusMinLag = 0">{{ t('clearFilters') }}</button>
+        </div>
       </div>
       <div v-if="!filteredStatuses.length" class="p-4">
         <EmptyState compact :title="t('downsampleStatusEmpty')" :description="t('downsampleStatusEmptyDesc')" />
@@ -1548,10 +1591,15 @@ onBeforeUnmount(() => {
           >
             <template #default="{ item: st }">
               <div
-                class="grid h-full grid-cols-[minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6rem,0.9fr)_minmax(4.5rem,0.55fr)_minmax(6rem,0.8fr)] items-center border-b border-slate-50 dark:border-slate-800"
+                role="button"
+                tabindex="0"
+                class="grid h-full cursor-pointer grid-cols-[minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6rem,0.9fr)_minmax(4.5rem,0.55fr)_minmax(6rem,0.8fr)] items-center border-b border-slate-50 hover:bg-slate-50/80 dark:border-slate-800 dark:hover:bg-slate-800/40"
                 :data-testid="`downsample-status-row-${st.policy_name}`"
+                :title="t('downsampleDetailOpen')"
+                @click="openPolicyDetail(st.policy_name)"
+                @keydown.enter.prevent="openPolicyDetail(st.policy_name)"
               >
-                <div class="truncate px-3 font-medium text-slate-700 dark:text-slate-200">{{ st.policy_name }}</div>
+                <div class="truncate px-3 font-medium text-sky-700 dark:text-sky-300">{{ st.policy_name }}</div>
                 <div class="truncate px-3 text-xs mts-muted">{{ formatUnix(st.completed_until_unix) }}</div>
                 <div class="truncate px-3 text-xs mts-muted">{{ formatUnix(st.last_run_unix) }}</div>
                 <div class="truncate px-3 text-xs mts-muted">{{ formatUnix(st.last_success_unix || 0) }}</div>
