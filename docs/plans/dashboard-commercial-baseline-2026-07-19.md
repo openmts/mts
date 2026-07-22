@@ -1428,3 +1428,12 @@
 - Overview：刷新失败若 admin busy，toast 附带打开运维 action，并乐观置 busy
 - adminOpBusy：`buildAdminBusyNotifyOptions` 统一 action 构造
 
+## P333（2026-07-22）
+- Databases/Users/Downsample/Config：写路径错误若 admin busy，toast 附带打开运维并乐观置 busy
+
+## P334（2026-07-22）
+- 通知历史保留 actionLabel/actionPath；面板可跳转；导出 JSON/CSV 含 action 字段
+
+## P335（2026-07-22）
+- ops-status 轮询失败指数退避（5s→30s）；Layout 横幅展示连续失败与下次重试间隔
+

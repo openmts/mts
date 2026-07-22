@@ -31,3 +31,32 @@ test('notifyHistoryToCSV escapes', () => {
   assert.ok(csv.includes('error'))
   assert.ok(csv.includes('"fail, ""x"""') || csv.includes('fail'))
 })
+
+test('export includes action fields', () => {
+  const out = buildNotifyHistoryExport([
+    {
+      id: '1',
+      kind: 'error',
+      message: 'busy',
+      count: 1,
+      at: Date.parse('2026-07-20T00:00:00.000Z'),
+      actionLabel: '打开运维',
+      actionPath: '/operations#ops-status-strip',
+    },
+  ], new Date('2026-07-20T00:00:00.000Z'))
+  assert.equal(out.items[0]?.action_path, '/operations#ops-status-strip')
+  const csv = notifyHistoryToCSV([
+    {
+      id: '1',
+      kind: 'error',
+      message: 'busy',
+      count: 1,
+      at: Date.parse('2026-07-20T00:00:00.000Z'),
+      actionLabel: '打开运维',
+      actionPath: '/operations#ops-status-strip',
+    },
+  ])
+  assert.match(csv, /action_path/)
+  assert.match(csv, /ops-status-strip/)
+})
+

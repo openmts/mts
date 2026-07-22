@@ -50,6 +50,8 @@ const {
   adminOpKind,
   adminOpStartedAtUnix,
   adminOpBusyError,
+  adminOpBusyFailStreak,
+  adminOpPollIntervalMs,
   refreshAdminOpBusy,
 } = useAdminOpBusy()
 
@@ -98,7 +100,11 @@ const adminOpBusyDetail = computed(() => {
 const adminOpBusyPollErrorLabel = computed(() => {
   const err = (adminOpBusyError.value || '').trim()
   if (!err) return ''
-  return formatMessage(t.value('adminOpBusyPollError'), { error: err })
+  const base = formatMessage(t.value('adminOpBusyPollError'), { error: err })
+  const streak = adminOpBusyFailStreak.value || 0
+  if (streak <= 0) return base
+  const sec = Math.max(1, Math.round((adminOpPollIntervalMs.value || 0) / 1000))
+  return `${base} · ${formatMessage(t.value('adminOpBusyPollBackoff'), { n: String(streak), sec: String(sec) })}`
 })
 
 provide('adminOpBusySummary', computed(() => ({

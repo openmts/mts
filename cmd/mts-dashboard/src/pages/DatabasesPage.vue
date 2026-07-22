@@ -17,6 +17,7 @@ import {
   Plus, Trash2, ChevronDown, ChevronRight, Table2, Tag, Clock, Download,
 } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -28,6 +29,7 @@ import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { createActionAbort } from '@/utils/actionAbort'
 import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
 import { filterByName } from '@/utils/listFilter'
@@ -84,6 +86,7 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
+const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const route = useRoute()
 const router = useRouter()
@@ -91,6 +94,16 @@ useHashScroll()
 const SERIES_CAP = 200
 const { t } = useI18n()
 const { success, info, error: notifyError, warn } = useNotify()
+
+function notifyMaybeAdminBusy(message: string, err?: unknown) {
+  if (err && isAdminHeavyBusyError(err)) {
+    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
+    void refreshAdminOpBusy()
+    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
+    return
+  }
+  notifyError(message)
+}
 const {
   exportJob,
   exportBusy,
@@ -398,7 +411,7 @@ function reportActionError(key: DbActionKey, e: unknown, ctx?: { db?: string; me
     ...(ctx?.meas ? { meas: ctx.meas } : {}),
   })
   const msg = actionResult.value?.message || formatCaughtError(e)
-  notifyError(msg)
+  notifyMaybeAdminBusy(msg, e)
 }
 
 async function retryLastDatabaseAction() {

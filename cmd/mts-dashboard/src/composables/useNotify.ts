@@ -74,6 +74,8 @@ export function useNotify() {
         message: saved.message,
         count: saved.count,
         at: saved.updatedAt,
+        actionLabel: saved.action?.label,
+        actionPath: saved.action?.path,
       })
     }
     scheduleDismiss(result.id, ttlMs)

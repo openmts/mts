@@ -11,12 +11,15 @@ import {
 const IDLE_INTERVAL_MS = 15_000
 const BUSY_INTERVAL_MS = 3_000
 const MIN_INTERVAL_MS = 2_000
+const FAIL_BACKOFF_STEPS_MS = [5_000, 10_000, 20_000, 30_000] as const
+const MAX_FAIL_STREAK = FAIL_BACKOFF_STEPS_MS.length
 
 interface SharedAdminOpBusy {
   status: Ref<AdminOpStatus>
   lastCheckedAt: Ref<number | null>
   checking: Ref<boolean>
   error: Ref<string>
+  failStreak: Ref<number>
   pollIntervalMs: Ref<number>
   refresh: () => Promise<void>
   setBusy: (v: boolean, op?: string) => void
@@ -39,6 +42,7 @@ function createShared(idleIntervalMs: number): SharedAdminOpBusy {
   const lastCheckedAt = ref<number | null>(null)
   const checking = ref(false)
   const error = ref('')
+  const failStreak = ref(0)
   const pollIntervalMs = ref(idleMs)
   let timer: ReturnType<typeof setInterval> | null = null
   let subscribers = 0
@@ -46,6 +50,10 @@ function createShared(idleIntervalMs: number): SharedAdminOpBusy {
   const { isAdmin, isAuthenticated } = useAuth()
 
   function desiredInterval(): number {
+    if (failStreak.value > 0) {
+      const idx = Math.min(failStreak.value, MAX_FAIL_STREAK) - 1
+      return FAIL_BACKOFF_STEPS_MS[Math.max(0, idx)]
+    }
     return status.value.busy ? busyMs : idleMs
   }
 
@@ -91,6 +99,8 @@ function createShared(idleIntervalMs: number): SharedAdminOpBusy {
     if (!shouldPollAdminOpBusy(isAuthenticated.value, isAdmin.value)) {
       applyStatus(emptyStatus())
       error.value = ''
+      failStreak.value = 0
+      rearmIfNeeded()
       return
     }
     if (checking.value) return
@@ -106,10 +116,16 @@ function createShared(idleIntervalMs: number): SharedAdminOpBusy {
       applyStatus(parseAdminOpStatusPayload(v))
       lastCheckedAt.value = Date.now()
       error.value = ''
+      if (failStreak.value !== 0) {
+        failStreak.value = 0
+        rearmIfNeeded()
+      }
     } catch (e) {
       if (signal.aborted) return
-      // 轮询失败不闪断 busy；保留上次值
+      // 轮询失败不闪断 busy；保留上次值，并指数退避降低噪音
       error.value = e instanceof Error ? e.message : String(e)
+      failStreak.value = Math.min(MAX_FAIL_STREAK, failStreak.value + 1)
+      rearmIfNeeded()
     } finally {
       if (!signal.aborted) checking.value = false
     }
@@ -145,6 +161,7 @@ function createShared(idleIntervalMs: number): SharedAdminOpBusy {
     lastCheckedAt,
     checking,
     error,
+    failStreak,
     pollIntervalMs,
     refresh,
     setBusy,
@@ -169,6 +186,7 @@ export function useAdminOpBusy(opts?: { intervalMs?: number }): {
   adminOpStartedAtUnix: ComputedRef<number | null>
   adminOpBusyChecking: Ref<boolean>
   adminOpBusyError: Ref<string>
+  adminOpBusyFailStreak: Ref<number>
   adminOpBusyCheckedAt: Ref<number | null>
   adminOpPollIntervalMs: Ref<number>
   refreshAdminOpBusy: () => Promise<void>
@@ -185,6 +203,7 @@ export function useAdminOpBusy(opts?: { intervalMs?: number }): {
     adminOpStartedAtUnix: computed(() => s.status.value.startedAtUnix),
     adminOpBusyChecking: s.checking,
     adminOpBusyError: s.error,
+    adminOpBusyFailStreak: s.failStreak,
     adminOpBusyCheckedAt: s.lastCheckedAt,
     adminOpPollIntervalMs: s.pollIntervalMs,
     refreshAdminOpBusy: s.refresh,

@@ -14,6 +14,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { listDatabases, listFields, listMeasurements } from '@/api/meta'
 import { fieldNames } from '@/utils/seriesMeta'
 import { useAuth } from '@/composables/useAuth'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
@@ -24,6 +25,7 @@ import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
+import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
   applyBatchProgressEvent,
@@ -65,9 +67,20 @@ interface StatusesResponse { statuses: DownsampleStatus[] }
 useHashScroll()
 const route = useRoute()
 const { isAdmin } = useAuth()
+const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t, locale } = useI18n()
 const { success, info, error: notifyError, warn } = useNotify()
+
+function notifyMaybeAdminBusy(message: string, err?: unknown) {
+  if (err && isAdminHeavyBusyError(err)) {
+    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
+    void refreshAdminOpBusy()
+    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
+    return
+  }
+  notifyError(message)
+}
 const {
   exportJob,
   exportBusy,
@@ -449,7 +462,7 @@ function reportDsCatch(key: DsActionKey, e: unknown) {
 function reportActionError(key: DsActionKey, e: unknown) {
   reportRetryError(key, e)
   const msg = actionResult.value?.message || formatCaughtError(e)
-  notifyError(msg)
+  notifyMaybeAdminBusy(msg, e)
 }
 
 async function retryLastDownsampleAction() {

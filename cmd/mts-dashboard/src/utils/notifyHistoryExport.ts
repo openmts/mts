@@ -11,6 +11,8 @@ export interface NotifyHistoryExportPayload {
     count: number
     at: string
     at_ms: number
+    action_label?: string
+    action_path?: string
   }>
 }
 
@@ -21,13 +23,20 @@ export function buildNotifyHistoryExport(
   return {
     generated_at: now.toISOString(),
     count: entries.length,
-    items: entries.map((e) => ({
-      kind: e.kind,
-      message: e.message,
-      count: e.count,
-      at: new Date(e.at).toISOString(),
-      at_ms: e.at,
-    })),
+    items: entries.map((e) => {
+      const item: NotifyHistoryExportPayload['items'][number] = {
+        kind: e.kind,
+        message: e.message,
+        count: e.count,
+        at: new Date(e.at).toISOString(),
+        at_ms: e.at,
+      }
+      if (e.actionPath) {
+        item.action_path = e.actionPath
+        item.action_label = e.actionLabel || e.actionPath
+      }
+      return item
+    }),
   }
 }
 
@@ -45,7 +54,7 @@ function csvEscape(v: string): string {
 }
 
 export function notifyHistoryToCSV(entries: readonly NotifyHistoryEntry[]): string {
-  const header = ['at', 'kind', 'count', 'message']
+  const header = ['at', 'kind', 'count', 'message', 'action_label', 'action_path']
   const lines = [header.join(',')]
   for (const e of entries) {
     lines.push(
@@ -54,6 +63,8 @@ export function notifyHistoryToCSV(entries: readonly NotifyHistoryEntry[]): stri
         csvEscape(e.kind),
         String(e.count),
         csvEscape(e.message),
+        csvEscape(e.actionLabel || ''),
+        csvEscape(e.actionPath || ''),
       ].join(','),
     )
   }

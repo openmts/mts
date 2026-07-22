@@ -106,3 +106,26 @@ test('filterNotifyHistory with time + kind + query', () => {
   assert.equal(got.length, 1)
   assert.equal(got[0]?.id, '2')
 })
+
+test('appendNotifyHistory keeps action and search matches path', () => {
+  const items = appendNotifyHistory([], {
+    kind: 'error',
+    message: 'busy',
+    at: 1,
+    actionLabel: '打开运维',
+    actionPath: '/operations#ops-status-strip',
+  })
+  assert.equal(items[0]?.actionPath, '/operations#ops-status-strip')
+  assert.equal(items[0]?.actionLabel, '打开运维')
+  assert.equal(searchNotifyHistory(items, 'ops-status').length, 1)
+  const s = mem()
+  recordNotifyHistory({
+    kind: 'error',
+    message: 'busy2',
+    actionLabel: 'Open',
+    actionPath: '/operations#ops-status-strip',
+  }, s)
+  const loaded = loadNotifyHistory(s)
+  assert.equal(loaded[0]?.actionPath, '/operations#ops-status-strip')
+})
+

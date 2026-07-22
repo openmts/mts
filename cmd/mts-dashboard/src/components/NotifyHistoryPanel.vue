@@ -27,7 +27,7 @@ import {
   notifyHistoryFormToPrefill,
   type NotifyHistoryPrefill,
 } from '@/utils/notifyHistoryPrefill'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const open = defineModel<boolean>('open', { default: false })
 const props = defineProps<{
@@ -36,6 +36,7 @@ const props = defineProps<{
 }>()
 const route = useRoute()
 const { t, locale } = useI18n()
+const router = useRouter()
 const { history, clearHistory, reloadHistory, success, info, error: notifyError } = useNotify()
 
 const {
@@ -246,6 +247,14 @@ onBeforeUnmount(() => {
   trap?.release()
   trap = null
 })
+
+
+function runHistoryAction(path: string) {
+  const target = String(path || '').trim()
+  if (!target) return
+  open.value = false
+  void router.push(target)
+}
 </script>
 
 <template>
@@ -468,6 +477,14 @@ onBeforeUnmount(() => {
                   <p class="line-clamp-2 break-words text-slate-700 dark:text-slate-200" :title="e.message">
                     {{ e.message }}<span v-if="e.count > 1" class="mts-muted"> (×{{ e.count }})</span>
                   </p>
+                  <button
+                    v-if="e.actionPath"
+                    type="button"
+                    class="mts-focus-ring mt-1 text-[11px] font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                    data-testid="notify-history-action"
+                    :aria-label="e.actionLabel || e.actionPath"
+                    @click.stop="runHistoryAction(e.actionPath)"
+                  >{{ e.actionLabel || e.actionPath }}</button>
                 </div>
               </div>
             </template>

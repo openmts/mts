@@ -11,19 +11,35 @@ export interface NotifyHistoryEntry {
   message: string
   count: number
   at: number
+  /** toast 快捷跳转（可选） */
+  actionLabel?: string
+  actionPath?: string
 }
 
 export function appendNotifyHistory(
   items: readonly NotifyHistoryEntry[],
-  entry: { kind: NotifyKind; message: string; count?: number; at?: number },
+  entry: {
+    kind: NotifyKind
+    message: string
+    count?: number
+    at?: number
+    actionLabel?: string
+    actionPath?: string
+  },
   max = NOTIFY_HISTORY_MAX,
 ): NotifyHistoryEntry[] {
   const message = String(entry.message || '').trim() || '—'
   const kind = entry.kind
   const count = Math.max(1, entry.count ?? 1)
   const at = entry.at ?? Date.now()
-  const id = `${at}-${kind}-${message.slice(0, 24)}`
+  const actionPath = String(entry.actionPath || '').trim()
+  const actionLabel = String(entry.actionLabel || '').trim()
+  const id = `${at}-${kind}-${message.slice(0, 24)}-${actionPath.slice(0, 16)}`
   const next: NotifyHistoryEntry = { id, kind, message, count, at }
+  if (actionPath) {
+    next.actionPath = actionPath
+    next.actionLabel = actionLabel || actionPath
+  }
   return [next, ...items].slice(0, max)
 }
 
@@ -60,7 +76,14 @@ export function saveNotifyHistory(
 }
 
 export function recordNotifyHistory(
-  entry: { kind: NotifyKind; message: string; count?: number; at?: number },
+  entry: {
+    kind: NotifyKind
+    message: string
+    count?: number
+    at?: number
+    actionLabel?: string
+    actionPath?: string
+  },
   storage: Pick<Storage, 'getItem' | 'setItem'> | null = typeof sessionStorage !== 'undefined' ? sessionStorage : null,
 ): NotifyHistoryEntry[] {
   const items = appendNotifyHistory(loadNotifyHistory(storage), entry)
@@ -99,7 +122,14 @@ function normalize(raw: unknown): NotifyHistoryEntry | null {
   if (!Number.isFinite(at)) return null
   const count = typeof o.count === 'number' && o.count > 0 ? Math.floor(o.count) : 1
   const id = String(o.id || `${at}-${kind}`)
-  return { id, kind, message, count, at }
+  const actionPath = String(o.actionPath || '').trim()
+  const actionLabel = String(o.actionLabel || '').trim()
+  const out: NotifyHistoryEntry = { id, kind, message, count, at }
+  if (actionPath) {
+    out.actionPath = actionPath
+    out.actionLabel = actionLabel || actionPath
+  }
+  return out
 }
 
 export type NotifyHistoryKindFilter = 'all' | NotifyKind
@@ -119,7 +149,7 @@ export function searchNotifyHistory(
   const q = String(query || '').trim().toLowerCase()
   if (!q) return items.slice()
   return items.filter((x) => {
-    const hay = `${x.kind} ${x.message}`.toLowerCase()
+    const hay = `${x.kind} ${x.message} ${x.actionLabel || ''} ${x.actionPath || ''}`.toLowerCase()
     return hay.includes(q)
   })
 }
