@@ -102,6 +102,7 @@ import {
   buildReadinessArchive,
   formatReadinessArchiveMarkdown,
 } from '@/utils/readinessArchive'
+import { loadStorageDrillHandoff, formatStorageDrillHandoffLine } from '@/utils/storageDrillHandoff'
 import {
   acceptancePackFilenames,
   buildAcceptancePack,
@@ -261,6 +262,13 @@ const signoffProgress = computed(() => signoffProgressPercent(state.value.signof
 const doctorWarns = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'warn'))
 const doctorOKs = computed(() => (doctor.value?.checks ?? []).filter((c) => c.level === 'ok'))
 const downsampleSummaryView = computed(() => downsampleStatusSummary.value || normalizeDownsampleStatusSummary(null))
+const storageDrillHandoff = computed(() => {
+  const storage = typeof sessionStorage !== 'undefined' ? sessionStorage : null
+  return loadStorageDrillHandoff(storage)
+})
+const storageDrillHandoffLine = computed(() =>
+  formatStorageDrillHandoffLine(storageDrillHandoff.value, uiLocale.value === 'en' ? 'en' : 'zh'),
+)
 const downsampleSummaryToneClass = computed(() => {
   const tone = downsampleStatusSummaryTone(downsampleSummaryView.value)
   if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
@@ -646,6 +654,7 @@ async function downloadArchive() {
     locale: uiLocale.value,
     downsample_status_summary: downsampleStatusSummary.value,
     api_paths: readinessApiPaths(),
+    storage_drill: storageDrillHandoff.value,
     ...archiveSessionFields(),
   })
   const names = archiveFilenames()
@@ -705,6 +714,7 @@ async function downloadAcceptancePack() {
     locale: uiLocale.value,
     downsample_status_summary: downsampleStatusSummary.value,
     api_paths: readinessApiPaths(),
+    storage_drill: storageDrillHandoff.value,
     ...archiveSessionFields(),
   })
   const pack = buildAcceptancePack({
@@ -1018,6 +1028,17 @@ watch(
         {{ t('readinessImportMerge') }}
       </label>
       <span>{{ t('readinessArchiveHint') }}</span>
+    </div>
+
+    <div
+      class="mts-card flex flex-wrap items-center justify-between gap-2 p-3 text-xs"
+      data-testid="readiness-storage-drill-handoff"
+    >
+      <div>
+        <p class="font-semibold text-slate-800 dark:text-slate-100">{{ t('readinessStorageDrillTitle') }}</p>
+        <p class="mts-muted" data-testid="readiness-storage-drill-line">{{ storageDrillHandoffLine }}</p>
+      </div>
+      <router-link class="mts-btn text-xs" to="/storage#backup-drill" data-testid="readiness-storage-drill-jump">{{ t('readinessStorageDrillJump') }}</router-link>
     </div>
 
     <div id="export-preflight" class="mts-card p-4 scroll-mt-20" data-testid="readiness-export-preflight">

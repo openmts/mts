@@ -433,6 +433,7 @@ test('query result scope palette entries', () => {
   assert.ok(all.some((i) => i.id === 'storage-export-write-path' && i.path.includes('/storage')))
   assert.ok(all.some((i) => i.id === 'config-effective-summary' && i.path.includes('/config')))
   assert.ok(all.some((i) => i.id === 'metrics-health-signals' && i.path.includes('/observability/metrics')))
+  assert.ok(all.some((i) => i.id === 'readiness-storage-drill-handoff' && i.path.includes('/ops/readiness')))
   assert.ok(all.some((i) => i.id === 'api-spec-query-rows-scope' && i.path.includes('queryRowsResponse')))
 })
 

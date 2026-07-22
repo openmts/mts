@@ -695,6 +695,14 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('metrics-downsample-summary')).toBeVisible()
   }
 
+  // P494: Readiness 存储演练交接面板
+  await page.goto('/ops/readiness')
+  await expect(page.getByTestId('readiness-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('readiness-storage-drill-handoff').count()) {
+    await expect(page.getByTestId('readiness-storage-drill-handoff')).toBeVisible()
+    await expect(page.getByTestId('readiness-storage-drill-jump')).toBeVisible()
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

@@ -2820,3 +2820,14 @@
 | /metrics gauges | text exposition | metrics-health-signals | 纯解析扫视 |
 | ops-status / readiness | 既有 path | jump-ops / jump-readiness | 深链 |
 | downsample summary | statuses summary_only | metrics-downsample-summary | 独立展示 |
+
+## P494（2026-07-23）
+- Storage：validate/snapshot/data-snapshot/restore-drill/export 成功写入 sessionStorage 演练交接
+- Readiness：归档/验收包含 `storage_drill`；页面展示会话交接摘要 + 跳转存储
+- 清单：`readiness-storage-drill-handoff`
+
+### 前后端对齐（P494）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| storage 演练结果 | 既有 path/结果字段 | sessionStorage handoff | 会话级 |
+| readiness archive | 无新 API | storage_drill 字段 | 交接 JSON/MD |

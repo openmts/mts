@@ -66,6 +66,7 @@ test('production checklist has required commercial gates', () => {
     'storage-export-write-path',
     'config-effective-summary',
     'metrics-health-signals',
+    'readiness-storage-drill-handoff',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -472,4 +473,12 @@ test('metrics-health-signals is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('/observability/metrics'))
+})
+
+test('readiness-storage-drill-handoff is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'readiness-storage-drill-handoff')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('/ops/readiness'))
 })

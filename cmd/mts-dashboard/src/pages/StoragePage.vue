@@ -39,6 +39,7 @@ import {
 import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
 import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
 import { formatStorageBytes, normalizeDataSnapshotResult, normalizeRestoreDrillResult, normalizeSnapshotResult, normalizeValidateResult } from '@/utils/storageResultView'
+import { recordStorageDrillEvent } from '@/utils/storageDrillHandoff'
 import { completedIds, loadReadinessState, setReadinessFlag } from '@/utils/readinessState'
 import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList } from 'lucide-vue-next'
 
@@ -188,6 +189,23 @@ const selectedDataSnapshotPath = ref('')
 const snapshots = ref<SnapshotInfo[]>([])
 const exportData = ref<ExportData | null>(null)
 const exportSummary = computed(() => summarizeStorageExport(exportData.value, exportPath.value || '/api/v1/admin/storage/export'))
+function rememberStorageDrill(
+  kind: 'validate' | 'snapshot' | 'data-snapshot' | 'restore-drill' | 'export',
+  path: string,
+  ok: boolean,
+  summary: string,
+  details?: Record<string, string | number | boolean | null>,
+) {
+  const storage = typeof sessionStorage !== 'undefined' ? sessionStorage : null
+  recordStorageDrillEvent(storage, {
+    kind,
+    at: new Date().toISOString(),
+    path,
+    ok,
+    summary,
+    details,
+  })
+}
 type StorageActionKey = 'validate' | 'snapshot' | 'data-snapshot' | 'restore-side' | 'export-config' | 'delete'
 const {
   lastFailedAction,
@@ -422,6 +440,7 @@ async function doValidate() {
       : formatMessage(t.value('storageValidateDone'), { path })
     setActionResult(makeActionResult(validateResult.value.ok ? 'ok' : 'warn', msg))
     success(msg)
+    rememberStorageDrill('validate', path, !!validateResult.value.ok, msg)
   } catch (e) {
     reportStorageCatch('validate', e)
   } finally { endStorageAction() }
@@ -438,6 +457,7 @@ async function doSnapshot() {
     const msg = `${t.value('createSnapshot')}：${snapshotResult.value.path || 'ok'}`
     setActionOk(msg)
     success(t.value('createSnapshot'))
+    rememberStorageDrill('snapshot', String(snapshotResult.value.path || '/api/v1/admin/storage/snapshot'), true, msg)
     await loadSnapshots()
   } catch (e) {
     reportStorageCatch('snapshot', e)
@@ -456,6 +476,13 @@ async function doDataSnapshot() {
     const msg = formatMessage(t.value('storageDataSnapshotMsg'), { path: dataSnapshotResult.value.path || 'ok', files: dataSnapshotResult.value.files ?? 0 })
     setActionOk(msg)
     success(t.value('storageDataSnapshotOk'))
+    rememberStorageDrill(
+      'data-snapshot',
+      String(dataSnapshotResult.value.path || '/api/v1/admin/storage/data-snapshot'),
+      true,
+      msg,
+      { files: dataSnapshotResult.value.files ?? 0, bytes: dataSnapshotResult.value.bytes ?? 0 },
+    )
     await loadDataSnapshots()
   } catch (e) {
     reportStorageCatch('data-snapshot', e)
@@ -486,6 +513,18 @@ async function doRestoreDrill() {
     setActionResult(makeActionResult(ok ? 'ok' : 'warn', msg))
     if (ok) success(t.value('storageRestoreOk'))
     else notifyError(msg)
+    rememberStorageDrill(
+      'restore-drill',
+      restoreDrillPath.value || String(restoreDrillResult.value.path || '/api/v1/admin/storage/restore-drill'),
+      ok,
+      msg,
+      {
+        files: restoreDrillResult.value.files ?? 0,
+        bytes: restoreDrillResult.value.bytes ?? 0,
+        check_issues: restoreDrillResult.value.check_issues ?? 0,
+        check_fatals: restoreDrillResult.value.check_fatals ?? 0,
+      },
+    )
     await loadDataSnapshots()
   } catch (e) {
     reportStorageCatch('restore-side', e)
@@ -509,6 +548,7 @@ async function doExport() {
     drillDone.value = { ...drillDone.value, 'export-config': true }
     setActionOk(t.value('storageConfigExported'))
     success(t.value('storageConfigExportToast'))
+    rememberStorageDrill('export', exportPath.value, true, t.value('storageConfigExported'))
   } catch (e) {
     reportStorageCatch('export-config', e)
   } finally { endStorageAction() }

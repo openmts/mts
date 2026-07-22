@@ -702,6 +702,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'readiness-storage-drill-handoff',
+    severity: 'recommended',
+    title: { zh: '就绪归档含存储演练会话交接', en: 'Readiness archive includes storage drill session handoff' },
+    detail: {
+      zh: 'Storage 演练结果写入 sessionStorage；Readiness 归档/验收包含 storage_drill 事件摘要并可跳转存储页。',
+      en: 'Storage drill results persist in sessionStorage; Readiness archive/acceptance pack includes storage_drill events with Storage deep link.',
+    },
+    automated: true,
+    jump: '/ops/readiness',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

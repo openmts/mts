@@ -28,6 +28,8 @@ import {
   type CommercialHandoffSummary,
 } from './commercialHandoffSummary.ts'
 import type { DataContractInput } from './dataContractView.ts'
+import type { StorageDrillHandoff } from './storageDrillHandoff.ts'
+import { formatStorageDrillHandoffLine } from './storageDrillHandoff.ts'
 
 export interface DoctorArchiveSummary {
   loaded: boolean
@@ -70,6 +72,8 @@ export interface ReadinessArchiveInput {
   data_contract?: DataContractInput | null
   /** 可选：服务端 API path 元数据（doctor/version/ops-status 等） */
   api_paths?: ReadinessArchiveApiPaths | null
+  /** 可选：本会话 Storage 演练交接（validate/export/restore 等） */
+  storage_drill?: StorageDrillHandoff | null
 }
 
 export interface ReadinessArchivePayload {
@@ -113,6 +117,8 @@ export interface ReadinessArchivePayload {
   commercial_handoff?: CommercialHandoffSummary | null
   /** 管理面 API path 元数据（机器可读） */
   api_paths?: ReadinessArchiveApiPaths
+  /** 本会话存储演练事件（可选） */
+  storage_drill?: StorageDrillHandoff | null
 }
 
 const copy = {
@@ -264,6 +270,7 @@ export function buildReadinessArchive(input: ReadinessArchiveInput): ReadinessAr
       downsample_statuses:
         input.api_paths?.downsample_statuses || '/api/v1/admin/downsample/statuses',
     },
+    storage_drill: input.storage_drill ?? null,
   }
 }
 
@@ -325,6 +332,13 @@ export function formatReadinessArchiveMarkdown(a: ReadinessArchivePayload): stri
   if (a.downsample_status_summary) {
     lines.push('', '## Downsample status summary', '')
     lines.push(`- ${formatDownsampleStatusSummaryLine(a.downsample_status_summary)}`)
+  }
+  if (a.storage_drill && a.storage_drill.events?.length) {
+    lines.push('', '## Storage drill (session)', '')
+    lines.push(`- ${formatStorageDrillHandoffLine(a.storage_drill, locale === 'en' ? 'en' : 'zh')}`)
+    for (const e of a.storage_drill.events.slice(0, 8)) {
+      lines.push(`- [${e.ok ? 'ok' : 'fail'}] ${e.kind} path=${e.path} ${e.summary}`)
+    }
   }
   if (a.commercial_handoff) {
     lines.push('', '## Commercial handoff', '')

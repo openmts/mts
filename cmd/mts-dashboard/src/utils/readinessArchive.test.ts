@@ -254,3 +254,34 @@ test('buildReadinessArchive includes api_paths and doctor path', () => {
   assert.match(md, /API paths/)
   assert.match(md, /doctor: \/api\/v1\/admin\/doctor/)
 })
+
+test('buildReadinessArchive includes storage_drill events', () => {
+  const a = buildReadinessArchive({
+    operator: 'op',
+    note: '',
+    state: {
+      production: {},
+      edgeHttps: {},
+      backupSchedule: {},
+      deployKit: {},
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    },
+    score: { checklist: 0, edgeHttps: 0, backupSchedule: 0, doctor: 0, total: 0, reasons: [] },
+    doctor: { loaded: false },
+    storage_drill: {
+      version: 1,
+      updated_at: '2026-07-23T00:00:00Z',
+      events: [{
+        kind: 'validate',
+        at: '2026-07-23T00:00:00Z',
+        path: '/api/v1/admin/storage/validate',
+        ok: true,
+        summary: 'healthy',
+      }],
+    },
+  })
+  assert.equal(a.storage_drill?.events?.[0]?.kind, 'validate')
+  const md = formatReadinessArchiveMarkdown(a)
+  assert.match(md, /Storage drill/)
+  assert.match(md, /validate/)
+})
