@@ -533,6 +533,15 @@ func TestHTTPP0P1DataMetadataUsersAdminAndDownsample(t *testing.T) {
 		t.Fatal("ops-status admin_op_busy want false when idle")
 	}
 
+	postJSONWithHeaders(t, server.URL+"/api/v1/admin/flush", emptyRequest{}, adminHeaders, http.StatusOK, &okResponse{})
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/ops-status", adminHeaders, http.StatusOK, &opsStatusResp)
+	if opsStatusResp.AdminOpBusy {
+		t.Fatal("ops-status after flush want not busy")
+	}
+	if opsStatusResp.Last == nil || opsStatusResp.Last.Op != "flush" || !opsStatusResp.Last.OK {
+		t.Fatalf("ops-status last after flush = %+v", opsStatusResp.Last)
+	}
+
 	var statsResp queryStatsResponse
 	getJSONWithHeaders(t, server.URL+"/api/v1/data/query/stats", dataHeaders, http.StatusOK, &statsResp)
 	if statsResp.Stats.SamplesReturned == 0 {

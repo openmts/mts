@@ -28,6 +28,8 @@ type serverRuntime struct {
 	maintenanceBusy        atomic.Bool
 	maintenanceOp          atomic.Value // string
 	maintenanceStartedUnix atomic.Int64
+	lastAdminHeavyMu       sync.Mutex
+	lastAdminHeavy         *adminHeavyLastResult
 	engine                 *mts.Engine
 	httpServer             *http.Server
 	grpcServer             *grpc.Server
@@ -334,9 +336,48 @@ func (r *serverRuntime) tryBeginAdminHeavy(op string) error {
 }
 
 func (r *serverRuntime) endAdminHeavy() {
+	r.finishAdminHeavy(nil)
+}
+
+// finishAdminHeavy 释放互斥并记录最近一次结果；err 非 nil 时写入 last.error。
+func (r *serverRuntime) finishAdminHeavy(err error) {
+	op := ""
+	if v := r.maintenanceOp.Load(); v != nil {
+		op, _ = v.(string)
+	}
+	started := r.maintenanceStartedUnix.Load()
+	finished := time.Now().Unix()
+	durationMs := int64(0)
+	if started > 0 && finished >= started {
+		durationMs = (finished - started) * 1000
+	}
+	result := &adminHeavyLastResult{
+		Op:             op,
+		OK:             err == nil,
+		StartedAtUnix:  started,
+		FinishedAtUnix: finished,
+		DurationMs:     durationMs,
+	}
+	if err != nil {
+		result.Error = err.Error()
+		result.OK = false
+	}
+	r.lastAdminHeavyMu.Lock()
+	r.lastAdminHeavy = result
+	r.lastAdminHeavyMu.Unlock()
 	r.maintenanceBusy.Store(false)
 	r.maintenanceOp.Store("")
 	r.maintenanceStartedUnix.Store(0)
+}
+
+func (r *serverRuntime) lastAdminHeavySnapshot() *adminHeavyLastResult {
+	r.lastAdminHeavyMu.Lock()
+	defer r.lastAdminHeavyMu.Unlock()
+	if r.lastAdminHeavy == nil {
+		return nil
+	}
+	cp := *r.lastAdminHeavy
+	return &cp
 }
 
 // 兼容旧名（运维路径）。
@@ -344,37 +385,40 @@ func (r *serverRuntime) tryBeginMaintenance() error { return r.tryBeginAdminHeav
 
 func (r *serverRuntime) endMaintenance() { r.endAdminHeavy() }
 
-func (r *serverRuntime) flush(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
+func (r *serverRuntime) flush(ctx context.Context) (err error) {
+	if err = ctx.Err(); err != nil {
 		return err
 	}
-	if err := r.tryBeginAdminHeavy("flush"); err != nil {
+	if err = r.tryBeginAdminHeavy("flush"); err != nil {
 		return err
 	}
-	defer r.endAdminHeavy()
-	return r.engine.Flush(ctx)
+	defer func() { r.finishAdminHeavy(err) }()
+	err = r.engine.Flush(ctx)
+	return err
 }
 
-func (r *serverRuntime) compact(ctx context.Context) (mts.CompactionResult, error) {
-	if err := ctx.Err(); err != nil {
+func (r *serverRuntime) compact(ctx context.Context) (result mts.CompactionResult, err error) {
+	if err = ctx.Err(); err != nil {
 		return mts.CompactionResult{}, err
 	}
-	if err := r.tryBeginAdminHeavy("compact"); err != nil {
+	if err = r.tryBeginAdminHeavy("compact"); err != nil {
 		return mts.CompactionResult{}, err
 	}
-	defer r.endAdminHeavy()
-	return r.engine.CompactWithResult(ctx)
+	defer func() { r.finishAdminHeavy(err) }()
+	result, err = r.engine.CompactWithResult(ctx)
+	return result, err
 }
 
-func (r *serverRuntime) applyRetention(ctx context.Context, req retentionApplyRequest) error {
-	if err := ctx.Err(); err != nil {
+func (r *serverRuntime) applyRetention(ctx context.Context, req retentionApplyRequest) (err error) {
+	if err = ctx.Err(); err != nil {
 		return err
 	}
-	if err := r.tryBeginAdminHeavy("retention"); err != nil {
+	if err = r.tryBeginAdminHeavy("retention"); err != nil {
 		return err
 	}
-	defer r.endAdminHeavy()
-	return r.engine.ApplyRetention(ctx, unixNanosOrNow(req.NowUnixNanos))
+	defer func() { r.finishAdminHeavy(err) }()
+	err = r.engine.ApplyRetention(ctx, unixNanosOrNow(req.NowUnixNanos))
+	return err
 }
 
 func (r *serverRuntime) maintenanceErrors(ctx context.Context) []string {
@@ -405,12 +449,18 @@ func (r *serverRuntime) maintenanceStatsPayload() maintenanceStatsResponse {
 		AdminOpBusy:   busy,
 		Op:            op,
 		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
 	}
 }
 
 func (r *serverRuntime) opsStatusPayload() opsStatusResponse {
 	busy, op, started := r.adminHeavyState()
-	return opsStatusResponse{AdminOpBusy: busy, Op: op, StartedAtUnix: started}
+	return opsStatusResponse{
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
+	}
 }
 
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {

@@ -8,6 +8,7 @@ import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
@@ -30,6 +31,7 @@ useHashScroll()
 const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
 const { success, info, error: notifyError } = useNotify()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 const {
   exportJob,
   exportBusy,
@@ -56,10 +58,13 @@ async function loadVersion() {
     loadError.value = ''
   } catch (e) {
     const msg = formatCaughtError(e)
-    if (server.value) loadError.value = msg
-    else {
+    if (server.value) {
+      loadError.value = msg
+      notifyMaybeAdminBusy(msg, e, { treatLocalBusy: true })
+    } else {
       server.value = null
       loadError.value = msg
+      notifyMaybeAdminBusy(msg, e)
     }
   } finally {
     loading.value = false
@@ -86,7 +91,11 @@ async function exportAbout() {
   })
   if (outcome === 'done') success(t.value('aboutExported'))
   else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
-  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
+  else if (outcome === 'error') {
+    const m = exportJob.value.error || t.value('failed')
+    notifyError(m)
+    notifyMaybeAdminBusy(m, { message: m }, { treatLocalBusy: true })
+  }
 }
 
 async function copyAbout() {

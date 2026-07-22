@@ -20,6 +20,8 @@ import {
   parseAdminHeavyBusyOp,
   parseAdminOpBusyPayload,
   parseAdminOpStatusPayload,
+  parseAdminHeavyLast,
+  formatAdminHeavyLastSummary,
   shouldPollAdminOpBusy,
 } from './adminOpBusy.ts'
 
@@ -40,10 +42,45 @@ test('parseAdminOpStatusPayload idle and busy', () => {
     busy: false,
     op: '',
     startedAtUnix: null,
+    last: null,
   })
   assert.deepEqual(
     parseAdminOpStatusPayload({ admin_op_busy: true, op: 'compact', started_at_unix: 1700000000 }),
-    { busy: true, op: 'compact', startedAtUnix: 1700000000 },
+    { busy: true, op: 'compact', startedAtUnix: 1700000000, last: null },
+  )
+  const withLast = parseAdminOpStatusPayload({
+    admin_op_busy: false,
+    last: {
+      op: 'flush',
+      ok: true,
+      finished_at_unix: 100,
+      started_at_unix: 90,
+      duration_ms: 10000,
+    },
+  })
+  assert.equal(withLast.busy, false)
+  assert.equal(withLast.last?.op, 'flush')
+  assert.equal(withLast.last?.ok, true)
+  assert.equal(withLast.last?.durationMs, 10000)
+})
+
+test('parseAdminHeavyLast and formatAdminHeavyLastSummary', () => {
+  assert.equal(parseAdminHeavyLast(null), null)
+  const last = parseAdminHeavyLast({
+    op: 'compact',
+    ok: false,
+    error: 'disk full',
+    duration_ms: 2500,
+  })
+  assert.equal(last?.ok, false)
+  assert.match(formatAdminHeavyLastSummary(last, 'Compact'), /fail/)
+  assert.match(formatAdminHeavyLastSummary(last, 'Compact'), /disk full/)
+  assert.match(
+    formatAdminHeavyLastSummary(
+      { op: 'flush', ok: true, error: '', startedAtUnix: 1, finishedAtUnix: 2, durationMs: 3000 },
+      'Flush',
+    ),
+    /ok/,
   )
 })
 

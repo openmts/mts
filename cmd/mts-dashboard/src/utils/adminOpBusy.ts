@@ -1,6 +1,14 @@
 /** admin_op_busy 轮询辅助（纯函数） */
 
 import { formatElapsedSeconds } from './inFlightStatus.ts'
+import {
+  type AdminHeavyLast,
+  formatAdminHeavyLastSummary,
+  parseAdminHeavyLast,
+} from './adminOpLast.ts'
+
+export type { AdminHeavyLast } from './adminOpLast.ts'
+export { formatAdminHeavyLastSummary, parseAdminHeavyLast } from './adminOpLast.ts'
 
 export type AdminOpKind =
   | 'flush'
@@ -18,6 +26,7 @@ export interface AdminOpStatus {
   busy: boolean
   op: string
   startedAtUnix: number | null
+  last: AdminHeavyLast | null
 }
 
 export function shouldPollAdminOpBusy(
@@ -32,18 +41,26 @@ export function parseAdminOpBusyPayload(payload: { admin_op_busy?: unknown } | n
 }
 
 export function parseAdminOpStatusPayload(
-  payload: { admin_op_busy?: unknown; op?: unknown; started_at_unix?: unknown } | null | undefined,
+  payload: {
+    admin_op_busy?: unknown
+    op?: unknown
+    started_at_unix?: unknown
+    last?: unknown
+  } | null | undefined,
 ): AdminOpStatus {
   const busy = Boolean(payload?.admin_op_busy)
   const op = typeof payload?.op === 'string' ? payload.op.trim() : ''
   const raw = payload?.started_at_unix
   const started =
     typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : null
+  const last = parseAdminHeavyLast(payload?.last)
   if (!busy) {
-    return { busy: false, op: '', startedAtUnix: null }
+    return { busy: false, op: '', startedAtUnix: null, last }
   }
-  return { busy: true, op, startedAtUnix: started }
+  return { busy: true, op, startedAtUnix: started, last }
 }
+
+
 
 /** i18n key for known ops; unknown falls back to generic banner body */
 export function adminOpKindLabelKey(op: string | null | undefined): string {

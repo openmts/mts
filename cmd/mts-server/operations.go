@@ -18,28 +18,29 @@ func (r *serverRuntime) storageValidate() storageValidateResponse {
 	return storageValidateResponse{OK: r.health().Healthy, DataDir: cfg.DataDir, Health: r.health()}
 }
 
-func (r *serverRuntime) storageSnapshot(ctx context.Context) (storageSnapshotResponse, error) {
-	if err := ctx.Err(); err != nil {
+func (r *serverRuntime) storageSnapshot(ctx context.Context) (resp storageSnapshotResponse, err error) {
+	if err = ctx.Err(); err != nil {
 		return storageSnapshotResponse{}, err
 	}
-	if err := r.tryBeginAdminHeavy("config_snapshot"); err != nil {
+	if err = r.tryBeginAdminHeavy("config_snapshot"); err != nil {
 		return storageSnapshotResponse{}, err
 	}
-	defer r.endAdminHeavy()
+	defer func() { r.finishAdminHeavy(err) }()
 	cfg := r.currentConfig()
 	dir := cfg.Backup.Dir
 	if dir == "" {
 		dir = filepath.Join(cfg.DataDir, "backups")
 	}
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err = os.MkdirAll(dir, 0700); err != nil {
 		return storageSnapshotResponse{}, err
 	}
 	path := filepath.Join(dir, fmt.Sprintf("snapshot-%d.json", time.Now().UTC().UnixNano()))
-	data, err := json.MarshalIndent(r.storageExport(ctx), "", "  ")
+	var data []byte
+	data, err = json.MarshalIndent(r.storageExport(ctx), "", "  ")
 	if err != nil {
 		return storageSnapshotResponse{}, err
 	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err = os.WriteFile(path, data, 0600); err != nil {
 		return storageSnapshotResponse{}, err
 	}
 	return storageSnapshotResponse{OK: true, Path: path}, nil

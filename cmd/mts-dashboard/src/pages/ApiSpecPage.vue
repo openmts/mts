@@ -7,6 +7,7 @@ import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError } from '@/utils/apiError'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
@@ -41,6 +42,7 @@ const { isAdmin } = useAuth()
 const route = useRoute()
 useHashScroll()
 const { success, info, error: notifyError, warn } = useNotify()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 const {
   exportJob,
   exportBusy,
@@ -76,9 +78,11 @@ async function load() {
     const msg = formatCaughtError(e)
     if (namespaces.value.length) {
       loadError.value = msg
+      notifyMaybeAdminBusy(msg, e, { treatLocalBusy: true })
     } else {
       loadError.value = msg
       notifyError(msg)
+      notifyMaybeAdminBusy(msg, e)
     }
   } finally {
     loading.value = false

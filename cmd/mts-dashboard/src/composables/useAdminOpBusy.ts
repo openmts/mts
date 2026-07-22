@@ -32,7 +32,7 @@ interface SharedAdminOpBusy {
 let shared: SharedAdminOpBusy | null = null
 
 function emptyStatus(): AdminOpStatus {
-  return { busy: false, op: '', startedAtUnix: null }
+  return { busy: false, op: '', startedAtUnix: null, last: null }
 }
 
 function createShared(idleIntervalMs: number): SharedAdminOpBusy {
@@ -76,23 +76,26 @@ function createShared(idleIntervalMs: number): SharedAdminOpBusy {
   }
 
   function applyStatus(s: AdminOpStatus) {
+    const last = s.last !== undefined ? s.last : status.value.last
     status.value = {
       busy: Boolean(s.busy),
       op: s.busy ? (s.op || '') : '',
       startedAtUnix: s.busy ? s.startedAtUnix : null,
+      last: last ?? null,
     }
     rearmIfNeeded()
   }
 
   function setBusy(v: boolean, op?: string) {
     if (!v) {
-      applyStatus(emptyStatus())
+      applyStatus({ ...emptyStatus(), last: status.value.last })
       return
     }
     applyStatus({
       busy: true,
       op: (op || status.value.op || '').trim(),
       startedAtUnix: status.value.startedAtUnix ?? Math.floor(Date.now() / 1000),
+      last: status.value.last,
     })
   }
 
@@ -184,6 +187,7 @@ export function useAdminOpBusy(opts?: { intervalMs?: number }): {
   adminOpBusy: ComputedRef<boolean>
   adminOpKind: ComputedRef<string>
   adminOpStartedAtUnix: ComputedRef<number | null>
+  adminOpLast: ComputedRef<import('@/utils/adminOpBusy').AdminHeavyLast | null>
   adminOpBusyChecking: Ref<boolean>
   adminOpBusyError: Ref<string>
   adminOpBusyFailStreak: Ref<number>
@@ -201,6 +205,7 @@ export function useAdminOpBusy(opts?: { intervalMs?: number }): {
     adminOpBusy: computed(() => s.status.value.busy),
     adminOpKind: computed(() => s.status.value.op),
     adminOpStartedAtUnix: computed(() => s.status.value.startedAtUnix),
+    adminOpLast: computed(() => s.status.value.last),
     adminOpBusyChecking: s.checking,
     adminOpBusyError: s.error,
     adminOpBusyFailStreak: s.failStreak,

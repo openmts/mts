@@ -114,12 +114,23 @@ export interface MaintenanceStats {
   maintenance_error_count: number
 }
 
+/** 最近一次管理重操作结果（ops-status / maintenance stats） */
+export interface AdminHeavyLastResult {
+  op?: string
+  ok?: boolean
+  error?: string
+  started_at_unix?: number
+  finished_at_unix?: number
+  duration_ms?: number
+}
+
 /** GET /api/v1/admin/stats/maintenance 响应；admin_op_busy 表示服务端管理重操作（运维/快照/恢复）互斥占用中 */
 export interface MaintenanceStatsResponse {
   stats: MaintenanceStats
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
+  last?: AdminHeavyLastResult | null
 }
 
 /** GET /api/v1/admin/ops-status 轻量互斥状态，供 Dashboard 高频轮询 */
@@ -127,6 +138,7 @@ export interface OpsStatusResponse {
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
+  last?: AdminHeavyLastResult | null
 }
 
 export interface StorageMemorySnapshot {

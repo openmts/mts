@@ -37,7 +37,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, adminHeavyBusyOpFromError, formatAdminHeavyLastSummary, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -66,6 +66,7 @@ const {
   adminOpBusy,
   adminOpKind,
   adminOpBusyChecking,
+  adminOpLast,
   setAdminOpBusy,
   refreshAdminOpBusy,
   applyAdminOpStatus,
@@ -94,6 +95,15 @@ const adminOpBusyChipLabel = computed(() => {
 const statsLoadedAt = ref<number | null>(null)
 const loadError = ref('')
 const partialStatsError = ref('')
+
+const adminOpLastLabel = computed(() => {
+  const last = adminOpLast.value
+  if (!last || !last.op) return ''
+  const key = adminOpKindLabelKey(last.op) as import('@/i18n/messages').MessageKey
+  const kind = t.value(key) || last.op
+  return formatAdminHeavyLastSummary(last, kind)
+})
+
 type OpsActionKey = 'flush' | 'compact' | 'retention'
 const {
   lastFailedAction,
@@ -748,6 +758,20 @@ watch(
           class="text-xs text-sky-800 dark:text-sky-200"
           data-testid="ops-status-busy-hint"
         >{{ t('opsStatusBusyHint') }}</p>
+        <p
+          v-if="adminOpLastLabel"
+          class="text-xs mts-muted"
+          data-testid="ops-status-last"
+          :title="adminOpLast?.error || adminOpLastLabel"
+        >
+          <span class="font-medium text-slate-700 dark:text-slate-200">{{ t('opsStatusLastLabel') }}:</span>
+          {{ adminOpLastLabel }}
+        </p>
+        <p
+          v-else-if="!adminOpBusy"
+          class="text-xs mts-muted"
+          data-testid="ops-status-last-empty"
+        >{{ t('opsStatusLastEmpty') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="mts-btn" data-testid="ops-status-retry-readyz" :disabled="reachChecking" @click="retryReadyz">

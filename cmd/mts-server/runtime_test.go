@@ -284,6 +284,37 @@ func TestRuntimeMaintenanceStatsPayloadBusy(t *testing.T) {
 	if st := runtime.opsStatusPayload(); st.Op != "" || st.StartedAtUnix != 0 {
 		t.Fatalf("opsStatus after end = %+v", st)
 	}
+	if st := runtime.opsStatusPayload(); st.Last == nil || st.Last.Op != "maintenance" || !st.Last.OK {
+		t.Fatalf("opsStatus last after end = %+v", st.Last)
+	}
+	if payload.Last == nil || payload.Last.Op != "maintenance" {
+		t.Fatalf("maintenance last = %+v", payload.Last)
+	}
+}
+
+func TestRuntimeAdminHeavyLastResultOnFlush(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.HTTP.Addr = "127.0.0.1:0"
+	cfg.HTTP.Enabled = true
+	cfg.GRPC.Enabled = false
+	runtime, err := openRuntime(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("openRuntime() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = runtime.engine.Close(context.Background())
+	})
+	if err := runtime.flush(context.Background()); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	st := runtime.opsStatusPayload()
+	if st.AdminOpBusy {
+		t.Fatal("busy want false after flush")
+	}
+	if st.Last == nil || st.Last.Op != "flush" || !st.Last.OK || st.Last.FinishedAtUnix <= 0 {
+		t.Fatalf("last after flush = %+v", st.Last)
+	}
 }
 
 func TestRuntimeAdminHeavySharedMutex(t *testing.T) {

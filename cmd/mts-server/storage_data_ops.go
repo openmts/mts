@@ -33,27 +33,30 @@ func underDir(root, path string) bool {
 }
 
 // storageDataSnapshot 将 live data_dir 快照到 backups/data-snapshot-*。
-func (r *serverRuntime) storageDataSnapshot(ctx context.Context, flush bool) (storageDataSnapshotResponse, error) {
-	if err := ctx.Err(); err != nil {
+func (r *serverRuntime) storageDataSnapshot(ctx context.Context, flush bool) (resp storageDataSnapshotResponse, err error) {
+	if err = ctx.Err(); err != nil {
 		return storageDataSnapshotResponse{}, err
 	}
-	if err := r.tryBeginAdminHeavy("data_snapshot"); err != nil {
+	if err = r.tryBeginAdminHeavy("data_snapshot"); err != nil {
 		return storageDataSnapshotResponse{}, err
 	}
-	defer r.endAdminHeavy()
+	defer func() { r.finishAdminHeavy(err) }()
 	cfg := r.currentConfig()
-	root, err := backupRoot(cfg)
+	var root string
+	root, err = backupRoot(cfg)
 	if err != nil {
 		return storageDataSnapshotResponse{}, err
 	}
 	if flush {
 		// 已持有 admin heavy 锁，直接刷引擎，避免 r.flush 重入互斥。
-		if err := r.engine.Flush(ctx); err != nil {
-			return storageDataSnapshotResponse{}, fmt.Errorf("flush before data snapshot: %w", err)
+		if err = r.engine.Flush(ctx); err != nil {
+			err = fmt.Errorf("flush before data snapshot: %w", err)
+			return storageDataSnapshotResponse{}, err
 		}
 	}
 	target := filepath.Join(root, fmt.Sprintf("data-snapshot-%d", time.Now().UTC().UnixNano()))
-	result, err := storagecheck.Snapshot(cfg.DataDir, target, storagecheck.SnapshotOptions{})
+	var result storagecheck.SnapshotResult
+	result, err = storagecheck.Snapshot(cfg.DataDir, target, storagecheck.SnapshotOptions{})
 	if err != nil {
 		return storageDataSnapshotResponse{}, err
 	}
@@ -67,64 +70,77 @@ func (r *serverRuntime) storageDataSnapshot(ctx context.Context, flush bool) (st
 }
 
 // storageRestoreDrill 将 data-snapshot 旁路恢复到 backups/restore-drill-*，绝不写入 live data_dir。
-func (r *serverRuntime) storageRestoreDrill(ctx context.Context, sourcePath string) (storageRestoreDrillResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return storageRestoreDrillResponse{}, err
-	}
-	if err := r.tryBeginAdminHeavy("restore_drill"); err != nil {
-		return storageRestoreDrillResponse{}, err
-	}
-	defer r.endAdminHeavy()
-	cfg := r.currentConfig()
-	root, err := backupRoot(cfg)
-	if err != nil {
-		return storageRestoreDrillResponse{}, err
-	}
+
+func resolveRestoreDrillSource(root, sourcePath string) (string, error) {
 	source := strings.TrimSpace(sourcePath)
 	if source == "" {
-		// 默认取最新 data-snapshot-*
-		latest, err := latestDataSnapshotPath(root)
-		if err != nil {
-			return storageRestoreDrillResponse{}, err
-		}
-		source = latest
+		return latestDataSnapshotPath(root)
 	}
 	source = filepath.Clean(source)
 	if !underDir(root, source) {
-		return storageRestoreDrillResponse{}, fmt.Errorf("source must be under backup dir")
+		return "", fmt.Errorf("source must be under backup dir")
 	}
 	if base := filepath.Base(source); !strings.HasPrefix(base, "data-snapshot-") {
-		return storageRestoreDrillResponse{}, fmt.Errorf("source must be a data-snapshot-* directory")
+		return "", fmt.Errorf("source must be a data-snapshot-* directory")
 	}
 	info, err := os.Stat(source)
 	if err != nil {
-		return storageRestoreDrillResponse{}, err
+		return "", err
 	}
 	if !info.IsDir() {
-		return storageRestoreDrillResponse{}, fmt.Errorf("source is not a directory")
+		return "", fmt.Errorf("source is not a directory")
 	}
+	return source, nil
+}
 
-	target := filepath.Join(root, fmt.Sprintf("restore-drill-%d", time.Now().UTC().UnixNano()))
-	live := filepath.Clean(cfg.DataDir)
-	if filepath.Clean(target) == live || underDir(live, target) || underDir(target, live) {
-		return storageRestoreDrillResponse{}, fmt.Errorf("restore target collides with live data_dir")
-	}
-
-	result, err := storagecheck.Restore(source, target, storagecheck.SnapshotOptions{})
-	if err != nil {
-		return storageRestoreDrillResponse{}, err
-	}
-	report, err := storagecheck.Check(target, storagecheck.Options{})
-	if err != nil {
-		return storageRestoreDrillResponse{}, fmt.Errorf("check restored tree: %w", err)
-	}
+func countRestoreDrillFatals(report storagecheck.Report) int {
 	fatal := 0
 	for _, issue := range report.Issues {
 		if issue.Severity == storagecheck.SeverityFatal {
 			fatal++
 		}
 	}
-	return storageRestoreDrillResponse{
+	return fatal
+}
+
+func (r *serverRuntime) storageRestoreDrill(ctx context.Context, sourcePath string) (resp storageRestoreDrillResponse, err error) {
+	if err = ctx.Err(); err != nil {
+		return storageRestoreDrillResponse{}, err
+	}
+	if err = r.tryBeginAdminHeavy("restore_drill"); err != nil {
+		return storageRestoreDrillResponse{}, err
+	}
+	defer func() { r.finishAdminHeavy(err) }()
+	cfg := r.currentConfig()
+	var root string
+	root, err = backupRoot(cfg)
+	if err != nil {
+		return storageRestoreDrillResponse{}, err
+	}
+	var source string
+	source, err = resolveRestoreDrillSource(root, sourcePath)
+	if err != nil {
+		return storageRestoreDrillResponse{}, err
+	}
+	target := filepath.Join(root, fmt.Sprintf("restore-drill-%d", time.Now().UTC().UnixNano()))
+	live := filepath.Clean(cfg.DataDir)
+	if filepath.Clean(target) == live || underDir(live, target) || underDir(target, live) {
+		err = fmt.Errorf("restore target collides with live data_dir")
+		return storageRestoreDrillResponse{}, err
+	}
+	var result storagecheck.SnapshotResult
+	result, err = storagecheck.Restore(source, target, storagecheck.SnapshotOptions{})
+	if err != nil {
+		return storageRestoreDrillResponse{}, err
+	}
+	var report storagecheck.Report
+	report, err = storagecheck.Check(target, storagecheck.Options{})
+	if err != nil {
+		err = fmt.Errorf("check restored tree: %w", err)
+		return storageRestoreDrillResponse{}, err
+	}
+	fatal := countRestoreDrillFatals(report)
+	resp = storageRestoreDrillResponse{
 		OK:          fatal == 0,
 		Source:      result.Source,
 		Target:      result.Target,
@@ -133,7 +149,8 @@ func (r *serverRuntime) storageRestoreDrill(ctx context.Context, sourcePath stri
 		CheckIssues: len(report.Issues),
 		CheckFatals: fatal,
 		CheckRoot:   report.Root,
-	}, nil
+	}
+	return resp, nil
 }
 
 func latestDataSnapshotPath(root string) (string, error) {

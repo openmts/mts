@@ -89,18 +89,30 @@ type deleteRequest struct {
 	Request mts.DeleteRequest `json:"request"`
 }
 
+// adminHeavyLastResult 最近一次管理重操作结果（空闲时供 Dashboard 展示）。
+type adminHeavyLastResult struct {
+	Op             string `json:"op,omitempty"`
+	OK             bool   `json:"ok"`
+	Error          string `json:"error,omitempty"`
+	StartedAtUnix  int64  `json:"started_at_unix,omitempty"`
+	FinishedAtUnix int64  `json:"finished_at_unix,omitempty"`
+	DurationMs     int64  `json:"duration_ms,omitempty"`
+}
+
 type maintenanceStatsResponse struct {
-	Stats         mts.MaintenanceStats `json:"stats"`
-	AdminOpBusy   bool                 `json:"admin_op_busy"`
-	Op            string               `json:"op,omitempty"`
-	StartedAtUnix int64                `json:"started_at_unix,omitempty"`
+	Stats         mts.MaintenanceStats  `json:"stats"`
+	AdminOpBusy   bool                  `json:"admin_op_busy"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 // opsStatusResponse 轻量运维互斥状态，供 Dashboard 高频轮询。
 type opsStatusResponse struct {
-	AdminOpBusy   bool   `json:"admin_op_busy"`
-	Op            string `json:"op,omitempty"`
-	StartedAtUnix int64  `json:"started_at_unix,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type userResponse struct {

@@ -1461,3 +1461,15 @@
 ## P343（2026-07-22）
 - `commandAdminOpRefreshFeedback` 纯函数 + 单测
 
+
+## P344（2026-07-22）
+- Server：`finishAdminHeavy` 记录最近一次管理重操作结果（op/ok/error/duration）
+
+## P345（2026-07-22）
+- Server：`ops-status` 与 `stats/maintenance` 响应增加 `last` 字段
+
+## P346（2026-07-22）
+- Dashboard：解析/展示最近一次运维结果（运维状态条）
+
+## P347（2026-07-22）
+- About/ApiSpec：加载失败走 `notifyMaybeAdminBusy` 与 soft-keep 联动
