@@ -154,4 +154,7 @@ server {
 
 ### 禁用用户与会话边界
 
-- 禁用用户会撤销其 token；登录失败保持 invalid credentials 口径。
+- 禁用用户会撤销其 token；登录失败保持 invalid credentials 口径（不泄露账户是否存在/禁用）。
+- **单条** `PUT /api/v1/users/{name}` 与 **批量** `POST /api/v1/users/batch-disabled` 在 disabled 状态变化时写入轻量 `last`（`user_disable`/`user_enable` 或 `batch_user_*`），**不占** heavy 互斥。
+- Dashboard Users 页 `users-admin-last` 芯片与全局 last 横幅可核对；就绪清单项 `user-disable-revokes-tokens` / `batch-admin-last`。
+- 启用用户不会自动恢复旧 token，需重新登录。

@@ -2745,6 +2745,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('users-toggle-reader-e2e').click()
   await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('users-action-result')).toContainText(/启用|enabled|Enabled|active/i)
+  // P432: 单条启用同样写入轻量 last
+  await expect(page.getByTestId('users-admin-last')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('users-admin-last-copy')).toBeVisible()
   // P428: 批量禁用 reader-e2e（真实路径，非 fail-last mock）并再启用
   const clearSel = page.getByTestId('users-clear-selection')
   if ((await clearSel.count()) && (await clearSel.isEnabled())) {

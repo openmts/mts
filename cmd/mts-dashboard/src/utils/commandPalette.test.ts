@@ -337,5 +337,7 @@ test('command palette has users status filter deep links', () => {
   assert.ok(filterCommandItems(all, 'enable users', (k) => k).some((i) => i.id === 'users-status-active'))
   assert.ok(filterCommandItems(all, '启用用户', (k) => k).some((i) => i.id === 'users-status-active'))
   assert.ok(filterCommandItems(all, '正常用户', (k) => k).some((i) => i.id === 'users-status-active'))
+  assert.ok(filterCommandItems(all, 'user_disable', (k) => k).some((i) => i.id === 'users-status-disabled'))
+  assert.ok(filterCommandItems(all, 'user_enable', (k) => k).some((i) => i.id === 'users-status-active'))
 })
 

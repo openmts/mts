@@ -204,8 +204,8 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     severity: 'recommended',
     title: { zh: '批量管理写入 last 可见', en: 'Batch admin ops write visible last' },
     detail: {
-      zh: '用户批量禁用/启用与降采样批量启停应写入轻量 last（不占 heavy 互斥），Users/Downsample 页芯片与全局 last 横幅可核对。',
-      en: 'User batch disable/enable and downsample batch enable/disable write a light last (no heavy lock); verify via Users/Downsample chips and global last banner.',
+      zh: '单条/批量用户启停与降采样批量启停应写入轻量 last（不占 heavy 互斥），Users/Downsample 页芯片与全局 last 横幅可核对。',
+      en: 'Single/batch user enable/disable and downsample batch enable/disable write a light last (no heavy lock); verify via Users/Downsample chips and global last banner.',
     },
     automated: true,
     jump: '/users#users-filter-bar',

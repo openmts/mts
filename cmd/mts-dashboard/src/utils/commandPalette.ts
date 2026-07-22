@@ -396,7 +396,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'users-status-disabled',
     path: '/users?status=disabled#users-filter-bar',
     labelKey: 'cmdUsersStatusDisabled',
-    keywords: ['disabled users', '禁用用户', 'status disabled', 'users disabled', 'revoke tokens', '撤销会话'],
+    keywords: ['disabled users', '禁用用户', 'status disabled', 'users disabled', 'revoke tokens', '撤销会话', 'user_disable', '单条禁用'],
     adminOnly: true,
   },
   {
@@ -412,6 +412,8 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
       'users active',
       'enabled users',
       '正常用户',
+      'user_enable',
+      '单条启用',
     ],
     adminOnly: true,
   },

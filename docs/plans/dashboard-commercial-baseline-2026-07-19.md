@@ -1993,3 +1993,16 @@
 | 单条禁用 last | recordUserDisabledTransitionLast | applyAdminOpStatus | 仅 disabled 状态变化时写入 |
 | Ops 复制 | — | label 回退 | 与 Storage/chip 一致 |
 
+## P432（2026-07-22）
+- Runbook：单条/批量禁用 last 与会话边界说明
+- API Spec：users_resource / update_user ResponseHint 含 user_disable|user_enable last
+- 命令面板关键词 `user_disable`/`user_enable`；e2e 单条启用后 last 芯片
+- 就绪清单 `batch-admin-last` 文案覆盖单条启停
+
+### 前后端对齐（P432）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| UpdateUser 契约 | ResponseHint last | API Spec 可见 | 与 PUT 行为一致 |
+| 单条启用 last | user_enable | e2e 芯片 | 与禁用对称 |
+| 运维文档 | — | Runbook 5.x | 可商用操作说明 |
+
