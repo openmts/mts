@@ -360,6 +360,7 @@ test('command palette password policy deep links', () => {
   assert.ok(all.some((i) => i.id === 'api-spec-query-rows-meta' && i.path.includes('row_count')))
   assert.ok(all.some((i) => i.id === 'api-spec-query-columns-meta' && i.path.includes('series_count')))
   assert.ok(all.some((i) => i.id === 'api-spec-write-points' && i.path.includes('points')))
+  assert.ok(all.some((i) => i.id === 'api-spec-data-limits' && i.path.includes('max_write_points')))
   assert.ok(all.some((i) => i.id === 'readiness-session-calibration'))
   assert.ok(all.some((i) => i.id === 'readiness-password-policy'))
 })

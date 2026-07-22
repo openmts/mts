@@ -893,6 +893,26 @@ func (r *serverRuntime) attachAdminOpToQueryExplain(resp queryExplainResponse) q
 	return resp
 }
 
+func (r *serverRuntime) dataLimitsPayload() dataLimitsResponse {
+	cfg := r.currentConfig()
+	resp := dataLimitsResponse{
+		MaxWritePoints:    cfg.Limits.MaxWritePoints,
+		DefaultQueryLimit: cfg.Limits.DefaultQueryLimit,
+		MaxQueryLimit:     cfg.Limits.MaxQueryLimit,
+		Path:              routeDataLimits,
+	}
+	return r.attachAdminOpToDataLimits(resp)
+}
+
+func (r *serverRuntime) attachAdminOpToDataLimits(resp dataLimitsResponse) dataLimitsResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) attachAdminOpToConfigValidate(resp configValidateResponse) configValidateResponse {
 	busy, op, started := r.adminHeavyState()
 	resp.AdminOpBusy = busy

@@ -274,6 +274,18 @@ export interface AdminAPISpecResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/data/limits — 数据面写/查限额（只读） */
+export interface DataLimitsResponse {
+  max_write_points?: number
+  default_query_limit?: number
+  max_query_limit?: number
+  path?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
 /** POST /api/v1/data/query/rows */
 export interface QueryRowsResponse {
   rows?: QueryResultRow[]

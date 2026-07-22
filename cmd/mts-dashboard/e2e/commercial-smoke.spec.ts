@@ -274,6 +274,11 @@ test('commercial browser smoke path', async ({ page }) => {
   // 3) Line Protocol 写入
   await page.goto('/write')
   await expect(page.getByTestId('write-page')).toBeVisible()
+  // P467: 数据面 limits 横幅（服务可用时）
+  if (await page.getByTestId('write-limits-banner').count()) {
+    await expect(page.getByTestId('write-limits-banner')).toBeVisible()
+    await expect(page.getByTestId('write-limits-path')).toContainText('/api/v1/data/limits')
+  }
   await expect(page.getByTestId('write-action-error')).toHaveCount(0)
   await expect(page.getByTestId('write-export-draft')).toBeVisible()
   await expect(page.getByTestId('write-share-link')).toBeVisible()
@@ -305,6 +310,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/api-spec?ns=data&q=row_count#api-spec-filters')
   await expect(page.getByTestId('api-spec-search')).toBeVisible()
   await expect(page.getByTestId('api-spec-search')).toHaveValue('row_count')
+  await page.goto('/api-spec?ns=data&q=max_write_points#api-spec-filters')
+  await expect(page.getByTestId('api-spec-search')).toHaveValue('max_write_points')
   await page.goto('/storage')
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
@@ -316,6 +323,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
   await expect(page.getByTestId('query-action-error')).toHaveCount(0)
+  // P467: 查询 limits 横幅
+  if (await page.getByTestId('query-limits-banner').count()) {
+    await expect(page.getByTestId('query-limits-banner')).toBeVisible()
+    await expect(page.getByTestId('query-limits-path')).toContainText('/api/v1/data/limits')
+  }
   // 等库/表元数据预填后再查（写入后通常有 default + cpu）
   await expect.poll(async () => {
     const db = await page.getByTestId('query-database').inputValue()

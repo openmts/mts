@@ -103,6 +103,18 @@ type queryStatsResponse struct {
 	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
+// dataLimitsResponse 数据面只读限额（不含密钥/路径等敏感配置）。
+type dataLimitsResponse struct {
+	MaxWritePoints    int                   `json:"max_write_points"`
+	DefaultQueryLimit int                   `json:"default_query_limit"`
+	MaxQueryLimit     int                   `json:"max_query_limit"`
+	Path              string                `json:"path,omitempty"`
+	AdminOpBusy       bool                  `json:"admin_op_busy,omitempty"`
+	Op                string                `json:"op,omitempty"`
+	StartedAtUnix     int64                 `json:"started_at_unix,omitempty"`
+	Last              *adminHeavyLastResult `json:"last,omitempty"`
+}
+
 type streamRecord struct {
 	Type   string            `json:"type"`
 	Row    *mts.Row          `json:"row,omitempty"`

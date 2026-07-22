@@ -15,6 +15,8 @@ import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError, resolveCaughtErrorCode } from '@/utils/apiError'
 import { configErrorCodeDeepLink, remediationPathForCode } from '@/utils/errorCodeContract'
+import { fetchDataLimits } from '@/api/dataLimits'
+import { normalizeDataLimits, queryLimitExceedsMax, clampQueryLimitInput, type DataLimitsView } from '@/utils/dataLimitsView'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
 import { useI18n } from '@/composables/useI18n'
@@ -107,6 +109,43 @@ const queryAdminBusyAction = computed(() =>
     openLabel: t.value('adminOpBusyOpenOps'),
   }),
 )
+
+const dataLimits = ref<DataLimitsView | null>(null)
+const dataLimitsError = ref('')
+const dataLimitsLoading = ref(false)
+
+async function loadDataLimits() {
+  dataLimitsLoading.value = true
+  dataLimitsError.value = ''
+  try {
+    const result = await fetchDataLimits()
+    dataLimits.value = normalizeDataLimits(result.limits)
+    if (result.adminOp) applyGlobalAdminOpStatus(result.adminOp)
+  } catch (e) {
+    dataLimitsError.value = formatCaughtError(e)
+  } finally {
+    dataLimitsLoading.value = false
+  }
+}
+
+const queryLimitWarn = computed(() => {
+  if (!dataLimits.value) return false
+  const n = Number(queryForm.value.limit || 0)
+  return queryLimitExceedsMax(n, dataLimits.value.maxQueryLimit)
+})
+
+function applyDefaultQueryLimit() {
+  if (!dataLimits.value?.defaultQueryLimit) return
+  queryForm.value.limit = String(dataLimits.value.defaultQueryLimit)
+}
+
+function clampQueryLimitToServer() {
+  if (!dataLimits.value?.maxQueryLimit) return
+  const n = Number(queryForm.value.limit || 0)
+  const c = clampQueryLimitInput(n, dataLimits.value.maxQueryLimit)
+  if (c > 0) queryForm.value.limit = String(c)
+}
+
 
 const queryErrorContractAction = computed(() => {
   if (queryAdminBusyAction.value?.path) return queryAdminBusyAction.value
@@ -301,8 +340,9 @@ onMounted(async () => {
   unregisterDirty = registerDirtyChecker('query', () => formDirty.value)
   window.addEventListener('keydown', onQueryKeydown)
   window.addEventListener('beforeunload', onBeforeUnload)
-  try { await loadDatabases() }
-  catch (e) {
+  try {
+    await Promise.all([loadDatabases(), loadDataLimits()])
+  } catch (e) {
     actionErrorCause.value = e
     actionError.value = formatCaughtError(e)
   }
@@ -418,7 +458,14 @@ function clearQueryTags() {
 
 function raiseQueryLimit() {
   const n = Number(queryForm.value.limit || 0)
-  if (!Number.isFinite(n) || n < 1000) queryForm.value.limit = '1000'
+  if (!Number.isFinite(n) || n < 1000) {
+    const cap = dataLimits.value?.maxQueryLimit || 0
+    queryForm.value.limit = String(cap > 0 ? Math.min(1000, cap) : 1000)
+    return
+  }
+  if (dataLimits.value?.maxQueryLimit && n > dataLimits.value.maxQueryLimit) {
+    queryForm.value.limit = String(dataLimits.value.maxQueryLimit)
+  }
 }
 
 async function retryNoMatchQuery() {
@@ -875,6 +922,33 @@ const columnRows = computed(() => {
           <button type="button" class="mts-btn-primary" data-testid="query-history-clear-filters" @click="historyFilter = ''">{{ t('clearFilters') }}</button>
         </template>
       </EmptyState>
+    </div>
+
+    <div
+      v-if="dataLimits || dataLimitsError"
+      class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
+      data-testid="query-limits-banner"
+    >
+      <template v-if="dataLimits">
+        <span data-testid="query-limits-default">{{ formatMessage(t('queryServerDefaultLimit'), { n: dataLimits.defaultQueryLimit || '—' }) }}</span>
+        <span data-testid="query-limits-max">{{ formatMessage(t('queryServerMaxLimit'), { n: dataLimits.maxQueryLimit || '∞' }) }}</span>
+        <span
+          class="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          data-testid="query-limits-path"
+          :title="dataLimits.path"
+        >{{ dataLimits.path }}</span>
+        <button type="button" class="mts-btn text-xs" data-testid="query-limits-apply-default" @click="applyDefaultQueryLimit">{{ t('queryApplyDefaultLimit') }}</button>
+        <button
+          v-if="queryLimitWarn"
+          type="button"
+          class="mts-btn text-xs"
+          data-testid="query-limits-clamp"
+          @click="clampQueryLimitToServer"
+        >{{ t('queryClampToMaxLimit') }}</button>
+      </template>
+      <span v-else-if="dataLimitsError" class="text-amber-700 dark:text-amber-200" data-testid="query-limits-error">{{ dataLimitsError }}</span>
+      <button type="button" class="mts-btn text-xs" data-testid="query-limits-refresh" :disabled="dataLimitsLoading" @click="loadDataLimits">{{ t('refresh') }}</button>
+      <span v-if="queryLimitWarn" class="text-amber-700 dark:text-amber-200" data-testid="query-limits-warn">{{ t('queryLimitExceedsServer') }}</span>
     </div>
 
     <div id="query-form" class="scroll-mt-20 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4 md:grid-cols-2 lg:grid-cols-3">

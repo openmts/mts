@@ -2451,3 +2451,18 @@
 | columns path | path/series_count | query-columns-path | 列式 |
 | 契约检索 | ResponseHint | 命令面板深链 | 运维 |
 
+
+## P467（2026-07-23）
+- Server：`GET /api/v1/data/limits`（+ gRPC GetDataLimits）返回写/查限额与 path/admin_op
+- Server：Config schema 补齐 `limits.max_write_points|default_query_limit|max_query_limit`
+- Dashboard：Write/Query 展示服务端限额横幅；写超限预检；查询超限告警/裁剪/应用默认 limit
+- 就绪清单：`data-limits-endpoint`（required）
+
+### 前后端对齐（P467）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 数据面限额 | /data/limits | write/query banners | 非 admin 可读 |
+| 写超限 | max_write_points | 提交前预检 | 与引擎硬限一致 |
+| 查超限 | max_query_limit | 告警+裁剪 | 避免必失败请求 |
+| 配置 schema | limits.* | Config 页 | 运维对照 |
+

@@ -559,6 +559,9 @@ func configSchema() []configFieldSchema {
 		{Name: "engine.query_block_cache.limit", Description: "查询 block payload 缓存条目上限，-1 关闭"},
 		{Name: "engine.storage_memory.hard_bytes_limit", Description: "存储硬内存字节上限"},
 		{Name: "engine.cardinality.max_series", Description: "series 高基数硬限制"},
+		{Name: "limits.max_write_points", Description: "单次写入最大点数（write/typed/points-typed）"},
+		{Name: "limits.default_query_limit", Description: "查询未指定 limit 时的默认行数上限"},
+		{Name: "limits.max_query_limit", Description: "查询 limit 硬上限，超过返回 bad_request"},
 		{Name: "shutdown_timeout", Description: "优雅关闭超时"},
 	}
 }

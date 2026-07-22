@@ -26,6 +26,8 @@ import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError, resolveCaughtErrorCode } from '@/utils/apiError'
 import { formatWriteSuccessMessage } from '@/utils/writeResultSummary'
+import { fetchDataLimits } from '@/api/dataLimits'
+import { normalizeDataLimits, writePointsExceedsMax, type DataLimitsView } from '@/utils/dataLimitsView'
 import type { WriteResponse } from '@/api/types'
 import { configErrorCodeDeepLink, remediationPathForCode } from '@/utils/errorCodeContract'
 import { formatMessage } from '@/utils/formatMessage'
@@ -88,6 +90,24 @@ const lineInput = ref('')
 const formRows = ref<FormRow[]>([createEmptyRow()])
 /** 表单写行数上限；大批量请用 Line Protocol / TypedBatch */
 const WRITE_FORM_ROW_MAX = 50
+const dataLimits = ref<DataLimitsView | null>(null)
+const dataLimitsError = ref('')
+const dataLimitsLoading = ref(false)
+
+async function loadDataLimits() {
+  dataLimitsLoading.value = true
+  dataLimitsError.value = ''
+  try {
+    const result = await fetchDataLimits()
+    dataLimits.value = normalizeDataLimits(result.limits)
+    if (result.adminOp) applyGlobalAdminOpStatus(result.adminOp)
+  } catch (e) {
+    dataLimitsError.value = formatCaughtError(e)
+  } finally {
+    dataLimitsLoading.value = false
+  }
+}
+
 const formRowCapReached = computed(() => formRows.value.length >= WRITE_FORM_ROW_MAX)
 const result = ref<{ ok: boolean; message: string } | null>(null)
 const loading = ref(false)
@@ -283,7 +303,7 @@ async function reloadWriteMeta() {
 onMounted(async () => {
   unregisterDirty = registerDirtyChecker('write', () => formDirty.value)
   window.addEventListener('beforeunload', onBeforeUnload)
-  await loadWriteDatabases()
+  await Promise.all([loadWriteDatabases(), loadDataLimits()])
   markWriteClean()
 })
 onBeforeUnmount(() => {
@@ -598,6 +618,13 @@ async function submit() {
   try {
     if (writeMode.value === 'typed') {
       const batch = buildTypedBatch()
+      const typedCount = Array.isArray(batch.timestamps) ? (batch.timestamps as number[]).length : 0
+      if (dataLimits.value && writePointsExceedsMax(typedCount, dataLimits.value.maxWritePoints)) {
+        throw new Error(formatMessage(t.value('writeExceedsServerLimit'), {
+          count: typedCount,
+          max: dataLimits.value.maxWritePoints,
+        }))
+      }
       const typedResp = await apiPost<WriteResponse>('/api/v1/data/write/typed', { batch, options: { sync: syncWrite.value } }, { signal })
       applyGlobalAdminOpStatus(parseAdminOpStatusPayload(typedResp))
       result.value = {
@@ -634,6 +661,12 @@ async function submit() {
     for (const p of points) {
       p.database = selectedDb.value
       p.retention_policy = retentionPolicy.value
+    }
+    if (dataLimits.value && writePointsExceedsMax(points.length, dataLimits.value.maxWritePoints)) {
+      throw new Error(formatMessage(t.value('writeExceedsServerLimit'), {
+        count: points.length,
+        max: dataLimits.value.maxWritePoints,
+      }))
     }
     const writePath = usePointsTyped.value ? '/api/v1/data/write/points-typed' : '/api/v1/data/write'
     const writeResp = await apiPost<WriteResponse>(writePath, { points, options: { sync: syncWrite.value } }, { signal })
@@ -806,6 +839,24 @@ async function exportWriteDraft() {
         </button>
       </div>
       <p class="text-[11px] mts-muted" data-testid="write-prefs-hint">{{ t('writeModeRemembered') }}</p>
+    </div>
+
+
+    <div
+      v-if="dataLimits || dataLimitsError"
+      class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
+      data-testid="write-limits-banner"
+    >
+      <template v-if="dataLimits">
+        <span data-testid="write-limits-max-points">{{ formatMessage(t('writeServerMaxPoints'), { max: dataLimits.maxWritePoints || '∞' }) }}</span>
+        <span
+          class="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800"
+          data-testid="write-limits-path"
+          :title="dataLimits.path"
+        >{{ dataLimits.path }}</span>
+      </template>
+      <span v-else-if="dataLimitsError" class="text-amber-700 dark:text-amber-200" data-testid="write-limits-error">{{ dataLimitsError }}</span>
+      <button type="button" class="mts-btn text-xs" data-testid="write-limits-refresh" :disabled="dataLimitsLoading" @click="loadDataLimits">{{ t('refresh') }}</button>
     </div>
 
     <div id="write-target" class="scroll-mt-20 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-4">

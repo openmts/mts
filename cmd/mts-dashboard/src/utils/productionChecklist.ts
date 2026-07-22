@@ -408,6 +408,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
     jump: '/query#query-results',
   },
+  {
+    id: 'data-limits-endpoint',
+    severity: 'required',
+    title: { zh: '数据面 limits 可对齐', en: 'Data-plane limits are exposed' },
+    detail: {
+      zh: 'GET /api/v1/data/limits 返回 max_write_points/default_query_limit/max_query_limit；Write/Query 页展示并做超限提示/裁剪；Config schema 含 limits.* 字段。',
+      en: 'GET /api/v1/data/limits returns max_write_points/default_query_limit/max_query_limit; Write/Query pages surface caps and preflight/clamp; Config schema lists limits.* fields.',
+    },
+    automated: true,
+    jump: '/write',
+  },
 ]
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {

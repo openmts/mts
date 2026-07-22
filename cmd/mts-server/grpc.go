@@ -309,6 +309,10 @@ func grpcQueryStats(r *serverRuntime, _ context.Context, _ any) (any, error) {
 	return r.queryStatsPayload(), nil
 }
 
+func grpcGetDataLimits(r *serverRuntime, _ context.Context, _ any) (any, error) {
+	return r.dataLimitsPayload(), nil
+}
+
 func grpcLogin(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	request := req.(*loginRequest)
 	ttl := defaultAuthTTL

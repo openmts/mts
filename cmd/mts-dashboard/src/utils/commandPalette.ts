@@ -923,6 +923,13 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     adminOnly: true,
   },
   {
+    id: 'api-spec-data-limits',
+    path: '/api-spec?ns=data&q=max_write_points#api-spec-filters',
+    labelKey: 'cmdApiSpecDataLimits',
+    keywords: ['data limits', 'max_write_points', 'max_query_limit', '限额', '写入上限', '查询上限'],
+    adminOnly: true,
+  },
+  {
     id: 'readiness-password-policy',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessPasswordPolicy',
