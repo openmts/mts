@@ -2720,3 +2720,17 @@
 | snapshots list/delete | path | 删除成功文案 | API path |
 | data-snapshots / export | path | 契约/运维 | GET |
 | logout / change-password | path | 会话边界 | ok/changePasswordResponse |
+
+## P486（2026-07-23）
+- Server：login/session/password-policy/authz check、admin/user audit 补 `path`（HTTP+gRPC）
+- Dashboard：Account 密码策略 path 徽章；Audit 列表 path；Access Grants users path
+- 清单：`session-policy-audit-path`；ApiSpec ResponseHint 对齐
+
+### 前后端对齐（P486）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| password-policy | path | account-password-policy-path | 公开策略 |
+| session/login | path | 会话边界/契约 | 登录校准 |
+| authz check | path | 契约 | allowed+path |
+| admin/user audit | path | audit-list-path | GET |
+| users list (Access) | path (P483) | access-grants-users-path | 授权总览 |

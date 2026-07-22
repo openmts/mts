@@ -386,6 +386,7 @@ func grpcGetSession(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 	}
 	return r.attachAdminOpToSession(sessionResponse{
 		OK:                 true,
+		Path:               routeAuthSession,
 		UserName:           principal.UserName,
 		Role:               principal.Role,
 		ExpiresAt:          principal.ExpiresAt,
@@ -551,7 +552,7 @@ func grpcCheckDatabasePermission(r *serverRuntime, ctx context.Context, req any)
 	}
 	request := req.(*databasePermissionRequest)
 	err := r.engine.CheckUserDatabasePermission(ctx, request.UserName, request.Database, request.Permission)
-	return authzDatabaseCheckResponse{Allowed: err == nil}, nil
+	return authzDatabaseCheckResponse{Allowed: err == nil, Path: routeAuthzDatabaseCheck}, nil
 }
 
 func grpcCreateDatabase(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -1004,7 +1005,7 @@ func grpcListAudit(r *serverRuntime, _ context.Context, req any) (any, error) {
 		request = &auditListRequest{}
 	}
 	events := r.audit.listFiltered(*request)
-	return r.attachAdminOpToAudit(auditListResponse{Events: events, Total: len(events)}), nil
+	return r.attachAdminOpToAudit(auditListResponse{Events: events, Total: len(events), Path: routeAdminAudit}), nil
 }
 
 func grpcListStorageSnapshots(r *serverRuntime, _ context.Context, _ any) (any, error) {

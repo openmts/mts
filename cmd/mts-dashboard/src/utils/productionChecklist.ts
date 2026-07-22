@@ -574,6 +574,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/ops#ops-status-strip',
   },
   {
+    id: 'session-policy-audit-path',
+    severity: 'recommended',
+    title: { zh: '会话/策略/审计响应含 path', en: 'Session/policy/audit responses include path' },
+    detail: {
+      zh: 'login/session/password-policy/authz check、admin/user audit 返回 path；Account/Audit/Access 徽章展示。',
+      en: 'login/session/password-policy/authz check, admin/user audit return path; Account/Audit/Access surface badges.',
+    },
+    automated: true,
+    jump: '/account#account-password-policy',
+  },
+  {
     id: 'storage-auth-path',
     severity: 'recommended',
     title: { zh: '存储快照/导出与 logout 响应含 path', en: 'Storage snapshot/export and logout responses include path' },

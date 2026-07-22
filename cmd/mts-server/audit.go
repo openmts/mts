@@ -32,6 +32,7 @@ type auditLog struct {
 
 type userAuditResponse struct {
 	Events []auditEvent `json:"events"`
+	Path   string       `json:"path,omitempty"`
 }
 
 type auditListRequest struct {
@@ -46,6 +47,7 @@ type auditListRequest struct {
 type auditListResponse struct {
 	Events        []auditEvent          `json:"events"`
 	Total         int                   `json:"total"`
+	Path          string                `json:"path,omitempty"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
 	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`

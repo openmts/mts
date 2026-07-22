@@ -288,6 +288,7 @@ type loginRequest struct {
 
 type authTokenResponse struct {
 	Token              mts.AuthToken `json:"token"`
+	Path               string        `json:"path,omitempty"`
 	MustChangePassword bool          `json:"must_change_password,omitempty"`
 	// RemainingSeconds / ServerTimeUnix 与 GET /auth/session 对齐，供登录即校准。
 	RemainingSeconds int64 `json:"remaining_seconds"`
@@ -297,6 +298,7 @@ type authTokenResponse struct {
 // passwordPolicyResponse 公开密码策略（与 Dashboard 校验对齐，无需登录）。
 type passwordPolicyResponse struct {
 	OK                     bool     `json:"ok"`
+	Path                   string   `json:"path,omitempty"`
 	MinLength              int      `json:"min_length"`
 	ForbiddenDefaults      []string `json:"forbidden_defaults"`
 	RequireChangeBootstrap bool     `json:"require_change_bootstrap"`
@@ -307,6 +309,7 @@ type passwordPolicyResponse struct {
 
 type sessionResponse struct {
 	OK                 bool                  `json:"ok"`
+	Path               string                `json:"path,omitempty"`
 	UserName           string                `json:"user_name"`
 	Role               mts.UserRole          `json:"role,omitempty"`
 	ExpiresAt          time.Time             `json:"expires_at"`
@@ -373,7 +376,8 @@ type databasePermissionRequest struct {
 }
 
 type authzDatabaseCheckResponse struct {
-	Allowed bool `json:"allowed"`
+	Allowed bool   `json:"allowed"`
+	Path    string `json:"path,omitempty"`
 }
 
 type databaseRequest struct {

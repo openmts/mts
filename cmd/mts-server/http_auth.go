@@ -28,6 +28,7 @@ func buildAuthTokenResponse(token mts.AuthToken, mustChange bool) authTokenRespo
 	now := time.Now()
 	return authTokenResponse{
 		Token:              token,
+		Path:               routeAuthLogin,
 		MustChangePassword: mustChange,
 		RemainingSeconds:   remainingSecondsUntil(token.ExpiresAt),
 		ServerTimeUnix:     now.Unix(),
@@ -164,6 +165,7 @@ func (r *serverRuntime) handleSession(writer http.ResponseWriter, request *http.
 	}
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToSession(sessionResponse{
 		OK:                 true,
+		Path:               routeAuthSession,
 		UserName:           principal.UserName,
 		Role:               principal.Role,
 		ExpiresAt:          principal.ExpiresAt,

@@ -62,6 +62,7 @@ interface AuditEvent {
 interface AuditResponse {
   events: AuditEvent[]
   total?: number
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -101,6 +102,7 @@ const untilLocal = ref('')
 const clientQuery = ref('')
 const limit = ref(500)
 const serverTotal = ref<number | null>(null)
+const auditListPath = ref('')
 const auditEvents = ref<AuditEvent[]>([])
 const loading = ref(false)
 const loadError = ref('')
@@ -241,6 +243,7 @@ async function loadAudit() {
       // 自身审计：服务端 action/since/until/limit；user_name 由路径固定
       const data = await apiGet<AuditResponse>(`/api/v1/users/${encodeURIComponent(name)}/audit?${qs}`)
       auditEvents.value = data.events ?? []
+      auditListPath.value = String(data.path || `/api/v1/users/${encodeURIComponent(name)}/audit`)
       serverTotal.value = (data.events ?? []).length
       clearSelection()
       return
@@ -257,6 +260,7 @@ async function loadAudit() {
     const data = await apiGet<AuditResponse>(`/api/v1/admin/audit?${qs}`)
     applyAdminOpStatus(parseAdminOpStatusPayload(data))
     auditEvents.value = data.events ?? []
+    auditListPath.value = String(data.path || '/api/v1/admin/audit')
     serverTotal.value = typeof data.total === 'number' ? data.total : (data.events ?? []).length
     clearSelection()
   } catch (e) {
@@ -421,6 +425,12 @@ watch(
 
 <template>
   <div class="space-y-6" data-testid="audit-page">
+    <p
+      v-if="auditListPath"
+      class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+      data-testid="audit-list-path"
+      :title="auditListPath"
+    >{{ auditListPath }}</p>
     <div>
       <h1 class="mts-title flex items-center gap-2">
         <ScrollText class="h-5 w-5" />

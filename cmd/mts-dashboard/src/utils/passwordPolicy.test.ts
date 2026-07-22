@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   applyServerPasswordPolicy,
+  getPasswordPolicyPath,
   getDefaultAuthTTLSeconds,
   getMaxAuthTTLSeconds,
   getMinPasswordLength,
@@ -72,4 +73,10 @@ test('applyServerPasswordPolicy applies auth ttl', () => {
   resetPasswordPolicyRuntime()
   assert.equal(getDefaultAuthTTLSeconds(), 12 * 3600)
   assert.equal(getMaxAuthTTLSeconds(), 30 * 24 * 3600)
+})
+
+test('applyServerPasswordPolicy stores path', () => {
+  resetPasswordPolicyRuntime()
+  applyServerPasswordPolicy({ path: '/api/v1/auth/password-policy', version: 3 })
+  assert.equal(getPasswordPolicyPath(), '/api/v1/auth/password-policy')
 })

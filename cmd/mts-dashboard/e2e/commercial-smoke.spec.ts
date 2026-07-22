@@ -273,6 +273,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('account-session-sample-source')).toContainText(/login|session/)
   await expect(page.getByTestId('account-session-probe-hint')).toBeVisible()
   await expect(page.getByTestId('account-password-policy')).toBeVisible()
+  if (await page.getByTestId('account-password-policy-path').count()) {
+    await expect(page.getByTestId('account-password-policy-path')).toContainText('/api/v1/auth/password-policy')
+  }
   await expect(page.getByTestId('account-session-relogin')).toBeVisible()
   await expect(page.getByTestId('account-session-hint')).toBeVisible()
   // 顶栏会话徽章跳转账户会话区
@@ -595,6 +598,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('metrics-admin-last-copy')).toBeVisible()
   await page.goto('/audit')
   await expect(page.getByTestId('audit-page')).toBeVisible()
+  if (await page.getByTestId('audit-list-path').count()) {
+    await expect(page.getByTestId('audit-list-path')).toContainText('/api/v1/admin/audit')
+  }
   await expect(page.getByTestId('audit-admin-last')).toBeVisible()
   await expect(page.getByTestId('audit-admin-last-copy')).toBeVisible()
 

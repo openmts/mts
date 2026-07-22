@@ -645,6 +645,7 @@ export async function apiChangePassword(
 
 export interface SessionResponse {
   ok: boolean
+  path?: string
   user_name: string
   role?: string
   expires_at: string
@@ -660,6 +661,7 @@ export interface SessionResponse {
 /** 服务端会话检视：校验 token 并回填 role/expires/must_change */
 export interface PasswordPolicyResponse {
   ok?: boolean
+  path?: string
   min_length?: number
   forbidden_defaults?: string[]
   require_change_bootstrap?: boolean

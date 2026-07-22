@@ -594,7 +594,7 @@ func (r *serverRuntime) handleListAudit(writer http.ResponseWriter, request *htt
 		}
 	}
 	events := r.audit.listFiltered(req)
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToAudit(auditListResponse{Events: events, Total: len(events)}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToAudit(auditListResponse{Events: events, Total: len(events), Path: routeAdminAudit}))
 }
 
 func (r *serverRuntime) handleListStorageSnapshots(writer http.ResponseWriter, request *http.Request) {

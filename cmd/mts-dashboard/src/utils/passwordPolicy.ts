@@ -13,6 +13,7 @@ export type PasswordLocale = 'zh' | 'en'
 /** 服务端公开策略快照（GET /api/v1/auth/password-policy） */
 export interface ServerPasswordPolicy {
   ok?: boolean
+  path?: string
   min_length?: number
   forbidden_defaults?: string[]
   require_change_bootstrap?: boolean
@@ -24,6 +25,7 @@ export interface ServerPasswordPolicy {
 let runtimeMinLength = MIN_PASSWORD_LENGTH
 let runtimeForbidden: string[] = [FORBIDDEN_DEFAULT_PASSWORD]
 let runtimeVersion = 0
+let runtimePath = ''
 let runtimeRequireBootstrap = true
 /** 与 server defaultAuthTTL 对齐；0 表示未知 */
 let runtimeDefaultAuthTTLSeconds = 12 * 3600
@@ -40,6 +42,10 @@ export function getForbiddenDefaultPasswords(): string[] {
 
 export function getPasswordPolicyVersion(): number {
   return runtimeVersion
+}
+
+export function getPasswordPolicyPath(): string {
+  return runtimePath
 }
 
 export function getRequireChangeBootstrap(): boolean {
@@ -71,6 +77,9 @@ export function applyServerPasswordPolicy(input: ServerPasswordPolicy | null | u
   if (typeof input.version === 'number' && Number.isFinite(input.version) && input.version > 0) {
     runtimeVersion = Math.floor(input.version)
   }
+  if (typeof input.path === 'string' && input.path.trim()) {
+    runtimePath = input.path.trim()
+  }
   if (typeof input.require_change_bootstrap === 'boolean') {
     runtimeRequireBootstrap = input.require_change_bootstrap
   }
@@ -90,6 +99,7 @@ export function resetPasswordPolicyRuntime(): void {
   runtimeMinLength = MIN_PASSWORD_LENGTH
   runtimeForbidden = [FORBIDDEN_DEFAULT_PASSWORD]
   runtimeVersion = 0
+  runtimePath = ''
   runtimeRequireBootstrap = true
   runtimeDefaultAuthTTLSeconds = 12 * 3600
   runtimeMaxAuthTTLSeconds = 30 * 24 * 3600

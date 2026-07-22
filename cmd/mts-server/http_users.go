@@ -263,7 +263,7 @@ func (r *serverRuntime) handleUserAudit(writer http.ResponseWriter, request *htt
 		}
 	}
 	events := r.audit.listFiltered(req)
-	writeHTTPJSON(writer, http.StatusOK, userAuditResponse{Events: events})
+	writeHTTPJSON(writer, http.StatusOK, userAuditResponse{Events: events, Path: request.URL.Path})
 }
 
 func (r *serverRuntime) handleAuthzDatabaseCheck(writer http.ResponseWriter, request *http.Request) {
@@ -302,13 +302,13 @@ func (r *serverRuntime) handleAuthzDatabaseCheck(writer http.ResponseWriter, req
 	)
 	if err != nil {
 		if errors.Is(err, mts.ErrPermissionDenied) {
-			writeHTTPJSON(writer, http.StatusOK, authzDatabaseCheckResponse{Allowed: false})
+			writeHTTPJSON(writer, http.StatusOK, authzDatabaseCheckResponse{Allowed: false, Path: routeAuthzDatabaseCheck})
 			return
 		}
 		writeAPIError(writer, err)
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, authzDatabaseCheckResponse{Allowed: true})
+	writeHTTPJSON(writer, http.StatusOK, authzDatabaseCheckResponse{Allowed: true, Path: routeAuthzDatabaseCheck})
 }
 
 // recordUserDisabledTransitionLast 单条禁用/启用写入轻量 last（与批量对称）。

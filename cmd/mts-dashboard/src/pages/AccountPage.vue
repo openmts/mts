@@ -30,6 +30,7 @@ import {
   getMaxAuthTTLSeconds,
   getMinPasswordLength,
   getPasswordPolicyVersion,
+  getPasswordPolicyPath,
   validateNewPassword,
 } from '@/utils/passwordPolicy'
 import { bootstrapPasswordPolicy } from '@/utils/passwordPolicyBootstrap'
@@ -120,6 +121,7 @@ const policyVersionLabel = computed(() => {
   if (v > 0) return formatMessage(t.value('passwordPolicyServerSynced'), { version: v })
   return t.value('passwordPolicyLocalDefault')
 })
+const policyPath = computed(() => getPasswordPolicyPath() || '/api/v1/auth/password-policy')
 const sessionLevelLabel = computed(() => {
   switch (sessionView.value.urgency) {
     case 'ok': return t.value('sessionLevelOk')
@@ -996,6 +998,12 @@ async function submit() {
     <div class="mts-card p-4" data-testid="account-password-policy">
       <h2 class="mb-1 text-sm font-semibold">{{ t('accountPasswordPolicyTitle') }}</h2>
       <p class="mb-3 text-[11px] mts-muted" data-testid="account-password-policy-sync">{{ policyVersionLabel }}</p>
+      <p
+        v-if="policyPath"
+        class="mb-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="account-password-policy-path"
+        :title="policyPath"
+      >{{ policyPath }}</p>
       <dl class="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
         <div>
           <dt class="mts-muted">{{ t('accountPasswordPolicyMin') }}</dt>

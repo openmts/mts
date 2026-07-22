@@ -117,6 +117,7 @@ const passwordPolicyVersion = 2
 func publicPasswordPolicy() passwordPolicyResponse {
 	return passwordPolicyResponse{
 		OK:                     true,
+		Path:                   routeAuthPasswordPolicy,
 		MinLength:              minUserPasswordLength,
 		ForbiddenDefaults:      []string{forbiddenDefaultPassword},
 		RequireChangeBootstrap: true,

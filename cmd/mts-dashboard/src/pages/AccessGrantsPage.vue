@@ -53,6 +53,7 @@ interface User {
 }
 interface UsersResponse {
   users: User[]
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -60,6 +61,7 @@ interface UsersResponse {
 }
 interface PermissionsResponse {
   grants: Array<{ database: string; permission: string }>
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -101,6 +103,7 @@ function permText(p: string): string {
 }
 const loading = ref(false)
 const loadError = ref('')
+const usersListPath = ref('')
 const rows = ref<GrantRow[]>([])
 const userFilter = ref('')
 const dbFilter = ref('')
@@ -178,6 +181,7 @@ async function load() {
   try {
     const list = await apiGet<UsersResponse>('/api/v1/users')
     applyAdminOpStatus(parseAdminOpStatusPayload(list))
+    usersListPath.value = String(list.path || '/api/v1/users')
     const usersList = list.users ?? []
     const bundles: UserGrantBundle[] = []
     const errs: string[] = []
@@ -340,6 +344,12 @@ watch(
 <template>
   <PermissionDenied v-if="!isAdmin" />
   <div v-else class="space-y-4" data-testid="access-grants-page">
+    <p
+      v-if="usersListPath"
+      class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+      data-testid="access-grants-users-path"
+      :title="usersListPath"
+    >{{ usersListPath }}</p>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="mts-title flex items-center gap-2">
