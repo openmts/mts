@@ -115,6 +115,28 @@ type dataLimitsResponse struct {
 	Last              *adminHeavyLastResult `json:"last,omitempty"`
 }
 
+// dataContractFeature 数据面契约能力开关（供 Dashboard 就绪交接）。
+type dataContractFeature struct {
+	ID          string `json:"id"`
+	Path        string `json:"path,omitempty"`
+	Description string `json:"description,omitempty"`
+	Enabled     bool   `json:"enabled"`
+}
+
+// dataContractResponse 数据面契约快照：限额 + 写/查/删/流式 meta 能力。
+type dataContractResponse struct {
+	Version           int                   `json:"version"`
+	Path              string                `json:"path,omitempty"`
+	MaxWritePoints    int                   `json:"max_write_points"`
+	DefaultQueryLimit int                   `json:"default_query_limit"`
+	MaxQueryLimit     int                   `json:"max_query_limit"`
+	Features          []dataContractFeature `json:"features"`
+	AdminOpBusy       bool                  `json:"admin_op_busy,omitempty"`
+	Op                string                `json:"op,omitempty"`
+	StartedAtUnix     int64                 `json:"started_at_unix,omitempty"`
+	Last              *adminHeavyLastResult `json:"last,omitempty"`
+}
+
 type streamRecord struct {
 	Type          string                `json:"type"`
 	Row           *mts.Row              `json:"row,omitempty"`

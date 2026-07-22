@@ -286,6 +286,27 @@ export interface DataLimitsResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/data/contract 数据面契约快照 */
+export interface DataContractFeature {
+  id: string
+  path?: string
+  description?: string
+  enabled?: boolean
+}
+
+export interface DataContractResponse {
+  version?: number
+  path?: string
+  max_write_points?: number
+  default_query_limit?: number
+  max_query_limit?: number
+  features?: DataContractFeature[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
 /** POST /api/v1/data/query/rows */
 export interface QueryRowsResponse {
   rows?: QueryResultRow[]

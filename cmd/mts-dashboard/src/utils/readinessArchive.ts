@@ -24,8 +24,10 @@ import {
   buildCommercialHandoffSummary,
   formatPasswordPolicyHandoffLine,
   formatSessionCalibrationHandoffLine,
+  formatDataContractHandoffLine,
   type CommercialHandoffSummary,
 } from './commercialHandoffSummary.ts'
+import type { DataContractInput } from './dataContractView.ts'
 
 export interface DoctorArchiveSummary {
   loaded: boolean
@@ -55,6 +57,7 @@ export interface ReadinessArchiveInput {
   session_checked_at_ms?: number | null
   session_server_time_unix?: number | null
   session_sample_source?: 'login' | 'session' | null
+  data_contract?: DataContractInput | null
 }
 
 export interface ReadinessArchivePayload {
@@ -236,6 +239,7 @@ export function buildReadinessArchive(input: ReadinessArchiveInput): ReadinessAr
         checkedAtMs: input.session_checked_at_ms,
         serverTimeUnix: input.session_server_time_unix,
         sampleSource: input.session_sample_source,
+        dataContract: input.data_contract ?? null,
       }),
   }
 }
@@ -296,6 +300,9 @@ export function formatReadinessArchiveMarkdown(a: ReadinessArchivePayload): stri
     lines.push(
       `- session_calibration: ${formatSessionCalibrationHandoffLine(a.commercial_handoff.session_calibration)}`,
     )
+    if (a.commercial_handoff.data_contract) {
+      lines.push(`- data_contract: ${formatDataContractHandoffLine(a.commercial_handoff.data_contract)}`)
+    }
   }
   lines.push('', t.completed, '')
   lines.push(`- production: ${a.checklist.production.join(', ') || '—'}`)

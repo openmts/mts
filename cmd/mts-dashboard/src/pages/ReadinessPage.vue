@@ -4,6 +4,8 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { snapshotForm } from '@/utils/formDirty'
 import { useRoute, useRouter } from 'vue-router'
 import { apiGet, getTokenExpiresAt } from '@/api/client'
+import { fetchDataContract } from '@/api/dataContract'
+import type { DataContractResponse } from '@/api/types'
 import {
   normalizeDownsampleStatusSummary,
   downsampleStatusSummaryTone,
@@ -30,6 +32,7 @@ import {
   buildCommercialHandoffSummary,
   formatPasswordPolicyHandoffLine,
   formatSessionCalibrationHandoffLine,
+  formatDataContractHandoffLine,
 } from '@/utils/commercialHandoffSummary'
 import { formatCommercialHandoffClipboardText } from '@/utils/healthReportExport'
 import { buildOpsNextSteps } from '@/utils/opsNextSteps'
@@ -224,6 +227,9 @@ const doctor = ref<DoctorResponse | null>(null)
 const doctorError = ref('')
 const versionError = ref('')
 const downsampleStatusSummary = ref<Required<DownsampleStatusSummaryInput> | null>(null)
+const dataContractRaw = ref<DataContractResponse | null>(null)
+const dataContractError = ref('')
+const loadingDataContract = ref(false)
 const loadingDoctor = ref(false)
 const loadingVersion = ref(false)
 const actionMsg = ref('')
@@ -266,6 +272,7 @@ const commercialHandoffView = computed(() =>
     checkedAtMs: lastSessionCheckedAt.value,
     serverTimeUnix: lastSessionServerTimeUnix.value,
     sampleSource: lastSessionSampleSource.value,
+    dataContract: dataContractRaw.value,
   }),
 )
 const commercialHandoffPasswordLine = computed(() =>
@@ -273,6 +280,9 @@ const commercialHandoffPasswordLine = computed(() =>
 )
 const commercialHandoffSessionLine = computed(() =>
   formatSessionCalibrationHandoffLine(commercialHandoffView.value.session_calibration),
+)
+const commercialHandoffDataContractLine = computed(() =>
+  formatDataContractHandoffLine(commercialHandoffView.value.data_contract),
 )
 const downsampleSummaryPath = computed(() => downsampleStatusSummaryJump(downsampleSummaryView.value))
 const downsampleErrorJump = computed(() => downsampleStatusHealthJump('error'))
@@ -335,6 +345,9 @@ const exportPreflight = computed(() => {
       lastSessionServerTimeUnix.value,
       lastSessionCheckedAt.value,
     ),
+    dataContractLoaded: dataContractRaw.value != null,
+    dataContractComplete: commercialHandoffView.value.data_contract.complete,
+    dataContractMissing: commercialHandoffView.value.data_contract.missingRequired,
   })
 })
 const readinessNextSteps = computed(() =>
@@ -499,6 +512,23 @@ function go(path: string) {
   void router.push(path)
 }
 
+async function loadDataContract() {
+  loadingDataContract.value = true
+  try {
+    const { contract, adminOp } = await fetchDataContract()
+    dataContractRaw.value = contract
+    if (adminOp) applyAdminOpStatus(adminOp)
+    dataContractError.value = ''
+  } catch (e) {
+    const msg = formatCaughtError(e)
+    dataContractError.value = msg
+    notifyMaybeAdminBusy(msg, e)
+  } finally {
+    loadingDataContract.value = false
+  }
+}
+
+
 async function exportState() {
   if (exportBusy.value) return
   const payload = buildReadinessExport(state.value)
@@ -555,6 +585,8 @@ function archiveSessionFields() {
     session_checked_at_ms: lastSessionCheckedAt.value,
     session_server_time_unix: lastSessionServerTimeUnix.value,
     session_sample_source: lastSessionSampleSource.value,
+    commercial_handoff: commercialHandoffView.value,
+    data_contract: dataContractRaw.value,
   }
 }
 
@@ -877,6 +909,7 @@ onMounted(() => {
   if (isAdmin.value) {
     void loadDoctor()
     void loadServerVersion()
+    void loadDataContract()
   }
   scrollToCurrentHash()
   if (typeof window !== 'undefined') {
@@ -1670,13 +1703,20 @@ watch(
           <dt class="mts-muted">{{ t('readinessCommercialHandoffSession') }}</dt>
           <dd class="font-mono" data-testid="readiness-commercial-handoff-session">{{ commercialHandoffSessionLine }}</dd>
         </div>
+        <div>
+          <dt class="mts-muted">{{ t('readinessCommercialHandoffDataContract') }}</dt>
+          <dd class="font-mono" data-testid="readiness-commercial-handoff-data-contract">{{ commercialHandoffDataContractLine }}</dd>
+        </div>
       </dl>
+      <p v-if="dataContractError" class="mt-2 text-xs text-amber-700 dark:text-amber-200" data-testid="readiness-data-contract-error">{{ dataContractError }}</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button type="button" class="mts-btn text-xs" data-testid="readiness-copy-commercial-handoff" @click="copyCommercialHandoff">{{ t('readinessCommercialHandoffCopy') }}</button>
+        <button type="button" class="mts-btn text-xs" data-testid="readiness-data-contract-refresh" :disabled="loadingDataContract" @click="loadDataContract">{{ t('readinessCommercialHandoffRefreshContract') }}</button>
         <router-link class="mts-btn text-xs" to="/account#account-password-policy" data-testid="readiness-handoff-jump-policy">{{ t('readinessCommercialHandoffJumpPolicy') }}</router-link>
         <router-link class="mts-btn text-xs" to="/account#account-session" data-testid="readiness-handoff-jump-session">{{ t('readinessCommercialHandoffJumpSession') }}</router-link>
         <router-link class="mts-btn text-xs" to="/api-spec?ns=auth&q=password-policy#api-spec-filters" data-testid="readiness-handoff-jump-spec">{{ t('readinessCommercialHandoffJumpSpec') }}</router-link>
         <router-link class="mts-btn text-xs" to="/api-spec?ns=auth&q=remaining_seconds#api-spec-filters" data-testid="readiness-handoff-jump-session-spec">{{ t('readinessCommercialHandoffJumpSessionSpec') }}</router-link>
+        <router-link class="mts-btn text-xs" to="/api-spec?ns=data&q=dataContractResponse#api-spec-filters" data-testid="readiness-handoff-jump-data-contract">{{ t('readinessCommercialHandoffJumpDataContract') }}</router-link>
       </div>
     </div>
 

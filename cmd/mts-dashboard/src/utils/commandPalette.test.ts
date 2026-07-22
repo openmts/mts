@@ -388,3 +388,10 @@ test('palette includes stream end and delete api-spec deep links', () => {
   assert.ok(all.some((i) => i.id === 'api-spec-query-stream-end' && i.path.includes('record_count')))
   assert.ok(all.some((i) => i.id === 'api-spec-data-delete' && i.path.includes('deleteResponse')))
 })
+
+
+test('palette includes data contract handoff and api-spec', () => {
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'api-spec-data-contract' && i.path.includes('dataContractResponse')))
+  assert.ok(all.some((i) => i.id === 'readiness-data-contract-handoff' && i.path.includes('commercial-handoff')))
+})

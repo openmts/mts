@@ -142,6 +142,13 @@ func (r *serverRuntime) handleDataLimits(writer http.ResponseWriter, request *ht
 	writeHTTPJSON(writer, http.StatusOK, r.dataLimitsPayload())
 }
 
+func (r *serverRuntime) handleDataContract(writer http.ResponseWriter, request *http.Request) {
+	if !requireHTTPMethod(writer, request, http.MethodGet) {
+		return
+	}
+	writeHTTPJSON(writer, http.StatusOK, r.dataContractPayload())
+}
+
 func (r *serverRuntime) handleQueryStream(writer http.ResponseWriter, request *http.Request) {
 	if !requireHTTPMethod(writer, request, http.MethodPost) {
 		return

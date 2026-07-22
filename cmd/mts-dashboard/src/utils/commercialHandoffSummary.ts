@@ -1,5 +1,11 @@
-/** 可商用交接摘要：密码策略 + 会话校准（纯函数，供就绪归档/验收包） */
+/** 可商用交接摘要：密码策略 + 会话校准 + 数据面契约（纯函数，供就绪归档/验收包） */
 
+import {
+  buildDataContractView,
+  formatDataContractHandoffLine,
+  type DataContractInput,
+  type DataContractView,
+} from './dataContractView.ts'
 import {
   getDefaultAuthTTLSeconds,
   getForbiddenDefaultPasswords,
@@ -53,6 +59,8 @@ export interface SessionCalibrationHandoffSummary {
 export interface CommercialHandoffSummary {
   password_policy: PasswordPolicyHandoffSummary
   session_calibration: SessionCalibrationHandoffSummary
+  /** 数据面契约快照（limits + write/query/stream/delete meta 能力） */
+  data_contract: DataContractView
 }
 
 export function buildPasswordPolicyHandoffSummary(): PasswordPolicyHandoffSummary {
@@ -193,10 +201,12 @@ export function buildCommercialHandoffSummary(input?: {
   serverTimeUnix?: number | null
   sampleSource?: SessionSampleSource | null
   nowMs?: number
+  dataContract?: DataContractInput | null
 }): CommercialHandoffSummary {
   return {
     password_policy: buildPasswordPolicyHandoffSummary(),
     session_calibration: buildSessionCalibrationHandoffSummary(input ?? {}),
+    data_contract: buildDataContractView(input?.dataContract ?? null),
   }
 }
 
@@ -225,3 +235,5 @@ export function formatSessionCalibrationHandoffLine(s: SessionCalibrationHandoff
   const sample = s.sample_source ? ` · sample: ${s.sample_source}` : ''
   return `urgency: ${s.urgency} · calibrated: ${cal} · source: ${s.calibration_source}${sample}${skew}`
 }
+
+export { formatDataContractHandoffLine }

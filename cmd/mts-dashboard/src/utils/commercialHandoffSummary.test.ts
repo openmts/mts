@@ -6,6 +6,7 @@ import {
 } from './passwordPolicy.ts'
 import {
   buildCommercialHandoffSummary,
+  formatDataContractHandoffLine,
   buildPasswordPolicyHandoffSummary,
   buildSessionCalibrationHandoffSummary,
   formatPasswordPolicyHandoffLine,
@@ -84,4 +85,24 @@ test('buildCommercialHandoffSummary bundles both', () => {
   const s = buildCommercialHandoffSummary({ expiresAtIso: null })
   assert.equal(s.session_calibration.has_local_expiry, false)
   assert.equal(s.password_policy.min_length, 8)
+})
+
+
+test('commercial handoff includes data_contract view', () => {
+  const h = buildCommercialHandoffSummary({
+    dataContract: {
+      version: 1,
+      path: '/api/v1/data/contract',
+      max_write_points: 10,
+      features: [
+        { id: 'write_accepted_points', enabled: true },
+        { id: 'query_result_meta', enabled: true },
+        { id: 'query_stream_end_meta', enabled: true },
+        { id: 'delete_response_meta', enabled: true },
+        { id: 'data_limits', enabled: true },
+      ],
+    },
+  })
+  assert.equal(h.data_contract.complete, true)
+  assert.match(formatDataContractHandoffLine(h.data_contract), /complete/)
 })

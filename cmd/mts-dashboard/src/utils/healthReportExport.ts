@@ -14,6 +14,7 @@ import {
   buildCommercialHandoffSummary,
   formatPasswordPolicyHandoffLine,
   formatSessionCalibrationHandoffLine,
+  formatDataContractHandoffLine,
   type CommercialHandoffSummary,
 } from './commercialHandoffSummary.ts'
 
@@ -48,6 +49,8 @@ export interface HealthReportInput {
   session_checked_at_ms?: number | null
   session_server_time_unix?: number | null
   session_sample_source?: 'login' | 'session' | null
+  /** 数据面契约原始响应（未传 commercial_handoff 时并入交接） */
+  data_contract?: import('./dataContractView.ts').DataContractInput | null
 }
 
 export function buildHealthReport(input: HealthReportInput, at = new Date()) {
@@ -84,6 +87,7 @@ export function buildHealthReport(input: HealthReportInput, at = new Date()) {
       serverTimeUnix: input.session_server_time_unix,
       sampleSource: input.session_sample_source,
       nowMs: at.getTime(),
+      dataContract: input.data_contract ?? null,
     })
   return {
     kind: HEALTH_REPORT_KIND,
@@ -139,6 +143,9 @@ export function formatHealthReportMarkdown(
     lines.push(
       `- session_calibration: ${formatSessionCalibrationHandoffLine(r.commercial_handoff.session_calibration)}`,
     )
+    if (r.commercial_handoff.data_contract) {
+      lines.push(`- data_contract: ${formatDataContractHandoffLine(r.commercial_handoff.data_contract)}`)
+    }
   }
   if (Array.isArray(o.health_reasons) && o.health_reasons.length) {
     lines.push('', '## Health reasons', '')
@@ -161,6 +168,7 @@ export function formatCommercialHandoffClipboardText(
     `generated_at: ${at.toISOString()}`,
     `password_policy: ${formatPasswordPolicyHandoffLine(handoff.password_policy)}`,
     `session_calibration: ${formatSessionCalibrationHandoffLine(handoff.session_calibration)}`,
+    `data_contract: ${formatDataContractHandoffLine(handoff.data_contract)}`,
     '',
   ].join('\n')
 }

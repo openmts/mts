@@ -210,3 +210,31 @@ test('buildExportPreflight clock skew warn and ok', () => {
 test('preflightItemTarget clockSkew', () => {
   assert.equal(preflightItemTarget('clockSkew')?.target, '/account#account-session')
 })
+
+
+test('buildExportPreflight data contract complete/gap/missing', () => {
+  const base = {
+    locale: 'zh' as const,
+    requiredChecklistRatio: 1,
+    edgeHttpsRequiredRatio: 1,
+    backupScheduleRequiredRatio: 1,
+    doctorLoaded: true,
+    doctorOk: true,
+    doctorWarnCount: 0,
+    httpTlsEnabled: true,
+  }
+  const ok = buildExportPreflight({ ...base, dataContractLoaded: true, dataContractComplete: true })
+  assert.ok(ok.items.some((i) => i.id === 'data-contract' && i.level === 'ok'))
+  const gap = buildExportPreflight({
+    ...base,
+    dataContractLoaded: true,
+    dataContractComplete: false,
+    dataContractMissing: ['delete_response_meta'],
+  })
+  const g = gap.items.find((i) => i.id === 'data-contract')
+  assert.equal(g?.level, 'warn')
+  assert.match(g?.message || '', /delete_response_meta/)
+  const miss = buildExportPreflight({ ...base, dataContractLoaded: false })
+  assert.ok(miss.items.some((i) => i.id === 'data-contract' && i.level === 'warn'))
+  assert.equal(preflightItemTarget('data-contract')?.target, '#commercial-handoff-panel')
+})

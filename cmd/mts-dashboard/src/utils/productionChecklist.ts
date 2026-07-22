@@ -409,6 +409,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/query#query-results',
   },
   {
+    id: 'data-contract-endpoint',
+    severity: 'required',
+    title: { zh: '数据面契约快照可交接', en: 'Data-plane contract snapshot for handoff' },
+    detail: {
+      zh: 'GET /api/v1/data/contract 返回 limits + write/query/stream/delete meta 能力；就绪交接/导出预检/验收包纳入 data_contract 摘要。',
+      en: 'GET /api/v1/data/contract returns limits plus write/query/stream/delete meta capabilities; readiness handoff/export preflight/acceptance pack include data_contract summary.',
+    },
+    automated: true,
+    jump: '/ops/readiness#commercial-handoff-panel',
+  },
+  {
     id: 'stream-delete-meta',
     severity: 'required',
     title: { zh: '流式查询 end 与删除响应含 meta', en: 'Stream end and delete responses include meta' },

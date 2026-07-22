@@ -675,7 +675,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', 'api-spec-auth-session-seed', 'query-result-meta', 'write-accepted-points', 'stream-delete-meta', 'api-spec-query-rows-meta', 'api-spec-query-stream-end', 'api-spec-data-delete', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', 'api-spec-auth-session-seed', 'query-result-meta', 'write-accepted-points', 'stream-delete-meta', 'data-contract-endpoint', 'api-spec-query-rows-meta', 'api-spec-query-stream-end', 'api-spec-data-delete', 'api-spec-data-contract', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
     adminOnly: true,
   },
   {
@@ -941,6 +941,20 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     path: '/api-spec?ns=data&q=deleteResponse#api-spec-filters',
     labelKey: 'cmdApiSpecDataDelete',
     keywords: ['delete', 'measurement', 'path', '范围删除', 'deleteResponse'],
+    adminOnly: true,
+  },
+  {
+    id: 'api-spec-data-contract',
+    path: '/api-spec?ns=data&q=dataContractResponse#api-spec-filters',
+    labelKey: 'cmdApiSpecDataContract',
+    keywords: ['data contract', 'features', 'data_contract', '数据面契约', 'limits features'],
+    adminOnly: true,
+  },
+  {
+    id: 'readiness-data-contract-handoff',
+    path: '/ops/readiness#commercial-handoff-panel',
+    labelKey: 'cmdReadinessDataContractHandoff',
+    keywords: ['data contract', 'handoff', 'data_contract', '就绪契约', '交接'],
     adminOnly: true,
   },
 

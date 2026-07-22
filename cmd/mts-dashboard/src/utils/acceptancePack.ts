@@ -21,6 +21,7 @@ import { formatDownsampleStatusSummaryLine } from './downsampleStatusSummary.ts'
 import {
   formatPasswordPolicyHandoffLine,
   formatSessionCalibrationHandoffLine,
+  formatDataContractHandoffLine,
 } from './commercialHandoffSummary.ts'
 
 export const ACCEPTANCE_PACK_KIND = 'mts.acceptance.pack' as const
@@ -316,6 +317,9 @@ export function formatAcceptancePackMarkdown(pack: AcceptancePackPayload): strin
     )
     lines.push(
       `- session_calibration: ${formatSessionCalibrationHandoffLine(pack.readiness.commercial_handoff.session_calibration)}`,
+    )
+    lines.push(
+      `- data_contract: ${formatDataContractHandoffLine(pack.readiness.commercial_handoff.data_contract)}`,
     )
   }
   lines.push('', t.ops, '')

@@ -317,6 +317,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('api-spec-search')).toHaveValue('record_count')
   await page.goto('/api-spec?ns=data&q=deleteResponse#api-spec-filters')
   await expect(page.getByTestId('api-spec-search')).toHaveValue('deleteResponse')
+  // P469: data contract 契约
+  await page.goto('/api-spec?ns=data&q=dataContractResponse#api-spec-filters')
+  await expect(page.getByTestId('api-spec-search')).toHaveValue('dataContractResponse')
   await page.goto('/storage')
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
@@ -2645,6 +2648,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-export-preflight')).toBeVisible()
   // P454: 可商用交接摘要（密码策略 / 会话校准）
   await expect(page.getByTestId('readiness-commercial-handoff')).toBeVisible()
+  if (await page.getByTestId('readiness-commercial-handoff-data-contract').count()) {
+    await expect(page.getByTestId('readiness-commercial-handoff-data-contract')).toBeVisible()
+  }
   await expect(page.getByTestId('readiness-commercial-handoff-password')).toBeVisible()
   await expect(page.getByTestId('readiness-commercial-handoff-session')).toBeVisible()
   await expect(page.getByTestId('readiness-copy-commercial-handoff')).toBeVisible()

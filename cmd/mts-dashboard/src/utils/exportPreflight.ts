@@ -39,6 +39,12 @@ export interface ExportPreflightInput {
   /** 客户端相对服务端时钟偏差（秒）；|skew|>=阈值时 warn */
   clockSkewSeconds?: number | null
   clockSkewWarnAbsSec?: number
+  /** 数据面契约是否已加载 */
+  dataContractLoaded?: boolean | null
+  /** 数据面契约必选能力是否齐全 */
+  dataContractComplete?: boolean | null
+  /** 缺失能力 id 列表（可选，用于文案） */
+  dataContractMissing?: string[] | null
 }
 
 export interface ExportPreflightResult {
@@ -72,6 +78,9 @@ const copy = {
     clockSkewOk: '客户端与服务端时钟偏差正常',
     clockSkewWarn: '客户端与服务端时钟偏差较大（{skew}，阈值 {threshold}s）；验收前请核对 NTP',
     clockSkewUnknown: '尚未取得服务端时间样本，无法评估时钟偏差',
+    dataContractOk: '数据面契约能力齐全（limits/write/query/stream/delete meta）',
+    dataContractMissingLoad: '数据面契约未加载（GET /data/contract）',
+    dataContractGap: '数据面契约能力缺失：{missing}',
     footer: '预检不阻止导出；完成项不代表生产人工验收已签字',
   },
   en: {
@@ -96,6 +105,9 @@ const copy = {
     clockSkewOk: 'Client/server clock skew is within tolerance',
     clockSkewWarn: 'Client/server clock skew is large ({skew}, threshold {threshold}s); verify NTP before acceptance',
     clockSkewUnknown: 'No server time sample yet; clock skew not evaluated',
+    dataContractOk: 'Data-plane contract features complete (limits/write/query/stream/delete meta)',
+    dataContractMissingLoad: 'Data-plane contract not loaded (GET /data/contract)',
+    dataContractGap: 'Data-plane contract features missing: {missing}',
     footer: 'Preflight does not block export; done items do not mean production acceptance is signed',
   },
 } as const
@@ -136,6 +148,8 @@ export function preflightItemTarget(id: string): { target: string; actionKey: 'p
       return { target: '/operations#ops-status-strip', actionKey: 'preflightJumpLocal' }
     case 'clockSkew':
       return { target: '/account#account-session', actionKey: 'preflightJumpLocal' }
+    case 'data-contract':
+      return { target: '#commercial-handoff-panel', actionKey: 'preflightJumpLocal' }
     default:
       return null
   }
@@ -175,6 +189,32 @@ function pushClockSkewItem(
   }
   if (skew === null) {
     items.push({ id: 'clockSkew', level: 'info', message: t.clockSkewUnknown })
+  }
+}
+
+
+function pushDataContractItem(
+  items: ExportPreflightItem[],
+  t: (typeof copy)[LocaleCode],
+  loaded?: boolean | null,
+  complete?: boolean | null,
+  missing?: string[] | null,
+): void {
+  if (loaded === true) {
+    if (complete === true) {
+      items.push({ id: 'data-contract', level: 'ok', message: t.dataContractOk })
+      return
+    }
+    const miss = Array.isArray(missing) && missing.length ? missing.join(',') : 'unknown'
+    items.push({
+      id: 'data-contract',
+      level: 'warn',
+      message: fill(t.dataContractGap, { missing: miss }),
+    })
+    return
+  }
+  if (loaded === false) {
+    items.push({ id: 'data-contract', level: 'warn', message: t.dataContractMissingLoad })
   }
 }
 
@@ -255,6 +295,13 @@ export function buildExportPreflight(input: ExportPreflightInput): ExportPreflig
   }
 
   pushClockSkewItem(items, t, input.clockSkewSeconds, input.clockSkewWarnAbsSec)
+  pushDataContractItem(
+    items,
+    t,
+    input.dataContractLoaded,
+    input.dataContractComplete,
+    input.dataContractMissing,
+  )
 
   items.push({ id: 'footer', level: 'info', message: t.footer })
 

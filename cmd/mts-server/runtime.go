@@ -918,6 +918,34 @@ func (r *serverRuntime) attachAdminOpToQueryExplain(resp queryExplainResponse) q
 	return resp
 }
 
+func (r *serverRuntime) dataContractPayload() dataContractResponse {
+	cfg := r.currentConfig()
+	resp := dataContractResponse{
+		Version:           1,
+		Path:              routeDataContract,
+		MaxWritePoints:    cfg.Limits.MaxWritePoints,
+		DefaultQueryLimit: cfg.Limits.DefaultQueryLimit,
+		MaxQueryLimit:     cfg.Limits.MaxQueryLimit,
+		Features: []dataContractFeature{
+			{ID: "write_accepted_points", Path: routeDataWrite, Description: "write responses include points/path", Enabled: true},
+			{ID: "query_result_meta", Path: routeDataQueryRows, Description: "query rows/columns/explain include path/count/admin_op", Enabled: true},
+			{ID: "query_stream_end_meta", Path: routeDataQueryStream, Description: "stream end frame includes path/format/record_count/admin_op", Enabled: true},
+			{ID: "delete_response_meta", Path: routeDataDelete, Description: "delete response includes path/database/measurement/admin_op", Enabled: true},
+			{ID: "data_limits", Path: routeDataLimits, Description: "GET data/limits exposes write/query caps", Enabled: true},
+		},
+	}
+	return r.attachAdminOpToDataContract(resp)
+}
+
+func (r *serverRuntime) attachAdminOpToDataContract(resp dataContractResponse) dataContractResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) dataLimitsPayload() dataLimitsResponse {
 	cfg := r.currentConfig()
 	resp := dataLimitsResponse{

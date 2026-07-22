@@ -2483,3 +2483,20 @@
 | 契约 | ResponseHint | ApiSpec 检索 + 命令面板 | 运维对照 |
 | 就绪门禁 | — | stream-delete-meta | required |
 
+
+## P469（2026-07-23）
+- Server：`GET /api/v1/data/contract`（+ gRPC GetDataContract）返回限额 + write/query/stream/delete meta 能力 features 快照
+- Server：ApiSpec/operation registry 对齐；单测 `TestHTTPDataContractReportsLimitsAndFeatures`
+- Dashboard：就绪交接/导出预检/验收包/健康报告纳入 `data_contract` 摘要；Readiness 拉契约并展示/刷新
+- 纯函数：`dataContractView`；清单 `data-contract-endpoint`（required）
+- 命令面板：`api-spec-data-contract` / `readiness-data-contract-handoff`；e2e 契约检索 dataContractResponse
+
+### 前后端对齐（P469）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 数据面契约 | /data/contract | readiness handoff + preflight | 非计分 |
+| 限额复用 | max_write/query limits | 交接摘要一行 | 与 /data/limits 一致 |
+| 能力 features | write/query/stream/delete meta | complete/missing | 运维对照 |
+| 契约检索 | ResponseHint | ApiSpec + 命令面板 | 只读深链 |
+| 就绪门禁 | — | data-contract-endpoint | required |
+
