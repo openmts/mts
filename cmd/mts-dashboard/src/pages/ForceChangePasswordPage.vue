@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import { validateNewPassword } from '@/utils/passwordPolicy'
-import { passwordRequirementHints, passwordHintsAllOk } from '@/utils/passwordHints'
+import { passwordRequirementHints, passwordHintsAllOk, passwordHintsProgress } from '@/utils/passwordHints'
 import { buildLoginLocation, formatRedirectLabel, sanitizeRedirect, withRedirectQuery } from '@/utils/redirect'
 import { KeyRound } from 'lucide-vue-next'
 import PasswordHints from '@/components/PasswordHints.vue'
@@ -33,6 +33,7 @@ const passwordHintsView = computed(() =>
   passwordRequirementHints(oldPassword.value, newPassword.value, confirmPassword.value),
 )
 const passwordHintsReady = computed(() => passwordHintsAllOk(passwordHintsView.value))
+const passwordHintsProgressView = computed(() => passwordHintsProgress(passwordHintsView.value))
 const loading = ref(false)
 const error = ref('')
 const errorRetryable = ref(false)
@@ -248,7 +249,12 @@ async function doLogout() {
           v-if="!passwordHintsReady && (newPassword || confirmPassword || oldPassword)"
           class="text-[11px] text-amber-700 dark:text-amber-200"
           data-testid="force-password-policy-gate"
-        >{{ t('forcePasswordPolicyGate') }}</p>
+        >
+          {{ t('forcePasswordPolicyGate') }}
+          <span class="ml-1 font-mono" data-testid="force-password-progress-text">
+            {{ passwordHintsProgressView.done }}/{{ passwordHintsProgressView.total }}
+          </span>
+        </p>
         <button
           type="submit"
           class="mts-focus-ring w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"

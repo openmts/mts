@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildHealthReport,
+  formatHealthReportMarkdown,
   formatHealthReportPretty,
   healthReportFilename,
+  healthReportFilenames,
   HEALTH_REPORT_KIND,
 } from './healthReportExport.ts'
 
@@ -32,4 +34,15 @@ test('format and filename', () => {
   const text = formatHealthReportPretty({ connectivity: 'ok' })
   assert.match(text, /mts.health.report/)
   assert.match(healthReportFilename(new Date('2026-07-22T01:02:03.000Z')), /mts-health-report-/)
+  const md = formatHealthReportMarkdown({
+    connectivity: 'ok',
+    healthy: true,
+    downsample_status_summary: { total: 1, error: 1, lagging: 0, max_lag_seconds: 0 },
+  }, new Date('2026-07-22T00:00:00.000Z'))
+  assert.match(md, /# MTS health report/)
+  assert.match(md, /Downsample/)
+  assert.match(md, /error: 1/)
+  const names = healthReportFilenames(new Date('2026-07-22T01:02:03.000Z'))
+  assert.match(names.json, /\.json$/)
+  assert.match(names.md, /\.md$/)
 })

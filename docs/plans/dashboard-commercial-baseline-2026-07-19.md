@@ -2213,3 +2213,16 @@
 | 健康报告 | summary/stats | mts.health.report | 交接扫视 |
 | 横幅复制 | summary | 剪贴板文本 | 只读 |
 
+## P449（2026-07-22）
+- Overview：健康报告 Markdown 导出 + 复制（`formatHealthReportMarkdown` / `healthReportFilenames`）
+- Login：默认密码风险提示强化（`login-default-risk`）
+- ForceChange / PasswordHints：策略分项进度条（`passwordHintsProgress`，submit 保持可点）
+- e2e：login 风险条、改密进度、Overview MD/复制按钮软断言
+
+### 前后端对齐（P449）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 健康报告 MD | 无变更 | md 文本导出/复制 | 交接扫视 |
+| 默认密码风险 | seed admin | Login 风险条 | 运维提示 |
+| 改密进度 | password_policy | 进度条 + 分项 | 不禁用 submit |
+

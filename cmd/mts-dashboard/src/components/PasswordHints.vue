@@ -6,6 +6,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import { MIN_PASSWORD_LENGTH } from '@/utils/passwordPolicy'
 import {
   assignedPasswordHints,
+  passwordHintsProgress,
   passwordRequirementHints,
   type PasswordHintItem,
 } from '@/utils/passwordHints'
@@ -50,6 +51,7 @@ const hints = computed((): PasswordHintItem[] => {
     props.confirmPassword || '',
   )
 })
+const progress = computed(() => passwordHintsProgress(hints.value))
 
 function labelOf(key: string): string {
   if (key === 'passwordHintMinLength') {
@@ -61,7 +63,28 @@ function labelOf(key: string): string {
 
 <template>
   <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60" data-testid="password-hints">
-    <p class="mb-2 text-[11px] font-medium text-slate-600 dark:text-slate-300">{{ t('passwordHintsTitle') }}</p>
+    <div class="mb-2 flex items-center justify-between gap-2">
+      <p class="text-[11px] font-medium text-slate-600 dark:text-slate-300">{{ t('passwordHintsTitle') }}</p>
+      <span
+        class="font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="password-hints-progress-label"
+      >{{ progress.done }}/{{ progress.total }} · {{ progress.percent }}%</span>
+    </div>
+    <div
+      class="mb-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+      data-testid="password-hints-progress"
+      role="progressbar"
+      :aria-valuenow="progress.percent"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      :aria-label="t('passwordHintsTitle')"
+    >
+      <div
+        class="h-full rounded-full transition-all"
+        :class="progress.percent >= 100 ? 'bg-emerald-500' : 'bg-amber-500'"
+        :style="{ width: `${progress.percent}%` }"
+      />
+    </div>
     <ul class="space-y-1">
       <li
         v-for="h in hints"

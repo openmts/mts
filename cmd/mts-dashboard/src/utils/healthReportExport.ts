@@ -6,10 +6,11 @@ import {
   type OverviewHealthCheck,
 } from './overviewExport.ts'
 import {
+  downsampleStatusSummaryTone,
+  formatDownsampleStatusSummaryLine,
   normalizeDownsampleStatusSummary,
   type DownsampleStatusSummaryInput,
 } from './downsampleStatusSummary.ts'
-import { downsampleStatusSummaryTone } from './downsampleStatusSummary.ts'
 
 export const HEALTH_REPORT_KIND = 'mts.health.report' as const
 export const HEALTH_REPORT_VERSION = 1 as const
@@ -81,4 +82,47 @@ export function formatHealthReportPretty(input: HealthReportInput, at = new Date
 export function healthReportFilename(at = new Date()): string {
   const stamp = at.toISOString().replace(/[:.]/g, '-').slice(0, 19)
   return `mts-health-report-${stamp}.json`
+}
+
+export function formatHealthReportMarkdown(
+  input: HealthReportInput,
+  at = new Date(),
+): string {
+  const r = buildHealthReport(input, at)
+  const o = r.overview
+  const lines: string[] = [
+    '# MTS health report',
+    '',
+    `- generated_at: ${r.generated_at}`,
+    `- connectivity: ${o.connectivity || '—'}`,
+    `- healthy: ${o.healthy == null ? '—' : String(o.healthy)}`,
+    `- ready: ${o.ready == null ? '—' : String(o.ready)}`,
+    `- readiness: ${o.readiness_total == null ? '—' : `${o.readiness_total}%`} (${o.readiness_level || '—'})`,
+  ]
+  if (o.server_version?.version) {
+    lines.push(`- server: ${o.server_version.version}${o.server_version.commit ? ` @ ${o.server_version.commit}` : ''}`)
+  }
+  if (r.downsample_status_summary) {
+    lines.push('', '## Downsample', '')
+    lines.push(`- tone: ${r.downsample_tone}`)
+    lines.push(`- ${formatDownsampleStatusSummaryLine(r.downsample_status_summary)}`)
+  }
+  if (Array.isArray(o.health_reasons) && o.health_reasons.length) {
+    lines.push('', '## Health reasons', '')
+    for (const x of o.health_reasons.slice(0, 12)) lines.push(`- ${x}`)
+  }
+  if (Array.isArray(o.maintenance_errors) && o.maintenance_errors.length) {
+    lines.push('', '## Maintenance errors', '')
+    for (const x of o.maintenance_errors.slice(0, 12)) lines.push(`- ${x}`)
+  }
+  lines.push('', '---', '', `_${r.disclaimer}_`, '')
+  return lines.join('\n')
+}
+
+export function healthReportFilenames(at = new Date()): { json: string; md: string } {
+  const stamp = at.toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  return {
+    json: `mts-health-report-${stamp}.json`,
+    md: `mts-health-report-${stamp}.md`,
+  }
 }

@@ -302,9 +302,14 @@ onBeforeUnmount(() => {
         </div>
       </form>
 
-      <div class="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
-        <p class="font-medium text-slate-600 dark:text-slate-300">{{ t('loginDefaultPolicy') }}</p>
+      <div
+        class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
+        role="note"
+        data-testid="login-default-risk"
+      >
+        <p class="font-medium text-amber-950 dark:text-amber-50">{{ t('loginDefaultPolicy') }}</p>
         <p class="mt-1">{{ t('loginDefaultHint') }}</p>
+        <p class="mt-2 font-medium" data-testid="login-default-risk-detail">{{ t('loginDefaultRisk') }}</p>
       </div>
     </div>
   </div>

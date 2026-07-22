@@ -73,3 +73,16 @@ export function assignedPasswordHints(
   return items
 }
 
+/** 策略分项完成度 0–100 */
+export function passwordHintsProgress(hints: PasswordHintItem[]): {
+  done: number
+  total: number
+  percent: number
+} {
+  const list = Array.isArray(hints) ? hints : []
+  const total = list.length
+  const done = list.filter((h) => h.ok).length
+  const percent = total === 0 ? 0 : Math.round((done / total) * 100)
+  return { done, total, percent }
+}
+

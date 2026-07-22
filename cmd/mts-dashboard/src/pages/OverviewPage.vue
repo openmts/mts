@@ -36,7 +36,7 @@ import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, C
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { buildOverviewExport, formatOverviewExportPretty } from '@/utils/overviewExport'
-import { buildHealthReport, healthReportFilename } from '@/utils/healthReportExport'
+import { buildHealthReport, formatHealthReportMarkdown, healthReportFilename, healthReportFilenames } from '@/utils/healthReportExport'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -647,9 +647,8 @@ async function exportOverview() {
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
-async function exportHealthReport() {
-  if (exportBusy.value) return
-  const payload = buildHealthReport({
+function healthReportInput() {
+  return {
     connectivity: connectivityKind.value,
     healthy: healthy.value,
     ready: ready.value,
@@ -668,7 +667,12 @@ async function exportHealthReport() {
     last_refreshed: lastRefreshed.value,
     downsample_status_summary: downsampleSummary.value,
     ops_stats: maintenanceStats.value as object | null,
-  })
+  }
+}
+
+async function exportHealthReport() {
+  if (exportBusy.value) return
+  const payload = buildHealthReport(healthReportInput())
   const outcome = await runJSONExport({
     label: 'Health',
     filename: healthReportFilename(),
@@ -683,6 +687,32 @@ async function exportHealthReport() {
   if (outcome === 'done') success(t.value('overviewHealthReportExported'))
   else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
+}
+
+async function exportHealthReportMarkdown() {
+  if (exportBusy.value) return
+  const names = healthReportFilenames()
+  const outcome = await runTextExport({
+    label: 'Health MD',
+    filename: names.md,
+    mime: 'text/markdown;charset=utf-8',
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return formatHealthReportMarkdown(healthReportInput())
+    },
+  })
+  if (outcome === 'done') success(t.value('overviewHealthMarkdownExported'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
+}
+
+async function copyHealthReport() {
+  const res = await copyText(formatHealthReportMarkdown(healthReportInput()))
+  if (res.ok) success(t.value('overviewHealthReportCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 
 async function copyOverview() {
@@ -840,6 +870,12 @@ async function copyOverview() {
         </button>
         <button type="button" class="mts-btn" data-testid="overview-export-health-report" :disabled="exportBusy" @click="exportHealthReport">
           <Download class="h-3.5 w-3.5" /> {{ t('overviewExportHealthReport') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-export-health-md" :disabled="exportBusy" @click="exportHealthReportMarkdown">
+          <Download class="h-3.5 w-3.5" /> {{ t('overviewExportHealthMarkdown') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-copy-health-report" @click="copyHealthReport">
+          <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopyHealthReport') }}
         </button>
         <button type="button" class="mts-btn" data-testid="overview-copy-snapshot" @click="copyOverview">
           <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopySnapshot') }}
