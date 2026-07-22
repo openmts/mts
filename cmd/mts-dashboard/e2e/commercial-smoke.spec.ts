@@ -223,6 +223,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-copy-health-report')).toBeVisible()
   await expect(page.getByTestId('overview-copy-commercial-handoff')).toBeVisible()
   await expect(page.getByTestId('overview-session-calibrated')).toBeVisible()
+  await expect(page.getByTestId('overview-session-server-hint')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('overview-share-link')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)

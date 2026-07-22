@@ -23,6 +23,7 @@ import {
   sessionExpiryView,
   sessionViewFromRemainingMs,
 } from '@/utils/sessionExpiry'
+import { buildSessionBadgeMeta } from '@/utils/sessionBadgeTitle'
 import { completedIds, loadReadinessState } from '@/utils/readinessState'
 import { computeReadinessScore, readinessLevel } from '@/utils/readinessScore'
 import { requiredChecklist } from '@/utils/productionChecklist'
@@ -303,6 +304,26 @@ const sessionSummary = computed(() => {
     nowMs.value,
   )
   return sessionViewFromRemainingMs(effective, true, undefined, undefined, loc)
+})
+
+const sessionBadgeMeta = computed(() =>
+  buildSessionBadgeMeta({
+    localLabel: sessionSummary.value.label,
+    localRemainingMs: sessionSummary.value.remainingMs,
+    urgency: sessionSummary.value.urgency,
+    serverRemainingSec: lastSessionRemainingSeconds.value,
+    checkedAtMs: lastSessionCheckedAt.value,
+    nowMs: nowMs.value,
+    locale: locale.value === 'en' ? 'en' : 'zh',
+  }),
+)
+
+/** Overview 运维扫视：有服务端样本时始终展示 remaining/偏差，不限于 warn */
+const overviewSessionServerHint = computed(() => {
+  const meta = sessionBadgeMeta.value
+  if (!meta.serverLabel) return ''
+  if (meta.hint) return meta.hint
+  return locale.value === 'en' ? `srv ${meta.serverLabel}` : `端 ${meta.serverLabel}`
 })
 
 function memoryLabel(key: string): string {
@@ -885,6 +906,7 @@ async function copyOverview() {
           <span
             class="rounded-full px-2 py-0.5 text-[11px] font-medium"
             data-testid="overview-session-calibrated"
+            :title="sessionBadgeMeta.title"
             :class="{
               'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200': sessionSummary.urgency === 'ok',
               'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200': sessionSummary.urgency === 'warn',
@@ -892,6 +914,12 @@ async function copyOverview() {
               'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300': sessionSummary.urgency === 'unknown',
             }"
           >{{ sessionSummary.label || t('sessionUnknown') }}</span>
+          <span
+            v-if="overviewSessionServerHint"
+            class="font-mono text-[11px] mts-muted"
+            data-testid="overview-session-server-hint"
+            :title="sessionBadgeMeta.title"
+          >{{ overviewSessionServerHint }}</span>
         </div>
         <div class="flex items-center gap-2">
           <Info class="h-4 w-4 mts-muted" />

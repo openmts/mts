@@ -292,11 +292,22 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     severity: 'required',
     title: { zh: '会话 remaining 服务端校准', en: 'Session remaining server calibration' },
     detail: {
-      zh: '写门禁/TopBar/Account 取 min(本地 expires, 服务端 remaining 推演)；warn/critical 周期探测 /auth/session。',
-      en: 'Write guard/TopBar/Account use min(local expires, projected server remaining); warn/critical probe /auth/session on a cadence.',
+      zh: '写门禁/TopBar/Account/Overview 取 min(本地 expires, 服务端 remaining 推演)；warn/critical 周期探测 /auth/session。',
+      en: 'Write guard/TopBar/Account/Overview use min(local expires, projected server remaining); warn/critical probe /auth/session on a cadence.',
     },
     automated: true,
     jump: '/account#account-session',
+  },
+  {
+    id: 'overview-session-server-hint',
+    severity: 'recommended',
+    title: { zh: 'Overview 会话服务端提示', en: 'Overview session server hint' },
+    detail: {
+      zh: 'Overview 会话徽章展示校准后 remaining；有服务端样本时始终显示服务端 remaining/时钟偏差（运维扫视）。',
+      en: 'Overview session badge shows calibrated remaining; with a server sample always shows server remaining/clock skew (ops sweep).',
+    },
+    automated: true,
+    jump: '/#overview-summary',
   },
   {
     id: 'api-spec-password-policy',

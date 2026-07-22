@@ -365,3 +365,9 @@ test('command palette readiness commercial handoff', () => {
   assert.ok(all.some((i) => i.id === 'readiness-commercial-handoff' && i.path.includes('commercial-handoff')))
 })
 
+test('command palette overview session server hint', () => {
+  const all = allVisibleCommandItems(false)
+  assert.ok(all.some((i) => i.id === 'overview-session-server-hint' && i.path.includes('overview-summary')))
+  const admin = allVisibleCommandItems(true)
+  assert.ok(admin.some((i) => i.id === 'overview-session-server-hint'))
+})

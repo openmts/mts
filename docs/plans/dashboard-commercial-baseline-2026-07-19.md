@@ -2315,3 +2315,15 @@
 | 时钟偏差 | server_time_unix | handoff skew | 运维交接可见 |
 | 健康报告 v2 | session 字段 | commercial_handoff | 只读 |
 
+## P457（2026-07-23）
+- Overview 会话徽章：服务端 remaining/时钟偏差 hint（有样本时始终展示，运维扫视）
+- 就绪清单：`overview-session-server-hint`；校准门禁文案纳入 Overview
+- 命令面板：Overview 会话深链
+
+### 前后端对齐（P457）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| Overview 会话 hint | remaining_seconds | overview-session-server-hint | 与 TopBar 同源 meta |
+| 就绪清单 | — | overview-session-server-hint | recommended |
+| 命令面板 | — | /#overview-summary | 运维跳转 |
+
