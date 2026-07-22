@@ -572,8 +572,18 @@ type downsamplePolicyResponse struct {
 	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
+type downsampleStatusSummary struct {
+	Total         int   `json:"total"`
+	Enabled       int   `json:"enabled"`
+	Active        int   `json:"active"`
+	Error         int   `json:"error"`
+	Lagging       int   `json:"lagging"`
+	MaxLagSeconds int64 `json:"max_lag_seconds"`
+}
+
 type downsampleStatusesResponse struct {
 	Statuses      []mts.DownsamplePolicyStatus `json:"statuses"`
+	Summary       *downsampleStatusSummary     `json:"summary,omitempty"`
 	AdminOpBusy   bool                         `json:"admin_op_busy,omitempty"`
 	Op            string                       `json:"op,omitempty"`
 	StartedAtUnix int64                        `json:"started_at_unix,omitempty"`

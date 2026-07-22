@@ -302,6 +302,16 @@ export interface DownsamplePoliciesResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/admin/downsample/statuses 摘要 */
+export interface DownsampleStatusSummary {
+  total: number
+  enabled: number
+  active: number
+  error: number
+  lagging: number
+  max_lag_seconds: number
+}
+
 /** GET /api/v1/admin/downsample/statuses（含 busy/last） */
 export interface DownsampleStatusesResponse {
   statuses?: unknown[]

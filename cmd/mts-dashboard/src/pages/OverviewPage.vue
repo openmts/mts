@@ -14,7 +14,8 @@ import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLa
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
-import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
+import type { HealthSnapshot, MaintenanceStats, CompactionStats, DownsampleStatusSummary } from '@/api/types'
+import { normalizeDownsampleStatusSummary, downsampleStatusSummaryTone, downsampleStatusSummaryJump } from '@/utils/downsampleStatusSummary'
 import { clientBuildInfo } from '@/utils/buildInfo'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
 import { completedIds, loadReadinessState } from '@/utils/readinessState'
@@ -118,6 +119,16 @@ const maintenanceErrors = ref<string[]>([])
 const memorySnapshot = ref<StorageMemorySnapshot | null>(null)
 const compactionStats = ref<CompactionStats | null>(null)
 const maintenanceStats = ref<MaintenanceStats | null>(null)
+const downsampleSummary = ref<ReturnType<typeof normalizeDownsampleStatusSummary> | null>(null)
+
+const downsampleSummaryView = computed(() => downsampleSummary.value || normalizeDownsampleStatusSummary(null))
+const downsampleSummaryToneClass = computed(() => {
+  const tone = downsampleStatusSummaryTone(downsampleSummaryView.value)
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+})
+const downsampleSummaryPath = computed(() => downsampleStatusSummaryJump(downsampleSummaryView.value))
 const doctorChecks = ref<DoctorCheck[]>([])
 const doctorTLS = ref<boolean | null>(null)
 const loadError = ref('')
@@ -339,6 +350,16 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
+      try {
+        const st = await apiGet<{ summary?: DownsampleStatusSummary; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
+          '/api/v1/admin/downsample/statuses',
+        )
+        applyAdminOpStatus(parseAdminOpStatusPayload(st))
+        downsampleSummary.value = normalizeDownsampleStatusSummary(st.summary)
+      } catch {
+        // 摘要失败不阻断维护统计
+        if (!downsampleSummary.value) downsampleSummary.value = normalizeDownsampleStatusSummary(null)
+      }
       return
     }
     case 'maintErrors': {
@@ -386,6 +407,7 @@ function clearNonAdminSnapshots() {
   memorySnapshot.value = null
   compactionStats.value = null
   maintenanceStats.value = null
+  downsampleSummary.value = null
   maintenanceErrors.value = []
   doctorChecks.value = []
   doctorTLS.value = null
@@ -395,7 +417,7 @@ function clearNonAdminSnapshots() {
 function nullAdminSectionData(key: AdminSectionKey) {
   if (key === 'memory') memorySnapshot.value = null
   else if (key === 'compaction') compactionStats.value = null
-  else if (key === 'maintenance') { maintenanceStats.value = null }
+  else if (key === 'maintenance') { maintenanceStats.value = null; downsampleSummary.value = null }
   else if (key === 'maintErrors') maintenanceErrors.value = []
   else if (key === 'doctor') {
     doctorChecks.value = []
@@ -1217,6 +1239,26 @@ async function copyOverview() {
           <div class="rounded bg-slate-50 px-3 py-2 dark:bg-slate-800/50">{{ t('opsStatErrors') }}: <span class="font-semibold">{{ maintenanceStats.maintenance_error_count }}</span></div>
         </div>
         <p v-if="maintenanceStats?.compaction_last_skip" class="mt-3 text-xs text-amber-700 dark:text-amber-200">{{ maintenanceStats.compaction_last_skip }}</p>
+        <div
+          v-if="downsampleSummary"
+          class="mt-3 rounded-lg border p-3"
+          :class="downsampleSummaryToneClass"
+          data-testid="overview-downsample-summary"
+        >
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('overviewDownsampleSummaryTitle') }}</p>
+              <p class="text-[11px] mts-muted">{{ t('overviewDownsampleSummaryDesc') }}</p>
+            </div>
+            <router-link class="mts-btn text-xs" :to="downsampleSummaryPath" data-testid="overview-go-downsample">{{ t('overviewDownsampleGo') }}</router-link>
+          </div>
+          <div class="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <div data-testid="overview-downsample-total">{{ t('overviewDownsampleTotal') }}: <span class="font-semibold">{{ downsampleSummaryView.total }}</span></div>
+            <div data-testid="overview-downsample-errors">{{ t('overviewDownsampleErrors') }}: <span class="font-semibold">{{ downsampleSummaryView.error }}</span></div>
+            <div data-testid="overview-downsample-lagging">{{ t('overviewDownsampleLagging') }}: <span class="font-semibold">{{ downsampleSummaryView.lagging }}</span></div>
+            <div data-testid="overview-downsample-max-lag">{{ t('overviewDownsampleMaxLag') }}: <span class="font-semibold">{{ downsampleSummaryView.max_lag_seconds }}s</span></div>
+          </div>
+        </div>
       </div>
     </template>
   </div>

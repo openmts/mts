@@ -344,7 +344,11 @@ func (r *serverRuntime) handleDownsampleStatuses(writer http.ResponseWriter, req
 		return
 	}
 	statuses = filterDownsampleStatuses(statuses, request.URL.Query())
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleStatuses(downsampleStatusesResponse{Statuses: statuses}))
+	summary := summarizeDownsampleStatuses(statuses)
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleStatuses(downsampleStatusesResponse{
+		Statuses: statuses,
+		Summary:  &summary,
+	}))
 }
 
 func (r *serverRuntime) handleDownsamplePolicyResource(writer http.ResponseWriter, request *http.Request) {

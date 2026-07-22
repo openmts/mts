@@ -2105,3 +2105,14 @@
 | 状态筛选 | statuses query | health/min_lag + 本地二次过滤 | 可商用扫视 |
 | 导出 functions | policy.functions | export v3 | 交接核对 |
 | 状态→详情 | status/policy GET | 行点击 open detail | 只读 |
+
+## P441（2026-07-22）
+- Server：`GET /admin/downsample/statuses` 附带 `summary`（total/enabled/active/error/lagging/max_lag）
+- Overview：降采样健康卡片 + 跳转 Downsample
+- 纯函数 `downsampleStatusSummary` 单测
+
+### 前后端对齐（P441）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| statuses summary | summary 字段 | Overview 卡片 | 过滤后汇总 |
+| 跳转 | — | /downsample#status | 运维下钻 |

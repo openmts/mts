@@ -2526,6 +2526,11 @@ test('commercial browser smoke path', async ({ page }) => {
   // 15) Overview 就绪评分入口
   await page.goto('/')
   await expect(page.getByTestId('overview-readiness-score')).toBeVisible()
+  // P441: Overview 降采样健康摘要（admin 数据加载后）
+  if (await page.getByTestId('overview-downsample-summary').count()) {
+    await expect(page.getByTestId('overview-downsample-total')).toBeVisible()
+    await expect(page.getByTestId('overview-go-downsample')).toBeVisible()
+  }
   await expect(page.getByTestId('overview-readiness-total')).toBeVisible()
   await expect(page.getByTestId('overview-go-deploy-kit')).toBeVisible()
   await expect(page.getByTestId('overview-signoff-completeness')).toBeVisible()

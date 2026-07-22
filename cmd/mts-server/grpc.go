@@ -803,7 +803,8 @@ func grpcDownsamplePolicyStatuses(r *serverRuntime, ctx context.Context, _ any) 
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToDownsampleStatuses(downsampleStatusesResponse{Statuses: statuses}), nil
+	summary := summarizeDownsampleStatuses(statuses)
+	return r.attachAdminOpToDownsampleStatuses(downsampleStatusesResponse{Statuses: statuses, Summary: &summary}), nil
 }
 
 func grpcRunDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
