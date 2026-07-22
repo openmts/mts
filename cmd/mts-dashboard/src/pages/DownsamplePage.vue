@@ -549,6 +549,7 @@ async function confirmBatch() {
     )
     const cancelledSummary = cancelledBox.summary
     if (cancelledSummary) {
+      applyAdminOpStatus(parseAdminOpStatusPayload(cancelledSummary as unknown as { admin_op_busy?: unknown; op?: unknown; started_at_unix?: unknown; last?: unknown }))
       const processed = cancelledSummary.ok_count + cancelledSummary.skip_count + cancelledSummary.fail_count
       const msg = formatMessage(t.value('listBatchCancelledPartial'), {
         done: processed || batchProgress.value.done,

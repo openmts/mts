@@ -12,6 +12,18 @@ async function login(page: Page, user: string, password: string) {
 
 test.describe.configure({ mode: 'serial' })
 
+
+async function expectFailAdminLast(
+  page: Page,
+  pageTestId: string,
+  lastTestId: string,
+) {
+  await expect(page.getByTestId(pageTestId)).toBeVisible()
+  await expect(page.getByTestId(lastTestId)).toHaveAttribute('data-ok', 'false')
+  await expect(page.getByTestId(`${lastTestId}-error`)).toContainText(/e2e disk full/i)
+  await expect(page.getByTestId(`${lastTestId}-copy`)).toBeVisible()
+}
+
 test('commercial browser smoke path', async ({ page }) => {
   test.setTimeout(180_000)
   // 脏表单离开确认：冒烟路径自动接受，避免深链被 confirm 卡住
@@ -514,7 +526,7 @@ test('commercial browser smoke path', async ({ page }) => {
       })
       return
     }
-    if (url.includes('/admin/audit')) {
+    if (url.includes('/admin/audit') || (url.includes('/users/') && url.includes('/audit'))) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -576,7 +588,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.route('**/api/v1/admin/config', fulfillFailLast)
   await page.route('**/api/v1/admin/api-spec', fulfillFailLast)
   await page.route('**/api/v1/admin/error-codes', fulfillFailLast)
-  await page.route('**/api/v1/admin/audit', fulfillFailLast)
+  await page.route('**/api/v1/admin/audit**', fulfillFailLast)
+  await page.route('**/api/v1/users/**/audit**', fulfillFailLast)
   await page.route('**/api/v1/admin/downsample/policies', fulfillFailLast)
   await page.route('**/api/v1/admin/downsample/statuses', fulfillFailLast)
   await page.route('**/api/v1/users', fulfillFailLast)
@@ -770,10 +783,28 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('query-admin-last-copy')).toBeVisible()
   // P415: Users 页 last 芯片（列表加载 apply；grant/revoke/batch 路径已 mock）
   await page.goto('/users')
-  await expect(page.getByTestId('users-page')).toBeVisible()
-  await expect(page.getByTestId('users-admin-last')).toHaveAttribute('data-ok', 'false')
-  await expect(page.getByTestId('users-admin-last-error')).toContainText(/e2e disk full/i)
-  await expect(page.getByTestId('users-admin-last-copy')).toBeVisible()
+  await expectFailAdminLast(page, 'users-page', 'users-admin-last')
+  // P417: 管理页 fail-last 芯片覆盖（列表/配置加载 apply；Metrics/AccessMatrix 走 refresh）
+  await page.goto('/config')
+  await expectFailAdminLast(page, 'config-page', 'config-admin-last')
+  await page.goto('/downsample')
+  await expectFailAdminLast(page, 'downsample-page', 'downsample-admin-last')
+  await page.goto('/databases')
+  await expectFailAdminLast(page, 'databases-page', 'databases-admin-last')
+  await page.goto('/audit')
+  await expectFailAdminLast(page, 'audit-page', 'audit-admin-last')
+  await page.goto('/access')
+  await expectFailAdminLast(page, 'access-matrix-page', 'access-matrix-admin-last')
+  await page.goto('/access/grants')
+  await expectFailAdminLast(page, 'access-grants-page', 'access-grants-admin-last')
+  await page.goto('/observability/metrics')
+  await expectFailAdminLast(page, 'metrics-page', 'metrics-admin-last')
+  await page.goto('/about')
+  await expectFailAdminLast(page, 'about-page', 'about-admin-last')
+  await page.goto('/api-spec')
+  await expectFailAdminLast(page, 'api-spec-page', 'api-spec-admin-last')
+  await page.goto('/account')
+  await expectFailAdminLast(page, 'account-page', 'account-admin-last')
   // P386: 失败 last 进入就绪评分原因（本地化文案）
   await page.goto('/ops/readiness')
   await expect(page.getByRole('main').getByRole('heading', { name: /就绪中心|Commercial readiness|可商用就绪/ })).toBeVisible()
@@ -793,7 +824,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/admin/config', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/api-spec', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/error-codes', fulfillFailLast).catch(() => {})
-  await page.unroute('**/api/v1/admin/audit', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/audit**', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/users/**/audit**', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/downsample/policies', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/downsample/statuses', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/users', fulfillFailLast).catch(() => {})

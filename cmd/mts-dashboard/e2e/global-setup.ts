@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { createWriteStream, mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs'
+import { createWriteStream, mkdirSync, writeFileSync, chmodSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
@@ -16,6 +16,12 @@ const HTTP_ADDR = process.env.MTS_E2E_HTTP_ADDR || '127.0.0.1:18086'
 const GRPC_ADDR = process.env.MTS_E2E_GRPC_ADDR || '127.0.0.1:19096'
 
 function writeConfig() {
+  // 每次冒烟使用干净 data_dir，避免上次强制改密残留导致 admin/admin 失败
+  try {
+    rmSync(STATE_DIR, { recursive: true, force: true })
+  } catch {
+    // ignore
+  }
   mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 })
   mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 })
   mkdirSync(BACKUP_DIR, { recursive: true, mode: 0o700 })

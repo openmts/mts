@@ -1793,3 +1793,15 @@
 |--------|------|------|-----------------|------|
 | storage snapshots DELETE | 是（既有） | 是（既有） | 是 | 删快照成功响应 |
 
+## P417（2026-07-22）
+- e2e fail-last：扩展 Config/Downsample/Databases/Audit/AccessMatrix/AccessGrants/Metrics/About/ApiSpec/Account 页 last 芯片断言（与列表/配置加载 apply 或 refreshAdminOpBusy 对齐）
+- e2e global-setup 每次清理 data_dir，避免强制改密残留导致 bootstrap admin/admin 登录失败
+- 抽取 `expectFailAdminLast` 辅助，降低 commercial-smoke 重复
+- Users/Downsample batch 取消 summary 也透传 apply busy/last（若服务端 summary 附带）
+
+### busy/last 覆盖矩阵（P417 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| fail-last 管理页芯片 | mock | — | 是 | 验收可见性 |
+| batch cancelled summary | 是（P415） | — | 是 | 取消路径不丢 last |
+
