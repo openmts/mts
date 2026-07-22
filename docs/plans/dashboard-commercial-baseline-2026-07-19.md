@@ -1510,3 +1510,12 @@
 
 ## P359（2026-07-22）
 - Config/Downsample/Readiness：标题区展示 last 摘要芯片
+
+## P360（2026-07-22）
+- Databases/Users：标题区展示 last 摘要芯片（admin）
+
+## P361（2026-07-22）
+- 命令面板：关闭最近管理重操作条动作 + 纯函数反馈
+
+## P362（2026-07-22）
+- e2e：flush 后 Databases/Users 可见 last 芯片

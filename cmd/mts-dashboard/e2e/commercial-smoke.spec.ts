@@ -333,6 +333,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('ops-status-refresh-busy').click()
   await expect(page.getByTestId('ops-status-last')).toContainText(/flush|Flush|刷盘/i)
 
+  // P360: 其它管理页可看到 last 摘要芯片
+  await page.goto('/databases')
+  await expect(page.getByTestId('databases-page')).toBeVisible()
+  await expect(page.getByTestId('databases-admin-last')).toBeVisible()
+  await expect(page.getByTestId('databases-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
+  await page.goto('/users')
+  await expect(page.getByTestId('users-page')).toBeVisible()
+  await expect(page.getByTestId('users-admin-last')).toBeVisible()
+
   // 6) 权限矩阵 / 实时授权 / 指标
   await page.goto('/access')
   await expect(page.getByTestId('access-matrix-page')).toBeVisible()

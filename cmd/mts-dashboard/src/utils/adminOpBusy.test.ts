@@ -28,6 +28,7 @@ import {
   adminOpLastToneClass,
   adminOpLastBannerSurfaceClass,
   adminOpLastChipSurfaceClass,
+  commandAdminOpLastDismissFeedback,
   shouldPollAdminOpBusy,
 } from './adminOpBusy.ts'
 
@@ -302,4 +303,19 @@ test('adminOpLast banner/chip surface classes', () => {
   assert.match(adminOpLastBannerSurfaceClass(null), /slate/)
   assert.match(adminOpLastChipSurfaceClass(false), /red/)
   assert.match(adminOpLastChipSurfaceClass(true), /emerald/)
+})
+
+test('commandAdminOpLastDismissFeedback', () => {
+  assert.deepEqual(commandAdminOpLastDismissFeedback({ isAdmin: false, hasLastSummary: true, alreadyDismissed: false }), {
+    kind: 'denied',
+  })
+  assert.deepEqual(commandAdminOpLastDismissFeedback({ isAdmin: true, hasLastSummary: false, alreadyDismissed: false }), {
+    kind: 'empty',
+  })
+  assert.deepEqual(commandAdminOpLastDismissFeedback({ isAdmin: true, hasLastSummary: true, alreadyDismissed: true }), {
+    kind: 'already_dismissed',
+  })
+  assert.deepEqual(commandAdminOpLastDismissFeedback({ isAdmin: true, hasLastSummary: true, alreadyDismissed: false }), {
+    kind: 'dismissed',
+  })
 })

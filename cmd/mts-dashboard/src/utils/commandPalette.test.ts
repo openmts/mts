@@ -145,6 +145,7 @@ test('command actions catalog and filter', () => {
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-reload-page'))
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-retry-last-action'))
   assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-refresh-admin-op-busy' && i.adminOnly))
+  assert.ok(COMMAND_ACTION_ITEMS.some((i) => i.id === 'action-dismiss-admin-op-last' && i.adminOnly))
   assert.ok(COMMAND_ACTION_ITEMS.every((i) => isCommandAction(i)))
   const all = allVisibleCommandItems(true)
   assert.ok(all.some((i) => i.id === 'action-toggle-theme'))
@@ -162,6 +163,8 @@ test('command actions catalog and filter', () => {
   assert.ok(filterCommandItems(all, '重试失败', resolve).some((i) => i.id === 'action-retry-last-action'))
   assert.ok(filterCommandItems(all, '刷新占用', resolve).some((i) => i.id === 'action-refresh-admin-op-busy'))
   assert.ok(filterCommandItems(all, 'admin busy', resolve).some((i) => i.id === 'action-refresh-admin-op-busy'))
+  assert.ok(filterCommandItems(all, '关闭最近', resolve).some((i) => i.id === 'action-dismiss-admin-op-last'))
+  assert.ok(filterCommandItems(all, 'dismiss last', resolve).some((i) => i.id === 'action-dismiss-admin-op-last'))
   assert.equal(allVisibleCommandItems(false).some((i) => i.id === 'action-refresh-admin-op-busy'), false)
 })
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, onMounted, computed, inject, watch, onBeforeUnmount, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet, apiPost, apiDelete } from '@/api/client'
@@ -28,6 +28,7 @@ import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
@@ -85,6 +86,8 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const databasesAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const route = useRoute()
 const router = useRouter()
@@ -748,7 +751,16 @@ onBeforeUnmount(() => {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('databases') }}</h1>
-        <p class="text-xs mts-muted">{{ isAdmin ? t('databasesDesc') : t('databasesReadOnlyDesc') }}</p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs mts-muted">{{ isAdmin ? t('databasesDesc') : t('databasesReadOnlyDesc') }}</p>
+          <span
+            v-if="isAdmin && databasesAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="databases-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="databasesAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ databasesAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex flex-wrap gap-2">
         <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />

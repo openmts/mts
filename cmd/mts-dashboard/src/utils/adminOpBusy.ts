@@ -11,9 +11,10 @@ import {
   adminOpLastToneClass,
   adminOpLastBannerSurfaceClass,
   adminOpLastChipSurfaceClass,
+  commandAdminOpLastDismissFeedback,
 } from './adminOpLast.ts'
 
-export type { AdminHeavyLast } from './adminOpLast.ts'
+export type { AdminHeavyLast, CommandAdminOpLastDismissFeedback } from './adminOpLast.ts'
 export {
   formatAdminHeavyLastSummary,
   parseAdminHeavyLast,
@@ -23,6 +24,7 @@ export {
   adminOpLastToneClass,
   adminOpLastBannerSurfaceClass,
   adminOpLastChipSurfaceClass,
+  commandAdminOpLastDismissFeedback,
 } from './adminOpLast.ts'
 
 export type AdminOpKind =

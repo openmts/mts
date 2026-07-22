@@ -3,7 +3,12 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch, typ
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, commandAdminOpRefreshFeedback, joinAdminOpChip } from '@/utils/adminOpBusy'
+import {
+  adminOpKindLabelKey,
+  commandAdminOpLastDismissFeedback,
+  commandAdminOpRefreshFeedback,
+  joinAdminOpChip,
+} from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
@@ -52,7 +57,7 @@ let trap: FocusTrapHandle | null = null
 const router = useRouter()
 const { isAdmin } = useAuth()
 const { adminOpBusy, adminOpKind, refreshAdminOpBusy } = useAdminOpBusy()
-const injectedAdminOpSummary = inject<ComputedRef<{ busy: boolean; op: string; opLabel: string; elapsed?: string; detail: string }> | undefined>('adminOpBusySummary', undefined)
+const injectedAdminOpSummary = inject<ComputedRef<{ busy: boolean; op: string; opLabel: string; elapsed?: string; detail: string; lastSummary?: string }> | undefined>('adminOpBusySummary', undefined)
 const { t, toggleLocale } = useI18n()
 const { toggleTheme } = useTheme()
 const { density, toggleDensity } = useDensity()
@@ -61,6 +66,8 @@ const { notifyMaybeAdminBusy, notifyAdminBusy } = useNotifyAdminBusy()
 
 const focusSidebarFilter = inject<(() => void) | undefined>('focusSidebarFilter', undefined)
 const openNotifyHistory = inject<(() => void) | undefined>('openNotifyHistory', undefined)
+const dismissAdminOpLastBanner = inject<(() => void) | undefined>('dismissAdminOpLastBanner', undefined)
+const showAdminOpLastBanner = inject<import('vue').ComputedRef<boolean> | undefined>('showAdminOpLastBanner', undefined)
 const openShortcutsHelp = inject<(() => void) | undefined>('openShortcutsHelp', undefined)
 const toggleSidebarCollapse = inject<(() => void) | undefined>('toggleSidebarCollapse', undefined)
 const scrollMainToTop = inject<(() => void) | undefined>('scrollMainToTop', undefined)
@@ -260,6 +267,30 @@ function runAction(action: CommandActionId) {
           else if (fb.kind === 'error') notifyError(fb.message)
           else notifyAdminBusy()
         })
+      break
+    }
+    case 'dismiss-admin-op-last': {
+      const hasLast = Boolean((injectedAdminOpSummary?.value?.lastSummary || '').trim())
+      const showing = Boolean(showAdminOpLastBanner?.value)
+      const fb = commandAdminOpLastDismissFeedback({
+        isAdmin: isAdmin.value,
+        hasLastSummary: hasLast || showing,
+        alreadyDismissed: hasLast && !showing,
+      })
+      if (fb.kind === 'denied') {
+        notifyError(t.value('permissionDenied') || 'admin only')
+        break
+      }
+      if (fb.kind === 'empty') {
+        notifyError(t.value('cmdActionDismissAdminOpLastEmpty'))
+        break
+      }
+      if (fb.kind === 'already_dismissed') {
+        success(t.value('cmdActionDismissAdminOpLastAlready'))
+        break
+      }
+      dismissAdminOpLastBanner?.()
+      success(t.value('cmdActionDismissAdminOpLastDone'))
       break
     }
     case 'retry-last-action': {

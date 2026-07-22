@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { inject, type ComputedRef,  ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiDelete, apiGet, apiPost, apiPostNDJSONStream, apiPut } from '@/api/client'
@@ -26,6 +26,7 @@ import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
+import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
@@ -104,6 +105,8 @@ const {
   pruneTo,
 } = useListSelection(visibleUserIds)
 const databases = ref<string[]>([])
+const adminOpBusySummary = inject<ComputedRef<{ lastSummary?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
+const usersAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
 const { currentUser, isAdmin } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
@@ -779,7 +782,16 @@ onBeforeUnmount(() => {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('usersTitle') }}</h1>
-        <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('usersDesc') }}</p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('usersDesc') }}</p>
+          <span
+            v-if="isAdmin && usersAdminLastLabel"
+            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
+            data-testid="users-admin-last"
+            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
+            :title="usersAdminLastLabel"
+          >{{ t('opsStatusLastLabel') }}: {{ usersAdminLastLabel }}</span>
+        </div>
       </div>
       <div class="flex gap-2">
         <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />

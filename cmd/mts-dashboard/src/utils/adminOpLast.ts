@@ -151,3 +151,21 @@ export function adminOpLastChipSurfaceClass(ok: boolean | null | undefined): str
   }
   return 'inline-flex max-w-full truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200'
 }
+
+export type CommandAdminOpLastDismissFeedback =
+  | { kind: 'denied' }
+  | { kind: 'empty' }
+  | { kind: 'already_dismissed' }
+  | { kind: 'dismissed' }
+
+/** 命令面板「关闭最近管理重操作条」反馈（纯函数） */
+export function commandAdminOpLastDismissFeedback(opts: {
+  isAdmin: boolean
+  hasLastSummary: boolean
+  alreadyDismissed: boolean
+}): CommandAdminOpLastDismissFeedback {
+  if (!opts.isAdmin) return { kind: 'denied' }
+  if (!opts.hasLastSummary) return { kind: 'empty' }
+  if (opts.alreadyDismissed) return { kind: 'already_dismissed' }
+  return { kind: 'dismissed' }
+}

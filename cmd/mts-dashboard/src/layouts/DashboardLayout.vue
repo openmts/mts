@@ -158,6 +158,11 @@ provide('adminOpBusySummary', computed(() => ({
   lastOk: adminOpLast.value ? adminOpLast.value.ok : null,
   lastFinishedAtUnix: adminOpLast.value?.finishedAtUnix ?? null,
 })))
+provide('dismissAdminOpLastBanner', dismissAdminOpLastBanner)
+provide(
+  'showAdminOpLastBanner',
+  computed(() => showAdminOpLastBanner.value),
+)
 const { showUnreachableBanner, checkOnce: retryReadyz, checking: reachChecking } = useServerReachability()
 
 function retryNetworkStatus() {

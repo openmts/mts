@@ -32,6 +32,7 @@ export type CommandActionId =
   | 'reload-page'
   | 'retry-last-action'
   | 'refresh-admin-op-busy'
+  | 'dismiss-admin-op-last'
 
 /** 页内快捷动作（不离开当前路由，除非动作本身导航） */
 export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
@@ -173,6 +174,23 @@ export const COMMAND_ACTION_ITEMS: CommandNavItem[] = [
     kind: 'action',
     adminOnly: true,
     action: 'refresh-admin-op-busy',
+  },
+  {
+    id: 'action-dismiss-admin-op-last',
+    path: 'action:dismiss-admin-op-last',
+    labelKey: 'cmdActionDismissAdminOpLast',
+    keywords: [
+      'dismiss last',
+      'close last op',
+      'hide last',
+      '关闭最近',
+      '关闭最近一次',
+      '关闭管理重操作',
+      'dismiss admin last',
+    ],
+    kind: 'action',
+    adminOnly: true,
+    action: 'dismiss-admin-op-last',
   },
 ]
 
