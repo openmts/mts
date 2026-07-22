@@ -517,14 +517,14 @@ func grpcGetConfig(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return configResponse{Config: r.effectiveConfig()}, nil
+	return r.configPayload(), nil
 }
 
 func grpcGetConfigSchema(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return configSchemaResponse{Fields: configSchema()}, nil
+	return r.configSchemaPayload(), nil
 }
 
 func grpcValidateConfig(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -549,14 +549,14 @@ func grpcGetAPISpec(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return apiSpec(), nil
+	return r.apiSpecPayload(), nil
 }
 
 func grpcGetErrorCodes(r *serverRuntime, ctx context.Context, _ any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return errorCodeSpecs(), nil
+	return r.errorCodesPayload(), nil
 }
 
 func grpcApplyRetention(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -805,7 +805,7 @@ func grpcListAudit(r *serverRuntime, _ context.Context, req any) (any, error) {
 		request = &auditListRequest{}
 	}
 	events := r.audit.listFiltered(*request)
-	return auditListResponse{Events: events, Total: len(events)}, nil
+	return r.attachAdminOpToAudit(auditListResponse{Events: events, Total: len(events)}), nil
 }
 
 func grpcListStorageSnapshots(r *serverRuntime, _ context.Context, _ any) (any, error) {

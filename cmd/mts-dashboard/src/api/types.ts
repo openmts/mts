@@ -242,6 +242,54 @@ export interface StorageExportResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/admin/config/effective|config（含 busy/last） */
+export interface ConfigResponse {
+  config: Record<string, unknown>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/config/schema（含 busy/last） */
+export interface ConfigSchemaResponse {
+  fields?: Array<{ name?: string; description?: string }>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/api-spec（含 busy/last） */
+export interface AdminAPISpecResponse {
+  version?: string
+  namespaces?: unknown[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/error-codes（含 busy/last） */
+export interface AdminErrorCodesResponse {
+  codes?: unknown[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/audit（含 busy/last） */
+export interface AdminAuditResponse {
+  events?: unknown[]
+  total?: number
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+
 
 export interface UserInfo {
   name: string

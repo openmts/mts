@@ -1648,3 +1648,9 @@
 ## P403（2026-07-22）
 - Server：`storage/snapshots`、`storage/data-snapshots`、`storage/export`（HTTP/gRPC）附带 `admin_op_busy/op/started_at_unix/last`
 - Dashboard Storage 列表/导出加载时 `applyAdminOpStatus`；api-spec 描述对齐；HTTP 单测 busy/last；e2e fail-last mock 同步
+
+## P404（2026-07-22）
+- Server：config/effective|schema、api-spec、error-codes、audit 列表附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）
+- Dashboard Config/ApiSpec/Audit 加载时 `applyAdminOpStatus`；types/registry 描述对齐
+- `AdminOpLastChip` a11y：芯片/复制钮/错误明细 `aria-label` + 错误 `role=status`
+- e2e fail-last mock 同步；overview 复制钮与芯片 aria 断言

@@ -70,6 +70,13 @@ const chipTitle = computed(() => {
   return props.label
 })
 
+const chipAriaLabel = computed(() => {
+  const base = `${t.value('opsStatusLastLabel')}: ${String(props.label || '').trim()}`
+  if (props.lastOk === false) return `${base}; ${t.value('adminOpLastErrorLabel')}`
+  if (props.lastOk === true) return `${base}; ok`
+  return base
+})
+
 function openOps() {
   if (!props.linkToOps) return
   const path = ADMIN_OP_BUSY_OPS_PATH
@@ -116,6 +123,7 @@ async function copyLast(ev?: Event) {
     :data-testid="testId"
     :data-ok="dataOk"
     :title="chipTitle"
+    :aria-label="chipAriaLabel"
     :role="linkToOps ? 'link' : undefined"
     :tabindex="linkToOps ? 0 : undefined"
     @click="openOps"
@@ -128,13 +136,16 @@ async function copyLast(ev?: Event) {
     class="mts-btn py-0.5 text-[11px] shrink-0"
     :data-testid="copyTestId"
     :title="t('opsStatusLastCopy')"
+    :aria-label="t('opsStatusLastCopy')"
     @click="copyLast"
   >
-    <Copy class="h-3 w-3" /> {{ t('opsStatusLastCopy') }}
+    <Copy class="h-3 w-3" aria-hidden="true" /> {{ t('opsStatusLastCopy') }}
   </button>
   <span
     v-if="errorDetail"
     class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
     :data-testid="errorTestId"
+    role="status"
+    :aria-label="`${t('adminOpLastErrorLabel')}: ${errorDetail}`"
   >{{ t('adminOpLastErrorLabel') }}: {{ errorDetail }}</span>
 </template>

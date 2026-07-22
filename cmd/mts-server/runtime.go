@@ -549,6 +549,57 @@ func (r *serverRuntime) storageExportPayload(ctx context.Context) storageExportR
 	}
 }
 
+func (r *serverRuntime) configPayload() configResponse {
+	busy, op, started := r.adminHeavyState()
+	return configResponse{
+		Config:        r.effectiveConfig(),
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
+	}
+}
+
+func (r *serverRuntime) configSchemaPayload() configSchemaResponse {
+	busy, op, started := r.adminHeavyState()
+	return configSchemaResponse{
+		Fields:        configSchema(),
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
+	}
+}
+
+func (r *serverRuntime) apiSpecPayload() apiSpecResponse {
+	busy, op, started := r.adminHeavyState()
+	resp := apiSpec()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) errorCodesPayload() errorCodesResponse {
+	busy, op, started := r.adminHeavyState()
+	resp := errorCodeSpecs()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToAudit(resp auditListResponse) auditListResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {

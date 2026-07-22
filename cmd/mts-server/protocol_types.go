@@ -266,11 +266,19 @@ type seriesResponse struct {
 }
 
 type configResponse struct {
-	Config config `json:"config"`
+	Config        config                `json:"config"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type configSchemaResponse struct {
-	Fields []configFieldSchema `json:"fields"`
+	Fields        []configFieldSchema   `json:"fields"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type configValidateRequest struct {
@@ -320,8 +328,12 @@ type versionResponse struct {
 }
 
 type apiSpecResponse struct {
-	Version    string         `json:"version"`
-	Namespaces []apiNamespace `json:"namespaces"`
+	Version       string                `json:"version"`
+	Namespaces    []apiNamespace        `json:"namespaces"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type apiNamespace struct {
@@ -338,7 +350,11 @@ type apiEndpoint struct {
 }
 
 type errorCodesResponse struct {
-	Codes []errorCodeSpec `json:"codes"`
+	Codes         []errorCodeSpec       `json:"codes"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type errorCodeSpec struct {

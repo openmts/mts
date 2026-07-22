@@ -765,6 +765,60 @@ func TestHTTPStorageListAndExportBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPConfigAPISpecAuditBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var cfgBusy configResponse
+	getJSONWithHeaders(t, server.URL+routeAdminConfigEffective, nil, http.StatusOK, &cfgBusy)
+	if !cfgBusy.AdminOpBusy || cfgBusy.Op != "compact" || cfgBusy.StartedAtUnix <= 0 {
+		t.Fatalf("config busy = %+v", cfgBusy)
+	}
+	var schemaBusy configSchemaResponse
+	getJSONWithHeaders(t, server.URL+routeAdminConfigSchema, nil, http.StatusOK, &schemaBusy)
+	if !schemaBusy.AdminOpBusy || schemaBusy.Op != "compact" {
+		t.Fatalf("schema busy = %+v", schemaBusy)
+	}
+	var specBusy apiSpecResponse
+	getJSONWithHeaders(t, server.URL+routeAdminAPISpec, nil, http.StatusOK, &specBusy)
+	if !specBusy.AdminOpBusy || specBusy.Op != "compact" || len(specBusy.Namespaces) == 0 {
+		t.Fatalf("api-spec busy = %+v", specBusy)
+	}
+	var codesBusy errorCodesResponse
+	getJSONWithHeaders(t, server.URL+routeAdminErrorCodes, nil, http.StatusOK, &codesBusy)
+	if !codesBusy.AdminOpBusy || codesBusy.Op != "compact" || len(codesBusy.Codes) == 0 {
+		t.Fatalf("error-codes busy = %+v", codesBusy)
+	}
+	var auditBusy auditListResponse
+	getJSONWithHeaders(t, server.URL+routeAdminAudit, nil, http.StatusOK, &auditBusy)
+	if !auditBusy.AdminOpBusy || auditBusy.Op != "compact" {
+		t.Fatalf("audit busy = %+v", auditBusy)
+	}
+	runtime.finishAdminHeavy(errors.New("config probe fail"))
+	var cfgDone configResponse
+	getJSONWithHeaders(t, server.URL+routeAdminConfigEffective, nil, http.StatusOK, &cfgDone)
+	if cfgDone.AdminOpBusy {
+		t.Fatal("config want not busy")
+	}
+	if cfgDone.Last == nil || cfgDone.Last.Op != "compact" || cfgDone.Last.OK || cfgDone.Last.Error != "config probe fail" {
+		t.Fatalf("config last = %+v", cfgDone.Last)
+	}
+	var specDone apiSpecResponse
+	getJSONWithHeaders(t, server.URL+routeAdminAPISpec, nil, http.StatusOK, &specDone)
+	if specDone.Last == nil || specDone.Last.Op != "compact" || specDone.Last.OK || specDone.Last.Error != "config probe fail" {
+		t.Fatalf("api-spec last = %+v", specDone.Last)
+	}
+	var auditDone auditListResponse
+	getJSONWithHeaders(t, server.URL+routeAdminAudit, nil, http.StatusOK, &auditDone)
+	if auditDone.Last == nil || auditDone.Last.Op != "compact" || auditDone.Last.OK || auditDone.Last.Error != "config probe fail" {
+		t.Fatalf("audit last = %+v", auditDone.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

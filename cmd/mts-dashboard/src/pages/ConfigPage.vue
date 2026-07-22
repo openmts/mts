@@ -9,7 +9,8 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { actionResultAdminBusyAction, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import { useI18n } from '@/composables/useI18n'
@@ -36,19 +37,38 @@ import { RefreshCw, CheckCircle, Download, Copy } from 'lucide-vue-next'
 import PasswordInputWithToggle from '@/components/PasswordInputWithToggle.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
-interface ConfigResponse { config: Record<string, unknown> }
+interface ConfigResponse {
+  config: Record<string, unknown>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface ValidateResponse { ok: boolean; error?: string }
 interface ReloadResponse { ok: boolean; fields: string[] }
 interface ErrorCodeSpec { code: string; http_status: number; grpc_code: string; description: string }
-interface ErrorCodesResponse { codes: ErrorCodeSpec[] }
+interface ErrorCodesResponse {
+  codes: ErrorCodeSpec[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface SchemaField { name: string; description: string }
-interface SchemaResponse { fields: SchemaField[] }
+interface SchemaResponse {
+  fields: SchemaField[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 
 useHashScroll()
 const route = useRoute()
 const { isAdmin } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
+const { applyAdminOpStatus } = useAdminOpBusy()
 const { success, info, error: notifyError } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 const adminOpBusySummary = inject<ComputedRef<{ busy?: boolean; lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
@@ -189,6 +209,7 @@ async function reloadAllConfig() {
 async function reloadConfigSchema() {
   try {
     const schemaData = await apiGet<SchemaResponse>('/api/v1/admin/config/schema')
+    applyAdminOpStatus(parseAdminOpStatusPayload(schemaData))
     schemaFields.value = schemaData.fields ?? []
     schemaError.value = ''
   } catch (e) {
@@ -204,6 +225,7 @@ async function reloadConfigSchema() {
 async function reloadErrorCodes() {
   try {
     const data = await apiGet<ErrorCodesResponse>('/api/v1/admin/error-codes')
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     errorCodes.value = data.codes ?? []
     errorCodesError.value = ''
   } catch (e) {
@@ -225,8 +247,10 @@ async function loadConfig() {
     apiGet<SchemaResponse>('/api/v1/admin/config/schema'),
   ])
   if (results[0].status !== 'fulfilled') throw results[0].reason
+  applyAdminOpStatus(parseAdminOpStatusPayload(results[0].value))
   config.value = results[0].value.config
   if (results[1].status === 'fulfilled') {
+    applyAdminOpStatus(parseAdminOpStatusPayload(results[1].value))
     errorCodes.value = results[1].value.codes ?? []
     errorCodesError.value = ''
   } else {
@@ -235,6 +259,7 @@ async function loadConfig() {
     errorCodesError.value = formatCaughtError(results[1].reason)
   }
   if (results[2].status === 'fulfilled') {
+    applyAdminOpStatus(parseAdminOpStatusPayload(results[2].value))
     schemaFields.value = results[2].value.fields ?? []
     schemaError.value = ''
   } else {

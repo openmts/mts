@@ -25,14 +25,14 @@ func (r *serverRuntime) handleAPISpec(writer http.ResponseWriter, request *http.
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, apiSpec())
+	writeHTTPJSON(writer, http.StatusOK, r.apiSpecPayload())
 }
 
 func (r *serverRuntime) handleErrorCodes(writer http.ResponseWriter, request *http.Request) {
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, errorCodeSpecs())
+	writeHTTPJSON(writer, http.StatusOK, r.errorCodesPayload())
 }
 
 func (r *serverRuntime) handleValidateConfig(writer http.ResponseWriter, request *http.Request) {
@@ -178,14 +178,14 @@ func (r *serverRuntime) handleConfig(writer http.ResponseWriter, request *http.R
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, configResponse{Config: r.effectiveConfig()})
+	writeHTTPJSON(writer, http.StatusOK, r.configPayload())
 }
 
 func (r *serverRuntime) handleConfigSchema(writer http.ResponseWriter, request *http.Request) {
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, configSchemaResponse{Fields: configSchema()})
+	writeHTTPJSON(writer, http.StatusOK, r.configSchemaPayload())
 }
 
 func (r *serverRuntime) handleFlush(writer http.ResponseWriter, request *http.Request) {
@@ -557,7 +557,7 @@ func (r *serverRuntime) handleListAudit(writer http.ResponseWriter, request *htt
 		}
 	}
 	events := r.audit.listFiltered(req)
-	writeHTTPJSON(writer, http.StatusOK, auditListResponse{Events: events, Total: len(events)})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToAudit(auditListResponse{Events: events, Total: len(events)}))
 }
 
 func (r *serverRuntime) handleListStorageSnapshots(writer http.ResponseWriter, request *http.Request) {

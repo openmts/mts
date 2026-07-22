@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseApiSpecPrefill, apiSpecFormToPrefill } from '@/utils/routePrefill'
 import { apiGet } from '@/api/client'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
@@ -38,6 +40,10 @@ interface APINamespace {
 interface APISpecResponse {
   version?: string
   namespaces: APINamespace[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
 }
 
 const { isAdmin } = useAuth()
@@ -62,6 +68,7 @@ const {
   runJSONExport,
 } = useExportJob()
 const { t, locale } = useI18n()
+const { applyAdminOpStatus } = useAdminOpBusy()
 const loading = ref(false)
 const loadError = ref('')
 const version = ref('')
@@ -76,6 +83,7 @@ async function load() {
   loading.value = true
   try {
     const data = await apiGet<APISpecResponse>('/api/v1/admin/api-spec')
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     version.value = data.version || 'v1'
     namespaces.value = data.namespaces || []
     if (!nsFilter.value && namespaces.value.length) {

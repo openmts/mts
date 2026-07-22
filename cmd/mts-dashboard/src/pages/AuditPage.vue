@@ -9,6 +9,8 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import { apiGet } from '@/api/client'
+import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
+import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useAuth } from '@/composables/useAuth'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
@@ -51,7 +53,14 @@ interface AuditEvent {
   database?: string
   detail?: string
 }
-interface AuditResponse { events: AuditEvent[]; total?: number }
+interface AuditResponse {
+  events: AuditEvent[]
+  total?: number
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 
 useHashScroll()
 const route = useRoute()
@@ -63,6 +72,7 @@ const auditAdminLastErrorDetail = computed(() => {
 })
 const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
+const { applyAdminOpStatus } = useAdminOpBusy()
 const { success, info, error: notifyError, warn } = useNotify()
 const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
@@ -238,6 +248,7 @@ async function loadAudit() {
       limit: limit.value,
     })
     const data = await apiGet<AuditResponse>(`/api/v1/admin/audit?${qs}`)
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     auditEvents.value = data.events ?? []
     serverTotal.value = typeof data.total === 'number' ? data.total : (data.events ?? []).length
     clearSelection()

@@ -458,7 +458,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "get_config",
 			Namespace:   "admin",
-			Description: "read config",
+			Description: "read config (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminConfig, routeAdminConfigEffective},
@@ -470,7 +470,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "get_effective_config",
 			Namespace:   "admin",
-			Description: "read effective config",
+			Description: "read effective config (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodGetEffectiveConfig,
 			GRPCRequest: &emptyRequest{},
@@ -479,7 +479,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "get_config_schema",
 			Namespace:   "admin",
-			Description: "read config schema",
+			Description: "read config schema (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminConfigSchema},
@@ -515,7 +515,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "get_api_spec",
 			Namespace:   "admin",
-			Description: "read API contract",
+			Description: "read API contract (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminAPISpec},
@@ -527,7 +527,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "get_error_codes",
 			Namespace:   "admin",
-			Description: "read error code contract",
+			Description: "read error code contract (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminErrorCodes},
@@ -737,7 +737,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "list_audit",
 			Namespace:   "admin",
-			Description: "list audit events with optional filters",
+			Description: "list audit events with optional filters (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminAudit},

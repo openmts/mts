@@ -481,6 +481,46 @@ test('commercial browser smoke path', async ({ page }) => {
       })
       return
     }
+    if (url.includes('/config/schema')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ fields: [], ...failLastPayload }),
+      })
+      return
+    }
+    if (url.includes('/config/effective') || url.endsWith('/admin/config') || url.includes('/admin/config?')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ config: {}, ...failLastPayload }),
+      })
+      return
+    }
+    if (url.includes('/api-spec')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ version: 'v1', namespaces: [], ...failLastPayload }),
+      })
+      return
+    }
+    if (url.includes('/error-codes')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ codes: [], ...failLastPayload }),
+      })
+      return
+    }
+    if (url.includes('/admin/audit')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ events: [], total: 0, ...failLastPayload }),
+      })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -494,6 +534,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.route('**/api/v1/admin/storage/snapshots', fulfillFailLast)
   await page.route('**/api/v1/admin/storage/data-snapshots', fulfillFailLast)
   await page.route('**/api/v1/admin/storage/export', fulfillFailLast)
+  await page.route('**/api/v1/admin/config/effective', fulfillFailLast)
+  await page.route('**/api/v1/admin/config/schema', fulfillFailLast)
+  await page.route('**/api/v1/admin/config', fulfillFailLast)
+  await page.route('**/api/v1/admin/api-spec', fulfillFailLast)
+  await page.route('**/api/v1/admin/error-codes', fulfillFailLast)
+  await page.route('**/api/v1/admin/audit', fulfillFailLast)
   await page.route('**/api/v1/admin/maintenance/errors', fulfillFailLast)
   // doctor / admin health 加载也会 applyAdminOpStatus，需与 fail last 一致
   await page.route('**/api/v1/admin/doctor', async (route) => {
@@ -547,6 +593,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-admin-last')).toHaveAttribute('data-ok', 'false')
   await expect(page.getByTestId('overview-admin-last-error')).toContainText(/e2e disk full/i)
   await expect(page.getByTestId('overview-admin-last-copy')).toBeVisible()
+  await expect(page.getByTestId('overview-admin-last')).toHaveAttribute('aria-label', /.+/)
+  await expect(page.getByTestId('overview-admin-last-copy')).toHaveAttribute('aria-label', /.+/)
   // P397: last 芯片可跳转运维状态条
   await page.getByTestId('overview-admin-last').click()
   await expect(page).toHaveURL(/\/operations/)
@@ -570,6 +618,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/admin/storage/snapshots', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/storage/data-snapshots', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/storage/export', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/config/effective', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/config/schema', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/config', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/api-spec', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/error-codes', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/audit', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/maintenance/errors', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/doctor').catch(() => {})
   await page.unroute('**/api/v1/admin/health').catch(() => {})
