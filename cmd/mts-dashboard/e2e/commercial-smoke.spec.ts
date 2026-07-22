@@ -301,6 +301,10 @@ test('commercial browser smoke path', async ({ page }) => {
   // P240/P241: 管理页可达与错误恢复入口存在
   await page.goto('/api-spec')
   await expect(page.getByTestId('api-spec-page').or(page.getByRole('main')).first()).toBeVisible()
+  // P466: data 契约可检索 row_count（查询 meta）
+  await page.goto('/api-spec?ns=data&q=row_count#api-spec-filters')
+  await expect(page.getByTestId('api-spec-search')).toBeVisible()
+  await expect(page.getByTestId('api-spec-search')).toHaveValue('row_count')
   await page.goto('/storage')
   await expect(page.getByTestId('storage-page')).toBeVisible()
   await expect(page.getByTestId('storage-list-error')).toHaveCount(0)
@@ -326,6 +330,11 @@ test('commercial browser smoke path', async ({ page }) => {
   if (await page.getByTestId('query-results-virtual-list').count()) {
     await expect(page.getByTestId('query-results-virtual-list')).toBeVisible()
     await expect(page.getByTestId('query-results-virtual-hint')).toBeVisible()
+    await expect(page.getByTestId('query-row-count')).toBeVisible()
+    // P466: 服务端 path 徽章（有结果时）
+    if (await page.getByTestId('query-result-path').count()) {
+      await expect(page.getByTestId('query-result-path')).toContainText('/api/v1/data/query/rows')
+    }
   }
   // P134: 查询历史面板虚拟列表（有历史时）
   await page.goto('/query#query-history')

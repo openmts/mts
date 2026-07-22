@@ -675,7 +675,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', 'api-spec-auth-session-seed', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', 'batch-admin-last', 'downsample-advanced-form', 'downsample-policy-detail', 'downsample-policy-deep-link', 'downsample-status-health', 'password-policy-public', 'session-remaining-calibration', 'login-session-seed', 'session-sample-source', 'overview-session-server-hint', 'clock-skew-banner', 'api-spec-password-policy', 'api-spec-auth-session-seed', 'query-result-meta', 'write-accepted-points', 'api-spec-query-rows-meta', '密码策略', '会话校准', '批量 last', '禁用会话', '降采样高级', '策略详情', '深链', '状态健康'],
     adminOnly: true,
   },
   {
@@ -899,6 +899,27 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
       '登录校准字段',
       'api-spec auth session',
     ],
+    adminOnly: true,
+  },
+  {
+    id: 'api-spec-query-rows-meta',
+    path: '/api-spec?ns=data&q=row_count#api-spec-filters',
+    labelKey: 'cmdApiSpecQueryRowsMeta',
+    keywords: ['query rows', 'row_count', 'query meta', '查询行', 'row_count', 'query_rows'],
+    adminOnly: true,
+  },
+  {
+    id: 'api-spec-query-columns-meta',
+    path: '/api-spec?ns=data&q=series_count#api-spec-filters',
+    labelKey: 'cmdApiSpecQueryColumnsMeta',
+    keywords: ['query columns', 'series_count', '列式查询', 'series_count', 'query_columns'],
+    adminOnly: true,
+  },
+  {
+    id: 'api-spec-write-points',
+    path: '/api-spec?ns=data&q=points#api-spec-filters',
+    labelKey: 'cmdApiSpecWritePoints',
+    keywords: ['write points', 'accepted points', '写入点数', 'writeResponse', 'points path'],
     adminOnly: true,
   },
   {

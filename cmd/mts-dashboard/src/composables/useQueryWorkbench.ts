@@ -1,6 +1,11 @@
 import { ref } from 'vue'
 import { formatCaughtError, resolveCaughtErrorCode } from '@/utils/apiError'
-import { queryAdminOpPayload } from '@/utils/queryResultMeta'
+import {
+  queryAdminOpPayload,
+  queryResultPath,
+  queryResultRowCount,
+  queryResultSeriesCount,
+} from '@/utils/queryResultMeta'
 import { apiPost, apiPostNDJSONStream } from '@/api/client'
 import {
   listDatabasesDetailed,
@@ -82,6 +87,13 @@ export function useQueryWorkbench() {
   const streamMeta = ref({ lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 })
   const actionError = ref('')
   const lastQueryErrorCode = ref('')
+  const lastQueryMeta = ref<{
+    path: string
+    rowCount: number
+    seriesCount: number
+    mode: QueryMode | ''
+  }>({ path: '', rowCount: 0, seriesCount: 0, mode: '' })
+
   const loading = ref(false)
   const queryStartedAt = ref<number | null>(null)
   let queryAbort: AbortController | null = null
@@ -381,6 +393,7 @@ export function useQueryWorkbench() {
     engineStatsSource.value = 'query'
     rawOutput.value = ''
     streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
+    lastQueryMeta.value = { path: '', rowCount: 0, seriesCount: 0, mode: '' }
   }
 
   async function executeQuery() {
@@ -407,6 +420,12 @@ export function useQueryWorkbench() {
         engineStatsSource.value = 'query'
         const rowsAdmin = queryAdminOpPayload(data)
         if (rowsAdmin) applyGlobalAdminOpStatus(parseAdminOpStatusPayload(rowsAdmin))
+        lastQueryMeta.value = {
+          path: queryResultPath(data, '/api/v1/data/query/rows'),
+          rowCount: queryResultRowCount(data, (data.rows ?? []).length),
+          seriesCount: 0,
+          mode: 'rows',
+        }
         actionError.value = ''
         lastQueryErrorCode.value = ''
       } else if (queryMode.value === 'explain') {
@@ -426,6 +445,12 @@ export function useQueryWorkbench() {
         streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
         const explainAdmin = queryAdminOpPayload(data)
         if (explainAdmin) applyGlobalAdminOpStatus(parseAdminOpStatusPayload(explainAdmin))
+        lastQueryMeta.value = {
+          path: queryResultPath(data, '/api/v1/data/query/explain'),
+          rowCount: 0,
+          seriesCount: Array.isArray(data.result?.columns) ? data.result!.columns!.length : 0,
+          mode: 'explain',
+        }
         actionError.value = ''
         lastQueryErrorCode.value = ''
       } else if (queryMode.value === 'columns') {
@@ -447,6 +472,12 @@ export function useQueryWorkbench() {
         engineStatsSource.value = 'query'
         const colsAdmin = queryAdminOpPayload(data)
         if (colsAdmin) applyGlobalAdminOpStatus(parseAdminOpStatusPayload(colsAdmin))
+        lastQueryMeta.value = {
+          path: queryResultPath(data, '/api/v1/data/query/columns'),
+          rowCount: 0,
+          seriesCount: queryResultSeriesCount(data, (data.columns ?? []).length),
+          mode: 'columns',
+        }
         actionError.value = ''
         lastQueryErrorCode.value = ''
       } else {
@@ -499,6 +530,12 @@ export function useQueryWorkbench() {
             : '')
         queryStats.value = endStats
         engineStatsSource.value = 'query'
+        lastQueryMeta.value = {
+          path: '/api/v1/data/query/stream',
+          rowCount: queryMode.value === 'stream-row' ? records : 0,
+          seriesCount: queryMode.value === 'stream-column' ? records : 0,
+          mode: queryMode.value,
+        }
         if (streamError) {
           actionError.value = streamError
           lastQueryErrorCode.value = 'stream'
@@ -583,6 +620,7 @@ export function useQueryWorkbench() {
     streamMeta,
     actionError,
     lastQueryErrorCode,
+    lastQueryMeta,
     loading,
     queryStartedAt,
     loadDatabases,

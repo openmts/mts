@@ -397,6 +397,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
     jump: '/query#query-form',
   },
+  {
+    id: 'query-result-path-visible',
+    severity: 'recommended',
+    title: { zh: '查询结果展示服务端 path', en: 'Query results show server path' },
+    detail: {
+      zh: '查询成功后 rows/columns/raw 区展示服务端 path 徽章；计数优先 row_count/series_count；命令面板可深链 ApiSpec 检索 row_count/series_count/points。',
+      en: 'After a successful query, rows/columns/raw show server path badges; counts prefer row_count/series_count; command palette deep-links ApiSpec for row_count/series_count/points.',
+    },
+    automated: true,
+    jump: '/query#query-results',
+  },
 ]
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {

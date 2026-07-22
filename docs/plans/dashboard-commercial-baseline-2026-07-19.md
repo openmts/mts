@@ -2437,3 +2437,17 @@
 | query/columns | series_count/path/admin_op | raw JSON + busy | 列式结果 |
 | query/explain | path/admin_op | raw JSON + busy | 计划导出 |
 
+
+## P466（2026-07-23）
+- Dashboard：`lastQueryMeta` 暴露 path/rowCount/seriesCount/mode；结果区 path 徽章
+- 计数优先服务端 `row_count`/`series_count`；stream/explain 同步 path
+- 命令面板：ApiSpec 深链 `row_count` / `series_count` / `points`
+- 就绪清单：`query-result-path-visible`（recommended）
+
+### 前后端对齐（P466）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| rows path | path/row_count | query-result-path | 可见对照 |
+| columns path | path/series_count | query-columns-path | 列式 |
+| 契约检索 | ResponseHint | 命令面板深链 | 运维 |
+

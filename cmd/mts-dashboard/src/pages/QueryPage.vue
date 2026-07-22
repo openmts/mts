@@ -60,7 +60,7 @@ const {
   databases, measurements, retentionPolicies, measurementsLoading, metaSource, metaHint,
   fieldOptions, seriesOptions, seriesTotal, seriesTruncated, seriesLoading, seriesError, seriesHasMore, SERIES_CAP, loadMoreSeries, refreshSeriesWithServerQuery,
   loadMeasurementMeta, refreshSeriesWithTags, applySeriesTags,
-  queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, lastQueryErrorCode, loading,
+  queryForm, queryMode, rows, columnSeries, queryStats, rawOutput, streamMeta, actionError, lastQueryErrorCode, lastQueryMeta, loading,
   queryStartedAt,
   engineStatsSource, engineStatsLoading, engineStatsError, engineStatsAt, loadEngineStats,
   loadDatabases, loadDbChildren, hasQuerySnapshot, executeQuery, cancelQuery, resultTextForCopy, buildQuery,
@@ -1242,7 +1242,13 @@ const columnRows = computed(() => {
       <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-sm dark:border-slate-800">
         <span class="font-semibold">{{ t('queryRowResult') }}</span>
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-xs text-slate-500 dark:text-slate-400" data-testid="query-row-count">{{ formatMessage(t('queryRowCountVirtual'), { count: rows.length }) }}</span>
+          <span class="text-xs text-slate-500 dark:text-slate-400" data-testid="query-row-count">{{ formatMessage(t('queryRowCountVirtual'), { count: lastQueryMeta.rowCount || rows.length }) }}</span>
+          <span
+            v-if="lastQueryMeta.path && lastQueryMeta.mode === 'rows'"
+            class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-result-path"
+            :title="lastQueryMeta.path"
+          >{{ lastQueryMeta.path }}</span>
           <div class="relative">
             <button
               type="button"
@@ -1317,7 +1323,15 @@ const columnRows = computed(() => {
     >
       <div class="flex justify-between border-b px-4 py-2 text-sm dark:border-slate-800">
         <span class="font-semibold">{{ t('queryColumnSummary') }}</span>
-        <span class="text-xs text-slate-500 dark:text-slate-400" data-testid="query-columns-count">{{ formatMessage(t('querySeriesCount'), { count: columnRows.length }) }}</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-slate-500 dark:text-slate-400" data-testid="query-columns-count">{{ formatMessage(t('querySeriesCount'), { count: lastQueryMeta.seriesCount || columnRows.length }) }}</span>
+          <span
+            v-if="lastQueryMeta.path && lastQueryMeta.mode === 'columns'"
+            class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-columns-path"
+            :title="lastQueryMeta.path"
+          >{{ lastQueryMeta.path }}</span>
+        </div>
       </div>
       <div
         class="grid grid-cols-[minmax(7rem,1fr)_minmax(6rem,0.8fr)_minmax(8rem,1.2fr)_minmax(5rem,0.6fr)] border-b px-4 py-2 text-left text-[11px] uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400"
@@ -1354,7 +1368,13 @@ const columnRows = computed(() => {
     <div v-if="rawOutput" class="overflow-hidden rounded-2xl border bg-white dark:border-slate-700 dark:bg-slate-900">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-sm dark:border-slate-800">
         <span class="font-semibold">{{ t('queryRawOutput') }}</span>
-        <div class="flex gap-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+        <div class="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+          <span
+            v-if="lastQueryMeta.path && (lastQueryMeta.mode === 'explain' || lastQueryMeta.mode === 'stream-row' || lastQueryMeta.mode === 'stream-column')"
+            class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="query-raw-path"
+            :title="lastQueryMeta.path"
+          >{{ lastQueryMeta.path }}</span>
           <span v-if="streamMeta.lines">{{ formatMessage(t('queryStreamLines'), { count: streamMeta.lines }) }}</span>
           <span v-if="streamMeta.previewOnly" class="text-amber-700 dark:text-amber-200">{{ formatMessage(t('queryStreamPreviewOnly'), { limit: streamMeta.previewLimit }) }}</span>
         </div>

@@ -35,6 +35,7 @@ test('production checklist has required commercial gates', () => {
     'error-codes-remediation',
     'write-accepted-points',
     'query-result-meta',
+    'query-result-path-visible',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -214,4 +215,13 @@ test('query-result-meta is automated required gate', () => {
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('/query'))
   assert.ok(requiredChecklist().some((x) => x.id === 'query-result-meta'))
+})
+
+
+test('query-result-path-visible is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'query-result-path-visible')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(productionChecklistJump(item!)?.includes('query-results'))
 })

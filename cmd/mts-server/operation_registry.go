@@ -106,7 +106,7 @@ func operationCatalog() []operation {
 		{
 			Name:         "query_rows",
 			Namespace:    "data",
-			Description:  "query row result",
+			Description:  "query row result (response includes row_count/path/admin_op_busy/last)",
 			ResponseHint: "queryRowsResponse{rows,stats,row_count,path,admin_op_busy,op,started_at_unix,last}",
 			Auth:         authDataToken,
 			HTTPMethods:  []string{http.MethodPost},
@@ -118,7 +118,7 @@ func operationCatalog() []operation {
 		{
 			Name:         "query_columns",
 			Namespace:    "data",
-			Description:  "query column result",
+			Description:  "query column result (response includes series_count/path/admin_op_busy/last)",
 			ResponseHint: "queryColumnsResponse{columns,stats,series_count,path,admin_op_busy,op,started_at_unix,last}",
 			Auth:         authDataToken,
 			HTTPMethods:  []string{http.MethodPost},
@@ -131,7 +131,7 @@ func operationCatalog() []operation {
 		{
 			Name:         "query_explain",
 			Namespace:    "data",
-			Description:  "query with execution explain",
+			Description:  "query with execution explain (response includes path/admin_op_busy/last)",
 			ResponseHint: "queryExplainResponse{result,path,admin_op_busy,op,started_at_unix,last}",
 			Auth:         authDataToken,
 			HTTPMethods:  []string{http.MethodPost},
