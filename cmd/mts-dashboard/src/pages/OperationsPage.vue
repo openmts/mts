@@ -21,6 +21,7 @@ import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import {
   appendOpsAction,
+  summarizeOpsActionLog,
   buildOpsActionExport,
   clearOpsActionLog,
   loadOpsActionLog,
@@ -165,6 +166,16 @@ const opsActionAbort = createActionAbort()
 const clearLogOpen = ref(false)
 const clearLogLoading = ref(false)
 const actionLog = ref<OpsActionEntry[]>(loadOpsActionLog())
+const actionLogSummary = computed(() => summarizeOpsActionLog(actionLog.value))
+const actionLogToneClass = computed(() => {
+  if (actionLogSummary.value.error_count > 0) {
+    return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  }
+  if (actionLogSummary.value.total > 0) {
+    return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+  }
+  return 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/40'
+})
 const actionKindFilter = ref<'all' | OpsActionKind>('all')
 const actionStatusFilter = ref<'all' | 'ok' | 'error'>('all')
 const actionTextFilter = ref('')
@@ -192,12 +203,13 @@ function persistLog() {
   saveOpsActionLog(actionLog.value)
 }
 
-function recordAction(kind: OpsActionKind, status: 'ok' | 'error', message: string) {
+function recordAction(kind: OpsActionKind, status: 'ok' | 'error', message: string, path = '') {
   actionLog.value = appendOpsAction(actionLog.value, {
     kind,
     status,
     message,
     at: Date.now(),
+    path: path || undefined,
   })
   persistLog()
 }
@@ -443,22 +455,26 @@ async function runConfirmed() {
   const signal = opsActionAbort.begin()
   try {
     let msg = ''
+    let actionPath = ''
     if (kind === 'flush') {
       const resp = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/flush', {}, { signal })
       applyAdminOpStatus(parseAdminOpStatusPayload(resp))
-      msg = formatMessage(t.value('opsFlushDone'), { path: String(resp?.path || '/api/v1/admin/flush') })
+      actionPath = String(resp?.path || '/api/v1/admin/flush')
+      msg = formatMessage(t.value('opsFlushDone'), { path: actionPath })
     } else if (kind === 'compact') {
       const resp = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/compact', {}, { signal })
       applyAdminOpStatus(parseAdminOpStatusPayload(resp))
-      msg = formatMessage(t.value('opsCompactDone'), { path: String(resp?.path || '/api/v1/admin/compact') })
+      actionPath = String(resp?.path || '/api/v1/admin/compact')
+      msg = formatMessage(t.value('opsCompactDone'), { path: actionPath })
     } else {
       const resp = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/retention/apply', {}, { signal })
       applyAdminOpStatus(parseAdminOpStatusPayload(resp))
-      msg = formatMessage(t.value('opsRetentionDone'), { path: String(resp?.path || '/api/v1/admin/retention/apply') })
+      actionPath = String(resp?.path || '/api/v1/admin/retention/apply')
+      msg = formatMessage(t.value('opsRetentionDone'), { path: actionPath })
     }
     setActionOk(msg)
     success(msg)
-    recordAction(kind, 'ok', msg)
+    recordAction(kind, 'ok', msg, actionPath)
     confirmKind.value = null
     await loadStats()
   } catch (e) {
@@ -874,6 +890,44 @@ watch(
           <RefreshCw class="h-3.5 w-3.5" /> {{ t('refresh') }}
         </button>
       </div>
+    </div>
+
+    <div
+      class="mts-panel rounded-xl border p-3 text-xs"
+      :class="actionLogToneClass"
+      data-testid="ops-action-summary"
+    >
+      <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('opsActionSummaryTitle') }}</p>
+          <p class="mts-muted">{{ t('opsActionSummaryDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" to="/observability/metrics" data-testid="ops-jump-metrics">{{ t('opsJumpMetrics') }}</router-link>
+          <router-link class="mts-btn text-xs" to="/ops/readiness" data-testid="ops-jump-readiness">{{ t('opsJumpReadiness') }}</router-link>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <div data-testid="ops-action-total">{{ t('opsActionTotal') }}: <span class="font-semibold">{{ actionLogSummary.total }}</span></div>
+        <div data-testid="ops-action-ok">{{ t('opsActionOk') }}: <span class="font-semibold">{{ actionLogSummary.ok_count }}</span></div>
+        <div data-testid="ops-action-error">{{ t('opsActionError') }}: <span class="font-semibold">{{ actionLogSummary.error_count }}</span></div>
+        <div data-testid="ops-action-flush">{{ t('opsActionFlush') }}: <span class="font-semibold">{{ actionLogSummary.by_kind.flush }}</span></div>
+        <div data-testid="ops-action-compact">{{ t('opsActionCompact') }}: <span class="font-semibold">{{ actionLogSummary.by_kind.compact }}</span></div>
+        <div data-testid="ops-action-retention">{{ t('opsActionRetention') }}: <span class="font-semibold">{{ actionLogSummary.by_kind.retention }}</span></div>
+      </div>
+      <p
+        v-if="actionLogSummary.last"
+        class="mt-2 truncate font-mono text-[11px] text-slate-600 dark:text-slate-300"
+        data-testid="ops-action-last"
+        :title="(actionLogSummary.last.path || '') + ' ' + actionLogSummary.last.message"
+      >{{ t('opsActionLast') }}：[{{ actionLogSummary.last.status }}] {{ actionLogSummary.last.kind }} {{ actionLogSummary.last.path || '' }} — {{ actionLogSummary.last.message }}</p>
+      <p v-else class="mt-2 mts-muted" data-testid="ops-action-last-empty">{{ t('opsActionLastEmpty') }}</p>
+      <p
+        v-if="actionLogSummary.paths.length"
+        class="mt-1 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="ops-action-paths"
+        :title="actionLogSummary.paths.join(' · ')"
+      >{{ actionLogSummary.paths.join(' · ') }}</p>
     </div>
 
     <div id="ops-maint-errors" class="mts-panel scroll-mt-20" data-testid="ops-maint-errors-panel">

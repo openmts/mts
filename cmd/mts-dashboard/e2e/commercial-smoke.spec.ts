@@ -721,6 +721,15 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('query-active-path')).toContainText('/api/v1/data/query')
   }
 
+  // P497: Operations 动作会话摘要 + Metrics/Readiness 深链
+  await page.goto('/operations')
+  await expect(page.getByTestId('ops-status-strip')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('ops-action-summary').count()) {
+    await expect(page.getByTestId('ops-action-summary')).toBeVisible()
+    await expect(page.getByTestId('ops-jump-metrics')).toBeVisible()
+    await expect(page.getByTestId('ops-jump-readiness')).toBeVisible()
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

@@ -13,6 +13,8 @@ export interface OpsActionEntry {
   status: OpsActionStatus
   message: string
   at: number
+  /** 服务端响应 path（若有） */
+  path?: string
 }
 
 export interface OpsActionExportPayload {
@@ -31,12 +33,14 @@ export function appendOpsAction(
   entry: Omit<OpsActionEntry, 'id'> & { id?: string },
   max = OPS_ACTION_LOG_MAX,
 ): OpsActionEntry[] {
+  const path = String(entry.path || '').trim()
   const next: OpsActionEntry = {
     id: entry.id || `ops-${entry.at}-${entry.kind}`,
     kind: entry.kind,
     status: entry.status,
     message: String(entry.message || '').trim() || '—',
     at: entry.at,
+    ...(path ? { path } : {}),
   }
   return [next, ...items].slice(0, max)
 }
@@ -103,11 +107,55 @@ function normalizeEntry(raw: unknown): OpsActionEntry | null {
   if (status !== 'ok' && status !== 'error') return null
   const at = typeof o.at === 'number' ? o.at : Date.parse(String(o.at ?? ''))
   if (!Number.isFinite(at)) return null
+  const path = String(o.path || '').trim()
   return {
     id: String(o.id || `ops-${at}`),
     kind,
     status,
     message: String(o.message || '—'),
     at,
+    ...(path ? { path } : {}),
+  }
+}
+
+export interface OpsActionLogSummary {
+  total: number
+  ok_count: number
+  error_count: number
+  last: OpsActionEntry | null
+  by_kind: Record<OpsActionKind, number>
+  paths: string[]
+}
+
+/** 运维动作会话摘要：计数 + 最近一条 + path 列表 */
+export function summarizeOpsActionLog(items: OpsActionEntry[] | null | undefined): OpsActionLogSummary {
+  const list = Array.isArray(items) ? items : []
+  const by_kind: Record<OpsActionKind, number> = {
+    flush: 0,
+    compact: 0,
+    retention: 0,
+    other: 0,
+  }
+  let ok = 0
+  let err = 0
+  const paths: string[] = []
+  const seen = new Set<string>()
+  for (const e of list) {
+    by_kind[e.kind] = (by_kind[e.kind] || 0) + 1
+    if (e.status === 'ok') ok += 1
+    else err += 1
+    const pth = String(e.path || '').trim()
+    if (pth && !seen.has(pth)) {
+      seen.add(pth)
+      paths.push(pth)
+    }
+  }
+  return {
+    total: list.length,
+    ok_count: ok,
+    error_count: err,
+    last: list[0] || null,
+    by_kind,
+    paths,
   }
 }

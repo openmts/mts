@@ -738,6 +738,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'ops-action-summary',
+    severity: 'recommended',
+    title: { zh: '运维动作会话摘要 + Metrics 深链', en: 'Ops action session summary + Metrics deep links' },
+    detail: {
+      zh: 'Operations 展示本会话 flush/compact/retention 计数与最近 path；动作日志含 path；深链 Metrics/Readiness。',
+      en: 'Operations shows session flush/compact/retention counts and latest paths; action log stores path; deep-links Metrics/Readiness.',
+    },
+    automated: true,
+    jump: '/operations',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

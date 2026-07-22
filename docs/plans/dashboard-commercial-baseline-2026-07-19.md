@@ -2853,3 +2853,14 @@
 | data/contract | path + features | query-contract-path | GET |
 | data/limits | path + max_query_limit | query-limits-path | GET |
 | query rows/columns/stream | query*Response path | query-active-path | 随模式切换 |
+
+## P497（2026-07-23）
+- Operations：动作会话摘要卡（计数/最近 path）；动作日志含 path；Metrics/Readiness 深链
+- 清单：`ops-action-summary`
+
+### 前后端对齐（P497）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| flush/compact/retention | path | action log + summary | POST |
+| metrics health | /metrics | ops-jump-metrics | 深链 |
+| readiness | 既有 | ops-jump-readiness | 深链 |

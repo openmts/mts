@@ -436,6 +436,7 @@ test('query result scope palette entries', () => {
   assert.ok(all.some((i) => i.id === 'readiness-storage-drill-handoff' && i.path.includes('/ops/readiness')))
   assert.ok(all.some((i) => i.id === 'write-contract-align' && i.path.includes('/write')))
   assert.ok(all.some((i) => i.id === 'query-contract-align' && i.path.includes('/query')))
+  assert.ok(all.some((i) => i.id === 'ops-action-summary' && i.path.includes('/operations')))
   assert.ok(all.some((i) => i.id === 'api-spec-query-rows-scope' && i.path.includes('queryRowsResponse')))
 })
 
