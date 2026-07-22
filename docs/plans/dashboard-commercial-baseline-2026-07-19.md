@@ -1707,4 +1707,19 @@
 | storage restore-drill | 是 | HTTP 主路径 | 是 | restore_drill |
 | retention/apply | ok 体（无 last） | 有 | loadStats 回读 | 仍走 finally 刷新 |
 
+## P410（2026-07-22）
+- Server：`retention/apply`、`config/reload`、downsample run/range/repair/dry-run 与 enable/disable/reset 的 `ok` 响应附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC 对齐）
+- Dashboard：Operations retention、Config reload、Downsample run/range/dry-run 成功后即时 `applyAdminOpStatus`
+- types/registry 描述对齐；HTTP 单测；覆盖矩阵增量
+
+### busy/last 覆盖矩阵（P410 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| retention/apply | 是 | 是 | 是 | last=本次 retention |
+| config/reload | 是 | 是 | 是 | 热加载字段列表 + busy/last |
+| downsample run/range/repair | 是 | 是 | 是 | 运行结果 + busy/last |
+| downsample dry-run | 是 | 是 | 是 | 预览不写库 |
+| downsample enable/disable/reset | 是 | 部分 | loadData 回读 | ok 体带 last |
+
+
 

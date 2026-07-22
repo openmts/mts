@@ -62,7 +62,7 @@ func (r *serverRuntime) handleReloadConfig(writer http.ResponseWriter, request *
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "reload_config"})
-	writeHTTPJSON(writer, http.StatusOK, resp)
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToReload(resp))
 }
 
 func (r *serverRuntime) handleStorageValidate(writer http.ResponseWriter, request *http.Request) {
@@ -227,7 +227,7 @@ func (r *serverRuntime) handleApplyRetention(writer http.ResponseWriter, request
 		return
 	}
 	r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "apply_retention"})
-	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 }
 
 func (r *serverRuntime) handleMaintenanceErrors(writer http.ResponseWriter, request *http.Request) {
@@ -387,13 +387,13 @@ func (r *serverRuntime) handleDownsampleAction(
 	switch action {
 	case "enable":
 		err := r.engine.EnableDownsamplePolicy(request.Context(), name)
-		writeActionOK(writer, err)
+		r.writeActionOK(writer, err)
 		if err == nil {
 			r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "enable_downsample_policy", Detail: name})
 		}
 	case "disable":
 		err := r.engine.DisableDownsamplePolicy(request.Context(), name)
-		writeActionOK(writer, err)
+		r.writeActionOK(writer, err)
 		if err == nil {
 			r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "disable_downsample_policy", Detail: name})
 		}
@@ -401,7 +401,7 @@ func (r *serverRuntime) handleDownsampleAction(
 		var req downsampleResetRequest
 		if decodeActionRequest(writer, request, &req) {
 			err := r.engine.ResetDownsamplePolicy(request.Context(), name, req.Reset)
-			writeActionOK(writer, err)
+			r.writeActionOK(writer, err)
 			if err == nil {
 				r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "reset_downsample_policy", Detail: name})
 			}
@@ -410,7 +410,7 @@ func (r *serverRuntime) handleDownsampleAction(
 		var req downsampleRunRequest
 		if decodeActionRequest(writer, request, &req) {
 			result, err := r.engine.RunDownsamplePolicy(request.Context(), name, unixSecondsOrNow(req.NowUnix))
-			writeDownsampleRun(writer, result, err)
+			r.writeDownsampleRun(writer, result, err)
 			if err == nil {
 				r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "run_downsample_policy", Detail: name})
 			}
@@ -425,7 +425,7 @@ func (r *serverRuntime) handleDownsampleAction(
 				unixFlexible(req.EndUnix),
 				req.Options,
 			)
-			writeDownsampleRun(writer, result, err)
+			r.writeDownsampleRun(writer, result, err)
 		}
 	case "repair":
 		var req downsampleRangeRequest
@@ -436,7 +436,7 @@ func (r *serverRuntime) handleDownsampleAction(
 				unixFlexible(req.StartUnix),
 				unixFlexible(req.EndUnix),
 			)
-			writeDownsampleRun(writer, result, err)
+			r.writeDownsampleRun(writer, result, err)
 		}
 	case "dry-run":
 		var req downsampleRangeRequest
@@ -451,7 +451,7 @@ func (r *serverRuntime) handleDownsampleAction(
 				writeAPIError(writer, err)
 				return
 			}
-			writeHTTPJSON(writer, http.StatusOK, downsampleDryRunResponse{Result: result})
+			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleDryRun(downsampleDryRunResponse{Result: result}))
 		}
 	default:
 		writeAPIError(writer, newAPIError(errorCodeNotFound, "downsample action not found", nil))
@@ -466,20 +466,20 @@ func decodeActionRequest(writer http.ResponseWriter, request *http.Request, valu
 	return true
 }
 
-func writeActionOK(writer http.ResponseWriter, err error) {
+func (r *serverRuntime) writeActionOK(writer http.ResponseWriter, err error) {
 	if err != nil {
 		writeAPIError(writer, err)
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, okResponse{OK: true})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 }
 
-func writeDownsampleRun(writer http.ResponseWriter, result mts.DownsampleRunResult, err error) {
+func (r *serverRuntime) writeDownsampleRun(writer http.ResponseWriter, result mts.DownsampleRunResult, err error) {
 	if err != nil {
 		writeAPIError(writer, err)
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, downsampleRunResponse{Result: result})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result}))
 }
 
 func unixSeconds(value int64) time.Time {

@@ -797,11 +797,12 @@ async function runPolicy(name: string) {
   const signal = dsActionAbort.begin()
   clearActionResult()
   try {
-    const data = await apiPost<{ result: DownsampleRunResult }>(
+    const data = await apiPost<{ result: DownsampleRunResult; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
       `/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/run`,
       {},
       { signal },
     )
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     const msg = formatRunResultMessage('run', name, data.result)
     setActionOk(msg)
     await loadData()
@@ -909,13 +910,15 @@ async function confirmRange() {
     })
     const path = rangeActionPath(rangeName.value, rangeMode.value)
     if (rangeMode.value === 'dry-run') {
-      const data = await apiPost<{ result: DownsampleDryRunResult }>(path, body, { signal })
+      const data = await apiPost<{ result: DownsampleDryRunResult; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(path, body, { signal })
+      applyAdminOpStatus(parseAdminOpStatusPayload(data))
       const msg = formatRunResultMessage('dry-run', rangeName.value, data.result)
       rangeOpen.value = false
       setActionResult(makeActionResult('info', msg))
       success(msg)
     } else {
-      const data = await apiPost<{ result: DownsampleRunResult }>(path, body, { signal })
+      const data = await apiPost<{ result: DownsampleRunResult; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(path, body, { signal })
+      applyAdminOpStatus(parseAdminOpStatusPayload(data))
       const msg = formatRunResultMessage(rangeMode.value, rangeName.value, data.result)
       rangeOpen.value = false
       await loadData()

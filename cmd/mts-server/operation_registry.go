@@ -503,7 +503,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "reload_config",
 			Namespace:   "admin",
-			Description: "reload hot fields",
+			Description: "reload hot fields (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAdminConfigReload},
@@ -563,7 +563,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "apply_retention",
 			Namespace:   "admin",
-			Description: "apply retention",
+			Description: "apply retention (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAdminRetentionApply},
@@ -861,7 +861,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "run_downsample_policy",
 			Namespace:   "admin",
-			Description: "run downsample policy",
+			Description: "run downsample policy (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodRunDownsamplePolicy,
 			GRPCRequest: &downsamplePolicyRangeRequest{},
@@ -870,7 +870,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "run_downsample_policy_range",
 			Namespace:   "admin",
-			Description: "run downsample policy range",
+			Description: "run downsample policy range (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodRunDownsamplePolicyRange,
 			GRPCRequest: &downsamplePolicyRangeRequest{},
@@ -879,7 +879,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "repair_downsample_policy",
 			Namespace:   "admin",
-			Description: "repair downsample policy",
+			Description: "repair downsample policy (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodRepairDownsamplePolicy,
 			GRPCRequest: &downsamplePolicyRangeRequest{},
@@ -888,7 +888,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "dry_run_downsample_policy",
 			Namespace:   "admin",
-			Description: "dry-run downsample policy",
+			Description: "dry-run downsample policy (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			GRPCMethod:  grpcMethodDryRunDownsamplePolicy,
 			GRPCRequest: &downsamplePolicyRangeRequest{},

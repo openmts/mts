@@ -1014,6 +1014,85 @@ func TestHTTPMaintenanceAndSnapshotBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPRetentionReloadDownsampleBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	runtime.config.ConfigPath = writeRuntimeConfig(t, runtime.currentConfig())
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var reloadBusy reloadConfigResponse
+	postJSONWithHeaders(t, server.URL+routeAdminConfigReload, emptyRequest{}, nil, http.StatusOK, &reloadBusy)
+	if !reloadBusy.AdminOpBusy || reloadBusy.Op != "compact" || reloadBusy.StartedAtUnix <= 0 {
+		t.Fatalf("reload busy = %+v", reloadBusy)
+	}
+	// enable/disable-style okResponse also carries busy while heavy op active
+	policy := testDownsamplePolicy()
+	policy.Name = "p410_rollup"
+	postJSONWithHeaders(t, server.URL+routeAdminDownsamplePolicies, policy, nil, http.StatusOK, &okResponse{})
+	var enableBusy okResponse
+	postJSONWithHeaders(t, server.URL+"/api/v1/admin/downsample/policies/p410_rollup/enable", emptyRequest{}, nil, http.StatusOK, &enableBusy)
+	if !enableBusy.AdminOpBusy || enableBusy.Op != "compact" {
+		t.Fatalf("enable busy = %+v", enableBusy)
+	}
+	runtime.finishAdminHeavy(errors.New("p410 probe fail"))
+
+	var ret okResponse
+	postJSONWithHeaders(t, server.URL+routeAdminRetentionApply, retentionApplyRequest{}, nil, http.StatusOK, &ret)
+	if !ret.OK {
+		t.Fatalf("retention ok=false: %+v", ret)
+	}
+	if ret.AdminOpBusy {
+		t.Fatalf("retention want not busy: %+v", ret)
+	}
+	if ret.Last == nil || ret.Last.Op != "retention" || !ret.Last.OK {
+		t.Fatalf("retention last = %+v", ret.Last)
+	}
+
+	var reloadDone reloadConfigResponse
+	postJSONWithHeaders(t, server.URL+routeAdminConfigReload, emptyRequest{}, nil, http.StatusOK, &reloadDone)
+	if reloadDone.AdminOpBusy {
+		t.Fatal("reload want not busy")
+	}
+	if reloadDone.Last == nil || reloadDone.Last.Op != "retention" || !reloadDone.Last.OK {
+		t.Fatalf("reload last = %+v", reloadDone.Last)
+	}
+
+	var dry downsampleDryRunResponse
+	postJSONWithHeaders(
+		t,
+		server.URL+"/api/v1/admin/downsample/policies/p410_rollup/dry-run",
+		downsampleRangeRequest{StartUnix: 1, EndUnix: int64(time.Hour)},
+		nil,
+		http.StatusOK,
+		&dry,
+	)
+	if dry.AdminOpBusy {
+		t.Fatalf("dry-run want not busy: %+v", dry)
+	}
+	if dry.Last == nil || dry.Last.Op != "retention" || !dry.Last.OK {
+		t.Fatalf("dry-run last = %+v", dry.Last)
+	}
+
+	var run downsampleRunResponse
+	postJSONWithHeaders(
+		t,
+		server.URL+"/api/v1/admin/downsample/policies/p410_rollup/run",
+		downsampleRunRequest{},
+		nil,
+		http.StatusOK,
+		&run,
+	)
+	if run.AdminOpBusy {
+		t.Fatalf("run want not busy: %+v", run)
+	}
+	if run.Last == nil || run.Last.Op != "retention" || !run.Last.OK {
+		t.Fatalf("run last = %+v", run.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

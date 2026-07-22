@@ -747,6 +747,42 @@ func (r *serverRuntime) attachAdminOpToRestoreDrill(resp storageRestoreDrillResp
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToOK(resp okResponse) okResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToReload(resp reloadConfigResponse) reloadConfigResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToDownsampleRun(resp downsampleRunResponse) downsampleRunResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToDownsampleDryRun(resp downsampleDryRunResponse) downsampleDryRunResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {

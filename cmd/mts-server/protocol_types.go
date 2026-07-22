@@ -19,7 +19,11 @@ const (
 )
 
 type okResponse struct {
-	OK bool `json:"ok"`
+	OK            bool                  `json:"ok"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type errorResponse struct {
@@ -327,8 +331,12 @@ type configValidateResponse struct {
 }
 
 type reloadConfigResponse struct {
-	OK     bool     `json:"ok"`
-	Fields []string `json:"fields"`
+	OK            bool                  `json:"ok"`
+	Fields        []string              `json:"fields"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type configFieldSchema struct {
@@ -570,11 +578,19 @@ type downsamplePolicyRangeRequest struct {
 }
 
 type downsampleRunResponse struct {
-	Result mts.DownsampleRunResult `json:"result"`
+	Result        mts.DownsampleRunResult `json:"result"`
+	AdminOpBusy   bool                    `json:"admin_op_busy,omitempty"`
+	Op            string                  `json:"op,omitempty"`
+	StartedAtUnix int64                   `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult   `json:"last,omitempty"`
 }
 
 type downsampleDryRunResponse struct {
-	Result mts.DownsampleDryRunResult `json:"result"`
+	Result        mts.DownsampleDryRunResult `json:"result"`
+	AdminOpBusy   bool                       `json:"admin_op_busy,omitempty"`
+	Op            string                     `json:"op,omitempty"`
+	StartedAtUnix int64                      `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult      `json:"last,omitempty"`
 }
 
 type emptyRequest struct{}

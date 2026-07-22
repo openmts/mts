@@ -560,7 +560,11 @@ func grpcReloadConfig(r *serverRuntime, ctx context.Context, _ any) (any, error)
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return r.reloadConfig()
+	resp, err := r.reloadConfig()
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToReload(resp), nil
 }
 
 func grpcGetAPISpec(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -581,7 +585,10 @@ func grpcApplyRetention(r *serverRuntime, ctx context.Context, req any) (any, er
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return okResponse{OK: true}, r.applyRetention(ctx, *req.(*retentionApplyRequest))
+	if err := r.applyRetention(ctx, *req.(*retentionApplyRequest)); err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToOK(okResponse{OK: true}), nil
 }
 
 func grpcMaintenanceErrors(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -730,7 +737,10 @@ func grpcRunDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (an
 	}
 	request := req.(*downsamplePolicyRangeRequest)
 	result, err := r.engine.RunDownsamplePolicy(ctx, request.Name, unixSecondsOrNow(request.EndUnix))
-	return downsampleRunResponse{Result: result}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result}), nil
 }
 
 func grpcRunDownsamplePolicyRange(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -739,7 +749,10 @@ func grpcRunDownsamplePolicyRange(r *serverRuntime, ctx context.Context, req any
 	}
 	request := req.(*downsamplePolicyRangeRequest)
 	result, err := r.engine.RunDownsamplePolicyRange(ctx, request.Name, unixFlexible(request.StartUnix), unixFlexible(request.EndUnix), request.Options)
-	return downsampleRunResponse{Result: result}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result}), nil
 }
 
 func grpcRepairDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -748,7 +761,10 @@ func grpcRepairDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) 
 	}
 	request := req.(*downsamplePolicyRangeRequest)
 	result, err := r.engine.RepairDownsamplePolicy(ctx, request.Name, unixFlexible(request.StartUnix), unixFlexible(request.EndUnix))
-	return downsampleRunResponse{Result: result}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result}), nil
 }
 
 func grpcDryRunDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -757,7 +773,10 @@ func grpcDryRunDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) 
 	}
 	request := req.(*downsamplePolicyRangeRequest)
 	result, err := r.engine.DryRunDownsamplePolicy(ctx, request.Name, unixFlexible(request.StartUnix), unixFlexible(request.EndUnix))
-	return downsampleDryRunResponse{Result: result}, err
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToDownsampleDryRun(downsampleDryRunResponse{Result: result}), nil
 }
 
 func invokeGRPCUnary(ctx context.Context, req any, decode func(any) error, interceptor grpc.UnaryServerInterceptor, method string, handler grpc.UnaryHandler) (any, error) {

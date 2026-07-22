@@ -431,7 +431,8 @@ async function runConfirmed() {
       applyAdminOpStatus(parseAdminOpStatusPayload(resp))
       msg = t.value('opsCompactDone')
     } else {
-      await apiPost('/api/v1/admin/retention/apply', {}, { signal })
+      const resp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/retention/apply', {}, { signal })
+      applyAdminOpStatus(parseAdminOpStatusPayload(resp))
       msg = t.value('opsRetentionDone')
     }
     setActionOk(msg)

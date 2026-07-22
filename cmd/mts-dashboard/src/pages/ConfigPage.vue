@@ -45,7 +45,14 @@ interface ConfigResponse {
   last?: unknown
 }
 interface ValidateResponse { ok: boolean; error?: string }
-interface ReloadResponse { ok: boolean; fields: string[] }
+interface ReloadResponse {
+  ok: boolean
+  fields: string[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface ErrorCodeSpec { code: string; http_status: number; grpc_code: string; description: string }
 interface ErrorCodesResponse {
   codes: ErrorCodeSpec[]
@@ -362,6 +369,7 @@ async function handleReload() {
   const signal = configActionAbort.begin()
   try {
     reloadResult.value = await apiPost<ReloadResponse>('/api/v1/admin/config/reload', undefined, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(reloadResult.value))
     setActionOk(reloadResult.value.fields?.length ? formatMessage(t.value('configReloadOkFields'), { fields: reloadResult.value.fields.join(', ') }) : t.value('configReloadOk'))
     await loadConfig()
     success(t.value('configReloadToast'))
