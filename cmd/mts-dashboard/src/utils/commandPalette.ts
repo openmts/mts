@@ -355,7 +355,17 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'operations-status',
     path: '/operations#ops-status-strip',
     labelKey: 'cmdOpsStatus',
-    keywords: ['ops status', 'admin busy', '运维状态', 'maintenance busy', '占用'],
+    keywords: [
+      'ops status',
+      'admin busy',
+      '运维状态',
+      'maintenance busy',
+      '占用',
+      'last op',
+      '最近一次',
+      '最近管理重操作',
+      'admin last',
+    ],
     adminOnly: true,
   },
   {

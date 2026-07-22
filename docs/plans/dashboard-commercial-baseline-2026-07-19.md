@@ -1495,3 +1495,9 @@
 
 ## P354（2026-07-22）
 - e2e：flush 后 dismiss 全局 last 条；ops-status-last 仍可见
+
+## P355（2026-07-22）
+- Operations：最近一次结果 ok/fail 色调区分（data-ok）
+
+## P356（2026-07-22）
+- 命令面板：运维状态支持「最近一次/last op」关键词检索

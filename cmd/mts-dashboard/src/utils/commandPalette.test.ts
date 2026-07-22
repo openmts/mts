@@ -108,6 +108,8 @@ test('command palette includes ops deep links for admin', () => {
   assert.ok(filterCommandItems(admin, '#data-restore', resolve).some((i) => i.id === 'storage-data-restore'))
   assert.ok(filterCommandItems(admin, 'memtable', resolve).some((i) => i.id === 'operations-flush'))
   assert.ok(filterCommandItems(admin, 'admin busy', resolve).some((i) => i.id === 'operations-status'))
+  assert.ok(filterCommandItems(admin, '最近一次', resolve).some((i) => i.id === 'operations-status'))
+  assert.ok(filterCommandItems(admin, 'last op', resolve).some((i) => i.id === 'operations-status'))
   assert.ok(filterCommandItems(admin, 'ops log', resolve).some((i) => i.id === 'operations-action-log'))
   assert.ok(filterCommandItems(admin, 'effective config', resolve).some((i) => i.id === 'config-effective'))
   assert.ok(filterCommandItems(admin, 'audit filters', resolve).some((i) => i.id === 'audit-filters'))

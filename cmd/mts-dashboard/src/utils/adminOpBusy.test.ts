@@ -25,6 +25,7 @@ import {
   shouldShowAdminOpLastBanner,
   readDismissedAdminOpLastFinishedAt,
   writeDismissedAdminOpLastFinishedAt,
+  adminOpLastToneClass,
   shouldPollAdminOpBusy,
 } from './adminOpBusy.ts'
 
@@ -285,4 +286,10 @@ test('shouldShowAdminOpLastBanner and dismiss storage', () => {
   }
   assert.equal(writeDismissedAdminOpLastFinishedAt(storage, 42), true)
   assert.equal(readDismissedAdminOpLastFinishedAt(storage), 42)
+})
+
+test('adminOpLastToneClass', () => {
+  assert.match(adminOpLastToneClass(true), /emerald/)
+  assert.match(adminOpLastToneClass(false), /red/)
+  assert.match(adminOpLastToneClass(null), /mts-muted|muted/)
 })

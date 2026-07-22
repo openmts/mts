@@ -116,3 +116,14 @@ export function writeDismissedAdminOpLastFinishedAt(
     return false
   }
 }
+
+/** 最近一次结果文案 tone class（纯函数） */
+export function adminOpLastToneClass(ok: boolean | null | undefined): string {
+  if (ok === false) {
+    return 'text-xs text-red-700 dark:text-red-300'
+  }
+  if (ok === true) {
+    return 'text-xs text-emerald-800 dark:text-emerald-200'
+  }
+  return 'text-xs mts-muted'
+}

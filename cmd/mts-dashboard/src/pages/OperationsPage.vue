@@ -37,7 +37,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, adminHeavyBusyOpFromError, formatAdminHeavyLastSummary, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, adminHeavyBusyOpFromError, adminOpLastToneClass, formatAdminHeavyLastSummary, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -760,8 +760,9 @@ watch(
         >{{ t('opsStatusBusyHint') }}</p>
         <p
           v-if="adminOpLastLabel"
-          class="text-xs mts-muted"
+          :class="adminOpLastToneClass(adminOpLast?.ok)"
           data-testid="ops-status-last"
+          :data-ok="adminOpLast?.ok === true ? 'true' : (adminOpLast?.ok === false ? 'false' : undefined)"
           :title="adminOpLast?.error || adminOpLastLabel"
         >
           <span class="font-medium text-slate-700 dark:text-slate-200">{{ t('opsStatusLastLabel') }}:</span>
