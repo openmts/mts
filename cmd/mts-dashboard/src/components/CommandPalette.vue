@@ -3,7 +3,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch, typ
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, commandAdminOpRefreshFeedback, joinAdminOpChip } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { createFocusTrap, type FocusTrapHandle } from '@/utils/focusTrap'
@@ -28,6 +28,7 @@ import { resolveRouteTitleKey } from '@/utils/pageTitle'
 import { useTheme } from '@/composables/useTheme'
 import { useDensity } from '@/composables/useDensity'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
 import {
@@ -56,6 +57,7 @@ const { t, toggleLocale } = useI18n()
 const { toggleTheme } = useTheme()
 const { density, toggleDensity } = useDensity()
 const { success, error: notifyError } = useNotify()
+const { notifyMaybeAdminBusy, notifyAdminBusy } = useNotifyAdminBusy()
 
 const focusSidebarFilter = inject<(() => void) | undefined>('focusSidebarFilter', undefined)
 const openNotifyHistory = inject<(() => void) | undefined>('openNotifyHistory', undefined)
@@ -239,13 +241,25 @@ function runAction(action: CommandActionId) {
       if (typeof window !== 'undefined') window.location.reload()
       break
     case 'refresh-admin-op-busy': {
-      if (!isAdmin.value) {
+      const denied = commandAdminOpRefreshFeedback({ isAdmin: isAdmin.value })
+      if (denied.kind === 'denied') {
         notifyError(t.value('permissionDenied') || 'admin only')
         break
       }
-      void refreshAdminOpBusy().then(() => {
-        success(t.value('cmdActionRefreshAdminOpBusyDone'))
-      })
+      void refreshAdminOpBusy()
+        .then(() => {
+          success(t.value('cmdActionRefreshAdminOpBusyDone'))
+        })
+        .catch((e: unknown) => {
+          const fb = commandAdminOpRefreshFeedback({
+            isAdmin: true,
+            error: e,
+            errorMessage: e instanceof Error ? e.message : String(e),
+          })
+          if (fb.kind === 'error' && fb.adminBusy) notifyMaybeAdminBusy(fb.message, e)
+          else if (fb.kind === 'error') notifyError(fb.message)
+          else notifyAdminBusy()
+        })
       break
     }
     case 'retry-last-action': {
@@ -257,10 +271,10 @@ function runAction(action: CommandActionId) {
           clickActionResultRetryButton(btn)
           success(t.value('cmdActionRetryLastTriggered'))
         } else {
-          notifyError(t.value('cmdActionRetryLastFailed'))
+          notifyMaybeAdminBusy(t.value('cmdActionRetryLastFailed'), undefined, { treatLocalBusy: true })
         }
       } else {
-        notifyError(t.value('cmdActionRetryLastFailed'))
+        notifyMaybeAdminBusy(t.value('cmdActionRetryLastFailed'), undefined, { treatLocalBusy: true })
       }
       break
     }

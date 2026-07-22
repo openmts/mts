@@ -1452,3 +1452,12 @@
 ## P340（2026-07-22）
 - 单测覆盖 resolveAdminBusyNotify（busy/local/plain）
 
+## P341（2026-07-22）
+- Readiness：version/doctor/导出失败走 `notifyMaybeAdminBusy`（soft-keep 也支持 treatLocalBusy）
+
+## P342（2026-07-22）
+- 命令面板：刷新占用状态 catch 统一 busy toast；重试失败在本地 busy 时带运维跳转
+
+## P343（2026-07-22）
+- `commandAdminOpRefreshFeedback` 纯函数 + 单测
+

@@ -7,9 +7,10 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, isAdminHeavyBusyMessage, joinAdminOpChip } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -150,6 +151,15 @@ function formatDoctorLevel(level?: string) {
 const router = useRouter()
 const route = useRoute()
 const { success, error: notifyError } = useNotify()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
+
+function notifyExportFail(message: string) {
+  const msg = String(message || '').trim() || t.value('failed')
+  const err = isAdminHeavyBusyMessage(msg)
+    ? { code: 'resource_exhausted', status: 429, message: msg }
+    : { message: msg }
+  notifyMaybeAdminBusy(msg, err, { treatLocalBusy: true })
+}
 const {
   exportJob,
   exportBusy,
@@ -367,10 +377,13 @@ async function loadServerVersion() {
   } catch (e) {
     const msg = formatCaughtError(e)
     // soft-keep：已有版本信息时保留快照
-    if (serverVersion.value) versionError.value = msg
-    else {
+    if (serverVersion.value) {
+      versionError.value = msg
+      notifyMaybeAdminBusy(msg, e, { treatLocalBusy: true })
+    } else {
       serverVersion.value = null
       versionError.value = msg
+      notifyMaybeAdminBusy(msg, e)
     }
   } finally {
     loadingVersion.value = false
@@ -385,10 +398,13 @@ async function loadDoctor() {
   } catch (e) {
     const msg = formatCaughtError(e)
     // soft-keep：已有 doctor 快照时保留
-    if (doctor.value) doctorError.value = msg
-    else {
+    if (doctor.value) {
+      doctorError.value = msg
+      notifyMaybeAdminBusy(msg, e, { treatLocalBusy: true })
+    } else {
       doctor.value = null
       doctorError.value = msg
+      notifyMaybeAdminBusy(msg, e)
     }
   } finally {
     loadingDoctor.value = false
@@ -416,7 +432,11 @@ async function exportState() {
   })
   if (outcome === 'done') flash('ok', t.value('readinessExportOk'))
   else if (outcome === 'cancelled') flash('info', t.value('exportCancelledToast'))
-  else if (outcome === 'error') flash('error', exportJob.value.error || t.value('failed'))
+  else if (outcome === 'error') {
+    const m = exportJob.value.error || t.value('failed')
+    flash('error', m)
+    notifyExportFail(m)
+  }
 }
 
 function openImport() {
@@ -440,6 +460,7 @@ async function onImportFile(ev: Event) {
     flash('ok', t.value('readinessImportOk'))
   } catch (e) {
     flash('error', `${t.value('readinessImportFail')}: ${formatCaughtError(e)}`)
+    notifyMaybeAdminBusy(`${t.value('readinessImportFail')}: ${formatCaughtError(e)}`, e)
   }
 }
 
@@ -504,7 +525,9 @@ async function downloadArchive() {
     return
   }
   if (outcome === 'error') {
-    flash('error', exportJob.value.error || t.value('failed'))
+    const m = exportJob.value.error || t.value('failed')
+    flash('error', m)
+    notifyExportFail(m)
     return
   }
   if (!signoffCompleteness.value.complete) {
@@ -567,7 +590,9 @@ async function downloadAcceptancePack() {
     return
   }
   if (outcome === 'error') {
-    flash('error', exportJob.value.error || t.value('failed'))
+    const m = exportJob.value.error || t.value('failed')
+    flash('error', m)
+    notifyExportFail(m)
     return
   }
   if (!signoffCompleteness.value.complete) {
@@ -631,7 +656,11 @@ async function downloadDeployKit() {
     success(t.value('readinessDeployKitDownloaded'))
     flash('ok', t.value('readinessDeployKitDownloaded'))
   } else if (outcome === 'cancelled') flash('info', t.value('exportCancelledToast'))
-  else if (outcome === 'error') flash('error', exportJob.value.error || t.value('failed'))
+  else if (outcome === 'error') {
+    const m = exportJob.value.error || t.value('failed')
+    flash('error', m)
+    notifyExportFail(m)
+  }
 }
 
 const deployDrillSteps = DEPLOY_DRILL_STEPS
@@ -665,7 +694,11 @@ async function downloadDeployDrill() {
     success(t.value('readinessDeployDrillDownloaded'))
     flash('ok', t.value('readinessDeployDrillDownloaded'))
   } else if (outcome === 'cancelled') flash('info', t.value('exportCancelledToast'))
-  else if (outcome === 'error') flash('error', exportJob.value.error || t.value('failed'))
+  else if (outcome === 'error') {
+    const m = exportJob.value.error || t.value('failed')
+    flash('error', m)
+    notifyExportFail(m)
+  }
 }
 
 async function copyDeployDrill() {

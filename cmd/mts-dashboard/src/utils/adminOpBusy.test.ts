@@ -14,6 +14,7 @@ import {
   isAdminHeavyBusyMessage,
   joinAdminOpChip,
   nextAdminOpFailStreak,
+  commandAdminOpRefreshFeedback,
   resolveAdminBusyNotify,
   parseAdminBusyFromHeaders,
   parseAdminHeavyBusyOp,
@@ -175,5 +176,31 @@ test('resolveAdminBusyNotify', () => {
     resolveAdminBusyNotify({ code: 'resource_exhausted', message: 'rate limit' }, false),
     { kind: 'plain' },
   )
+})
+
+test('commandAdminOpRefreshFeedback', () => {
+  assert.deepEqual(commandAdminOpRefreshFeedback({ isAdmin: false }), { kind: 'denied' })
+  assert.deepEqual(commandAdminOpRefreshFeedback({ isAdmin: true }), { kind: 'ok' })
+  const errBusy = commandAdminOpRefreshFeedback({
+    isAdmin: true,
+    error: {
+      code: 'resource_exhausted',
+      status: 429,
+      message: 'admin heavy operation already in progress: flush',
+      adminOpBusy: true,
+      op: 'flush',
+    },
+  })
+  assert.equal(errBusy.kind, 'error')
+  if (errBusy.kind === 'error') assert.equal(errBusy.adminBusy, true)
+  const errPlain = commandAdminOpRefreshFeedback({
+    isAdmin: true,
+    errorMessage: 'network down',
+  })
+  assert.equal(errPlain.kind, 'error')
+  if (errPlain.kind === 'error') {
+    assert.equal(errPlain.adminBusy, false)
+    assert.equal(errPlain.message, 'network down')
+  }
 })
 

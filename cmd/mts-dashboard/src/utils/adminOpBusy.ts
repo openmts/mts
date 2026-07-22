@@ -221,3 +221,26 @@ export function buildAdminBusyNotifyOptions(label: string): { action: { label: s
   return { action: adminOpBusyOpenAction(label) }
 }
 
+export type CommandAdminOpRefreshFeedback =
+  | { kind: 'denied' }
+  | { kind: 'ok' }
+  | { kind: 'error'; message: string; adminBusy: boolean }
+
+/** 命令面板「刷新管理占用」结果反馈（纯函数） */
+export function commandAdminOpRefreshFeedback(opts: {
+  isAdmin: boolean
+  errorMessage?: string | null
+  error?: unknown
+}): CommandAdminOpRefreshFeedback {
+  if (!opts.isAdmin) return { kind: 'denied' }
+  const msg = String(opts.errorMessage || '').trim()
+  if (!msg && opts.error == null) return { kind: 'ok' }
+  const err = opts.error ?? (msg ? { message: msg, code: 'internal' } : null)
+  const busy = err != null && resolveAdminBusyNotify(err).kind === 'admin_busy'
+  return {
+    kind: 'error',
+    message: msg || (err instanceof Error ? err.message : String(err || 'error')),
+    adminBusy: busy,
+  }
+}
+
