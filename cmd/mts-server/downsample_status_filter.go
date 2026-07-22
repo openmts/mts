@@ -63,3 +63,13 @@ func filterDownsampleStatuses(
 	}
 	return out
 }
+
+// isTruthyQuery 解析 Dashboard 常用真值查询参数（1/true/yes/on）。
+func isTruthyQuery(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}

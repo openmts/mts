@@ -345,6 +345,14 @@ func (r *serverRuntime) handleDownsampleStatuses(writer http.ResponseWriter, req
 	}
 	statuses = filterDownsampleStatuses(statuses, request.URL.Query())
 	summary := summarizeDownsampleStatuses(statuses)
+	// summary_only=1|true：Overview/Readiness 轻量拉摘要，省略 statuses 数组
+	if isTruthyQuery(request.URL.Query().Get("summary_only")) {
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleStatuses(downsampleStatusesResponse{
+			Statuses: []mts.DownsamplePolicyStatus{},
+			Summary:  &summary,
+		}))
+		return
+	}
 	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsampleStatuses(downsampleStatusesResponse{
 		Statuses: statuses,
 		Summary:  &summary,

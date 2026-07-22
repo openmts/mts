@@ -36,6 +36,7 @@ function sampleArchive(locale: 'zh' | 'en' = 'zh') {
       warn_count: 1,
       checks: [{ level: 'warn', code: 'http_tls', message: 'tls off' }],
     },
+    downsample_status_summary: { total: 1, error: 1, lagging: 0, max_lag_seconds: 0 },
   })
 }
 
@@ -67,6 +68,7 @@ test('buildAcceptancePack aggregates archive client server ops', () => {
   assert.equal(pack.ops_actions.length, 1)
   assert.match(pack.disclaimer, /不代表生产人工验收/)
   const md = formatAcceptancePackMarkdown(pack)
+  assert.match(md, /Downsample status summary/)
   assert.match(md, /验收材料包/)
   assert.match(md, /1\.2\.3/)
   assert.match(md, /0\.9\.0/)

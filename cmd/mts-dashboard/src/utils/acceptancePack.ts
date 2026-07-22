@@ -17,6 +17,7 @@ import {
   buildExportPreflight,
   type ExportPreflightItem,
 } from './exportPreflight.ts'
+import { formatDownsampleStatusSummaryLine } from './downsampleStatusSummary.ts'
 
 export const ACCEPTANCE_PACK_KIND = 'mts.acceptance.pack' as const
 export const ACCEPTANCE_PACK_VERSION = 1 as const
@@ -300,6 +301,10 @@ export function formatAcceptancePackMarkdown(pack: AcceptancePackPayload): strin
     lines.push(`- [${item.level}] ${item.id}: ${item.message}`)
   }
   lines.push(`- ${t.preflightNotScored}`)
+  if (pack.readiness.downsample_status_summary) {
+    lines.push('', '## Downsample status summary', '')
+    lines.push(`- ${formatDownsampleStatusSummaryLine(pack.readiness.downsample_status_summary)}`)
+  }
   lines.push('', t.ops, '')
   if (!pack.ops_actions.length) {
     lines.push(`- ${t.empty}`)

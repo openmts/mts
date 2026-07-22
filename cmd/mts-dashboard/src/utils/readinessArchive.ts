@@ -15,6 +15,11 @@ import {
   buildExportPreflight,
   type ExportPreflightItem,
 } from './exportPreflight.ts'
+import {
+  formatDownsampleStatusSummaryLine,
+  normalizeDownsampleStatusSummary,
+  type DownsampleStatusSummaryInput,
+} from './downsampleStatusSummary.ts'
 
 export interface DoctorArchiveSummary {
   loaded: boolean
@@ -34,6 +39,8 @@ export interface ReadinessArchiveInput {
   now?: string
   /** 导出文案语言；默认 zh */
   locale?: LocaleCode
+  /** 可选：降采样 statuses 摘要（只读归档） */
+  downsample_status_summary?: DownsampleStatusSummaryInput | null
 }
 
 export interface ReadinessArchivePayload {
@@ -71,6 +78,8 @@ export interface ReadinessArchivePayload {
     ok_count: number
     items: Pick<ExportPreflightItem, 'id' | 'level' | 'message' | 'target'>[]
   }
+  /** 可选：降采样健康摘要（/admin/downsample/statuses summary） */
+  downsample_status_summary?: Required<DownsampleStatusSummaryInput> | null
 }
 
 const copy = {
@@ -200,6 +209,9 @@ export function buildReadinessArchive(input: ReadinessArchiveInput): ReadinessAr
         })),
       }
     })(),
+    downsample_status_summary: input.downsample_status_summary
+      ? normalizeDownsampleStatusSummary(input.downsample_status_summary)
+      : null,
   }
 }
 
@@ -248,6 +260,10 @@ export function formatReadinessArchiveMarkdown(a: ReadinessArchivePayload): stri
     for (const c of a.doctor.checks ?? []) {
       lines.push(`- [${c.level}] ${c.code}: ${c.message}`)
     }
+  }
+  if (a.downsample_status_summary) {
+    lines.push('', '## Downsample status summary', '')
+    lines.push(`- ${formatDownsampleStatusSummaryLine(a.downsample_status_summary)}`)
   }
   lines.push('', t.completed, '')
   lines.push(`- production: ${a.checklist.production.join(', ') || '—'}`)

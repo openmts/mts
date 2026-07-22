@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildDownsampleStatusSummaryExport,
+  downsampleStatusHealthJump,
   downsampleStatusSummaryJump,
   downsampleStatusSummaryToCSV,
   downsampleStatusSummaryTone,
@@ -34,7 +35,24 @@ test('tone and jump', () => {
   assert.equal(downsampleStatusSummaryTone(normalizeDownsampleStatusSummary({ error: 1 })), 'bad')
   assert.equal(downsampleStatusSummaryTone(normalizeDownsampleStatusSummary({ lagging: 1 })), 'warn')
   assert.equal(downsampleStatusSummaryTone(normalizeDownsampleStatusSummary({ total: 1 })), 'ok')
-  assert.match(downsampleStatusSummaryJump(normalizeDownsampleStatusSummary({ error: 1 })), /downsample-status/)
+  assert.equal(
+    downsampleStatusSummaryJump(normalizeDownsampleStatusSummary({ error: 1 })),
+    '/downsample?health=error#downsample-status',
+  )
+  assert.equal(
+    downsampleStatusSummaryJump(normalizeDownsampleStatusSummary({ lagging: 1 })),
+    '/downsample?health=lagging#downsample-status',
+  )
+  assert.equal(
+    downsampleStatusSummaryJump(normalizeDownsampleStatusSummary({ lagging: 1 }), { min_lag_seconds: 60 }),
+    '/downsample?health=lagging&min_lag=60#downsample-status',
+  )
+  assert.equal(downsampleStatusHealthJump('error'), '/downsample?health=error#downsample-status')
+  assert.equal(downsampleStatusHealthJump('active'), '/downsample?health=active#downsample-status')
+  assert.equal(
+    downsampleStatusHealthJump('lagging', { min_lag_seconds: 120 }),
+    '/downsample?health=lagging&min_lag=120#downsample-status',
+  )
 })
 
 test('export summary json/csv', () => {

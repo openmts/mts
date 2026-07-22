@@ -31,3 +31,16 @@ func TestFilterDownsampleStatuses(t *testing.T) {
 		t.Fatalf("q filter = %#v", got)
 	}
 }
+
+func TestIsTruthyQuery(t *testing.T) {
+	for _, raw := range []string{"1", "true", "TRUE", "yes", "on", " On "} {
+		if !isTruthyQuery(raw) {
+			t.Fatalf("expected truthy %q", raw)
+		}
+	}
+	for _, raw := range []string{"", "0", "false", "no", "off", "2"} {
+		if isTruthyQuery(raw) {
+			t.Fatalf("expected false %q", raw)
+		}
+	}
+}

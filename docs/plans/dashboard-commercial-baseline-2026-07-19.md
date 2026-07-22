@@ -2141,3 +2141,19 @@
 |------|--------|-----------|------|
 | 状态健康深链 | statuses query | `?health=&min_lag=` | 只读筛选 |
 | 分享链接 | — | share 含 health | 运维协作 |
+
+## P444（2026-07-22）
+- Overview 降采样健康卡片：一键深链 error / lagging / active（只读筛选）
+- `downsampleStatusSummaryJump` 默认带 `?health=`
+- Overview / Readiness 导出与归档纳入 `downsample_status_summary`
+- Server：`GET /admin/downsample/statuses?summary_only=1` 仅返回 summary（省略 statuses 行）
+- Overview/Readiness 轻量拉取 `summary_only=1`
+- e2e：Overview 错误深链跳转验证
+
+### 前后端对齐（P444）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| summary_only | statuses?summary_only=1 | Overview/Readiness 轻量摘要 | 减少载荷 |
+| 一键健康深链 | statuses?health= | Overview 按钮 | 只读筛选 |
+| 导出归档摘要 | summary 字段 | overview/readiness/acceptance | 交接核对 |
+

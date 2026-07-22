@@ -73,10 +73,37 @@ export function downsampleStatusSummaryTone(
   return 'ok'
 }
 
-export function downsampleStatusSummaryJump(s: Required<DownsampleStatusSummaryInput>): string {
-  if (s.error > 0) return '/downsample#downsample-status'
-  if (s.lagging > 0) return '/downsample#downsample-status'
-  return '/downsample#downsample-filters'
+/** 按摘要严重度生成状态表深链（error / lagging 带 health 筛选） */
+export function downsampleStatusSummaryJump(
+  s: Required<DownsampleStatusSummaryInput>,
+  opts?: { min_lag_seconds?: number },
+): string {
+  if (s.error > 0) return '/downsample?health=error#downsample-status'
+  if (s.lagging > 0) {
+    const lag = opts?.min_lag_seconds
+    if (lag != null && lag > 0) {
+      return `/downsample?health=lagging&min_lag=${Math.floor(lag)}#downsample-status`
+    }
+    return '/downsample?health=lagging#downsample-status'
+  }
+  return '/downsample#downsample-status'
+}
+
+/** 固定健康筛选深链（Overview 一键按钮） */
+export function downsampleStatusHealthJump(
+  health: 'error' | 'active' | 'lagging' | '',
+  opts?: { min_lag_seconds?: number },
+): string {
+  if (health === 'error') return '/downsample?health=error#downsample-status'
+  if (health === 'active') return '/downsample?health=active#downsample-status'
+  if (health === 'lagging') {
+    const lag = opts?.min_lag_seconds
+    if (lag != null && lag > 0) {
+      return `/downsample?health=lagging&min_lag=${Math.floor(lag)}#downsample-status`
+    }
+    return '/downsample?health=lagging#downsample-status'
+  }
+  return '/downsample#downsample-status'
 }
 
 export function buildDownsampleStatusSummaryExport(
@@ -180,3 +207,12 @@ export function downsampleStatusesToCSV(
   }
   return lines.join('\n')
 }
+
+/** Markdown/文本单行摘要 */
+export function formatDownsampleStatusSummaryLine(
+  s: DownsampleStatusSummaryInput | null | undefined,
+): string {
+  const n = normalizeDownsampleStatusSummary(s)
+  return `total: ${n.total} · enabled: ${n.enabled} · active: ${n.active} · error: ${n.error} · lagging: ${n.lagging} · max_lag_seconds: ${n.max_lag_seconds}`
+}
+

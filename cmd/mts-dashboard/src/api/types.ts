@@ -315,6 +315,8 @@ export interface DownsampleStatusSummary {
 /** GET /api/v1/admin/downsample/statuses（含 busy/last） */
 export interface DownsampleStatusesResponse {
   statuses?: unknown[]
+  /** 过滤后汇总；summary_only=1 时仅返回摘要 */
+  summary?: DownsampleStatusSummary
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number

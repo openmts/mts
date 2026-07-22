@@ -837,7 +837,7 @@ func operationCatalog() []operation {
 			Name:         "downsample_statuses",
 			Namespace:    "admin",
 			Description:  "downsample policy statuses (includes admin_op_busy/last)",
-			ResponseHint: "downsampleStatusesResponse{statuses,admin_op_busy,last}",
+			ResponseHint: "downsampleStatusesResponse{statuses,summary,admin_op_busy,last; summary_only=1 omits rows}",
 			Auth:         authAdmin,
 			HTTPMethods:  []string{http.MethodGet},
 			HTTPPaths:    []string{routeAdminDownsampleStatuses},

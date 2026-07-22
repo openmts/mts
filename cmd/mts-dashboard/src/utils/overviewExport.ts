@@ -1,5 +1,11 @@
 /** Overview 运维快照导出（纯函数） */
 
+import {
+  normalizeDownsampleStatusSummary,
+  type DownsampleStatusSummaryInput,
+} from './downsampleStatusSummary.ts'
+
+
 export interface OverviewHealthCheck {
   name: string
   status: string
@@ -30,6 +36,8 @@ export function buildOverviewExport(
     server_version?: { version?: string; commit?: string; built_at?: string } | null
     client?: object | null
     last_refreshed?: string
+    /** 降采样 statuses summary（可商用扫视） */
+    downsample_status_summary?: DownsampleStatusSummaryInput | null
   },
   at = new Date(),
 ): {
@@ -52,6 +60,7 @@ export function buildOverviewExport(
   server_version: { version?: string; commit?: string; built_at?: string } | null
   client: object | null
   last_refreshed: string
+  downsample_status_summary: Required<DownsampleStatusSummaryInput> | null
 } {
   return {
     kind: 'mts.overview.snapshot',
@@ -73,6 +82,9 @@ export function buildOverviewExport(
     server_version: input.server_version ?? null,
     client: input.client ?? null,
     last_refreshed: input.last_refreshed || '',
+    downsample_status_summary: input.downsample_status_summary
+      ? normalizeDownsampleStatusSummary(input.downsample_status_summary)
+      : null,
   }
 }
 

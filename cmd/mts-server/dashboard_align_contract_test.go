@@ -352,3 +352,44 @@ func TestHTTPGetDownsamplePolicyStatus(t *testing.T) {
 		t.Fatalf("missing code = %v", missing.Code)
 	}
 }
+
+func TestHTTPDownsampleStatusesSummaryOnly(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	policy := mts.DownsamplePolicy{
+		Name:              "sum-only-ds",
+		SourceDatabase:    "default",
+		SourceRetention:   "autogen",
+		SourceMeasurement: "cpu",
+		TargetDatabase:    "default",
+		TargetRetention:   "autogen",
+		TargetMeasurement: "cpu_1m_sum_only",
+		Interval:          time.Minute,
+		RefreshInterval:   time.Minute,
+		Lookback:          time.Minute,
+		BatchSize:         10,
+		Functions:         []mts.DownsampleFunction{{Function: mts.AggregateAvg, Field: "usage", As: "mean_usage"}},
+		Enabled:           true,
+	}
+	postJSON(t, server.URL+"/api/v1/admin/downsample/policies", policy, http.StatusOK, &okResponse{})
+
+	var full downsampleStatusesResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/downsample/statuses", nil, http.StatusOK, &full)
+	if full.Summary == nil || full.Summary.Total < 1 {
+		t.Fatalf("full summary = %#v", full.Summary)
+	}
+	if len(full.Statuses) < 1 {
+		t.Fatalf("full statuses empty")
+	}
+
+	var light downsampleStatusesResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/admin/downsample/statuses?summary_only=1", nil, http.StatusOK, &light)
+	if light.Summary == nil || light.Summary.Total != full.Summary.Total {
+		t.Fatalf("light summary = %#v full=%#v", light.Summary, full.Summary)
+	}
+	if len(light.Statuses) != 0 {
+		t.Fatalf("summary_only should omit rows, got %d", len(light.Statuses))
+	}
+}

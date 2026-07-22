@@ -15,7 +15,7 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats, DownsampleStatusSummary } from '@/api/types'
-import { normalizeDownsampleStatusSummary, downsampleStatusSummaryTone, downsampleStatusSummaryJump } from '@/utils/downsampleStatusSummary'
+import { normalizeDownsampleStatusSummary, downsampleStatusSummaryTone, downsampleStatusSummaryJump, downsampleStatusHealthJump } from '@/utils/downsampleStatusSummary'
 import { clientBuildInfo } from '@/utils/buildInfo'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
 import { completedIds, loadReadinessState } from '@/utils/readinessState'
@@ -129,6 +129,9 @@ const downsampleSummaryToneClass = computed(() => {
   return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
 })
 const downsampleSummaryPath = computed(() => downsampleStatusSummaryJump(downsampleSummaryView.value))
+const downsampleErrorJump = computed(() => downsampleStatusHealthJump('error'))
+const downsampleLaggingJump = computed(() => downsampleStatusHealthJump('lagging'))
+const downsampleActiveJump = computed(() => downsampleStatusHealthJump('active'))
 const doctorChecks = ref<DoctorCheck[]>([])
 const doctorTLS = ref<boolean | null>(null)
 const loadError = ref('')
@@ -351,8 +354,8 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
       maintenanceStats.value = v.stats ?? null
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       try {
-        const st = await apiGet<{ summary?: DownsampleStatusSummary; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
-          '/api/v1/admin/downsample/statuses',
+        const st = await apiGet<{ summary?: DownsampleStatusSummary; statuses?: unknown[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
+          '/api/v1/admin/downsample/statuses?summary_only=1',
         )
         applyAdminOpStatus(parseAdminOpStatusPayload(st))
         downsampleSummary.value = normalizeDownsampleStatusSummary(st.summary)
@@ -620,6 +623,7 @@ function buildOverviewSnapshotPayload() {
     server_version: serverVersion.value,
     client: clientInfo as unknown as object,
     last_refreshed: lastRefreshed.value,
+    downsample_status_summary: downsampleSummary.value,
   })
 }
 
@@ -660,6 +664,7 @@ async function copyOverview() {
     server_version: serverVersion.value,
     client: clientInfo as unknown as object,
     last_refreshed: lastRefreshed.value,
+    downsample_status_summary: downsampleSummary.value,
   }))
   if (res.ok) success(t.value('overviewCopied'))
   else notifyError(res.error || t.value('failed'))
@@ -1250,7 +1255,12 @@ async function copyOverview() {
               <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('overviewDownsampleSummaryTitle') }}</p>
               <p class="text-[11px] mts-muted">{{ t('overviewDownsampleSummaryDesc') }}</p>
             </div>
-            <router-link class="mts-btn text-xs" :to="downsampleSummaryPath" data-testid="overview-go-downsample">{{ t('overviewDownsampleGo') }}</router-link>
+            <div class="flex flex-wrap gap-1.5">
+              <router-link class="mts-btn text-xs" :to="downsampleSummaryPath" data-testid="overview-go-downsample">{{ t('overviewDownsampleGo') }}</router-link>
+              <router-link class="mts-btn text-xs" :to="downsampleErrorJump" data-testid="overview-downsample-jump-error">{{ t('overviewDownsampleJumpError') }}</router-link>
+              <router-link class="mts-btn text-xs" :to="downsampleLaggingJump" data-testid="overview-downsample-jump-lagging">{{ t('overviewDownsampleJumpLagging') }}</router-link>
+              <router-link class="mts-btn text-xs" :to="downsampleActiveJump" data-testid="overview-downsample-jump-active">{{ t('overviewDownsampleJumpActive') }}</router-link>
+            </div>
           </div>
           <div class="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             <div data-testid="overview-downsample-total">{{ t('overviewDownsampleTotal') }}: <span class="font-semibold">{{ downsampleSummaryView.total }}</span></div>

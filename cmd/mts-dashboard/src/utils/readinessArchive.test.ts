@@ -33,8 +33,11 @@ test('buildReadinessArchive includes score and checklist', () => {
       warn_count: 1,
       checks: [{ level: 'warn', code: 'http_tls', message: 'tls off' }],
     },
+    downsample_status_summary: { total: 3, error: 1, lagging: 2, max_lag_seconds: 42 },
   })
   assert.equal(a.kind, 'mts.readiness.archive')
+  assert.equal(a.downsample_status_summary?.error, 1)
+  assert.equal(a.downsample_status_summary?.max_lag_seconds, 42)
   assert.equal(a.locale, 'zh')
   assert.equal(a.operator, 'alice')
   assert.equal(a.score.total, 82)
@@ -51,6 +54,8 @@ test('buildReadinessArchive includes score and checklist', () => {
   assert.match(md, /http_tls/)
   assert.match(md, /weekly drill/)
   assert.match(md, /边缘 HTTPS \/ TLS|Edge HTTPS/)
+  assert.match(md, /Downsample status summary/)
+  assert.match(md, /max_lag_seconds: 42/)
 })
 
 test('buildReadinessArchive english catalog titles', () => {

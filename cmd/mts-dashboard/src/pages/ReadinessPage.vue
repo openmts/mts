@@ -4,6 +4,7 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { snapshotForm } from '@/utils/formDirty'
 import { useRoute, useRouter } from 'vue-router'
 import { apiGet } from '@/api/client'
+import { normalizeDownsampleStatusSummary, type DownsampleStatusSummaryInput } from '@/utils/downsampleStatusSummary'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
@@ -209,6 +210,7 @@ const DOC_LIST_HEIGHT = 280
 const doctor = ref<DoctorResponse | null>(null)
 const doctorError = ref('')
 const versionError = ref('')
+const downsampleStatusSummary = ref<Required<DownsampleStatusSummaryInput> | null>(null)
 const loadingDoctor = ref(false)
 const loadingVersion = ref(false)
 const actionMsg = ref('')
@@ -432,6 +434,18 @@ async function loadDoctor() {
   } finally {
     loadingDoctor.value = false
   }
+  // 降采样健康摘要：失败不阻断 doctor；summary_only 减少载荷
+  try {
+    const st = await apiGet<{ summary?: DownsampleStatusSummaryInput; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
+      '/api/v1/admin/downsample/statuses?summary_only=1',
+    )
+    applyAdminOpStatus(parseAdminOpStatusPayload(st))
+    downsampleStatusSummary.value = normalizeDownsampleStatusSummary(st.summary)
+  } catch {
+    if (!downsampleStatusSummary.value) {
+      downsampleStatusSummary.value = normalizeDownsampleStatusSummary(null)
+    }
+  }
 }
 
 function go(path: string) {
@@ -519,6 +533,7 @@ async function downloadArchive() {
     score: scoreBreakdown.value,
     doctor: doctorArchiveSummary(),
     locale: uiLocale.value,
+    downsample_status_summary: downsampleStatusSummary.value,
   })
   const names = archiveFilenames()
   const md = formatReadinessArchiveMarkdown(archive)
@@ -575,6 +590,7 @@ async function downloadAcceptancePack() {
     score: scoreBreakdown.value,
     doctor: doctorArchiveSummary(),
     locale: uiLocale.value,
+    downsample_status_summary: downsampleStatusSummary.value,
   })
   const pack = buildAcceptancePack({
     archive,
