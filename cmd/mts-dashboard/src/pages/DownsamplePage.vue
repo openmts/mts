@@ -673,6 +673,7 @@ async function confirmBatch() {
     if (!data) {
       data = {
         ok: batchProgress.value.fail === 0,
+        path: '/api/v1/admin/downsample/policies/batch',
         ok_count: batchProgress.value.ok,
         skip_count: batchProgress.value.skip,
         fail_count: batchProgress.value.fail,
@@ -689,13 +690,15 @@ async function confirmBatch() {
       .filter((it) => it.status === 'error')
       .map((it) => `${it.name}: ${it.message || it.status}`)
     if (errors.length === 0) {
+      const path = String((data as { path?: string }).path || '/api/v1/admin/downsample/policies/batch')
       const msg = batchMode.value === 'enable'
-        ? `${t.value('downsampleBatchEnable')}: ${ok}`
-        : `${t.value('downsampleBatchDisable')}: ${ok}`
+        ? `${t.value('downsampleBatchEnable')}: ${ok} (${path})`
+        : `${t.value('downsampleBatchDisable')}: ${ok} (${path})`
       setActionOk(msg)
       success(msg)
     } else {
-      const msg = `${ok}/${names.length}; ${errors.slice(0, 3).join('; ')}`
+      const path = String((data as { path?: string }).path || '/api/v1/admin/downsample/policies/batch')
+      const msg = `${ok}/${names.length}; ${errors.slice(0, 3).join('; ')} (${path})`
       if (ok === 0) {
         lastFailedAction.value = 'batch'
         actionResult.value = makeActionResult('error', msg)
@@ -808,7 +811,7 @@ async function createPolicy() {
   dsActionStartedAt.value = Date.now()
   const signal = dsActionAbort.begin()
   try {
-    const created = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/downsample/policies', newPolicy.value, { signal })
+    const created = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/downsample/policies', newPolicy.value, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(created))
     showCreate.value = false
     newPolicy.value = {
@@ -831,8 +834,11 @@ async function createPolicy() {
     refreshHuman.value = '1m'
     lookbackHuman.value = '1m'
     await loadData()
-    setActionOk(t.value('downsampleCreated'))
-    success(t.value('downsampleCreated'))
+    const okMsg = formatMessage(t.value('downsampleCreated'), {
+      path: String(created?.path || '/api/v1/admin/downsample/policies'),
+    })
+    setActionOk(okMsg)
+    success(okMsg)
   } catch (e) {
     reportDsCatch('create', e)
   } finally {
@@ -862,12 +868,16 @@ async function confirmDelete() {
   dsActionStartedAt.value = Date.now()
   const signal = dsActionAbort.begin()
   try {
-    const del = await apiDelete<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`, { signal })
+    const delPath = `/api/v1/admin/downsample/policies/${encodeURIComponent(deleteName.value)}`
+    const del = await apiDelete<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(delPath, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(del))
     deleteOpen.value = false
     await loadData()
-    setActionOk(t.value('downsampleDeleted'))
-    success(t.value('downsampleDeleted'))
+    const okMsg = formatMessage(t.value('downsampleDeleted'), {
+      path: String(del?.path || delPath),
+    })
+    setActionOk(okMsg)
+    success(okMsg)
   } catch (e) {
     reportDsCatch('delete', e)
   } finally {
@@ -891,11 +901,15 @@ async function togglePolicy(policy: DownsamplePolicy) {
   dsActionStartedAt.value = Date.now()
   const signal = dsActionAbort.begin()
   try {
-    const act = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`, undefined, { signal })
+    const actPath = `/api/v1/admin/downsample/policies/${encodeURIComponent(policy.name)}/${action}`
+    const act = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(actPath, undefined, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(act))
     await loadData()
     lastFailedAction.value = null
-    const msg = policy.enabled ? t.value('downsampleDisabledOk') : t.value('downsampleEnabledOk')
+    const msg = formatMessage(
+      t.value(policy.enabled ? 'downsampleDisabledOk' : 'downsampleEnabledOk'),
+      { path: String(act?.path || actPath) },
+    )
     setActionOk(msg)
     success(msg)
   } catch (e) {
@@ -969,12 +983,16 @@ async function resetPolicy(name: string) {
   const signal = dsActionAbort.begin()
   clearActionResult()
   try {
-    const reset = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/reset`, {
+    const resetPath = `/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/reset`
+    const reset = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(resetPath, {
       reset: { allow_policy_replace: true },
     }, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(reset))
     await loadData()
-    const msg = `${t.value('downsampleResetOk')}: ${name}`
+    const base = formatMessage(t.value('downsampleResetOk'), {
+      path: String(reset?.path || resetPath),
+    })
+    const msg = `${base}: ${name}`
     setActionOk(msg)
     success(msg)
   } catch (e) {

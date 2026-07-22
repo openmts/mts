@@ -685,6 +685,7 @@ type compactionStatsResponse struct {
 }
 
 type downsamplePoliciesResponse struct {
+	Path          string                 `json:"path,omitempty"`
 	Policies      []mts.DownsamplePolicy `json:"policies"`
 	AdminOpBusy   bool                   `json:"admin_op_busy,omitempty"`
 	Op            string                 `json:"op,omitempty"`
@@ -693,6 +694,7 @@ type downsamplePoliciesResponse struct {
 }
 
 type downsamplePolicyResponse struct {
+	Path          string                `json:"path,omitempty"`
 	Policy        mts.DownsamplePolicy  `json:"policy"`
 	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
 	Op            string                `json:"op,omitempty"`
@@ -710,6 +712,7 @@ type downsampleStatusSummary struct {
 }
 
 type downsampleStatusesResponse struct {
+	Path          string                       `json:"path,omitempty"`
 	Statuses      []mts.DownsamplePolicyStatus `json:"statuses"`
 	Summary       *downsampleStatusSummary     `json:"summary,omitempty"`
 	AdminOpBusy   bool                         `json:"admin_op_busy,omitempty"`
@@ -719,6 +722,7 @@ type downsampleStatusesResponse struct {
 }
 
 type downsamplePolicyStatusResponse struct {
+	Path          string                     `json:"path,omitempty"`
 	Status        mts.DownsamplePolicyStatus `json:"status"`
 	AdminOpBusy   bool                       `json:"admin_op_busy,omitempty"`
 	Op            string                     `json:"op,omitempty"`
@@ -766,6 +770,7 @@ type downsamplePolicyRangeRequest struct {
 }
 
 type downsampleRunResponse struct {
+	Path          string                  `json:"path,omitempty"`
 	Result        mts.DownsampleRunResult `json:"result"`
 	AdminOpBusy   bool                    `json:"admin_op_busy,omitempty"`
 	Op            string                  `json:"op,omitempty"`

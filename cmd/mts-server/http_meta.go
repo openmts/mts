@@ -36,7 +36,7 @@ func (r *serverRuntime) handleAdminDatabases(writer http.ResponseWriter, request
 			return
 		}
 		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "create_database", Database: req.Name})
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDatabases}))
 	default:
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
 	}
@@ -63,7 +63,7 @@ func (r *serverRuntime) handleAdminDatabaseResource(writer http.ResponseWriter, 
 			return
 		}
 		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "drop_database", Database: database})
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true, Path: request.URL.Path}))
 		return
 	}
 	if len(parts) == 2 && parts[1] == "retention-policies" {
@@ -90,7 +90,7 @@ func (r *serverRuntime) handleRetentionPolicies(
 			return
 		}
 		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "create_retention_policy", Database: database, Detail: req.Policy.Name})
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true, Path: request.URL.Path}))
 	case http.MethodGet:
 		policies, err := r.engine.ListRetentionPolicies(request.Context(), database)
 		if err != nil {

@@ -2694,3 +2694,17 @@
 | batch-disabled | path / stream summary path | listBatchDone/Partial 含 path | NDJSON summary |
 | doctor / admin health | path | overview-doctor-path / readiness-doctor-path | GET |
 | 契约检索 | ResponseHint | 命令面板 | 运维对照 |
+
+## P484（2026-07-23）
+- Server：create/drop database、create RP、downsample create/delete/enable/disable/reset/list/statuses/run 补 `path`（HTTP+gRPC）
+- Dashboard：Databases/Downsample 成功文案含 path；batch 成功/部分失败附加 path
+- 清单：`meta-downsample-path`；ApiSpec ResponseHint 对齐
+
+### 前后端对齐（P484）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| database create/drop | path | databasesCreated/Deleted | okResponse |
+| retention create | path | databasesRpCreated | okResponse |
+| downsample mutations | path | create/delete/enable/disable/reset | okResponse |
+| downsample list/status | path | 契约/列表 | GET |
+| batch downsample | path (P483) | batch 成功文案 | stream summary |

@@ -560,7 +560,7 @@ func grpcCreateDatabase(r *serverRuntime, ctx context.Context, req any) (any, er
 	if err := r.engine.CreateDatabase(ctx, req.(*databaseRequest).Name); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDatabases}), nil
 }
 
 func grpcListDatabases(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -581,7 +581,7 @@ func grpcDropDatabase(r *serverRuntime, ctx context.Context, req any) (any, erro
 	if err := r.engine.DropDatabase(ctx, req.(*databaseRequest).Name); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDatabasesPrefix + req.(*databaseRequest).Name}), nil
 }
 
 func grpcCreateRetentionPolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -592,7 +592,7 @@ func grpcCreateRetentionPolicy(r *serverRuntime, ctx context.Context, req any) (
 	if err := r.engine.CreateRetentionPolicy(ctx, request.Database, request.Policy); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDatabasesPrefix + request.Database + "/retention-policies"}), nil
 }
 
 func grpcListRetentionPolicies(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -802,7 +802,7 @@ func grpcCreateDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) 
 	if err := r.engine.CreateDownsamplePolicy(ctx, policy); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDownsamplePolicies}), nil
 }
 
 func grpcListDownsamplePolicies(r *serverRuntime, ctx context.Context, _ any) (any, error) {
@@ -813,27 +813,29 @@ func grpcListDownsamplePolicies(r *serverRuntime, ctx context.Context, _ any) (a
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToDownsamplePolicies(downsamplePoliciesResponse{Policies: policies}), nil
+	return r.attachAdminOpToDownsamplePolicies(downsamplePoliciesResponse{Policies: policies, Path: routeAdminDownsamplePolicies}), nil
 }
 
 func grpcEnableDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	if err := r.engine.EnableDownsamplePolicy(ctx, req.(*downsamplePolicyRequest).Name); err != nil {
+	name := req.(*downsamplePolicyRequest).Name
+	if err := r.engine.EnableDownsamplePolicy(ctx, name); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDownsamplePrefix + name + "/enable"}), nil
 }
 
 func grpcDisableDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	if err := r.engine.DisableDownsamplePolicy(ctx, req.(*downsamplePolicyRequest).Name); err != nil {
+	name := req.(*downsamplePolicyRequest).Name
+	if err := r.engine.DisableDownsamplePolicy(ctx, name); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDownsamplePrefix + name + "/disable"}), nil
 }
 
 func grpcDropDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -845,13 +847,13 @@ func grpcDropDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (a
 		if err := r.engine.DropDownsamplePolicyWithOptions(ctx, request.Name, request.Options); err != nil {
 			return nil, err
 		}
-		return r.attachAdminOpToOK(okResponse{OK: true}), nil
+		return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDownsamplePrefix + request.Name}), nil
 	case *downsamplePolicyRequest:
 		// 兼容仅传 name 的旧请求。
 		if err := r.engine.DropDownsamplePolicy(ctx, request.Name); err != nil {
 			return nil, err
 		}
-		return r.attachAdminOpToOK(okResponse{OK: true}), nil
+		return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDownsamplePrefix + request.Name}), nil
 	default:
 		return nil, newAPIError(errorCodeBadRequest, "invalid drop downsample request", nil)
 	}
@@ -865,7 +867,7 @@ func grpcResetDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (
 	if err := r.engine.ResetDownsamplePolicy(ctx, request.Name, request.Reset); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToOK(okResponse{OK: true, Path: routeAdminDownsamplePrefix + request.Name + "/reset"}), nil
 }
 
 func grpcDownsamplePolicyStatuses(r *serverRuntime, ctx context.Context, _ any) (any, error) {

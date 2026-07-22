@@ -517,7 +517,7 @@ async function createDatabase() {
   const signal = dbActionAbort.begin()
   try {
     const name = newDbName.value.trim()
-    const created = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/databases', { name }, { signal })
+    const created = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/databases', { name }, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(created))
     databases.value.push({
       name,
@@ -533,8 +533,11 @@ async function createDatabase() {
       newRpDuration: '',
     })
     newDbName.value = ''
-    setActionOk(t.value('databasesCreated'))
-    success(t.value('databasesCreated'))
+    const okMsg = formatMessage(t.value('databasesCreated'), {
+      path: String(created?.path || '/api/v1/admin/databases'),
+    })
+    setActionOk(okMsg)
+    success(okMsg)
   } catch (e) {
     reportDbCatch('create-db', e)
   } finally {
@@ -567,13 +570,16 @@ async function confirmDeleteDatabase() {
   dbActionStartedAt.value = Date.now()
   const signal = dbActionAbort.begin()
   try {
-    const del = await apiDelete<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/databases/${encodeURIComponent(name)}`, { signal })
+    const del = await apiDelete<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/databases/${encodeURIComponent(name)}`, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(del))
     databases.value = databases.value.filter((d) => d.name !== name)
     pruneTo(databases.value.map((d) => d.name))
     confirmOpen.value = false
     lastFailedAction.value = null
-    const okMsg = formatMessage(t.value('databasesDeleted'), { name })
+    const okMsg = formatMessage(t.value('databasesDeleted'), {
+      name,
+      path: String(del?.path || `/api/v1/admin/databases/${encodeURIComponent(name)}`),
+    })
     setActionOk(okMsg)
     success(okMsg)
   } catch (e) {
@@ -612,15 +618,19 @@ async function createRetentionPolicy(db: DatabaseEntry) {
   dbActionStartedAt.value = Date.now()
   const signal = dbActionAbort.begin()
   try {
-    const rp = await apiPost<{ admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(`/api/v1/admin/databases/${encodeURIComponent(db.name)}/retention-policies`, {
+    const rpPath = `/api/v1/admin/databases/${encodeURIComponent(db.name)}/retention-policies`
+    const rp = await apiPost<{ path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(rpPath, {
       policy: { name, duration: durationNs },
     }, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(rp))
     db.retentionPolicies.push({ name, duration: durationNs })
     db.newRpName = ''
     db.newRpDuration = ''
-    setActionOk(t.value('databasesRpCreated'))
-    success(t.value('databasesRpCreated'))
+    const okMsg = formatMessage(t.value('databasesRpCreated'), {
+      path: String(rp?.path || rpPath),
+    })
+    setActionOk(okMsg)
+    success(okMsg)
   } catch (e) {
     reportDbCatch('create-rp', e, { db: db.name })
   } finally {

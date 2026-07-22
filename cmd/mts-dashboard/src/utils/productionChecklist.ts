@@ -574,6 +574,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/ops#ops-status-strip',
   },
   {
+    id: 'meta-downsample-path',
+    severity: 'recommended',
+    title: { zh: '库表/RP/降采样写路径响应含 path', en: 'Database/RP/downsample mutation responses include path' },
+    detail: {
+      zh: 'create/drop database、create RP、downsample create/delete/enable/disable/reset/list/statuses 返回 path；Databases/Downsample 成功文案展示。',
+      en: 'create/drop database, create RP, downsample create/delete/enable/disable/reset/list/statuses return path; Databases/Downsample success messages surface it.',
+    },
+    automated: true,
+    jump: '/databases',
+  },
+  {
     id: 'users-doctor-path',
     severity: 'recommended',
     title: { zh: 'Users/批次与 doctor/health 响应含 path', en: 'Users/batch and doctor/health responses include path' },
