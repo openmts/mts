@@ -25,7 +25,7 @@ async function expectFailAdminLast(
 }
 
 test('commercial browser smoke path', async ({ page }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(210_000)
   // 脏表单离开确认：冒烟路径自动接受，避免深链被 confirm 卡住
   page.on('dialog', async (dialog) => {
     await dialog.accept()
@@ -1306,6 +1306,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('command-palette-input').fill('disabled users')
   await expect(page.getByTestId('command-item-users-status-disabled')).toBeVisible()
   await page.getByTestId('command-item-users-status-disabled').click()
+  await expect(page).toHaveURL(/status=disabled/)
+  await expect(page.getByTestId('users-status-filter')).toHaveValue('disabled')
+  // P428: 命令面板就绪清单「禁用用户撤销会话」深链
+  await page.getByTestId('topbar-command-palette').click()
+  await expect(page.getByTestId('command-palette')).toBeVisible()
+  await page.getByTestId('command-palette-input').fill('禁用用户撤销会话')
+  await expect(page.getByTestId('command-item-readiness-user-disable-revokes-tokens')).toBeVisible()
+  await page.getByTestId('command-item-readiness-user-disable-revokes-tokens').click()
   await expect(page).toHaveURL(/status=disabled/)
   await expect(page.getByTestId('users-status-filter')).toHaveValue('disabled')
   await page.getByTestId('topbar-command-palette').click()
@@ -2718,6 +2726,35 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('users-toggle-reader-e2e').click()
   await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('users-action-result')).toContainText(/启用|enabled|Enabled|active/i)
+  // P428: 批量禁用 reader-e2e（真实路径，非 fail-last mock）并再启用
+  const clearSel = page.getByTestId('users-clear-selection')
+  if ((await clearSel.count()) && (await clearSel.isEnabled())) {
+    await clearSel.click()
+  }
+  // 确保筛选不过滤掉 reader
+  await page.getByTestId('users-filter').fill('')
+  await page.getByTestId('users-status-filter').selectOption('')
+  await page.getByTestId('users-role-filter').selectOption('')
+  await expect(page.getByTestId('users-row-reader-e2e')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('users-select-reader-e2e').check()
+  await expect(page.getByTestId('users-batch-disable')).toBeEnabled()
+  await page.getByTestId('users-batch-disable').click()
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+  await expect(page.getByTestId('confirm-dialog')).toContainText(/撤销|token|会话|revoke/i)
+  await page.getByTestId('confirm-dialog-confirm').click()
+  await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('users-action-result')).toContainText(/禁用|disabled|batch|批量|ok/i)
+  await page.getByTestId('users-status-filter').selectOption('disabled')
+  await expect(page.getByTestId('users-row-reader-e2e')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('users-status-filter').selectOption('')
+  await expect(page.getByTestId('users-row-reader-e2e')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('users-select-reader-e2e').check()
+  await expect(page.getByTestId('users-batch-enable')).toBeEnabled()
+  await page.getByTestId('users-batch-enable').click()
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+  await page.getByTestId('confirm-dialog-confirm').click()
+  await expect(page.getByTestId('users-action-result')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('users-action-result')).toContainText(/启用|enabled|batch|批量|ok/i)
   await page.getByTestId('users-open-grant-reader-e2e').click()
   await expect(page.getByTestId('user-grant-panel')).toBeVisible()
   // 仅匹配库名 checkbox，排除 count/filter 等

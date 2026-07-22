@@ -283,6 +283,17 @@ test('command palette has readiness production checklist and admin-op jumps', ()
   const all = allVisibleCommandItems(true)
   assert.ok(all.some((i) => i.id === 'readiness-production-checklist' && i.path.includes('production-checklist')))
   assert.ok(all.some((i) => i.id === 'readiness-admin-op-visibility' && i.path.includes('ops-status-strip')))
+  assert.ok(
+    all.some(
+      (i) =>
+        i.id === 'readiness-user-disable-revokes-tokens' && i.path.includes('status=disabled'),
+    ),
+  )
+  assert.ok(
+    filterCommandItems(all, '禁用用户撤销会话', (k) => k).some(
+      (i) => i.id === 'readiness-user-disable-revokes-tokens',
+    ),
+  )
 })
 
 test('command palette has reset-nav-order action', () => {

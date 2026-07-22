@@ -1945,3 +1945,15 @@
 | 批量禁用 | 撤 token（内核） | 确认文案提示 | i18n |
 | 就绪清单禁用会话 | — | jump → /users?status=disabled | automated |
 
+## P428（2026-07-22）
+- 命令面板：`readiness-user-disable-revokes-tokens` 深链 Users 禁用筛选；清单关键词对齐
+- API Spec 导出：Markdown 含 `response=` / `响应=` 单测
+- e2e：命令面板禁用会话清单入口；Users 对 `reader-e2e` 真实批量禁用/启用（确认文案含 token 撤销）
+
+### 清单/批量边界（P428 增量）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 命令面板禁用会话 | — | → /users?status=disabled | 与就绪清单一致 |
+| API Spec 导出 response | ResponseHint | md 导出可见 | 单测 |
+| 批量禁用 reader | 撤 token | 确认框文案+状态筛选可见 | 真实 e2e |
+

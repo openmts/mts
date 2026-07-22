@@ -396,7 +396,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'users-status-disabled',
     path: '/users?status=disabled#users-filter-bar',
     labelKey: 'cmdUsersStatusDisabled',
-    keywords: ['disabled users', '禁用用户', 'status disabled', 'users disabled'],
+    keywords: ['disabled users', '禁用用户', 'status disabled', 'users disabled', 'revoke tokens', '撤销会话'],
     adminOnly: true,
   },
   {
@@ -657,7 +657,7 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     id: 'readiness-production-checklist',
     path: '/ops/readiness#production-checklist',
     labelKey: 'cmdReadinessProductionChecklist',
-    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last'],
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last', 'user-disable-revokes-tokens', '禁用会话'],
     adminOnly: true,
   },
   {
@@ -665,6 +665,19 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     path: '/operations#ops-status-strip',
     labelKey: 'cmdReadinessAdminOpVisibility',
     keywords: ['admin op busy', 'last', '管理重操作', 'ops status', 'admin-op-visibility'],
+    adminOnly: true,
+  },
+  {
+    id: 'readiness-user-disable-revokes-tokens',
+    path: '/users?status=disabled#users-filter-bar',
+    labelKey: 'cmdReadinessUserDisableRevokesTokens',
+    keywords: [
+      'user disable revokes tokens',
+      '禁用用户撤销会话',
+      'disable user sessions',
+      'user-disable-revokes-tokens',
+      'revokes tokens',
+    ],
     adminOnly: true,
   },
   {
