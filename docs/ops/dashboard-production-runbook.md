@@ -100,12 +100,20 @@ server {
 | 场景 | 动作 |
 |---|---|
 | 健康巡检 | 抓取 `/healthz` `/readyz`；Dashboard 概览页 |
+| 管理重操作状态 | 关注全局横幅与各页 `AdminOpLast` 芯片；`GET /api/v1/admin/ops-status` 看 `admin_op_busy` / `last` |
 | 内存/刷盘压力 | 运维页 Flush；观察 maintenance/compaction 统计 |
-| 压缩 | Compact（按运维策略，避免高峰全量） |
+| 压缩 | Compact（按运维策略，避免高峰全量）；busy 时其它管理写会 429/`admin_op_busy` |
 | 保留策略 | Retention 立即执行或确认周期任务 |
 | 降采样 | 策略 enable/disable/run/reset/dry-run |
 | 配置热更 | Config validate → reload（变更前备份配置文件） |
 | 快照 | Storage 创建快照并异地拷贝 |
+
+### 5.1 管理重操作 busy/last（可商用观测）
+
+1. **busy**：`admin_op_busy=true` 时全局横幅提示进行中操作（flush/compact/retention/snapshot/restore 等）。
+2. **last**：最近一次重操作结果（ok/error/耗时）；失败 last 进入就绪评分原因，可在运维页 ack 后关闭横幅。
+3. **Dashboard**：概览 / 运维 / 存储 / 就绪中心及多数管理页展示 last 芯片；写入/查询 meta 加载也会透传 busy/last。
+4. **排障**：若写/运维返回 `resource_exhausted` 且带 `admin_op_busy`，先等待或取消占用中的重操作，再重试。
 
 ## 6. 应急
 
@@ -114,6 +122,7 @@ server {
 3. **写放大 / 磁盘满**：停写入流量 → Flush → 评估 retention/compact → 扩容磁盘。
 4. **误删 / 数据可疑**：停止写入 → 用最近快照恢复到旁路目录验证 → 再切换。
 5. **权限事故**：禁用相关用户 → 审计页检索 → 修正库级授权。
+6. **管理重操作卡住 / 频繁 429**：查运维页 ops-status 与 last 错误；确认无残留 compact/flush；必要时重启单机进程（POC）并保留审计。
 
 ## 7. 安全注意
 

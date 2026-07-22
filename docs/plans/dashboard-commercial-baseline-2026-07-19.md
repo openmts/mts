@@ -1818,3 +1818,15 @@
 | users database-permissions GET | mock | — | 是 | AccessGrants 并发拉取 |
 | SPA `/metrics` → observability | — | — | — | 仅客户端路由；抓取路径不变 |
 
+## P419（2026-07-22）
+- 生产清单：新增 `admin-op-visibility`（busy/last 可观测，自动化覆盖）
+- 生产 Runbook：日常运维/应急补充管理重操作 busy/last 排障口径
+- e2e：写入模式深链 `/write#write-mode-{form,line,prometheus,typed}` 切换验收；snapshots DELETE mock 注释澄清
+- 锚点审计：命令面板 52 条深链与页面 id/testid 对齐（write-mode-* 为动态 id）
+
+### busy/last 覆盖矩阵（P419 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| 清单/Runbook 可观测说明 | — | — | — | 运维文档对齐 |
+| write mode 深链 | — | — | — | 命令面板一致性 |
+

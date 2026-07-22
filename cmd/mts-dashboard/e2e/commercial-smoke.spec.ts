@@ -740,6 +740,7 @@ test('commercial browser smoke path', async ({ page }) => {
       ].join('\n') + '\n',
     })
   })
+  // P419: snapshots GET 已由 fulfillFailLast 覆盖；此路由仅保证 DELETE 也带 fail last
   await page.route('**/api/v1/admin/storage/snapshots**', async (route) => {
     const req = route.request()
     const url = req.url()
@@ -1303,6 +1304,15 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page).toHaveURL(/\/write/)
   await expect(page.getByTestId('write-mode-typed')).toBeVisible()
   // typed 模式已选中（深色底）
+  await expect(page.getByTestId('write-mode-typed')).toHaveClass(/bg-slate-800/)
+  // P419: 写入模式深链 hash 切换（命令面板路径 /write#write-mode-*）
+  await page.goto('/write#write-mode-form')
+  await expect(page.getByTestId('write-mode-form')).toHaveClass(/bg-slate-800/)
+  await page.goto('/write#write-mode-line')
+  await expect(page.getByTestId('write-mode-line')).toHaveClass(/bg-slate-800/)
+  await page.goto('/write#write-mode-prometheus')
+  await expect(page.getByTestId('write-mode-prometheus')).toHaveClass(/bg-slate-800/)
+  await page.goto('/write#write-mode-typed')
   await expect(page.getByTestId('write-mode-typed')).toHaveClass(/bg-slate-800/)
 
   // P104: 命令面板分组（空查询可见导航+动作）

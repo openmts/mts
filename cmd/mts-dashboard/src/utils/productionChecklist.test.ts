@@ -9,7 +9,7 @@ import { textForLocale } from './localizedText.ts'
 
 test('production checklist has required commercial gates', () => {
   const ids = PRODUCTION_CHECKLIST.map((x) => x.id)
-  for (const need of ['https-edge', 'security-headers', 'change-default-admin', 'smoke-login-query-write']) {
+  for (const need of ['https-edge', 'security-headers', 'change-default-admin', 'smoke-login-query-write', 'admin-op-visibility']) {
     assert.ok(ids.includes(need), need)
   }
   assert.ok(requiredChecklist().length >= 4)
@@ -29,4 +29,11 @@ test('productionChecklist bilingual titles and details', () => {
     assert.ok(textForLocale(item.title, 'en'))
     assert.ok(textForLocale(item.detail, 'zh'))
   }
+})
+
+test('admin-op-visibility is automated commercial gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'admin-op-visibility')
+  assert.ok(item)
+  assert.equal(item?.automated, true)
+  assert.equal(item?.severity, 'recommended')
 })

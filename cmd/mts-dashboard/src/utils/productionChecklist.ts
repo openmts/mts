@@ -78,6 +78,16 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
   },
   {
+    id: 'admin-op-visibility',
+    severity: 'recommended',
+    title: { zh: '管理重操作 busy/last 可见', en: 'Admin heavy op busy/last visibility' },
+    detail: {
+      zh: '运维/管理页与全局横幅展示 admin_op_busy 与 last；fail-last 冒烟覆盖主要管理页芯片。',
+      en: 'Ops/admin pages and global banner surface admin_op_busy and last; fail-last smoke covers main admin last chips.',
+    },
+    automated: true,
+  },
+  {
     id: 'data-restore-ui',
     severity: 'recommended',
     title: { zh: 'data_dir 旁路恢复编排', en: 'data_dir side-path restore orchestration' },
