@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   PRODUCTION_CHECKLIST,
   automatedCoverage,
+  productionChecklistJump,
   requiredChecklist,
 } from './productionChecklist.ts'
 import { textForLocale } from './localizedText.ts'
@@ -37,3 +38,15 @@ test('admin-op-visibility is automated commercial gate', () => {
   assert.equal(item?.automated, true)
   assert.equal(item?.severity, 'recommended')
 })
+
+test('production checklist items expose jump targets', () => {
+  for (const item of PRODUCTION_CHECKLIST) {
+    const jump = productionChecklistJump(item)
+    assert.ok(jump, item.id)
+    assert.ok(jump.startsWith('/') || jump.startsWith('#'), item.id + ' jump shape')
+  }
+  const adminOp = PRODUCTION_CHECKLIST.find((x) => x.id === 'admin-op-visibility')
+  assert.equal(productionChecklistJump(adminOp!), '/operations#ops-status-strip')
+  assert.equal(productionChecklistJump({}), null)
+})
+

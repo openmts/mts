@@ -1830,3 +1830,17 @@
 | 清单/Runbook 可观测说明 | — | — | — | 运维文档对齐 |
 | write mode 深链 | — | — | — | 命令面板一致性 |
 
+## P420（2026-07-22）
+- Server：改密旧密码错误映射 `bad_request`（不再 `unauthenticated`），避免客户端误清仍有效会话；成功响应 `changePasswordResponse` 含 `must_change_password=false` 与 admin busy/last
+- Dashboard：`/api/v1/auth/password` 失败不触发会话清理；改密成功清脏表单再跳转登录；`invalid credentials` 友好文案
+- 就绪中心：生产清单项补充 `jump` 与「打开相关页面」；`admin-op-visibility` 跳转运维 `#ops-status-strip`
+- 命令面板：生产清单 / admin-op 可见性深链
+- e2e：账户改密错误保会话、就绪清单跳转、写入 admin busy 429 文案
+
+### busy/last 与会话边界（P420 增量）
+| 接口/场景 | HTTP | gRPC | Dashboard | 备注 |
+|-----------|------|------|-----------|------|
+| auth/password 旧密码错误 | bad_request | bad_request | 不 clearAuth | 会话仍有效 |
+| auth/password 成功 | ok+must_change=false+adminOp | 同左 | clearAuth 后登录 | 表单清脏 |
+| readiness prod jump admin-op | — | — | 是 | → /operations#ops-status-strip |
+| write admin busy 429 | 既有 | 既有 | e2e mock | 友好文案 |

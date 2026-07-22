@@ -359,12 +359,15 @@ func grpcChangePassword(r *serverRuntime, ctx context.Context, req any) (any, er
 		return nil, mts.ErrPermissionDenied
 	}
 	if err := r.engine.ChangePassword(ctx, request.UserName, request.OldPassword, request.NewPassword); err != nil {
-		return nil, newAPIError(errorCodeUnauthenticated, "invalid credentials", err)
+		return nil, mapChangePasswordError(err)
 	}
 	if err := r.clearMustChangePassword(ctx, principal.UserName); err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToOK(okResponse{OK: true}), nil
+	return r.attachAdminOpToChangePassword(changePasswordResponse{
+		OK:                 true,
+		MustChangePassword: false,
+	}), nil
 }
 
 func grpcSetUserPassword(r *serverRuntime, ctx context.Context, req any) (any, error) {

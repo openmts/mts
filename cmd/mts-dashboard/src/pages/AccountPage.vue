@@ -553,6 +553,12 @@ async function submit() {
       }
       return
     }
+    // 成功后清脏表单，避免路由守卫拦截跳转登录
+    oldPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    error.value = ''
+    passwordRetryable.value = false
     success(t.value('accountPasswordChanged'))
     await router.replace({ name: 'Login', query: { reason: 'password_changed' } })
   } finally {

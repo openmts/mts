@@ -132,3 +132,17 @@ test('friendlyApiError structured adminOpBusy prefers op field', () => {
   assert.match(f.title, /管理|Admin/)
 })
 
+test('friendlyApiError change password invalid credentials', () => {
+  const e = friendlyApiError(
+    { code: 'bad_request', status: 400, message: 'invalid credentials' },
+    'zh',
+  )
+  assert.match(e.title, /修改密码/)
+  assert.match(e.display, /当前密码不正确|会话仍然有效/)
+  const en = friendlyApiError(
+    { code: 'bad_request', status: 400, message: 'invalid credentials' },
+    'en',
+  )
+  assert.match(en.display, /incorrect|session remains/i)
+})
+

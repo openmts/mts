@@ -335,9 +335,15 @@ func TestHTTPChangePasswordErrorBranches(t *testing.T) {
 		server.URL+"/api/v1/auth/password",
 		changePasswordRequest{UserName: "change-user", OldPassword: "wrong", NewPassword: "next"},
 		headers,
-		http.StatusUnauthorized,
+		http.StatusBadRequest,
 		&errorResponse{},
 	)
+	// 旧密码错误不得撤销当前会话 token
+	var session sessionResponse
+	getJSONWithHeaders(t, server.URL+"/api/v1/auth/session", headers, http.StatusOK, &session)
+	if !session.OK || session.UserName != "change-user" {
+		t.Fatalf("session after wrong password = %+v", session)
+	}
 	resp := doHTTP(t, http.MethodGet, server.URL+"/api/v1/auth/password", nil, headers)
 	closeHTTPResponse(t, resp, http.StatusMethodNotAllowed)
 }

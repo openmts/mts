@@ -1074,6 +1074,14 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('readiness-next-steps')).toBeVisible()
   await expect(page.locator('[data-testid^="next-step-"]').first()).toBeVisible()
   await expect(page.getByTestId('readiness-doctor-panel')).toBeVisible()
+  await expect(page.getByTestId('readiness-production-checklist')).toBeVisible()
+  await expect(page.getByTestId('readiness-prod-jump-admin-op-visibility')).toBeVisible()
+  await page.getByTestId('readiness-prod-jump-admin-op-visibility').click()
+  await expect(page).toHaveURL(/operations/)
+  await expect(page.getByTestId('ops-page')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('ops-status-strip')).toBeVisible()
+  await page.goto('/ops/readiness')
+  await expect(page.getByTestId('readiness-production-checklist')).toBeVisible()
   if (await page.getByTestId('readiness-doctor-virtual-list').count()) {
     await expect(page.getByTestId('readiness-doctor-virtual-list')).toBeVisible()
     await expect(page.getByTestId('readiness-doctor-virtual-hint')).toBeVisible()
@@ -1709,6 +1717,38 @@ test('commercial browser smoke path', async ({ page }) => {
   }
   await expect(page.getByTestId('write-submit')).toHaveAttribute('aria-busy', 'false')
 
+  // P420: 写入路径 admin busy 429 友好文案（mock，避免真实写入）
+  {
+    const fulfillBusy = async (route: import('@playwright/test').Route) => {
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: false,
+          code: 'resource_exhausted',
+          message: 'admin heavy operation already in progress: flush',
+          admin_op_busy: true,
+          op: 'flush',
+        }),
+      })
+    }
+    await page.route('**/api/v1/data/write', fulfillBusy)
+    await page.route('**/api/v1/data/write/**', fulfillBusy)
+    try {
+      await page.goto('/write')
+      await expect(page.getByTestId('write-page')).toBeVisible()
+      await page.getByTestId('write-mode-line').click()
+      await page.getByRole('main').locator('textarea').first().fill('cpu,host=e2e-busy usage=1 3000')
+      await page.getByTestId('write-submit').click()
+      await expect(page.getByTestId('write-action-error')).toBeVisible({ timeout: 10_000 })
+      await expect(page.getByTestId('write-action-error')).toContainText(/管理重操作|Admin operation busy|flush/i)
+    } finally {
+      await page.unroute('**/api/v1/data/write', fulfillBusy).catch(() => {})
+      await page.unroute('**/api/v1/data/write/**', fulfillBusy).catch(() => {})
+    }
+  }
+
+
   // P234b: 导出取消 — 慢导出窗口 + export-job-cancel
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
@@ -1852,6 +1892,18 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('account-password-dirty-badge')).toBeVisible()
   await page.getByTestId('account-old-password').fill('')
   await expect(page.getByTestId('account-password-dirty-badge')).toHaveCount(0)
+
+  // P420: 账户改密旧密码错误不得清会话 / 不得踢回登录
+  await page.getByTestId('account-old-password').fill('definitely-wrong-old')
+  await page.getByTestId('account-new-password').fill('NewPass-e2e-420')
+  await page.getByTestId('account-confirm-password').fill('NewPass-e2e-420')
+  await page.getByTestId('account-password-submit').click()
+  await expect(page.getByTestId('account-password-error')).toBeVisible({ timeout: 10_000 })
+  await expect(page).toHaveURL(/\/account/)
+  await expect(page.getByTestId('account-page')).toBeVisible()
+  await page.getByTestId('account-old-password').fill('')
+  await page.getByTestId('account-new-password').fill('')
+  await page.getByTestId('account-confirm-password').fill('')
 
   // P207: Overview / About 导出入口与 Write 导出
   await page.goto('/')

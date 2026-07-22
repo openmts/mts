@@ -257,7 +257,8 @@ async function readAPIError(response: Response, fallbackText = ''): Promise<APIE
 }
 
 function handleAuthFailure(path: string, status: number, code: string) {
-  if (path === '/api/v1/auth/login') return
+  // 登录/改密失败不得清会话：改密旧密码错误仅表示凭证校验失败
+  if (path === '/api/v1/auth/login' || path === '/api/v1/auth/password') return
   if (shouldClearSession(status, code)) {
     triggerAuthFailed()
   }
@@ -582,13 +583,22 @@ export async function apiLogin(
   return apiPost<LoginResponse>('/api/v1/auth/login', body, opts?.signal ? { signal: opts.signal } : {})
 }
 
+export interface ChangePasswordResponse {
+  ok?: boolean
+  must_change_password?: boolean
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
+
 export async function apiChangePassword(
   userName: string,
   oldPassword: string,
   newPassword: string,
   init: RequestInit = {},
-): Promise<void> {
-  await apiPost('/api/v1/auth/password', {
+): Promise<ChangePasswordResponse> {
+  return apiPost<ChangePasswordResponse>('/api/v1/auth/password', {
     user_name: userName,
     old_password: oldPassword,
     new_password: newPassword,

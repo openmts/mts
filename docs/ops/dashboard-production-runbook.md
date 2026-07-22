@@ -148,3 +148,5 @@ server {
 2. 将快照目录拷贝到旁路介质。
 3. Dashboard 存储页执行「创建 data_dir 快照」→「执行旁路恢复演练」（`POST /api/v1/admin/storage/data-snapshot` + `restore-drill`），或 CLI/测试 `TestDataDirSidePathRestoreDrill`；也可旁路 data_dir 启动临时 mts-server 做查询比对。
 4. 在存储页备份演练清单勾选主机侧步骤，保留演练记录。
+
+4. **改密会话边界**：`POST /api/v1/auth/password` 旧密码错误返回 `bad_request`（非 401），Dashboard 不会清会话；仅成功改密后撤销 token 并要求重新登录。就绪清单 `admin-op-visibility` 可从就绪中心跳转运维状态条核对 busy/last。

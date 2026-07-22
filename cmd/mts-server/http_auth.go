@@ -104,7 +104,7 @@ func (r *serverRuntime) handleChangePassword(writer http.ResponseWriter, request
 		req.OldPassword,
 		req.NewPassword,
 	); err != nil {
-		writeAPIError(writer, newAPIError(errorCodeUnauthenticated, "invalid credentials", err))
+		writeAPIError(writer, mapChangePasswordError(err))
 		return
 	}
 	if err := r.clearMustChangePassword(request.Context(), principal.UserName); err != nil {
@@ -112,7 +112,10 @@ func (r *serverRuntime) handleChangePassword(writer http.ResponseWriter, request
 		return
 	}
 	r.audit.record(auditEvent{UserName: principal.UserName, Action: "change_password"})
-	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToChangePassword(changePasswordResponse{
+		OK:                 true,
+		MustChangePassword: false,
+	}))
 }
 
 func (r *serverRuntime) handleSession(writer http.ResponseWriter, request *http.Request) {

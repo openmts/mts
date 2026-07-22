@@ -574,6 +574,20 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     adminOnly: true,
   },
   {
+    id: 'readiness-production-checklist',
+    path: '/ops/readiness#production-checklist',
+    labelKey: 'cmdReadinessProductionChecklist',
+    keywords: ['production checklist', '上线清单', 'admin-op-visibility', 'busy last'],
+    adminOnly: true,
+  },
+  {
+    id: 'readiness-admin-op-visibility',
+    path: '/operations#ops-status-strip',
+    labelKey: 'cmdReadinessAdminOpVisibility',
+    keywords: ['admin op busy', 'last', '管理重操作', 'ops status', 'admin-op-visibility'],
+    adminOnly: true,
+  },
+  {
     id: 'notify-history',
     path: notifyHistoryFormToPrefill({ kind: 'all', range: 'all' }, { path: '/' }),
     labelKey: 'cmdNotifyHistory',

@@ -232,6 +232,16 @@ type changePasswordRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
+// changePasswordResponse 改密成功体：会话已撤销，客户端须重新登录；must_change 恒为 false。
+type changePasswordResponse struct {
+	OK                 bool                  `json:"ok"`
+	MustChangePassword bool                  `json:"must_change_password"`
+	AdminOpBusy        bool                  `json:"admin_op_busy,omitempty"`
+	Op                 string                `json:"op,omitempty"`
+	StartedAtUnix      int64                 `json:"started_at_unix,omitempty"`
+	Last               *adminHeavyLastResult `json:"last,omitempty"`
+}
+
 type authzDatabaseCheckRequest struct {
 	UserName   string                 `json:"user_name"`
 	Database   string                 `json:"database"`

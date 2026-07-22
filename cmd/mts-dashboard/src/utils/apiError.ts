@@ -110,6 +110,14 @@ export function friendlyApiError(
   let title = titleMap[locale]
   let hint = hintMap[locale]
   const raw = String(input?.message || '').trim()
+  // 改密旧密码错误：服务端 bad_request + invalid credentials
+  if (code === 'bad_request' && /invalid credentials/i.test(raw)) {
+    title = locale === 'en' ? 'Password change failed' : '修改密码失败'
+    hint =
+      locale === 'en'
+        ? 'Current password is incorrect; session remains valid'
+        : '当前密码不正确；会话仍然有效，可重试'
+  }
   const structuredBusy = Boolean(input?.adminOpBusy || input?.admin_op_busy || (input?.op || '').trim())
   // 管理重操作互斥：resource_exhausted 但语义是 admin busy，文案对齐运维占用
   if (code === 'resource_exhausted' && (structuredBusy || isAdminHeavyBusyMessage(raw))) {

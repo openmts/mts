@@ -278,3 +278,10 @@ test('command palette includes readiness doctor and account prefs anchors', () =
   const all = visibleCommandItems(COMMAND_NAV_ITEMS, true)
   assert.ok(all.some((i) => i.id === 'account-prefs' && i.path.includes('#account-prefs-tools')))
 })
+
+test('command palette has readiness production checklist and admin-op jumps', () => {
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'readiness-production-checklist' && i.path.includes('production-checklist')))
+  assert.ok(all.some((i) => i.id === 'readiness-admin-op-visibility' && i.path.includes('ops-status-strip')))
+})
+

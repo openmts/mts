@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -79,5 +80,24 @@ func TestUserMustChangePasswordHelpers(t *testing.T) {
 	u.Metadata = withMustChangePassword(u.Metadata, false)
 	if userMustChangePassword(u) {
 		t.Fatal("expected cleared")
+	}
+}
+
+func TestMapChangePasswordError(t *testing.T) {
+	if err := mapChangePasswordError(nil); err != nil {
+		t.Fatalf("nil => %v", err)
+	}
+	err := mapChangePasswordError(mts.ErrInvalidCredentials)
+	var apiErr apiError
+	if !errors.As(err, &apiErr) || apiErr.Code != errorCodeBadRequest {
+		t.Fatalf("invalid credentials => %+v", err)
+	}
+	err = mapChangePasswordError(mts.ErrAuthenticationDisabled)
+	if !errors.As(err, &apiErr) || apiErr.Code != errorCodePermissionDenied {
+		t.Fatalf("auth disabled => %+v", err)
+	}
+	cause := errors.New("boom")
+	if got := mapChangePasswordError(cause); !errors.Is(got, cause) {
+		t.Fatalf("passthrough = %v", got)
 	}
 }

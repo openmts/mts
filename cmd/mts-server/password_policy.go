@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	mts "github.com/openmts/mts"
@@ -74,4 +75,19 @@ func passwordChangeAllowedPath(path string) bool {
 		// health/metrics/ready 无用户 token 时不走此门禁
 		return false
 	}
+}
+
+// mapChangePasswordError 将改密失败映射为业务错误码。
+// 旧密码错误属于请求校验失败（bad_request），不得用 unauthenticated，避免客户端误清仍有效的会话。
+func mapChangePasswordError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, mts.ErrAuthenticationDisabled) {
+		return newAPIError(errorCodePermissionDenied, "password authentication disabled", err)
+	}
+	if errors.Is(err, mts.ErrInvalidCredentials) {
+		return newAPIError(errorCodeBadRequest, "invalid credentials", err)
+	}
+	return err
 }

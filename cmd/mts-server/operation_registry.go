@@ -240,7 +240,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "change_password",
 			Namespace:   "auth",
-			Description: "change user password",
+			Description: "change user password (wrong old password -> bad_request; success clears must_change and revokes tokens; response includes admin_op_busy/last)",
 			Auth:        authUserPass,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAuthPassword},

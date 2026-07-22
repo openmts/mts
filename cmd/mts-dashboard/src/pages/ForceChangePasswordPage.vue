@@ -96,9 +96,16 @@ async function submit() {
         return
       }
       error.value = err
+      // 旧密码错误等校验失败可立即重试；网络类同样可重试
       errorRetryable.value = true
       return
     }
+    // 成功后清脏表单，避免路由守卫拦截跳转登录
+    oldPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    error.value = ''
+    errorRetryable.value = false
     await router.replace({
       name: 'Login',
       query: withRedirectQuery({ reason: 'password_changed' }, route.query.redirect),

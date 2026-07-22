@@ -11,6 +11,12 @@ export interface ProductionCheckItem {
   detail: LocalizedText
   /** 自动化是否已覆盖 */
   automated: boolean
+  /**
+   * 可选跳转：
+   * - 以 / 开头：路由
+   * - 以 # 开头：同页锚点
+   */
+  jump?: string
 }
 
 export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
@@ -23,6 +29,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'Terminate TLS/HSTS at the edge, or enable mts-server HTTP TLS (HSTS is emitted automatically); see edgeHttpsAcceptance and doctor API.',
     },
     automated: true,
+    jump: '#edge-https-checklist',
   },
   {
     id: 'security-headers',
@@ -33,6 +40,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'nosniff / DENY / CSP / Referrer-Policy are written by wrapHTTP by default.',
     },
     automated: true,
+    jump: '#doctor-panel',
   },
   {
     id: 'change-default-admin',
@@ -43,6 +51,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'After bootstrap default-password login, must_change_password blocks business APIs until password change completes.',
     },
     automated: true,
+    jump: '/account#account-password',
   },
   {
     id: 'health-ready-metrics',
@@ -53,6 +62,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'Wire /healthz /readyz /metrics into monitoring/alerts; Dashboard /observability/metrics provides read-only browse.',
     },
     automated: true,
+    jump: '/observability/metrics',
   },
   {
     id: 'backup-snapshot',
@@ -63,6 +73,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'Storage drill list + data-snapshot/restore-drill API + TestDataDirSidePathRestoreDrill; off-host copy remains manual.',
     },
     automated: true,
+    jump: '/storage',
   },
   {
     id: 'smoke-login-query-write',
@@ -76,16 +87,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'TestCommercialDashboardSmoke + Playwright commercial-smoke cover login/password change/write/query/ops.',
     },
     automated: true,
+    jump: '/query',
   },
   {
     id: 'admin-op-visibility',
     severity: 'recommended',
     title: { zh: '管理重操作 busy/last 可见', en: 'Admin heavy op busy/last visibility' },
     detail: {
-      zh: '运维/管理页与全局横幅展示 admin_op_busy 与 last；fail-last 冒烟覆盖主要管理页芯片。',
-      en: 'Ops/admin pages and global banner surface admin_op_busy and last; fail-last smoke covers main admin last chips.',
+      zh: '运维/管理页与全局横幅展示 admin_op_busy 与 last；勾选前请在运维页确认 busy 条与失败 last；fail-last 冒烟覆盖主要管理页芯片。',
+      en: 'Ops/admin pages and global banner surface admin_op_busy and last; before checking, confirm busy strip and fail-last on Operations; fail-last smoke covers main admin chips.',
     },
     automated: true,
+    jump: '/operations#ops-status-strip',
   },
   {
     id: 'data-restore-ui',
@@ -96,6 +109,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'Storage page data-snapshot + restore-drill; targets limited to side-path dirs under backups.',
     },
     automated: true,
+    jump: '/storage',
   },
   {
     id: 'readiness-center',
@@ -106,6 +120,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'Dashboard /ops/readiness aggregates checklist, HTTPS acceptance, backup schedule and doctor; score includes doctor warn/TLS.',
     },
     automated: true,
+    jump: '#readiness-action',
   },
   {
     id: 'admin-doctor',
@@ -116,6 +131,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'GET /api/v1/admin/doctor + Overview display; CLI mts-server doctor uses the same contract.',
     },
     automated: true,
+    jump: '#doctor-panel',
   },
   {
     id: 'backup-script',
@@ -126,6 +142,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'scripts/mts-backup.sh supports data-snapshot / rsync / restore-drill; make backup-script-check self-checks.',
     },
     automated: true,
+    jump: '#backup-schedule-checklist',
   },
   {
     id: 'backup-schedule',
@@ -136,6 +153,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'scripts/mts-backup.sh + readiness guidance + cron/systemd samples; real scheduling is deployment-side.',
     },
     automated: true,
+    jump: '#backup-schedule-checklist',
   },
   {
     id: 'production-runbook',
@@ -146,6 +164,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'docs/ops/dashboard-production-runbook.md covers topology, checklist, proxy and incident response.',
     },
     automated: false,
+    jump: '#deploy-runbook-drill',
   },
   {
     id: 'rbac-matrix-ui',
@@ -156,6 +175,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'Dashboard /access capability map + /access/grants live grant summary.',
     },
     automated: true,
+    jump: '/access',
   },
   {
     id: 'rbac-review',
@@ -166,6 +186,7 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
       en: 'Confirm non-admin users can only read/write granted databases.',
     },
     automated: false,
+    jump: '/access/grants',
   },
 ]
 
@@ -181,4 +202,10 @@ export function automatedCoverage(items = PRODUCTION_CHECKLIST): {
   const total = items.length
   const automated = items.filter((x) => x.automated).length
   return { total, automated, ratio: total === 0 ? 0 : automated / total }
+}
+
+/** 解析清单项跳转：路由或同页锚点 */
+export function productionChecklistJump(item: Pick<ProductionCheckItem, 'jump'>): string | null {
+  const j = String(item.jump || '').trim()
+  return j || null
 }

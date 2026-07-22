@@ -44,6 +44,7 @@ import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import {
   PRODUCTION_CHECKLIST,
+  productionChecklistJump,
   automatedCoverage,
   requiredChecklist,
 } from '@/utils/productionChecklist'
@@ -1567,7 +1568,7 @@ watch(
             :checked="!!state.production[item.id]"
             @change="toggle('production', item.id, ($event.target as HTMLInputElement).checked)"
           />
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <p class="font-medium text-slate-800 dark:text-slate-100">
               {{ textForLocale(item.title, uiLocale) }}
               <span class="ml-1 text-[11px] font-normal mts-muted">{{ item.severity === 'required' ? t('required') : t('recommended') }}</span>
@@ -1575,6 +1576,15 @@ watch(
             </p>
             <p class="text-xs mts-muted">{{ textForLocale(item.detail, uiLocale) }}</p>
           </div>
+          <button
+            v-if="productionChecklistJump(item)"
+            type="button"
+            class="mts-btn shrink-0 !px-2 !py-0.5 text-[11px]"
+            :data-testid="`readiness-prod-jump-${item.id}`"
+            @click="jumpPreflight(productionChecklistJump(item) || undefined)"
+          >
+            {{ t('readinessProdJump') }}
+          </button>
         </li>
       </ol>
     </div>
