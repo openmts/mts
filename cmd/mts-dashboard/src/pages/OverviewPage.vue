@@ -36,6 +36,7 @@ import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, C
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { buildOverviewExport, formatOverviewExportPretty } from '@/utils/overviewExport'
+import { buildHealthReport, healthReportFilename } from '@/utils/healthReportExport'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -646,6 +647,44 @@ async function exportOverview() {
   else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
 }
 
+async function exportHealthReport() {
+  if (exportBusy.value) return
+  const payload = buildHealthReport({
+    connectivity: connectivityKind.value,
+    healthy: healthy.value,
+    ready: ready.value,
+    health_reasons: healthReasons.value,
+    health_checks: healthChecks.value,
+    maintenance_errors: maintenanceErrors.value,
+    memory: memorySnapshot.value as object | null,
+    compaction: compactionStats.value as object | null,
+    maintenance: maintenanceStats.value as object | null,
+    doctor_tls: doctorTLS.value,
+    doctor_checks: doctorChecks.value,
+    readiness_total: localReadinessScore.value.total,
+    readiness_level: localReadinessLevel.value,
+    server_version: serverVersion.value,
+    client: clientInfo as unknown as object,
+    last_refreshed: lastRefreshed.value,
+    downsample_status_summary: downsampleSummary.value,
+    ops_stats: maintenanceStats.value as object | null,
+  })
+  const outcome = await runJSONExport({
+    label: 'Health',
+    filename: healthReportFilename(),
+    total: 1,
+    build: async ({ isCancelled, progress }) => {
+      progress(0, 1)
+      if (isCancelled()) return null
+      progress(1, 1)
+      return payload
+    },
+  })
+  if (outcome === 'done') success(t.value('overviewHealthReportExported'))
+  else if (outcome === 'cancelled') info(t.value('exportCancelledToast'))
+  else if (outcome === 'error') notifyError(exportJob.value.error || t.value('failed'))
+}
+
 async function copyOverview() {
   const res = await copyText(formatOverviewExportPretty({
     connectivity: connectivityKind.value,
@@ -798,6 +837,9 @@ async function copyOverview() {
         <ExportJobBanner class="w-full basis-full" :job="exportJob" :retryable="canRetryExport" @cancel="cancelExport" @retry="retryLastExport" @dismiss="resetExport" />
         <button type="button" class="mts-btn" data-testid="overview-export-json" :disabled="exportBusy" @click="exportOverview">
           <Download class="h-3.5 w-3.5" /> {{ t('overviewExportJSON') }}
+        </button>
+        <button type="button" class="mts-btn" data-testid="overview-export-health-report" :disabled="exportBusy" @click="exportHealthReport">
+          <Download class="h-3.5 w-3.5" /> {{ t('overviewExportHealthReport') }}
         </button>
         <button type="button" class="mts-btn" data-testid="overview-copy-snapshot" @click="copyOverview">
           <Copy class="h-3.5 w-3.5" /> {{ t('overviewCopySnapshot') }}

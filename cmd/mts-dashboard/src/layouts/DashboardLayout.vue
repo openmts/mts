@@ -68,6 +68,7 @@ import {
 } from '@/utils/downsampleStatusSummary'
 import {
   downsampleHealthFingerprint,
+  formatDownsampleHealthBannerCopyText,
   readDismissedDownsampleHealthFingerprint,
   shouldShowDownsampleHealthBanner as shouldShowDownsampleHealthBannerState,
   writeDismissedDownsampleHealthFingerprint,
@@ -120,6 +121,16 @@ function dismissDownsampleHealthBanner() {
     writeDismissedDownsampleHealthFingerprint(sessionStorage, fp)
   }
   dismissedDownsampleHealthFp.value = fp
+}
+async function copyDownsampleHealthBanner() {
+  const textToCopy = formatDownsampleHealthBannerCopyText(downsampleHealthSummary.value)
+  if (!textToCopy.trim()) {
+    notifyError(t.value('failed'))
+    return
+  }
+  const res = await copyText(textToCopy)
+  if (res.ok) success(t.value('downsampleHealthBannerCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 const downsampleHealthBannerClass = computed(() => {
   if (downsampleHealthTone.value === 'bad') {
@@ -794,6 +805,13 @@ function onSkipToMain(e: Event) {
             data-testid="downsample-health-banner-refresh"
             @click="refreshDownsampleHealth"
           >{{ t('refresh') }}</button>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring text-xs"
+            data-testid="downsample-health-banner-copy"
+            :title="t('downsampleHealthBannerCopy')"
+            @click="copyDownsampleHealthBanner"
+          >{{ t('downsampleHealthBannerCopy') }}</button>
           <button
             type="button"
             class="mts-btn mts-focus-ring text-xs"

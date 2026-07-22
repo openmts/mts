@@ -1,0 +1,84 @@
+/** Overview 一键健康报告（聚合 overview + downsample + 可选 ops 字段，纯函数） */
+
+import {
+  buildOverviewExport,
+  type OverviewDoctorCheck,
+  type OverviewHealthCheck,
+} from './overviewExport.ts'
+import {
+  normalizeDownsampleStatusSummary,
+  type DownsampleStatusSummaryInput,
+} from './downsampleStatusSummary.ts'
+import { downsampleStatusSummaryTone } from './downsampleStatusSummary.ts'
+
+export const HEALTH_REPORT_KIND = 'mts.health.report' as const
+export const HEALTH_REPORT_VERSION = 1 as const
+
+export interface HealthReportInput {
+  connectivity?: string
+  healthy?: boolean | null
+  ready?: boolean | null
+  health_reasons?: string[]
+  health_checks?: OverviewHealthCheck[]
+  maintenance_errors?: string[]
+  memory?: object | null
+  compaction?: object | null
+  maintenance?: object | null
+  doctor_tls?: boolean | null
+  doctor_checks?: OverviewDoctorCheck[]
+  readiness_total?: number
+  readiness_level?: string
+  server_version?: { version?: string; commit?: string; built_at?: string } | null
+  client?: object | null
+  last_refreshed?: string
+  downsample_status_summary?: DownsampleStatusSummaryInput | null
+  /** 可选：运维统计快照片段 */
+  ops_stats?: object | null
+}
+
+export function buildHealthReport(input: HealthReportInput, at = new Date()) {
+  const overview = buildOverviewExport(
+    {
+      connectivity: input.connectivity,
+      healthy: input.healthy,
+      ready: input.ready,
+      health_reasons: input.health_reasons,
+      health_checks: input.health_checks,
+      maintenance_errors: input.maintenance_errors,
+      memory: input.memory,
+      compaction: input.compaction,
+      maintenance: input.maintenance,
+      doctor_tls: input.doctor_tls,
+      doctor_checks: input.doctor_checks,
+      readiness_total: input.readiness_total,
+      readiness_level: input.readiness_level,
+      server_version: input.server_version,
+      client: input.client,
+      last_refreshed: input.last_refreshed,
+      downsample_status_summary: input.downsample_status_summary,
+    },
+    at,
+  )
+  const ds = overview.downsample_status_summary
+  const tone = ds ? downsampleStatusSummaryTone(ds) : 'ok'
+  return {
+    kind: HEALTH_REPORT_KIND,
+    version: HEALTH_REPORT_VERSION,
+    generated_at: at.toISOString(),
+    disclaimer:
+      'Dashboard 健康报告汇总，用于交接与扫视；不代表边缘证书、异地备份或人工验收已完成。',
+    overview,
+    downsample_status_summary: ds,
+    downsample_tone: tone,
+    ops_stats: input.ops_stats ?? null,
+  }
+}
+
+export function formatHealthReportPretty(input: HealthReportInput, at = new Date()): string {
+  return JSON.stringify(buildHealthReport(input, at), null, 2)
+}
+
+export function healthReportFilename(at = new Date()): string {
+  const stamp = at.toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  return `mts-health-report-${stamp}.json`
+}

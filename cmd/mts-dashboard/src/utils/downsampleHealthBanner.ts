@@ -1,7 +1,10 @@
 /** 全局降采样告警横幅：摘要指纹 + session 级 dismiss（纯函数） */
 
 import type { DownsampleStatusSummaryInput } from './downsampleStatusSummary.ts'
-import { normalizeDownsampleStatusSummary } from './downsampleStatusSummary.ts'
+import {
+  formatDownsampleStatusSummaryLine,
+  normalizeDownsampleStatusSummary,
+} from './downsampleStatusSummary.ts'
 
 export const DOWNSAMPLE_HEALTH_BANNER_DISMISS_KEY = 'mts.downsample-health-banner-dismissed-fp'
 
@@ -66,4 +69,12 @@ export function clearDismissedDownsampleHealthFingerprint(
   } catch {
     // ignore
   }
+}
+
+/** 横幅「复制摘要」剪贴板文本 */
+export function formatDownsampleHealthBannerCopyText(
+  summary: DownsampleStatusSummaryInput | null | undefined,
+): string {
+  const line = formatDownsampleStatusSummaryLine(summary)
+  return `MTS downsample health\n${line}`
 }

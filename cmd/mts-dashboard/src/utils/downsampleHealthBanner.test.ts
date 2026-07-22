@@ -6,6 +6,7 @@ import {
   readDismissedDownsampleHealthFingerprint,
   shouldShowDownsampleHealthBanner,
   writeDismissedDownsampleHealthFingerprint,
+  formatDownsampleHealthBannerCopyText,
 } from './downsampleHealthBanner.ts'
 
 test('fingerprint stable', () => {
@@ -61,4 +62,11 @@ test('session storage dismiss roundtrip', () => {
   assert.equal(readDismissedDownsampleHealthFingerprint(storage), 'e1:l0:m0:t1')
   clearDismissedDownsampleHealthFingerprint(storage)
   assert.equal(readDismissedDownsampleHealthFingerprint(storage), null)
+})
+
+test('copy text includes summary line', () => {
+  const text = formatDownsampleHealthBannerCopyText({ total: 2, error: 1, lagging: 1, max_lag_seconds: 3 })
+  assert.match(text, /MTS downsample health/)
+  assert.match(text, /error: 1/)
+  assert.match(text, /max_lag_seconds: 3/)
 })

@@ -2200,3 +2200,16 @@
 | ops 导出 v2 | summary | ops stats JSON | 交接 |
 | 快捷深链 | statuses?health=error | g then d | 只读筛选 |
 
+## P448（2026-07-22）
+- ForceChangePassword：密码策略提示门禁（未满足不可提交）
+- Overview：一键「健康报告」聚合导出（overview v2 + downsample summary + ops 片段）
+- 全局降采样告警横幅：复制摘要
+- e2e：Overview 健康报告按钮；横幅 copy 软断言
+
+### 前后端对齐（P448）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 强制改密门禁 | password_policy | 前端 hints + 提交门禁 | 与 server 对齐 |
+| 健康报告 | summary/stats | mts.health.report | 交接扫视 |
+| 横幅复制 | summary | 剪贴板文本 | 只读 |
+

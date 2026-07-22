@@ -212,6 +212,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('sidebar-order-up-query').click()
   await expect.poll(async () => page.evaluate((k) => localStorage.getItem(k), navKeySmoke)).toBeTruthy()
   await expect(page.getByTestId('overview-export-json')).toBeVisible()
+  await expect(page.getByTestId('overview-export-health-report')).toBeVisible()
   await expect(page.getByTestId('overview-copy-snapshot')).toBeVisible()
   await expect(page.getByTestId('overview-share-link')).toBeVisible()
   await expect(page.getByTestId('offline-banner')).toHaveCount(0)
@@ -432,6 +433,7 @@ test('commercial browser smoke path', async ({ page }) => {
   if (await page.getByTestId('downsample-health-banner').count()) {
     await expect(page.getByTestId('downsample-health-banner-detail')).toBeVisible()
     await expect(page.getByTestId('downsample-health-banner-refresh')).toBeVisible()
+    await expect(page.getByTestId('downsample-health-banner-copy')).toBeVisible()
     await expect(page.getByTestId('downsample-health-banner-dismiss')).toBeVisible()
   }
   await expect(page.getByTestId('metrics-admin-last')).toBeVisible()
