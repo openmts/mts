@@ -55,6 +55,15 @@ func (e *Engine) ListDownsamplePolicies(ctx context.Context) ([]DownsamplePolicy
 	return fromModelDownsamplePolicies(policies), nil
 }
 
+// GetDownsamplePolicy 按名称读取单条本地降采样策略。
+func (e *Engine) GetDownsamplePolicy(ctx context.Context, name string) (DownsamplePolicy, error) {
+	policy, err := e.runtime.Storage().GetDownsamplePolicy(ctx, name)
+	if err != nil {
+		return DownsamplePolicy{}, publicError(err)
+	}
+	return fromModelDownsamplePolicy(policy), nil
+}
+
 // DownsamplePolicyStatuses 返回降采样策略运行状态。
 func (e *Engine) DownsamplePolicyStatuses(
 	ctx context.Context,

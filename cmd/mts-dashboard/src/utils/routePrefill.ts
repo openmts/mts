@@ -437,6 +437,8 @@ export function accessGrantsFormToPrefill(form: {
 export type DownsamplePrefill = {
   q?: string
   enabled?: string
+  /** 打开策略详情（只读核对，不自动写操作） */
+  policy?: string
 }
 
 /** 降采样策略筛选预填（不自动 run/enable） */
@@ -448,6 +450,8 @@ export function parseDownsamplePrefill(
   if (q) out.q = q
   const enabled = firstQueryValue(query.enabled)
   if (enabled === 'enabled' || enabled === 'disabled') out.enabled = enabled
+  const policy = firstQueryValue(query.policy)
+  if (policy) out.policy = policy
   return out
 }
 
@@ -455,18 +459,22 @@ export function buildDownsamplePrefillPath(opts: DownsamplePrefill & { hash?: st
   const params = new URLSearchParams()
   if (opts.q) params.set('q', opts.q)
   if (opts.enabled) params.set('enabled', opts.enabled)
+  if (opts.policy) params.set('policy', opts.policy)
   const qs = params.toString()
-  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : '#downsample-filters'
+  const defaultHash = opts.policy ? '#downsample-detail' : '#downsample-filters'
+  const hash = opts.hash?.startsWith('#') ? opts.hash : opts.hash ? `#${opts.hash}` : defaultHash
   return qs ? `/downsample?${qs}${hash}` : `/downsample${hash}`
 }
 
 export function downsampleFormToPrefill(form: {
   q?: string
   enabled?: string
+  policy?: string
 }, opts?: { hash?: string }): string {
   return buildDownsamplePrefillPath({
     q: form.q?.trim() || undefined,
     enabled: form.enabled?.trim() || undefined,
+    policy: form.policy?.trim() || undefined,
     hash: opts?.hash,
   })
 }

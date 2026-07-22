@@ -358,18 +358,26 @@ func (r *serverRuntime) handleDownsamplePolicyResource(writer http.ResponseWrite
 	}
 	name := parts[0]
 	if len(parts) == 1 {
-		if request.Method != http.MethodDelete {
+		switch request.Method {
+		case http.MethodGet:
+			policy, err := r.engine.GetDownsamplePolicy(request.Context(), name)
+			if err != nil {
+				writeAPIError(writer, err)
+				return
+			}
+			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDownsamplePolicy(downsamplePolicyResponse{Policy: policy}))
+		case http.MethodDelete:
+			var req downsampleDropRequest
+			_ = decodeHTTPJSON(request, &req)
+			if err := r.engine.DropDownsamplePolicyWithOptions(request.Context(), name, req.Options); err != nil {
+				writeAPIError(writer, err)
+				return
+			}
+			r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "drop_downsample_policy", Detail: name})
+			writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
+		default:
 			writeAPIError(writer, newAPIError(errorCodeBadRequest, messageMethodNotAllowed, nil))
-			return
 		}
-		var req downsampleDropRequest
-		_ = decodeHTTPJSON(request, &req)
-		if err := r.engine.DropDownsamplePolicyWithOptions(request.Context(), name, req.Options); err != nil {
-			writeAPIError(writer, err)
-			return
-		}
-		r.audit.record(auditEvent{UserName: r.auditUser(request), Action: "drop_downsample_policy", Detail: name})
-		writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToOK(okResponse{OK: true}))
 		return
 	}
 	if request.Method != http.MethodPost {

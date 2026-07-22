@@ -638,6 +638,15 @@ func (r *serverRuntime) attachAdminOpToDownsamplePolicies(resp downsamplePolicie
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToDownsamplePolicy(resp downsamplePolicyResponse) downsamplePolicyResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) attachAdminOpToDownsampleStatuses(resp downsampleStatusesResponse) downsampleStatusesResponse {
 	busy, op, started := r.adminHeavyState()
 	resp.AdminOpBusy = busy

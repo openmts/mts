@@ -94,6 +94,13 @@ func (e *Engine) ListDownsamplePolicies(
 	return e.metadata.ListDownsamplePolicies(ctx)
 }
 
+func (e *Engine) GetDownsamplePolicy(
+	ctx context.Context,
+	name string,
+) (model.DownsamplePolicy, error) {
+	return e.downsamplePolicyByName(ctx, name)
+}
+
 func (e *Engine) DownsamplePolicyStatuses(
 	ctx context.Context,
 	now time.Duration,

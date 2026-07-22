@@ -209,7 +209,8 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     },
     automated: true,
     jump: '/users#users-filter-bar',
-  },  {
+  },
+  {
     id: 'downsample-advanced-form',
     severity: 'recommended',
     title: { zh: '降采样高级字段可配置', en: 'Downsample advanced fields configurable' },
@@ -219,7 +220,8 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     },
     automated: true,
     jump: '/downsample#downsample-filter-bar',
-  },  {
+  },
+  {
     id: 'downsample-policy-detail',
     severity: 'recommended',
     title: { zh: '降采样策略详情可核对', en: 'Downsample policy detail inspectable' },
@@ -229,6 +231,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     },
     automated: true,
     jump: '/downsample#downsample-detail',
+  },
+  {
+    id: 'downsample-policy-deep-link',
+    severity: 'recommended',
+    title: { zh: '降采样策略详情深链可复用', en: 'Downsample policy detail deep link reusable' },
+    detail: {
+      zh: '详情支持 ?policy= 与复制 JSON/链接；深链只读打开详情，不自动 run/enable。',
+      en: 'Detail supports ?policy= plus copy JSON/link; deep links open read-only detail without auto run/enable.',
+    },
+    automated: true,
+    jump: '/downsample?policy=example#downsample-detail',
   },
 ]
 

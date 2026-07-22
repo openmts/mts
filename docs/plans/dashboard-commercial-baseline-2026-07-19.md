@@ -2052,3 +2052,19 @@
 | 策略详情 | 列表/状态 API | detail panel | 只读核对 |
 | 就绪清单 | — | downsample-policy-detail | 可勾选 |
 
+## P437（2026-07-22）
+- Downsample：策略详情复制 JSON / 详情链接；`?policy=` 深链打开详情
+- routePrefill 支持 policy；纯函数 detail JSON v1
+- 深链缺失策略：详情壳 + 提示，不自动写
+- e2e：复制按钮、URL policy、深链重开详情
+- 就绪清单：`downsample-policy-deep-link`
+- Server：`GET /api/v1/admin/downsample/policies/{name}` 单策略读取（含 admin_op last）
+
+### 前后端对齐（P437）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 详情深链 | — | `?policy=` + hash | 只读，不自动写 |
+| 详情导出 | — | JSON kind policy_detail | 运维粘贴核对 |
+| 单策略 GET | `GET .../policies/{name}` | 列表+深链；契约可直读 | 对齐 registry GET |
+| 就绪清单 | — | downsample-policy-deep-link | 可勾选 |
+

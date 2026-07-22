@@ -84,3 +84,44 @@ export function buildDownsamplePolicyDetailFields(
     { key: 'group_by', labelKey: 'downsampleGroupByTags', value: tags || empty, mono: true },
   ]
 }
+
+/** 详情复制/导出用稳定 JSON（仅展示字段） */
+export function buildDownsamplePolicyDetailJSON(
+  p: DownsamplePolicyDetailInput | null | undefined,
+): {
+  kind: 'mts.downsample.policy_detail'
+  version: 1
+  policy: DownsamplePolicyDetailInput | null
+} {
+  if (!p || !p.name) {
+    return { kind: 'mts.downsample.policy_detail', version: 1, policy: null }
+  }
+  return {
+    kind: 'mts.downsample.policy_detail',
+    version: 1,
+    policy: {
+      name: p.name,
+      source_database: p.source_database,
+      source_retention: p.source_retention,
+      source_measurement: p.source_measurement,
+      target_database: p.target_database,
+      target_retention: p.target_retention,
+      target_measurement: p.target_measurement,
+      interval: p.interval,
+      refresh_interval: p.refresh_interval,
+      lookback: p.lookback,
+      batch_size: p.batch_size,
+      enabled: p.enabled,
+      group_by_tags: p.group_by_tags,
+      functions: p.functions,
+    },
+  }
+}
+
+export function downsamplePolicyDetailToJSONText(
+  p: DownsamplePolicyDetailInput | null | undefined,
+  space = 2,
+): string {
+  return JSON.stringify(buildDownsamplePolicyDetailJSON(p), null, space)
+}
+

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, inject, onMounted, onBeforeUnmount, watch, nextTick, type ComputedRef } from 'vue'
 import { useHashScroll } from '@/composables/useHashScroll'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { parseDownsamplePrefill, downsampleFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { apiGet, apiPost, apiDelete, apiPostNDJSONStream } from '@/api/client'
@@ -43,7 +43,7 @@ import { filterDownsamplePolicies, type DownsampleEnabledFilter } from '@/utils/
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { buildDownsampleExport, downsampleToCSV } from '@/utils/downsampleExport'
-import { buildDownsamplePolicyDetailFields } from '@/utils/downsamplePolicyDetail'
+import { buildDownsamplePolicyDetailFields, downsamplePolicyDetailToJSONText } from '@/utils/downsamplePolicyDetail'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -83,6 +83,7 @@ interface StatusesResponse {
 
 useHashScroll()
 const route = useRoute()
+const router = useRouter()
 const { isAdmin } = useAuth()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t, locale } = useI18n()
@@ -136,6 +137,7 @@ const policyFilter = ref('')
 const enabledFilter = ref<DownsampleEnabledFilter>('')
 const selectedNames = ref<string[]>([])
 const detailPolicyName = ref('')
+const detailMissingNotified = ref('')
 const batchOpen = ref(false)
 const batchMode = ref<'enable' | 'disable'>('enable')
 const batchLoading = ref(false)
@@ -329,6 +331,13 @@ function applyDownsamplePrefillFromRoute() {
       changed = true
     }
   }
+  if (pre.policy != null) {
+    const name = pre.policy.trim()
+    if (name && detailPolicyName.value !== name) {
+      detailPolicyName.value = name
+      changed = true
+    }
+  }
   if (changed) success(t.value('downsamplePrefillApplied'))
 }
 
@@ -357,6 +366,7 @@ watch(
     if (prev != null && path !== prev) applyDownsamplePrefillFromRoute()
   },
 )
+
 
 async function loadData() {
   if (!isAdmin.value) return
@@ -400,6 +410,7 @@ async function loadData() {
     policiesError.value = ''
     statusesError.value = ''
   }
+  maybeNotifyDetailMissing()
 }
 
 const filteredPolicies = computed(() =>
@@ -902,6 +913,12 @@ const detailPolicy = computed(() => {
   if (!name) return null
   return policies.value.find((x) => x.name === name) || null
 })
+const detailPolicyMissing = computed(() => {
+  const name = detailPolicyName.value.trim()
+  if (!name) return false
+  // 列表已加载且仍找不到时视为缺失（深链/删后残留）
+  return policies.value.length > 0 && !detailPolicy.value
+})
 const detailFields = computed(() =>
   buildDownsamplePolicyDetailFields(
     detailPolicy.value || undefined,
@@ -914,11 +931,62 @@ const detailStatus = computed(() => {
   if (!name) return null
   return getStatus(name) || null
 })
+
+function maybeNotifyDetailMissing() {
+  const name = detailPolicyName.value.trim()
+  if (!name || !detailPolicyMissing.value) {
+    if (!name) detailMissingNotified.value = ''
+    return
+  }
+  if (detailMissingNotified.value === name) return
+  detailMissingNotified.value = name
+  notifyError(t.value('downsampleDetailMissing'))
+}
+
 function openPolicyDetail(name: string) {
   detailPolicyName.value = name
+  detailMissingNotified.value = ''
+  syncPolicyDetailQuery(name)
 }
 function closePolicyDetail() {
   detailPolicyName.value = ''
+  detailMissingNotified.value = ''
+  syncPolicyDetailQuery('')
+}
+function syncPolicyDetailQuery(name: string) {
+  const q = { ...(route.query as Record<string, string | string[] | null | undefined>) }
+  const next = name.trim()
+  if (next) q.policy = next
+  else delete q.policy
+  const cur = typeof route.query.policy === 'string' ? route.query.policy : ''
+  if ((cur || '') === next) return
+  void router.replace({ path: '/downsample', query: q, hash: next ? '#downsample-detail' : route.hash || undefined })
+}
+async function copyPolicyDetailJSON() {
+  const text = downsamplePolicyDetailToJSONText(detailPolicy.value || undefined)
+  if (!text || text.includes('"policy": null')) {
+    notifyError(t.value('opsStatusLastEmpty'))
+    return
+  }
+  const res = await copyText(text)
+  if (res.ok) success(t.value('downsampleDetailCopied'))
+  else notifyError(res.error || t.value('failed'))
+}
+async function copyPolicyDetailLink() {
+  const name = detailPolicyName.value.trim()
+  if (!name) {
+    notifyError(t.value('opsStatusLastEmpty'))
+    return
+  }
+  const path = downsampleFormToPrefill({
+    q: policyFilter.value,
+    enabled: enabledFilter.value || undefined,
+    policy: name,
+  }, { hash: '#downsample-detail' })
+  const url = `${window.location.origin}${path}`
+  const res = await copyText(url)
+  if (res.ok) success(t.value('downsampleDetailLinkCopied'))
+  else notifyError(res.error || t.value('failed'))
 }
 function detailEnabledLabel(enabled: boolean | undefined): string {
   return enabled ? t.value('downsampleEnabledOnly') : t.value('downsampleDisabledOnly')
@@ -1320,18 +1388,25 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      v-if="detailPolicy"
+      v-if="detailPolicyName.trim()"
       id="downsample-detail"
       class="mts-card scroll-mt-20 overflow-hidden"
       data-testid="downsample-detail-panel"
     >
       <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
         <div class="min-w-0">
-          <p class="truncate font-mono text-sm font-medium text-slate-800 dark:text-slate-100" data-testid="downsample-detail-name">{{ detailPolicy.name }}</p>
-          <p class="text-xs mts-muted" data-testid="downsample-detail-enabled">{{ detailEnabledLabel(detailPolicy.enabled) }}</p>
+          <p class="truncate font-mono text-sm font-medium text-slate-800 dark:text-slate-100" data-testid="downsample-detail-name">{{ detailPolicy?.name || detailPolicyName }}</p>
+          <p v-if="detailPolicy" class="text-xs mts-muted" data-testid="downsample-detail-enabled">{{ detailEnabledLabel(detailPolicy.enabled) }}</p>
+          <p v-else-if="detailPolicyMissing" class="text-xs text-amber-700 dark:text-amber-300" data-testid="downsample-detail-missing">{{ t('downsampleDetailMissing') }}</p>
+          <p v-else class="text-xs mts-muted" data-testid="downsample-detail-loading">{{ t('loading') }}</p>
         </div>
-        <button type="button" class="mts-btn" data-testid="downsample-detail-close" @click="closePolicyDetail">{{ t('downsampleDetailClose') }}</button>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="mts-btn" data-testid="downsample-detail-copy-json" :disabled="!detailPolicy" @click="copyPolicyDetailJSON">{{ t('downsampleDetailCopyJSON') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-detail-copy-link" :disabled="!detailPolicyName.trim()" @click="copyPolicyDetailLink">{{ t('downsampleDetailCopyLink') }}</button>
+          <button type="button" class="mts-btn" data-testid="downsample-detail-close" @click="closePolicyDetail">{{ t('downsampleDetailClose') }}</button>
+        </div>
       </div>
+      <template v-if="detailPolicy">
       <dl class="grid gap-2 p-3 sm:grid-cols-2" data-testid="downsample-detail-fields">
         <div v-for="f in detailFields" :key="f.key" class="min-w-0 rounded border border-slate-100 px-2 py-1.5 dark:border-slate-800" :data-testid="`downsample-detail-field-${f.key}`">
           <dt class="text-[11px] mts-muted">{{ f.label }}</dt>
@@ -1346,6 +1421,7 @@ onBeforeUnmount(() => {
         </p>
         <p v-if="detailStatus.last_error" class="mt-1 text-red-600 dark:text-red-300" data-testid="downsample-detail-status-error">{{ detailStatus.last_error }}</p>
       </div>
+      </template>
     </div>
 
     <div id="downsample-status" class="mts-card scroll-mt-20 overflow-hidden p-0" data-testid="downsample-status-panel">

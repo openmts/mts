@@ -211,9 +211,14 @@ test('access grants and downsample prefill helpers', () => {
     q: 'cpu',
     enabled: 'enabled',
   })
+  assert.deepEqual(parseDownsamplePrefill({ policy: 'p1' }), { policy: 'p1' })
   assert.equal(
     downsampleFormToPrefill({ q: 'roll', enabled: 'disabled' }),
     '/downsample?q=roll&enabled=disabled#downsample-filters',
+  )
+  assert.equal(
+    downsampleFormToPrefill({ policy: 'e2e-batch-ds' }),
+    '/downsample?policy=e2e-batch-ds#downsample-detail',
   )
 })
 

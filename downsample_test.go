@@ -327,3 +327,43 @@ func TestPublicDownsampleRangeStatusResetAndDropOptions(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 }
+
+func TestGetDownsamplePolicy(t *testing.T) {
+	ctx := context.Background()
+	eng, err := mts.Open(ctx, mts.Options{Path: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := eng.Close(ctx); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+	policy := mts.DownsamplePolicy{
+		Name:              "pub_get",
+		SourceDatabase:    "default",
+		SourceRetention:   "autogen",
+		SourceMeasurement: "cpu",
+		TargetDatabase:    "default",
+		TargetRetention:   "autogen",
+		TargetMeasurement: "cpu_1m",
+		Interval:          time.Minute,
+		Functions:         []mts.DownsampleFunction{{Function: mts.AggregateAvg, Field: "usage", As: "mean_usage"}},
+		RefreshInterval:   time.Minute,
+		Lookback:          time.Minute,
+		Enabled:           true,
+	}
+	if err := eng.CreateDownsamplePolicy(ctx, policy); err != nil {
+		t.Fatalf("CreateDownsamplePolicy() error = %v", err)
+	}
+	got, err := eng.GetDownsamplePolicy(ctx, "pub_get")
+	if err != nil {
+		t.Fatalf("GetDownsamplePolicy() error = %v", err)
+	}
+	if got.Name != "pub_get" {
+		t.Fatalf("GetDownsamplePolicy name = %q", got.Name)
+	}
+	if _, err := eng.GetDownsamplePolicy(ctx, "nope"); err == nil {
+		t.Fatal("GetDownsamplePolicy(missing) error = nil, want error")
+	}
+}

@@ -139,3 +139,47 @@ func TestEngineDownsampleRangeDryRunRepairAndBackfill(t *testing.T) {
 		t.Fatalf("backfill = %#v, want watermark at 2m", backfill)
 	}
 }
+
+func TestEngineGetDownsamplePolicy(t *testing.T) {
+	ctx := context.Background()
+	eng, err := Open(ctx, model.Options{Path: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer func() {
+		if err := eng.Close(ctx); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	}()
+	policy := model.DownsamplePolicy{
+		Name:              "cpu_get",
+		SourceDatabase:    "metrics",
+		SourceRetention:   "autogen",
+		SourceMeasurement: "cpu",
+		TargetDatabase:    "metrics",
+		TargetRetention:   "rp_1m",
+		TargetMeasurement: "cpu",
+		Interval:          time.Minute,
+		Functions: []model.DownsampleFunction{{
+			Function: "avg",
+			Field:    "usage",
+		}},
+		Delay:           time.Minute,
+		RefreshInterval: time.Minute,
+		Lookback:        time.Minute,
+		Enabled:         true,
+	}
+	if err := eng.CreateDownsamplePolicy(ctx, policy); err != nil {
+		t.Fatalf("CreateDownsamplePolicy() error = %v", err)
+	}
+	got, err := eng.GetDownsamplePolicy(ctx, "cpu_get")
+	if err != nil {
+		t.Fatalf("GetDownsamplePolicy() error = %v", err)
+	}
+	if got.Name != "cpu_get" || got.TargetMeasurement != "cpu" {
+		t.Fatalf("GetDownsamplePolicy() = %#v", got)
+	}
+	if _, err := eng.GetDownsamplePolicy(ctx, "missing"); err == nil {
+		t.Fatal("GetDownsamplePolicy(missing) error = nil, want error")
+	}
+}

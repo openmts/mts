@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildDownsamplePolicyDetailFields,
+  buildDownsamplePolicyDetailJSON,
+  downsamplePolicyDetailToJSONText,
   formatDownsampleFunctions,
   formatDownsamplePolicyPath,
 } from './downsamplePolicyDetail.ts'
@@ -40,4 +42,15 @@ test('buildDownsamplePolicyDetailFields', () => {
   assert.ok(fields.some((f) => f.key === 'batch_size' && f.value === '100'))
   assert.ok(fields.some((f) => f.key === 'functions' && f.value.includes('mean_usage')))
   assert.deepEqual(buildDownsamplePolicyDetailFields(null, () => ''), [])
+})
+
+test('buildDownsamplePolicyDetailJSON', () => {
+  const out = buildDownsamplePolicyDetailJSON(sample)
+  assert.equal(out.kind, 'mts.downsample.policy_detail')
+  assert.equal(out.version, 1)
+  assert.equal(out.policy?.name, 'p1')
+  assert.equal(out.policy?.batch_size, 100)
+  const text = downsamplePolicyDetailToJSONText(sample)
+  assert.match(text, /"name": "p1"/)
+  assert.equal(buildDownsamplePolicyDetailJSON(null).policy, null)
 })

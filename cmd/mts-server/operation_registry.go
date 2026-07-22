@@ -825,8 +825,8 @@ func operationCatalog() []operation {
 		{
 			Name:         "downsample_policy_resource",
 			Namespace:    "admin",
-			Description:  "downsample policy actions",
-			ResponseHint: "okResponse by policy action (+admin_op_busy/last)",
+			Description:  "get/delete downsample policy or run policy actions",
+			ResponseHint: "downsamplePolicyResponse|okResponse by policy action (+admin_op_busy/last)",
 			Auth:         authAdmin,
 			HTTPMethods:  []string{http.MethodGet, http.MethodPost, http.MethodDelete},
 			HTTPPaths:    []string{routeAdminDownsamplePrefix},
