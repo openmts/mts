@@ -99,9 +99,11 @@ export function formatRunResultMessage(
     samples_estimate?: number
     estimate_complete?: boolean
   } | null,
+  path?: string,
 ): string {
+  const suffix = path ? ` (${path})` : ''
   if (mode === 'dry-run') {
-    return `dry-run ${name}: windows=${result?.windows ?? 0} points≈${result?.points_estimate ?? 0} samples≈${result?.samples_estimate ?? 0} complete=${result?.estimate_complete}`
+    return `dry-run ${name}: windows=${result?.windows ?? 0} points≈${result?.points_estimate ?? 0} samples≈${result?.samples_estimate ?? 0} complete=${result?.estimate_complete}${suffix}`
   }
-  return `${mode} ${name}: windows=${result?.windows_processed ?? 0} points=${result?.points_written ?? 0}`
+  return `${mode} ${name}: windows=${result?.windows_processed ?? 0} points=${result?.points_written ?? 0}${suffix}`
 }

@@ -894,7 +894,8 @@ func grpcRunDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (an
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result}), nil
+	path := routeAdminDownsamplePrefix + request.Name + "/run"
+	return r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result, Path: path}), nil
 }
 
 func grpcRunDownsamplePolicyRange(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -906,7 +907,8 @@ func grpcRunDownsamplePolicyRange(r *serverRuntime, ctx context.Context, req any
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result}), nil
+	path := routeAdminDownsamplePrefix + request.Name + "/run-range"
+	return r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result, Path: path}), nil
 }
 
 func grpcRepairDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -918,7 +920,8 @@ func grpcRepairDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) 
 	if err != nil {
 		return nil, err
 	}
-	return r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result}), nil
+	path := routeAdminDownsamplePrefix + request.Name + "/repair"
+	return r.attachAdminOpToDownsampleRun(downsampleRunResponse{Result: result, Path: path}), nil
 }
 
 func grpcDryRunDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {

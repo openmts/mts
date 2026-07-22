@@ -76,6 +76,7 @@ import {
 
 interface PoliciesResponse {
   policies: DownsamplePolicy[]
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -84,6 +85,7 @@ interface PoliciesResponse {
 interface StatusesResponse {
   statuses: DownsampleStatus[]
   summary?: DownsampleStatusSummary
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -117,7 +119,9 @@ const {
   runJSONExport,
 } = useExportJob()
 const policies = ref<DownsamplePolicy[]>([])
+const policiesListPath = ref('')
 const statuses = ref<DownsampleStatus[]>([])
+const statusesListPath = ref('')
 const loadError = ref('')
 const policiesError = ref('')
 const statusesError = ref('')
@@ -427,6 +431,7 @@ async function loadData() {
   if (results[0].status === 'fulfilled') {
     applyAdminOpStatus(parseAdminOpStatusPayload(results[0].value))
     policies.value = results[0].value.policies ?? []
+    policiesListPath.value = String(results[0].value.path || '/api/v1/admin/downsample/policies')
     policiesError.value = ''
   } else {
     const msg = formatCaughtError(results[0].reason)
@@ -439,6 +444,7 @@ async function loadData() {
   if (results[1].status === 'fulfilled') {
     applyAdminOpStatus(parseAdminOpStatusPayload(results[1].value))
     statuses.value = results[1].value.statuses ?? []
+    statusesListPath.value = String(results[1].value.path || '/api/v1/admin/downsample/statuses')
     statusSummaryServer.value = results[1].value.summary
       ? normalizeDownsampleStatusSummary(results[1].value.summary)
       : summarizeDownsampleStatuses(results[1].value.statuses ?? [])
@@ -951,13 +957,14 @@ async function runPolicy(name: string) {
   const signal = dsActionAbort.begin()
   clearActionResult()
   try {
-    const data = await apiPost<{ result: DownsampleRunResult; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
-      `/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/run`,
+    const runPath = `/api/v1/admin/downsample/policies/${encodeURIComponent(name)}/run`
+    const data = await apiPost<{ result: DownsampleRunResult; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
+      runPath,
       {},
       { signal },
     )
     applyAdminOpStatus(parseAdminOpStatusPayload(data))
-    const msg = formatRunResultMessage('run', name, data.result)
+    const msg = formatRunResultMessage('run', name, data.result, String(data.path || runPath))
     setActionOk(msg)
     await loadData()
     success(msg)
@@ -1235,16 +1242,16 @@ async function confirmRange() {
     })
     const path = rangeActionPath(rangeName.value, rangeMode.value)
     if (rangeMode.value === 'dry-run') {
-      const data = await apiPost<{ result: DownsampleDryRunResult; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(path, body, { signal })
+      const data = await apiPost<{ result: DownsampleDryRunResult; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(path, body, { signal })
       applyAdminOpStatus(parseAdminOpStatusPayload(data))
-      const msg = formatRunResultMessage('dry-run', rangeName.value, data.result)
+      const msg = formatRunResultMessage('dry-run', rangeName.value, data.result, String(data.path || path))
       rangeOpen.value = false
       setActionResult(makeActionResult('info', msg))
       success(msg)
     } else {
-      const data = await apiPost<{ result: DownsampleRunResult; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(path, body, { signal })
+      const data = await apiPost<{ result: DownsampleRunResult; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(path, body, { signal })
       applyAdminOpStatus(parseAdminOpStatusPayload(data))
-      const msg = formatRunResultMessage(rangeMode.value, rangeName.value, data.result)
+      const msg = formatRunResultMessage(rangeMode.value, rangeName.value, data.result, String(data.path || path))
       rangeOpen.value = false
       await loadData()
       lastFailedAction.value = null
@@ -1440,6 +1447,13 @@ onBeforeUnmount(() => {
       @retry="loadData"
       @dismiss="policiesError = ''"
     />
+    <p
+      v-if="policiesListPath || statusesListPath"
+      class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+      data-testid="downsample-policies-path"
+      :title="[policiesListPath, statusesListPath].filter(Boolean).join(' · ')"
+    >{{ [policiesListPath, statusesListPath].filter(Boolean).join(' · ') }}</p>
+
     <PartialErrorBanner
       v-if="!loadError && statusesError"
       :message="`${t('downsampleStatusesLoadFailed')}：${statusesError}`"

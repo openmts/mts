@@ -627,6 +627,27 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('api-spec-path')).toContainText('/api/v1/admin/api-spec')
   }
 
+  // P488: Storage/Overview/Downsample path 徽章（有则校验）
+  await page.goto('/storage')
+  await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('storage-data-snapshots-path').count()) {
+    await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('/api/v1/admin/storage/data-snapshots')
+  }
+  if (await page.getByTestId('storage-snapshots-list-path').count()) {
+    await expect(page.getByTestId('storage-snapshots-list-path')).toContainText('/api/v1/admin/storage/snapshots')
+  }
+  await page.goto('/')
+  await expect(page.getByTestId('overview-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('overview-stats-paths').count()) {
+    await expect(page.getByTestId('overview-stats-paths')).toContainText('/api/v1/admin/')
+  }
+  await page.goto('/downsample')
+  await expect(page.getByTestId('downsample-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('downsample-policies-path').count()) {
+    await expect(page.getByTestId('downsample-policies-path')).toContainText('/api/v1/admin/downsample')
+  }
+
+
   // P366: About / ApiSpec last 芯片（不在 h1 内）
   await page.goto('/about')
   await expect(page.getByTestId('about-page')).toBeVisible()

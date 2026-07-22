@@ -56,3 +56,14 @@ test('formatRunResultMessage', () => {
     /dry-run p/,
   )
 })
+
+test('formatRunResultMessage includes optional path', () => {
+  assert.match(
+    formatRunResultMessage('dry-run', 'p', { windows: 1, points_estimate: 2, samples_estimate: 3, estimate_complete: false }, '/api/v1/admin/downsample/policies/p/dry-run'),
+    /dry-run p:.*\(\/api\/v1\/admin\/downsample\/policies\/p\/dry-run\)/,
+  )
+  assert.match(
+    formatRunResultMessage('run', 'p', { windows_processed: 1, points_written: 2 }, '/api/v1/admin/downsample/policies/p/run'),
+    /\(\/api\/v1\/admin\/downsample\/policies\/p\/run\)/,
+  )
+})

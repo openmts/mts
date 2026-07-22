@@ -608,6 +608,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/storage',
   },
   {
+    id: 'storage-overview-path',
+    severity: 'recommended',
+    title: { zh: '存储演练/Overview/降采样 run 响应含 path', en: 'Storage drill/Overview/downsample run responses include path' },
+    detail: {
+      zh: 'restore-drill/export/snapshots 列表、Overview stats/health、downsample policies/statuses/run/dry-run 返回 path；Storage/Overview/Downsample 展示。',
+      en: 'restore-drill/export/snapshots list, Overview stats/health, downsample policies/statuses/run/dry-run return path; Storage/Overview/Downsample surface it.',
+    },
+    automated: true,
+    jump: '/storage',
+  },
+
+  {
     id: 'meta-downsample-path',
     severity: 'recommended',
     title: { zh: '库表/RP/降采样写路径响应含 path', en: 'Database/RP/downsample mutation responses include path' },

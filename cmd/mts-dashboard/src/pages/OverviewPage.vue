@@ -74,11 +74,11 @@ interface StorageMemorySnapshot {
   num_gc?: number
   [key: string]: unknown
 }
-interface StorageMemoryResponse { snapshot: StorageMemorySnapshot; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
-interface CompactionStatsResponse { stats: CompactionStats; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
-interface MaintenanceStatsResponse { stats: MaintenanceStats; admin_op_busy?: boolean }
-interface MaintenanceErrorsResponse { errors?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
-interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks']; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
+interface StorageMemoryResponse { snapshot: StorageMemorySnapshot; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
+interface CompactionStatsResponse { stats: CompactionStats; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
+interface MaintenanceStatsResponse { stats: MaintenanceStats; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
+interface MaintenanceErrorsResponse { errors?: string[]; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
+interface AdminHealthResponse { health?: HealthSnapshot; healthy?: boolean; ready?: boolean; reasons?: string[]; checks?: HealthSnapshot['checks']; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 interface DoctorCheck { level: string; code: string; message: string }
 interface DoctorResponse { ok: boolean; path?: string; http_tls_enabled?: boolean; checks?: DoctorCheck[]; lines?: string[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 
@@ -153,6 +153,7 @@ const downsampleActiveJump = computed(() => downsampleStatusHealthJump('active')
 const doctorChecks = ref<DoctorCheck[]>([])
 const doctorTLS = ref<boolean | null>(null)
 const doctorPath = ref('')
+const overviewStatsPaths = ref({ memory: '', compaction: '', maintenance: '', maintErrors: '', health: '', version: '' })
 const dataContractRaw = ref<DataContractResponse | null>(null)
 const dataContractError = ref('')
 const loadError = ref('')
@@ -445,18 +446,21 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
     case 'memory': {
       const v = await apiGet<StorageMemoryResponse>('/api/v1/admin/stats/storage-memory')
       memorySnapshot.value = v.snapshot
+      overviewStatsPaths.value = { ...overviewStatsPaths.value, memory: String(v.path || '/api/v1/admin/stats/storage-memory') }
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'compaction': {
       const v = await apiGet<CompactionStatsResponse>('/api/v1/admin/stats/compaction')
       compactionStats.value = v.stats
+      overviewStatsPaths.value = { ...overviewStatsPaths.value, compaction: String(v.path || '/api/v1/admin/stats/compaction') }
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
     case 'maintenance': {
       const v = await apiGet<MaintenanceStatsResponse>('/api/v1/admin/stats/maintenance')
       maintenanceStats.value = v.stats ?? null
+      overviewStatsPaths.value = { ...overviewStatsPaths.value, maintenance: String(v.path || '/api/v1/admin/stats/maintenance') }
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       try {
         const st = await apiGet<{ summary?: DownsampleStatusSummary; statuses?: unknown[]; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>(
@@ -473,6 +477,7 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
     case 'maintErrors': {
       const v = await apiGet<MaintenanceErrorsResponse>('/api/v1/admin/maintenance/errors')
       maintenanceErrors.value = v.errors ?? []
+      overviewStatsPaths.value = { ...overviewStatsPaths.value, maintErrors: String(v.path || '/api/v1/admin/maintenance/errors') }
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
@@ -485,8 +490,9 @@ async function loadAdminSection(key: AdminSectionKey): Promise<void> {
       return
     }
     case 'version': {
-      const v = await apiGet<{ version: string; commit: string; built_at: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/version')
+      const v = await apiGet<{ version: string; commit: string; built_at: string; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }>('/api/v1/admin/version')
       serverVersion.value = { version: v.version, commit: v.commit, built_at: v.built_at }
+      overviewStatsPaths.value = { ...overviewStatsPaths.value, version: String(v.path || '/api/v1/admin/version') }
       applyAdminOpStatus(parseAdminOpStatusPayload(v))
       return
     }
@@ -541,6 +547,11 @@ function applyAdminHealthRaw(raw: AdminHealthResponse | HealthSnapshot) {
   const h = (wrapped.health ?? raw) as HealthSnapshot
   if (h && typeof h.healthy === 'boolean') {
     applyHealth(h)
+  }
+  if (wrapped && typeof wrapped.path === 'string' && wrapped.path) {
+    overviewStatsPaths.value = { ...overviewStatsPaths.value, health: wrapped.path }
+  } else if (!overviewStatsPaths.value.health) {
+    overviewStatsPaths.value = { ...overviewStatsPaths.value, health: '/api/v1/admin/health' }
   }
   // admin/health 现附带 busy/last，与 doctor/maintenance 对齐
   if (wrapped && (typeof wrapped.admin_op_busy === 'boolean' || wrapped.last != null || wrapped.op)) {
@@ -1301,6 +1312,13 @@ async function copyOverview() {
         data-testid="overview-doctor-path"
         :title="doctorPath"
       >{{ doctorPath }}</p>
+        <p
+          v-if="overviewStatsPaths.maintenance || overviewStatsPaths.memory || overviewStatsPaths.compaction || overviewStatsPaths.health"
+          class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+          data-testid="overview-stats-paths"
+          :title="[overviewStatsPaths.health, overviewStatsPaths.maintenance, overviewStatsPaths.compaction, overviewStatsPaths.memory, overviewStatsPaths.maintErrors, overviewStatsPaths.version].filter(Boolean).join(' · ')"
+        >{{ [overviewStatsPaths.health, overviewStatsPaths.maintenance, overviewStatsPaths.compaction, overviewStatsPaths.memory, overviewStatsPaths.maintErrors, overviewStatsPaths.version].filter(Boolean).join(' · ') }}</p>
+
       <EmptyState
         v-if="!doctorChecks.length"
         compact

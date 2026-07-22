@@ -79,6 +79,7 @@ interface RestoreDrillResponse {
   check_issues?: number
   check_fatals?: number
   check_root?: string
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -87,6 +88,7 @@ interface RestoreDrillResponse {
 interface DataSnapshotInfo { name: string; kind: string; path: string; size_bytes: number; mod_time: string }
 interface DataSnapshotsResponse {
   snapshots: DataSnapshotInfo[]
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -95,6 +97,7 @@ interface DataSnapshotsResponse {
 interface SnapshotInfo { name: string; path: string; size_bytes: number; mod_time: string }
 interface SnapshotsResponse {
   snapshots: SnapshotInfo[]
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -103,6 +106,7 @@ interface SnapshotsResponse {
 interface ExportData { generated_at: string; config: Record<string, unknown>; health: Record<string, unknown> }
 interface ExportResponse {
   export: ExportData
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -159,6 +163,10 @@ const snapshotResult = ref<SnapshotResponse | null>(null)
 const dataSnapshotResult = ref<DataSnapshotResponse | null>(null)
 const restoreDrillResult = ref<RestoreDrillResponse | null>(null)
 const dataSnapshots = ref<DataSnapshotInfo[]>([])
+const dataSnapshotsListPath = ref('')
+const snapshotsListPath = ref('')
+const exportPath = ref('')
+const restoreDrillPath = ref('')
 const selectedDataSnapshotPath = ref('')
 const snapshots = ref<SnapshotInfo[]>([])
 const exportData = ref<ExportData | null>(null)
@@ -220,6 +228,7 @@ async function loadSnapshots(opts?: { soft?: boolean }) {
     const data = await apiGet<SnapshotsResponse>('/api/v1/admin/storage/snapshots')
     applyAdminOpStatus(parseAdminOpStatusPayload(data))
     snapshots.value = data.snapshots ?? []
+    snapshotsListPath.value = String(data.path || '/api/v1/admin/storage/snapshots')
     snapshotListError.value = ''
   } catch (e) {
     const msg = formatCaughtError(e)
@@ -241,6 +250,7 @@ async function loadDataSnapshots(opts?: { soft?: boolean }) {
     const data = await apiGet<DataSnapshotsResponse>('/api/v1/admin/storage/data-snapshots')
     applyAdminOpStatus(parseAdminOpStatusPayload(data))
     dataSnapshots.value = data.snapshots ?? []
+    dataSnapshotsListPath.value = String(data.path || '/api/v1/admin/storage/data-snapshots')
     selectedDataSnapshotPath.value = defaultSelectedSnapshotPath(
       dataSnapshots.value,
       selectedDataSnapshotPath.value || dataSnapshotResult.value?.path || null,
@@ -443,11 +453,18 @@ async function doRestoreDrill() {
     const body = source ? { source_path: source } : {}
     restoreDrillResult.value = await apiPost<RestoreDrillResponse>('/api/v1/admin/storage/restore-drill', body, { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(restoreDrillResult.value))
+    restoreDrillPath.value = String(restoreDrillResult.value.path || '/api/v1/admin/storage/restore-drill')
     const ok = !!restoreDrillResult.value.ok && (restoreDrillResult.value.check_fatals ?? 0) === 0
     drillDone.value = { ...drillDone.value, 'restore-side': ok }
     const msg = ok
-      ? formatMessage(t.value('storageRestoreDone'), { target: restoreDrillResult.value.target })
-      : formatMessage(t.value('storageRestoreFatal'), { fatals: restoreDrillResult.value.check_fatals ?? '?' })
+      ? formatMessage(t.value('storageRestoreDone'), {
+          target: restoreDrillResult.value.target,
+          path: restoreDrillPath.value || restoreDrillResult.value.path || '/api/v1/admin/storage/restore-drill',
+        })
+      : formatMessage(t.value('storageRestoreFatal'), {
+          fatals: restoreDrillResult.value.check_fatals ?? '?',
+          path: restoreDrillPath.value || restoreDrillResult.value.path || '/api/v1/admin/storage/restore-drill',
+        })
     setActionResult(makeActionResult(ok ? 'ok' : 'warn', msg))
     if (ok) success(t.value('storageRestoreOk'))
     else notifyError(msg)
@@ -470,6 +487,7 @@ async function doExport() {
     const data = await apiGet<ExportResponse>('/api/v1/admin/storage/export', { signal })
     applyAdminOpStatus(parseAdminOpStatusPayload(data))
     exportData.value = data.export
+    exportPath.value = String(data.path || '/api/v1/admin/storage/export')
     drillDone.value = { ...drillDone.value, 'export-config': true }
     setActionOk(t.value('storageConfigExported'))
     success(t.value('storageConfigExportToast'))
@@ -656,6 +674,12 @@ async function copyStorageShareLink() {
     />
 
     <div id="backup-drill" class="mts-card p-4 scroll-mt-20">
+      <p
+        v-if="snapshotsListPath"
+        class="mb-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="storage-snapshots-list-path"
+        :title="snapshotsListPath"
+      >{{ snapshotsListPath }}</p>
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <ClipboardList class="h-4 w-4" />
@@ -826,10 +850,22 @@ async function copyStorageShareLink() {
     <div v-if="exportData" class="mts-panel">
       <h3 class="mb-2 text-sm font-semibold">{{ t('storageExportPreview') }}</h3>
       <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400">{{ JSON.stringify(exportData, null, 2) }}</pre>
+      <p
+        v-if="exportPath"
+        class="mt-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="storage-export-path"
+        :title="exportPath"
+      >{{ exportPath }}</p>
     </div>
 
     
     <div id="data-restore" class="mts-panel scroll-mt-20">
+      <p
+        v-if="dataSnapshotsListPath"
+        class="mb-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="storage-data-snapshots-path"
+        :title="dataSnapshotsListPath"
+      >{{ dataSnapshotsListPath }}</p>
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('storageDataDirRestore') }}</h3>
         <span class="text-xs mts-muted">{{ t('storageDataDirRestoreHint') }}</span>
@@ -875,6 +911,12 @@ async function copyStorageShareLink() {
         </button>
       </div>
       <pre v-if="dataSnapshotResult" class="mt-3 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(dataSnapshotResult, null, 2) }}</pre>
+      <p
+        v-if="restoreDrillPath || restoreDrillResult?.path"
+        class="mt-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="storage-restore-drill-path"
+        :title="restoreDrillPath || restoreDrillResult?.path || ''"
+      >{{ restoreDrillPath || restoreDrillResult?.path }}</p>
       <pre v-if="restoreDrillResult" class="mt-2 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-sky-300">{{ JSON.stringify(restoreDrillResult, null, 2) }}</pre>
       <EmptyState
         v-if="!dataListLoading && !dataSnapshots.length && !dataListError"

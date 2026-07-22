@@ -2750,3 +2750,16 @@
 | api-spec | path | api-spec-path | GET |
 | restore-drill / dry-run | path | 契约 | POST |
 
+## P488（2026-07-23）
+- Server：gRPC downsample run/run-range/repair/dry-run 响应补齐 `path`
+- Dashboard：Storage restore/export/snapshots 列表、Overview stats/health、Downsample policies/statuses/run/dry-run 展示 path
+- 清单：`storage-overview-path`
+
+### 前后端对齐（P488）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| restore-drill | path (P487) | storage-restore-drill-path + 成功文案 | POST |
+| snapshots/export list | path (P485) | 列表 path 徽章 | GET |
+| Overview stats/health | path (P487/P483) | overview-stats-paths | GET |
+| downsample list/run/dry-run | path | downsample-policies-path + 成功文案 | GET/POST |
+
