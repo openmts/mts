@@ -294,8 +294,18 @@ export function formatAcceptancePackMarkdown(pack: AcceptancePackPayload): strin
     )
   } else {
     lines.push(`- ok: ${pack.readiness.doctor.ok === true ? 'yes' : 'no'}`)
+    if (pack.readiness.doctor.path) lines.push(`- path: ${pack.readiness.doctor.path}`)
     lines.push(`- http_tls_enabled: ${String(pack.readiness.doctor.http_tls_enabled)}`)
     lines.push(`- warn_count: ${pack.readiness.doctor.warn_count ?? 0}`)
+  }
+  if (pack.readiness.api_paths) {
+    lines.push('', '## API paths', '')
+    const ap = pack.readiness.api_paths
+    if (ap.doctor) lines.push(`- doctor: ${ap.doctor}`)
+    if (ap.version) lines.push(`- version: ${ap.version}`)
+    if (ap.ops_status) lines.push(`- ops_status: ${ap.ops_status}`)
+    if (ap.health) lines.push(`- health: ${ap.health}`)
+    if (ap.downsample_statuses) lines.push(`- downsample_statuses: ${ap.downsample_statuses}`)
   }
   lines.push('', t.deployKit, '')
   lines.push(`- ${t.deployKitCount}${sep}${pack.deploy_kit.count}`)

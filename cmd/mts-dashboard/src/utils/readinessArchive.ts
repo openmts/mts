@@ -32,10 +32,20 @@ import type { DataContractInput } from './dataContractView.ts'
 export interface DoctorArchiveSummary {
   loaded: boolean
   ok?: boolean
+  path?: string
   http_tls_enabled?: boolean | null
   warn_count?: number
   checks?: { level: string; code: string; message: string }[]
   error?: string
+}
+
+/** 归档中附带的管理面 API path，便于交接对照服务端契约 */
+export interface ReadinessArchiveApiPaths {
+  doctor?: string
+  version?: string
+  ops_status?: string
+  health?: string
+  downsample_statuses?: string
 }
 
 export interface ReadinessArchiveInput {
@@ -58,6 +68,8 @@ export interface ReadinessArchiveInput {
   session_server_time_unix?: number | null
   session_sample_source?: 'login' | 'session' | null
   data_contract?: DataContractInput | null
+  /** 可选：服务端 API path 元数据（doctor/version/ops-status 等） */
+  api_paths?: ReadinessArchiveApiPaths | null
 }
 
 export interface ReadinessArchivePayload {
@@ -99,6 +111,8 @@ export interface ReadinessArchivePayload {
   downsample_status_summary?: Required<DownsampleStatusSummaryInput> | null
   /** 可选：密码策略与会话校准（可商用交接） */
   commercial_handoff?: CommercialHandoffSummary | null
+  /** 管理面 API path 元数据（机器可读） */
+  api_paths?: ReadinessArchiveApiPaths
 }
 
 const copy = {
@@ -177,6 +191,7 @@ export function buildReadinessArchive(input: ReadinessArchiveInput): ReadinessAr
     doctor: {
       loaded: input.doctor.loaded,
       ok: input.doctor.ok,
+      path: input.doctor.path || undefined,
       http_tls_enabled: input.doctor.http_tls_enabled ?? null,
       warn_count: input.doctor.warn_count ?? 0,
       checks: (input.doctor.checks ?? []).map((c) => ({ ...c })),
@@ -241,6 +256,14 @@ export function buildReadinessArchive(input: ReadinessArchiveInput): ReadinessAr
         sampleSource: input.session_sample_source,
         dataContract: input.data_contract ?? null,
       }),
+    api_paths: {
+      doctor: input.api_paths?.doctor || input.doctor.path || '/api/v1/admin/doctor',
+      version: input.api_paths?.version || '/api/v1/admin/version',
+      ops_status: input.api_paths?.ops_status || '/api/v1/admin/ops-status',
+      health: input.api_paths?.health || '/api/v1/admin/health',
+      downsample_statuses:
+        input.api_paths?.downsample_statuses || '/api/v1/admin/downsample/statuses',
+    },
   }
 }
 
@@ -284,11 +307,20 @@ export function formatReadinessArchiveMarkdown(a: ReadinessArchivePayload): stri
     lines.push(`- ${t.notLoaded}${a.doctor.error ? `${sep}${a.doctor.error}` : ''}`)
   } else {
     lines.push(`- ok: ${a.doctor.ok === true ? 'yes' : 'no'}`)
+    if (a.doctor.path) lines.push(`- path: ${a.doctor.path}`)
     lines.push(`- http_tls_enabled: ${String(a.doctor.http_tls_enabled)}`)
     lines.push(`- warn_count: ${a.doctor.warn_count ?? 0}`)
     for (const c of a.doctor.checks ?? []) {
       lines.push(`- [${c.level}] ${c.code}: ${c.message}`)
     }
+  }
+  if (a.api_paths) {
+    lines.push('', '## API paths', '')
+    if (a.api_paths.doctor) lines.push(`- doctor: ${a.api_paths.doctor}`)
+    if (a.api_paths.version) lines.push(`- version: ${a.api_paths.version}`)
+    if (a.api_paths.ops_status) lines.push(`- ops_status: ${a.api_paths.ops_status}`)
+    if (a.api_paths.health) lines.push(`- health: ${a.api_paths.health}`)
+    if (a.api_paths.downsample_statuses) lines.push(`- downsample_statuses: ${a.api_paths.downsample_statuses}`)
   }
   if (a.downsample_status_summary) {
     lines.push('', '## Downsample status summary', '')

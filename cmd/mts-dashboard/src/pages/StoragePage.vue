@@ -38,6 +38,7 @@ import {
 } from '@/utils/storageSnapshots'
 import { BACKUP_DRILL_STEPS, drillProgress } from '@/utils/backupDrill'
 import { EDGE_HTTPS_ACCEPTANCE_STEPS, edgeHttpsProgress } from '@/utils/edgeHttpsAcceptance'
+import { formatStorageBytes, normalizeDataSnapshotResult, normalizeRestoreDrillResult } from '@/utils/storageResultView'
 import { completedIds, loadReadinessState, setReadinessFlag } from '@/utils/readinessState'
 import { CheckCircle, Camera, Download, Trash2, RefreshCw, ClipboardList } from 'lucide-vue-next'
 
@@ -160,13 +161,21 @@ const storageAdminBusyTitle = computed(() => adminOpBusySummary?.value?.detail |
 const uiLocale = computed<LocaleCode>(() => (locale.value === 'en' ? 'en' : 'zh'))
 const validateResult = ref<ValidateResponse | null>(null)
 const snapshotResult = ref<SnapshotResponse | null>(null)
-const dataSnapshotResult = ref<DataSnapshotResponse | null>(null)
-const restoreDrillResult = ref<RestoreDrillResponse | null>(null)
-const dataSnapshots = ref<DataSnapshotInfo[]>([])
 const dataSnapshotsListPath = ref('')
 const snapshotsListPath = ref('')
 const exportPath = ref('')
 const restoreDrillPath = ref('')
+const dataSnapshotResult = ref<DataSnapshotResponse | null>(null)
+const restoreDrillResult = ref<RestoreDrillResponse | null>(null)
+const dataSnapshotView = computed(() => normalizeDataSnapshotResult(dataSnapshotResult.value))
+const restoreDrillView = computed(() =>
+  normalizeRestoreDrillResult(
+    restoreDrillResult.value
+      ? { ...restoreDrillResult.value, path: restoreDrillPath.value || restoreDrillResult.value.path }
+      : null,
+  ),
+)
+const dataSnapshots = ref<DataSnapshotInfo[]>([])
 const selectedDataSnapshotPath = ref('')
 const snapshots = ref<SnapshotInfo[]>([])
 const exportData = ref<ExportData | null>(null)
@@ -910,14 +919,43 @@ async function copyStorageShareLink() {
           {{ loading === 'restore-drill' ? t('loading') : t('storageRunRestoreDrill') }}
         </button>
       </div>
-      <pre v-if="dataSnapshotResult" class="mt-3 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-emerald-400">{{ JSON.stringify(dataSnapshotResult, null, 2) }}</pre>
-      <p
-        v-if="restoreDrillPath || restoreDrillResult?.path"
-        class="mt-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
-        data-testid="storage-restore-drill-path"
-        :title="restoreDrillPath || restoreDrillResult?.path || ''"
-      >{{ restoreDrillPath || restoreDrillResult?.path }}</p>
-      <pre v-if="restoreDrillResult" class="mt-2 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[11px] text-sky-300">{{ JSON.stringify(restoreDrillResult, null, 2) }}</pre>
+      <div
+        v-if="dataSnapshotView"
+        class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-xs dark:border-emerald-900/40 dark:bg-emerald-950/20"
+        data-testid="storage-data-snapshot-result"
+      >
+        <p class="mb-2 font-semibold text-emerald-800 dark:text-emerald-200">{{ t('storageDataSnapshotResultTitle') }}</p>
+        <dl class="grid gap-1 sm:grid-cols-2">
+          <div><dt class="inline mts-muted">{{ t('storageResultPath') }}：</dt><dd class="inline font-mono break-all" data-testid="storage-data-snapshot-result-path">{{ dataSnapshotView.path }}</dd></div>
+          <div><dt class="inline mts-muted">{{ t('storageResultFiles') }}：</dt><dd class="inline font-semibold" data-testid="storage-data-snapshot-result-files">{{ dataSnapshotView.files }}</dd></div>
+          <div><dt class="inline mts-muted">{{ t('storageResultBytes') }}：</dt><dd class="inline font-semibold" data-testid="storage-data-snapshot-result-bytes">{{ formatStorageBytes(dataSnapshotView.bytes) }}</dd></div>
+          <div v-if="dataSnapshotView.source"><dt class="inline mts-muted">{{ t('storageResultSource') }}：</dt><dd class="inline font-mono break-all">{{ dataSnapshotView.source }}</dd></div>
+        </dl>
+      </div>
+      <div
+        v-if="restoreDrillView"
+        class="mt-3 rounded-lg border p-3 text-xs"
+        :class="restoreDrillView.tone === 'ok'
+          ? 'border-sky-200 bg-sky-50/70 dark:border-sky-900/40 dark:bg-sky-950/20'
+          : restoreDrillView.tone === 'warn'
+            ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+            : 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'"
+        data-testid="storage-restore-drill-result"
+      >
+        <p class="mb-2 font-semibold text-slate-800 dark:text-slate-100">
+          {{ restoreDrillView.ok ? t('storageRestoreResultTitleOk') : t('storageRestoreResultTitleBad') }}
+        </p>
+        <dl class="grid gap-1 sm:grid-cols-2">
+          <div class="sm:col-span-2"><dt class="inline mts-muted">{{ t('storageResultPath') }}：</dt><dd class="inline font-mono break-all" data-testid="storage-restore-drill-path">{{ restoreDrillView.path }}</dd></div>
+          <div class="sm:col-span-2"><dt class="inline mts-muted">{{ t('storageResultSource') }}：</dt><dd class="inline font-mono break-all" data-testid="storage-restore-source">{{ restoreDrillView.source || t('emptyValue') }}</dd></div>
+          <div class="sm:col-span-2"><dt class="inline mts-muted">{{ t('storageResultTarget') }}：</dt><dd class="inline font-mono break-all" data-testid="storage-restore-target">{{ restoreDrillView.target || t('emptyValue') }}</dd></div>
+          <div><dt class="inline mts-muted">{{ t('storageResultFiles') }}：</dt><dd class="inline font-semibold" data-testid="storage-restore-files">{{ restoreDrillView.files }}</dd></div>
+          <div><dt class="inline mts-muted">{{ t('storageResultBytes') }}：</dt><dd class="inline font-semibold" data-testid="storage-restore-bytes">{{ formatStorageBytes(restoreDrillView.bytes) }}</dd></div>
+          <div><dt class="inline mts-muted">{{ t('storageResultIssues') }}：</dt><dd class="inline font-semibold" data-testid="storage-restore-issues">{{ restoreDrillView.check_issues }}</dd></div>
+          <div><dt class="inline mts-muted">{{ t('storageResultFatals') }}：</dt><dd class="inline font-semibold" data-testid="storage-restore-fatals">{{ restoreDrillView.check_fatals }}</dd></div>
+          <div v-if="restoreDrillView.check_root" class="sm:col-span-2"><dt class="inline mts-muted">{{ t('storageResultCheckRoot') }}：</dt><dd class="inline font-mono break-all">{{ restoreDrillView.check_root }}</dd></div>
+        </dl>
+      </div>
       <EmptyState
         v-if="!dataListLoading && !dataSnapshots.length && !dataListError"
         class="mt-4"

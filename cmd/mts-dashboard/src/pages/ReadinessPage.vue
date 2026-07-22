@@ -138,6 +138,7 @@ interface VersionResponse {
   version: string
   commit: string
   built_at: string
+  path?: string
   admin_op_busy?: boolean
   op?: string
   started_at_unix?: number
@@ -237,6 +238,7 @@ const actionMsg = ref('')
 const actionKind = ref<'ok' | 'error' | 'info'>('info')
 const importMerge = ref(true)
 const fileInput = ref<HTMLInputElement | null>(null)
+const serverVersionPath = ref('')
 const serverVersion = ref<VersionResponse | null>(null)
 
 const productionDone = computed(() => completedIds(state.value.production))
@@ -457,6 +459,7 @@ async function loadServerVersion() {
   try {
     const v = await apiGet<VersionResponse>('/api/v1/admin/version')
     serverVersion.value = v
+    serverVersionPath.value = String(v.path || '/api/v1/admin/version')
     applyAdminOpStatus(parseAdminOpStatusPayload(v))
     versionError.value = ''
   } catch (e) {
@@ -602,10 +605,21 @@ function doctorArchiveSummary() {
   return {
     loaded: doctor.value != null,
     ok: doctor.value?.ok,
+    path: doctor.value?.path || '/api/v1/admin/doctor',
     http_tls_enabled: doctor.value == null ? null : !!doctor.value.http_tls_enabled,
     warn_count: doctorWarns.value.length,
     checks: doctor.value?.checks,
     error: doctorError.value || undefined,
+  }
+}
+
+function readinessApiPaths() {
+  return {
+    doctor: doctor.value?.path || '/api/v1/admin/doctor',
+    version: serverVersionPath.value || '/api/v1/admin/version',
+    ops_status: '/api/v1/admin/ops-status',
+    health: '/api/v1/admin/health',
+    downsample_statuses: '/api/v1/admin/downsample/statuses',
   }
 }
 
@@ -631,6 +645,7 @@ async function downloadArchive() {
     doctor: doctorArchiveSummary(),
     locale: uiLocale.value,
     downsample_status_summary: downsampleStatusSummary.value,
+    api_paths: readinessApiPaths(),
     ...archiveSessionFields(),
   })
   const names = archiveFilenames()
@@ -689,6 +704,7 @@ async function downloadAcceptancePack() {
     doctor: doctorArchiveSummary(),
     locale: uiLocale.value,
     downsample_status_summary: downsampleStatusSummary.value,
+    api_paths: readinessApiPaths(),
     ...archiveSessionFields(),
   })
   const pack = buildAcceptancePack({

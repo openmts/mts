@@ -631,6 +631,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     jump: '/databases',
   },
   {
+    id: 'readiness-storage-result-path',
+    severity: 'recommended',
+    title: { zh: '就绪归档 API path + 存储演练结构化结果', en: 'Readiness archive API paths + structured storage drill result' },
+    detail: {
+      zh: 'Readiness 归档含 doctor/api_paths；Storage data-snapshot/restore-drill 以结构化卡片展示 path/files/fatals。',
+      en: 'Readiness archive includes doctor/api_paths; Storage data-snapshot/restore-drill show structured path/files/fatals cards.',
+    },
+    automated: true,
+    jump: '/storage#data-restore',
+  },
+
+  {
     id: 'users-doctor-path',
     severity: 'recommended',
     title: { zh: 'Users/批次与 doctor/health 响应含 path', en: 'Users/batch and doctor/health responses include path' },

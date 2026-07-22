@@ -2763,3 +2763,15 @@
 | Overview stats/health | path (P487/P483) | overview-stats-paths | GET |
 | downsample list/run/dry-run | path | downsample-policies-path + 成功文案 | GET/POST |
 
+## P489（2026-07-23）
+- Readiness：归档/验收包 doctor.path + api_paths（doctor/version/ops-status/health/downsample statuses）
+- Storage：data-snapshot / restore-drill 结构化结果卡片（path/files/bytes/issues/fatals）
+- 清单：`readiness-storage-result-path`
+
+### 前后端对齐（P489）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| doctor/version | path | 归档 api_paths | 交接可读 |
+| restore-drill | path + 字段 | 结构化结果卡 | 替代纯 JSON pre |
+| data-snapshot | path + files | 结构化结果卡 | 运维扫视 |
+

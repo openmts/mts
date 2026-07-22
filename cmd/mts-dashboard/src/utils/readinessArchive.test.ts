@@ -219,3 +219,38 @@ test('archive includes export preflight summary', () => {
   assert.match(md, /导出前预检/)
   assert.match(md, /预检不阻止导出/)
 })
+
+test('buildReadinessArchive includes api_paths and doctor path', () => {
+  const a = buildReadinessArchive({
+    operator: 'ops',
+    note: 'n',
+    state: {
+      production: {},
+      edgeHttps: {},
+      backupSchedule: {},
+      deployKit: {},
+      signoffNotes: { edgeHttps: '', backupOffsite: '', backupAlert: '' },
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    },
+    score: { total: 10, checklist: 0, edgeHttps: 0, backupSchedule: 0, doctor: 10, reasons: [] },
+    doctor: {
+      loaded: true,
+      ok: true,
+      path: '/api/v1/admin/doctor',
+      http_tls_enabled: true,
+      warn_count: 0,
+      checks: [],
+    },
+    api_paths: {
+      doctor: '/api/v1/admin/doctor',
+      version: '/api/v1/admin/version',
+    },
+  })
+  assert.equal(a.doctor.path, '/api/v1/admin/doctor')
+  assert.equal(a.api_paths?.doctor, '/api/v1/admin/doctor')
+  assert.equal(a.api_paths?.version, '/api/v1/admin/version')
+  assert.ok(a.api_paths?.ops_status?.includes('ops-status'))
+  const md = formatReadinessArchiveMarkdown(a)
+  assert.match(md, /API paths/)
+  assert.match(md, /doctor: \/api\/v1\/admin\/doctor/)
+})

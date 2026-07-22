@@ -647,6 +647,13 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('downsample-policies-path')).toContainText('/api/v1/admin/downsample')
   }
 
+  // P489: Storage 结构化结果区 testid 存在性（结果卡在操作后才有，仅校验 data-restore 面板）
+  await page.goto('/storage#data-restore')
+  await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('storage-restore-drill')).toBeVisible()
+  if (await page.getByTestId('storage-data-snapshots-path').count()) {
+    await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
+  }
 
   // P366: About / ApiSpec last 芯片（不在 h1 内）
   await page.goto('/about')
