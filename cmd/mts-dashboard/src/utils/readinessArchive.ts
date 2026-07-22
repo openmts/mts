@@ -20,6 +20,12 @@ import {
   normalizeDownsampleStatusSummary,
   type DownsampleStatusSummaryInput,
 } from './downsampleStatusSummary.ts'
+import {
+  buildCommercialHandoffSummary,
+  formatPasswordPolicyHandoffLine,
+  formatSessionCalibrationHandoffLine,
+  type CommercialHandoffSummary,
+} from './commercialHandoffSummary.ts'
 
 export interface DoctorArchiveSummary {
   loaded: boolean
@@ -41,6 +47,12 @@ export interface ReadinessArchiveInput {
   locale?: LocaleCode
   /** 可选：降采样 statuses 摘要（只读归档） */
   downsample_status_summary?: DownsampleStatusSummaryInput | null
+  /** 可选：密码策略 + 会话校准交接摘要 */
+  commercial_handoff?: CommercialHandoffSummary | null
+  /** 构造会话校准摘要用（未传 commercial_handoff 时） */
+  session_expires_at?: string | null
+  session_remaining_seconds?: number | null
+  session_checked_at_ms?: number | null
 }
 
 export interface ReadinessArchivePayload {
@@ -80,6 +92,8 @@ export interface ReadinessArchivePayload {
   }
   /** 可选：降采样健康摘要（/admin/downsample/statuses summary） */
   downsample_status_summary?: Required<DownsampleStatusSummaryInput> | null
+  /** 可选：密码策略与会话校准（可商用交接） */
+  commercial_handoff?: CommercialHandoffSummary | null
 }
 
 const copy = {
@@ -212,6 +226,13 @@ export function buildReadinessArchive(input: ReadinessArchiveInput): ReadinessAr
     downsample_status_summary: input.downsample_status_summary
       ? normalizeDownsampleStatusSummary(input.downsample_status_summary)
       : null,
+    commercial_handoff:
+      input.commercial_handoff ??
+      buildCommercialHandoffSummary({
+        expiresAtIso: input.session_expires_at,
+        serverRemainingSec: input.session_remaining_seconds,
+        checkedAtMs: input.session_checked_at_ms,
+      }),
   }
 }
 
@@ -264,6 +285,13 @@ export function formatReadinessArchiveMarkdown(a: ReadinessArchivePayload): stri
   if (a.downsample_status_summary) {
     lines.push('', '## Downsample status summary', '')
     lines.push(`- ${formatDownsampleStatusSummaryLine(a.downsample_status_summary)}`)
+  }
+  if (a.commercial_handoff) {
+    lines.push('', '## Commercial handoff', '')
+    lines.push(`- password_policy: ${formatPasswordPolicyHandoffLine(a.commercial_handoff.password_policy)}`)
+    lines.push(
+      `- session_calibration: ${formatSessionCalibrationHandoffLine(a.commercial_handoff.session_calibration)}`,
+    )
   }
   lines.push('', t.completed, '')
   lines.push(`- production: ${a.checklist.production.join(', ') || '—'}`)

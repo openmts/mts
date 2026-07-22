@@ -2275,3 +2275,16 @@
 | 会话校准可见 | remaining_seconds | Account 校准行 | 只读 |
 | 就绪清单 | — | production checklist | 商用门禁 |
 
+## P454（2026-07-22）
+- `commercialHandoffSummary`：密码策略 + 会话校准交接摘要（纯函数）
+- 就绪归档/验收包 MD/JSON 写入 `commercial_handoff`
+- Readiness：交接摘要卡片 + 深链；导出带当前会话 remaining
+- 命令面板：`readiness-commercial-handoff`
+
+### 前后端对齐（P454）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 密码策略交接 | password-policy | archive.commercial_handoff | 不计分 |
+| 会话校准交接 | session remaining | archive 推演 | 只读 |
+| 验收包 | — | acceptance pack MD | 运维交接 |
+

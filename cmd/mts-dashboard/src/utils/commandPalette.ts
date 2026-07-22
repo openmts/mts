@@ -895,6 +895,14 @@ export const COMMAND_NAV_ITEMS: CommandNavItem[] = [
     keywords: ['session-remaining-calibration', '会话校准', 'remaining calibration', 'session probe'],
     adminOnly: true,
   },
+  {
+    id: 'readiness-commercial-handoff',
+    path: '/ops/readiness#commercial-handoff-panel',
+    labelKey: 'cmdReadinessCommercialHandoff',
+    keywords: ['commercial handoff', '可商用交接', 'password policy archive', 'session calibration archive'],
+    adminOnly: true,
+  },
+
 
   {
     id: 'account-density',

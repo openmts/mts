@@ -18,6 +18,10 @@ import {
   type ExportPreflightItem,
 } from './exportPreflight.ts'
 import { formatDownsampleStatusSummaryLine } from './downsampleStatusSummary.ts'
+import {
+  formatPasswordPolicyHandoffLine,
+  formatSessionCalibrationHandoffLine,
+} from './commercialHandoffSummary.ts'
 
 export const ACCEPTANCE_PACK_KIND = 'mts.acceptance.pack' as const
 export const ACCEPTANCE_PACK_VERSION = 1 as const
@@ -304,6 +308,15 @@ export function formatAcceptancePackMarkdown(pack: AcceptancePackPayload): strin
   if (pack.readiness.downsample_status_summary) {
     lines.push('', '## Downsample status summary', '')
     lines.push(`- ${formatDownsampleStatusSummaryLine(pack.readiness.downsample_status_summary)}`)
+  }
+  if (pack.readiness.commercial_handoff) {
+    lines.push('', '## Commercial handoff', '')
+    lines.push(
+      `- password_policy: ${formatPasswordPolicyHandoffLine(pack.readiness.commercial_handoff.password_policy)}`,
+    )
+    lines.push(
+      `- session_calibration: ${formatSessionCalibrationHandoffLine(pack.readiness.commercial_handoff.session_calibration)}`,
+    )
   }
   lines.push('', t.ops, '')
   if (!pack.ops_actions.length) {

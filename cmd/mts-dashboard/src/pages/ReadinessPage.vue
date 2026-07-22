@@ -3,7 +3,7 @@ import { computed, inject, onMounted, onBeforeUnmount, ref, watch, type Computed
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { snapshotForm } from '@/utils/formDirty'
 import { useRoute, useRouter } from 'vue-router'
-import { apiGet } from '@/api/client'
+import { apiGet, getTokenExpiresAt } from '@/api/client'
 import {
   normalizeDownsampleStatusSummary,
   downsampleStatusSummaryTone,
@@ -26,6 +26,11 @@ import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLa
 import { scheduleScrollToHash } from '@/utils/hashScroll'
 import { readinessFormToPrefill, parseReadinessPrefill } from '@/utils/routePrefill'
 import { buildExportPreflight, formatExportPreflightText } from '@/utils/exportPreflight'
+import {
+  buildCommercialHandoffSummary,
+  formatPasswordPolicyHandoffLine,
+  formatSessionCalibrationHandoffLine,
+} from '@/utils/commercialHandoffSummary'
 import { buildOpsNextSteps } from '@/utils/opsNextSteps'
 import { copyText } from '@/utils/clipboard'
 import {
@@ -144,7 +149,7 @@ async function refreshReadinessBusyOnly() {
     readinessBusyRefreshing.value = false
   }
 }
-const { isAdmin, currentUser } = useAuth()
+const { isAdmin, currentUser, lastSessionRemainingSeconds, lastSessionCheckedAt } = useAuth()
 const { t, locale } = useI18n()
 const adminOpBusySummary = inject<ComputedRef<{ busy: boolean; opLabel: string; elapsed: string; detail?: string; lastSummary?: string; lastError?: string; lastOk?: boolean | null }> | undefined>('adminOpBusySummary', undefined)
 const readinessAdminLastLabel = computed(() => (adminOpBusySummary?.value?.lastSummary || '').trim())
@@ -251,6 +256,20 @@ const downsampleSummaryToneClass = computed(() => {
   if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
   return 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
 })
+
+const commercialHandoffView = computed(() =>
+  buildCommercialHandoffSummary({
+    expiresAtIso: getTokenExpiresAt() || null,
+    serverRemainingSec: lastSessionRemainingSeconds.value,
+    checkedAtMs: lastSessionCheckedAt.value,
+  }),
+)
+const commercialHandoffPasswordLine = computed(() =>
+  formatPasswordPolicyHandoffLine(commercialHandoffView.value.password_policy),
+)
+const commercialHandoffSessionLine = computed(() =>
+  formatSessionCalibrationHandoffLine(commercialHandoffView.value.session_calibration),
+)
 const downsampleSummaryPath = computed(() => downsampleStatusSummaryJump(downsampleSummaryView.value))
 const downsampleErrorJump = computed(() => downsampleStatusHealthJump('error'))
 const downsampleLaggingJump = computed(() => downsampleStatusHealthJump('lagging'))
@@ -517,6 +536,14 @@ async function onImportFile(ev: Event) {
   }
 }
 
+function archiveSessionFields() {
+  return {
+    session_expires_at: getTokenExpiresAt() || null,
+    session_remaining_seconds: lastSessionRemainingSeconds.value,
+    session_checked_at_ms: lastSessionCheckedAt.value,
+  }
+}
+
 function doctorArchiveSummary() {
   return {
     loaded: doctor.value != null,
@@ -550,6 +577,7 @@ async function downloadArchive() {
     doctor: doctorArchiveSummary(),
     locale: uiLocale.value,
     downsample_status_summary: downsampleStatusSummary.value,
+    ...archiveSessionFields(),
   })
   const names = archiveFilenames()
   const md = formatReadinessArchiveMarkdown(archive)
@@ -607,6 +635,7 @@ async function downloadAcceptancePack() {
     doctor: doctorArchiveSummary(),
     locale: uiLocale.value,
     downsample_status_summary: downsampleStatusSummary.value,
+    ...archiveSessionFields(),
   })
   const pack = buildAcceptancePack({
     archive,
@@ -1605,6 +1634,26 @@ watch(
         <div data-testid="readiness-downsample-errors">{{ t('overviewDownsampleErrors') }}: <span class="font-semibold">{{ downsampleSummaryView.error }}</span></div>
         <div data-testid="readiness-downsample-lagging">{{ t('overviewDownsampleLagging') }}: <span class="font-semibold">{{ downsampleSummaryView.lagging }}</span></div>
         <div data-testid="readiness-downsample-max-lag">{{ t('overviewDownsampleMaxLag') }}: <span class="font-semibold">{{ downsampleSummaryView.max_lag_seconds }}s</span></div>
+      </div>
+    </div>
+
+    <div class="mts-panel scroll-mt-20" data-testid="readiness-commercial-handoff" id="commercial-handoff-panel">
+      <h2 class="mts-subtitle">{{ t('readinessCommercialHandoffTitle') }}</h2>
+      <p class="mt-1 text-xs mts-muted">{{ t('readinessCommercialHandoffDesc') }}</p>
+      <dl class="mt-3 space-y-2 text-xs">
+        <div>
+          <dt class="mts-muted">{{ t('readinessCommercialHandoffPassword') }}</dt>
+          <dd class="font-mono" data-testid="readiness-commercial-handoff-password">{{ commercialHandoffPasswordLine }}</dd>
+        </div>
+        <div>
+          <dt class="mts-muted">{{ t('readinessCommercialHandoffSession') }}</dt>
+          <dd class="font-mono" data-testid="readiness-commercial-handoff-session">{{ commercialHandoffSessionLine }}</dd>
+        </div>
+      </dl>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <router-link class="mts-btn text-xs" to="/account#account-password-policy" data-testid="readiness-handoff-jump-policy">{{ t('readinessCommercialHandoffJumpPolicy') }}</router-link>
+        <router-link class="mts-btn text-xs" to="/account#account-session" data-testid="readiness-handoff-jump-session">{{ t('readinessCommercialHandoffJumpSession') }}</router-link>
+        <router-link class="mts-btn text-xs" to="/api-spec?ns=auth&q=password-policy#api-spec-filters" data-testid="readiness-handoff-jump-spec">{{ t('readinessCommercialHandoffJumpSpec') }}</router-link>
       </div>
     </div>
 

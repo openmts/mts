@@ -2596,6 +2596,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('overview-go-preflight').click()
   await expect(page).toHaveURL(/ops\/readiness/)
   await expect(page.getByTestId('readiness-export-preflight')).toBeVisible()
+  // P454: 可商用交接摘要（密码策略 / 会话校准）
+  await expect(page.getByTestId('readiness-commercial-handoff')).toBeVisible()
+  await expect(page.getByTestId('readiness-commercial-handoff-password')).toBeVisible()
+  await expect(page.getByTestId('readiness-commercial-handoff-session')).toBeVisible()
   // P445: 就绪中心降采样健康卡片 + 错误深链
   if (await page.getByTestId('readiness-downsample-summary').count()) {
     await expect(page.getByTestId('readiness-downsample-total')).toBeVisible()

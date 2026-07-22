@@ -359,3 +359,9 @@ test('command palette password policy deep links', () => {
   assert.ok(all.some((i) => i.id === 'readiness-session-calibration'))
   assert.ok(all.some((i) => i.id === 'readiness-password-policy'))
 })
+
+test('command palette readiness commercial handoff', () => {
+  const all = allVisibleCommandItems(true)
+  assert.ok(all.some((i) => i.id === 'readiness-commercial-handoff' && i.path.includes('commercial-handoff')))
+})
+

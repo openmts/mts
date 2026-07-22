@@ -56,6 +56,32 @@ test('buildReadinessArchive includes score and checklist', () => {
   assert.match(md, /边缘 HTTPS \/ TLS|Edge HTTPS/)
   assert.match(md, /Downsample status summary/)
   assert.match(md, /max_lag_seconds: 42/)
+  assert.ok(a.commercial_handoff?.password_policy.min_length)
+  assert.match(md, /Commercial handoff/)
+  assert.match(md, /password_policy/)
+})
+
+test('buildReadinessArchive commercial handoff session merge', () => {
+  const now = Date.parse('2026-07-22T12:00:00.000Z')
+  const a = buildReadinessArchive({
+    operator: 'ops',
+    now: new Date(now).toISOString(),
+    state: {
+      production: {},
+      edgeHttps: {},
+      backupSchedule: {},
+      deployKit: {},
+      updatedAt: new Date(now).toISOString(),
+    },
+    score: { checklist: 0, edgeHttps: 0, backupSchedule: 0, doctor: 0, total: 0, reasons: [] },
+    doctor: { loaded: false },
+    session_expires_at: new Date(now + 600_000).toISOString(),
+    session_remaining_seconds: 90,
+    session_checked_at_ms: now,
+  })
+  assert.equal(a.commercial_handoff?.session_calibration.calibration_source, 'merged')
+  const md = formatReadinessArchiveMarkdown(a)
+  assert.match(md, /session_calibration/)
 })
 
 test('buildReadinessArchive english catalog titles', () => {

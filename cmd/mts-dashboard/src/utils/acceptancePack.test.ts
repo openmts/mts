@@ -69,6 +69,7 @@ test('buildAcceptancePack aggregates archive client server ops', () => {
   assert.match(pack.disclaimer, /不代表生产人工验收/)
   const md = formatAcceptancePackMarkdown(pack)
   assert.match(md, /Downsample status summary/)
+  assert.match(md, /Commercial handoff/)
   assert.match(md, /验收材料包/)
   assert.match(md, /1\.2\.3/)
   assert.match(md, /0\.9\.0/)
@@ -146,3 +147,16 @@ test('acceptancePackFilenames stamp', () => {
   assert.match(names.json, /mts-acceptance-pack-2026-07-20T12-34-56\.json/)
   assert.match(names.md, /\.md$/)
 })
+
+test('acceptance pack includes commercial handoff', () => {
+  const pack = buildAcceptancePack({
+    archive: sampleArchive('zh'),
+    client: { name: 'mts-dashboard', version: '1.0.0', mode: 'test', base: '/', apiBase: '' },
+    locale: 'zh',
+  })
+  assert.ok(pack.readiness.commercial_handoff?.password_policy.min_length)
+  const md = formatAcceptancePackMarkdown(pack)
+  assert.match(md, /Commercial handoff/)
+  assert.match(md, /password_policy/)
+})
+
