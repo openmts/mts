@@ -1158,6 +1158,31 @@ func TestHTTPWriteBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPConfigValidateBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	runtime.config.ConfigPath = writeRuntimeConfig(t, runtime.currentConfig())
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("compact"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var busy configValidateResponse
+	postJSONWithHeaders(t, server.URL+routeAdminConfigValidate, configValidateRequest{Config: runtime.currentConfig()}, nil, http.StatusOK, &busy)
+	if !busy.OK || !busy.AdminOpBusy || busy.Op != "compact" || busy.StartedAtUnix <= 0 {
+		t.Fatalf("validate busy = %+v", busy)
+	}
+	runtime.finishAdminHeavy(errors.New("validate probe fail"))
+	var done configValidateResponse
+	postJSONWithHeaders(t, server.URL+routeAdminConfigValidate, configValidateRequest{Config: runtime.currentConfig()}, nil, http.StatusOK, &done)
+	if done.AdminOpBusy {
+		t.Fatal("validate want not busy")
+	}
+	if done.Last == nil || done.Last.Op != "compact" || done.Last.OK || done.Last.Error != "validate probe fail" {
+		t.Fatalf("validate last = %+v", done.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()

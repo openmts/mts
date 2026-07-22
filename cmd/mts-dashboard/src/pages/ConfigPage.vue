@@ -44,7 +44,14 @@ interface ConfigResponse {
   started_at_unix?: number
   last?: unknown
 }
-interface ValidateResponse { ok: boolean; error?: string }
+interface ValidateResponse {
+  ok: boolean
+  error?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface ReloadResponse {
   ok: boolean
   fields: string[]
@@ -337,6 +344,7 @@ async function handleValidate() {
   const signal = configActionAbort.begin()
   try {
     validateResult.value = await apiPost<ValidateResponse>('/api/v1/admin/config/validate', { config: config.value }, { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(validateResult.value))
     if (validateResult.value.ok) {
       setActionOk(t.value('configValidateOk'))
       success(t.value('configValidateOk'))

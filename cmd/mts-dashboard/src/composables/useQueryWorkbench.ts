@@ -5,6 +5,7 @@ import {
   listDatabasesDetailed,
   listFields,
   listMeasurements,
+  listMeasurementsDetailed,
   listRetentionPoliciesDetailed,
   listSeriesDetailed,
   type FieldMeta,
@@ -85,6 +86,9 @@ export function useQueryWorkbench() {
     databases.value = result.names
     metaSource.value = result.source
     metaHint.value = result.error || ''
+    if (result.adminOp) {
+      applyGlobalAdminOpStatus(parseAdminOpStatusPayload(result.adminOp))
+    }
     if (databases.value.length && !queryForm.value.database) {
       queryForm.value.database = databases.value[0]
     }
@@ -104,14 +108,21 @@ export function useQueryWorkbench() {
     if (!db) return
     measurementsLoading.value = true
     try {
-      const meas = await listMeasurements(db)
+      const measResult = await listMeasurementsDetailed(db)
+      const meas = measResult.names
       measurements.value = meas
+      if (measResult.adminOp) {
+        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(measResult.adminOp))
+      }
       if (meas.length && !queryForm.value.measurement) {
         queryForm.value.measurement = meas[0]
       }
       try {
         const rpResult = await listRetentionPoliciesDetailed(db)
         retentionPolicies.value = rpResult.policies.map((p) => p.name)
+        if (rpResult.adminOp) {
+          applyGlobalAdminOpStatus(parseAdminOpStatusPayload(rpResult.adminOp))
+        }
         if (retentionPolicies.value.length && !retentionPolicies.value.includes(queryForm.value.retention_policy)) {
           queryForm.value.retention_policy = retentionPolicies.value[0]
         }

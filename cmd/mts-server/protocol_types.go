@@ -330,8 +330,12 @@ type configValidateRequest struct {
 }
 
 type configValidateResponse struct {
-	OK    bool   `json:"ok"`
-	Error string `json:"error,omitempty"`
+	OK            bool                  `json:"ok"`
+	Error         string                `json:"error,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type reloadConfigResponse struct {

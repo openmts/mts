@@ -582,7 +582,7 @@ func grpcValidateConfig(r *serverRuntime, ctx context.Context, req any) (any, er
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	resp := r.validateConfigPayload(req.(*configValidateRequest).Config)
+	resp := r.attachAdminOpToConfigValidate(r.validateConfigPayload(req.(*configValidateRequest).Config))
 	if !resp.OK {
 		return nil, newAPIError(errorCodeBadRequest, resp.Error, nil)
 	}

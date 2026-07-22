@@ -491,7 +491,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "validate_config",
 			Namespace:   "admin",
-			Description: "validate config payload",
+			Description: "validate config payload (response includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodPost},
 			HTTPPaths:   []string{routeAdminConfigValidate},

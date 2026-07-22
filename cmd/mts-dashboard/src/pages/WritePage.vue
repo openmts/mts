@@ -255,6 +255,9 @@ async function loadWriteDatabases() {
   databases.value = result.names
   metaSource.value = result.source
   metaHint.value = result.error || (result.source === 'manual' ? t.value('writeManualDbHint') : '')
+  if (result.adminOp) {
+    applyGlobalAdminOpStatus(parseAdminOpStatusPayload(result.adminOp))
+  }
   if (databases.value.length && !selectedDb.value) {
     selectedDb.value = databases.value[0]
   }
@@ -735,8 +738,8 @@ async function exportWriteDraft() {
           :last-ok="adminOpBusySummary?.lastOk"
           :last-error="writeAdminLastErrorDetail"
           test-id="write-admin-last"
-            show-copy
-            copy-test-id="write-admin-last-copy"
+          show-copy
+          copy-test-id="write-admin-last-copy"
           error-test-id="write-admin-last-error"
         />
 

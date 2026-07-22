@@ -44,7 +44,7 @@ func (r *serverRuntime) handleValidateConfig(writer http.ResponseWriter, request
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	resp := r.validateConfigPayload(req.Config)
+	resp := r.attachAdminOpToConfigValidate(r.validateConfigPayload(req.Config))
 	if !resp.OK {
 		writeHTTPJSON(writer, http.StatusBadRequest, resp)
 		return

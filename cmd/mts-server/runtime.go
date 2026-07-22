@@ -792,6 +792,15 @@ func (r *serverRuntime) attachAdminOpToWrite(resp writeResponse) writeResponse {
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToConfigValidate(resp configValidateResponse) configValidateResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {

@@ -1746,3 +1746,16 @@
 | data write / typed / points-typed | 是 | 是 | 是 | 写路径成功响应 |
 | data delete | 是 | 是 | 是 | Query 删除成功即时 apply |
 
+## P413（2026-07-22）
+- Server：`POST /api/v1/admin/config/validate` 成功/失败体附带 `admin_op_busy/op/started_at_unix/last`（HTTP/gRPC）
+- Dashboard：Config validate、Write 加载 databases、Query 加载 databases/measurements/RP 时 `applyAdminOpStatus`
+- Write/Query `AdminOpLastChip` 属性缩进整理；e2e fail-last 覆盖 write/query 页 last 芯片 + write/delete/config validate mock
+- HTTP 单测；全量 mts-server / npm test / commercial-smoke 通过
+
+### busy/last 覆盖矩阵（P413 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| config/validate | 是 | 是 | 是 | 校验结果 + busy/last |
+| write/query meta 加载 | 是 | — | 是 | databases/measurements/RP |
+| e2e fail-last write/query | mock | — | 是 | 防真实 last 覆盖失败场景 |
+
