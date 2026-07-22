@@ -5,6 +5,7 @@ import {
   buildEffectiveConfigExport,
   buildErrorCodesExport,
   formatConfigPretty,
+  summarizeEffectiveConfig,
 } from './configExport.ts'
 
 const at = new Date('2026-07-20T12:00:00.000Z')
@@ -40,4 +41,23 @@ test('buildConfigSchemaExport and error codes', () => {
 test('formatConfigPretty', () => {
   assert.match(formatConfigPretty({ a: 1 }), /"a": 1/)
   assert.equal(formatConfigPretty(null), '{}')
+})
+
+test('summarizeEffectiveConfig counts sections and sensitive keys', () => {
+  const s = summarizeEffectiveConfig({
+    http: { addr: '127.0.0.1:8086' },
+    auth: { token_ttl: '1h', admin_password: 'x' },
+    limits: { max_write_points: 1000 },
+  }, '/api/v1/admin/config/effective')
+  assert.ok(s)
+  assert.equal(s!.top_level_keys, 3)
+  assert.deepEqual(s!.sections, ['auth', 'http', 'limits'])
+  assert.ok(s!.leaf_count >= 3)
+  assert.ok(s!.sensitive_key_hits >= 1)
+  assert.equal(s!.path, '/api/v1/admin/config/effective')
+})
+
+test('summarizeEffectiveConfig returns null for empty', () => {
+  assert.equal(summarizeEffectiveConfig(null), null)
+  assert.equal(summarizeEffectiveConfig(undefined), null)
 })

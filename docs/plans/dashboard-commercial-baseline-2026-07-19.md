@@ -2799,3 +2799,12 @@
 |------|--------|-----------|------|
 | storage export | path + export | storage-export-summary | 结构化摘要 |
 | write typed/points/write | writeResponse path | write-active-path | 当前模式 API |
+
+## P492（2026-07-23）
+- Config：effective 结构化摘要（顶层分区/叶子数/对象数/敏感键命中），原始 JSON 可折叠
+- 清单：`config-effective-summary`
+
+### 前后端对齐（P492）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| config effective | path + config | config-effective-summary | 扫视摘要 |

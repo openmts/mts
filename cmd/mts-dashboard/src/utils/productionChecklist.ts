@@ -678,6 +678,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'config-effective-summary',
+    severity: 'recommended',
+    title: { zh: '有效配置结构化摘要', en: 'Effective config structured summary' },
+    detail: {
+      zh: 'Config 有效配置展示顶层分区/叶子数/敏感键命中摘要，原始 JSON 可折叠。',
+      en: 'Config effective view shows section/leaf/sensitive-key summary with collapsible raw JSON.',
+    },
+    automated: true,
+    jump: '/config',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

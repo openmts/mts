@@ -28,6 +28,7 @@ import {
   buildEffectiveConfigExport,
   buildErrorCodesExport,
   formatConfigPretty,
+  summarizeEffectiveConfig,
 } from '@/utils/configExport'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
@@ -148,6 +149,9 @@ const reloadResult = ref<ReloadResponse | null>(null)
 const errorCodes = ref<ErrorCodeSpec[]>([])
 const schemaFields = ref<SchemaField[]>([])
 const configEffectivePath = ref('')
+const effectiveSummary = computed(() =>
+  summarizeEffectiveConfig(config.value, configEffectivePath.value || '/api/v1/admin/config/effective'),
+)
 const configSchemaPath = ref('')
 const configErrorCodesPath = ref('')
 const schemaFilter = ref('')
@@ -708,8 +712,8 @@ onBeforeUnmount(() => {
       <p>{{ reloadResult.fields?.length ? formatMessage(t('configReloadOkFields'), { fields: reloadResult.fields.join(', ') }) : t('configReloadOk') }}</p>
     </div>
 
-    <div v-if="config" class="mts-panel">
-      <h2 class="mb-4 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+    <div v-if="config && effectiveSummary" class="mts-panel" data-testid="config-effective-summary">
+      <h2 class="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
         <span>{{ t('configEffective') }}</span>
         <span
           v-if="configEffectivePath"
@@ -718,7 +722,18 @@ onBeforeUnmount(() => {
           :title="configEffectivePath"
         >{{ configEffectivePath }}</span>
       </h2>
-      <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400" id="config-effective" data-testid="config-effective-json">{{ JSON.stringify(config, null, 2) }}</pre>
+      <dl class="mb-3 grid gap-1 text-xs sm:grid-cols-2">
+        <div class="sm:col-span-2"><dt class="inline mts-muted">{{ t('storageResultPath') }}：</dt><dd class="inline font-mono break-all" data-testid="config-effective-summary-path">{{ effectiveSummary.path }}</dd></div>
+        <div><dt class="inline mts-muted">{{ t('configSummaryTopKeys') }}：</dt><dd class="inline font-semibold" data-testid="config-effective-top-keys">{{ effectiveSummary.top_level_keys }}</dd></div>
+        <div><dt class="inline mts-muted">{{ t('configSummaryLeaves') }}：</dt><dd class="inline font-semibold" data-testid="config-effective-leaves">{{ effectiveSummary.leaf_count }}</dd></div>
+        <div><dt class="inline mts-muted">{{ t('configSummaryObjects') }}：</dt><dd class="inline font-semibold" data-testid="config-effective-objects">{{ effectiveSummary.nested_object_count }}</dd></div>
+        <div><dt class="inline mts-muted">{{ t('configSummarySensitive') }}：</dt><dd class="inline font-semibold" data-testid="config-effective-sensitive">{{ effectiveSummary.sensitive_key_hits }}</dd></div>
+        <div class="sm:col-span-2"><dt class="inline mts-muted">{{ t('configSummarySections') }}：</dt><dd class="inline break-all font-mono text-[11px]" data-testid="config-effective-sections">{{ effectiveSummary.sections.join(', ') || t('emptyValue') }}</dd></div>
+      </dl>
+      <details class="rounded-lg border border-slate-200 dark:border-slate-700" data-testid="config-effective-raw" open>
+        <summary class="cursor-pointer px-3 py-2 text-xs mts-muted">{{ t('configEffectiveRawToggle') }}</summary>
+        <pre class="max-h-96 overflow-auto rounded-b-lg bg-slate-900 p-4 text-xs text-green-400" id="config-effective" data-testid="config-effective-json">{{ JSON.stringify(config, null, 2) }}</pre>
+      </details>
     </div>
 
     <div class="mts-panel">

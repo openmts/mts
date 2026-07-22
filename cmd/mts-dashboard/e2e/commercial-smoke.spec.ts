@@ -674,6 +674,15 @@ test('commercial browser smoke path', async ({ page }) => {
     }
   }
 
+  // P492: Config 有效配置结构化摘要
+  await page.goto('/config#config-effective')
+  await expect(page.getByTestId('config-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('config-effective-summary').count()) {
+    await expect(page.getByTestId('config-effective-summary')).toBeVisible()
+    await expect(page.getByTestId('config-effective-summary-path')).toContainText('/api/v1/admin/config')
+    await expect(page.getByTestId('config-effective-json')).toBeVisible()
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }
