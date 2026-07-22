@@ -1625,3 +1625,6 @@
 
 ## P396（2026-07-22）
 - operation_registry / api-spec 描述对齐：ops_status、admin_doctor、admin_health、maintenance stats/errors 明示 busy/last 字段
+
+## P397（2026-07-22）
+- `AdminOpLastChip` 默认可点击跳转 `/operations#ops-status-strip`；Storage 失败/成功 last 卡片同步可跳转；e2e 覆盖 Overview last → 运维

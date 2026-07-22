@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, inject, ref, onMounted, onBeforeUnmount, watch, type ComputedRef } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { actionResultAdminBusyAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, ADMIN_OP_BUSY_OPS_PATH, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -62,6 +62,7 @@ interface ExportResponse { export: ExportData }
 
 const route = useRoute()
 const { isAdmin } = useAuth()
+const router = useRouter()
 const { adminOpBusy, adminOpKind, adminOpBusyChecking, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const storageBusyRefreshing = ref(false)
 async function refreshStorageBusyOnly() {
@@ -92,6 +93,16 @@ const storageAdminLastErrorDetail = computed(() => {
   if (adminOpBusySummary?.value?.lastOk !== false) return ''
   return (adminOpBusySummary?.value?.lastError || '').trim()
 })
+function openStorageAdminLastOps() {
+  const path = ADMIN_OP_BUSY_OPS_PATH
+  const hashIdx = path.indexOf('#')
+  if (hashIdx >= 0) {
+    void router.push({ path: path.slice(0, hashIdx) || '/operations', hash: path.slice(hashIdx) })
+    return
+  }
+  void router.push(path)
+}
+
 const storageAdminBusyChipLabel = computed(() => {
   if (!adminOpBusy.value) return t.value('storageAdminBusyChip')
   const key = adminOpKindLabelKey(adminOpKind.value) as MessageKey
@@ -893,16 +904,20 @@ async function copyStorageShareLink() {
     </div>
     <div
       v-else-if="!loading && storageAdminLastLabel"
-      class="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs"
+      class="flex cursor-pointer flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs"
       :class="adminOpBusySummary?.lastOk === false
         ? 'border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100'
         : (adminOpBusySummary?.lastOk === true
           ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100'
           : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-200')"
       data-testid="storage-admin-last"
-      role="status"
+      role="link"
+      tabindex="0"
       :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-      :title="storageAdminLastLabel"
+      :title="`${storageAdminLastLabel} · ${t('adminOpBusyOpenOps')}`"
+      @click="openStorageAdminLastOps"
+      @keydown.enter.prevent="openStorageAdminLastOps"
+      @keydown.space.prevent="openStorageAdminLastOps"
     >
       <div class="min-w-0">
         <span class="min-w-0 truncate">
