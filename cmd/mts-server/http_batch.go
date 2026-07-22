@@ -38,7 +38,7 @@ func (r *serverRuntime) handleBatchUserDisabled(writer http.ResponseWriter, requ
 		writeAPIError(writer, err)
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, resp)
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToBatch(resp))
 }
 
 func (r *serverRuntime) batchUpdateUserDisabled(
@@ -116,7 +116,7 @@ func (r *serverRuntime) handleBatchDownsamplePolicies(writer http.ResponseWriter
 		writeAPIError(writer, err)
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, resp)
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToBatch(resp))
 }
 
 func (r *serverRuntime) batchDownsamplePolicies(
@@ -196,14 +196,22 @@ func grpcBatchUpdateUserDisabled(r *serverRuntime, ctx context.Context, req any)
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return r.batchUpdateUserDisabled(ctx, *req.(*batchUserDisabledRequest), r.grpcActor(ctx))
+	resp, err := r.batchUpdateUserDisabled(ctx, *req.(*batchUserDisabledRequest), r.grpcActor(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToBatch(resp), nil
 }
 
 func grpcBatchDownsamplePolicies(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return r.batchDownsamplePolicies(ctx, *req.(*batchDownsampleRequest), r.grpcActor(ctx))
+	resp, err := r.batchDownsamplePolicies(ctx, *req.(*batchDownsampleRequest), r.grpcActor(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToBatch(resp), nil
 }
 
 func (r *serverRuntime) grpcActor(ctx context.Context) string {

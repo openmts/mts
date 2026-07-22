@@ -36,6 +36,11 @@ func TestHTTPBatchUpdateUserDisabled(t *testing.T) {
 	if resp.Skip < 2 {
 		t.Fatalf("skip_count=%d want >=2; resp=%#v", resp.Skip, resp)
 	}
+	// busy/last 字段应可反序列化（空闲时 busy=false，Last 可为 nil 或历史值）
+	_ = resp.AdminOpBusy
+	_ = resp.Op
+	_ = resp.StartedAtUnix
+	_ = resp.Last
 
 	// 禁用自己应 skip
 	self := batchMutationResponse{}

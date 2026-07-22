@@ -574,6 +574,7 @@ async function confirmBatch() {
         items: [],
       }
     }
+    applyAdminOpStatus(parseAdminOpStatusPayload(data as unknown as { admin_op_busy?: unknown; op?: unknown; started_at_unix?: unknown; last?: unknown }))
     await loadData()
     selectedNames.value = []
     batchOpen.value = false

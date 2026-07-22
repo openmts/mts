@@ -20,6 +20,10 @@ export interface BatchMutationSummary {
   items: Array<{ name: string; status: string; message?: string }>
   cancelled?: boolean
   message?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
 }
 
 export function emptyBatchProgress(): BatchProgressState {
@@ -63,6 +67,10 @@ export function applyBatchProgressEvent(
       items,
       cancelled: Boolean(r.cancelled),
       message: r.message != null ? String(r.message) : undefined,
+      admin_op_busy: r.admin_op_busy != null ? Boolean(r.admin_op_busy) : undefined,
+      op: typeof r.op === 'string' ? r.op : undefined,
+      started_at_unix: typeof r.started_at_unix === 'number' ? r.started_at_unix : undefined,
+      last: r.last,
     }
     const next: BatchProgressState = {
       done: Number(r.total) || summary.ok_count + summary.skip_count + summary.fail_count,

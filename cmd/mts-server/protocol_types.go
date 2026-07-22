@@ -158,11 +158,15 @@ type batchItemResult struct {
 
 // batchMutationResponse 批量写操作汇总。
 type batchMutationResponse struct {
-	OK      bool              `json:"ok"`
-	OKCount int               `json:"ok_count"`
-	Skip    int               `json:"skip_count"`
-	Fail    int               `json:"fail_count"`
-	Items   []batchItemResult `json:"items"`
+	OK            bool                  `json:"ok"`
+	OKCount       int                   `json:"ok_count"`
+	Skip          int                   `json:"skip_count"`
+	Fail          int                   `json:"fail_count"`
+	Items         []batchItemResult     `json:"items"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 // batchDownsampleRequest 批量启用/禁用降采样策略。

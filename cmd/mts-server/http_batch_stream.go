@@ -24,7 +24,7 @@ func (r *serverRuntime) streamBatchUserDisabled(
 	}
 	streamBatchItems(request.Context(), enc, flusher, names, func(ctx context.Context, name string) batchItemResult {
 		return r.applyUserDisabled(ctx, name, req.Disabled, actor)
-	})
+	}, r.attachBatchProgressSummary)
 }
 
 func (r *serverRuntime) streamBatchDownsamplePolicies(
@@ -49,7 +49,7 @@ func (r *serverRuntime) streamBatchDownsamplePolicies(
 	}
 	streamBatchItems(request.Context(), enc, flusher, names, func(ctx context.Context, name string) batchItemResult {
 		return r.applyDownsampleAction(ctx, name, action, actor)
-	})
+	}, r.attachBatchProgressSummary)
 }
 
 func streamBatchItems(
@@ -58,13 +58,14 @@ func streamBatchItems(
 	flusher http.Flusher,
 	names []string,
 	apply func(context.Context, string) batchItemResult,
+	attachSummary func(*batchProgressEvent),
 ) {
 	out := batchMutationResponse{OK: true, Items: make([]batchItemResult, 0, len(names))}
 	total := len(names)
 	for index, name := range names {
 		if err := ctx.Err(); err != nil {
 			// 客户端取消/服务端超时：立即停止后续写，并推送已处理部分 summary。
-			_ = writeBatchProgressEvent(enc, flusher, batchProgressEvent{
+			event := batchProgressEvent{
 				Type:      "summary",
 				OK:        out.OK && out.Fail == 0,
 				OKCount:   out.OKCount,
@@ -75,7 +76,11 @@ func streamBatchItems(
 				Total:     total,
 				Cancelled: true,
 				Message:   err.Error(),
-			})
+			}
+			if attachSummary != nil {
+				attachSummary(&event)
+			}
+			_ = writeBatchProgressEvent(enc, flusher, event)
 			return
 		}
 		item := apply(ctx, name)
@@ -98,7 +103,7 @@ func streamBatchItems(
 			Message: item.Message,
 		})
 	}
-	_ = writeBatchProgressEvent(enc, flusher, batchProgressEvent{
+	event := batchProgressEvent{
 		Type:    "summary",
 		OK:      out.OK,
 		OKCount: out.OKCount,
@@ -107,7 +112,11 @@ func streamBatchItems(
 		Items:   out.Items,
 		Index:   total,
 		Total:   total,
-	})
+	}
+	if attachSummary != nil {
+		attachSummary(&event)
+	}
+	_ = writeBatchProgressEvent(enc, flusher, event)
 }
 
 func validateBatchNames(names []string) error {
@@ -130,18 +139,33 @@ func wantsBatchProgressStream(request *http.Request) bool {
 
 // batchProgressEvent 批量写进度 NDJSON 事件（item/summary/error）。
 type batchProgressEvent struct {
-	Type      string            `json:"type"`
-	Index     int               `json:"index,omitempty"`
-	Total     int               `json:"total,omitempty"`
-	Name      string            `json:"name,omitempty"`
-	Status    string            `json:"status,omitempty"`
-	Message   string            `json:"message,omitempty"`
-	OK        bool              `json:"ok,omitempty"`
-	OKCount   int               `json:"ok_count,omitempty"`
-	Skip      int               `json:"skip_count,omitempty"`
-	Fail      int               `json:"fail_count,omitempty"`
-	Items     []batchItemResult `json:"items,omitempty"`
-	Cancelled bool              `json:"cancelled,omitempty"`
+	Type          string                `json:"type"`
+	Index         int                   `json:"index,omitempty"`
+	Total         int                   `json:"total,omitempty"`
+	Name          string                `json:"name,omitempty"`
+	Status        string                `json:"status,omitempty"`
+	Message       string                `json:"message,omitempty"`
+	OK            bool                  `json:"ok,omitempty"`
+	OKCount       int                   `json:"ok_count,omitempty"`
+	Skip          int                   `json:"skip_count,omitempty"`
+	Fail          int                   `json:"fail_count,omitempty"`
+	Items         []batchItemResult     `json:"items,omitempty"`
+	Cancelled     bool                  `json:"cancelled,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
+}
+
+func (r *serverRuntime) attachBatchProgressSummary(event *batchProgressEvent) {
+	if r == nil || event == nil {
+		return
+	}
+	busy, op, started := r.adminHeavyState()
+	event.AdminOpBusy = busy
+	event.Op = op
+	event.StartedAtUnix = started
+	event.Last = r.lastAdminHeavySnapshot()
 }
 
 func beginBatchProgressStream(writer http.ResponseWriter) (*json.Encoder, http.Flusher, bool) {

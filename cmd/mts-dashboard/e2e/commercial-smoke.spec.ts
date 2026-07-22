@@ -689,6 +689,33 @@ test('commercial browser smoke path', async ({ page }) => {
       body: JSON.stringify({ ok: true, ...failLastPayload }),
     })
   })
+  // Users grant/revoke/batch 成功响应也会 apply；fail-last 场景需覆盖以免真实 last 覆盖
+  await page.route('**/api/v1/users/**/database-permissions/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, ...failLastPayload }),
+    })
+  })
+  await page.route('**/api/v1/users/batch-disabled**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/x-ndjson',
+      body: [
+        JSON.stringify({ type: 'item', index: 1, total: 1, name: 'u1', status: 'ok' }),
+        JSON.stringify({
+          type: 'summary',
+          ok: true,
+          ok_count: 1,
+          skip_count: 0,
+          fail_count: 0,
+          total: 1,
+          items: [{ name: 'u1', status: 'ok' }],
+          ...failLastPayload,
+        }),
+      ].join('\n') + '\n',
+    })
+  })
   await page.goto('/operations')
   await page.getByTestId('ops-status-refresh-busy').click()
   await expect(page.getByTestId('ops-status-last')).toContainText(/fail|失败|compact|压缩/i)
@@ -727,6 +754,12 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('query-admin-last')).toHaveAttribute('data-ok', 'false')
   await expect(page.getByTestId('query-admin-last-error')).toContainText(/e2e disk full/i)
   await expect(page.getByTestId('query-admin-last-copy')).toBeVisible()
+  // P415: Users 页 last 芯片（列表加载 apply；grant/revoke/batch 路径已 mock）
+  await page.goto('/users')
+  await expect(page.getByTestId('users-page')).toBeVisible()
+  await expect(page.getByTestId('users-admin-last')).toHaveAttribute('data-ok', 'false')
+  await expect(page.getByTestId('users-admin-last-error')).toContainText(/e2e disk full/i)
+  await expect(page.getByTestId('users-admin-last-copy')).toBeVisible()
   // P386: 失败 last 进入就绪评分原因（本地化文案）
   await page.goto('/ops/readiness')
   await expect(page.getByRole('main').getByRole('heading', { name: /就绪中心|Commercial readiness|可商用就绪/ })).toBeVisible()
@@ -763,6 +796,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/data/write').catch(() => {})
   await page.unroute('**/api/v1/data/write/**').catch(() => {})
   await page.unroute('**/api/v1/data/delete').catch(() => {})
+  await page.unroute('**/api/v1/users/**/database-permissions/**').catch(() => {})
+  await page.unroute('**/api/v1/users/batch-disabled**').catch(() => {})
 
   // P381: mock 写入命中 admin busy → 结果条可跳转运维
   await page.route('**/api/v1/data/write', async (route) => {

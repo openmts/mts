@@ -548,17 +548,21 @@ async function grantPermission() {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    const tasks: Promise<unknown>[] = []
+    const tasks: Promise<Record<string, unknown>>[] = []
     for (const db of grantDbs.value) {
       for (const perm of grantPerms.value) {
-        tasks.push(apiPut(
+        tasks.push(apiPut<Record<string, unknown>>(
           `/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(db)}/${perm}`,
           undefined,
           { signal },
         ))
       }
     }
-    await Promise.all(tasks)
+    const results = await Promise.all(tasks)
+    // 批量授权：对最后一次成功响应 apply busy/last（各次响应 last 同源）
+    if (results.length) {
+      applyAdminOpStatus(parseAdminOpStatusPayload(results[results.length - 1]))
+    }
     grantDbs.value = []
     grantPerms.value = []
     await selectUser(selectedUser.value)
@@ -586,10 +590,11 @@ async function revokeGrant(g: DatabaseGrant) {
   usersActionStartedAt.value = Date.now()
   const signal = usersActionAbort.begin()
   try {
-    await apiDelete(
+    const del = await apiDelete<Record<string, unknown>>(
       `/api/v1/users/${encodeURIComponent(selectedUser.value.name)}/database-permissions/${encodeURIComponent(g.database)}/${encodeURIComponent(g.permission)}`,
       { signal },
     )
+    applyAdminOpStatus(parseAdminOpStatusPayload(del))
     await selectUser(selectedUser.value)
     setActionOk(t.value('usersRevokeOk'))
     success(t.value('usersRevokeOk'))
@@ -753,6 +758,8 @@ async function confirmBatch() {
         items: [],
       }
     }
+    // 批量写 summary/非流式响应可能附带 busy/last
+    applyAdminOpStatus(parseAdminOpStatusPayload(data as unknown as { admin_op_busy?: unknown; op?: unknown; started_at_unix?: unknown; last?: unknown }))
     await loadUsers()
     const ok = data.ok_count ?? 0
     const skip = data.skip_count ?? 0

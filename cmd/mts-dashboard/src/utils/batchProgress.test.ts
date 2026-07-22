@@ -53,3 +53,22 @@ test('applyBatchProgressEvent cancelled summary', () => {
   assert.equal(r.next.ok, 1)
   assert.equal(r.next.done, 3)
 })
+
+test('applyBatchProgressEvent summary carries admin op fields', () => {
+  const r = applyBatchProgressEvent(emptyBatchProgress(), {
+    type: 'summary',
+    ok: true,
+    ok_count: 1,
+    skip_count: 0,
+    fail_count: 0,
+    total: 1,
+    items: [{ name: 'a', status: 'ok' }],
+    admin_op_busy: false,
+    op: 'compact',
+    started_at_unix: 0,
+    last: { ok: false, op: 'compact', error: 'e2e disk full', finished_at_unix: 1 },
+  })
+  assert.equal(r.summary?.admin_op_busy, false)
+  assert.equal(r.summary?.op, 'compact')
+  assert.equal((r.summary?.last as { error?: string } | undefined)?.error, 'e2e disk full')
+})

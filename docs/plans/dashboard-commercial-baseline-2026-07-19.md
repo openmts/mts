@@ -1771,3 +1771,16 @@
 | write RP/measurements/fields | 是 | — | 是 | Write 元数据加载 |
 | query fields/series | 是 | — | 是 | Query 元数据/序列列表 |
 
+## P415（2026-07-22）
+- Server：users/downsample batch（非流式 JSON + 流式 summary + gRPC）成功响应附带 `admin_op_busy/op/started_at_unix/last`
+- Dashboard：Users grant/revoke 成功后即时 `applyAdminOpStatus`；Users/Downsample batch summary 透传并 apply busy/last
+- batchProgress 解析 summary 的 adminOp 字段；e2e fail-last 覆盖 users last 芯片与 permissions/batch mock
+- HTTP batch 单测字段可反序列化；npm test / commercial-smoke 验证
+
+### busy/last 覆盖矩阵（P415 增量）
+| 接口族 | HTTP | gRPC | Dashboard apply | 备注 |
+|--------|------|------|-----------------|------|
+| users grant/revoke database-permissions | 是（P411） | 是（P411） | 是 | 批量授权 apply 末次成功响应 |
+| users batch-disabled | 是 | 是 | 是 | 非流式体 + 流式 summary |
+| downsample policies batch | 是 | 是 | 是 | 非流式体 + 流式 summary |
+

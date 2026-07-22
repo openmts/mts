@@ -756,6 +756,15 @@ func (r *serverRuntime) attachAdminOpToOK(resp okResponse) okResponse {
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToBatch(resp batchMutationResponse) batchMutationResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) attachAdminOpToReload(resp reloadConfigResponse) reloadConfigResponse {
 	busy, op, started := r.adminHeavyState()
 	resp.AdminOpBusy = busy
