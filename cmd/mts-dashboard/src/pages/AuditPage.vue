@@ -3,6 +3,7 @@ import { ref, onMounted, computed, inject, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import EmptyState from '@/components/EmptyState.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -14,7 +15,7 @@ import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError } from '@/utils/apiError'
-import { adminOpLastChipSurfaceClass, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
+import { isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import {
   auditRangeToLocalInputs,
   filterAuditEvents,
@@ -409,18 +410,15 @@ watch(
       </h1>
       <div class="mt-1 flex flex-wrap items-center gap-2">
         <p class="text-xs mts-muted">{{ isAdmin ? t('auditDesc') : t('auditSelfDesc') }}</p>
-        <span
-          v-if="isAdmin && auditAdminLastLabel"
-          :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-          data-testid="audit-admin-last"
-          :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-          :title="auditAdminLastLabel"
-        >{{ t('opsStatusLastLabel') }}: {{ auditAdminLastLabel }}</span>
-          <span
-            v-if="auditAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="audit-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ auditAdminLastErrorDetail }}</span>
+        <AdminOpLastChip
+          v-if="auditAdminLastLabel"
+          :label="auditAdminLastLabel"
+          :last-ok="adminOpBusySummary?.lastOk"
+          :last-error="auditAdminLastErrorDetail"
+          test-id="audit-admin-last"
+          error-test-id="audit-admin-last-error"
+        />
+
       </div>
     </div>
     <p

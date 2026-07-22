@@ -4,12 +4,13 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
-import { adminOpLastChipSurfaceClass, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
+import { isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { permissionLabel } from '@/utils/permissionLabel'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -332,18 +333,15 @@ watch(
           <p class="text-xs mts-muted">
             {{ t('accessGrantsDesc') }}
           </p>
-          <span
+          <AdminOpLastChip
             v-if="accessGrantsAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="access-grants-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="accessGrantsAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ accessGrantsAdminLastLabel }}</span>
-          <span
-            v-if="accessGrantsAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="access-grants-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ accessGrantsAdminLastErrorDetail }}</span>
+            :label="accessGrantsAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="accessGrantsAdminLastErrorDetail"
+            test-id="access-grants-admin-last"
+            error-test-id="access-grants-admin-last-error"
+          />
+
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

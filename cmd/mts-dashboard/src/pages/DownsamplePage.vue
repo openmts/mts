@@ -15,6 +15,7 @@ import { listDatabases, listFields, listMeasurements } from '@/api/meta'
 import { fieldNames } from '@/utils/seriesMeta'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -24,7 +25,7 @@ import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
@@ -991,18 +992,15 @@ onBeforeUnmount(() => {
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('downsampleTitle') }}</h1>
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('downsampleDesc') }}</p>
-          <span
+          <AdminOpLastChip
             v-if="downsampleAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="downsample-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="downsampleAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ downsampleAdminLastLabel }}</span>
-          <span
-            v-if="downsampleAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="downsample-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ downsampleAdminLastErrorDetail }}</span>
+            :label="downsampleAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="downsampleAdminLastErrorDetail"
+            test-id="downsample-admin-last"
+            error-test-id="downsample-admin-last-error"
+          />
+
         </div>
       </div>
       <div class="flex gap-2">

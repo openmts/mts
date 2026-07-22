@@ -6,6 +6,7 @@ import { parseApiSpecPrefill, apiSpecFormToPrefill } from '@/utils/routePrefill'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError } from '@/utils/apiError'
@@ -21,7 +22,7 @@ import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+
 
 interface APIEndpoint {
   method: string
@@ -229,18 +230,15 @@ async function exportMarkdown() {
         <h1 class="mts-title" data-testid="api-spec-title">{{ t('apiSpec') }}</h1>
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <p class="text-xs mts-muted">{{ formatMessage(t('apiSpecDesc'), { version: version || t('emptyValue'), count: totalEndpoints }) }}</p>
-          <span
+          <AdminOpLastChip
             v-if="apiSpecAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="api-spec-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="apiSpecAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ apiSpecAdminLastLabel }}</span>
-          <span
-            v-if="apiSpecAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="api-spec-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ apiSpecAdminLastErrorDetail }}</span>
+            :label="apiSpecAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="apiSpecAdminLastErrorDetail"
+            test-id="api-spec-admin-last"
+            error-test-id="api-spec-admin-last-error"
+          />
+
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

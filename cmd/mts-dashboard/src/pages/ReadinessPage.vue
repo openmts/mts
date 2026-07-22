@@ -7,7 +7,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpKindLabelKey, adminOpLastChipSurfaceClass, isAdminHeavyBusyMessage, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, isAdminHeavyBusyMessage, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
@@ -41,6 +41,7 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import {
   PRODUCTION_CHECKLIST,
   automatedCoverage,
@@ -1026,18 +1027,15 @@ watch(
             data-testid="readiness-admin-busy"
             :title="readinessAdminBusyTitle"
           >{{ readinessAdminBusyChipLabel }}</span>
-          <span
+          <AdminOpLastChip
             v-else-if="readinessAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="readiness-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="readinessAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ readinessAdminLastLabel }}</span>
-          <span
-            v-if="readinessAdminLastErrorDetail && !adminOpBusy"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="readiness-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ readinessAdminLastErrorDetail }}</span>
+            :label="readinessAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="readinessAdminLastErrorDetail"
+            test-id="readiness-admin-last"
+            error-test-id="readiness-admin-last-error"
+          />
+
           <button
             v-if="adminOpBusy"
             type="button"

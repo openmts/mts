@@ -1619,3 +1619,9 @@
 
 ## P394（2026-07-22）
 - Server `GET /api/v1/admin/health`（HTTP/gRPC）附带 `admin_op_busy/op/started_at_unix/last`；Overview 加载时 `applyAdminOpStatus` + 完整 applyHealth；HTTP 单测 busy/last
+
+## P395（2026-07-22）
+- 全站 last 芯片收敛到 `AdminOpLastChip`（Config/Query/Write/Users/Databases/Downsample/Metrics/Account/ApiSpec/Audit/Access/Readiness/Overview；Storage 保留卡片式 last 条）
+
+## P396（2026-07-22）
+- operation_registry / api-spec 描述对齐：ops_status、admin_doctor、admin_health、maintenance stats/errors 明示 busy/last 字段

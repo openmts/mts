@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
@@ -20,7 +21,7 @@ import { useAuth } from '@/composables/useAuth'
 import { nowUnixMsString } from '@/utils/time'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { useI18n } from '@/composables/useI18n'
@@ -724,18 +725,15 @@ async function exportWriteDraft() {
           data-testid="write-admin-busy"
           :title="writeAdminBusyLabel"
         >{{ t('opsAdminBusyChip') }}{{ writeAdminBusyLabel ? `: ${writeAdminBusyLabel}` : '' }}</span>
-        <span
-          v-if="writeAdminLastLabel && !writeAdminBusy"
-          :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-          data-testid="write-admin-last"
-          :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-          :title="writeAdminLastLabel"
-        >{{ t('opsStatusLastLabel') }}: {{ writeAdminLastLabel }}</span>
-          <span
-            v-if="writeAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="write-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ writeAdminLastErrorDetail }}</span>
+        <AdminOpLastChip
+          v-if="isAdmin && writeAdminLastLabel && !writeAdminBusy"
+          :label="writeAdminLastLabel"
+          :last-ok="adminOpBusySummary?.lastOk"
+          :last-error="writeAdminLastErrorDetail"
+          test-id="write-admin-last"
+          error-test-id="write-admin-last-error"
+        />
+
       </div>
       <div id="write-mode-tabs" class="scroll-mt-20 flex flex-wrap gap-2" data-testid="write-mode-tabs">
         <button

@@ -9,12 +9,13 @@ import { registerDirtyChecker } from '@/utils/routeDirty'
 import { useAuth } from '@/composables/useAuth'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import PermissionDenied from '@/components/PermissionDenied.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
@@ -488,18 +489,15 @@ onBeforeUnmount(() => {
         </h1>
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <p class="text-xs mts-muted">{{ t('configDesc') }}</p>
-          <span
+          <AdminOpLastChip
             v-if="configAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="config-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="configAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ configAdminLastLabel }}</span>
-          <span
-            v-if="configAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="config-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ configAdminLastErrorDetail }}</span>
+            :label="configAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="configAdminLastErrorDetail"
+            test-id="config-admin-last"
+            error-test-id="config-admin-last-error"
+          />
+
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

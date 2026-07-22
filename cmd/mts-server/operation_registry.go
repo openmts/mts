@@ -575,7 +575,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "maintenance_errors",
 			Namespace:   "admin",
-			Description: "list maintenance errors",
+			Description: "maintenance error list with admin_op_busy/last",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminMaintenanceErrors},
@@ -587,7 +587,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "maintenance_stats",
 			Namespace:   "admin",
-			Description: "maintenance task stats snapshot",
+			Description: "maintenance task stats snapshot (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminStatsMaintenance},
@@ -599,7 +599,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "ops_status",
 			Namespace:   "admin",
-			Description: "lightweight admin heavy-op busy flag",
+			Description: "lightweight admin heavy-op busy/last status (admin_op_busy, op, started_at_unix, last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminOpsStatus},
@@ -635,7 +635,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "admin_doctor",
 			Namespace:   "admin",
-			Description: "production doctor readiness checks",
+			Description: "production doctor readiness checks (includes admin_op_busy/last when served over HTTP)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminDoctor},
@@ -653,7 +653,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "admin_health",
 			Namespace:   "admin",
-			Description: "admin health snapshot",
+			Description: "admin health snapshot with admin_op_busy/last for dashboard polling alignment",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminHealth},

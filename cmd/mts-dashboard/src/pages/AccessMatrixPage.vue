@@ -15,8 +15,9 @@ import {
   type RoleName,
 } from '@/utils/rbacMatrix'
 import { Download, Shield } from 'lucide-vue-next'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+
 import ListSelectionToolbar from '@/components/ListSelectionToolbar.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useI18n } from '@/composables/useI18n'
@@ -270,18 +271,15 @@ async function exportMatrixCSV() {
             {{ t('accessMatrixDesc') }}
             <span class="font-medium text-slate-800 dark:text-slate-100">{{ roleLabel(displayRole) }}</span>
           </p>
-          <span
-            v-if="isAdmin && accessMatrixAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="access-matrix-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="accessMatrixAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ accessMatrixAdminLastLabel }}</span>
-          <span
-            v-if="accessMatrixAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="access-matrix-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ accessMatrixAdminLastErrorDetail }}</span>
+          <AdminOpLastChip
+            v-if="accessMatrixAdminLastLabel"
+            :label="accessMatrixAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="accessMatrixAdminLastErrorDetail"
+            test-id="access-matrix-admin-last"
+            error-test-id="access-matrix-admin-last-error"
+          />
+
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

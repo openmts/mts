@@ -10,7 +10,7 @@ import { useQueryHistory } from '@/composables/useQueryHistory'
 import { filterQueryHistory } from '@/utils/queryHistory'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
@@ -20,6 +20,7 @@ import { formatFieldsMap } from '@/utils/fieldValue'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import {
   collectQueryCSVColumns,
   queryCSVHeader,
@@ -709,18 +710,15 @@ const columnRows = computed(() => {
           data-testid="query-admin-busy"
           :title="queryAdminBusyLabel"
         >{{ t('opsAdminBusyChip') }}{{ queryAdminBusyLabel ? `: ${queryAdminBusyLabel}` : '' }}</span>
-        <span
+        <AdminOpLastChip
           v-if="isAdmin && queryAdminLastLabel && !queryAdminBusy"
-          :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-          data-testid="query-admin-last"
-          :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-          :title="queryAdminLastLabel"
-        >{{ t('opsStatusLastLabel') }}: {{ queryAdminLastLabel }}</span>
-          <span
-            v-if="queryAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="query-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ queryAdminLastErrorDetail }}</span>
+          :label="queryAdminLastLabel"
+          :last-ok="adminOpBusySummary?.lastOk"
+          :last-error="queryAdminLastErrorDetail"
+          test-id="query-admin-last"
+          error-test-id="query-admin-last-error"
+        />
+
       </div>
       <div class="flex gap-2">
         <button class="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700" @click="showHistory = !showHistory" :title="t('queryHistoryShortcutTitle')"><History class="h-3.5 w-3.5" />{{ t('queryHistoryBtn') }}</button>

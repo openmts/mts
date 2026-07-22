@@ -7,12 +7,13 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminHeavyBusyOpFromError, adminOpKindLabelKey, adminOpLastChipSurfaceClass, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminHeavyBusyOpFromError, adminOpKindLabelKey, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import type { HealthSnapshot, MaintenanceStats, CompactionStats } from '@/api/types'
 import { clientBuildInfo } from '@/utils/buildInfo'
 import { parseExpiresAt, sessionExpiryView } from '@/utils/sessionExpiry'
@@ -1172,19 +1173,16 @@ async function copyOverview() {
             data-testid="overview-admin-busy"
             :title="adminOpBusyChipTitle"
           >{{ adminOpBusyChipLabel }}</span>
-          <span
+          <AdminOpLastChip
             v-else-if="adminOpLastSummaryLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="overview-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="adminOpLastSummaryLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ adminOpLastSummaryLabel }}</span>
+            :label="adminOpLastSummaryLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="adminOpLastErrorDetail"
+            test-id="overview-admin-last"
+            error-test-id="overview-admin-last-error"
+          />
+
         </div>
-        <p
-          v-if="!adminOpBusy && adminOpLastErrorDetail"
-          class="mb-3 break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-          data-testid="overview-admin-last-error"
-        >{{ t('adminOpLastErrorLabel') }}: {{ adminOpLastErrorDetail }}</p>
         <EmptyState
           v-if="!maintenanceStats"
           compact

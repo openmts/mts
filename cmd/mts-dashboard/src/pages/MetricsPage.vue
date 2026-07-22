@@ -10,6 +10,7 @@ import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { useAuth } from '@/composables/useAuth'
 import PermissionDenied from '@/components/PermissionDenied.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -27,7 +28,7 @@ import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+
 import { Activity, RefreshCw, Download } from 'lucide-vue-next'
 
 const { isAdmin } = useAuth()
@@ -260,18 +261,15 @@ onBeforeUnmount(() => {
             {{ t('metricsDesc') }}
             <span v-if="lastRefreshed" data-testid="metrics-refreshed">{{ formatMessage(t('metricsRefreshedAt'), { time: lastRefreshed }) }}</span>
           </p>
-          <span
+          <AdminOpLastChip
             v-if="metricsAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="metrics-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="metricsAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ metricsAdminLastLabel }}</span>
-          <span
-            v-if="metricsAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="metrics-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ metricsAdminLastErrorDetail }}</span>
+            :label="metricsAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="metricsAdminLastErrorDetail"
+            test-id="metrics-admin-last"
+            error-test-id="metrics-admin-last-error"
+          />
+
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2">

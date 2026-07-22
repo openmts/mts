@@ -14,6 +14,7 @@ import {
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { Plus, Trash2, Key, Lock, Download } from 'lucide-vue-next'
 import UserModals from '@/components/UserModals.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import UserGrantPanel from '@/components/UserGrantPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
@@ -26,7 +27,7 @@ import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
@@ -794,18 +795,15 @@ onBeforeUnmount(() => {
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('usersTitle') }}</h1>
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ t('usersDesc') }}</p>
-          <span
+          <AdminOpLastChip
             v-if="isAdmin && usersAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="users-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="usersAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ usersAdminLastLabel }}</span>
-          <span
-            v-if="usersAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="users-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ usersAdminLastErrorDetail }}</span>
+            :label="usersAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="usersAdminLastErrorDetail"
+            test-id="users-admin-last"
+            error-test-id="users-admin-last-error"
+          />
+
         </div>
       </div>
       <div class="flex gap-2">

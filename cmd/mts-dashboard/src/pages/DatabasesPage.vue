@@ -18,6 +18,7 @@ import {
 } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
@@ -28,7 +29,7 @@ import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
-import { actionResultAdminBusyAction, adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction } from '@/utils/adminOpBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
@@ -765,18 +766,15 @@ onBeforeUnmount(() => {
         <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ t('databases') }}</h1>
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <p class="text-xs mts-muted">{{ isAdmin ? t('databasesDesc') : t('databasesReadOnlyDesc') }}</p>
-          <span
+          <AdminOpLastChip
             v-if="isAdmin && databasesAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="databases-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="databasesAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ databasesAdminLastLabel }}</span>
-          <span
-            v-if="databasesAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="databases-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ databasesAdminLastErrorDetail }}</span>
+            :label="databasesAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="databasesAdminLastErrorDetail"
+            test-id="databases-admin-last"
+            error-test-id="databases-admin-last-error"
+          />
+
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

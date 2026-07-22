@@ -5,13 +5,14 @@ import { useHashScroll } from '@/composables/useHashScroll'
 import { parseAccountPrefill, accountFormToPrefill } from '@/utils/routePrefill'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useAuth } from '@/composables/useAuth'
-import { adminOpLastChipSurfaceClass } from '@/utils/adminOpBusy'
+
 import { getTokenExpiresAt } from '@/api/client'
 import { parseExpiresAt, sessionExpiryView, formatRemaining } from '@/utils/sessionExpiry'
 import { sessionClockTickMs } from '@/utils/sessionClock'
 import { useI18n } from '@/composables/useI18n'
 import { useNotify } from '@/composables/useNotify'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
+import AdminOpLastChip from '@/components/AdminOpLastChip.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
 import { createActionAbort } from '@/utils/actionAbort'
 import { isCanceledError, isTimeoutError } from '@/utils/apiError'
@@ -577,18 +578,15 @@ async function submit() {
         </h1>
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <p class="text-xs mts-muted">{{ t('accountDesc') }}</p>
-          <span
-            v-if="isAdmin && accountAdminLastLabel"
-            :class="adminOpLastChipSurfaceClass(adminOpBusySummary?.lastOk)"
-            data-testid="account-admin-last"
-            :data-ok="adminOpBusySummary?.lastOk === true ? 'true' : (adminOpBusySummary?.lastOk === false ? 'false' : undefined)"
-            :title="accountAdminLastLabel"
-          >{{ t('opsStatusLastLabel') }}: {{ accountAdminLastLabel }}</span>
-          <span
-            v-if="accountAdminLastErrorDetail"
-            class="max-w-full break-all font-mono text-[11px] text-red-700 dark:text-red-300"
-            data-testid="account-admin-last-error"
-          >{{ t('adminOpLastErrorLabel') }}: {{ accountAdminLastErrorDetail }}</span>
+          <AdminOpLastChip
+            v-if="accountAdminLastLabel"
+            :label="accountAdminLastLabel"
+            :last-ok="adminOpBusySummary?.lastOk"
+            :last-error="accountAdminLastErrorDetail"
+            test-id="account-admin-last"
+            error-test-id="account-admin-last-error"
+          />
+
         </div>
       </div>
       <div class="flex flex-wrap gap-2">
