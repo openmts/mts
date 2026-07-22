@@ -7,7 +7,7 @@ import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, adminOpKindLabelKey, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminHeavyBusyOpFromError, adminOpKindLabelKey, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
@@ -32,6 +32,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import type { LocaleCode } from '@/utils/localizedText'
 import { Activity, RefreshCw, Cpu, Layers, Wrench, AlertTriangle, ShieldCheck, ClipboardCheck, Info, Clock3, FileCode2, Download, Copy } from 'lucide-vue-next'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { buildOverviewExport, formatOverviewExportPretty } from '@/utils/overviewExport'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
@@ -84,18 +85,8 @@ const overviewAdminBusyHintText = computed(() => {
   return t.value('overviewAdminBusyHintGeneric')
 })
 const { success, info, error: notifyError } = useNotify()
+const { notifyAdminBusy, notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
-function notifyAdminBusy(message?: string) {
-  notifyError(message || t.value('opsAdminBusy'), {
-    action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')),
-  })
-}
-
-function notifyMaybeAdminBusy(message: string, err?: unknown) {
-  if (err && isAdminHeavyBusyError(err)) notifyAdminBusy(message)
-  else if (adminOpBusy.value) notifyAdminBusy(message)
-  else notifyError(message)
-}
 const {
   exportJob,
   exportBusy,
@@ -464,7 +455,7 @@ async function loadOverview(opts?: { background?: boolean }) {
       refreshError.value = msg
       refreshFailStreak.value += 1
       if (refreshFailStreak.value === 1) {
-        notifyMaybeAdminBusy(`${t.value('overviewRefreshFailed')}：${msg}`, e)
+        notifyMaybeAdminBusy(`${t.value('overviewRefreshFailed')}：${msg}`, e, { treatLocalBusy: true })
       }
     } else {
       loadError.value = msg

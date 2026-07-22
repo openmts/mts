@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiDelete, apiGet, apiPost, apiPostNDJSONStream, apiPut } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
-import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import {
@@ -26,8 +25,8 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
-import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { createActionAbort } from '@/utils/actionAbort'
 import {
   applyBatchProgressEvent,
@@ -106,7 +105,6 @@ const {
 } = useListSelection(visibleUserIds)
 const databases = ref<string[]>([])
 const { currentUser, isAdmin } = useAuth()
-const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
 function roleLabel(role?: string): string {
@@ -114,16 +112,8 @@ function roleLabel(role?: string): string {
   return t.value('roleUser')
 }
 const { success, info, error: notifyError, warn } = useNotify()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
-function notifyMaybeAdminBusy(message: string, err?: unknown) {
-  if (err && isAdminHeavyBusyError(err)) {
-    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
-    void refreshAdminOpBusy()
-    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
-    return
-  }
-  notifyError(message)
-}
 const {
   exportJob,
   exportBusy,

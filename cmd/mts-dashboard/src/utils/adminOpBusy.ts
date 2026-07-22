@@ -170,6 +170,24 @@ export function adminHeavyBusyOpFromError(err: unknown): string {
   return parseAdminHeavyBusyOp(e.message)
 }
 
+export type AdminBusyNotifyDecision =
+  | { kind: 'admin_busy'; op: string }
+  | { kind: 'plain' }
+
+/** 是否用 admin-busy toast（含 action / 乐观置 busy） */
+export function resolveAdminBusyNotify(
+  err?: unknown,
+  localBusy = false,
+): AdminBusyNotifyDecision {
+  if (err != null && isAdminHeavyBusyError(err)) {
+    return { kind: 'admin_busy', op: adminHeavyBusyOpFromError(err) }
+  }
+  if (localBusy) {
+    return { kind: 'admin_busy', op: '' }
+  }
+  return { kind: 'plain' }
+}
+
 /** 运维占用状态条深链（toast / 横幅统一） */
 export const ADMIN_OP_BUSY_OPS_PATH = '/operations#ops-status-strip'
 

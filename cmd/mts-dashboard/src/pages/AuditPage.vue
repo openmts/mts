@@ -9,12 +9,12 @@ import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
 import { apiGet } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
-import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError } from '@/utils/apiError'
-import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
+import { isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import {
   auditRangeToLocalInputs,
   filterAuditEvents,
@@ -57,17 +57,8 @@ const route = useRoute()
 const { isAdmin, currentUser } = useAuth()
 const { t } = useI18n()
 const { success, info, error: notifyError, warn } = useNotify()
-const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
-function notifyMaybeAdminBusy(message: string, err?: unknown) {
-  if (err && isAdminHeavyBusyError(err)) {
-    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
-    void refreshAdminOpBusy()
-    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
-    return
-  }
-  notifyError(message)
-}
 const {
   exportJob,
   exportBusy,

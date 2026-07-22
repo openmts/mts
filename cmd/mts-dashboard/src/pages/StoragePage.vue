@@ -5,7 +5,7 @@ import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpBusyOpenAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -15,6 +15,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import { formatMessage } from '@/utils/formatMessage'
@@ -74,6 +75,7 @@ async function refreshStorageBusyOnly() {
 }
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, info, error: notifyError } = useNotify()
+const { notifyAdminBusy, notifyMaybeAdminBusy } = useNotifyAdminBusy({ busyMessageKey: 'storageAdminBusy' })
 const {
   exportJob,
   exportBusy,
@@ -200,11 +202,6 @@ async function reloadStorageLists() {
   await loadDataSnapshots()
 }
 
-function notifyAdminBusy(message?: string) {
-  notifyError(message || t.value('storageAdminBusy'), {
-    action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')),
-  })
-}
 
 function reportActionError(key: StorageActionKey, e: unknown) {
   reportRetryError(key, e)

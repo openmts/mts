@@ -1446,3 +1446,9 @@
 ## P338（2026-07-22）
 - e2e：通知历史预置 action 条目，点击跳转 `/operations#ops-status-strip`
 
+## P339（2026-07-22）
+- 抽取 `resolveAdminBusyNotify` + `useNotifyAdminBusy`；全站管理页复用 busy toast/action
+
+## P340（2026-07-22）
+- 单测覆盖 resolveAdminBusyNotify（busy/local/plain）
+

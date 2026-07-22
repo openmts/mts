@@ -4,12 +4,11 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
-import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
+import { isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { permissionLabel } from '@/utils/permissionLabel'
 import { useAuth } from '@/composables/useAuth'
-import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
@@ -25,6 +24,7 @@ import {
 } from '@/utils/grantsSummary'
 import { RefreshCw, ShieldCheck, Download } from 'lucide-vue-next'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { buildGrantsExport, grantsToCSV } from '@/utils/grantsExport'
 import { parseAccessGrantsPrefill, accessGrantsFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
@@ -56,17 +56,8 @@ useHashScroll()
 const { isAdmin } = useAuth()
 const { t, locale } = useI18n()
 const { success, info, warn, error: notifyError } = useNotify()
-const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
-function notifyMaybeAdminBusy(message: string, err?: unknown) {
-  if (err && isAdminHeavyBusyError(err)) {
-    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
-    void refreshAdminOpBusy()
-    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
-    return
-  }
-  notifyError(message)
-}
 const {
   exportJob,
   exportBusy,

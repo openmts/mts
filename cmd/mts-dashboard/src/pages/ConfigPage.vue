@@ -7,10 +7,9 @@ import { apiGet, apiPost, getAdminToken, setAdminToken, getDataToken, setDataTok
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { registerDirtyChecker } from '@/utils/routeDirty'
 import { useAuth } from '@/composables/useAuth'
-import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
-import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { createActionAbort } from '@/utils/actionAbort'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
@@ -46,20 +45,11 @@ interface SchemaResponse { fields: SchemaField[] }
 useHashScroll()
 const route = useRoute()
 const { isAdmin } = useAuth()
-const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { t } = useI18n()
 const { success, info, error: notifyError } = useNotify()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
-function notifyMaybeAdminBusy(message: string, err?: unknown) {
-  if (err && isAdminHeavyBusyError(err)) {
-    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
-    void refreshAdminOpBusy()
-    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
-    return
-  }
-  notifyError(message)
-}
 const {
   exportJob,
   exportBusy,

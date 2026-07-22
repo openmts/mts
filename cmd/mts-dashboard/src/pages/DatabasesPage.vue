@@ -17,7 +17,6 @@ import {
   Plus, Trash2, ChevronDown, ChevronRight, Table2, Tag, Clock, Download,
 } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
-import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
@@ -28,8 +27,8 @@ import VirtualTable from '@/components/VirtualTable.vue'
 import { makeActionResult } from '@/utils/actionResult'
 import { useActionRetry } from '@/composables/useActionRetry'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
-import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { createActionAbort } from '@/utils/actionAbort'
 import { formatRPDuration, mapRPDurationError, parseRPDurationToNs } from '@/utils/rpDuration'
 import { filterByName } from '@/utils/listFilter'
@@ -86,7 +85,6 @@ interface DatabaseEntry {
   newRpDuration: string
 }
 const { isAdmin } = useAuth()
-const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const route = useRoute()
 const router = useRouter()
@@ -94,16 +92,8 @@ useHashScroll()
 const SERIES_CAP = 200
 const { t } = useI18n()
 const { success, info, error: notifyError, warn } = useNotify()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
-function notifyMaybeAdminBusy(message: string, err?: unknown) {
-  if (err && isAdminHeavyBusyError(err)) {
-    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
-    void refreshAdminOpBusy()
-    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
-    return
-  }
-  notifyError(message)
-}
 const {
   exportJob,
   exportBusy,

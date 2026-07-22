@@ -13,6 +13,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import InFlightBanner from '@/components/InFlightBanner.vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
 import { createActionAbort } from '@/utils/actionAbort'
 import { makeActionResult } from '@/utils/actionResult'
@@ -36,7 +37,7 @@ import type { CompactionStats, MaintenanceStats, MaintenanceStatsResponse, Stora
 import { useHashScroll } from '@/composables/useHashScroll'
 import { useServerReachability } from '@/composables/useServerReachability'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { adminOpBusyOpenAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
+import { adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
 
@@ -50,6 +51,7 @@ useHashScroll()
 const { t } = useI18n()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, error: notifyError, warn, info } = useNotify()
+const { notifyAdminBusy, notifyMaybeAdminBusy } = useNotifyAdminBusy({ busyMessageKey: 'opsAdminBusy' })
 const {
   exportJob,
   exportBusy,
@@ -315,11 +317,6 @@ const statsLoadedLabel = computed(() => {
   return formatMessage(t.value('opsStatsLastLoaded'), { time: formatAt(statsLoadedAt.value) })
 })
 
-function notifyAdminBusy(message?: string) {
-  notifyError(message || t.value('opsAdminBusy'), {
-    action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')),
-  })
-}
 
 function openConfirm(kind: 'flush' | 'compact' | 'retention') {
   if (confirmLoading.value) return

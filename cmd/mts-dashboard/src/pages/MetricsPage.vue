@@ -6,11 +6,9 @@ import { parseMetricsPrefill, metricsFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { apiGetText } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
-import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { useI18n } from '@/composables/useI18n'
 import { formatMessage } from '@/utils/formatMessage'
 import { useAuth } from '@/composables/useAuth'
-import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import PartialErrorBanner from '@/components/PartialErrorBanner.vue'
@@ -28,6 +26,7 @@ import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { Activity, RefreshCw, Download } from 'lucide-vue-next'
 
 const { isAdmin } = useAuth()
@@ -35,17 +34,8 @@ const route = useRoute()
 useHashScroll()
 const { t } = useI18n()
 const { success, info, error: notifyError } = useNotify()
-const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 
-function notifyMaybeAdminBusy(message: string, err?: unknown) {
-  if (err && isAdminHeavyBusyError(err)) {
-    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
-    void refreshAdminOpBusy()
-    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
-    return
-  }
-  notifyError(message)
-}
 const {
   exportJob,
   exportBusy,

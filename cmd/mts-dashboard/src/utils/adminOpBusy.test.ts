@@ -14,6 +14,7 @@ import {
   isAdminHeavyBusyMessage,
   joinAdminOpChip,
   nextAdminOpFailStreak,
+  resolveAdminBusyNotify,
   parseAdminBusyFromHeaders,
   parseAdminHeavyBusyOp,
   parseAdminOpBusyPayload,
@@ -152,5 +153,27 @@ test('nextAdminOpFailStreak', () => {
   assert.equal(nextAdminOpFailStreak(0, false), 1)
   assert.equal(nextAdminOpFailStreak(3, false), 4)
   assert.equal(nextAdminOpFailStreak(4, false), 4)
+})
+
+test('resolveAdminBusyNotify', () => {
+  assert.deepEqual(resolveAdminBusyNotify(undefined, false), { kind: 'plain' })
+  assert.deepEqual(resolveAdminBusyNotify(undefined, true), { kind: 'admin_busy', op: '' })
+  assert.deepEqual(
+    resolveAdminBusyNotify(
+      {
+        code: 'resource_exhausted',
+        status: 429,
+        message: 'admin heavy operation already in progress: flush',
+        adminOpBusy: true,
+        op: 'flush',
+      },
+      false,
+    ),
+    { kind: 'admin_busy', op: 'flush' },
+  )
+  assert.deepEqual(
+    resolveAdminBusyNotify({ code: 'resource_exhausted', message: 'rate limit' }, false),
+    { kind: 'plain' },
+  )
 })
 

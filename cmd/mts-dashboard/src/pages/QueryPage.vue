@@ -9,8 +9,8 @@ import { useQueryWorkbench } from '@/composables/useQueryWorkbench'
 import { useQueryHistory } from '@/composables/useQueryHistory'
 import { filterQueryHistory } from '@/utils/queryHistory'
 import { useNotify } from '@/composables/useNotify'
+import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { formatCaughtError, isCanceledError, isTimeoutError } from '@/utils/apiError'
-import { adminHeavyBusyOpFromError, adminOpBusyOpenAction, isAdminHeavyBusyError } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { copyText } from '@/utils/clipboard'
 import { useI18n } from '@/composables/useI18n'
@@ -48,7 +48,6 @@ import InFlightBanner from '@/components/InFlightBanner.vue'
 import ActionResultBanner from '@/components/ActionResultBanner.vue'
 import { checkDatabasePermission } from '@/api/authz'
 import { useAuth } from '@/composables/useAuth'
-import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Search, Square, Copy, Check, Trash2, History, BarChart3, Download, Star, Pencil, X, Upload, Columns3 } from 'lucide-vue-next'
 
@@ -67,7 +66,7 @@ const route = useRoute()
 useHashScroll()
 const { offline, writeBlocked, blockReason, blockedMessageKey } = useMutationGuard()
 const { success, info, error: notifyError } = useNotify()
-const { setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { notifyMaybeAdminBusy } = useNotifyAdminBusy()
 const {
   exportJob,
   exportBusy,
@@ -80,15 +79,6 @@ const {
 } = useExportJob()
 const { t, locale } = useI18n()
 
-function notifyMaybeAdminBusy(message: string, err?: unknown) {
-  if (err && isAdminHeavyBusyError(err)) {
-    setAdminOpBusy(true, adminHeavyBusyOpFromError(err) || undefined)
-    void refreshAdminOpBusy()
-    notifyError(message, { action: adminOpBusyOpenAction(t.value('adminOpBusyOpenOps')) })
-    return
-  }
-  notifyError(message)
-}
 const { currentUser, isAdmin } = useAuth()
 const authzHint = ref('')
 const authzChecking = ref(false)
