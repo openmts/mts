@@ -1,5 +1,10 @@
 /** 运维页导出（纯函数） */
 
+import {
+  normalizeDownsampleStatusSummary,
+  type DownsampleStatusSummaryInput,
+} from './downsampleStatusSummary.ts'
+
 export function buildMaintenanceErrorsExport(
   errors: string[] | null | undefined,
   at = new Date(),
@@ -31,30 +36,35 @@ export function buildOpsStatsExport(
     compaction?: object | null
     memory?: object | null
     maintenance_errors?: string[] | null
+    downsample_status_summary?: DownsampleStatusSummaryInput | null
   },
   at = new Date(),
 ): {
   kind: 'mts.ops.stats'
-  version: 1
+  version: 2
   generated_at: string
   maintenance: object | null
   compaction: object | null
   memory: object | null
   maintenance_errors: string[]
   maintenance_error_count: number
+  downsample_status_summary: ReturnType<typeof normalizeDownsampleStatusSummary> | null
 } {
   const errors = Array.isArray(input.maintenance_errors)
     ? input.maintenance_errors.map((e) => String(e ?? '')).filter(Boolean)
     : []
   return {
     kind: 'mts.ops.stats',
-    version: 1,
+    version: 2,
     generated_at: at.toISOString(),
     maintenance: input.maintenance ?? null,
     compaction: input.compaction ?? null,
     memory: input.memory ?? null,
     maintenance_errors: errors,
     maintenance_error_count: errors.length,
+    downsample_status_summary: input.downsample_status_summary
+      ? normalizeDownsampleStatusSummary(input.downsample_status_summary)
+      : null,
   }
 }
 

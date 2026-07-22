@@ -484,6 +484,7 @@ async function exportStats() {
     compaction: compactionStats.value,
     memory: memorySnapshot.value,
     maintenance_errors: maintenanceErrors.value,
+    downsample_status_summary: downsampleStatusSummary.value,
   })
   const outcome = await runJSONExport({
     label: 'JSON',
@@ -508,6 +509,7 @@ async function copyStats() {
       compaction: compactionStats.value,
       memory: memorySnapshot.value,
       maintenance_errors: maintenanceErrors.value,
+      downsample_status_summary: downsampleStatusSummary.value,
     }),
   )
   if (res.ok) success(t.value('opsStatsCopied'))

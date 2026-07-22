@@ -428,10 +428,11 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('metrics-downsample-total')).toBeVisible()
     await expect(page.getByTestId('metrics-downsample-jump-error')).toBeVisible()
   }
-  // P446: 全局降采样告警横幅（仅 error/lagging>0 时出现，软断言）
+  // P446/P447: 全局降采样告警横幅（仅 error/lagging>0 时出现，软断言；可 dismiss）
   if (await page.getByTestId('downsample-health-banner').count()) {
     await expect(page.getByTestId('downsample-health-banner-detail')).toBeVisible()
     await expect(page.getByTestId('downsample-health-banner-refresh')).toBeVisible()
+    await expect(page.getByTestId('downsample-health-banner-dismiss')).toBeVisible()
   }
   await expect(page.getByTestId('metrics-admin-last')).toBeVisible()
   await expect(page.getByTestId('metrics-admin-last-copy')).toBeVisible()

@@ -2186,3 +2186,17 @@
 | Metrics 导出 v2 | summary | JSON 附带 summary | 交接 |
 | 全局告警横幅 | summary_only 轮询 | Layout banner | error/lag 触发 |
 
+## P447（2026-07-22）
+- 全局降采样告警横幅：session 级 dismiss（按 summary 指纹；摘要变化重新提示）
+- opsExport：`mts.ops.stats` **version: 2** 含 `downsample_status_summary`
+- 快捷键 `g` 然后 `d`：admin 跳转 `/downsample?health=error#downsample-status`
+- 命令面板关键词 `g d` / `gd` 对齐错误深链
+- e2e：横幅 dismiss 按钮软断言
+
+### 前后端对齐（P447）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| 横幅 dismiss | summary 指纹 | sessionStorage | 会话级 |
+| ops 导出 v2 | summary | ops stats JSON | 交接 |
+| 快捷深链 | statuses?health=error | g then d | 只读筛选 |
+

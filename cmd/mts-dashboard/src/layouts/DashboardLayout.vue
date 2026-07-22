@@ -14,8 +14,11 @@ import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import { resolveRouteTitleKey } from '@/utils/pageTitle'
 import {
+  DOWNSAMPLE_ERROR_JUMP_PATH,
   isEditableTarget,
   matchNotifyHistoryOpen,
+  matchSequenceChordD,
+  matchSequenceChordStartG,
   matchShortcutHelpOpen,
   matchSidebarFilterFocus,
 } from '@/utils/keyboardShortcuts'
@@ -63,6 +66,12 @@ import {
   downsampleStatusSummaryTone,
   type DownsampleStatusSummaryInput,
 } from '@/utils/downsampleStatusSummary'
+import {
+  downsampleHealthFingerprint,
+  readDismissedDownsampleHealthFingerprint,
+  shouldShowDownsampleHealthBanner as shouldShowDownsampleHealthBannerState,
+  writeDismissedDownsampleHealthFingerprint,
+} from '@/utils/downsampleHealthBanner'
 
 const { t } = useI18n()
 const { offline, sessionWriteBlocked, sessionRemainingLabel, sessionUrgency } = useMutationGuard()
@@ -88,16 +97,30 @@ const failAckedAdminOpLastFinishedAt = ref<number | null>(
 
 /** 降采样健康（admin 全局告警；summary_only 轻量） */
 const downsampleHealthSummary = ref<ReturnType<typeof normalizeDownsampleStatusSummary> | null>(null)
+const dismissedDownsampleHealthFp = ref<string | null>(
+  typeof sessionStorage !== 'undefined' ? readDismissedDownsampleHealthFingerprint(sessionStorage) : null,
+)
 const downsampleHealthTone = computed(() => {
   if (!downsampleHealthSummary.value) return 'ok' as const
   return downsampleStatusSummaryTone(downsampleHealthSummary.value)
 })
-const showDownsampleHealthBanner = computed(() => {
-  if (!isAdmin.value || offline.value) return false
+const showDownsampleHealthBanner = computed(() =>
+  shouldShowDownsampleHealthBannerState({
+    isAdmin: isAdmin.value,
+    offline: offline.value,
+    summary: downsampleHealthSummary.value,
+    dismissedFingerprint: dismissedDownsampleHealthFp.value,
+  }),
+)
+function dismissDownsampleHealthBanner() {
   const s = downsampleHealthSummary.value
-  if (!s) return false
-  return s.error > 0 || s.lagging > 0
-})
+  if (!s) return
+  const fp = downsampleHealthFingerprint(s)
+  if (typeof sessionStorage !== 'undefined') {
+    writeDismissedDownsampleHealthFingerprint(sessionStorage, fp)
+  }
+  dismissedDownsampleHealthFp.value = fp
+}
 const downsampleHealthBannerClass = computed(() => {
   if (downsampleHealthTone.value === 'bad') {
     return 'border-red-300 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100'
@@ -418,6 +441,7 @@ function scrollMainToTop(behavior: ScrollBehavior = 'smooth') {
 }
 
 
+let pendingGoChordUntil = 0
 function onGlobalKey(e: KeyboardEvent) {
   if (shortcutsOpen.value && e.key === 'Escape') {
     e.preventDefault()
@@ -446,7 +470,22 @@ function onGlobalKey(e: KeyboardEvent) {
       sidebarOpen.value = true
     }
     sidebarNavRef.value?.focusFilter()
+    return
   }
+  const editable = isEditableTarget(e.target)
+  const now = Date.now()
+  if (pendingGoChordUntil > now && matchSequenceChordD(e, editable)) {
+    e.preventDefault()
+    pendingGoChordUntil = 0
+    if (isAdmin.value) void router.push(DOWNSAMPLE_ERROR_JUMP_PATH)
+    return
+  }
+  if (matchSequenceChordStartG(e, editable)) {
+    // 不 preventDefault，避免干扰输入法；仅记录等待窗
+    pendingGoChordUntil = now + 800
+    return
+  }
+  pendingGoChordUntil = 0
 }
 
 watch(
@@ -755,6 +794,13 @@ function onSkipToMain(e: Event) {
             data-testid="downsample-health-banner-refresh"
             @click="refreshDownsampleHealth"
           >{{ t('refresh') }}</button>
+          <button
+            type="button"
+            class="mts-btn mts-focus-ring text-xs"
+            data-testid="downsample-health-banner-dismiss"
+            :title="t('downsampleHealthBannerDismiss')"
+            @click="dismissDownsampleHealthBanner"
+          >{{ t('downsampleHealthBannerDismiss') }}</button>
         </div>
       </div>
       <div

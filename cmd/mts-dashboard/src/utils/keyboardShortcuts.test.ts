@@ -2,8 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   DASHBOARD_SHORTCUTS,
+  DOWNSAMPLE_ERROR_JUMP_PATH,
   isEditableTarget,
   matchNotifyHistoryOpen,
+  matchSequenceChordD,
+  matchSequenceChordStartG,
   matchShortcutHelpOpen,
   matchSidebarFilterFocus,
 } from './keyboardShortcuts.ts'
@@ -46,4 +49,14 @@ test('matchNotifyHistoryOpen ctrl/cmd shift h', () => {
 
 test('isEditableTarget', () => {
   assert.equal(isEditableTarget(null), false)
+})
+
+test('g then d sequence helpers', () => {
+  assert.ok(DASHBOARD_SHORTCUTS.some((s) => s.id === 'downsample-errors'))
+  assert.equal(DOWNSAMPLE_ERROR_JUMP_PATH.includes('health=error'), true)
+  const g = { key: 'g', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false } as KeyboardEvent
+  const d = { key: 'd', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false } as KeyboardEvent
+  assert.equal(matchSequenceChordStartG(g, false), true)
+  assert.equal(matchSequenceChordStartG(g, true), false)
+  assert.equal(matchSequenceChordD(d, false), true)
 })
