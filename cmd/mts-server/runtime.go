@@ -866,6 +866,33 @@ func (r *serverRuntime) attachAdminOpToWrite(resp writeResponse) writeResponse {
 	return resp
 }
 
+func (r *serverRuntime) attachAdminOpToQueryRows(resp queryRowsResponse) queryRowsResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToQueryColumns(resp queryColumnsResponse) queryColumnsResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToQueryExplain(resp queryExplainResponse) queryExplainResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
 func (r *serverRuntime) attachAdminOpToConfigValidate(resp configValidateResponse) configValidateResponse {
 	busy, op, started := r.adminHeavyState()
 	resp.AdminOpBusy = busy

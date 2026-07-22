@@ -65,17 +65,34 @@ type queryRequest struct {
 type queryRowsRequest = queryRequest
 
 type queryRowsResponse struct {
-	Rows  []mts.Row      `json:"rows"`
-	Stats mts.QueryStats `json:"stats"`
+	Rows          []mts.Row             `json:"rows"`
+	Stats         mts.QueryStats        `json:"stats"`
+	RowCount      int                   `json:"row_count,omitempty"`
+	Path          string                `json:"path,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type queryColumnsResponse struct {
-	Columns []mts.ColumnSeries `json:"columns"`
-	Stats   mts.QueryStats     `json:"stats"`
+	Columns       []mts.ColumnSeries    `json:"columns"`
+	Stats         mts.QueryStats        `json:"stats"`
+	SeriesCount   int                   `json:"series_count,omitempty"`
+	Path          string                `json:"path,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type queryExplainResponse struct {
-	Result mts.QueryResult `json:"result"`
+	Result        mts.QueryResult       `json:"result"`
+	Path          string                `json:"path,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type queryStatsResponse struct {

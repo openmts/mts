@@ -2423,3 +2423,17 @@
 | TypedBatch | points/path | writeTypedSuccess | 计数以 timestamps 为准 |
 | 契约 | ResponseHint | ApiSpec 可读 | 运维对照 |
 
+
+## P465（2026-07-23）
+- Server：query/rows|columns|explain 响应对齐 `path`、`row_count`/`series_count`、`admin_op_busy/last`（HTTP+gRPC）
+- Server：ApiSpec ResponseHint 同步更新
+- Dashboard：Query workbench 消费 meta 并刷新全局 admin-op；columns/explain raw 附带 path/count
+- 就绪清单：`query-result-meta`（required）
+
+### 前后端对齐（P465）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| query/rows | row_count/path/admin_op | useQueryWorkbench | 与契约一致 |
+| query/columns | series_count/path/admin_op | raw JSON + busy | 列式结果 |
+| query/explain | path/admin_op | raw JSON + busy | 计划导出 |
+

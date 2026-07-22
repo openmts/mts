@@ -386,6 +386,17 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
     automated: true,
     jump: '/write#write-mode-tabs',
   },
+  {
+    id: 'query-result-meta',
+    severity: 'required',
+    title: { zh: '查询响应含 path/count/admin_op', en: 'Query responses include path/count/admin_op' },
+    detail: {
+      zh: 'POST query/rows|columns|explain 返回 path 与 row_count/series_count，并附带 admin_op_busy/last；Dashboard 查询台消费并刷新全局管理占用状态。',
+      en: 'POST query/rows|columns|explain return path and row_count/series_count plus admin_op_busy/last; Query workbench consumes them and refreshes global admin-op state.',
+    },
+    automated: true,
+    jump: '/query#query-form',
+  },
 ]
 
 export function requiredChecklist(items = PRODUCTION_CHECKLIST): ProductionCheckItem[] {

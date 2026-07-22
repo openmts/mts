@@ -165,7 +165,13 @@ func grpcQueryRowsHandler(service any, ctx context.Context, decode func(any) err
 		if err != nil {
 			return nil, grpcError(ctx, err)
 		}
-		return queryRowsResponse{Rows: rows, Stats: service.(*grpcService).runtime.queryStats()}, nil
+		rt := service.(*grpcService).runtime
+		return rt.attachAdminOpToQueryRows(queryRowsResponse{
+			Rows:     rows,
+			Stats:    rt.queryStats(),
+			RowCount: len(rows),
+			Path:     routeDataQueryRows,
+		}), nil
 	}
 	return invokeGRPCUnary(ctx, &queryRowsRequest{}, decode, interceptor, grpcFullMethod(grpcMethodQueryRows), handler)
 }
@@ -276,7 +282,12 @@ func grpcQueryColumns(r *serverRuntime, ctx context.Context, req any) (any, erro
 	if err != nil {
 		return queryColumnsResponse{}, err
 	}
-	return queryColumnsResponse{Columns: columns, Stats: r.queryStats()}, nil
+	return r.attachAdminOpToQueryColumns(queryColumnsResponse{
+		Columns:     columns,
+		Stats:       r.queryStats(),
+		SeriesCount: len(columns),
+		Path:        routeDataQueryColumns,
+	}), nil
 }
 
 func grpcQueryWithExplain(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -285,7 +296,13 @@ func grpcQueryWithExplain(r *serverRuntime, ctx context.Context, req any) (any, 
 		return nil, err
 	}
 	result, err := r.queryWithExplain(ctx, *request)
-	return queryExplainResponse{Result: result}, err
+	if err != nil {
+		return queryExplainResponse{}, err
+	}
+	return r.attachAdminOpToQueryExplain(queryExplainResponse{
+		Result: result,
+		Path:   routeDataQueryExplain,
+	}), nil
 }
 
 func grpcQueryStats(r *serverRuntime, _ context.Context, _ any) (any, error) {

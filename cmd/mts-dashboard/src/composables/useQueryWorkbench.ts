@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { formatCaughtError, resolveCaughtErrorCode } from '@/utils/apiError'
+import { queryAdminOpPayload } from '@/utils/queryResultMeta'
 import { apiPost, apiPostNDJSONStream } from '@/api/client'
 import {
   listDatabasesDetailed,
@@ -20,7 +21,13 @@ import { formatMessage } from '@/utils/formatMessage'
 import { fetchEngineQueryStats } from '@/api/queryMeta'
 import { applyGlobalAdminOpStatus } from '@/composables/useAdminOpBusy'
 import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
-import type { QueryResultRow, QueryStatsData } from '@/api/types'
+import type {
+  QueryColumnsResponse,
+  QueryExplainResponse,
+  QueryResultRow,
+  QueryRowsResponse,
+  QueryStatsData,
+} from '@/api/types'
 import { hasQueryResultSnapshot } from '@/utils/querySnapshot'
 
 export type { QueryResultRow, QueryStatsData }
@@ -386,7 +393,7 @@ export function useQueryWorkbench() {
     try {
       const query = buildQuery()
       if (queryMode.value === 'rows') {
-        const data = await apiPost<{ rows: QueryResultRow[]; stats?: QueryStatsData }>(
+        const data = await apiPost<QueryRowsResponse>(
           '/api/v1/data/query/rows',
           { query },
           { signal },
@@ -398,32 +405,31 @@ export function useQueryWorkbench() {
         streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
         queryStats.value = data.stats ?? null
         engineStatsSource.value = 'query'
+        const rowsAdmin = queryAdminOpPayload(data)
+        if (rowsAdmin) applyGlobalAdminOpStatus(parseAdminOpStatusPayload(rowsAdmin))
         actionError.value = ''
         lastQueryErrorCode.value = ''
       } else if (queryMode.value === 'explain') {
-        const data = await apiPost<{
-          result: {
-            columns: unknown[]
-            explain: Record<string, unknown>
-            stats: QueryStatsData
-          }
-        }>('/api/v1/data/query/explain', { query }, { signal })
+        const data = await apiPost<QueryExplainResponse>('/api/v1/data/query/explain', { query }, { signal })
         if (seq !== requestSeq) return
         rows.value = []
         columnSeries.value = []
         queryStats.value = data.result?.stats ?? null
         engineStatsSource.value = 'query'
         const payload = {
+          path: data.path || '/api/v1/data/query/explain',
           explain: data.result?.explain ?? null,
           stats: data.result?.stats ?? null,
           columns: data.result?.columns ?? [],
         }
         rawOutput.value = JSON.stringify(payload, null, 2)
         streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
+        const explainAdmin = queryAdminOpPayload(data)
+        if (explainAdmin) applyGlobalAdminOpStatus(parseAdminOpStatusPayload(explainAdmin))
         actionError.value = ''
         lastQueryErrorCode.value = ''
       } else if (queryMode.value === 'columns') {
-        const data = await apiPost<{ columns: unknown[]; stats?: QueryStatsData }>(
+        const data = await apiPost<QueryColumnsResponse>(
           '/api/v1/data/query/columns',
           { query },
           { signal },
@@ -431,10 +437,16 @@ export function useQueryWorkbench() {
         if (seq !== requestSeq) return
         rows.value = []
         columnSeries.value = data.columns ?? []
-        rawOutput.value = JSON.stringify(data.columns, null, 2)
+        rawOutput.value = JSON.stringify({
+          path: data.path || '/api/v1/data/query/columns',
+          series_count: data.series_count ?? (data.columns ?? []).length,
+          columns: data.columns ?? [],
+        }, null, 2)
         streamMeta.value = { lines: 0, records: 0, errors: 0, previewOnly: false, previewLimit: 200 }
         queryStats.value = data.stats ?? null
         engineStatsSource.value = 'query'
+        const colsAdmin = queryAdminOpPayload(data)
+        if (colsAdmin) applyGlobalAdminOpStatus(parseAdminOpStatusPayload(colsAdmin))
         actionError.value = ''
         lastQueryErrorCode.value = ''
       } else {

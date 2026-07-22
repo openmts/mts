@@ -80,7 +80,12 @@ func (r *serverRuntime) handleQueryRows(writer http.ResponseWriter, request *htt
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, queryRowsResponse{Rows: rows, Stats: r.queryStats()})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToQueryRows(queryRowsResponse{
+		Rows:     rows,
+		Stats:    r.queryStats(),
+		RowCount: len(rows),
+		Path:     routeDataQueryRows,
+	}))
 }
 
 func (r *serverRuntime) handleQueryColumns(writer http.ResponseWriter, request *http.Request) {
@@ -96,7 +101,12 @@ func (r *serverRuntime) handleQueryColumns(writer http.ResponseWriter, request *
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, queryColumnsResponse{Columns: columns, Stats: r.queryStats()})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToQueryColumns(queryColumnsResponse{
+		Columns:     columns,
+		Stats:       r.queryStats(),
+		SeriesCount: len(columns),
+		Path:        routeDataQueryColumns,
+	}))
 }
 
 func (r *serverRuntime) handleQueryExplain(writer http.ResponseWriter, request *http.Request) {
@@ -112,7 +122,10 @@ func (r *serverRuntime) handleQueryExplain(writer http.ResponseWriter, request *
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, queryExplainResponse{Result: result})
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToQueryExplain(queryExplainResponse{
+		Result: result,
+		Path:   routeDataQueryExplain,
+	}))
 }
 
 func (r *serverRuntime) handleQueryStats(writer http.ResponseWriter, request *http.Request) {

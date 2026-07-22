@@ -274,6 +274,44 @@ export interface AdminAPISpecResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** POST /api/v1/data/query/rows */
+export interface QueryRowsResponse {
+  rows?: QueryResultRow[]
+  stats?: QueryStatsData
+  row_count?: number
+  path?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** POST /api/v1/data/query/columns */
+export interface QueryColumnsResponse {
+  columns?: unknown[]
+  stats?: QueryStatsData
+  series_count?: number
+  path?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** POST /api/v1/data/query/explain */
+export interface QueryExplainResponse {
+  result?: {
+    columns?: unknown[]
+    explain?: Record<string, unknown>
+    stats?: QueryStatsData
+  }
+  path?: string
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
 /** POST /api/v1/data/write|write/typed|write/points-typed 成功响应 */
 export interface WriteResponse {
   ok?: boolean
