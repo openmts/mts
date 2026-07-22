@@ -403,11 +403,19 @@ type storageDataSnapshotInfo struct {
 }
 
 type storageDataSnapshotsResponse struct {
-	Snapshots []storageDataSnapshotInfo `json:"snapshots"`
+	Snapshots     []storageDataSnapshotInfo `json:"snapshots"`
+	AdminOpBusy   bool                      `json:"admin_op_busy,omitempty"`
+	Op            string                    `json:"op,omitempty"`
+	StartedAtUnix int64                     `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult     `json:"last,omitempty"`
 }
 
 type storageExportResponse struct {
-	Export storageExport `json:"export"`
+	Export        storageExport         `json:"export"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 type storageExport struct {

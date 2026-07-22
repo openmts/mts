@@ -633,7 +633,7 @@ func grpcStorageExport(r *serverRuntime, ctx context.Context, _ any) (any, error
 	if err := r.requireGRPCAdmin(ctx); err != nil {
 		return nil, err
 	}
-	return storageExportResponse{Export: r.storageExport(ctx)}, nil
+	return r.storageExportPayload(ctx), nil
 }
 
 func grpcCreateDownsamplePolicy(r *serverRuntime, ctx context.Context, req any) (any, error) {
@@ -809,7 +809,11 @@ func grpcListAudit(r *serverRuntime, _ context.Context, req any) (any, error) {
 }
 
 func grpcListStorageSnapshots(r *serverRuntime, _ context.Context, _ any) (any, error) {
-	return r.listStorageSnapshots()
+	resp, err := r.listStorageSnapshots()
+	if err != nil {
+		return nil, err
+	}
+	return r.attachAdminOpToSnapshots(resp), nil
 }
 
 func grpcDeleteStorageSnapshot(r *serverRuntime, ctx context.Context, req any) (any, error) {

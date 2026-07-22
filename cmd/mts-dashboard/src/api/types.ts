@@ -215,6 +215,33 @@ export interface StorageMemoryResponse {
   last?: AdminHeavyLastResult | null
 }
 
+/** GET /api/v1/admin/storage/snapshots（列表；含 busy/last） */
+export interface StorageSnapshotsResponse {
+  snapshots?: Array<{ name?: string; path?: string; size_bytes?: number; mod_time?: string }>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/storage/data-snapshots（列表；含 busy/last） */
+export interface StorageDataSnapshotsResponse {
+  snapshots?: Array<{ name?: string; kind?: string; path?: string; size_bytes?: number; mod_time?: string }>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
+/** GET /api/v1/admin/storage/export（含 busy/last） */
+export interface StorageExportResponse {
+  export?: Record<string, unknown>
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: AdminHeavyLastResult | null
+}
+
 
 export interface UserInfo {
   name: string

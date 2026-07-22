@@ -277,6 +277,8 @@ async function exportMatrixCSV() {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="accessMatrixAdminLastErrorDetail"
             test-id="access-matrix-admin-last"
+            show-copy
+            copy-test-id="access-matrix-admin-last-copy"
             error-test-id="access-matrix-admin-last-error"
           />
 

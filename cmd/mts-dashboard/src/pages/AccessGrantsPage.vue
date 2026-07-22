@@ -339,6 +339,8 @@ watch(
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="accessGrantsAdminLastErrorDetail"
             test-id="access-grants-admin-last"
+            show-copy
+            copy-test-id="access-grants-admin-last-copy"
             error-test-id="access-grants-admin-last-error"
           />
 

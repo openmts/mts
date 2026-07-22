@@ -236,6 +236,8 @@ async function exportMarkdown() {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="apiSpecAdminLastErrorDetail"
             test-id="api-spec-admin-last"
+            show-copy
+            copy-test-id="api-spec-admin-last-copy"
             error-test-id="api-spec-admin-last-error"
           />
 

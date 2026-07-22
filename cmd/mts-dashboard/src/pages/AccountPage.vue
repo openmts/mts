@@ -584,6 +584,8 @@ async function submit() {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="accountAdminLastErrorDetail"
             test-id="account-admin-last"
+            show-copy
+            copy-test-id="account-admin-last-copy"
             error-test-id="account-admin-last-error"
           />
 

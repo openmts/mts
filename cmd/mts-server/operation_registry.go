@@ -695,7 +695,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "storage_data_snapshots",
 			Namespace:   "admin",
-			Description: "list data-snapshot and restore-drill directories",
+			Description: "list data-snapshot and restore-drill directories (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminStorageDataSnapshots},
@@ -716,7 +716,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "list_storage_snapshots",
 			Namespace:   "admin",
-			Description: "list or delete local storage snapshots",
+			Description: "list or delete local storage snapshots (GET includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet, http.MethodDelete},
 			HTTPPaths:   []string{routeAdminStorageSnapshots},
@@ -750,7 +750,7 @@ func operationCatalog() []operation {
 		{
 			Name:        "storage_export",
 			Namespace:   "admin",
-			Description: "export server metadata summary",
+			Description: "export server metadata summary (includes admin_op_busy/last)",
 			Auth:        authAdmin,
 			HTTPMethods: []string{http.MethodGet},
 			HTTPPaths:   []string{routeAdminStorageExport},

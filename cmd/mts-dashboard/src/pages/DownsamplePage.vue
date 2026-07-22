@@ -998,6 +998,8 @@ onBeforeUnmount(() => {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="downsampleAdminLastErrorDetail"
             test-id="downsample-admin-last"
+            show-copy
+            copy-test-id="downsample-admin-last-copy"
             error-test-id="downsample-admin-last-error"
           />
 

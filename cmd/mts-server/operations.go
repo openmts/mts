@@ -66,7 +66,11 @@ type storageSnapshotInfo struct {
 }
 
 type storageSnapshotsResponse struct {
-	Snapshots []storageSnapshotInfo `json:"snapshots"`
+	Snapshots     []storageSnapshotInfo `json:"snapshots"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
 func (r *serverRuntime) listStorageSnapshots() (storageSnapshotsResponse, error) {

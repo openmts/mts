@@ -126,7 +126,7 @@ func (r *serverRuntime) handleListStorageDataSnapshots(writer http.ResponseWrite
 		writeAPIError(writer, newAPIError(errorCodeInternal, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, resp)
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToDataSnapshots(resp))
 }
 
 func (r *serverRuntime) handleStorageSnapshot(writer http.ResponseWriter, request *http.Request) {
@@ -146,7 +146,7 @@ func (r *serverRuntime) handleStorageExport(writer http.ResponseWriter, request 
 	if !r.requireHTTPAdminMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, storageExportResponse{Export: r.storageExport(request.Context())})
+	writeHTTPJSON(writer, http.StatusOK, r.storageExportPayload(request.Context()))
 }
 
 func (r *serverRuntime) healthMetrics() string {
@@ -569,7 +569,7 @@ func (r *serverRuntime) handleListStorageSnapshots(writer http.ResponseWriter, r
 		writeAPIError(writer, newAPIError(errorCodeInternal, err.Error(), err))
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, resp)
+	writeHTTPJSON(writer, http.StatusOK, r.attachAdminOpToSnapshots(resp))
 }
 
 func (r *serverRuntime) handleDeleteStorageSnapshot(writer http.ResponseWriter, request *http.Request) {

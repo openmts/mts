@@ -772,6 +772,8 @@ onBeforeUnmount(() => {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="databasesAdminLastErrorDetail"
             test-id="databases-admin-last"
+            show-copy
+            copy-test-id="databases-admin-last-copy"
             error-test-id="databases-admin-last-error"
           />
 

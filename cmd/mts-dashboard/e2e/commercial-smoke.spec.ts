@@ -340,26 +340,32 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('databases-page')).toBeVisible()
   await expect(page.getByTestId('databases-admin-last')).toBeVisible()
   await expect(page.getByTestId('databases-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
+  await expect(page.getByTestId('databases-admin-last-copy')).toBeVisible()
   await page.goto('/users')
   await expect(page.getByTestId('users-page')).toBeVisible()
   await expect(page.getByTestId('users-admin-last')).toBeVisible()
+  await expect(page.getByTestId('users-admin-last-copy')).toBeVisible()
 
   await page.goto('/observability/metrics')
   await expect(page.getByTestId('metrics-page')).toBeVisible()
   await expect(page.getByTestId('metrics-admin-last')).toBeVisible()
+  await expect(page.getByTestId('metrics-admin-last-copy')).toBeVisible()
   await page.goto('/audit')
   await expect(page.getByTestId('audit-page')).toBeVisible()
   await expect(page.getByTestId('audit-admin-last')).toBeVisible()
+  await expect(page.getByTestId('audit-admin-last-copy')).toBeVisible()
 
   // P366: About / ApiSpec last 芯片（不在 h1 内）
   await page.goto('/about')
   await expect(page.getByTestId('about-page')).toBeVisible()
   await expect(page.getByTestId('about-admin-last')).toBeVisible()
   await expect(page.getByTestId('about-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
+  await expect(page.getByTestId('about-admin-last-copy')).toBeVisible()
   await page.goto('/api-spec')
   await expect(page.getByTestId('api-spec-page')).toBeVisible()
   await expect(page.getByTestId('api-spec-admin-last')).toBeVisible()
   await expect(page.getByTestId('api-spec-admin-last')).toContainText(/flush|Flush|刷盘|ok/i)
+  await expect(page.getByTestId('api-spec-admin-last-copy')).toBeVisible()
 
   // P368: Operations 复制最近一次
   await page.goto('/operations')
@@ -371,20 +377,25 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.goto('/access')
   await expect(page.getByTestId('access-matrix-page')).toBeVisible()
   await expect(page.getByTestId('access-matrix-admin-last')).toBeVisible()
+  await expect(page.getByTestId('access-matrix-admin-last-copy')).toBeVisible()
   await page.goto('/access/grants')
   await expect(page.getByTestId('access-grants-page')).toBeVisible()
   await expect(page.getByTestId('access-grants-admin-last')).toBeVisible()
+  await expect(page.getByTestId('access-grants-admin-last-copy')).toBeVisible()
 
   await page.goto('/account')
   await expect(page.getByTestId('account-page')).toBeVisible()
   await expect(page.getByTestId('account-admin-last')).toBeVisible()
+  await expect(page.getByTestId('account-admin-last-copy')).toBeVisible()
 
   await page.goto('/query')
   await expect(page.getByTestId('query-page')).toBeVisible()
   await expect(page.getByTestId('query-admin-last')).toBeVisible()
+  await expect(page.getByTestId('query-admin-last-copy')).toBeVisible()
   await page.goto('/write')
   await expect(page.getByTestId('write-page')).toBeVisible()
   await expect(page.getByTestId('write-admin-last')).toBeVisible()
+  await expect(page.getByTestId('write-admin-last-copy')).toBeVisible()
 
   // P383: mock ops-status / stats/maintenance 失败 last → 横幅 error + Overview 明细
   const failLastPayload = {
@@ -448,6 +459,28 @@ test('commercial browser smoke path', async ({ page }) => {
       })
       return
     }
+    if (url.includes('/storage/export')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          export: { generated_at: '2026-01-01T00:00:00Z', config: {}, health: {} },
+          ...failLastPayload,
+        }),
+      })
+      return
+    }
+    if (url.includes('/storage/data-snapshots') || url.includes('/storage/snapshots')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          snapshots: [],
+          ...failLastPayload,
+        }),
+      })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -458,6 +491,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.route('**/api/v1/admin/stats/maintenance', fulfillFailLast)
   await page.route('**/api/v1/admin/stats/compaction', fulfillFailLast)
   await page.route('**/api/v1/admin/stats/storage-memory', fulfillFailLast)
+  await page.route('**/api/v1/admin/storage/snapshots', fulfillFailLast)
+  await page.route('**/api/v1/admin/storage/data-snapshots', fulfillFailLast)
+  await page.route('**/api/v1/admin/storage/export', fulfillFailLast)
   await page.route('**/api/v1/admin/maintenance/errors', fulfillFailLast)
   // doctor / admin health 加载也会 applyAdminOpStatus，需与 fail last 一致
   await page.route('**/api/v1/admin/doctor', async (route) => {
@@ -531,6 +567,9 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.unroute('**/api/v1/admin/stats/maintenance', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/stats/compaction', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/stats/storage-memory', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/storage/snapshots', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/storage/data-snapshots', fulfillFailLast).catch(() => {})
+  await page.unroute('**/api/v1/admin/storage/export', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/maintenance/errors', fulfillFailLast).catch(() => {})
   await page.unroute('**/api/v1/admin/doctor').catch(() => {})
   await page.unroute('**/api/v1/admin/health').catch(() => {})

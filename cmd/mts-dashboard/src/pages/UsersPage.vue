@@ -801,6 +801,8 @@ onBeforeUnmount(() => {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="usersAdminLastErrorDetail"
             test-id="users-admin-last"
+            show-copy
+            copy-test-id="users-admin-last-copy"
             error-test-id="users-admin-last-error"
           />
 

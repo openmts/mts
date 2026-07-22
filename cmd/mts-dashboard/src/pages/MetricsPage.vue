@@ -267,6 +267,8 @@ onBeforeUnmount(() => {
             :last-ok="adminOpBusySummary?.lastOk"
             :last-error="metricsAdminLastErrorDetail"
             test-id="metrics-admin-last"
+            show-copy
+            copy-test-id="metrics-admin-last-copy"
             error-test-id="metrics-admin-last-error"
           />
 

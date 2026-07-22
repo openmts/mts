@@ -5,7 +5,7 @@ import { apiPost, apiGet, apiDelete } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { useAuth } from '@/composables/useAuth'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
-import { actionResultAdminBusyAction, ADMIN_OP_BUSY_OPS_PATH, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, formatAdminHeavyLastCopyText } from '@/utils/adminOpBusy'
+import { actionResultAdminBusyAction, ADMIN_OP_BUSY_OPS_PATH, adminOpKindLabelKey, adminHeavyBusyOpFromError, isAdminHeavyBusyError, joinAdminOpChip, formatAdminHeavyLastCopyText, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import type { MessageKey } from '@/i18n/messages'
 import PermissionDenied from '@/components/PermissionDenied.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -54,16 +54,34 @@ interface RestoreDrillResponse {
   check_root?: string
 }
 interface DataSnapshotInfo { name: string; kind: string; path: string; size_bytes: number; mod_time: string }
-interface DataSnapshotsResponse { snapshots: DataSnapshotInfo[] }
+interface DataSnapshotsResponse {
+  snapshots: DataSnapshotInfo[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface SnapshotInfo { name: string; path: string; size_bytes: number; mod_time: string }
-interface SnapshotsResponse { snapshots: SnapshotInfo[] }
+interface SnapshotsResponse {
+  snapshots: SnapshotInfo[]
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 interface ExportData { generated_at: string; config: Record<string, unknown>; health: Record<string, unknown> }
-interface ExportResponse { export: ExportData }
+interface ExportResponse {
+  export: ExportData
+  admin_op_busy?: boolean
+  op?: string
+  started_at_unix?: number
+  last?: unknown
+}
 
 const route = useRoute()
 const { isAdmin } = useAuth()
 const router = useRouter()
-const { adminOpBusy, adminOpKind, adminOpBusyChecking, adminOpLast, setAdminOpBusy, refreshAdminOpBusy } = useAdminOpBusy()
+const { adminOpBusy, adminOpKind, adminOpBusyChecking, adminOpLast, setAdminOpBusy, refreshAdminOpBusy, applyAdminOpStatus } = useAdminOpBusy()
 const storageBusyRefreshing = ref(false)
 async function refreshStorageBusyOnly() {
   if (storageBusyRefreshing.value || adminOpBusyChecking.value) return
@@ -205,6 +223,7 @@ async function loadSnapshots(opts?: { soft?: boolean }) {
   if (!soft) listLoading.value = true
   try {
     const data = await apiGet<SnapshotsResponse>('/api/v1/admin/storage/snapshots')
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     snapshots.value = data.snapshots ?? []
     snapshotListError.value = ''
   } catch (e) {
@@ -225,6 +244,7 @@ async function loadDataSnapshots(opts?: { soft?: boolean }) {
   dataListLoading.value = true
   try {
     const data = await apiGet<DataSnapshotsResponse>('/api/v1/admin/storage/data-snapshots')
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     dataSnapshots.value = data.snapshots ?? []
     selectedDataSnapshotPath.value = defaultSelectedSnapshotPath(
       dataSnapshots.value,
@@ -446,6 +466,7 @@ async function doExport() {
   const signal = beginStorageAction('export')
   try {
     const data = await apiGet<ExportResponse>('/api/v1/admin/storage/export', { signal })
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
     exportData.value = data.export
     drillDone.value = { ...drillDone.value, 'export-config': true }
     setActionOk(t.value('storageConfigExported'))

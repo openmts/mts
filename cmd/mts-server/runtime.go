@@ -520,6 +520,35 @@ func (r *serverRuntime) compactionStatsPayload() compactionStatsResponse {
 	}
 }
 
+func (r *serverRuntime) attachAdminOpToSnapshots(resp storageSnapshotsResponse) storageSnapshotsResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) attachAdminOpToDataSnapshots(resp storageDataSnapshotsResponse) storageDataSnapshotsResponse {
+	busy, op, started := r.adminHeavyState()
+	resp.AdminOpBusy = busy
+	resp.Op = op
+	resp.StartedAtUnix = started
+	resp.Last = r.lastAdminHeavySnapshot()
+	return resp
+}
+
+func (r *serverRuntime) storageExportPayload(ctx context.Context) storageExportResponse {
+	busy, op, started := r.adminHeavyState()
+	return storageExportResponse{
+		Export:        r.storageExport(ctx),
+		AdminOpBusy:   busy,
+		Op:            op,
+		StartedAtUnix: started,
+		Last:          r.lastAdminHeavySnapshot(),
+	}
+}
+
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {
 	busy = r.maintenanceBusy.Load()
 	if v := r.maintenanceOp.Load(); v != nil {

@@ -1640,3 +1640,11 @@
 
 ## P401（2026-07-22）
 - `AdminOpLastChip` 支持 `showCopy`；Overview/Readiness/Config/Query/Write/About 开启页内复制最近一次；e2e 覆盖 overview 复制钮
+
+## P402（2026-07-22）
+- 剩余页 `AdminOpLastChip` 开启 `showCopy`（Users/Databases/Downsample/Metrics/Account/Audit/ApiSpec/Access/）
+- e2e 覆盖各页 `*-admin-last-copy` 可见
+
+## P403（2026-07-22）
+- Server：`storage/snapshots`、`storage/data-snapshots`、`storage/export`（HTTP/gRPC）附带 `admin_op_busy/op/started_at_unix/last`
+- Dashboard Storage 列表/导出加载时 `applyAdminOpStatus`；api-spec 描述对齐；HTTP 单测 busy/last；e2e fail-last mock 同步

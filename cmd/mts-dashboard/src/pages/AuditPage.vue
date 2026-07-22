@@ -416,6 +416,8 @@ watch(
           :last-ok="adminOpBusySummary?.lastOk"
           :last-error="auditAdminLastErrorDetail"
           test-id="audit-admin-last"
+          show-copy
+          copy-test-id="audit-admin-last-copy"
           error-test-id="audit-admin-last-error"
         />
 

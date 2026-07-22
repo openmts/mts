@@ -721,6 +721,50 @@ func TestHTTPStorageMemoryAndCompactionBusyAndLast(t *testing.T) {
 	}
 }
 
+func TestHTTPStorageListAndExportBusyAndLast(t *testing.T) {
+	runtime := openTestRuntime(t)
+	server := httptest.NewServer(runtime.httpHandler())
+	defer server.Close()
+
+	if err := runtime.tryBeginAdminHeavy("snapshot"); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	var snapBusy storageSnapshotsResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStorageSnapshots, nil, http.StatusOK, &snapBusy)
+	if !snapBusy.AdminOpBusy || snapBusy.Op != "snapshot" || snapBusy.StartedAtUnix <= 0 {
+		t.Fatalf("snapshots busy = %+v", snapBusy)
+	}
+	var dataBusy storageDataSnapshotsResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStorageDataSnapshots, nil, http.StatusOK, &dataBusy)
+	if !dataBusy.AdminOpBusy || dataBusy.Op != "snapshot" || dataBusy.StartedAtUnix <= 0 {
+		t.Fatalf("data-snapshots busy = %+v", dataBusy)
+	}
+	var expBusy storageExportResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStorageExport, nil, http.StatusOK, &expBusy)
+	if !expBusy.AdminOpBusy || expBusy.Op != "snapshot" || expBusy.StartedAtUnix <= 0 {
+		t.Fatalf("export busy = %+v", expBusy)
+	}
+	runtime.finishAdminHeavy(errors.New("storage list probe fail"))
+	var snapDone storageSnapshotsResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStorageSnapshots, nil, http.StatusOK, &snapDone)
+	if snapDone.AdminOpBusy {
+		t.Fatal("snapshots want not busy")
+	}
+	if snapDone.Last == nil || snapDone.Last.Op != "snapshot" || snapDone.Last.OK || snapDone.Last.Error != "storage list probe fail" {
+		t.Fatalf("snapshots last = %+v", snapDone.Last)
+	}
+	var dataDone storageDataSnapshotsResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStorageDataSnapshots, nil, http.StatusOK, &dataDone)
+	if dataDone.Last == nil || dataDone.Last.Op != "snapshot" || dataDone.Last.OK || dataDone.Last.Error != "storage list probe fail" {
+		t.Fatalf("data-snapshots last = %+v", dataDone.Last)
+	}
+	var expDone storageExportResponse
+	getJSONWithHeaders(t, server.URL+routeAdminStorageExport, nil, http.StatusOK, &expDone)
+	if expDone.Last == nil || expDone.Last.Op != "snapshot" || expDone.Last.OK || expDone.Last.Error != "storage list probe fail" {
+		t.Fatalf("export last = %+v", expDone.Last)
+	}
+}
+
 func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()
