@@ -69,6 +69,11 @@ const usePointsTyped = ref(initialWritePrefs.usePointsTyped)
 const writeMode = ref<WriteMode>(initialWritePrefs.writeMode as WriteMode)
 
 const WRITE_MODES: WriteMode[] = ['form', 'line', 'prometheus', 'typed']
+const activeWritePath = computed(() => {
+  if (writeMode.value === 'typed') return '/api/v1/data/write/typed'
+  if (usePointsTyped.value) return '/api/v1/data/write/points-typed'
+  return '/api/v1/data/write'
+})
 function applyWriteHash(hash?: string | null) {
   const raw = hash ?? (typeof window !== 'undefined' ? window.location.hash : route.hash)
   const id = hashTargetId(raw)
@@ -854,6 +859,11 @@ async function exportWriteDraft() {
         </button>
       </div>
       <p class="text-[11px] mts-muted" data-testid="write-prefs-hint">{{ t('writeModeRemembered') }}</p>
+      <p
+        class="max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="write-active-path"
+        :title="activeWritePath"
+      >{{ t('writeActivePath') }}：{{ activeWritePath }}</p>
     </div>
 
 

@@ -837,7 +837,7 @@ func operationCatalog() []operation {
 			Name:         "storage_export",
 			Namespace:    "admin",
 			Description:  "export server metadata summary (includes admin_op_busy/last)",
-			ResponseHint: "storageExportResponse{export,admin_op_busy,last}",
+			ResponseHint: "storageExportResponse{export,path,admin_op_busy,last}",
 			Auth:         authAdmin,
 			HTTPMethods:  []string{http.MethodGet},
 			HTTPPaths:    []string{routeAdminStorageExport},

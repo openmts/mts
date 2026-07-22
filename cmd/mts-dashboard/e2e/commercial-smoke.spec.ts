@@ -659,6 +659,21 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('metrics-source-paths')).toContainText('/metrics')
   }
 
+  // P491: Write 当前写入 API path；Storage export 摘要（导出后才有，软断言）
+  await page.goto('/write')
+  await expect(page.getByTestId('write-page')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('write-active-path')).toBeVisible()
+  await expect(page.getByTestId('write-active-path')).toContainText('/api/v1/data/write')
+  await page.goto('/storage')
+  await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('storage-export-fetch').count()) {
+    await page.getByTestId('storage-export-fetch').click()
+    if (await page.getByTestId('storage-export-summary').count()) {
+      await expect(page.getByTestId('storage-export-summary')).toBeVisible()
+      await expect(page.getByTestId('storage-export-path')).toContainText('/api/v1/admin/storage/export')
+    }
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

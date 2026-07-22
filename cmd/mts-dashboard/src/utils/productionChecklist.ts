@@ -666,6 +666,18 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'storage-export-write-path',
+    severity: 'recommended',
+    title: { zh: '存储导出摘要 + 写入 API path', en: 'Storage export summary + write API path' },
+    detail: {
+      zh: 'Storage export 结构化摘要（users/grants/path）；Write 页展示当前写入 API path（typed/points-typed/write）。',
+      en: 'Storage export structured summary (users/grants/path); Write page shows active write API path (typed/points-typed/write).',
+    },
+    automated: true,
+    jump: '/storage',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

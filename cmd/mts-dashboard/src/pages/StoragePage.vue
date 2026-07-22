@@ -29,7 +29,7 @@ import { formatBytes } from '@/utils/formatBytes'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
-import { buildStorageConfigExport, formatStorageExportPretty } from '@/utils/storageExport'
+import { buildStorageConfigExport, formatStorageExportPretty, summarizeStorageExport } from '@/utils/storageExport'
 import { copyText } from '@/utils/clipboard'
 import { storageFormToPrefill, parseStoragePrefill } from '@/utils/routePrefill'
 import {
@@ -104,7 +104,13 @@ interface SnapshotsResponse {
   started_at_unix?: number
   last?: unknown
 }
-interface ExportData { generated_at: string; config: Record<string, unknown>; health: Record<string, unknown> }
+interface ExportData {
+  generated_at: string
+  config: Record<string, unknown>
+  health: Record<string, unknown>
+  users?: unknown[]
+  grants?: Record<string, unknown[]>
+}
 interface ExportResponse {
   export: ExportData
   path?: string
@@ -181,6 +187,7 @@ const dataSnapshots = ref<DataSnapshotInfo[]>([])
 const selectedDataSnapshotPath = ref('')
 const snapshots = ref<SnapshotInfo[]>([])
 const exportData = ref<ExportData | null>(null)
+const exportSummary = computed(() => summarizeStorageExport(exportData.value, exportPath.value || '/api/v1/admin/storage/export'))
 type StorageActionKey = 'validate' | 'snapshot' | 'data-snapshot' | 'restore-side' | 'export-config' | 'delete'
 const {
   lastFailedAction,
@@ -885,15 +892,21 @@ async function copyStorageShareLink() {
       </div>
     </div>
 
-    <div v-if="exportData" class="mts-panel">
+    <div v-if="exportData && exportSummary" class="mts-panel" data-testid="storage-export-summary">
       <h3 class="mb-2 text-sm font-semibold">{{ t('storageExportPreview') }}</h3>
-      <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-green-400">{{ JSON.stringify(exportData, null, 2) }}</pre>
-      <p
-        v-if="exportPath"
-        class="mt-2 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
-        data-testid="storage-export-path"
-        :title="exportPath"
-      >{{ exportPath }}</p>
+      <dl class="mb-3 grid gap-1 text-xs sm:grid-cols-2">
+        <div class="sm:col-span-2"><dt class="inline mts-muted">{{ t('storageResultPath') }}：</dt><dd class="inline font-mono break-all" data-testid="storage-export-path">{{ exportSummary.path }}</dd></div>
+        <div><dt class="inline mts-muted">{{ t('storageExportGeneratedAt') }}：</dt><dd class="inline font-mono" data-testid="storage-export-generated-at">{{ exportSummary.generated_at || t('emptyValue') }}</dd></div>
+        <div><dt class="inline mts-muted">{{ t('storageExportConfigKeys') }}：</dt><dd class="inline font-semibold" data-testid="storage-export-config-keys">{{ exportSummary.config_keys }}</dd></div>
+        <div><dt class="inline mts-muted">{{ t('storageExportUsers') }}：</dt><dd class="inline font-semibold" data-testid="storage-export-users">{{ exportSummary.user_count }}</dd></div>
+        <div><dt class="inline mts-muted">{{ t('storageExportGrants') }}：</dt><dd class="inline font-semibold" data-testid="storage-export-grants">{{ exportSummary.grant_total }} ({{ exportSummary.grant_user_count }})</dd></div>
+        <div><dt class="inline mts-muted">{{ t('healthy') }}：</dt><dd class="inline font-semibold" data-testid="storage-export-healthy">{{ exportSummary.healthy === null ? t('emptyValue') : (exportSummary.healthy ? t('healthy') : t('unhealthy')) }}</dd></div>
+        <div><dt class="inline mts-muted">{{ t('ready') }}：</dt><dd class="inline font-semibold" data-testid="storage-export-ready">{{ exportSummary.ready === null ? t('emptyValue') : (exportSummary.ready ? t('ready') : t('notReady')) }}</dd></div>
+      </dl>
+      <details class="rounded-lg border border-slate-200 dark:border-slate-700" data-testid="storage-export-raw">
+        <summary class="cursor-pointer px-3 py-2 text-xs mts-muted">{{ t('storageExportRawToggle') }}</summary>
+        <pre class="max-h-96 overflow-auto rounded-b-lg bg-slate-900 p-4 text-xs text-green-400">{{ JSON.stringify(exportData, null, 2) }}</pre>
+      </details>
     </div>
 
     

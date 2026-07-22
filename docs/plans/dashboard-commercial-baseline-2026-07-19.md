@@ -2787,3 +2787,15 @@
 | storage snapshot | path | storage-snapshot-result | 结构化 |
 | metrics + ops-status | text/JSON path | metrics-source-paths | 可观测 |
 
+
+## P491（2026-07-23）
+- Storage：export 结构化摘要卡（path/users/grants/config_keys/healthy/ready），原始 JSON 折叠
+- Write：展示当前写入 API path（typed / points-typed / write）
+- Server：storage export ApiSpec ResponseHint 含 path
+- 清单：`storage-export-write-path`
+
+### 前后端对齐（P491）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| storage export | path + export | storage-export-summary | 结构化摘要 |
+| write typed/points/write | writeResponse path | write-active-path | 当前模式 API |

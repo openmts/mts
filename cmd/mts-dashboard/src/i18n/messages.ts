@@ -824,6 +824,13 @@ export const messages = {
     storageValidateChecks: '检查项',
     storageValidateReasons: '原因',
     storageSnapshotResultTitle: '配置快照结果',
+    storageExportGeneratedAt: '生成时间',
+    storageExportConfigKeys: '配置字段数',
+    storageExportUsers: '用户数',
+    storageExportGrants: '授权条目',
+    storageExportRawToggle: '展开原始 JSON',
+    writeActivePath: '当前写入 API',
+
 
 
     storageConfigExported: '配置已导出，可下载 JSON',
@@ -2580,6 +2587,13 @@ export const messages = {
     storageValidateChecks: 'Checks',
     storageValidateReasons: 'Reasons',
     storageSnapshotResultTitle: 'Config snapshot result',
+    storageExportGeneratedAt: 'Generated at',
+    storageExportConfigKeys: 'Config keys',
+    storageExportUsers: 'Users',
+    storageExportGrants: 'Grants',
+    storageExportRawToggle: 'Expand raw JSON',
+    writeActivePath: 'Active write API',
+
 
 
     storageConfigExported: 'Config exported; JSON ready to download',
