@@ -6,10 +6,16 @@ const rows = [
   { name: 'alice', display_name: 'A,1', role: 'user', disabled: false },
 ]
 
-test('buildUsersExport', () => {
-  const out = buildUsersExport(rows, new Date('2026-07-20T00:00:00.000Z'))
+test('buildUsersExport v2 meta', () => {
+  const out = buildUsersExport(rows, new Date('2026-07-20T00:00:00.000Z'), {
+    list_path: '/api/v1/users',
+    batch_path: '/api/v1/users/batch-disabled',
+  })
   assert.equal(out.kind, 'mts.users.inventory')
+  assert.equal(out.version, 2)
   assert.equal(out.count, 1)
+  assert.equal(out.list_path, '/api/v1/users')
+  assert.equal(out.batch_path, '/api/v1/users/batch-disabled')
 })
 
 test('usersToCSV escapes', () => {

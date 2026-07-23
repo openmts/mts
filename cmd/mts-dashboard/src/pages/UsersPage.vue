@@ -54,6 +54,11 @@ import {
   ariaSortValue,
 } from '@/utils/listSort'
 import { USERS_CSV_HEADER, buildUsersExport, userToCSVLine, usersToCSV } from '@/utils/usersExport'
+import {
+  alignUsersMeta,
+  buildUsersBatchSummary,
+  USERS_BATCH_DISABLED_PATH,
+} from '@/utils/usersMetaAlign'
 import { parseUsersPrefill, usersFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { stampFilename } from '@/utils/download'
@@ -183,6 +188,35 @@ const usersAdminBusyAction = computed(() =>
     openLabel: t.value('adminOpBusyOpenOps'),
   }),
 )
+
+const usersMetaAlign = computed(() => {
+  const list = users.value || []
+  return alignUsersMeta({
+    listPath: usersListPath.value,
+    userCount: list.length,
+    filteredCount: filteredUsers.value.length,
+    adminCount: list.filter((u) => u.role === 'admin').length,
+    disabledCount: list.filter((u) => u.disabled).length,
+    selectedCount: selectedCount.value,
+  })
+})
+
+const usersMetaToneClass = computed(() => {
+  const tone = usersMetaAlign.value.tone
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
+})
+
+const lastUsersBatchSummary = ref<ReturnType<typeof buildUsersBatchSummary> | null>(null)
+const usersBatchToneClass = computed(() => {
+  const tone = lastUsersBatchSummary.value?.tone
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
+})
 function reportAndNotify(key: UsersActionKey, e: unknown, ctx?: Record<string, string>) {
   reportActionError(key, e, ctx)
   const msg = actionResult.value?.message
@@ -775,7 +809,10 @@ async function exportJSON() {
           if (done < rows.length) await new Promise((r) => setTimeout(r, 0))
         }
       }
-      return buildUsersExport(rows)
+      return buildUsersExport(rows, new Date(), {
+        list_path: usersMetaAlign.value.list_path,
+        batch_path: usersMetaAlign.value.batch_path,
+      })
     },
   })
   if (outcome === 'done') success(t.value('inventoryExported'))
@@ -867,6 +904,13 @@ async function confirmBatch() {
     if (cancelledSummary) {
       applyAdminOpStatus(parseAdminOpStatusPayload(cancelledSummary as unknown as { admin_op_busy?: unknown; op?: unknown; started_at_unix?: unknown; last?: unknown }))
       const processed = cancelledSummary.ok_count + cancelledSummary.skip_count + cancelledSummary.fail_count
+      lastUsersBatchSummary.value = buildUsersBatchSummary({
+        path: String(cancelledSummary.path || USERS_BATCH_DISABLED_PATH),
+        okCount: cancelledSummary.ok_count,
+        skipCount: cancelledSummary.skip_count,
+        failCount: cancelledSummary.fail_count,
+        cancelled: true,
+      })
       const msg = formatMessage(t.value('listBatchCancelledPartial'), {
         done: processed || batchProgress.value.done,
         total: batchProgress.value.total || processed,
@@ -902,7 +946,14 @@ async function confirmBatch() {
       .filter((it) => it.status === 'error')
       .map((it) => it.name)
     const key = fail ? 'listBatchPartial' : 'listBatchDone'
-    const batchPath = String((data as BatchMutationSummary).path || '/api/v1/users/batch-disabled')
+    const batchPath = String((data as BatchMutationSummary).path || USERS_BATCH_DISABLED_PATH)
+    lastUsersBatchSummary.value = buildUsersBatchSummary({
+      path: batchPath,
+      okCount: ok,
+      skipCount: skip,
+      failCount: fail,
+      cancelled: false,
+    })
     let msg = formatMessage(t.value(key), { ok, skip, fail, path: batchPath })
     if (failNames.length) {
       const shown = failNames.slice(0, 8).join(', ')
@@ -1028,6 +1079,50 @@ onBeforeUnmount(() => {
       data-testid="users-list-path"
       :title="usersListPath"
     >{{ usersListPath }}</p>
+    <div
+      class="mts-panel rounded-xl border p-3 text-xs"
+      :class="usersMetaToneClass"
+      data-testid="users-meta-align"
+    >
+      <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('usersMetaAlignTitle') }}</p>
+          <p class="mts-muted">{{ t('usersMetaAlignDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" to="/audit" data-testid="users-jump-audit">{{ t('usersJumpAudit') }}</router-link>
+          <router-link class="mts-btn text-xs" to="/access/grants" data-testid="users-jump-grants">{{ t('usersJumpGrants') }}</router-link>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <div data-testid="users-meta-count">{{ t('usersMetaCount') }}: <span class="font-semibold">{{ usersMetaAlign.user_count }}</span></div>
+        <div data-testid="users-meta-filtered">{{ t('usersMetaFiltered') }}: <span class="font-semibold">{{ usersMetaAlign.filtered_count }}</span></div>
+        <div data-testid="users-meta-admin">{{ t('usersMetaAdmin') }}: <span class="font-semibold">{{ usersMetaAlign.admin_count }}</span></div>
+        <div data-testid="users-meta-disabled">{{ t('usersMetaDisabled') }}: <span class="font-semibold">{{ usersMetaAlign.disabled_count }}</span></div>
+        <div data-testid="users-meta-selected">{{ t('usersMetaSelected') }}: <span class="font-semibold">{{ usersMetaAlign.selected_count }}</span></div>
+        <div data-testid="users-meta-batch-path" class="truncate font-mono" :title="usersMetaAlign.batch_path">{{ usersMetaAlign.batch_path }}</div>
+      </div>
+      <p
+        class="mt-2 max-w-full truncate font-mono text-[11px] text-slate-600 dark:text-slate-300"
+        data-testid="users-meta-list-path"
+        :title="usersMetaAlign.list_path"
+      >{{ usersMetaAlign.list_path }}</p>
+    </div>
+    <div
+      v-if="lastUsersBatchSummary"
+      class="mts-panel rounded-xl border p-3 text-xs"
+      :class="usersBatchToneClass"
+      data-testid="users-batch-summary"
+    >
+      <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('usersBatchSummaryTitle') }}</p>
+      <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div data-testid="users-batch-ok">ok: <span class="font-semibold">{{ lastUsersBatchSummary.ok_count }}</span></div>
+        <div data-testid="users-batch-skip">skip: <span class="font-semibold">{{ lastUsersBatchSummary.skip_count }}</span></div>
+        <div data-testid="users-batch-fail">fail: <span class="font-semibold">{{ lastUsersBatchSummary.fail_count }}</span></div>
+        <div data-testid="users-batch-cancelled">cancelled: <span class="font-semibold">{{ lastUsersBatchSummary.cancelled ? 'yes' : 'no' }}</span></div>
+      </div>
+      <p class="mt-2 truncate font-mono text-[11px]" data-testid="users-batch-summary-path" :title="lastUsersBatchSummary.path">{{ lastUsersBatchSummary.path }}</p>
+    </div>
     <InFlightBanner
       :active="deleteLoading || batchLoading || usersToggleLoading || usersWriteLoading"
       :started-at-ms="usersActionStartedAt"

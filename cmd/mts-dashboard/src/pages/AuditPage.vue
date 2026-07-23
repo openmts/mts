@@ -26,7 +26,8 @@ import {
 import { auditLimitOptions, buildAuditQueryString } from '@/utils/auditQuery'
 import { parseAuditPrefill, auditFormToPrefill, type PrefillTimeRange, isPrefillTimeRange } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
-import { AUDIT_CSV_HEADER, auditEventToCSVLine, auditEventsToCSV } from '@/utils/auditExport'
+import { AUDIT_CSV_HEADER, auditEventToCSVLine, buildAuditExport } from '@/utils/auditExport'
+import { buildAuditSessionSummary } from '@/utils/auditSessionSummary'
 import { filterRowsByIds } from '@/utils/listSelection'
 import { useListSelection } from '@/composables/useListSelection'
 import {
@@ -119,6 +120,32 @@ const auditSort = ref<SortState<AuditSortKey>>(
 const filteredEvents = computed(() =>
   filterAuditEvents(auditEvents.value, clientQuery.value),
 )
+const auditSource = computed(() => (isAdmin.value ? 'admin' : 'self') as 'admin' | 'self')
+
+const auditSessionSummary = computed(() =>
+  buildAuditSessionSummary({
+    listPath: auditListPath.value,
+    source: auditSource.value,
+    eventCount: auditEvents.value.length,
+    filteredCount: filteredEvents.value.length,
+    serverTotal: serverTotal.value,
+    selectedUser: selectedUser.value,
+    actionFilter: actionFilter.value,
+    clientQuery: clientQuery.value,
+    hasTimeRange: Boolean(sinceLocal.value || untilLocal.value),
+    limit: limit.value,
+    userName: currentUser.value || selectedUser.value,
+  }),
+)
+
+const auditSummaryToneClass = computed(() => {
+  const tone = auditSessionSummary.value.tone
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
+})
+
 
 const displayedEvents = computed(() =>
   sortByAccessor(filteredEvents.value, auditSort.value, {
@@ -372,7 +399,17 @@ async function exportJSON() {
           if (done < rows.length) await new Promise((r) => setTimeout(r, 0))
         }
       }
-      return out
+      const s = auditSessionSummary.value
+      return buildAuditExport(out, new Date(), {
+        list_path: s.list_path,
+        source: s.source,
+        server_total: s.server_total,
+        filtered_count: s.filtered_count,
+        selected_user: s.selected_user,
+        action_filter: s.action_filter,
+        client_query: s.client_query,
+        limit: s.limit,
+      })
     },
   })
   if (outcome === 'done') success(t.value('auditExportJSONOk'))
@@ -431,6 +468,44 @@ watch(
       data-testid="audit-list-path"
       :title="auditListPath"
     >{{ auditListPath }}</p>
+    <div
+      class="mts-panel rounded-xl border p-3 text-xs"
+      :class="auditSummaryToneClass"
+      data-testid="audit-session-summary"
+    >
+      <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('auditSessionSummaryTitle') }}</p>
+          <p class="mts-muted">{{ t('auditSessionSummaryDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link
+            v-if="isAdmin"
+            class="mts-btn text-xs"
+            to="/users"
+            data-testid="audit-jump-users"
+          >{{ t('auditJumpUsers') }}</router-link>
+          <router-link
+            class="mts-btn text-xs"
+            to="/ops/readiness"
+            data-testid="audit-jump-readiness"
+          >{{ t('auditJumpReadiness') }}</router-link>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <div data-testid="audit-summary-events">{{ t('auditSummaryEvents') }}: <span class="font-semibold">{{ auditSessionSummary.event_count }}</span></div>
+        <div data-testid="audit-summary-filtered">{{ t('auditSummaryFiltered') }}: <span class="font-semibold">{{ auditSessionSummary.filtered_count }}</span></div>
+        <div data-testid="audit-summary-total">{{ t('auditTotal') }}: <span class="font-semibold">{{ auditSessionSummary.server_total ?? '—' }}</span></div>
+        <div data-testid="audit-summary-limit">{{ t('auditLimit') }}: <span class="font-semibold">{{ auditSessionSummary.limit }}</span></div>
+        <div data-testid="audit-summary-source">{{ t('auditSummarySource') }}: <span class="font-semibold">{{ auditSessionSummary.source || '—' }}</span></div>
+        <div data-testid="audit-summary-filters">{{ t('auditSummaryFilters') }}: <span class="font-semibold">{{ [auditSessionSummary.selected_user, auditSessionSummary.action_filter, auditSessionSummary.client_query].filter(Boolean).join(' · ') || '—' }}</span></div>
+      </div>
+      <p
+        class="mt-2 max-w-full truncate font-mono text-[11px] text-slate-600 dark:text-slate-300"
+        data-testid="audit-summary-path"
+        :title="auditSessionSummary.list_path"
+      >{{ auditSessionSummary.list_path }}</p>
+    </div>
     <div>
       <h1 class="mts-title flex items-center gap-2">
         <ScrollText class="h-5 w-5" />

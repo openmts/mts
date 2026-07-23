@@ -762,6 +762,30 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'audit-session-summary',
+    severity: 'recommended',
+    title: { zh: '审计会话摘要 + Users 深链', en: 'Audit session summary + Users deep links' },
+    detail: {
+      zh: 'Audit 展示 list path、事件/筛选计数与 source；导出 v2 含 path/meta；深链 Users/Readiness。',
+      en: 'Audit shows list path, event/filter counts and source; export v2 includes path/meta; deep-links Users/Readiness.',
+    },
+    automated: true,
+    jump: '/audit',
+  },
+
+  {
+    id: 'users-meta-align',
+    severity: 'recommended',
+    title: { zh: 'Users 列表 path + 批量结果摘要', en: 'Users list path + batch result summary' },
+    detail: {
+      zh: 'Users 展示 list path、角色/禁用统计、batch-disabled path；批量结果结构化摘要；深链 Audit/Grants；inventory v2 含 path。',
+      en: 'Users shows list path, role/disabled stats, batch-disabled path; structured batch summary; deep-links Audit/Grants; inventory v2 includes path.',
+    },
+    automated: true,
+    jump: '/users',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

@@ -2874,3 +2874,17 @@
 |------|--------|-----------|------|
 | data/admin databases | path + list | databases-list-path / source | GET |
 | inventory export | n/a | mts.databases.inventory v2 | 本地导出 |
+
+## P499（2026-07-23）
+- Audit：会话摘要卡（path/事件/筛选/source）+ Users/Readiness 深链；导出 v2 含 path/meta
+- Users：列表 path/角色禁用统计 + batch-disabled path；批量结果摘要；Audit/Grants 深链；inventory v2
+- 清单：`audit-session-summary`、`users-meta-align`
+
+### 前后端对齐（P499）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| admin/user audit | path + total/events | audit-session-summary / audit-list-path | GET |
+| audit export | n/a | mts.audit.export v2 | 本地导出 |
+| users list | path | users-meta-list-path | GET |
+| users batch-disabled | path | users-batch-summary | stream/summary |
+| users inventory | n/a | mts.users.inventory v2 | 本地导出 |

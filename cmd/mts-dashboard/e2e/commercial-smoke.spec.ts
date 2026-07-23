@@ -739,6 +739,22 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('databases-jump-query')).toBeVisible()
   }
 
+  // P499: Audit 会话摘要 + Users meta/深链
+  await page.goto('/audit')
+  await expect(page.getByTestId('audit-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('audit-session-summary').count()) {
+    await expect(page.getByTestId('audit-session-summary')).toBeVisible()
+    await expect(page.getByTestId('audit-summary-path')).toContainText('/audit')
+    await expect(page.getByTestId('audit-jump-users')).toBeVisible()
+  }
+  await page.goto('/users')
+  await expect(page.getByTestId('users-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('users-meta-align').count()) {
+    await expect(page.getByTestId('users-meta-align')).toBeVisible()
+    await expect(page.getByTestId('users-meta-list-path')).toContainText('/api/v1/users')
+    await expect(page.getByTestId('users-jump-audit')).toBeVisible()
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

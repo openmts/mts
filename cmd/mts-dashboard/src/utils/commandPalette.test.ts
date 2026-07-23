@@ -438,6 +438,8 @@ test('query result scope palette entries', () => {
   assert.ok(all.some((i) => i.id === 'query-contract-align' && i.path.includes('/query')))
   assert.ok(all.some((i) => i.id === 'ops-action-summary' && i.path.includes('/operations')))
   assert.ok(all.some((i) => i.id === 'databases-meta-align' && i.path.includes('/databases')))
+  assert.ok(all.some((i) => i.id === 'audit-session-summary' && i.path.includes('/audit')))
+  assert.ok(all.some((i) => i.id === 'users-meta-align' && i.path.includes('/users')))
   assert.ok(all.some((i) => i.id === 'api-spec-query-rows-scope' && i.path.includes('queryRowsResponse')))
 })
 

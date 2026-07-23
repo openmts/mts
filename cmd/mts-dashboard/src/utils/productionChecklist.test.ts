@@ -71,6 +71,8 @@ test('production checklist has required commercial gates', () => {
     'query-contract-align',
     'ops-action-summary',
     'databases-meta-align',
+    'audit-session-summary',
+    'users-meta-align',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -517,4 +519,20 @@ test('databases-meta-align is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.ok(productionChecklistJump(item!)?.includes('/databases'))
+})
+
+test('audit-session-summary is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'audit-session-summary')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.equal(item!.jump, '/audit')
+})
+
+test('users-meta-align is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'users-meta-align')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.equal(item!.jump, '/users')
 })
