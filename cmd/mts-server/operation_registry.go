@@ -45,7 +45,7 @@ func operationCatalog() []operation {
 			Name:         "health",
 			Namespace:    "system",
 			Description:  "liveness/readiness health",
-			ResponseHint: "healthResponse{status,checks...}",
+			ResponseHint: "healthProbeResponse{healthy,ready,reasons,checks,path}",
 			Auth:         authNone,
 			HTTPMethods:  []string{http.MethodGet},
 			HTTPPaths:    []string{routeHealth, routeReady},

@@ -442,6 +442,9 @@ test('query result scope palette entries', () => {
   assert.ok(all.some((i) => i.id === 'users-meta-align' && i.path.includes('/users')))
   assert.ok(all.some((i) => i.id === 'access-grants-meta-align' && i.path.includes('/access/grants')))
   assert.ok(all.some((i) => i.id === 'access-matrix-meta-align' && i.path.includes('/access')))
+  assert.ok(all.some((i) => i.id === 'overview-scan-summary' && (i.path === '/' || i.path.includes('overview'))))
+  assert.ok(all.some((i) => i.id === 'account-session-align' && i.path.includes('/account')))
+  assert.ok(all.some((i) => i.id === 'healthz-readyz-path'))
   assert.ok(all.some((i) => i.id === 'api-spec-query-rows-scope' && i.path.includes('queryRowsResponse')))
 })
 

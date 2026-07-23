@@ -58,7 +58,7 @@ func (r *serverRuntime) handleHealth(writer http.ResponseWriter, request *http.R
 	if !requireHTTPMethod(writer, request, http.MethodGet) {
 		return
 	}
-	writeHTTPJSON(writer, http.StatusOK, r.health())
+	writeHTTPJSON(writer, http.StatusOK, r.healthProbePayload(request.URL.Path))
 }
 
 func decodeHTTPJSON(request *http.Request, value any) error {

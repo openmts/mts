@@ -770,6 +770,24 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('access-matrix-jump-grants')).toBeVisible()
   }
 
+  // P501: Overview doctor/contract path 扫视
+  await page.goto('/')
+  await expect(page.getByTestId('overview-summary').or(page.getByTestId('overview-page')).first()).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('overview-scan-summary').count()) {
+    await expect(page.getByTestId('overview-scan-summary')).toBeVisible()
+    await expect(page.getByTestId('overview-scan-contract-path')).toContainText('/api/v1/data/contract')
+    await expect(page.getByTestId('overview-scan-jump-readiness')).toBeVisible()
+  }
+
+  // P502: Account 会话 API path 对齐
+  await page.goto('/account')
+  await expect(page.getByTestId('account-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('account-session-align').count()) {
+    await expect(page.getByTestId('account-session-align')).toBeVisible()
+    await expect(page.getByTestId('account-session-path')).toContainText('/api/v1/auth/session')
+    await expect(page.getByTestId('account-jump-audit')).toBeVisible()
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

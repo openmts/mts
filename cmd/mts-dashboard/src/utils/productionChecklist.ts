@@ -810,6 +810,42 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'overview-scan-summary',
+    severity: 'recommended',
+    title: { zh: '总览 doctor/契约 path 扫视压缩', en: 'Overview doctor/contract path scan' },
+    detail: {
+      zh: 'Overview 展示 doctor 计数、data contract 完整度与管理 path 列表；深链就绪/读写。',
+      en: 'Overview shows doctor counts, data-contract completeness and admin paths; deep-links readiness/read-write.',
+    },
+    automated: true,
+    jump: '/',
+  },
+
+  {
+    id: 'account-session-align',
+    severity: 'recommended',
+    title: { zh: 'Account 会话 API path 对齐', en: 'Account session API path alignment' },
+    detail: {
+      zh: 'Account 展示 session/login/logout/change-password path 与校准来源；深链审计/总览。',
+      en: 'Account surfaces session/login/logout/change-password paths and calibration source; deep-links audit/overview.',
+    },
+    automated: true,
+    jump: '/account#account-session',
+  },
+
+  {
+    id: 'healthz-readyz-path',
+    severity: 'recommended',
+    title: { zh: 'healthz/readyz 响应含 path', en: 'healthz/readyz responses include path' },
+    detail: {
+      zh: 'GET /healthz 与 /readyz 返回 path，并保留 healthy/ready 顶层字段。',
+      en: 'GET /healthz and /readyz return path while keeping healthy/ready top-level fields.',
+    },
+    automated: true,
+    jump: '/about',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },

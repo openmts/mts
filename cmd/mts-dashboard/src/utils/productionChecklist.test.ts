@@ -75,6 +75,9 @@ test('production checklist has required commercial gates', () => {
     'users-meta-align',
     'access-grants-meta-align',
     'access-matrix-meta-align',
+    'overview-scan-summary',
+    'account-session-align',
+    'healthz-readyz-path',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -553,4 +556,27 @@ test('access-matrix-meta-align is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.equal(item!.jump, '/access')
+})
+
+test('overview-scan-summary is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'overview-scan-summary')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.equal(item!.jump, '/')
+})
+
+test('account-session-align is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'account-session-align')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.ok(String(item!.jump || '').includes('/account'))
+})
+
+test('healthz-readyz-path is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'healthz-readyz-path')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
 })

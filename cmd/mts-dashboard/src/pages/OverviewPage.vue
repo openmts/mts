@@ -54,6 +54,7 @@ import {
 } from '@/utils/healthReportExport'
 import { buildCommercialHandoffSummary, formatDataContractHandoffLine } from '@/utils/commercialHandoffSummary'
 import { buildDataContractView } from '@/utils/dataContractView'
+import { buildOverviewScanSummary } from '@/utils/overviewScanSummary'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -315,6 +316,42 @@ const overviewDataContractToneClass = computed(() => {
     return 'border-emerald-200 bg-emerald-50/80 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100'
   }
   return 'border-amber-200 bg-amber-50/80 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100'
+})
+
+const overviewScanSummary = computed(() => {
+  const contractView = buildDataContractView(dataContractRaw.value)
+  return buildOverviewScanSummary({
+    doctor: {
+      path: doctorPath.value,
+      checks: doctorChecks.value,
+      httpTlsEnabled: doctorTLS.value,
+    },
+    contract: {
+      path: contractView.path || dataContractRaw.value?.path || '/api/v1/data/contract',
+      loaded: dataContractRaw.value != null,
+      complete: contractView.complete,
+      enabledCount: contractView.enabledCount,
+      totalFeatures: contractView.totalFeatures,
+      missingRequired: contractView.missingRequired,
+    },
+    paths: {
+      doctorPath: doctorPath.value,
+      contractPath: contractView.path || dataContractRaw.value?.path || '',
+      healthPath: overviewStatsPaths.value.health,
+      memoryPath: overviewStatsPaths.value.memory,
+      compactionPath: overviewStatsPaths.value.compaction,
+      maintenancePath: overviewStatsPaths.value.maintenance,
+      versionPath: overviewStatsPaths.value.version,
+    },
+  })
+})
+
+const overviewScanToneClass = computed(() => {
+  const tone = overviewScanSummary.value.tone
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
 })
 
 function readinessLevelLabel(level: string): string {
@@ -1073,6 +1110,47 @@ async function copyOverview() {
           {{ t('about') }}
         </button>
       </div>
+    </div>
+
+    <div
+      class="mts-panel rounded-xl border p-3 text-xs"
+      :class="overviewScanToneClass"
+      data-testid="overview-scan-summary"
+    >
+      <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('overviewScanSummaryTitle') }}</p>
+          <p class="mts-muted">{{ t('overviewScanSummaryDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" to="/ops/readiness" data-testid="overview-scan-jump-readiness">{{ t('overviewScanJumpReadiness') }}</router-link>
+          <router-link class="mts-btn text-xs" to="/write" data-testid="overview-scan-jump-write">{{ t('overviewScanJumpWrite') }}</router-link>
+          <router-link class="mts-btn text-xs" to="/query" data-testid="overview-scan-jump-query">{{ t('overviewScanJumpQuery') }}</router-link>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <div data-testid="overview-scan-doctor-checks">{{ t('overviewScanDoctorChecks') }}: <span class="font-semibold">{{ overviewScanSummary.doctor.check_count }}</span></div>
+        <div data-testid="overview-scan-doctor-warn">{{ t('overviewScanDoctorWarn') }}: <span class="font-semibold">{{ overviewScanSummary.doctor.warn_count }}</span></div>
+        <div data-testid="overview-scan-doctor-error">{{ t('overviewScanDoctorError') }}: <span class="font-semibold">{{ overviewScanSummary.doctor.error_count }}</span></div>
+        <div data-testid="overview-scan-contract-features">{{ t('overviewScanContractFeatures') }}: <span class="font-semibold">{{ overviewScanSummary.contract.enabled_count }}/{{ overviewScanSummary.contract.total_features }}</span></div>
+        <div data-testid="overview-scan-contract-complete">{{ t('overviewScanContractComplete') }}: <span class="font-semibold">{{ overviewScanSummary.contract.complete ? 'yes' : 'no' }}</span></div>
+        <div data-testid="overview-scan-path-count">{{ t('overviewScanPathCount') }}: <span class="font-semibold">{{ overviewScanSummary.paths.path_count }}</span></div>
+      </div>
+      <p
+        class="mt-2 max-w-full truncate font-mono text-[11px] text-slate-600 dark:text-slate-300"
+        data-testid="overview-scan-doctor-path"
+        :title="overviewScanSummary.doctor.path"
+      >{{ overviewScanSummary.doctor.path }}</p>
+      <p
+        class="mt-1 max-w-full truncate font-mono text-[11px] text-slate-600 dark:text-slate-300"
+        data-testid="overview-scan-contract-path"
+        :title="overviewScanSummary.contract.path"
+      >{{ overviewScanSummary.contract.path }}</p>
+      <p
+        class="mt-1 max-w-full truncate font-mono text-[10px] text-slate-500 dark:text-slate-400"
+        data-testid="overview-scan-paths"
+        :title="[overviewScanSummary.paths.health_path, overviewScanSummary.paths.memory_path, overviewScanSummary.paths.compaction_path, overviewScanSummary.paths.maintenance_path, overviewScanSummary.paths.version_path].join(' · ')"
+      >{{ [overviewScanSummary.paths.health_path, overviewScanSummary.paths.memory_path, overviewScanSummary.paths.compaction_path, overviewScanSummary.paths.maintenance_path, overviewScanSummary.paths.version_path].join(' · ') }}</p>
     </div>
 
     <div

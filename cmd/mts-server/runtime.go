@@ -1011,6 +1011,21 @@ func (r *serverRuntime) health() mts.HealthSnapshot {
 	return r.engine.HealthSnapshot()
 }
 
+func (r *serverRuntime) healthProbePayload(requestPath string) healthProbeResponse {
+	snap := r.health()
+	path := strings.TrimSpace(requestPath)
+	if path == "" {
+		path = routeHealth
+	}
+	return healthProbeResponse{
+		Healthy: snap.Healthy,
+		Ready:   snap.Ready,
+		Reasons: snap.Reasons,
+		Checks:  snap.Checks,
+		Path:    path,
+	}
+}
+
 func (r *serverRuntime) effectiveConfig() config {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

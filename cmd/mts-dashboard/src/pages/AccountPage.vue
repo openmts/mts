@@ -34,6 +34,7 @@ import {
   validateNewPassword,
 } from '@/utils/passwordPolicy'
 import { bootstrapPasswordPolicy } from '@/utils/passwordPolicyBootstrap'
+import { alignAccountSession } from '@/utils/accountSessionAlign'
 import { formatAuthTTLLimit } from '@/utils/loginTTL'
 import { formatMessage } from '@/utils/formatMessage'
 import { KeyRound, UserRound, Download, Copy } from 'lucide-vue-next'
@@ -122,6 +123,25 @@ const policyVersionLabel = computed(() => {
   return t.value('passwordPolicyLocalDefault')
 })
 const policyPath = computed(() => getPasswordPolicyPath() || '/api/v1/auth/password-policy')
+
+const accountSessionAlign = computed(() =>
+  alignAccountSession({
+    passwordPolicyPath: policyPath.value,
+    sampleSource: lastSessionSampleSource.value,
+    hasServerRemaining:
+      lastSessionRemainingSeconds.value != null &&
+      Number.isFinite(Number(lastSessionRemainingSeconds.value)),
+    hasLocalExpiry: Boolean(getTokenExpiresAt()),
+    urgency: sessionView.value.urgency,
+  }),
+)
+const accountSessionAlignToneClass = computed(() => {
+  const tone = accountSessionAlign.value.tone
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
+})
 const sessionLevelLabel = computed(() => {
   switch (sessionView.value.urgency) {
     case 'ok': return t.value('sessionLevelOk')
@@ -854,6 +874,31 @@ async function submit() {
 
     <div id="account-session" class="mts-card scroll-mt-20 p-4" data-testid="account-session">
       <h2 class="mb-3 text-sm font-semibold">{{ t('accountSessionCard') }}</h2>
+      <div
+        class="mb-3 rounded-xl border p-3 text-xs"
+        :class="accountSessionAlignToneClass"
+        data-testid="account-session-align"
+      >
+        <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('accountSessionAlignTitle') }}</p>
+            <p class="mts-muted">{{ t('accountSessionAlignDesc') }}</p>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            <router-link class="mts-btn text-xs" to="/audit" data-testid="account-jump-audit">{{ t('accountJumpAudit') }}</router-link>
+            <router-link class="mts-btn text-xs" to="/" data-testid="account-jump-overview">{{ t('accountJumpOverview') }}</router-link>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div data-testid="account-session-sample">{{ t('accountSessionSampleSourceLabel') }}: <span class="font-semibold">{{ accountSessionAlign.sample_source || '—' }}</span></div>
+          <div data-testid="account-session-urgency">{{ t('sessionExpiry') }}: <span class="font-semibold">{{ accountSessionAlign.urgency }}</span></div>
+          <div data-testid="account-session-has-server">server_remaining: <span class="font-semibold">{{ accountSessionAlign.has_server_remaining ? 'yes' : 'no' }}</span></div>
+        </div>
+        <p class="mt-2 truncate font-mono text-[11px]" data-testid="account-session-path" :title="accountSessionAlign.session_path">{{ accountSessionAlign.session_path }}</p>
+        <p class="mt-1 truncate font-mono text-[11px]" data-testid="account-login-path" :title="accountSessionAlign.login_path">{{ accountSessionAlign.login_path }}</p>
+        <p class="mt-1 truncate font-mono text-[11px]" data-testid="account-logout-path" :title="accountSessionAlign.logout_path">{{ accountSessionAlign.logout_path }}</p>
+        <p class="mt-1 truncate font-mono text-[11px]" data-testid="account-change-password-path" :title="accountSessionAlign.change_password_path">{{ accountSessionAlign.change_password_path }}</p>
+      </div>
       <div
         v-if="showAccountClockSkewAlert"
         class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"

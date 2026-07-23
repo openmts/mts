@@ -596,6 +596,14 @@ type storageValidateResponse struct {
 	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
+type healthProbeResponse struct {
+	Healthy bool              `json:"healthy"`
+	Ready   bool              `json:"ready"`
+	Reasons []string          `json:"reasons"`
+	Checks  []mts.HealthCheck `json:"checks"`
+	Path    string            `json:"path,omitempty"`
+}
+
 type adminHealthResponse struct {
 	Health        mts.HealthSnapshot    `json:"health"`
 	Path          string                `json:"path,omitempty"`

@@ -2901,3 +2901,23 @@
 | GET /users/:name/database-permissions | path | access-grants-meta-perm-path | 样例 path |
 | grants export | n/a | mts.access.grants v2 | 本地导出 |
 | access matrix | 静态 RBAC | access-matrix-meta-align | 客户端矩阵 |
+
+## P501（2026-07-23）
+- Overview：doctor/契约/管理 path 扫视压缩卡 + 就绪/读写深链
+- 清单：`overview-scan-summary`
+
+## P502（2026-07-23）
+- Account：session/login/logout/change-password path 对齐 + 审计/总览深链
+- 清单：`account-session-align`
+
+## P503（2026-07-23）
+- Server：healthz/readyz 响应含 path（保留 healthy/ready 顶层）
+- 清单：`healthz-readyz-path`
+
+### 前后端对齐（P501–P503）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| admin doctor/health/stats | path | overview-scan-paths | 扫视 |
+| data/contract | path | overview-scan-contract-path | 契约 |
+| auth session/login | path | account-session-path | 会话 |
+| healthz/readyz | path | n/a（探活） | 公开探活 |
