@@ -755,6 +755,21 @@ test('commercial browser smoke path', async ({ page }) => {
     await expect(page.getByTestId('users-jump-audit')).toBeVisible()
   }
 
+  // P500: Access Grants/Matrix path 扫视 + 深链
+  await page.goto('/access/grants')
+  await expect(page.getByTestId('access-grants-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('access-grants-meta-align').count()) {
+    await expect(page.getByTestId('access-grants-meta-align')).toBeVisible()
+    await expect(page.getByTestId('access-grants-meta-users-path')).toContainText('/api/v1/users')
+    await expect(page.getByTestId('access-grants-jump-users')).toBeVisible()
+  }
+  await page.goto('/access')
+  await expect(page.getByTestId('access-matrix-page')).toBeVisible({ timeout: 15_000 })
+  if (await page.getByTestId('access-matrix-meta-align').count()) {
+    await expect(page.getByTestId('access-matrix-meta-align')).toBeVisible()
+    await expect(page.getByTestId('access-matrix-jump-grants')).toBeVisible()
+  }
+
   if (await page.getByTestId('storage-data-snapshots-path').count()) {
     await expect(page.getByTestId('storage-data-snapshots-path')).toContainText('data-snapshots')
   }

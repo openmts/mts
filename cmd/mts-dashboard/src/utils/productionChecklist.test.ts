@@ -73,6 +73,8 @@ test('production checklist has required commercial gates', () => {
     'databases-meta-align',
     'audit-session-summary',
     'users-meta-align',
+    'access-grants-meta-align',
+    'access-matrix-meta-align',
   ]) {
     assert.ok(ids.includes(need), need)
   }
@@ -535,4 +537,20 @@ test('users-meta-align is automated recommended gate', () => {
   assert.equal(item!.severity, 'recommended')
   assert.equal(item!.automated, true)
   assert.equal(item!.jump, '/users')
+})
+
+test('access-grants-meta-align is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'access-grants-meta-align')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.equal(item!.jump, '/access/grants')
+})
+
+test('access-matrix-meta-align is automated recommended gate', () => {
+  const item = PRODUCTION_CHECKLIST.find((x) => x.id === 'access-matrix-meta-align')
+  assert.ok(item)
+  assert.equal(item!.severity, 'recommended')
+  assert.equal(item!.automated, true)
+  assert.equal(item!.jump, '/access')
 })

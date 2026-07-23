@@ -25,6 +25,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import { useNotify } from '@/composables/useNotify'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { accessMatrixToCSV, buildAccessMatrixExport } from '@/utils/accessMatrixExport'
+import { alignAccessMatrixMeta } from '@/utils/accessMatrixMetaAlign'
 import { parseAccessPrefill, accessFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { stampFilename } from '@/utils/download'
@@ -117,6 +118,26 @@ const {
   toggleAllVisible,
   clear: clearSelection,
 } = useListSelection(visibleIds)
+
+const matrixMetaAlign = computed(() => {
+  const all = RBAC_CAPABILITY_MATRIX
+  const filtered = filteredRows.value
+  return alignAccessMatrixMeta({
+    totalCount: all.length,
+    filteredCount: filtered.length,
+    selectedCount: selectedCount.value,
+    withRouteCount: filtered.filter((r) => Boolean(r.route)).length,
+    adminFullCount: filtered.filter((r) => r.admin === 'full').length,
+    userDataCount: filtered.filter((r) => r.user === 'data_scoped' || r.user === 'full').length,
+  })
+})
+
+const matrixMetaToneClass = computed(() => {
+  const tone = matrixMetaAlign.value.tone
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
+})
 
 const adminCounts = countByLevel('admin')
 const userCounts = countByLevel('user')
@@ -326,6 +347,41 @@ async function exportMatrixCSV() {
         <p class="mt-1 text-xs mts-muted">
           {{ formatMessage(t('accessMatrixDistLine'), { full: userCounts.full, self: userCounts.self, data: userCounts.data_scoped, none: userCounts.none }) }}
         </p>
+      </div>
+    </div>
+
+    <div
+      class="mts-panel rounded-xl border p-3 text-xs"
+      :class="matrixMetaToneClass"
+      data-testid="access-matrix-meta-align"
+    >
+      <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('accessMatrixMetaTitle') }}</p>
+          <p class="mts-muted">{{ t('accessMatrixMetaDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link
+            v-if="isAdmin"
+            class="mts-btn text-xs"
+            to="/access/grants"
+            data-testid="access-matrix-jump-grants"
+          >{{ t('accessMatrixJumpGrants') }}</router-link>
+          <router-link
+            v-if="isAdmin"
+            class="mts-btn text-xs"
+            to="/users"
+            data-testid="access-matrix-jump-users"
+          >{{ t('accessMatrixJumpUsers') }}</router-link>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <div data-testid="access-matrix-meta-total">{{ t('accessMatrixMetaTotal') }}: <span class="font-semibold">{{ matrixMetaAlign.total_count }}</span></div>
+        <div data-testid="access-matrix-meta-filtered">{{ t('accessMatrixMetaFiltered') }}: <span class="font-semibold">{{ matrixMetaAlign.filtered_count }}</span></div>
+        <div data-testid="access-matrix-meta-routes">{{ t('accessMatrixMetaRoutes') }}: <span class="font-semibold">{{ matrixMetaAlign.with_route_count }}</span></div>
+        <div data-testid="access-matrix-meta-admin-full">{{ t('accessMatrixMetaAdminFull') }}: <span class="font-semibold">{{ matrixMetaAlign.admin_full_count }}</span></div>
+        <div data-testid="access-matrix-meta-user-data">{{ t('accessMatrixMetaUserData') }}: <span class="font-semibold">{{ matrixMetaAlign.user_data_count }}</span></div>
+        <div data-testid="access-matrix-meta-selected">{{ t('accessMatrixMetaSelected') }}: <span class="font-semibold">{{ matrixMetaAlign.selected_count }}</span></div>
       </div>
     </div>
 

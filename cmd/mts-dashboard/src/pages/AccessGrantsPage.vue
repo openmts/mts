@@ -29,6 +29,10 @@ import { RefreshCw, ShieldCheck, Download } from 'lucide-vue-next'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { buildGrantsExport, grantsToCSV } from '@/utils/grantsExport'
+import {
+  alignAccessGrantsMeta,
+  preferredPermissionsPath,
+} from '@/utils/accessGrantsMetaAlign'
 import { parseAccessGrantsPrefill, accessGrantsFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
 import { stampFilename } from '@/utils/download'
@@ -104,6 +108,7 @@ function permText(p: string): string {
 const loading = ref(false)
 const loadError = ref('')
 const usersListPath = ref('')
+const permissionsPathSample = ref('')
 const rows = ref<GrantRow[]>([])
 const userFilter = ref('')
 const dbFilter = ref('')
@@ -159,6 +164,27 @@ const {
 
 const coverage = computed(() => grantCoverage(filtered.value))
 
+const grantsMetaAlign = computed(() =>
+  alignAccessGrantsMeta({
+    usersListPath: usersListPath.value,
+    permissionsPathSample: permissionsPathSample.value,
+    grantCount: rows.value.length,
+    filteredCount: filtered.value.length,
+    userCount: coverage.value.users,
+    databaseCount: coverage.value.databases,
+    partialErrorCount: partialErrors.value.length,
+    selectedCount: selectedCount.value,
+  }),
+)
+
+const grantsMetaToneClass = computed(() => {
+  const tone = grantsMetaAlign.value.tone
+  if (tone === 'ok') return 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+  if (tone === 'bad') return 'border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20'
+  return 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
+})
+
 function cycleGrantSort(key: GrantSortKey) {
   grantSort.value = cycleSortState(grantSort.value, key)
   saveSortState(storage, GRANTS_SORT_KEY, grantSort.value)
@@ -182,7 +208,11 @@ async function load() {
     const list = await apiGet<UsersResponse>('/api/v1/users')
     applyAdminOpStatus(parseAdminOpStatusPayload(list))
     usersListPath.value = String(list.path || '/api/v1/users')
+    permissionsPathSample.value = ''
     const usersList = list.users ?? []
+    if (!usersList.length) {
+      permissionsPathSample.value = preferredPermissionsPath('')
+    }
     const bundles: UserGrantBundle[] = []
     const errs: string[] = []
     // 并发拉取，限制并发数避免压垮 POC 单机
@@ -197,6 +227,11 @@ async function load() {
             `/api/v1/users/${encodeURIComponent(u.name)}/database-permissions`,
           )
           applyAdminOpStatus(parseAdminOpStatusPayload(data))
+          if (!permissionsPathSample.value) {
+            permissionsPathSample.value = String(
+              data.path || preferredPermissionsPath(u.name),
+            )
+          }
           bundles.push({
             user: u.name,
             role: u.role,
@@ -252,7 +287,14 @@ async function exportJSON() {
           if (done < list.length) await new Promise((r) => setTimeout(r, 0))
         }
       }
-      return buildGrantsExport(list)
+      const m = grantsMetaAlign.value
+      return buildGrantsExport(list, new Date(), {
+        users_list_path: m.users_list_path,
+        permissions_path_sample: m.permissions_path_sample,
+        user_count: m.user_count,
+        database_count: m.database_count,
+        partial_error_count: m.partial_error_count,
+      })
     },
   })
   if (outcome === 'done') success(t.value('accessExported'))
@@ -350,6 +392,41 @@ watch(
       data-testid="access-grants-users-path"
       :title="usersListPath"
     >{{ usersListPath }}</p>
+    <div
+      class="mts-panel rounded-xl border p-3 text-xs"
+      :class="grantsMetaToneClass"
+      data-testid="access-grants-meta-align"
+    >
+      <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ t('accessGrantsMetaTitle') }}</p>
+          <p class="mts-muted">{{ t('accessGrantsMetaDesc') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <router-link class="mts-btn text-xs" to="/users" data-testid="access-grants-jump-users">{{ t('accessGrantsJumpUsers') }}</router-link>
+          <router-link class="mts-btn text-xs" to="/audit" data-testid="access-grants-jump-audit">{{ t('accessGrantsJumpAudit') }}</router-link>
+          <router-link class="mts-btn text-xs" to="/access" data-testid="access-grants-jump-matrix">{{ t('accessGrantsJumpMatrix') }}</router-link>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <div data-testid="access-grants-meta-grants">{{ t('accessGrantsMetaGrants') }}: <span class="font-semibold">{{ grantsMetaAlign.grant_count }}</span></div>
+        <div data-testid="access-grants-meta-filtered">{{ t('accessGrantsMetaFiltered') }}: <span class="font-semibold">{{ grantsMetaAlign.filtered_count }}</span></div>
+        <div data-testid="access-grants-meta-users">{{ t('accessGrantsMetaUsers') }}: <span class="font-semibold">{{ grantsMetaAlign.user_count }}</span></div>
+        <div data-testid="access-grants-meta-dbs">{{ t('accessGrantsMetaDatabases') }}: <span class="font-semibold">{{ grantsMetaAlign.database_count }}</span></div>
+        <div data-testid="access-grants-meta-partial">{{ t('accessGrantsMetaPartial') }}: <span class="font-semibold">{{ grantsMetaAlign.partial_error_count }}</span></div>
+        <div data-testid="access-grants-meta-selected">{{ t('accessGrantsMetaSelected') }}: <span class="font-semibold">{{ grantsMetaAlign.selected_count }}</span></div>
+      </div>
+      <p
+        class="mt-2 max-w-full truncate font-mono text-[11px] text-slate-600 dark:text-slate-300"
+        data-testid="access-grants-meta-users-path"
+        :title="grantsMetaAlign.users_list_path"
+      >{{ grantsMetaAlign.users_list_path }}</p>
+      <p
+        class="mt-1 max-w-full truncate font-mono text-[11px] text-slate-600 dark:text-slate-300"
+        data-testid="access-grants-meta-perm-path"
+        :title="grantsMetaAlign.permissions_path_sample"
+      >{{ grantsMetaAlign.permissions_path_sample }}</p>
+    </div>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="mts-title flex items-center gap-2">

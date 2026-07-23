@@ -2888,3 +2888,16 @@
 | users list | path | users-meta-list-path | GET |
 | users batch-disabled | path | users-batch-summary | stream/summary |
 | users inventory | n/a | mts.users.inventory v2 | 本地导出 |
+
+## P500（2026-07-23）
+- Access Grants：users/permissions path 对齐卡 + 覆盖率/部分失败 + Users/Audit/Matrix 深链；导出 v2
+- Access Matrix：能力/路由扫视 + Grants/Users 深链
+- 清单：`access-grants-meta-align`、`access-matrix-meta-align`
+
+### 前后端对齐（P500）
+| 场景 | 服务端 | Dashboard | 备注 |
+|------|--------|-----------|------|
+| GET /users | path | access-grants-meta-users-path | 列表入口 |
+| GET /users/:name/database-permissions | path | access-grants-meta-perm-path | 样例 path |
+| grants export | n/a | mts.access.grants v2 | 本地导出 |
+| access matrix | 静态 RBAC | access-matrix-meta-align | 客户端矩阵 |

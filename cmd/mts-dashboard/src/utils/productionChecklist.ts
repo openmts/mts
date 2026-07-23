@@ -786,6 +786,30 @@ export const PRODUCTION_CHECKLIST: ProductionCheckItem[] = [
   },
 
   {
+    id: 'access-grants-meta-align',
+    severity: 'recommended',
+    title: { zh: '授权总览 path/覆盖率可观测', en: 'Access grants path/coverage observability' },
+    detail: {
+      zh: 'Access Grants 展示 users/list path、permissions 样例 path、覆盖率与部分失败；导出 v2 含 path；深链 Users/Audit/Matrix。',
+      en: 'Access Grants shows users list path, sample permissions path, coverage and partial errors; export v2 includes path; deep-links Users/Audit/Matrix.',
+    },
+    automated: true,
+    jump: '/access/grants',
+  },
+
+  {
+    id: 'access-matrix-meta-align',
+    severity: 'recommended',
+    title: { zh: '能力矩阵扫视 + Grants 深链', en: 'Access matrix scan + Grants deep links' },
+    detail: {
+      zh: 'Access Matrix 展示能力行/路由覆盖统计；管理员深链实时授权与用户。',
+      en: 'Access Matrix shows capability/route coverage stats; admins deep-link live grants and users.',
+    },
+    automated: true,
+    jump: '/access',
+  },
+
+  {
     id: 'admin-config-storage-path',
     severity: 'recommended',
     title: { zh: '配置/存储/版本响应含 path', en: 'Config/storage/version responses include path' },
