@@ -7,6 +7,7 @@ import (
 
 var (
 	ErrInvalidUser            = errors.New("invalid user")
+	ErrInvalidPageLimit       = errors.New("invalid page limit")
 	ErrUserNotFound           = errors.New("user not found")
 	ErrUserAlreadyExists      = errors.New("user already exists")
 	ErrInvalidPermission      = errors.New("invalid permission")
@@ -15,6 +16,8 @@ var (
 	ErrAuthenticationDisabled = errors.New("authentication disabled")
 	ErrUnsupportedEndpoint    = errors.New("unsupported user endpoint")
 )
+
+const MaxGrantPageLimit = 200
 
 const EndpointLocal = "local"
 
@@ -53,6 +56,17 @@ type User struct {
 type Grant struct {
 	Database   string
 	Permission Permission
+}
+
+type UserGrantBundle struct {
+	User   User
+	Grants []Grant
+}
+
+type UserGrantPage struct {
+	Items      []UserGrantBundle
+	TotalUsers int
+	NextCursor string
 }
 
 type Credentials struct {

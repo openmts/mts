@@ -9,6 +9,11 @@
     "preview": "vite preview",
     "typecheck": "vue-tsc -b --pretty false",
     "test": "node --experimental-strip-types --test src/utils/*.test.ts src/composables/*.test.ts",
+    "lint": "eslint src e2e scripts",
+    "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test --test-coverage-exclude='**/*.test.ts' --test-coverage-lines=90 --test-coverage-functions=90 --test-coverage-branches=70 src/utils/*.test.ts src/composables/*.test.ts",
+    "test:security": "node --test scripts/check-dangerous-dom.test.mjs && node scripts/check-dangerous-dom.mjs src",
+    "audit:ci": "npm audit --registry=https://registry.npmjs.org --audit-level=high",
+    "gate": "npm run lint && npm run test:coverage && npm run test:security && npm run audit:ci",
     "build:base": "VITE_BASE=${VITE_BASE:-/} vue-tsc -b && VITE_BASE=${VITE_BASE:-/} vite build",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium"
@@ -19,12 +24,19 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "^1.55.1",
     "@tailwindcss/vite": "^4.1.18",
     "@vitejs/plugin-vue": "^6.0.8",
+    "eslint": "10.8.0",
+    "eslint-plugin-no-unsanitized": "4.1.5",
+    "eslint-plugin-vue": "10.10.0",
+    "globals": "17.8.0",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.9.3",
+    "typescript-eslint": "8.65.0",
     "vite": "^7.2.7",
+    "vue-eslint-parser": "10.4.1",
     "vue-tsc": "^3.1.8"
   }
 }

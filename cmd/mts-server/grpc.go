@@ -40,7 +40,10 @@ func (jsonCodec) Unmarshal(data []byte, value any) error {
 
 func newGRPCServer(runtime *serverRuntime) (*grpc.Server, error) {
 	cfg := runtime.currentConfig()
-	options := []grpc.ServerOption{grpc.UnaryInterceptor(runtime.grpcUnaryInterceptor)}
+	options := []grpc.ServerOption{
+		grpc.UnaryInterceptor(runtime.grpcUnaryInterceptor),
+		grpc.StreamInterceptor(runtime.grpcStreamInterceptor),
+	}
 	if cfg.GRPC.MaxRecvMsgBytes > 0 {
 		options = append(options, grpc.MaxRecvMsgSize(cfg.GRPC.MaxRecvMsgBytes))
 	}
@@ -76,13 +79,18 @@ func (r *serverRuntime) grpcUnaryInterceptor(
 		defer cancel()
 	}
 	_ = grpc.SetHeader(ctx, metadata.Pairs(strings.ToLower(headerRequestID), requestID))
-	grpcSem := r.grpcSem
-	if !acquireGRPC(grpcSem) {
+	if !r.grpcLimiter.tryAcquire() {
 		return nil, status.Error(codes.ResourceExhausted, "too many concurrent grpc requests")
 	}
-	defer releaseGRPC(grpcSem)
+	defer r.grpcLimiter.release()
 	start := time.Now()
 	resp, err := handler(ctx, req)
+	if err == nil && ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		err = grpcError(ctx, err)
+	}
 	code := status.Code(err)
 	duration := time.Since(start)
 	r.metrics.observe("grpc", info.FullMethod, code.String(), duration)
@@ -339,10 +347,7 @@ func grpcGetDataContract(r *serverRuntime, _ context.Context, _ any) (any, error
 
 func grpcLogin(r *serverRuntime, ctx context.Context, req any) (any, error) {
 	request := req.(*loginRequest)
-	ttl := defaultAuthTTL
-	if request.TTLSeconds > 0 {
-		ttl = time.Duration(request.TTLSeconds) * time.Second
-	}
+	ttl := normalizeAuthTTL(request.TTLSeconds)
 	token, err := r.engine.Authenticate(ctx, mts.Credentials{
 		UserName: request.UserName,
 		Password: request.Password,
@@ -952,6 +957,12 @@ func grpcError(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, context.Canceled) {
+		return status.Error(codes.Canceled, "request canceled")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return status.Error(codes.DeadlineExceeded, "request deadline exceeded")
+	}
 	classified := classifyAPIError(err)
 	var apiErr apiError
 	if errors.As(err, &apiErr) && (apiErr.AdminOpBusy || apiErr.Op != "") {
@@ -962,7 +973,11 @@ func grpcError(ctx context.Context, err error) error {
 		_ = grpc.SetHeader(ctx, metadata.Pairs(pairs...))
 		_ = grpc.SetTrailer(ctx, metadata.Pairs(pairs...))
 	}
-	return status.Error(grpcCodeForErrorCode(classified.Code), classified.Message)
+	message := classified.Message
+	if classified.Code == errorCodeInternal {
+		message = string(errorCodeInternal)
+	}
+	return status.Error(grpcCodeForErrorCode(classified.Code), message)
 }
 
 // grpcErrorPlain 无上下文时的兼容包装（测试/内部）。

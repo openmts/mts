@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, computed, inject, watch, type Computed
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseConfigPrefill, configFormToPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { apiGet, apiPost, getAdminToken, setAdminToken, getDataToken, setDataToken } from '@/api/client'
 import { useMutationGuard } from '@/composables/useMutationGuard'
 import { registerDirtyChecker } from '@/utils/routeDirty'
@@ -358,7 +359,7 @@ async function copyConfigShareLink() {
     error_q: errorCodeFilter.value,
     section: schemaFilter.value ? 'config-schema' : errorCodeFilter.value ? 'config-error-codes' : 'config-effective',
   })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('configShareCopied'))
   else notifyError(res.error || t.value('failed'))

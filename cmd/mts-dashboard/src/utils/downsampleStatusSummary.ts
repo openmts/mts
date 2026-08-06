@@ -1,5 +1,7 @@
 /** 降采样状态摘要（Overview / 列表 / 导出） */
 
+import { escapeCSVCell } from './csvEscape.ts'
+
 export interface DownsampleStatusSummaryInput {
   total?: number
   enabled?: number
@@ -159,18 +161,13 @@ export function buildDownsampleStatusSummaryExport(
   return out
 }
 
-function escapeCSV(v: string): string {
-  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`
-  return v
-}
-
 export function downsampleStatusSummaryToCSV(
   summary: DownsampleStatusSummaryInput | null | undefined,
 ): string {
   const s = normalizeDownsampleStatusSummary(summary)
   const header = ['total', 'enabled', 'active', 'error', 'lagging', 'max_lag_seconds']
   const row = [s.total, s.enabled, s.active, s.error, s.lagging, s.max_lag_seconds]
-    .map((c) => escapeCSV(String(c)))
+    .map(escapeCSVCell)
     .join(',')
   return header.join(',') + '\n' + row
 }
@@ -201,7 +198,7 @@ export function downsampleStatusesToCSV(
         s.next_run_unix ?? '',
         s.last_error || '',
       ]
-        .map((c) => escapeCSV(String(c ?? '')))
+        .map(escapeCSVCell)
         .join(','),
     )
   }
@@ -215,4 +212,3 @@ export function formatDownsampleStatusSummaryLine(
   const n = normalizeDownsampleStatusSummary(s)
   return `total: ${n.total} · enabled: ${n.enabled} · active: ${n.active} · error: ${n.error} · lagging: ${n.lagging} · max_lag_seconds: ${n.max_lag_seconds}`
 }
-

@@ -35,6 +35,17 @@ type DatabaseGrant struct {
 	Permission DatabasePermission
 }
 
+type UserGrantBundle struct {
+	User   User
+	Grants []DatabaseGrant
+}
+
+type UserGrantPage struct {
+	Items      []UserGrantBundle
+	TotalUsers int
+	NextCursor string
+}
+
 type Credentials struct {
 	UserName string
 	Password string
@@ -62,6 +73,7 @@ type UserManager interface {
 	GrantDatabasePermission(context.Context, string, string, DatabasePermission) error
 	RevokeDatabasePermission(context.Context, string, string, DatabasePermission) error
 	ListDatabasePermissions(context.Context, string) ([]DatabaseGrant, error)
+	ListUserGrantPage(context.Context, string, int) (UserGrantPage, error)
 	CheckDatabasePermission(context.Context, string, string, DatabasePermission) error
 	SetPassword(context.Context, string, string) error
 	ChangePassword(context.Context, string, string, string) error
@@ -80,6 +92,7 @@ type localUserBackend interface {
 	Close() error
 	user.UserStore
 	user.PermissionStore
+	user.GrantPageStore
 	user.CredentialStore
 	user.Authenticator
 	user.TokenStore
@@ -157,6 +170,36 @@ func (m *localUserManager) ListDatabasePermissions(ctx context.Context, userName
 		}
 	}
 	return out, nil
+}
+
+func (m *localUserManager) ListUserGrantPage(
+	ctx context.Context,
+	cursor string,
+	limit int,
+) (UserGrantPage, error) {
+	page, err := m.inner.ListUserGrantPage(ctx, cursor, limit)
+	if err != nil {
+		return UserGrantPage{}, err
+	}
+	items := make([]UserGrantBundle, len(page.Items))
+	for index, item := range page.Items {
+		grants := make([]DatabaseGrant, len(item.Grants))
+		for grantIndex, grant := range item.Grants {
+			grants[grantIndex] = DatabaseGrant{
+				Database:   grant.Database,
+				Permission: DatabasePermission(grant.Permission),
+			}
+		}
+		items[index] = UserGrantBundle{
+			User:   fromInternalUser(item.User),
+			Grants: grants,
+		}
+	}
+	return UserGrantPage{
+		Items:      items,
+		TotalUsers: page.TotalUsers,
+		NextCursor: page.NextCursor,
+	}, nil
 }
 
 func (m *localUserManager) CheckDatabasePermission(

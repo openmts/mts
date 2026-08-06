@@ -3,6 +3,7 @@ import { computed, inject, onBeforeUnmount, onMounted, ref, watch, type Computed
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseAccountPrefill, accountFormToPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { buildLoginLocation } from '@/utils/redirect'
 import { useAuth } from '@/composables/useAuth'
 
@@ -355,7 +356,7 @@ function applyAccountPrefillFromRoute() {
 
 async function copyAccountShareLink() {
   const path = accountFormToPrefill({ landing_q: landingFilter.value })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('accountShareCopied'))
   else notifyError(res.error || t.value('failed'))

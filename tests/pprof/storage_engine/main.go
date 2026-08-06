@@ -505,6 +505,9 @@ func collectRunMetrics(root string) (runMetrics, error) {
 	if root != "" {
 		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 			if walkErr != nil {
+				if shouldIgnoreWalkError(root, path, walkErr) {
+					return nil
+				}
 				return walkErr
 			}
 			if entry.IsDir() {
@@ -515,6 +518,9 @@ func collectRunMetrics(root string) (runMetrics, error) {
 			}
 			info, err := entry.Info()
 			if err != nil {
+				if shouldIgnoreWalkError(root, path, err) {
+					return nil
+				}
 				return err
 			}
 			metrics.dataDirBytes += info.Size()
@@ -535,6 +541,10 @@ func collectRunMetrics(root string) (runMetrics, error) {
 	metrics.pauseTotalNs = mem.PauseTotalNs
 	metrics.rssBytes, metrics.rssPeakBytes = readProcessRSS()
 	return metrics, nil
+}
+
+func shouldIgnoreWalkError(root, path string, err error) bool {
+	return path != root && os.IsNotExist(err)
 }
 
 func readProcessRSS() (uint64, uint64) {

@@ -3,6 +3,7 @@ import { ref, computed, inject, onMounted, watch, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseApiSpecPrefill, apiSpecFormToPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { apiGet } from '@/api/client'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
@@ -131,7 +132,7 @@ async function copyApiSpecShareLink() {
     ns: nsFilter.value || undefined,
     q: q.value,
   })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('apiSpecShareCopied'))
   else notifyError(res.error || t.value('failed'))

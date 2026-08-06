@@ -331,6 +331,19 @@ func (e *Engine) ListDatabasePermissions(ctx context.Context, userName string) (
 	return out, nil
 }
 
+// ListUserGrantPage 按用户名列出用户及其 database 授权快照。
+func (e *Engine) ListUserGrantPage(
+	ctx context.Context,
+	cursor string,
+	limit int,
+) (UserGrantPage, error) {
+	page, err := e.runtime.Users().ListUserGrantPage(ctx, cursor, limit)
+	if err != nil {
+		return UserGrantPage{}, publicError(err)
+	}
+	return fromRuntimeUserGrantPage(page), nil
+}
+
 // CheckUserDatabasePermission 校验用户是否拥有 database 权限。
 func (e *Engine) CheckUserDatabasePermission(
 	ctx context.Context,

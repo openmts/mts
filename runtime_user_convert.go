@@ -39,3 +39,22 @@ func fromRuntimeUser(user runtime.User) User {
 		Metadata:    user.Metadata,
 	}
 }
+
+func fromRuntimeUserGrantPage(page runtime.UserGrantPage) UserGrantPage {
+	items := make([]UserGrantBundle, len(page.Items))
+	for index, item := range page.Items {
+		grants := make([]DatabaseGrant, len(item.Grants))
+		for grantIndex, grant := range item.Grants {
+			grants[grantIndex] = fromRuntimeGrant(grant)
+		}
+		items[index] = UserGrantBundle{
+			User:   fromRuntimeUser(item.User),
+			Grants: grants,
+		}
+	}
+	return UserGrantPage{
+		Items:      items,
+		TotalUsers: page.TotalUsers,
+		NextCursor: page.NextCursor,
+	}
+}

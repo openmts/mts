@@ -23,9 +23,8 @@ import {
   flattenUserGrants,
   grantCoverage,
   type GrantRow,
-  type UserGrantBundle,
 } from '@/utils/grantsSummary'
-import { RefreshCw, ShieldCheck, Download } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, Download } from 'lucide-vue-next'
 import { useNotify } from '@/composables/useNotify'
 import { useNotifyAdminBusy } from '@/composables/useNotifyAdminBusy'
 import { buildGrantsExport, grantsToCSV } from '@/utils/grantsExport'
@@ -34,6 +33,7 @@ import {
   preferredPermissionsPath,
 } from '@/utils/accessGrantsMetaAlign'
 import { parseAccessGrantsPrefill, accessGrantsFormToPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { copyText } from '@/utils/clipboard'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
@@ -49,28 +49,15 @@ import {
   ariaSortValue,
 } from '@/utils/listSort'
 import { grantRowId } from '@/utils/rowIds'
-
-interface User {
-  name: string
-  role?: string
-  disabled?: boolean
-}
-interface UsersResponse {
-  users: User[]
-  path?: string
-  admin_op_busy?: boolean
-  op?: string
-  started_at_unix?: number
-  last?: unknown
-}
-interface PermissionsResponse {
-  grants: Array<{ database: string; permission: string }>
-  path?: string
-  admin_op_busy?: boolean
-  op?: string
-  started_at_unix?: number
-  last?: unknown
-}
+import {
+  ACCESS_GRANTS_PAGE_LIMIT,
+  accessGrantItemsToBundles,
+  advanceAccessGrantsCursor,
+  buildAccessGrantsPagePath,
+  retreatAccessGrantsCursor,
+  type AccessGrantsCursorNavigation,
+  type AccessGrantsPageResponse,
+} from '@/utils/accessGrantsPagination'
 
 const route = useRoute()
 useHashScroll()
@@ -115,6 +102,13 @@ const dbFilter = ref('')
 const permFilter = ref('')
 const q = ref('')
 const partialErrors = ref<string[]>([])
+const pageCursor = ref('')
+const pageCursorHistory = ref<string[]>([])
+const pageNextCursor = ref('')
+const pageUserCount = ref(0)
+const totalUserCount = ref(0)
+const pageNumber = computed(() => pageCursorHistory.value.length + 1)
+const hasPreviousPage = computed(() => pageCursorHistory.value.length > 0)
 
 const users = computed(() => Array.from(new Set(rows.value.map((r) => r.user))).sort())
 const databases = computed(() => Array.from(new Set(rows.value.map((r) => r.database))).sort())
@@ -170,7 +164,7 @@ const grantsMetaAlign = computed(() =>
     permissionsPathSample: permissionsPathSample.value,
     grantCount: rows.value.length,
     filteredCount: filtered.value.length,
-    userCount: coverage.value.users,
+    userCount: pageUserCount.value,
     databaseCount: coverage.value.databases,
     partialErrorCount: partialErrors.value.length,
     selectedCount: selectedCount.value,
@@ -199,59 +193,47 @@ function rowsForExport() {
   return filterRowsByIds(filtered.value, exportIds.value, (r) => grantRowId(r))
 }
 
-async function load() {
+function currentAccessGrantsNavigation(): AccessGrantsCursorNavigation {
+  return {
+    cursor: pageCursor.value,
+    history: [...pageCursorHistory.value],
+  }
+}
+
+function applyAccessGrantsPage(
+  data: AccessGrantsPageResponse,
+  navigation: AccessGrantsCursorNavigation,
+) {
+  const items = data.items ?? []
+  const nextRows = flattenUserGrants(accessGrantItemsToBundles(items))
+  const isPageChange = navigation.cursor !== pageCursor.value
+  usersListPath.value = String(data.path || buildAccessGrantsPagePath(navigation.cursor))
+  permissionsPathSample.value = preferredPermissionsPath(items[0]?.user.name || '')
+  rows.value = nextRows
+  pageUserCount.value = items.length
+  totalUserCount.value = Math.max(0, Number(data.total_users) || 0)
+  pageNextCursor.value = String(data.next_cursor || '')
+  pageCursor.value = navigation.cursor
+  pageCursorHistory.value = [...navigation.history]
+  if (isPageChange) clearSelection()
+  else pruneTo(nextRows.map((row) => grantRowId(row)))
+}
+
+async function loadAccessGrantsPage(navigation: AccessGrantsCursorNavigation) {
   if (!isAdmin.value) return
   loading.value = true
   loadError.value = ''
   partialErrors.value = []
   try {
-    const list = await apiGet<UsersResponse>('/api/v1/users')
-    applyAdminOpStatus(parseAdminOpStatusPayload(list))
-    usersListPath.value = String(list.path || '/api/v1/users')
-    permissionsPathSample.value = ''
-    const usersList = list.users ?? []
-    if (!usersList.length) {
-      permissionsPathSample.value = preferredPermissionsPath('')
-    }
-    const bundles: UserGrantBundle[] = []
-    const errs: string[] = []
-    // 并发拉取，限制并发数避免压垮 POC 单机
-    const concurrency = 4
-    let idx = 0
-    async function worker() {
-      while (idx < usersList.length) {
-        const i = idx++
-        const u = usersList[i]
-        try {
-          const data = await apiGet<PermissionsResponse>(
-            `/api/v1/users/${encodeURIComponent(u.name)}/database-permissions`,
-          )
-          applyAdminOpStatus(parseAdminOpStatusPayload(data))
-          if (!permissionsPathSample.value) {
-            permissionsPathSample.value = String(
-              data.path || preferredPermissionsPath(u.name),
-            )
-          }
-          bundles.push({
-            user: u.name,
-            role: u.role,
-            disabled: u.disabled,
-            grants: data.grants ?? [],
-          })
-        } catch (e) {
-          errs.push(`${u.name}: ${formatCaughtError(e)}`)
-          bundles.push({ user: u.name, role: u.role, disabled: u.disabled, grants: [] })
-        }
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(concurrency, usersList.length || 1) }, () => worker()))
-    rows.value = flattenUserGrants(bundles)
-    partialErrors.value = errs
-    pruneTo(rows.value.map((r) => grantRowId(r)))
+    const data = await apiGet<AccessGrantsPageResponse>(
+      buildAccessGrantsPagePath(navigation.cursor, ACCESS_GRANTS_PAGE_LIMIT),
+    )
+    applyAdminOpStatus(parseAdminOpStatusPayload(data))
+    applyAccessGrantsPage(data, navigation)
   } catch (e) {
     const msg = formatCaughtError(e)
     if (rows.value.length) {
-      // soft-keep：用户列表/授权全量刷新失败时保留上次表
+      // soft-keep：刷新或翻页失败时保留当前页。
       loadError.value = ''
       partialErrors.value = [msg]
       if (isAdminHeavyBusyError(e)) notifyMaybeAdminBusy(msg, e)
@@ -263,6 +245,24 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+async function load() {
+  await loadAccessGrantsPage(currentAccessGrantsNavigation())
+}
+
+async function loadNextPage() {
+  if (loading.value || !pageNextCursor.value) return
+  const navigation = advanceAccessGrantsCursor(
+    currentAccessGrantsNavigation(),
+    pageNextCursor.value,
+  )
+  await loadAccessGrantsPage(navigation)
+}
+
+async function loadPreviousPage() {
+  if (loading.value || !hasPreviousPage.value) return
+  await loadAccessGrantsPage(retreatAccessGrantsCursor(currentAccessGrantsNavigation()))
 }
 
 async function exportJSON() {
@@ -363,7 +363,7 @@ async function copyAccessGrantsShareLink() {
     permission: permFilter.value,
     q: q.value,
   }, { hash: '#access-grants-filters' })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('accessGrantsShareCopied'))
   else notifyError(res.error || t.value('failed'))
@@ -475,6 +475,38 @@ watch(
       @retry="load"
       @dismiss="partialErrors = []"
     />
+
+    <div
+      class="flex flex-wrap items-center justify-between gap-3 border-y border-slate-200 py-2 dark:border-slate-700"
+      data-testid="access-grants-page-scope"
+    >
+      <div class="min-w-0 text-xs">
+        <p class="font-medium text-slate-700 dark:text-slate-200" data-testid="access-grants-page-number">
+          {{ formatMessage(t('accessGrantsPageStatus'), { page: pageNumber, shown: pageUserCount, total: totalUserCount }) }}
+        </p>
+        <p class="mts-muted">{{ t('accessGrantsPageScope') }}</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          class="mts-btn"
+          data-testid="access-grants-page-previous"
+          :disabled="loading || !hasPreviousPage"
+          @click="loadPreviousPage"
+        >
+          <ChevronLeft class="h-3.5 w-3.5" /> {{ t('accessGrantsPagePrevious') }}
+        </button>
+        <button
+          type="button"
+          class="mts-btn"
+          data-testid="access-grants-page-next"
+          :disabled="loading || !pageNextCursor"
+          @click="loadNextPage"
+        >
+          {{ t('accessGrantsPageNext') }} <ChevronRight class="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
 
     <div class="grid gap-3 sm:grid-cols-3">
       <div class="mts-card p-3">

@@ -1,5 +1,7 @@
 /** 数据库清单导出（纯函数） */
 
+import { escapeCSVCell } from './csvEscape.ts'
+
 export interface DatabaseExportRow {
   name: string
   measurement_count?: number
@@ -44,11 +46,6 @@ export function buildDatabasesExport(
   }
 }
 
-function escapeCSV(v: string): string {
-  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`
-  return v
-}
-
 export function databasesToCSV(rows: DatabaseExportRow[] | null | undefined): string {
   const header = ['name', 'measurement_count', 'retention_policy_count', 'loaded']
   const lines = [header.join(',')]
@@ -60,7 +57,7 @@ export function databasesToCSV(rows: DatabaseExportRow[] | null | undefined): st
         r.retention_policy_count ?? '',
         r.loaded ? 'true' : 'false',
       ]
-        .map((c) => escapeCSV(String(c ?? '')))
+        .map(escapeCSVCell)
         .join(','),
     )
   }

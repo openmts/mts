@@ -133,24 +133,29 @@ func (e *Engine) shardForStartLocked(database string, policy string, start int64
 	if shard, ok := e.shards[id]; ok {
 		return shard, nil
 	}
+	if pending, ok := e.retentionPending[id]; ok {
+		if err := e.finishExpiredShardCleanupLocked(id); err != nil {
+			return nil, fmt.Errorf("remove expired shard %s: %w", pending.dir, err)
+		}
+	}
 	dir := shardDir(e.opts.Path, database, policy, start)
 	shard, maxSeq, err := OpenShard(ShardOptions{
-		Dir:                dir,
-		Database:           database,
-		RetentionPolicy:    policy,
-		Start:              start,
-		End:                start + int64(e.opts.ShardDuration) - 1,
-		WAL:                e.opts.WAL,
-		FlushSync:          e.opts.FlushSync,
+		Dir:                             dir,
+		Database:                        database,
+		RetentionPolicy:                 policy,
+		Start:                           start,
+		End:                             start + int64(e.opts.ShardDuration) - 1,
+		WAL:                             e.opts.WAL,
+		FlushSync:                       e.opts.FlushSync,
 		MemTableMaxSamples:              e.opts.MemTableMaxSamples,
 		MemTableDisorderFlushRatio:      e.opts.MemTableDisorderFlushRatio,
 		MemTableDisorderFlushMinSamples: e.opts.MemTableDisorderFlushMinSamples,
 		Compaction:                      e.opts.Compaction,
-		Compression:        e.opts.Compression,
-		Memory:             e.memory,
-		scheduler:          e.compactionScheduler,
-		logger:             e.logger,
-		deps:               e.deps.Shard,
+		Compression:                     e.opts.Compression,
+		Memory:                          e.memory,
+		scheduler:                       e.compactionScheduler,
+		logger:                          e.logger,
+		deps:                            e.deps.Shard,
 	})
 	if err != nil {
 		return nil, err
@@ -191,22 +196,22 @@ func (e *Engine) openShardDir(path string, entry os.DirEntry, err error) error {
 	policy := filepath.Base(filepath.Dir(filepath.Dir(path)))
 	database := filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(path))))
 	shard, maxSeq, err := OpenShard(ShardOptions{
-		Dir:                path,
-		Database:           database,
-		RetentionPolicy:    policy,
-		Start:              start,
-		End:                start + int64(e.opts.ShardDuration) - 1,
-		WAL:                e.opts.WAL,
-		FlushSync:          e.opts.FlushSync,
+		Dir:                             path,
+		Database:                        database,
+		RetentionPolicy:                 policy,
+		Start:                           start,
+		End:                             start + int64(e.opts.ShardDuration) - 1,
+		WAL:                             e.opts.WAL,
+		FlushSync:                       e.opts.FlushSync,
 		MemTableMaxSamples:              e.opts.MemTableMaxSamples,
 		MemTableDisorderFlushRatio:      e.opts.MemTableDisorderFlushRatio,
 		MemTableDisorderFlushMinSamples: e.opts.MemTableDisorderFlushMinSamples,
 		Compaction:                      e.opts.Compaction,
-		Compression:        e.opts.Compression,
-		Memory:             e.memory,
-		scheduler:          e.compactionScheduler,
-		logger:             e.logger,
-		deps:               e.deps.Shard,
+		Compression:                     e.opts.Compression,
+		Memory:                          e.memory,
+		scheduler:                       e.compactionScheduler,
+		logger:                          e.logger,
+		deps:                            e.deps.Shard,
 	})
 	if err != nil {
 		return err

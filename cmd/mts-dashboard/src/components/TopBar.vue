@@ -146,7 +146,8 @@ async function onLogout() {
     router.currentRoute.value.name === 'Login'
       ? undefined
       : router.currentRoute.value.fullPath
-  await logout()
+  const remoteRevoked = await logout()
+  if (!remoteRevoked) warn(t.value('logoutRemoteRevokeFailed'))
   await router.replace(buildLoginLocation({ redirectRaw }))
 }
 

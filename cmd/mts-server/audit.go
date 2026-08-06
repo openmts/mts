@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -20,14 +21,19 @@ type auditEvent struct {
 }
 
 type auditLog struct {
-	mu        sync.Mutex
-	limit     int
-	events    []auditEvent
-	engine    *mts.Engine
-	dbCreated bool
-	ch        chan auditEvent
-	closed    bool
-	done      chan struct{}
+	mu         sync.Mutex
+	limit      int
+	events     []auditEvent
+	engine     *mts.Engine
+	dbCreated  bool
+	ch         chan auditEvent
+	closed     bool
+	done       chan struct{}
+	persistCtx context.Context
+	cancel     context.CancelFunc
+	dropped    uint64
+	persistErr uint64
+	lastError  string
 }
 
 type userAuditResponse struct {
@@ -58,10 +64,13 @@ func newAuditLog(limit int) *auditLog {
 	if limit <= 0 {
 		limit = 256
 	}
+	persistCtx, cancel := context.WithCancel(context.Background())
 	l := &auditLog{
-		limit: limit,
-		ch:    make(chan auditEvent, 1024),
-		done:  make(chan struct{}),
+		limit:      limit,
+		ch:         make(chan auditEvent, 1024),
+		done:       make(chan struct{}),
+		persistCtx: persistCtx,
+		cancel:     cancel,
 	}
 	go l.persistLoop()
 	return l
@@ -70,30 +79,62 @@ func newAuditLog(limit int) *auditLog {
 func (l *auditLog) persistLoop() {
 	defer close(l.done)
 	for event := range l.ch {
-		_ = l.persistEvent(event)
+		if err := l.persistEvent(event); err != nil {
+			l.mu.Lock()
+			l.persistErr++
+			l.lastError = err.Error()
+			l.mu.Unlock()
+		}
 	}
 }
 
-// close 停止异步持久化，并在关闭后禁止继续写引擎。
-func (l *auditLog) close() {
+// close 停止接收新事件，并等待已接收事件完成持久化。
+func (l *auditLog) close(ctx context.Context) error {
 	if l == nil {
-		return
+		return nil
 	}
 	l.mu.Lock()
 	if l.closed {
+		done := l.done
 		l.mu.Unlock()
-		return
+		return l.waitClosed(ctx, done)
 	}
 	l.closed = true
-	l.engine = nil
-	ch := l.ch
+	close(l.ch)
+	done := l.done
 	l.mu.Unlock()
-	if ch != nil {
-		close(ch)
+	return l.waitClosed(ctx, done)
+}
+
+func (l *auditLog) waitClosed(ctx context.Context, done <-chan struct{}) error {
+	var waitErr error
+	select {
+	case <-done:
+	case <-ctx.Done():
+		waitErr = ctx.Err()
+		l.cancel()
+		<-done
 	}
-	if l.done != nil {
-		<-l.done
+	l.cancel()
+	l.mu.Lock()
+	l.engine = nil
+	dropped := l.dropped
+	persistErr := l.persistErr
+	lastError := l.lastError
+	l.mu.Unlock()
+	return errors.Join(waitErr, auditCloseStatsError(dropped, persistErr, lastError))
+}
+
+func auditCloseStatsError(dropped uint64, persistErr uint64, lastError string) error {
+	if dropped == 0 && persistErr == 0 {
+		return nil
 	}
+	return fmt.Errorf(
+		"audit close: dropped=%d persist_errors=%d last_error=%q",
+		dropped,
+		persistErr,
+		lastError,
+	)
 }
 
 func (l *auditLog) record(event auditEvent) {
@@ -105,6 +146,7 @@ func (l *auditLog) record(event auditEvent) {
 	}
 	l.mu.Lock()
 	if l.closed {
+		l.dropped++
 		l.mu.Unlock()
 		return
 	}
@@ -112,42 +154,32 @@ func (l *auditLog) record(event auditEvent) {
 	if len(l.events) > l.limit {
 		l.events = append([]auditEvent(nil), l.events[len(l.events)-l.limit:]...)
 	}
-	ch := l.ch
-	l.mu.Unlock()
-
-	if ch == nil {
-		return
-	}
 	select {
-	case ch <- event:
+	case l.ch <- event:
 	default:
-		// channel full, drop event to avoid blocking
+		l.dropped++
 	}
+	l.mu.Unlock()
 }
 
 func (l *auditLog) persistEvent(event auditEvent) error {
 	l.mu.Lock()
 	eng := l.engine
-	closed := l.closed
-	l.mu.Unlock()
-	if closed || eng == nil {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	l.mu.Lock()
-	if l.closed || l.engine == nil {
-		l.mu.Unlock()
-		return nil
-	}
-	if !l.dbCreated {
-		_ = l.engine.CreateDatabase(ctx, "_internal")
-		l.dbCreated = true
-	}
-	eng = l.engine
+	dbCreated := l.dbCreated
+	persistCtx := l.persistCtx
 	l.mu.Unlock()
 	if eng == nil {
 		return nil
+	}
+	ctx, cancel := context.WithTimeout(persistCtx, 5*time.Second)
+	defer cancel()
+	if !dbCreated {
+		if err := eng.CreateDatabase(ctx, "_internal"); err != nil {
+			return fmt.Errorf("create audit database: %w", err)
+		}
+		l.mu.Lock()
+		l.dbCreated = true
+		l.mu.Unlock()
 	}
 	fields := map[string]mts.FieldValue{
 		"action": mts.StringValue(event.Action),
@@ -177,7 +209,13 @@ func (l *auditLog) list(userName string) []auditEvent {
 }
 
 func (l *auditLog) loadPersisted(req auditListRequest) []auditEvent {
-	if l == nil || l.engine == nil {
+	if l == nil {
+		return nil
+	}
+	l.mu.Lock()
+	eng := l.engine
+	l.mu.Unlock()
+	if eng == nil {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -213,7 +251,7 @@ func (l *auditLog) loadPersisted(req auditListRequest) []auditEvent {
 	if req.UntilUnix > 0 {
 		q.EndTime = req.UntilUnix * int64(time.Second)
 	}
-	rows, err := l.engine.QueryRows(ctx, q)
+	rows, err := eng.QueryRows(ctx, q)
 	if err != nil {
 		return nil
 	}

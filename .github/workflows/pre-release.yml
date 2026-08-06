@@ -1,0 +1,151 @@
+name: Pre-release Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: prerelease-main
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: mts-server ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, darwin, windows]
+        arch: [amd64, arm64]
+        exclude:
+          - os: windows
+            arch: arm64
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/mts-dashboard/package-lock.json
+
+      - name: 构建并嵌入 Dashboard
+        run: |
+          cd cmd/mts-dashboard
+          npm ci --registry=https://registry.npmjs.org
+          npm run build
+
+      - name: 构建 mts-server
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: "0"
+        run: |
+          ext=""
+          if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
+          version="dev-${GITHUB_SHA:0:7}"
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${version} -X main.commit=${GITHUB_SHA} -X main.builtAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "dist/mts-server-${GOOS}-${GOARCH}${ext}" \
+            ./cmd/mts-server
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: mts-server-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  prerelease:
+    name: 发布 dev pre-release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 下载全部构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: 生成校验和
+        run: |
+          cd dist
+          sha256sum */* > checksums.txt
+          cat checksums.txt
+
+      - name: 清理旧 dev pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete dev --yes 2>/dev/null || true
+          gh api --method DELETE "repos/${{ github.repository }}/git/refs/tags/dev" 2>/dev/null || true
+
+      - name: 创建 GitHub Pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          short="${GITHUB_SHA:0:7}"
+          gh release create dev \
+            dist/*/* dist/checksums.txt \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "mts-server dev pre-release" \
+            --notes "main 分支 commit ${short} 构建的 mts-server pre-release（已嵌入 Dashboard）。"
+
+  docker:
+    name: 构建并推送 GHCR 镜像 (dev)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # GHCR_IMAGE 在构建前用 bash 计算（ghcr.io 要求全小写仓库名）
+      GHCR_IMAGE: ""
+      # 镜像 tag 固定为 dev；每次 main push 都会覆盖推送到 ghcr.io
+      IMAGE_TAG: dev
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 计算镜像仓库名
+        run: echo "GHCR_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/mts-server" >> "$GITHUB_ENV"
+
+      - name: 配置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 配置 QEMU 多平台模拟
+        uses: docker/setup-qemu-action@v3
+
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 构建并推送镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.GHCR_IMAGE }}:${{ env.IMAGE_TAG }}
+          build-args: |
+            VERSION=dev-${{ github.sha }}
+            COMMIT=${{ github.sha }}

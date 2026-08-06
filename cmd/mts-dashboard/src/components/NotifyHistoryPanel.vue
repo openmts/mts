@@ -23,6 +23,7 @@ import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { copyText } from '@/utils/clipboard'
+import { buildShareURL } from '@/utils/shareURL'
 import {
   notifyHistoryFormToPrefill,
   type NotifyHistoryPrefill,
@@ -134,7 +135,7 @@ async function copyNotifyShareLink() {
     },
     { path: route.path || '/' },
   )
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('notifyHistoryShareCopied'))
   else notifyError(res.error || t.value('failed'))

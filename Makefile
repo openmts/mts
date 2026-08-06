@@ -13,6 +13,8 @@ FMT_TIMEOUT ?= 300s
 LINT_TIMEOUT ?= 720s
 COVERAGE_MIN ?= 90.0
 COVERAGE_PACKAGE_TIMEOUT ?= 300s
+DASHBOARD_INSTALL_TIMEOUT ?= 300s
+DASHBOARD_GATE_TIMEOUT ?= 600s
 CI_TIMEOUT ?= 1800s
 
 STORAGE_POINTS ?= 100000
@@ -28,7 +30,7 @@ DOWNSAMPLE_POINTS ?= 100000
 DOWNSAMPLE_SERIES ?= 100
 DOWNSAMPLE_POLICIES ?= 1
 
-CORE_PACKAGES = $(shell $(GO) list ./... | grep -v '/tests/' | grep -v '/internal/bench')
+CORE_PACKAGES = $(shell $(GO) list ./... | grep -v '/tests/' | grep -v '/internal/bench' | grep -v '/node_modules/')
 
 # Windows 的 timeout.exe 与 GNU timeout 语法不兼容，检测后跳过外层 timeout 包装
 # （go test 自身的 -timeout 参数仍会生效）
@@ -41,6 +43,8 @@ ifdef IS_WINDOWS
   FMT_TIMEOUT_PREFIX =
   LINT_TIMEOUT_PREFIX =
   COVERAGE_TIMEOUT_PREFIX =
+  DASHBOARD_INSTALL_TIMEOUT_PREFIX =
+  DASHBOARD_GATE_TIMEOUT_PREFIX =
   SCENARIO_TIMEOUT_PREFIX =
   CI_TIMEOUT_PREFIX =
 else
@@ -50,6 +54,8 @@ else
   FMT_TIMEOUT_PREFIX = timeout $(FMT_TIMEOUT)
   LINT_TIMEOUT_PREFIX = timeout $(LINT_TIMEOUT)
   COVERAGE_TIMEOUT_PREFIX = timeout $(COVERAGE_PACKAGE_TIMEOUT)
+  DASHBOARD_INSTALL_TIMEOUT_PREFIX = timeout $(DASHBOARD_INSTALL_TIMEOUT)
+  DASHBOARD_GATE_TIMEOUT_PREFIX = timeout $(DASHBOARD_GATE_TIMEOUT)
   SCENARIO_TIMEOUT_PREFIX = timeout $(SCENARIO_TIMEOUT)
   CI_TIMEOUT_PREFIX = timeout $(CI_TIMEOUT)
 endif
@@ -82,6 +88,11 @@ dashboard: ## 构建前端 Dashboard 并嵌入
 .PHONY: dashboard-test
 dashboard-test: ## 运行 Dashboard 单元测试
 	cd cmd/mts-dashboard && npm test
+
+.PHONY: dashboard-gate
+dashboard-gate: ## 运行 Dashboard lint、覆盖率、安全与依赖审计门禁
+	cd cmd/mts-dashboard && $(DASHBOARD_INSTALL_TIMEOUT_PREFIX) npm ci --registry=https://registry.npmjs.org
+	cd cmd/mts-dashboard && $(DASHBOARD_GATE_TIMEOUT_PREFIX) npm run gate
 
 .PHONY: dashboard-test-e2e
 dashboard-test-e2e: dashboard ## 构建嵌入前端并运行 Playwright 商业冒烟
@@ -131,25 +142,9 @@ test-race: ## 对存储核心包运行 race 检测
 
 .PHONY: coverage
 coverage: ## 检查生产包覆盖率不低于 COVERAGE_MIN
-	@tmp_dir="$$(mktemp -d "$${TMPDIR:-/tmp}/mts-coverage.XXXXXX")"; \
-	chmod 0700 "$$tmp_dir"; \
-	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	failed=0; \
-	for pkg in $(CORE_PACKAGES); do \
-		profile="$$tmp_dir/$$(echo "$$pkg" | tr '/.' '__').cover"; \
-		if ! output="$$($(COVERAGE_TIMEOUT_PREFIX) $(GO) test "$$pkg" -coverprofile="$$profile" -count=$(COUNT) -timeout 5m 2>&1)"; then \
-			printf '%s\n' "$$output"; \
-			exit 1; \
-		fi; \
-		chmod 0600 "$$profile"; \
-		printf '%s\n' "$$output"; \
-		coverage="$$($(GO) tool cover -func="$$profile" | awk '/^total:/ {gsub("%", "", $$3); print $$3}')"; \
-		if ! awk -v got="$$coverage" -v min="$(COVERAGE_MIN)" 'BEGIN { exit !(got + 0 >= min + 0) }'; then \
-			printf 'coverage below threshold: package=%s got=%s%% min=%s%%\n' "$$pkg" "$$coverage" "$(COVERAGE_MIN)"; \
-			failed=1; \
-		fi; \
-	done; \
-	exit "$$failed"
+	@MTS_COVERAGE_MIN=$(COVERAGE_MIN) \
+		MTS_COVERAGE_PACKAGE_TIMEOUT=$(COVERAGE_PACKAGE_TIMEOUT) \
+		bash scripts/coverage_gate.sh $(CORE_PACKAGES)
 
 .PHONY: e2e
 e2e: ensure-dashboard-embed ## 运行全部 e2e 用例

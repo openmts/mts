@@ -56,3 +56,42 @@ func TestQueryRowIteratorProjectsFieldsAtStorage(t *testing.T) {
 		t.Fatalf("temp should be projected out: %#v", row.Fields)
 	}
 }
+
+func TestProjectedRowStreamExactFieldsDoesNotAllocate(t *testing.T) {
+	source := projectionRowStream{row: model.Row{
+		Fields: map[string]model.FieldValue{"usage": model.Float64Value(1.5)},
+	}}
+	stream := newProjectedRowStream(source, []string{"usage"})
+
+	allocs := testing.AllocsPerRun(100, func() {
+		if !stream.Next() {
+			panic("projection stream unexpectedly ended")
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("exact projection allocations = %.2f, want 0", allocs)
+	}
+	if len(stream.Row().Fields) != 1 {
+		t.Fatalf("projected fields = %#v, want usage only", stream.Row().Fields)
+	}
+}
+
+type projectionRowStream struct {
+	row model.Row
+}
+
+func (s projectionRowStream) Next() bool {
+	return true
+}
+
+func (s projectionRowStream) Row() model.Row {
+	return s.row
+}
+
+func (projectionRowStream) Err() error {
+	return nil
+}
+
+func (projectionRowStream) Close() error {
+	return nil
+}

@@ -1,0 +1,120 @@
+# mts-server 容器默认配置。
+#
+# 与 configs/mts-server.yaml 的区别：
+#   - data_dir 指向挂载卷 /data，backup.dir 同步指向 /data 下。
+#   - http/grpc 监听 0.0.0.0，便于容器外访问；生产暴露前应放反向代理后。
+# 生产部署可将自定义配置挂载到 /etc/mts-server/config.yaml 覆盖本文件。
+
+data_dir: /data/mts-server
+
+http:
+  enabled: true
+  addr: 0.0.0.0:8086
+  dashboard_base: /
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    client_ca_file: ""
+    client_auth: false
+  read_timeout: 30s
+  read_header_timeout: 5s
+  write_timeout: 30s
+  idle_timeout: 2m
+
+grpc:
+  enabled: true
+  addr: 0.0.0.0:9096
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    client_ca_file: ""
+    client_auth: false
+  max_recv_msg_bytes: 16777216
+  max_send_msg_bytes: 16777216
+
+auth:
+  admin_token: ""
+  data_tokens: []
+  require_user: false
+
+user:
+  endpoint: local
+  password_auth_disabled: false
+
+limits:
+  max_request_body_bytes: 16777216
+  max_write_points: 10000
+  default_query_limit: 10000
+  max_query_limit: 100000
+  request_timeout: 30s
+  max_concurrent_http: 1024
+  max_concurrent_grpc: 1024
+
+observability:
+  access_log: true
+  pprof:
+    enabled: false
+
+backup:
+  dir: /data/mts-server/backups
+
+log:
+  level: info
+  format: text
+
+engine:
+  default_database: default
+  default_retention_policy: autogen
+  shard_duration: 1h
+  retention: 0s
+  memtable_max_samples: 10000
+  flush_sync: false
+  max_concurrent_compaction: 0
+  max_concurrent_downsample: 0
+  memtable_disorder_flush_ratio: 0
+  memtable_disorder_flush_min_samples: 0
+  compression:
+    enabled: true
+    algorithm: snappy
+    min_page_values: 128
+    value_page_samples: 0
+    omit_write_seq: false
+    zstd_level: default
+  compaction:
+    enabled: true
+    background_interval: 0s
+    level0_part_limit: 4
+    max_cascade_steps: 8
+    max_concurrent: 0
+  wal:
+    sync: false
+    segment_bytes: 0
+    batch_records: 0
+    batch_bytes: 0
+    batch_interval: 0s
+  query_page_cache:
+    limit: 0
+    max_samples: 0
+  query_block_cache:
+    limit: 0
+    max_bytes: 0
+  query_protection:
+    default_max_samples: 0
+    default_limit: 0
+  cardinality:
+    max_series: 0
+    max_fields: 0
+    max_tag_values_per_key: 0
+  storage_memory:
+    soft_sample_limit: 0
+    hard_sample_limit: 0
+    soft_bytes_limit: 0
+    hard_bytes_limit: 0
+    query_bytes_limit: 0
+    flush_bytes_limit: 0
+    compaction_bytes_limit: 0
+    compression_bytes_limit: 0
+
+shutdown_timeout: 15s

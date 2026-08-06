@@ -1,0 +1,51 @@
+# mts benchmark baseline
+# generated_at_utc: 2026-07-30T07:01:41Z
+# go_version: go version go1.26.5 linux/amd64
+# cpu_governor: powersave
+# parameters: package=./internal/bench count=10 benchmem=true pattern=BenchmarkEngine(Write(Batch|WideBatch)|Query(Row|Column)Iterator)/points=10000$
+goos: linux
+goarch: amd64
+pkg: github.com/openmts/mts/internal/bench
+cpu: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics     
+BenchmarkEngineWriteBatch/points=10000-16         	      48	  24326022 ns/op	29608783 B/op	   98966 allocs/op
+BenchmarkEngineWriteBatch/points=10000-16         	      45	  24667436 ns/op	29605659 B/op	   98956 allocs/op
+BenchmarkEngineWriteBatch/points=10000-16         	      46	  24915856 ns/op	29605100 B/op	   98957 allocs/op
+BenchmarkEngineWriteBatch/points=10000-16         	      43	  25069628 ns/op	29604983 B/op	   98956 allocs/op
+BenchmarkEngineWriteBatch/points=10000-16         	      45	  24569833 ns/op	29606476 B/op	   98959 allocs/op
+BenchmarkEngineWriteBatch/points=10000-16         	      45	  25150340 ns/op	29605075 B/op	   98956 allocs/op
+BenchmarkEngineWriteBatch/points=10000-16         	      46	  24679217 ns/op	29606840 B/op	   98958 allocs/op
+BenchmarkEngineWriteBatch/points=10000-16         	      45	  24820819 ns/op	29605661 B/op	   98958 allocs/op
+BenchmarkEngineWriteBatch/points=10000-16         	      43	  24754903 ns/op	29607765 B/op	   98958 allocs/op
+BenchmarkEngineWriteBatch/points=10000-16         	      48	  24828922 ns/op	29605664 B/op	   98958 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      27	  41952170 ns/op	48315053 B/op	  136311 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      26	  42607932 ns/op	48321443 B/op	  136334 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      26	  42244156 ns/op	48320299 B/op	  136333 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      24	  41841628 ns/op	48318478 B/op	  136324 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      25	  41944455 ns/op	48318817 B/op	  136327 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      26	  41679699 ns/op	48320708 B/op	  136334 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      26	  42231350 ns/op	48320038 B/op	  136332 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      27	  41852089 ns/op	48320132 B/op	  136330 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      26	  41447372 ns/op	48319125 B/op	  136328 allocs/op
+BenchmarkEngineWriteWideBatch/points=10000-16     	      26	  41833368 ns/op	48319011 B/op	  136326 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	     100	  11540291 ns/op	32428688 B/op	  103159 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	      97	  11483083 ns/op	32433956 B/op	  103165 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	      93	  11591504 ns/op	32433194 B/op	  103163 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	     100	  11865892 ns/op	32435688 B/op	  103167 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	      96	  11542268 ns/op	32433256 B/op	  103164 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	      97	  11412904 ns/op	32434934 B/op	  103166 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	      98	  11619771 ns/op	32434844 B/op	  103166 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	      93	  11809137 ns/op	32433670 B/op	  103165 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	      96	  11681374 ns/op	32435063 B/op	  103166 allocs/op
+BenchmarkEngineQueryRowIterator/points=10000-16   	      99	  11586437 ns/op	32436577 B/op	  103168 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     358	   3428521 ns/op	10879208 B/op	   23401 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     324	   3563050 ns/op	10880562 B/op	   23403 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     345	   3481006 ns/op	10880725 B/op	   23403 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     340	   3595721 ns/op	10880408 B/op	   23403 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     334	   3536081 ns/op	10881622 B/op	   23404 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     334	   3474393 ns/op	10880421 B/op	   23403 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     342	   3541189 ns/op	10880850 B/op	   23403 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     346	   3489924 ns/op	10880780 B/op	   23403 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     338	   3471648 ns/op	10881054 B/op	   23403 allocs/op
+BenchmarkEngineQueryColumnIterator/points=10000-16         	     346	   3474141 ns/op	10880855 B/op	   23403 allocs/op
+PASS
+ok  	github.com/openmts/mts/internal/bench	45.538s

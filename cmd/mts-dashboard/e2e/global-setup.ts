@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { createWriteStream, mkdirSync, writeFileSync, chmodSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -14,6 +15,10 @@ const PID_PATH = join(STATE_DIR, 'server.pid')
 const BASE_URL = process.env.MTS_E2E_BASE_URL || 'http://127.0.0.1:18086'
 const HTTP_ADDR = process.env.MTS_E2E_HTTP_ADDR || '127.0.0.1:18086'
 const GRPC_ADDR = process.env.MTS_E2E_GRPC_ADDR || '127.0.0.1:19096'
+const DASHBOARD_BASE = process.env.MTS_E2E_DASHBOARD_BASE || '/'
+const REQUIRE_PASSWORD_CHANGE = process.env.MTS_E2E_REQUIRE_PASSWORD_CHANGE !== '0'
+const ADMIN_TOKEN = randomBytes(32).toString('base64url')
+const INITIAL_ADMIN_PASSWORD = 'BootstrapAdmin!2026'
 
 function writeConfig() {
   // 每次冒烟使用干净 data_dir，避免上次强制改密残留导致 admin/admin 失败
@@ -29,7 +34,7 @@ function writeConfig() {
 http:
   enabled: true
   addr: ${JSON.stringify(HTTP_ADDR)}
-  dashboard_base: /
+  dashboard_base: ${JSON.stringify(DASHBOARD_BASE)}
   read_timeout: 30s
   read_header_timeout: 5s
   write_timeout: 30s
@@ -40,7 +45,7 @@ grpc:
   max_recv_msg_bytes: 16777216
   max_send_msg_bytes: 16777216
 auth:
-  admin_token: ""
+  admin_token: ${JSON.stringify(ADMIN_TOKEN)}
   data_tokens: []
   require_user: false
 user:
@@ -76,6 +81,26 @@ engine:
     max_cascade_steps: 8
 `
   writeFileSync(CONFIG_PATH, yaml, { mode: 0o600 })
+}
+
+async function bootstrapAdmin(url: string) {
+  const response = await fetch(`${url}/api/v1/users`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-MTS-Admin-Token': ADMIN_TOKEN,
+    },
+    body: JSON.stringify({
+      name: 'admin',
+      role: 'admin',
+      password: INITIAL_ADMIN_PASSWORD,
+      metadata: { must_change_password: REQUIRE_PASSWORD_CHANGE ? '1' : '0' },
+    }),
+  })
+  const body = await response.text()
+  if (!response.ok) {
+    throw new Error(`bootstrap admin failed: ${response.status} ${body}`)
+  }
 }
 
 async function buildServer() {
@@ -133,6 +158,7 @@ export default async function globalSetup() {
 
   try {
     await waitReady(BASE_URL, 45_000)
+    await bootstrapAdmin(BASE_URL)
   } catch (e) {
     try { process.kill(-child.pid, 'SIGTERM') } catch { /* ignore */ }
     try { process.kill(child.pid, 'SIGTERM') } catch { /* ignore */ }

@@ -36,6 +36,7 @@ const (
 	routeAuthPasswordPolicy        = "/api/v1/auth/password-policy"
 	routeUsers                     = "/api/v1/users"
 	routeUsersPrefix               = "/api/v1/users/"
+	routeUsersAccessGrants         = "/api/v1/users/access-grants"
 	routeUsersBatchDisabled        = "/api/v1/users/batch-disabled"
 	routeAuthzDatabaseCheck        = "/api/v1/authz/database/check"
 	routeAdminDatabases            = "/api/v1/admin/databases"

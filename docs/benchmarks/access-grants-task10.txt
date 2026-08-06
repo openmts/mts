@@ -1,0 +1,117 @@
+# Access Grants Task 10 性能证据
+
+generated_at: 2026-07-30T18:26:42+08:00
+workspace: /root/projects/v2/mts
+branch: main
+base_commit: 08d26a5
+os: Fedora Linux 44 Server Edition
+cpu: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+cpu_governor: powersave
+go: go1.26.5 linux/amd64
+node: v22.22.2
+npm: 10.9.7
+
+## 1. 采样命令
+
+```bash
+timeout 3m go test ./internal/user -run '^$' \
+  -bench '^BenchmarkUserGrantRead/legacy' -benchmem \
+  -benchtime=500ms -count=10 > /tmp/mts-access-grants-before.txt
+
+timeout 5m go test ./internal/user ./cmd/mts-server -run '^$' \
+  -bench 'Benchmark(UserGrantRead|AccessGrantsHTTP)' -benchmem \
+  -benchtime=500ms -count=10 > /tmp/mts-access-grants-after.txt
+
+timeout 2m benchstat -filter '.fullname:/legacy-users=/' \
+  baseline=/tmp/mts-access-grants-before.txt \
+  current=/tmp/mts-access-grants-after.txt
+
+cd cmd/mts-dashboard
+timeout 10m npm run test:e2e -- --grep 'commercial browser smoke path'
+```
+
+Go benchmark fixture 均为 10/100/1000 用户，每个用户三项 database grant；内部分页和
+HTTP 默认首屏 limit 均为 100，runtime、用户 fixture 和管理员令牌均在计时区外构造。
+Playwright fixture 每用户保留一项 grant，用于隔离 Dashboard 请求预算与首屏渲染时间。
+
+## 2. 请求数
+
+| 用户数 | 旧 Dashboard 模型 | 新聚合模型 | 新模型首屏用户数 |
+| ---: | ---: | ---: | ---: |
+| 10 | 11 requests/op | 1 request/op | 10 users/op |
+| 100 | 101 requests/op | 1 request/op | 100 users/op |
+| 1000 | 1001 requests/op | 1 request/op | 100 users/op |
+
+旧模型为一次 `/api/v1/users` 加每用户一次 `/database-permissions`。新模型只调用
+`GET /api/v1/users/access-grants`，请求数不再随总用户数线性增长。
+
+## 3. 内部分页 p50
+
+| 用户数 | sec/op | B/op | allocs/op | requests/op |
+| ---: | ---: | ---: | ---: | ---: |
+| 10 | 2.553 us | 3.375 KiB | 42 | 1 |
+| 100 | 29.73 us | 34.44 KiB | 402 | 1 |
+| 1000 | 104.7 us | 48.69 KiB | 402 | 1 |
+
+1000 用户场景只复制首屏 100 个 bundle，因此 `allocs/op` 与 100 用户场景一致。
+
+## 4. HTTP handler p50
+
+| 用户数 | sec/op | response-B/op | B/op | allocs/op | users/op |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 12.01 us | 1,927 B | 11.21 KiB | 99 | 10 |
+| 100 | 90.78 us | 18,668 B | 95.06 KiB | 639 | 100 |
+| 1000 | 170.5 us | 18,695 B | 110.2 KiB | 639 | 100 |
+
+1000 用户只比 100 用户多 27 response bytes，来自非空 `next_cursor`；响应用户数和
+序列化分配保持首屏上限。1000 用户总量仍需排序，因此耗时高于 100 用户，但未出现
+响应体积或分配随总用户数线性增长。
+
+## 5. legacy benchstat
+
+```text
+                                   baseline       current        vs base
+legacy-users=10 sec/op             2.789 us       2.746 us       -1.54% (p=0.015 n=10)
+legacy-users=100 sec/op            30.74 us       30.24 us       ~ (p=0.063 n=10)
+legacy-users=1000 sec/op           367.2 us       362.7 us       ~ (p=0.247 n=10)
+
+requests/op                        全部不变
+B/op                               全部不变
+allocs/op                          全部不变
+```
+
+只比较同名 legacy benchmark。10 用户耗时统计显著改善；100/1000 用户耗时无统计显著
+变化；三档 `B/op`、`allocs/op` 和请求数均无劣化。分页与 HTTP benchmark 是新增语义，
+不与 legacy 的绝对耗时直接比较。
+
+## 6. Playwright 首屏
+
+| 用户数 | 聚合 GET 数 | 旧 GET 数 | 首屏耗时 |
+| ---: | ---: | ---: | ---: |
+| 10 | 1 | 0 | 184.38 ms |
+| 100 | 1 | 0 | 178.53 ms |
+| 1000 | 1 | 0 | 180.62 ms |
+
+耗时口径为 `page.goto('/access/grants')` 到页面状态显示正确的当前页/总用户数；fixture
+由 Playwright route 在本机受控返回，用于验证 Dashboard 渲染和请求预算，不代表网络
+环境 SLA。用例还验证下一页和上一页各只新增一次聚合请求，旧 users/permissions GET
+始终为 0。
+
+## 7. Dashboard bundle
+
+| 指标 | Task 9 基线 | Task 10 | 变化 |
+| --- | ---: | ---: | ---: |
+| 总 raw | 1,400,585 B | 1,403,096 B | +2,511 B (+0.1793%) |
+| 总 gzip | 421,766 B | 422,715 B | +949 B (+0.2250%) |
+| 主入口 raw | 333,874 B | 334,442 B | +568 B (+0.1701%) |
+| 主入口 gzip | 110,983 B | 111,248 B | +265 B (+0.2388%) |
+
+四项增长均低于 5% 门禁。Access Grants 独立 chunk 为 24,408 B raw，Vite 报告
+7.38 kB gzip；新增分页逻辑没有被并入主入口的大块同步代码。
+
+## 8. 结论
+
+Task 10 消除了 Access Grants 的 U+1 请求：10/100/1000 用户首屏均固定为一次聚合请求。
+旧读取模型的耗时、内存和分配未出现劣化；1000 用户新路径受 100 用户页上限控制，HTTP
+响应约 18.7 KB，Playwright 首屏保持约 0.2 秒。Dashboard bundle 增长低于 0.25%，满足
+本 Task 的 5% 门禁。

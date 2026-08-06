@@ -25,6 +25,7 @@ import {
 } from '@/utils/commandPalette'
 import { auditLimitOptions, buildAuditQueryString } from '@/utils/auditQuery'
 import { parseAuditPrefill, auditFormToPrefill, type PrefillTimeRange, isPrefillTimeRange } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { copyText } from '@/utils/clipboard'
 import { AUDIT_CSV_HEADER, auditEventToCSVLine, buildAuditExport } from '@/utils/auditExport'
 import { buildAuditSessionSummary } from '@/utils/auditSessionSummary'
@@ -369,7 +370,7 @@ async function copyAuditShareLink() {
     q: clientQuery.value,
     user: isAdmin.value ? selectedUser.value : (currentUser.value || selectedUser.value),
   }, { hash: '#audit-filters' })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('auditShareCopied'))
   else notifyError(res.error || t.value('failed'))
@@ -659,12 +660,17 @@ watch(
           id="audit-table"
           class="scroll-mt-20 overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800"
           data-testid="audit-table"
+          role="grid"
+          :aria-rowcount="displayedRows.length + 1"
+          aria-colcount="6"
         >
           <div
             class="grid grid-cols-[2.5rem_minmax(9rem,1.1fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1.4fr)] gap-0 border-b border-slate-100 bg-white text-left dark:border-slate-800 dark:bg-slate-900"
             data-testid="audit-table-header"
+            role="row"
+            aria-rowindex="1"
           >
-            <div class="sticky top-0 z-[1] px-3 py-3">
+            <div class="sticky top-0 z-[1] px-3 py-3" role="columnheader">
               <input
                 type="checkbox"
                 class="h-3.5 w-3.5"
@@ -675,27 +681,27 @@ watch(
                 @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
               />
             </div>
-            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-time-col" @click="cycleAuditSort('time')" :aria-sort="ariaSortValue(auditSort, 'time')">
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted" role="columnheader" :aria-sort="ariaSortValue(auditSort, 'time')">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-time-col" @click="cycleAuditSort('time')">
                 {{ t('auditColTime') }} <span aria-hidden="true">{{ auditSortIndicator('time') }}</span>
               </button>
             </div>
-            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-user-col" @click="cycleAuditSort('user')" :aria-sort="ariaSortValue(auditSort, 'user')">
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted" role="columnheader" :aria-sort="ariaSortValue(auditSort, 'user')">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-user-col" @click="cycleAuditSort('user')">
                 {{ t('user') }} <span aria-hidden="true">{{ auditSortIndicator('user') }}</span>
               </button>
             </div>
-            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-action-col" @click="cycleAuditSort('action')" :aria-sort="ariaSortValue(auditSort, 'action')">
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted" role="columnheader" :aria-sort="ariaSortValue(auditSort, 'action')">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-action-col" @click="cycleAuditSort('action')">
                 {{ t('action') }} <span aria-hidden="true">{{ auditSortIndicator('action') }}</span>
               </button>
             </div>
-            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">
-              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-database-col" @click="cycleAuditSort('database')" :aria-sort="ariaSortValue(auditSort, 'database')">
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted" role="columnheader" :aria-sort="ariaSortValue(auditSort, 'database')">
+              <button type="button" class="mts-focus-ring inline-flex items-center gap-1" data-testid="audit-sort-database-col" @click="cycleAuditSort('database')">
                 {{ t('database') }} <span aria-hidden="true">{{ auditSortIndicator('database') }}</span>
               </button>
             </div>
-            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted">{{ t('auditColDetail') }}</div>
+            <div class="sticky top-0 z-[1] px-4 py-3 text-xs font-medium mts-muted" role="columnheader">{{ t('auditColDetail') }}</div>
           </div>
           <div v-if="!displayedEvents.length" data-testid="audit-empty-body">
             <EmptyState
@@ -722,6 +728,7 @@ watch(
             :items="displayedRows"
             :row-height="AUDIT_ROW_HEIGHT"
             :height="AUDIT_LIST_HEIGHT"
+            semantic-role="rowgroup"
             data-testid="audit-virtual-list"
           >
             <template #default="{ item: row }">
@@ -729,7 +736,7 @@ watch(
                 class="grid h-full grid-cols-[2.5rem_minmax(9rem,1.1fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_minmax(6rem,0.7fr)_minmax(8rem,1.4fr)] items-center border-b border-slate-100 last:border-b-0 dark:border-slate-800"
                 :data-testid="`audit-row-${row.idx}`"
               >
-                <div class="px-3">
+                <div class="px-3" role="gridcell">
                   <input
                     type="checkbox"
                     class="h-3.5 w-3.5"
@@ -739,11 +746,11 @@ watch(
                     @change="toggle(row.id, ($event.target as HTMLInputElement).checked)"
                   />
                 </div>
-                <div class="truncate px-4 text-xs text-slate-600 dark:text-slate-300">{{ row.evt.time }}</div>
-                <div class="truncate px-4 text-xs text-slate-700 dark:text-slate-200">{{ row.evt.user_name }}</div>
-                <div class="truncate px-4 text-xs font-medium text-slate-700 dark:text-slate-200">{{ row.evt.action }}</div>
-                <div class="truncate px-4 text-xs mts-muted">{{ row.evt.database || t('emptyValue') }}</div>
-                <div class="truncate px-4 text-xs mts-muted" :title="row.evt.detail || ''">{{ row.evt.detail || t('emptyValue') }}</div>
+                <div class="truncate px-4 text-xs text-slate-600 dark:text-slate-300" role="gridcell">{{ row.evt.time }}</div>
+                <div class="truncate px-4 text-xs text-slate-700 dark:text-slate-200" role="gridcell">{{ row.evt.user_name }}</div>
+                <div class="truncate px-4 text-xs font-medium text-slate-700 dark:text-slate-200" role="gridcell">{{ row.evt.action }}</div>
+                <div class="truncate px-4 text-xs mts-muted" role="gridcell">{{ row.evt.database || t('emptyValue') }}</div>
+                <div class="truncate px-4 text-xs mts-muted" role="gridcell" :title="row.evt.detail || ''">{{ row.evt.detail || t('emptyValue') }}</div>
               </div>
             </template>
           </VirtualTable>

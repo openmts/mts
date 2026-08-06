@@ -26,8 +26,9 @@ import (
 const grpcServiceName = "mts.v1.MTSServer"
 
 const (
-	e2eAdminToken = "e2e-admin-token"
-	e2eDataToken  = "e2e-data-token"
+	e2eAdminToken   = "e2e-admin-token"
+	e2eDataToken    = "e2e-data-token"
+	e2eUserPassword = "MtsE2E!9"
 )
 
 var httpUserToken string
@@ -261,7 +262,7 @@ func exerciseHTTP(addr string) error {
 	if err := postHTTPJSON(client, addr, "/api/v1/users", mts.User{Name: "http-e2e"}, &okResponse{}); err != nil {
 		return err
 	}
-	if err := putHTTPJSON(client, addr, "/api/v1/users/http-e2e/password", passwordRequest{Password: "secret"}, &okResponse{}); err != nil {
+	if err := putHTTPJSON(client, addr, "/api/v1/users/http-e2e/password", passwordRequest{Password: e2eUserPassword}, &okResponse{}); err != nil {
 		return err
 	}
 	if err := postHTTPJSON(client, addr, "/api/v1/users/http-e2e/database-permissions/default/read", emptyRequest{}, &okResponse{}); err != nil {
@@ -273,7 +274,7 @@ func exerciseHTTP(addr string) error {
 	var login authTokenResponse
 	if err := postHTTPJSON(client, addr, "/api/v1/auth/login", loginRequest{
 		UserName:   "http-e2e",
-		Password:   "secret",
+		Password:   e2eUserPassword,
 		TTLSeconds: 60,
 	}, &login); err != nil {
 		return err
@@ -545,7 +546,7 @@ func exerciseGRPC(addr string) error {
 	if err := invokeGRPC(adminCtx, conn, "CreateUser", mts.User{Name: "grpc-e2e"}, &okResponse{}); err != nil {
 		return fmt.Errorf("grpc create user: %w", err)
 	}
-	if err := invokeGRPC(adminCtx, conn, "SetUserPassword", setUserPasswordRequest{UserName: "grpc-e2e", Password: "secret"}, &okResponse{}); err != nil {
+	if err := invokeGRPC(adminCtx, conn, "SetUserPassword", setUserPasswordRequest{UserName: "grpc-e2e", Password: e2eUserPassword}, &okResponse{}); err != nil {
 		return fmt.Errorf("grpc set password: %w", err)
 	}
 	if err := invokeGRPC(adminCtx, conn, "GrantDatabasePermission", databasePermissionRequest{UserName: "grpc-e2e", Database: "default", Permission: mts.DatabasePermissionRead}, &okResponse{}); err != nil {
@@ -555,7 +556,7 @@ func exerciseGRPC(addr string) error {
 		return fmt.Errorf("grpc grant write: %w", err)
 	}
 	var login authTokenResponse
-	if err := invokeGRPC(ctx, conn, "Login", loginRequest{UserName: "grpc-e2e", Password: "secret", TTLSeconds: 60}, &login); err != nil {
+	if err := invokeGRPC(ctx, conn, "Login", loginRequest{UserName: "grpc-e2e", Password: e2eUserPassword, TTLSeconds: 60}, &login); err != nil {
 		return fmt.Errorf("grpc login: %w", err)
 	}
 	dataCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(

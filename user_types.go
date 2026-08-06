@@ -16,6 +16,9 @@ const (
 	DatabasePermissionAdmin DatabasePermission = "admin"
 )
 
+// MaxUserGrantPageLimit 是用户授权聚合读取的单页上限。
+const MaxUserGrantPageLimit = 200
+
 // User 表示一个本地或外部权限系统中的用户身份。
 type User struct {
 	Name        string            `json:"name"`
@@ -36,6 +39,19 @@ const (
 type DatabaseGrant struct {
 	Database   string             `json:"database"`
 	Permission DatabasePermission `json:"permission"`
+}
+
+// UserGrantBundle 包含一个用户及其 database 授权。
+type UserGrantBundle struct {
+	User   User            `json:"user"`
+	Grants []DatabaseGrant `json:"grants"`
+}
+
+// UserGrantPage 是按用户名排序的授权聚合分页结果。
+type UserGrantPage struct {
+	Items      []UserGrantBundle `json:"items"`
+	TotalUsers int               `json:"total_users"`
+	NextCursor string            `json:"next_cursor,omitempty"`
 }
 
 type Credentials struct {

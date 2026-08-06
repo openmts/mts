@@ -27,6 +27,7 @@ const currentUser = ref(getCurrentUser())
 const currentRole = ref(getCurrentUserRole())
 const mustChangePassword = ref(getMustChangePassword())
 const loggingOut = ref(false)
+const lastLogoutRemoteRevoked = ref<boolean | null>(null)
 const lastSessionRemainingSeconds = ref<number | null>(null)
 const lastSessionCheckedAt = ref<number | null>(null)
 const lastSessionServerTimeUnix = ref<number | null>(null)
@@ -67,6 +68,7 @@ export function useAuth() {
       if (role !== 'admin' && role !== 'user') {
         return formatCaughtError({ code: 'internal', message: 'invalid role' })
       }
+      clearAuth()
       setBearerToken(data.token.token)
       setCurrentUser(data.token.user_name)
       setTokenExpiresAt(data.token.expires_at || '')
@@ -130,11 +132,13 @@ export function useAuth() {
     }
   }
 
-  async function logout(): Promise<void> {
-    if (loggingOut.value) return
+  async function logout(): Promise<boolean> {
+    if (loggingOut.value) return false
     loggingOut.value = true
+    let remoteRevoked = false
     try {
-      await apiLogout()
+      remoteRevoked = await apiLogout()
+      return remoteRevoked
     } finally {
       clearAuth()
       currentUser.value = ''
@@ -142,6 +146,7 @@ export function useAuth() {
       mustChangePassword.value = false
       isAuthenticated.value = false
       clearSessionCalibration()
+      lastLogoutRemoteRevoked.value = remoteRevoked
       loggingOut.value = false
     }
   }
@@ -235,6 +240,7 @@ export function useAuth() {
     changePassword,
     logout,
     loggingOut,
+    lastLogoutRemoteRevoked,
     syncFromStorage,
     ensureSession,
     refreshSession,

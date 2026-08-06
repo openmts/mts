@@ -283,6 +283,17 @@ type databasePermissionsResponse struct {
 	Last          *adminHeavyLastResult `json:"last,omitempty"`
 }
 
+type accessGrantsResponse struct {
+	Items         []mts.UserGrantBundle `json:"items"`
+	TotalUsers    int                   `json:"total_users"`
+	NextCursor    string                `json:"next_cursor,omitempty"`
+	Path          string                `json:"path,omitempty"`
+	AdminOpBusy   bool                  `json:"admin_op_busy,omitempty"`
+	Op            string                `json:"op,omitempty"`
+	StartedAtUnix int64                 `json:"started_at_unix,omitempty"`
+	Last          *adminHeavyLastResult `json:"last,omitempty"`
+}
+
 type loginRequest struct {
 	UserName   string `json:"user_name"`
 	Password   string `json:"password"`

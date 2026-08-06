@@ -1,10 +1,6 @@
 import type { QueryResultRow } from '@/api/types'
 import { formatFieldValue } from '@/utils/fieldValue'
-
-function escapeCSV(v: string): string {
-  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`
-  return v
-}
+import { escapeCSVCell } from './csvEscape.ts'
 
 /** 收集 query 行的 tag/field 列集合 */
 export function collectQueryCSVColumns(rows: QueryResultRow[]): { tags: string[]; fields: string[] } {
@@ -19,7 +15,7 @@ export function collectQueryCSVColumns(rows: QueryResultRow[]): { tags: string[]
 
 export function queryCSVHeader(tags: string[], fields: string[]): string {
   const header = ['timestamp', 'measurement', ...tags.map((t) => `tag.${t}`), ...fields.map((f) => `field.${f}`)]
-  return header.map(escapeCSV).join(',')
+  return header.map(escapeCSVCell).join(',')
 }
 
 export function queryCSVRow(r: QueryResultRow, tags: string[], fields: string[]): string {
@@ -29,7 +25,7 @@ export function queryCSVRow(r: QueryResultRow, tags: string[], fields: string[])
     ...tags.map((t) => r.tags?.[t] ?? ''),
     ...fields.map((f) => formatFieldValue(r.fields?.[f])),
   ]
-  return cols.map((c) => escapeCSV(String(c))).join(',')
+  return cols.map(escapeCSVCell).join(',')
 }
 
 /** 将行结果导出为 CSV 文本 */

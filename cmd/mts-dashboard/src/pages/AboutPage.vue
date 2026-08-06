@@ -3,6 +3,7 @@ import { computed, inject, onMounted, ref, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { aboutFormToPrefill, parseAboutPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { apiGet } from '@/api/client'
 import { formatCaughtError } from '@/utils/apiError'
 import { useAuth } from '@/composables/useAuth'
@@ -137,7 +138,7 @@ function currentAboutSection(): string {
 
 async function copyAboutShareLink() {
   const path = aboutFormToPrefill({ section: currentAboutSection() })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('aboutShareCopied'))
   else notifyError(res.error || t.value('failed'))

@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const NEW_PASSWORD = 'AdminChanged!2026'
+const INITIAL_ADMIN_PASSWORD = 'BootstrapAdmin!2026'
+const ACCESS_GRANTS_FIXTURE_PAGE_LIMIT = 100
 
 async function login(page: Page, user: string, password: string) {
   await page.goto('/login')
@@ -65,8 +67,8 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('login-redirect-hint')).toBeVisible()
   await expect(page.getByTestId('login-redirect-path')).toContainText('/query')
 
-  // 1) bootstrap 默认密码 -> 强制改密
-  await login(page, 'admin', 'admin')
+  // 1) 使用显式管理 token 引导的初始管理员 -> 强制改密
+  await login(page, 'admin', INITIAL_ADMIN_PASSWORD)
   await expect(page).toHaveURL(/force-change-password/)
   await expect(page.getByTestId('password-hints')).toBeVisible()
   // P280: 强改密密码可见性切换
@@ -78,7 +80,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await page.getByTestId('force-toggle-new').click()
   await expect(page.getByTestId('force-new')).toHaveAttribute('type', 'password')
   // P279: 本地策略失败仅 dismiss、不可 retry
-  await page.getByTestId('force-old').fill('admin')
+  await page.getByTestId('force-old').fill(INITIAL_ADMIN_PASSWORD)
   await page.getByTestId('force-new').fill('short')
   await page.getByTestId('force-confirm').fill('short')
   await expect(page.getByTestId('password-hints-progress')).toBeVisible()
@@ -99,7 +101,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page).toHaveURL(/force-change-password/)
   await expect(page.getByTestId('force-password-panel')).toBeVisible()
 
-  await page.getByTestId('force-old').fill('admin')
+  await page.getByTestId('force-old').fill(INITIAL_ADMIN_PASSWORD)
   await page.getByTestId('force-new').fill(NEW_PASSWORD)
   await page.getByTestId('force-confirm').fill(NEW_PASSWORD)
   await page.getByTestId('force-password-submit').click()
@@ -130,8 +132,23 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('overview-auto-refresh')).toBeVisible()
   await expect(page.getByTestId('overview-refresh')).toBeVisible()
   // P187: 登出后访问受保护深链应带 redirect 提示，登录后回到原路径
+  const revokedBearer = await page.evaluate(() => {
+    sessionStorage.setItem('mts_admin_token', 'stale-admin-token')
+    sessionStorage.setItem('mts_data_token', 'stale-data-token')
+    return localStorage.getItem('mts_bearer_token') || ''
+  })
+  expect(revokedBearer).not.toBe('')
   await page.getByTestId('topbar-logout').click()
   await expect(page).toHaveURL(/login/)
+  await expect.poll(() => page.evaluate(() => ({
+    bearer: localStorage.getItem('mts_bearer_token'),
+    admin: sessionStorage.getItem('mts_admin_token'),
+    data: sessionStorage.getItem('mts_data_token'),
+  }))).toEqual({ bearer: null, admin: null, data: null })
+  const revokedResponse = await page.request.get('/api/v1/auth/session', {
+    headers: { Authorization: `Bearer ${revokedBearer}` },
+  })
+  expect(revokedResponse.status()).toBe(401)
   await page.goto('/query?database=default')
   await expect(page).toHaveURL(/login/)
   await expect(page.getByTestId('login-redirect-hint')).toBeVisible()
@@ -1356,10 +1373,125 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('access-matrix-table-header')).toBeVisible()
   await expect(page.getByTestId('access-matrix-virtual-list')).toBeVisible()
   await expect(page.getByTestId('access-matrix-virtual-hint')).toBeVisible()
+  const accessGrantAggregateRequests: string[] = []
+  const accessGrantLegacyRequests: string[] = []
+  const accessGrantRequestBudgets: Array<{
+    userCount: number
+    requestCount: number
+    firstScreenMs: number
+  }> = []
+  let accessGrantFixtureUserCount = 0
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') return
+    const requestURL = new URL(request.url())
+    if (requestURL.pathname === '/api/v1/users/access-grants') {
+      accessGrantAggregateRequests.push(request.url())
+      return
+    }
+    if (
+      requestURL.pathname === '/api/v1/users'
+      || requestURL.pathname.endsWith('/database-permissions')
+    ) {
+      accessGrantLegacyRequests.push(request.url())
+    }
+  })
+  await page.route('**/api/v1/users/access-grants?*', async (route) => {
+    const requestURL = new URL(route.request().url())
+    if (accessGrantFixtureUserCount > 0) {
+      const pageUserCount = Math.min(
+        accessGrantFixtureUserCount,
+        ACCESS_GRANTS_FIXTURE_PAGE_LIMIT,
+      )
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: Array.from({ length: pageUserCount }, (_, index) => ({
+            user: {
+              name: `user-${String(index).padStart(4, '0')}`,
+              role: 'user',
+              disabled: false,
+            },
+            grants: [{ database: 'metrics', permission: 'read' }],
+          })),
+          total_users: accessGrantFixtureUserCount,
+          next_cursor: accessGrantFixtureUserCount > ACCESS_GRANTS_FIXTURE_PAGE_LIMIT
+            ? 'user-0099'
+            : '',
+          path: '/api/v1/users/access-grants',
+          admin_op_busy: false,
+        }),
+      })
+      return
+    }
+    const isSecondPage = requestURL.searchParams.get('cursor') === 'alice'
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [{
+          user: {
+            name: isSecondPage ? 'bob' : 'alice',
+            role: 'user',
+            disabled: isSecondPage,
+          },
+          grants: [{
+            database: isSecondPage ? 'archive' : 'metrics',
+            permission: isSecondPage ? 'admin' : 'read',
+          }],
+        }],
+        total_users: 2,
+        next_cursor: isSecondPage ? '' : 'alice',
+        path: '/api/v1/users/access-grants',
+        admin_op_busy: false,
+      }),
+    })
+  })
+  for (const userCount of [10, 100, 1000]) {
+    accessGrantFixtureUserCount = userCount
+    const requestCountBefore = accessGrantAggregateRequests.length
+    const startedAt = performance.now()
+    await page.goto(`/access/grants?fixture-users=${userCount}`)
+    await expect(page.getByTestId('access-grants-page')).toBeVisible()
+    await expect.poll(() => accessGrantAggregateRequests.length).toBe(requestCountBefore + 1)
+    const shown = Math.min(userCount, ACCESS_GRANTS_FIXTURE_PAGE_LIMIT)
+    await expect(page.getByTestId('access-grants-page-number')).toContainText(
+      new RegExp(`${shown}(?:\\s*/\\s*共\\s*|\\s+of\\s+)${userCount}`),
+    )
+    accessGrantRequestBudgets.push({
+      userCount,
+      requestCount: accessGrantAggregateRequests.length - requestCountBefore,
+      firstScreenMs: Number((performance.now() - startedAt).toFixed(2)),
+    })
+  }
+  expect(accessGrantLegacyRequests).toHaveLength(0)
+  await test.info().attach('access-grants-request-budget.json', {
+    body: JSON.stringify(accessGrantRequestBudgets, null, 2),
+    contentType: 'application/json',
+  })
+  console.log(`Access Grants request budget: ${JSON.stringify(accessGrantRequestBudgets)}`)
+
+  accessGrantFixtureUserCount = 0
+  const paginationRequestStart = accessGrantAggregateRequests.length
   await page.goto('/access/grants')
   await expect(page.getByTestId('access-grants-page')).toBeVisible()
   await expect(page.getByTestId('access-grants-load-error')).toHaveCount(0)
   await expect(page.getByTestId('access-grants-partial-error')).toHaveCount(0)
+  await expect.poll(() => accessGrantAggregateRequests.length).toBe(paginationRequestStart + 1)
+  expect(accessGrantLegacyRequests).toHaveLength(0)
+  await expect(page.getByTestId('access-grants-page-scope')).toBeVisible()
+  await expect(page.getByTestId('access-grants-page-number')).toContainText('1')
+  await expect(page.getByTestId('access-grants-page-next')).toBeEnabled()
+  await page.getByTestId('access-grants-page-next').click()
+  await expect.poll(() => accessGrantAggregateRequests.length).toBe(paginationRequestStart + 2)
+  expect(accessGrantAggregateRequests[paginationRequestStart + 1]).toContain('cursor=alice')
+  await expect(page.getByTestId('access-grants-page-number')).toContainText('2')
+  await expect(page.getByTestId('access-grants-page-next')).toBeDisabled()
+  await page.getByTestId('access-grants-page-previous').click()
+  await expect.poll(() => accessGrantAggregateRequests.length).toBe(paginationRequestStart + 3)
+  await expect(page.getByTestId('access-grants-page-number')).toContainText('1')
+  expect(accessGrantLegacyRequests).toHaveLength(0)
+  await page.unroute('**/api/v1/users/access-grants?*')
   await expect(page.getByRole('main').getByRole('heading', { name: /实时授权|Live grants/ })).toBeVisible()
   await expect(page.getByTestId('access-grants-export-json')).toBeVisible()
   await expect(page.getByTestId('access-grants-export-csv')).toBeVisible()
@@ -1448,6 +1580,11 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('users-table-header')).toBeVisible()
   await expect(page.getByTestId('users-virtual-list')).toBeVisible()
   await expect(page.getByTestId('users-virtual-hint')).toBeVisible()
+  await expect(page.getByTestId('users-table')).toHaveAttribute('role', 'grid')
+  await expect(page.getByTestId('users-table-header')).toHaveAttribute('role', 'row')
+  await expect(page.getByTestId('users-table-header').getByRole('columnheader')).toHaveCount(5)
+  await expect(page.getByTestId('users-virtual-list')).toHaveAttribute('role', 'rowgroup')
+  await expect(page.getByTestId('users-virtual-list').getByRole('row').first()).toBeVisible()
   // 打开首个用户授权面板（admin 默认有 admin 用户）
   const openGrant = page.locator('[data-testid^="users-open-grant-"]').first()
   await expect(openGrant).toBeVisible()
@@ -1455,7 +1592,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('user-grant-panel')).toBeVisible()
   await expect(page.getByTestId('user-grant-db-filter')).toBeVisible()
   await expect(page.getByTestId('user-grant-submit')).toBeDisabled()
-  await page.getByTestId('user-grant-close').click()
+  await page.getByRole('button', { name: /关闭.*admin|Close.*admin/i }).click()
   await expect(page.getByTestId('user-grant-panel')).toHaveCount(0)
   await page.goto('/downsample')
   await expect(page.getByTestId('downsample-page')).toBeVisible()
@@ -1472,6 +1609,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('downsample-create-lookback')).toBeVisible()
   await expect(page.getByTestId('downsample-create-batch-size')).toBeVisible()
   await expect(page.getByTestId('downsample-create-meta')).toBeVisible()
+  await expect(page.getByRole('button', { name: /删除.*函数.*1|Remove.*function.*1/i })).toBeVisible()
   await page.keyboard.press('Escape')
   if (await page.getByTestId('downsample-virtual-list').count()) {
     await expect(page.getByTestId('downsample-virtual-list')).toBeVisible()
@@ -1795,7 +1933,7 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('audit-selection-toolbar')).toBeVisible()
   await expect(page.getByTestId('audit-select-all')).toBeVisible()
   await expect(page.getByTestId('audit-table')).toBeVisible()
-  await expect(page.getByTestId('audit-sort-time-col')).toHaveAttribute('aria-sort', /none|ascending|descending/)
+  await expect(page.getByTestId('audit-sort-time-col').locator('..')).toHaveAttribute('aria-sort', /none|ascending|descending/)
   await expect(page.getByTestId('audit-table-header')).toBeVisible()
   // 空结果时空状态；有事件时虚拟列表
   const emptyBody = page.getByTestId('audit-empty-body')
@@ -2313,6 +2451,8 @@ test('commercial browser smoke path', async ({ page }) => {
     throw new Error(`unexpected write-cancel idle title: ${cancelTitle}`)
   }
   await expect(page.getByTestId('write-submit')).toHaveAttribute('aria-busy', 'false')
+  await page.getByTestId('write-mode-form').click()
+  await expect(page.getByRole('button', { name: /删除.*行.*1|Remove.*row.*1/i })).toBeVisible()
 
   // P420: 写入路径 admin busy 429 友好文案（mock，避免真实写入）
   {

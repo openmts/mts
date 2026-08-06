@@ -30,6 +30,7 @@ type Engine struct {
 	retentionExpired      uint64
 	retentionDeletedBytes uint64
 	retentionDeleteErrors uint64
+	retentionPending      map[string]expiredShardCleanup
 
 	compactStopOnce sync.Once
 	compactStop     chan struct{}
@@ -79,6 +80,7 @@ func OpenWithDeps(_ context.Context, opts model.Options, deps Deps) (*Engine, er
 		deps:                deps,
 		metadata:            metadata,
 		shards:              make(map[string]*Shard),
+		retentionPending:    make(map[string]expiredShardCleanup),
 		memory:              newStorageMemoryLimiter(opts.StorageMemory),
 		compactionScheduler: newCompactionScheduler(opts.MaxConcurrentCompaction),
 		downsampleRunning:   make(map[string]struct{}),

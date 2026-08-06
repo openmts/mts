@@ -1,6 +1,7 @@
 /** 降采样策略清单导出（纯函数） */
 
 import { formatDownsampleFunctions } from './downsamplePolicyDetail.ts'
+import { escapeCSVCell } from './csvEscape.ts'
 
 export interface DownsampleExportRow {
   name: string
@@ -75,11 +76,6 @@ export function buildDownsampleExport(
   }
 }
 
-function escapeCSV(v: string): string {
-  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`
-  return v
-}
-
 export function downsampleToCSV(rows: DownsampleExportRow[] | null | undefined): string {
   const header = [
     'name',
@@ -118,7 +114,7 @@ export function downsampleToCSV(rows: DownsampleExportRow[] | null | undefined):
         fnText,
         tags,
       ]
-        .map((c) => escapeCSV(String(c ?? '')))
+        .map(escapeCSVCell)
         .join(','),
     )
   }

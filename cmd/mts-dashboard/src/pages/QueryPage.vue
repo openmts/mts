@@ -2,6 +2,7 @@
 import { onMounted, onBeforeUnmount, ref, watch, computed, inject, nextTick, type ComputedRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { parseQueryPrefill, timeRangeToQueryFormTimes, queryFormToPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { apiPost } from '@/api/client'
@@ -286,7 +287,7 @@ function applyQueryPrefillFromRoute() {
 
 async function copyShareLink() {
   const path = queryFormToPrefill(queryForm.value, { hash: '#query-form', mode: queryMode.value })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('queryShareCopied'))
   else notifyError(res.error || t.value('failed'))

@@ -11,10 +11,10 @@ import (
 func TestShouldFlushMemTableOnDisorderRatio(t *testing.T) {
 	ctx := context.Background()
 	eng, err := Open(ctx, model.Options{
-		Path:                           t.TempDir(),
-		ShardDuration:                  time.Hour,
-		MemTableMaxSamples:             100000,
-		MemTableDisorderFlushRatio:     0.5,
+		Path:                            t.TempDir(),
+		ShardDuration:                   time.Hour,
+		MemTableMaxSamples:              100000,
+		MemTableDisorderFlushRatio:      0.5,
 		MemTableDisorderFlushMinSamples: 4,
 	})
 	if err != nil {

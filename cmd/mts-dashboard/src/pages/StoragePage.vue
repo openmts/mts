@@ -32,6 +32,7 @@ import ExportJobBanner from '@/components/ExportJobBanner.vue'
 import { buildStorageConfigExport, formatStorageExportPretty, summarizeStorageExport } from '@/utils/storageExport'
 import { copyText } from '@/utils/clipboard'
 import { storageFormToPrefill, parseStoragePrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import {
   defaultSelectedSnapshotPath,
   selectableDataSnapshots,
@@ -657,7 +658,7 @@ function currentStorageSection(): string {
 
 async function copyStorageShareLink() {
   const path = storageFormToPrefill({ section: currentStorageSection() })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('storageShareCopied'))
   else notifyError(res.error || t.value('failed'))

@@ -8,6 +8,11 @@ export const AUTH_STORAGE_KEYS = {
   mustChange: 'mts_must_change_password',
 } as const
 
+export const AUTH_SESSION_STORAGE_KEYS = {
+  adminToken: 'mts_admin_token',
+  dataToken: 'mts_data_token',
+} as const
+
 export interface AuthStorageSnapshot {
   token: string
   user: string
@@ -39,4 +44,12 @@ export function isAuthStorageKey(key: string | null | undefined): boolean {
     key === AUTH_STORAGE_KEYS.expiresAt ||
     key === AUTH_STORAGE_KEYS.mustChange
   )
+}
+
+export function clearAuthStorage(
+  removeLocal: (key: string) => void,
+  removeSession: (key: string) => void,
+): void {
+  for (const key of Object.values(AUTH_STORAGE_KEYS)) removeLocal(key)
+  for (const key of Object.values(AUTH_SESSION_STORAGE_KEYS)) removeSession(key)
 }

@@ -211,7 +211,7 @@ go run ./cmd/mts-server init-config --output ./mts-server.yaml
 go run ./cmd/mts-server version
 ```
 
-HTTP 默认监听 `127.0.0.1:8086`，gRPC 默认监听 `127.0.0.1:9096`。HTTP API 按数据面、管理面和用户权限面拆分：数据面使用 `/api/v1/data/*`，管理面使用 `/api/v1/admin/*`，用户权限面使用 `/api/v1/users/*` 和 `/api/v1/authz/*`。配置 `auth.admin_token` 后，管理面和用户权限面需要服务级 admin token；开启 `auth.require_user` 后，服务会预置管理员账号 `admin/admin`，可登录后使用管理员 Bearer token 访问管理接口，普通用户只能访问已授权的数据面并修改自己的密码。首次登录后应修改默认管理员密码。配置 `auth.data_tokens` 后，数据面需要 `X-MTS-Data-Token` 或 Bearer token。生产部署可开启 HTTP/gRPC TLS、请求限制、访问日志、pprof、API 契约、配置校验/热重载和本地 storage snapshot/export。
+HTTP 默认监听 `127.0.0.1:8086`，gRPC 默认监听 `127.0.0.1:9096`。HTTP API 按数据面、管理面和用户权限面拆分：数据面使用 `/api/v1/data/*`，管理面使用 `/api/v1/admin/*`，用户权限面使用 `/api/v1/users/*` 和 `/api/v1/authz/*`。管理员可通过 `GET /api/v1/users/access-grants?limit=100&cursor=<username>` 分页读取用户与 database 授权快照，`limit` 范围为 1 到 200。服务不会创建默认管理员；首次部署应先配置强随机 `auth.admin_token`，再通过受保护的用户 API 创建管理员账号和初始密码。开启 `auth.require_user` 后，管理员可使用登录后的 Bearer token 访问管理接口，普通用户只能访问已授权的数据面并修改自己的密码。配置 `auth.data_tokens` 后，数据面需要 `X-MTS-Data-Token` 或 Bearer token。生产部署可开启 HTTP/gRPC TLS、请求限制、访问日志、pprof、API 契约、配置校验/热重载和本地 storage snapshot/export。
 
 ```bash
 curl http://127.0.0.1:8086/healthz
@@ -244,6 +244,8 @@ go build ./cmd/mts-server  # 编译含 Dashboard 的二进制
 # 子路径部署：前端 VITE_BASE=/mts/ make dashboard，服务端 http.dashboard_base: /mts/
 ```
 
+容器化部署直接拉取 GHCR 镜像（已内嵌 Dashboard），Docker 运行方式见 [docs/ops/docker-runbook.md](docs/ops/docker-runbook.md)。
+
 ## 结构化日志
 
 `Options.Logger` 接收 `*slog.Logger`，nil 时使用零开销 nopHandler。日志仅在生命周期事件（Open/Close/Compaction/Retention/Downsample）和错误路径记录，高频读写路径依赖指标体系：
@@ -265,9 +267,22 @@ make fmt
 make test
 make lint
 make coverage
+make dashboard-gate
 make e2e
 ```
 
 常用场景可直接执行 `make e2e-public-api`、`make fault-matrix`、`make storage-100k`、`make bench-query`、`make pprof-storage`、`make mts-server-test`；完整商用门禁执行 `make ci`。
 
-商用交付门禁要求生产包代码行覆盖率达到 90% 以上；`tests/**` 下的 e2e、fault、scale 和 pprof harness 作为行为验证单独执行。
+商用交付门禁要求每个含生产语句的 Go 包代码行覆盖率达到 90% 以上。Dashboard 门禁包含 lint、单测覆盖率、安全 DOM sink 扫描和高危依赖审计，覆盖率阈值为 lines/functions 90%、branches 70%；`tests/**` 下的 e2e、fault、scale 和 pprof harness 作为行为验证单独执行。
+
+## GitHub CI
+
+`.github/workflows/` 提供三个工作流：
+
+- `ci.yml`：push 触发，执行格式化检查、`make unit`、覆盖率门禁（>=90%）与 `golangci-lint`，任一失败即阻塞。
+- `pre-release.yml`：main 分支 push 后构建 mts-server 跨平台二进制（linux/darwin/windows × amd64/arm64）并发布 `dev` GitHub Pre-release，同时构建并推送 `ghcr.io/<owner>/mts-server:dev` 镜像（linux/amd64、linux/arm64）。
+- `release.yml`：推送 `v*` tag 时构建并发布 mts-server 正式版本，生成校验和并创建 GitHub Release，同时构建并推送 `ghcr.io/<owner>/mts-server:<tag>` 镜像。
+
+所有构建先 `npm run build` 构建并嵌入 mts-dashboard，再以 `CGO_ENABLED=0` 静态编译，版本信息通过 `-ldflags -X main.version/commit/builtAt` 注入。镜像基于 `deploy/docker/mts-server.yaml`（监听 `0.0.0.0`、数据目录 `/data`），Dockerfile 见仓库根目录。
+
+镜像推送使用 `GITHUB_TOKEN` 认证 GHCR，workflow 中声明 `packages: write` 权限，无需额外配置凭据；首次推送后如需公开拉取，请在仓库 Packages 页面将镜像可见性设为 public。

@@ -27,6 +27,7 @@ import { formatMessage } from '@/utils/formatMessage'
 import { healthStatusLabel, healthStatusToneClass } from '@/utils/healthStatusLabel'
 import { scheduleScrollToHash } from '@/utils/hashScroll'
 import { readinessFormToPrefill, parseReadinessPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { buildExportPreflight, formatExportPreflightText } from '@/utils/exportPreflight'
 import {
   buildCommercialHandoffSummary,
@@ -893,7 +894,7 @@ function currentReadinessSection(): string {
 
 async function copyReadinessShareLink() {
   const path = readinessFormToPrefill({ section: currentReadinessSection() })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('readinessShareCopied'))
   else notifyError(res.error || t.value('failed'))

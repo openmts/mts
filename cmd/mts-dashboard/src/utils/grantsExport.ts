@@ -1,11 +1,7 @@
 /** 实时授权导出（纯函数） */
 
 import type { GrantRow } from './grantsSummary.ts'
-
-function escapeCSV(v: string): string {
-  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`
-  return v
-}
+import { escapeCSVCell } from './csvEscape.ts'
 
 export function buildGrantsExport(
   rows: GrantRow[] | null | undefined,
@@ -76,7 +72,7 @@ export function grantsToCSV(rows: GrantRow[] | null | undefined): string {
   for (const r of rows || []) {
     lines.push(
       [r.user, r.role || '', r.disabled ? 'true' : 'false', r.database, r.permission]
-        .map((c) => escapeCSV(String(c ?? '')))
+        .map(escapeCSVCell)
         .join(','),
     )
   }

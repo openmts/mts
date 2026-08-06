@@ -63,6 +63,8 @@ type grpcCredentialSource struct {
 	ctx context.Context
 }
 
+type grpcAdminAuthorizedContextKey struct{}
+
 func (s grpcCredentialSource) Context() context.Context {
 	return s.ctx
 }
@@ -89,6 +91,9 @@ func (r *serverRuntime) requireHTTPAdmin(request *http.Request) error {
 }
 
 func (r *serverRuntime) requireGRPCAdmin(ctx context.Context) error {
+	if authorized, _ := ctx.Value(grpcAdminAuthorizedContextKey{}).(bool); authorized {
+		return nil
+	}
 	return r.requireAdmin(grpcCredentialSource{ctx: ctx})
 }
 

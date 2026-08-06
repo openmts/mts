@@ -57,6 +57,7 @@ import {
   databasesFormToPrefill,
 } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
+import { buildShareURL } from '@/utils/shareURL'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
 import ExportJobBanner from '@/components/ExportJobBanner.vue'
@@ -291,7 +292,7 @@ async function copyDatabasesShareLink() {
     database: activeDatabase.value?.name,
     q: dbFilter.value,
   }, { hash: activeDatabase.value ? '#databases-detail' : '#databases-filter-bar' })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('databasesShareCopied'))
   else notifyError(res.error || t.value('failed'))

@@ -6,10 +6,12 @@ const props = withDefaults(defineProps<{
   rowHeight?: number
   height?: number
   overscan?: number
+  semanticRole?: 'list' | 'rowgroup'
 }>(), {
   rowHeight: 36,
   height: 360,
   overscan: 8,
+  semanticRole: 'list',
 })
 
 const scroller = ref<HTMLElement | null>(null)
@@ -50,7 +52,7 @@ onBeforeUnmount(() => {
   <div
     ref="scroller"
     class="relative w-full overflow-auto"
-    role="list"
+    :role="semanticRole"
     :style="{ height: height + 'px' }"
   >
     <div :style="{ height: innerHeight + 'px', position: 'relative' }">
@@ -59,6 +61,10 @@ onBeforeUnmount(() => {
           v-for="(item, i) in visible"
           :key="start + i"
           :style="{ height: rowHeight + 'px' }"
+          :role="semanticRole === 'rowgroup' ? 'row' : 'listitem'"
+          :aria-rowindex="semanticRole === 'rowgroup' ? start + i + 2 : undefined"
+          :aria-posinset="semanticRole === 'list' ? start + i + 1 : undefined"
+          :aria-setsize="semanticRole === 'list' ? total : undefined"
         >
           <slot :item="item" :index="start + i" />
         </div>

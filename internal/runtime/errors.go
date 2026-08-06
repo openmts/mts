@@ -4,6 +4,7 @@ import "github.com/openmts/mts/internal/user"
 
 var (
 	ErrInvalidUser             = user.ErrInvalidUser
+	ErrInvalidPageLimit        = user.ErrInvalidPageLimit
 	ErrUserNotFound            = user.ErrUserNotFound
 	ErrUserAlreadyExists       = user.ErrUserAlreadyExists
 	ErrInvalidPermission       = user.ErrInvalidPermission

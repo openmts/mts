@@ -118,6 +118,7 @@ func TestOperationRegistryMountsCoreHTTPPaths(t *testing.T) {
 		routeAuthPasswordPolicy,
 		routeUsers,
 		routeUsersPrefix,
+		routeUsersAccessGrants,
 		routeUsersBatchDisabled,
 		routeAuthzDatabaseCheck,
 		routeAdminDatabases,
@@ -178,6 +179,7 @@ func TestAPISpecFromRegistryIncludesWriteAndAdmin(t *testing.T) {
 	foundWriteResp := false
 	foundFlushResp := false
 	foundBatchDisabledResp := false
+	foundAccessGrantsResp := false
 	for _, ns := range spec.Namespaces {
 		for _, ep := range ns.Endpoints {
 			if ep.Method == http.MethodPost && ep.Path == routeDataWrite {
@@ -195,6 +197,9 @@ func TestAPISpecFromRegistryIncludesWriteAndAdmin(t *testing.T) {
 			if ep.Method == http.MethodPost && ep.Path == routeUsersBatchDisabled && ep.Response != "" {
 				foundBatchDisabledResp = true
 			}
+			if ep.Method == http.MethodGet && ep.Path == routeUsersAccessGrants && ep.Response != "" {
+				foundAccessGrantsResp = true
+			}
 		}
 	}
 	if !foundWrite {
@@ -211,5 +216,8 @@ func TestAPISpecFromRegistryIncludesWriteAndAdmin(t *testing.T) {
 	}
 	if !foundBatchDisabledResp {
 		t.Fatal("api spec batch-disabled endpoint missing response hint")
+	}
+	if !foundAccessGrantsResp {
+		t.Fatal("api spec access-grants endpoint missing response hint")
 	}
 }

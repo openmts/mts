@@ -67,7 +67,7 @@ func TestHTTPRequireUserAuthenticatesBearerToken(t *testing.T) {
 	}, http.StatusOK, &writeResponse{})
 }
 
-func TestHTTPRequireUserBootstrapsDefaultAdmin(t *testing.T) {
+func TestHTTPRequireUserAuthenticatesExplicitAdmin(t *testing.T) {
 	runtime := openTestRuntimeRequireUser(t)
 	server := httptest.NewServer(runtime.httpHandler())
 	defer server.Close()
@@ -122,96 +122,6 @@ func TestHTTPCreateUserRollsBackWhenInitialPasswordInvalid(t *testing.T) {
 	}, http.StatusBadRequest, &errorResponse{})
 
 	getJSONWithHeaders(t, server.URL+"/api/v1/users/rollback-user", nil, http.StatusNotFound, &errorResponse{})
-}
-
-func TestRuntimeDoesNotResetExistingDefaultAdminPassword(t *testing.T) {
-	ctx := context.Background()
-	cfg := defaultConfig()
-	cfg.DataDir = t.TempDir()
-	cfg.HTTP.Addr = "127.0.0.1:0"
-	cfg.GRPC.Addr = "127.0.0.1:0"
-	cfg.Auth.RequireUser = true
-	cfg.Observability.AccessLog = false
-
-	runtime, err := openRuntime(ctx, cfg)
-	if err != nil {
-		t.Fatalf("openRuntime(first) error = %v", err)
-	}
-	if err := runtime.engine.ChangePassword(ctx, "admin", "admin", "changed1"); err != nil {
-		t.Fatalf("ChangePassword(admin) error = %v", err)
-	}
-	if err := runtime.shutdown(ctx); err != nil {
-		t.Fatalf("shutdown(first) error = %v", err)
-	}
-
-	reopened, err := openRuntime(ctx, cfg)
-	if err != nil {
-		t.Fatalf("openRuntime(reopen) error = %v", err)
-	}
-	t.Cleanup(func() {
-		if err := reopened.shutdown(ctx); err != nil {
-			t.Fatalf("shutdown(reopened) error = %v", err)
-		}
-	})
-	if _, err := reopened.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "admin"}, time.Minute); err != mts.ErrInvalidCredentials {
-		t.Fatalf("Authenticate(admin/default) error = %v, want ErrInvalidCredentials", err)
-	}
-	if _, err := reopened.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "changed1"}, time.Minute); err != nil {
-		t.Fatalf("Authenticate(admin/changed) error = %v", err)
-	}
-}
-
-func TestBootstrapDefaultAdminSkipsWhenUserAuthDisabled(t *testing.T) {
-	ctx := context.Background()
-	runtime := openTestRuntime(t)
-
-	// 密码认证开启时，即使 require_user=false 也应预置 admin，保证 Dashboard 可登录。
-	if err := bootstrapDefaultAdmin(ctx, runtime.currentConfig(), runtime.engine); err != nil {
-		t.Fatalf("bootstrapDefaultAdmin(password auth enabled) error = %v", err)
-	}
-	if _, err := runtime.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "admin"}, time.Minute); err != nil {
-		t.Fatalf("Authenticate(admin/admin) error = %v", err)
-	}
-
-	// 密码认证关闭时跳过 bootstrap。
-	cfg := runtime.currentConfig()
-	cfg.Auth.RequireUser = true
-	cfg.User.PasswordAuthDisabled = true
-	// 清理已有 admin，验证禁用密码认证时不会再创建/修复
-	if err := runtime.engine.DeleteUser(ctx, "admin"); err != nil {
-		t.Fatalf("DeleteUser(admin) error = %v", err)
-	}
-	if err := bootstrapDefaultAdmin(ctx, cfg, runtime.engine); err != nil {
-		t.Fatalf("bootstrapDefaultAdmin(disabled password auth) error = %v", err)
-	}
-	if _, ok, err := runtime.engine.GetUser(ctx, "admin"); err != nil || ok {
-		t.Fatalf("GetUser(admin) ok=%v err=%v, want missing", ok, err)
-	}
-}
-
-func TestBootstrapDefaultAdminPromotesExistingAdminUser(t *testing.T) {
-	ctx := context.Background()
-	runtime := openTestRuntime(t)
-	// openTestRuntime 已 bootstrap 默认 admin；先降级为 disabled user 再验证提升逻辑。
-	if err := runtime.engine.UpdateUser(ctx, mts.User{Name: "admin", Role: mts.UserRoleUser, Disabled: true}); err != nil {
-		t.Fatalf("UpdateUser(admin demote) error = %v", err)
-	}
-	cfg := runtime.currentConfig()
-	cfg.Auth.RequireUser = true
-	if err := bootstrapDefaultAdmin(ctx, cfg, runtime.engine); err != nil {
-		t.Fatalf("bootstrapDefaultAdmin(existing admin) error = %v", err)
-	}
-	admin, ok, err := runtime.engine.GetUser(ctx, "admin")
-	if err != nil || !ok {
-		t.Fatalf("GetUser(admin) ok=%v err=%v", ok, err)
-	}
-	if admin.Role != mts.UserRoleAdmin || admin.Disabled {
-		t.Fatalf("admin = %#v, want enabled admin role", admin)
-	}
-	// 密码仍保留 bootstrap 初始值
-	if _, err := runtime.engine.Authenticate(ctx, mts.Credentials{UserName: "admin", Password: "admin"}, time.Minute); err != nil {
-		t.Fatalf("Authenticate(admin/admin) error = %v", err)
-	}
 }
 
 func TestHTTPUserRoleControlsUserManagement(t *testing.T) {
@@ -605,13 +515,6 @@ func TestHTTPAdminAuth(t *testing.T) {
 	getJSONWithHeaders(t, server.URL+"/api/v1/users", nil, http.StatusUnauthorized, &response)
 	if response.Code != errorCodeUnauthenticated {
 		t.Fatalf("auth error = %#v, want unauthenticated", response)
-	}
-}
-
-func clearTestMustChangePassword(t *testing.T, runtime *serverRuntime) {
-	t.Helper()
-	if err := runtime.clearMustChangePassword(context.Background(), defaultSystemAdminName); err != nil {
-		t.Fatalf("clearTestMustChangePassword error = %v", err)
 	}
 }
 
@@ -1211,7 +1114,7 @@ func openTestRuntime(t *testing.T) *serverRuntime {
 			t.Fatalf("shutdown runtime error = %v", err)
 		}
 	})
-	clearTestMustChangePassword(t, runtime)
+	seedUserWithPassword(t, runtime, mts.User{Name: "admin", Role: mts.UserRoleAdmin}, "admin")
 	return runtime
 }
 
@@ -1232,7 +1135,7 @@ func openTestRuntimeWithAdminToken(t *testing.T) *serverRuntime {
 			t.Fatalf("shutdown runtime error = %v", err)
 		}
 	})
-	clearTestMustChangePassword(t, runtime)
+	seedUserWithPassword(t, runtime, mts.User{Name: "admin", Role: mts.UserRoleAdmin}, "admin")
 	return runtime
 }
 
@@ -1253,7 +1156,7 @@ func openTestRuntimeRequireUser(t *testing.T) *serverRuntime {
 			t.Fatalf("shutdown runtime error = %v", err)
 		}
 	})
-	clearTestMustChangePassword(t, runtime)
+	seedUserWithPassword(t, runtime, mts.User{Name: "admin", Role: mts.UserRoleAdmin}, "admin")
 	return runtime
 }
 

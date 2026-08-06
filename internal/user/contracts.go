@@ -22,6 +22,11 @@ type PermissionStore interface {
 	CheckPermission(context.Context, string, string, Permission) error
 }
 
+// GrantPageStore 读取用户与授权的一致分页快照。
+type GrantPageStore interface {
+	ListUserGrantPage(context.Context, string, int) (UserGrantPage, error)
+}
+
 // CredentialStore 管理密码凭证。
 type CredentialStore interface {
 	SetPassword(context.Context, string, string) error

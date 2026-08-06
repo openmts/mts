@@ -241,7 +241,6 @@ func (c *Catalog) ensureMetadataLocked(database string, policy string) bool {
 	return changed
 }
 
-
 func resolvedPointFrom(
 	point model.Point,
 	seriesID uint64,

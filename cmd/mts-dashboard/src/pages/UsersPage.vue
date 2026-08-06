@@ -60,6 +60,7 @@ import {
   USERS_BATCH_DISABLED_PATH,
 } from '@/utils/usersMetaAlign'
 import { parseUsersPrefill, usersFormToPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { copyText } from '@/utils/clipboard'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
@@ -328,7 +329,7 @@ async function copyUsersShareLink() {
     status: statusFilter.value || undefined,
     user: selectedUser.value?.name,
   }, { hash: selectedUser.value ? '#user-grant-panel' : '#users-filter-bar' })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('usersShareCopied'))
   else notifyError(res.error || t.value('failed'))
@@ -1204,12 +1205,17 @@ onBeforeUnmount(() => {
         id="users-table"
         class="min-w-[40rem] overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800"
         data-testid="users-table"
+        role="grid"
+        :aria-rowcount="filteredUsers.length + 1"
+        aria-colcount="5"
       >
         <div
           class="grid grid-cols-[2.5rem_minmax(10rem,1.4fr)_minmax(5rem,0.7fr)_minmax(5rem,0.7fr)_minmax(9rem,1fr)] border-b border-slate-100 bg-slate-50/95 text-left text-[11px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-400"
           data-testid="users-table-header"
+          role="row"
+          aria-rowindex="1"
         >
-          <div class="px-3 py-2.5">
+          <div class="px-3 py-2.5" role="columnheader">
             <input
               type="checkbox"
               class="h-3.5 w-3.5"
@@ -1220,27 +1226,28 @@ onBeforeUnmount(() => {
               @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
             />
           </div>
-          <div class="px-4 py-2.5">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-name" @click="cycleUserSort('name')" :aria-sort="ariaSortValue(userSort, 'name')">
+          <div class="px-4 py-2.5" role="columnheader" :aria-sort="ariaSortValue(userSort, 'name')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-name" @click="cycleUserSort('name')">
               {{ t('usersColUser') }} <span aria-hidden="true">{{ userSortIndicator('name') }}</span>
             </button>
           </div>
-          <div class="px-4 py-2.5">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-role" @click="cycleUserSort('role')" :aria-sort="ariaSortValue(userSort, 'role')">
+          <div class="px-4 py-2.5" role="columnheader" :aria-sort="ariaSortValue(userSort, 'role')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-role" @click="cycleUserSort('role')">
               {{ t('usersColRole') }} <span aria-hidden="true">{{ userSortIndicator('role') }}</span>
             </button>
           </div>
-          <div class="px-4 py-2.5">
-            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-status" @click="cycleUserSort('status')" :aria-sort="ariaSortValue(userSort, 'status')">
+          <div class="px-4 py-2.5" role="columnheader" :aria-sort="ariaSortValue(userSort, 'status')">
+            <button type="button" class="mts-focus-ring inline-flex items-center gap-1 uppercase" data-testid="users-sort-status" @click="cycleUserSort('status')">
               {{ t('usersColStatus') }} <span aria-hidden="true">{{ userSortIndicator('status') }}</span>
             </button>
           </div>
-          <div class="px-4 py-2.5 uppercase">{{ t('action') }}</div>
+          <div class="px-4 py-2.5 uppercase" role="columnheader">{{ t('action') }}</div>
         </div>
         <VirtualTable
           :items="filteredUsers"
           :row-height="USERS_ROW_HEIGHT"
           :height="USERS_LIST_HEIGHT"
+          semantic-role="rowgroup"
           data-testid="users-virtual-list"
         >
           <template #default="{ item: u }">
@@ -1248,7 +1255,7 @@ onBeforeUnmount(() => {
               class="grid h-full grid-cols-[2.5rem_minmax(10rem,1.4fr)_minmax(5rem,0.7fr)_minmax(5rem,0.7fr)_minmax(9rem,1fr)] items-center border-b border-slate-50 hover:bg-slate-50 dark:hover:bg-slate-800/40"
               :data-testid="`users-row-${u.name}`"
             >
-              <div class="px-3">
+              <div class="px-3" role="gridcell">
                 <input
                   type="checkbox"
                   class="h-3.5 w-3.5"
@@ -1258,22 +1265,22 @@ onBeforeUnmount(() => {
                   @change="toggle(u.name, ($event.target as HTMLInputElement).checked)"
                 />
               </div>
-              <div class="min-w-0 px-4">
+              <div class="min-w-0 px-4" role="gridcell">
                 <button type="button" class="text-left font-medium text-slate-800 hover:underline dark:text-slate-100" :data-testid="`users-open-grant-${u.name}`" @click="selectUser(u)">{{ u.name }}</button>
                 <span v-if="u.display_name" class="ml-2 text-xs text-slate-400 dark:text-slate-500">{{ u.display_name }}</span>
               </div>
-              <div class="px-4 text-slate-600 dark:text-slate-300">{{ roleLabel(u.role) }}</div>
-              <div class="px-4">
+              <div class="px-4 text-slate-600 dark:text-slate-300" role="gridcell">{{ roleLabel(u.role) }}</div>
+              <div class="px-4" role="gridcell">
                 <span
                   :class="u.disabled ? 'bg-red-50 text-red-700 dark:text-red-200' : 'bg-green-50 text-green-700 dark:text-green-200'"
                   class="rounded px-2 py-0.5 text-xs"
                 >{{ u.disabled ? t('usersStatusDisabled') : t('usersStatusActive') }}</span>
               </div>
-              <div class="px-4">
+              <div class="px-4" role="gridcell">
                 <div class="flex items-center gap-1">
                   <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : t('usersSetPassword')" :disabled="writeBlocked" :data-testid="`users-set-password-${u.name}`" @click="openSetPassword(u.name)"><Key class="h-4 w-4" /></button>
                   <button type="button" class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`users-toggle-${u.name}`" @click="requestToggleDisable(u)">{{ u.disabled ? t('usersEnable') : t('usersDisable') }}</button>
-                  <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`users-delete-${u.name}`" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
+                  <button type="button" class="rounded p-1 text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40" :disabled="writeBlocked" :aria-label="formatMessage(t('usersDeleteButton'), { name: u.name })" :title="writeBlocked ? t(blockedMessageKey('offlineAdminBlocked')) : undefined" :data-testid="`users-delete-${u.name}`" @click="requestDelete(u.name)"><Trash2 class="h-4 w-4" /></button>
                 </div>
               </div>
             </div>

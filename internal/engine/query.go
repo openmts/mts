@@ -62,6 +62,10 @@ func (s *projectedRowStream) Next() bool {
 		return false
 	}
 	row := s.source.Row()
+	if fieldsMatchProjection(row.Fields, s.fields) {
+		s.current = row
+		return true
+	}
 	projected := make(map[string]model.FieldValue, len(s.fields))
 	for name, value := range row.Fields {
 		if _, ok := s.fields[name]; ok {
@@ -70,6 +74,18 @@ func (s *projectedRowStream) Next() bool {
 	}
 	row.Fields = projected
 	s.current = row
+	return true
+}
+
+func fieldsMatchProjection(fields map[string]model.FieldValue, projection map[string]struct{}) bool {
+	if len(fields) != len(projection) {
+		return false
+	}
+	for name := range fields {
+		if _, ok := projection[name]; !ok {
+			return false
+		}
+	}
 	return true
 }
 

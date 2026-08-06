@@ -288,7 +288,7 @@ func TestHTTPAdminConfigAndDownsampleBranches(t *testing.T) {
 	resp := doHTTP(t, http.MethodPatch, server.URL+"/api/v1/admin/downsample/policies", emptyRequest{}, nil)
 	closeHTTPResponse(t, resp, http.StatusBadRequest)
 	resp = doHTTP(t, http.MethodGet, server.URL+"/api/v1/admin/downsample/policies/missing", nil, nil)
-	closeHTTPResponse(t, resp, http.StatusBadRequest)
+	closeHTTPResponse(t, resp, http.StatusNotFound)
 	postJSON(
 		t,
 		server.URL+"/api/v1/admin/downsample/policies/missing/unknown",

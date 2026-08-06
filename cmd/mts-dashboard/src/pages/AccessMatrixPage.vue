@@ -27,6 +27,7 @@ import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { accessMatrixToCSV, buildAccessMatrixExport } from '@/utils/accessMatrixExport'
 import { alignAccessMatrixMeta } from '@/utils/accessMatrixMetaAlign'
 import { parseAccessPrefill, accessFormToPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { copyText } from '@/utils/clipboard'
 import { stampFilename } from '@/utils/download'
 import { useExportJob } from '@/composables/useExportJob'
@@ -202,7 +203,7 @@ async function copyAccessShareLink() {
     area: areaFilter.value,
     q: textFilter.value,
   }, { hash: '#access-matrix-filter-bar' })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('accessShareCopied'))
   else notifyError(res.error || t.value('failed'))

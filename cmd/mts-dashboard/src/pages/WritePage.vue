@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { hashTargetId, scheduleScrollToHash } from '@/utils/hashScroll'
 import { parseWritePrefill, writeFormToPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { copyText } from '@/utils/clipboard'
 import { apiPost } from '@/api/client'
 import { applyGlobalAdminOpStatus } from '@/composables/useAdminOpBusy'
@@ -487,7 +488,7 @@ async function copyWriteShareLink() {
     { database: selectedDb.value, measurement },
     { hash: writeMode.value === 'typed' ? '#write-mode-typed' : '#write-target' },
   )
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('writeShareCopied'))
   else notifyError(res.error || t.value('failed'))
@@ -1034,7 +1035,7 @@ async function exportWriteDraft() {
     <div id="write-body" v-if="writeMode==='form'" class="scroll-mt-20 space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div v-for="(row, idx) in formRows" :key="idx" class="rounded border border-slate-100 p-3 dark:border-slate-800">
         <div class="mb-2 flex justify-between text-xs font-medium">{{ formatMessage(t('writeRowN'), { n: idx+1 }) }}
-          <button class="text-red-500" @click="removeRow(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
+          <button type="button" class="text-red-500" :aria-label="formatMessage(t('writeRemoveRow'), { n: idx + 1 })" @click="removeRow(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
         </div>
         <div class="grid gap-2 md:grid-cols-3">
           <input

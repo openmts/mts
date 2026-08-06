@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"errors"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -20,14 +23,11 @@ func grpcStreamsFromRegistry() []grpc.StreamDesc {
 
 func grpcQueryStreamHandler(service any, stream grpc.ServerStream) error {
 	r := service.(*grpcService).runtime
-	grpcSem := r.grpcSem
-	if !acquireGRPC(grpcSem) {
-		return status.Error(codes.ResourceExhausted, "too many concurrent grpc requests")
-	}
-	defer releaseGRPC(grpcSem)
-
 	var req queryStreamRequest
 	if err := stream.RecvMsg(&req); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return grpcError(stream.Context(), err)
+		}
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 	ctx := stream.Context()

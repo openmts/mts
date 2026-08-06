@@ -7,6 +7,7 @@ import {
 } from './accessGrantsMetaAlign.ts'
 
 test('preferredPermissionsPath', () => {
+	assert.equal(USERS_LIST_PATH, '/api/v1/users/access-grants')
   assert.equal(preferredPermissionsPath('alice'), '/api/v1/users/alice/database-permissions')
   assert.match(preferredPermissionsPath(''), /\{name\}/)
 })

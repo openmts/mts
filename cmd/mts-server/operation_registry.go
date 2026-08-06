@@ -341,6 +341,16 @@ func operationCatalog() []operation {
 			HTTPHandler:  (*serverRuntime).handleUsers,
 		},
 		{
+			Name:         "list_access_grants",
+			Namespace:    "users",
+			Description:  "list a paginated user and database grant snapshot",
+			ResponseHint: "accessGrantsResponse{items,total_users,next_cursor,path,admin_op_busy,last}",
+			Auth:         authAdmin,
+			HTTPMethods:  []string{http.MethodGet},
+			HTTPPaths:    []string{routeUsersAccessGrants},
+			HTTPHandler:  (*serverRuntime).handleAccessGrants,
+		},
+		{
 			Name:         "users_resource",
 			Namespace:    "users",
 			Description:  "user resource and database permissions (PUT .../password -> setPasswordResponse with user_name; disable via PUT user revokes tokens)",
@@ -1023,22 +1033,68 @@ func grpcMethodsFromRegistry() []grpc.MethodDesc {
 			panic("duplicate grpc method in operation registry: " + op.GRPCMethod)
 		}
 		seen[op.GRPCMethod] = struct{}{}
+		var handler grpc.MethodHandler
 		switch {
 		case op.GRPCHandler != nil:
-			methods = append(methods, grpc.MethodDesc{
-				MethodName: op.GRPCMethod,
-				Handler:    op.GRPCHandler,
-			})
+			handler = op.GRPCHandler
 		case op.GRPCFn != nil:
-			methods = append(methods, grpc.MethodDesc{
-				MethodName: op.GRPCMethod,
-				Handler:    unaryHandler(op.GRPCMethod, op.GRPCRequest, op.GRPCFn),
-			})
+			handler = unaryHandler(op.GRPCMethod, op.GRPCRequest, op.GRPCFn)
 		default:
 			panic("grpc operation missing handler: " + op.GRPCMethod)
 		}
+		handler = withGRPCOperationAudit(op, handler)
+		methods = append(methods, grpc.MethodDesc{
+			MethodName: op.GRPCMethod,
+			Handler:    withGRPCOperationAuth(op.Auth, handler),
+		})
 	}
 	return methods
+}
+
+func withGRPCOperationAuth(auth operationAuth, handler grpc.MethodHandler) grpc.MethodHandler {
+	if auth != authAdmin {
+		return handler
+	}
+	return func(
+		service any,
+		ctx context.Context,
+		decode func(any) error,
+		interceptor grpc.UnaryServerInterceptor,
+	) (any, error) {
+		runtime := service.(*grpcService).runtime
+		authInterceptor := func(
+			ctx context.Context,
+			req any,
+			_ *grpc.UnaryServerInfo,
+			next grpc.UnaryHandler,
+		) (any, error) {
+			if err := runtime.requireGRPCAdmin(ctx); err != nil {
+				return nil, grpcError(ctx, err)
+			}
+			ctx = context.WithValue(ctx, grpcAdminAuthorizedContextKey{}, true)
+			return next(ctx, req)
+		}
+		return handler(service, ctx, decode, chainGRPCUnaryInterceptors(interceptor, authInterceptor))
+	}
+}
+
+func chainGRPCUnaryInterceptors(
+	outer grpc.UnaryServerInterceptor,
+	inner grpc.UnaryServerInterceptor,
+) grpc.UnaryServerInterceptor {
+	if outer == nil {
+		return inner
+	}
+	return func(
+		ctx context.Context,
+		req any,
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (any, error) {
+		return outer(ctx, req, info, func(ctx context.Context, req any) (any, error) {
+			return inner(ctx, req, info, handler)
+		})
+	}
 }
 
 func apiSpecFromRegistry() apiSpecResponse {

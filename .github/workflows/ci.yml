@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: 单元测试与覆盖率
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: 安装 goimports-reviser
+        run: go install github.com/incu6us/goimports-reviser/v3@v3.12.6
+
+      - name: 格式化检查
+        run: goimports-reviser -project-name github.com/openmts/mts -recursive -list-diff -set-exit-status .
+
+      - name: 单元测试
+        run: make unit
+
+      - name: 覆盖率门禁（>=90%）
+        run: make coverage
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2

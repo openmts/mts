@@ -40,6 +40,7 @@ import type {
   QueryStreamEndMeta,
 } from '@/api/types'
 import { hasQueryResultSnapshot } from '@/utils/querySnapshot'
+import { beginLatestLoad, createLatestRequestGuard } from '@/utils/latestRequestGuard'
 
 export type { QueryResultRow, QueryStatsData }
 
@@ -108,6 +109,8 @@ export function useQueryWorkbench() {
   const queryStartedAt = ref<number | null>(null)
   let queryAbort: AbortController | null = null
   let requestSeq = 0
+  const dbChildrenGuard = createLatestRequestGuard()
+  const measurementMetaGuard = createLatestRequestGuard()
 
   async function loadDatabases() {
     const result = await listDatabasesDetailed()
@@ -123,6 +126,7 @@ export function useQueryWorkbench() {
   }
 
   async function loadDbChildren(db: string) {
+    const request = beginLatestLoad(dbChildrenGuard, !!db, (value) => { measurementsLoading.value = value })
     measurements.value = []
     retentionPolicies.value = []
     fieldOptions.value = []
@@ -134,39 +138,38 @@ export function useQueryWorkbench() {
     seriesHasMore.value = false
     seriesError.value = ''
     if (!queryForm.value.measurement) queryForm.value.measurement = ''
-    if (!db) return
-    measurementsLoading.value = true
+    if (!request) return
     try {
       const measResult = await listMeasurementsDetailed(db)
       const meas = measResult.names
-      measurements.value = meas
-      if (measResult.adminOp) {
-        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(measResult.adminOp))
-      }
-      if (meas.length && !queryForm.value.measurement) {
-        queryForm.value.measurement = meas[0]
-      }
+      if (!request.commit(() => {
+        measurements.value = meas
+        if (measResult.adminOp) {
+          applyGlobalAdminOpStatus(parseAdminOpStatusPayload(measResult.adminOp))
+        }
+        if (meas.length && !queryForm.value.measurement) {
+          queryForm.value.measurement = meas[0]
+        }
+      })) return
       try {
         const rpResult = await listRetentionPoliciesDetailed(db)
-        retentionPolicies.value = rpResult.policies.map((p) => p.name)
-        if (rpResult.adminOp) {
-          applyGlobalAdminOpStatus(parseAdminOpStatusPayload(rpResult.adminOp))
-        }
-        if (retentionPolicies.value.length && !retentionPolicies.value.includes(queryForm.value.retention_policy)) {
-          queryForm.value.retention_policy = retentionPolicies.value[0]
-        }
-        // partial: 库列表可能 admin，RP 走 data
-        if (rpResult.source === 'data' && metaSource.value === 'admin') {
-          // keep admin for db list
-        } else if (rpResult.source === 'manual' && metaSource.value === 'admin') {
-          metaSource.value = 'partial'
-        }
+        request.commit(() => {
+          retentionPolicies.value = rpResult.policies.map((p) => p.name)
+          if (rpResult.adminOp) {
+            applyGlobalAdminOpStatus(parseAdminOpStatusPayload(rpResult.adminOp))
+          }
+          if (retentionPolicies.value.length && !retentionPolicies.value.includes(queryForm.value.retention_policy)) {
+            queryForm.value.retention_policy = retentionPolicies.value[0]
+          }
+          if (rpResult.source === 'manual' && metaSource.value === 'admin') {
+            metaSource.value = 'partial'
+          }
+        })
       } catch {
-        // RP 列表失败时允许手填
-        retentionPolicies.value = []
+        request.commit(() => { retentionPolicies.value = [] })
       }
     } finally {
-      measurementsLoading.value = false
+      request.commit(() => { measurementsLoading.value = false })
     }
   }
 
@@ -227,6 +230,8 @@ export function useQueryWorkbench() {
   }
 
   async function loadMeasurementMeta(db: string, measurement: string, opts?: { useFormTags?: boolean }) {
+    const hasTarget = !!db.trim() && !!measurement.trim()
+    const request = beginLatestLoad(measurementMetaGuard, hasTarget, (value) => { seriesLoading.value = value })
     fieldOptions.value = []
     seriesOptions.value = []
     seriesTotal.value = 0
@@ -234,35 +239,38 @@ export function useQueryWorkbench() {
     seriesOffset.value = 0
     seriesHasMore.value = false
     seriesError.value = ''
-    if (!db.trim() || !measurement.trim()) return
-    seriesLoading.value = true
+    if (!request) return
     try {
       let tagFilter: Record<string, string> | undefined
       if (opts?.useFormTags) {
         const parsed = parseTagsSafe(queryForm.value.tags)
         if (parsed.error) {
-          seriesError.value = parsed.error
+          request.commit(() => { seriesError.value = parsed.error || '' })
         } else {
           tagFilter = parsed.tags
         }
       }
+      let seriesLoadError = ''
       const [fieldsResult, seriesResult] = await Promise.all([
         listFieldsDetailed(db, measurement).catch(() => ({ fields: [] as FieldMeta[], adminOp: undefined })),
         listSeriesDetailed(db, measurement, { tags: tagFilter, limit: SERIES_CAP, offset: 0 }).catch((e) => {
-          seriesError.value = seriesError.value || formatCaughtError(e)
+          seriesLoadError = formatCaughtError(e)
           return { series: [] as SeriesMeta[], total: 0, truncated: false, limit: SERIES_CAP, offset: 0, adminOp: undefined }
         }),
       ])
-      if (fieldsResult.adminOp) {
-        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(fieldsResult.adminOp))
-      }
-      if (seriesResult.adminOp) {
-        applyGlobalAdminOpStatus(parseAdminOpStatusPayload(seriesResult.adminOp))
-      }
-      fieldOptions.value = fieldNames(fieldsResult.fields)
-      applySeriesPage(seriesResult, false)
+      request.commit(() => {
+        if (seriesLoadError) seriesError.value = seriesError.value || seriesLoadError
+        if (fieldsResult.adminOp) {
+          applyGlobalAdminOpStatus(parseAdminOpStatusPayload(fieldsResult.adminOp))
+        }
+        if (seriesResult.adminOp) {
+          applyGlobalAdminOpStatus(parseAdminOpStatusPayload(seriesResult.adminOp))
+        }
+        fieldOptions.value = fieldNames(fieldsResult.fields)
+        applySeriesPage(seriesResult, false)
+      })
     } finally {
-      seriesLoading.value = false
+      request.commit(() => { seriesLoading.value = false })
     }
   }
 

@@ -23,6 +23,13 @@ const maxCachedCompactionIndexRows = 65536
 
 var ErrCompactionDiskSpaceExceeded = errors.New("compaction disk space exceeded")
 
+type expiredShardCleanup struct {
+	dir          string
+	parts        int
+	deletedBytes int64
+	files        fileOps
+}
+
 func (e *Engine) Compact(ctx context.Context) error {
 	_, err := e.CompactWithResult(ctx)
 	return err
@@ -133,6 +140,9 @@ func (e *Engine) ApplyRetention(_ context.Context, now time.Time) error {
 	cutoff := now.UnixNano() - int64(e.opts.Retention)
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if err := e.retryExpiredShardCleanupLocked(); err != nil {
+		return err
+	}
 	for id, shard := range e.shards {
 		if err := e.applyRetentionToShardLocked(id, shard, cutoff); err != nil {
 			return err
@@ -182,19 +192,45 @@ func (e *Engine) removeExpiredShardLocked(id string, shard *Shard) error {
 		shard.lifecycleMu.Unlock()
 		return err
 	}
-	if err := shard.deps.files.RemoveAll(shard.opts.Dir); err != nil {
+	if e.retentionPending == nil {
+		e.retentionPending = make(map[string]expiredShardCleanup)
+	}
+	e.retentionPending[id] = expiredShardCleanup{
+		dir:          shard.opts.Dir,
+		parts:        len(shard.manifest.Parts),
+		deletedBytes: deletedBytes,
+		files:        shard.deps.files,
+	}
+	delete(e.shards, id)
+	shard.lifecycleMu.Unlock()
+	return e.finishExpiredShardCleanupLocked(id)
+}
+
+func (e *Engine) retryExpiredShardCleanupLocked() error {
+	for id := range e.retentionPending {
+		if err := e.finishExpiredShardCleanupLocked(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (e *Engine) finishExpiredShardCleanupLocked(id string) error {
+	pending, ok := e.retentionPending[id]
+	if !ok {
+		return nil
+	}
+	if err := pending.files.RemoveAll(pending.dir); err != nil {
 		e.retentionDeleteErrors++
-		shard.lifecycleMu.Unlock()
 		return err
 	}
-	e.retentionExpired += uint64(len(shard.manifest.Parts))
-	e.retentionDeletedBytes += uint64(deletedBytes)
-	shard.lifecycleMu.Unlock()
+	delete(e.retentionPending, id)
+	e.retentionExpired += uint64(pending.parts)
+	e.retentionDeletedBytes += uint64(pending.deletedBytes)
 	e.logger.Info("retention shard removed",
 		"shard", id,
-		"deleted_bytes", deletedBytes,
+		"deleted_bytes", pending.deletedBytes,
 	)
-	delete(e.shards, id)
 	return nil
 }
 

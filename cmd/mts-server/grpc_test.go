@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -125,7 +126,7 @@ func TestGRPCRequireUserAuthenticatesBearerToken(t *testing.T) {
 	invokeOK(t, goodCtx, conn, "Write", &writeRequest{Points: []mts.Point{testPoint()}}, &writeResp)
 }
 
-func TestGRPCRequireUserBootstrapsDefaultAdmin(t *testing.T) {
+func TestGRPCRequireUserAuthenticatesExplicitAdmin(t *testing.T) {
 	runtime := openTestRuntimeRequireUser(t)
 	conn := openBufconnClient(t, runtime)
 	defer func() {
@@ -262,6 +263,135 @@ func TestGRPCUserRoleControlsUserManagement(t *testing.T) {
 		Permission: mts.DatabasePermissionRead,
 	}, &okResponse{})
 	invokeOK(t, adminCtx, conn, "DeleteUser", &userNameRequest{Name: "bob"}, &okResponse{})
+}
+
+func TestGRPCRegistryAdminOperationsRequireAuthentication(t *testing.T) {
+	runtime := openTestRuntimeWithAdminToken(t)
+	runtime.config.Auth.RequireUser = true
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+	adminCtx := metadata.NewOutgoingContext(
+		ctx,
+		metadata.Pairs("authorization", "Bearer test-admin-token"),
+	)
+	seedUserWithPassword(t, runtime, mts.User{Name: "grpc-regular-user"}, "regular-pass")
+	var login authTokenResponse
+	invokeOK(
+		t,
+		ctx,
+		conn,
+		"Login",
+		&loginRequest{UserName: "grpc-regular-user", Password: "regular-pass"},
+		&login,
+	)
+	userCtx := metadata.NewOutgoingContext(
+		ctx,
+		metadata.Pairs("authorization", "Bearer "+login.Token.Token),
+	)
+
+	var created storageSnapshotResponse
+	invokeOK(t, adminCtx, conn, "StorageSnapshot", &emptyRequest{}, &created)
+	snapshotName := filepath.Base(created.Path)
+	operations := []struct {
+		name string
+		req  any
+		out  func() any
+	}{
+		{name: "ListAudit", req: &auditListRequest{}, out: func() any { return &auditListResponse{} }},
+		{name: "ListStorageSnapshots", req: &emptyRequest{}, out: func() any { return &storageSnapshotsResponse{} }},
+		{
+			name: "DeleteStorageSnapshot",
+			req:  &storageSnapshotDeleteRequest{Name: snapshotName},
+			out:  func() any { return &okResponse{} },
+		},
+	}
+
+	for _, operation := range operations {
+		t.Run(operation.name+"/anonymous", func(t *testing.T) {
+			err := invokeGRPC(ctx, conn, operation.name, operation.req, operation.out())
+			if status.Code(err) != codes.Unauthenticated {
+				t.Fatalf("code = %v, want Unauthenticated, err=%v", status.Code(err), err)
+			}
+		})
+		t.Run(operation.name+"/regular_user", func(t *testing.T) {
+			err := invokeGRPC(userCtx, conn, operation.name, operation.req, operation.out())
+			if status.Code(err) != codes.PermissionDenied {
+				t.Fatalf("code = %v, want PermissionDenied, err=%v", status.Code(err), err)
+			}
+		})
+	}
+
+	var audit auditListResponse
+	invokeOK(t, adminCtx, conn, "ListAudit", &auditListRequest{}, &audit)
+	var snapshots storageSnapshotsResponse
+	invokeOK(t, adminCtx, conn, "ListStorageSnapshots", &emptyRequest{}, &snapshots)
+	invokeOK(
+		t,
+		adminCtx,
+		conn,
+		"DeleteStorageSnapshot",
+		&storageSnapshotDeleteRequest{Name: snapshotName},
+		&okResponse{},
+	)
+}
+
+func TestGRPCRegistryAdminMatrixRejectsNonAdmins(t *testing.T) {
+	runtime := openTestRuntimeWithAdminToken(t)
+	runtime.config.Auth.RequireUser = true
+	conn := openBufconnClient(t, runtime)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Fatalf("Close(conn) error = %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+	seedUserWithPassword(t, runtime, mts.User{Name: "grpc-matrix-user"}, "regular-pass")
+	var login authTokenResponse
+	invokeOK(
+		t,
+		ctx,
+		conn,
+		"Login",
+		&loginRequest{UserName: "grpc-matrix-user", Password: "regular-pass"},
+		&login,
+	)
+	userCtx := metadata.NewOutgoingContext(
+		ctx,
+		metadata.Pairs("authorization", "Bearer "+login.Token.Token),
+	)
+	callers := []struct {
+		name string
+		ctx  context.Context
+		code codes.Code
+	}{
+		{name: "anonymous", ctx: ctx, code: codes.Unauthenticated},
+		{name: "regular_user", ctx: userCtx, code: codes.PermissionDenied},
+	}
+
+	for _, operation := range operationCatalog() {
+		if operation.Auth != authAdmin || operation.GRPCMethod == "" {
+			continue
+		}
+		for _, caller := range callers {
+			t.Run(operation.GRPCMethod+"/"+caller.name, func(t *testing.T) {
+				request := newGRPCRequest(operation.GRPCRequest)
+				if request == nil {
+					request = &emptyRequest{}
+				}
+				err := invokeGRPC(caller.ctx, conn, operation.GRPCMethod, request, &map[string]any{})
+				if status.Code(err) != caller.code {
+					t.Fatalf("code = %v, want %v, err=%v", status.Code(err), caller.code, err)
+				}
+			})
+		}
+	}
 }
 
 func TestGRPCUserCanOnlyChangeOwnPassword(t *testing.T) {

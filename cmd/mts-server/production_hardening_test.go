@@ -408,27 +408,28 @@ func TestProductionHelperBranches(t *testing.T) {
 	_ = newLogger(&bytes.Buffer{}, logConfig{Level: "error", Format: "text"})
 	_ = newLogger(&bytes.Buffer{}, logConfig{Level: "unknown", Format: "text"})
 	runtime.applyLimitState(config{})
-	if runtime.httpSem != nil || runtime.grpcSem != nil {
-		t.Fatalf("zero limits semaphores = %#v %#v, want nil", runtime.httpSem, runtime.grpcSem)
+	if httpLimit, _ := runtime.httpLimiter.snapshot(); httpLimit != 0 {
+		t.Fatalf("zero HTTP limit = %d, want 0", httpLimit)
+	}
+	if grpcLimit, _ := runtime.grpcLimiter.snapshot(); grpcLimit != 0 {
+		t.Fatalf("zero gRPC limit = %d, want 0", grpcLimit)
 	}
 	runtime.applyLimitState(config{Limits: limitsConfig{MaxConcurrentHTTP: 1, MaxConcurrentGRPC: 1}})
 	recorder := httptest.NewRecorder()
-	httpSem := runtime.httpSem
-	if !runtime.acquireHTTP(recorder, httpSem) {
+	if !runtime.acquireHTTP(recorder) {
 		t.Fatal("first acquire http failed")
 	}
-	if runtime.acquireHTTP(recorder, httpSem) {
+	if runtime.acquireHTTP(recorder) {
 		t.Fatal("second acquire http succeeded, want reject")
 	}
-	releaseHTTP(httpSem)
-	grpcSem := runtime.grpcSem
-	if !acquireGRPC(grpcSem) {
+	runtime.httpLimiter.release()
+	if !runtime.grpcLimiter.tryAcquire() {
 		t.Fatal("first acquire grpc failed")
 	}
-	if acquireGRPC(grpcSem) {
+	if runtime.grpcLimiter.tryAcquire() {
 		t.Fatal("second acquire grpc succeeded, want reject")
 	}
-	releaseGRPC(grpcSem)
+	runtime.grpcLimiter.release()
 	audit := newAuditLog(1)
 	audit.record(auditEvent{UserName: "a", Action: "one"})
 	audit.record(auditEvent{UserName: "a", Action: "two"})

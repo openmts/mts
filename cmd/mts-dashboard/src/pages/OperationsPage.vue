@@ -48,6 +48,7 @@ import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { actionResultAdminBusyAction, adminOpKindLabelKey, adminHeavyBusyOpFromError, formatAdminHeavyLastSummary, isAdminHeavyBusyError, joinAdminOpChip, parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
 import { formatMessage } from '@/utils/formatMessage'
 import { parseOperationsPrefill, operationsFormToPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 
 interface CompactionStatsResponse { stats: CompactionStats; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: unknown }
 interface MaintenanceErrorsResponse { errors: string[]; path?: string; admin_op_busy?: boolean; op?: string; started_at_unix?: number; last?: { op?: string; ok?: boolean; error?: string } }
@@ -699,7 +700,7 @@ async function copyOperationsShareLink() {
   }, {
     hash: maintErrorFilter.value ? '#ops-maint-errors' : '#ops-action-log',
   })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('opsShareCopied'))
   else notifyError(res.error || t.value('failed'))

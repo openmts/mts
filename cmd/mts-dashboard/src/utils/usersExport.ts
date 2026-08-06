@@ -1,5 +1,7 @@
 /** 用户清单导出（纯函数） */
 
+import { escapeCSVCell } from './csvEscape.ts'
+
 export interface UserExportRow {
   name: string
   display_name?: string
@@ -44,16 +46,11 @@ export function buildUsersExport(
   }
 }
 
-function escapeCSV(v: string): string {
-  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`
-  return v
-}
-
 export const USERS_CSV_HEADER = 'name,display_name,role,disabled'
 
 export function userToCSVLine(r: UserExportRow): string {
   return [r.name, r.display_name || '', r.role || '', r.disabled ? 'true' : 'false']
-    .map((c) => escapeCSV(String(c ?? '')))
+    .map(escapeCSVCell)
     .join(',')
 }
 

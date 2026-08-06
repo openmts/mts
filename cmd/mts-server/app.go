@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	yaml "github.com/goccy/go-yaml"
 	cli "github.com/urfave/cli/v2"
@@ -181,19 +180,28 @@ func runServer(ctx context.Context, cfg config, logger *slog.Logger) (err error)
 		return err
 	}
 	if err := runtime.start(); err != nil {
-		return errors.Join(err, runtime.shutdown(ctx))
+		return err
 	}
 	runtime.setLogger(logger)
 	sighup := make(chan os.Signal, 1)
 	signal.Notify(sighup, syscall.SIGHUP)
 	defer signal.Stop(sighup)
 	logger.Info("mts-server started", "http", cfg.HTTP.Addr, "grpc", cfg.GRPC.Addr)
+	return serveRuntime(ctx, runtime, logger, sighup)
+}
+
+func serveRuntime(
+	ctx context.Context,
+	runtime *serverRuntime,
+	logger *slog.Logger,
+	sighup <-chan os.Signal,
+) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return shutdownRuntime(runtime, cfg)
+			return shutdownRuntime(runtime)
 		case err := <-runtime.serveErrors():
-			return errors.Join(err, runtime.shutdown(ctx))
+			return errors.Join(err, runtime.shutdownWithinTimeout())
 		case <-sighup:
 			if _, err := runtime.reloadConfig(); err != nil {
 				logger.Warn("reload config failed", "error", err)
@@ -204,10 +212,8 @@ func runServer(ctx context.Context, cfg config, logger *slog.Logger) (err error)
 	}
 }
 
-func shutdownRuntime(runtime *serverRuntime, cfg config) error {
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Shutdown))
-	defer cancel()
-	if err := runtime.shutdown(shutdownCtx); err != nil {
+func shutdownRuntime(runtime *serverRuntime) error {
+	if err := runtime.shutdownWithinTimeout(); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return nil

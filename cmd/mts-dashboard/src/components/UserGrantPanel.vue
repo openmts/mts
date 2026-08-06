@@ -57,7 +57,7 @@ const canGrant = computed(() => props.grantDbs.length > 0 && props.grantPerms.le
         <Shield class="h-4 w-4 text-slate-500 dark:text-slate-400" />
         {{ formatMessage(t('grantPanelTitle'), { name: selectedUser.name }) }}
       </h3>
-      <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300" data-testid="user-grant-close" @click="emit('close')"><X class="h-4 w-4" /></button>
+      <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300" data-testid="user-grant-close" :aria-label="formatMessage(t('grantPanelClose'), { name: selectedUser.name })" @click="emit('close')"><X class="h-4 w-4" /></button>
     </div>
     <div class="mb-3">
       <div class="mb-1 flex items-center justify-between gap-2">

@@ -23,8 +23,8 @@ type serverRuntime struct {
 	logger                 *slog.Logger
 	metrics                *serverMetrics
 	audit                  *auditLog
-	httpSem                chan struct{}
-	grpcSem                chan struct{}
+	httpLimiter            requestLimiter
+	grpcLimiter            requestLimiter
 	requestSeq             atomic.Uint64
 	maintenanceBusy        atomic.Bool
 	maintenanceOp          atomic.Value // string
@@ -46,11 +46,6 @@ func openRuntime(ctx context.Context, cfg config) (*serverRuntime, error) {
 	}
 	engine, err := mts.Open(ctx, cfg.engineOptions())
 	if err != nil {
-		return nil, err
-	}
-	// bootstrap 不受 serve 父 context 取消影响（避免启动即 cancel 时无法预置管理员）。
-	if err := bootstrapDefaultAdmin(context.WithoutCancel(ctx), cfg, engine); err != nil {
-		_ = engine.Close(ctx)
 		return nil, err
 	}
 	audit := newAuditLog(256)
@@ -89,51 +84,9 @@ func openRuntime(ctx context.Context, cfg config) (*serverRuntime, error) {
 	return runtime, nil
 }
 
-const (
-	defaultSystemAdminName     = "admin"
-	defaultSystemAdminPassword = "admin"
-)
-
-func bootstrapDefaultAdmin(ctx context.Context, cfg config, engine *mts.Engine) error {
-	// Dashboard 强制登录；只要密码认证开启就预置默认管理员，便于 POC/演示首访可登录。
-	// require_user 仅控制数据面是否强制用户鉴权，不再作为 bootstrap 门槛。
-	if cfg.User.PasswordAuthDisabled {
-		return nil
-	}
-	user, ok, err := engine.GetUser(ctx, defaultSystemAdminName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		user := mts.User{
-			Name:     defaultSystemAdminName,
-			Role:     mts.UserRoleAdmin,
-			Metadata: withMustChangePassword(nil, true),
-		}
-		if err := engine.CreateUser(ctx, user); err != nil {
-			return err
-		}
-		return engine.SetPassword(ctx, defaultSystemAdminName, defaultSystemAdminPassword)
-	}
-	if user.Role == mts.UserRoleAdmin && !user.Disabled {
-		return nil
-	}
-	user.Role = mts.UserRoleAdmin
-	user.Disabled = false
-	return engine.UpdateUser(ctx, user)
-}
-
 func (r *serverRuntime) applyLimitState(cfg config) {
-	if cfg.Limits.MaxConcurrentHTTP > 0 {
-		r.httpSem = make(chan struct{}, cfg.Limits.MaxConcurrentHTTP)
-	} else {
-		r.httpSem = nil
-	}
-	if cfg.Limits.MaxConcurrentGRPC > 0 {
-		r.grpcSem = make(chan struct{}, cfg.Limits.MaxConcurrentGRPC)
-	} else {
-		r.grpcSem = nil
-	}
+	r.httpLimiter.setLimit(cfg.Limits.MaxConcurrentHTTP)
+	r.grpcLimiter.setLimit(cfg.Limits.MaxConcurrentGRPC)
 }
 
 func (r *serverRuntime) setLogger(logger *slog.Logger) {
@@ -162,7 +115,7 @@ func (r *serverRuntime) start() error {
 	if r.httpServer != nil {
 		ln, err := net.Listen("tcp", r.config.HTTP.Addr)
 		if err != nil {
-			return err
+			return errors.Join(err, r.shutdownWithinTimeout())
 		}
 		r.httpLn = ln
 		go func() {
@@ -175,8 +128,7 @@ func (r *serverRuntime) start() error {
 	if r.grpcServer != nil {
 		ln, err := net.Listen("tcp", r.config.GRPC.Addr)
 		if err != nil {
-			_ = r.shutdown(context.Background())
-			return err
+			return errors.Join(err, r.shutdownWithinTimeout())
 		}
 		r.grpcLn = ln
 		go func() {
@@ -227,12 +179,19 @@ func (r *serverRuntime) shutdown(ctx context.Context) error {
 		}
 	}
 	if r.audit != nil {
-		r.audit.close()
+		err = errors.Join(err, r.audit.close(ctx))
 	}
 	if r.engine != nil {
 		err = errors.Join(err, r.engine.Close(ctx))
 	}
 	return err
+}
+
+func (r *serverRuntime) shutdownWithinTimeout() error {
+	timeout := time.Duration(r.currentConfig().Shutdown)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return r.shutdown(shutdownCtx)
 }
 
 func (r *serverRuntime) write(ctx context.Context, req writeRequest) error {
@@ -480,518 +439,6 @@ func (r *serverRuntime) compactionStats() mts.CompactionStats {
 
 func (r *serverRuntime) maintenanceStats() mts.MaintenanceStats {
 	return r.engine.MaintenanceStatsSnapshot()
-}
-
-func (r *serverRuntime) maintenanceStatsPayload() maintenanceStatsResponse {
-	busy, op, started := r.adminHeavyState()
-	return maintenanceStatsResponse{
-		Stats:         r.maintenanceStats(),
-		Path:          routeAdminStatsMaintenance,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) opsStatusPayload() opsStatusResponse {
-	busy, op, started := r.adminHeavyState()
-	return opsStatusResponse{
-		Path:          routeAdminOpsStatus,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) adminHealthPayload() adminHealthResponse {
-	busy, op, started := r.adminHeavyState()
-	return adminHealthResponse{
-		Health:        r.health(),
-		Path:          routeAdminHealth,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) adminVersionPayload() versionResponse {
-	busy, op, started := r.adminHeavyState()
-	return versionResponse{
-		Version:       version,
-		Commit:        commit,
-		BuiltAt:       builtAt,
-		Path:          routeAdminVersion,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) storageMemoryPayload() storageMemoryResponse {
-	busy, op, started := r.adminHeavyState()
-	return storageMemoryResponse{
-		Snapshot:      r.storageMemory(),
-		Path:          routeAdminStatsStorageMemory,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) compactionStatsPayload() compactionStatsResponse {
-	busy, op, started := r.adminHeavyState()
-	return compactionStatsResponse{
-		Stats:         r.compactionStats(),
-		Path:          routeAdminStatsCompaction,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) attachAdminOpToSnapshots(resp storageSnapshotsResponse) storageSnapshotsResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDataSnapshots(resp storageDataSnapshotsResponse) storageDataSnapshotsResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) storageExportPayload(ctx context.Context) storageExportResponse {
-	busy, op, started := r.adminHeavyState()
-	return storageExportResponse{
-		Export:        r.storageExport(ctx),
-		Path:          routeAdminStorageExport,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) configPayload() configResponse {
-	busy, op, started := r.adminHeavyState()
-	return configResponse{
-		Config:        r.effectiveConfig(),
-		Path:          routeAdminConfigEffective,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) configSchemaPayload() configSchemaResponse {
-	busy, op, started := r.adminHeavyState()
-	return configSchemaResponse{
-		Fields:        configSchema(),
-		Path:          routeAdminConfigSchema,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) apiSpecPayload() apiSpecResponse {
-	busy, op, started := r.adminHeavyState()
-	resp := apiSpec()
-	resp.Path = routeAdminAPISpec
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) errorCodesPayload() errorCodesResponse {
-	busy, op, started := r.adminHeavyState()
-	resp := errorCodeSpecs()
-	resp.Path = routeAdminErrorCodes
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToAudit(resp auditListResponse) auditListResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDownsamplePolicies(resp downsamplePoliciesResponse) downsamplePoliciesResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDownsamplePolicy(resp downsamplePolicyResponse) downsamplePolicyResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDownsampleStatuses(resp downsampleStatusesResponse) downsampleStatusesResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDownsamplePolicyStatus(resp downsamplePolicyStatusResponse) downsamplePolicyStatusResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToUsers(resp usersResponse) usersResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToMeasurements(resp measurementsResponse) measurementsResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDatabases(resp databasesResponse) databasesResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToRetentionPolicies(resp retentionPoliciesResponse) retentionPoliciesResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToPermissions(resp databasePermissionsResponse) databasePermissionsResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToFields(resp fieldsResponse) fieldsResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToSeries(resp seriesResponse) seriesResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) queryStatsPayload() queryStatsResponse {
-	busy, op, started := r.adminHeavyState()
-	return queryStatsResponse{
-		Stats:         r.queryStats(),
-		Path:          routeDataQueryStats,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) attachAdminOpToSession(resp sessionResponse) sessionResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) storageValidatePayload() storageValidateResponse {
-	busy, op, started := r.adminHeavyState()
-	resp := r.storageValidate()
-	resp.Path = routeAdminStorageValidate
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToMaintenance(resp maintenanceResponse) maintenanceResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToStorageSnapshot(resp storageSnapshotResponse) storageSnapshotResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDataSnapshot(resp storageDataSnapshotResponse) storageDataSnapshotResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToRestoreDrill(resp storageRestoreDrillResponse) storageRestoreDrillResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDelete(resp deleteResponse) deleteResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) streamEndRecord(format string, recordCount int, database, measurement string) streamRecord {
-	busy, op, started := r.adminHeavyState()
-	stats := r.queryStats()
-	return streamRecord{
-		Type:          streamTypeEnd,
-		Stats:         &stats,
-		Path:          routeDataQueryStream,
-		Format:        format,
-		RecordCount:   recordCount,
-		Database:      database,
-		Measurement:   measurement,
-		AdminOpBusy:   busy,
-		Op:            op,
-		StartedAtUnix: started,
-		Last:          r.lastAdminHeavySnapshot(),
-	}
-}
-
-func (r *serverRuntime) attachAdminOpToOK(resp okResponse) okResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToSetPassword(resp setPasswordResponse) setPasswordResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToChangePassword(resp changePasswordResponse) changePasswordResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToBatch(resp batchMutationResponse) batchMutationResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToReload(resp reloadConfigResponse) reloadConfigResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDownsampleRun(resp downsampleRunResponse) downsampleRunResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToDownsampleDryRun(resp downsampleDryRunResponse) downsampleDryRunResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToWrite(resp writeResponse) writeResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToQueryRows(resp queryRowsResponse) queryRowsResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToQueryColumns(resp queryColumnsResponse) queryColumnsResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToQueryExplain(resp queryExplainResponse) queryExplainResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) dataContractPayload() dataContractResponse {
-	cfg := r.currentConfig()
-	resp := dataContractResponse{
-		Version:           1,
-		Path:              routeDataContract,
-		MaxWritePoints:    cfg.Limits.MaxWritePoints,
-		DefaultQueryLimit: cfg.Limits.DefaultQueryLimit,
-		MaxQueryLimit:     cfg.Limits.MaxQueryLimit,
-		Features: []dataContractFeature{
-			{ID: "write_accepted_points", Path: routeDataWrite, Description: "write responses include points/path/mode/database/retention_policy", Enabled: true},
-			{ID: "write_response_mode", Path: routeDataWrite, Description: "write responses include mode (points|typed|points_typed), database and retention_policy", Enabled: true},
-			{ID: "write_response_retention", Path: routeDataWrite, Description: "write responses include retention_policy when single-policy batch", Enabled: true},
-			{ID: "query_result_meta", Path: routeDataQueryRows, Description: "query rows/columns/explain include path/count/database/measurement/admin_op", Enabled: true},
-			{ID: "query_stats_path", Path: routeDataQueryStats, Description: "GET query/stats includes path and admin_op", Enabled: true},
-			{ID: "query_stream_end_meta", Path: routeDataQueryStream, Description: "stream end frame includes path/format/record_count/database/measurement/admin_op", Enabled: true},
-			{ID: "delete_response_meta", Path: routeDataDelete, Description: "delete response includes path/database/measurement/admin_op", Enabled: true},
-			{ID: "data_limits", Path: routeDataLimits, Description: "GET data/limits exposes write/query caps", Enabled: true},
-			{ID: "meta_list_path", Path: routeDataDatabases, Description: "meta list responses include path/database/measurement scope", Enabled: true},
-		},
-	}
-	return r.attachAdminOpToDataContract(resp)
-}
-
-func (r *serverRuntime) attachAdminOpToDataContract(resp dataContractResponse) dataContractResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) dataLimitsPayload() dataLimitsResponse {
-	cfg := r.currentConfig()
-	resp := dataLimitsResponse{
-		MaxWritePoints:    cfg.Limits.MaxWritePoints,
-		DefaultQueryLimit: cfg.Limits.DefaultQueryLimit,
-		MaxQueryLimit:     cfg.Limits.MaxQueryLimit,
-		Path:              routeDataLimits,
-	}
-	return r.attachAdminOpToDataLimits(resp)
-}
-
-func (r *serverRuntime) attachAdminOpToDataLimits(resp dataLimitsResponse) dataLimitsResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
-}
-
-func (r *serverRuntime) attachAdminOpToConfigValidate(resp configValidateResponse) configValidateResponse {
-	busy, op, started := r.adminHeavyState()
-	resp.AdminOpBusy = busy
-	resp.Op = op
-	resp.StartedAtUnix = started
-	resp.Last = r.lastAdminHeavySnapshot()
-	return resp
 }
 
 func (r *serverRuntime) adminHeavyState() (busy bool, op string, startedAtUnix int64) {

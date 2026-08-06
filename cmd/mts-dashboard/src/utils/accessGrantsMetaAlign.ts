@@ -1,6 +1,6 @@
 /** Access Grants 页 path / 覆盖率对齐摘要（纯函数） */
 
-export const USERS_LIST_PATH = '/api/v1/users'
+export const USERS_LIST_PATH = '/api/v1/users/access-grants'
 export const USER_PERMISSIONS_PATH_TEMPLATE = '/api/v1/users/{name}/database-permissions'
 
 export interface AccessGrantsMetaAlign {

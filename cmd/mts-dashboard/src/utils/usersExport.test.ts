@@ -23,3 +23,14 @@ test('usersToCSV escapes', () => {
   assert.match(csv, /^name,display_name,role,disabled\n/)
   assert.match(csv, /"A,1"/)
 })
+
+test('usersToCSV neutralizes spreadsheet formulas through the shared escaper', () => {
+  const csv = usersToCSV([
+    { name: '=cmd', display_name: '\t@SUM(1,1)', role: 'user', disabled: false },
+  ])
+
+  assert.equal(
+    csv,
+    'name,display_name,role,disabled\n\'=cmd,"\'\t@SUM(1,1)",user,false',
+  )
+})

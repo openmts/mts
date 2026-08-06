@@ -1,5 +1,7 @@
 /** 审计事件导出（纯函数） */
 
+import { escapeCSVCell } from './csvEscape.ts'
+
 export interface AuditExportEvent {
   time: string
   user_name: string
@@ -19,16 +21,11 @@ export interface AuditExportMeta {
   limit?: number
 }
 
-function escapeCSV(v: string): string {
-  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`
-  return v
-}
-
 export const AUDIT_CSV_HEADER = 'time,user_name,action,database,detail'
 
 export function auditEventToCSVLine(e: AuditExportEvent): string {
   return [e.time, e.user_name, e.action, e.database || '', e.detail || '']
-    .map((v) => escapeCSV(String(v ?? '')))
+    .map(escapeCSVCell)
     .join(',')
 }
 

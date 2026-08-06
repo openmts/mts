@@ -23,16 +23,36 @@ func (c *Catalog) downsamplePath() string {
 func (c *Catalog) UpsertDownsamplePolicy(policy model.DownsamplePolicy) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	previous, existed := c.downsamplePolicies[policy.Name]
 	c.downsamplePolicies[policy.Name] = cloneDownsamplePolicy(policy)
-	return c.saveDownsampleMetadataLocked()
+	if err := c.saveDownsampleMetadataLocked(); err != nil {
+		if existed {
+			c.downsamplePolicies[policy.Name] = previous
+		} else {
+			delete(c.downsamplePolicies, policy.Name)
+		}
+		return c.restoreDownsampleMetadataAfterErrorLocked(err)
+	}
+	return nil
 }
 
 func (c *Catalog) DropDownsamplePolicy(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	policy, policyExists := c.downsamplePolicies[name]
+	watermark, watermarkExists := c.downsampleWatermarks[name]
 	delete(c.downsamplePolicies, name)
 	delete(c.downsampleWatermarks, name)
-	return c.saveDownsampleMetadataLocked()
+	if err := c.saveDownsampleMetadataLocked(); err != nil {
+		if policyExists {
+			c.downsamplePolicies[name] = policy
+		}
+		if watermarkExists {
+			c.downsampleWatermarks[name] = watermark
+		}
+		return c.restoreDownsampleMetadataAfterErrorLocked(err)
+	}
+	return nil
 }
 
 func (c *Catalog) ListDownsamplePolicies() ([]model.DownsamplePolicy, error) {
@@ -56,8 +76,17 @@ func (c *Catalog) DownsampleWatermark(name string) (model.DownsampleWatermark, b
 func (c *Catalog) UpdateDownsampleWatermark(watermark model.DownsampleWatermark) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	previous, existed := c.downsampleWatermarks[watermark.PolicyName]
 	c.downsampleWatermarks[watermark.PolicyName] = watermark
-	return c.saveDownsampleMetadataLocked()
+	if err := c.saveDownsampleMetadataLocked(); err != nil {
+		if existed {
+			c.downsampleWatermarks[watermark.PolicyName] = previous
+		} else {
+			delete(c.downsampleWatermarks, watermark.PolicyName)
+		}
+		return c.restoreDownsampleMetadataAfterErrorLocked(err)
+	}
+	return nil
 }
 
 func (c *Catalog) loadDownsampleMetadata() error {
@@ -83,6 +112,14 @@ func (c *Catalog) saveDownsampleMetadataLocked() error {
 		return fmt.Errorf("write downsample metadata: %w", err)
 	}
 	return nil
+}
+
+func (c *Catalog) restoreDownsampleMetadataAfterErrorLocked(writeErr error) error {
+	data := encodeDownsampleMetadata(c.downsamplePolicies, c.downsampleWatermarks)
+	if err := storagefs.WriteFileAtomic(c.downsamplePath(), data); err != nil {
+		return errors.Join(writeErr, fmt.Errorf("restore downsample metadata: %w", err))
+	}
+	return writeErr
 }
 
 func encodeDownsampleMetadata(

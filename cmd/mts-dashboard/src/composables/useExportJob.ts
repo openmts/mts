@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
-import { downloadJSON, downloadText } from '@/utils/download'
-import { formatCaughtError } from '@/utils/apiError'
+import { downloadJSON, downloadText } from '../utils/download.ts'
+import { formatCaughtError } from '../utils/apiError.ts'
 import {
   beginExportJob,
   cancelExportJob,
@@ -11,7 +11,7 @@ import {
   isExportJobBusy,
   progressExportJob,
   type ExportJobState,
-} from '@/utils/exportJob'
+} from '../utils/exportJob.ts'
 
 export type ExportBuildHelpers = {
   isCancelled: () => boolean
@@ -97,7 +97,7 @@ export function useExportJob() {
     state.value = beginExportJob(label, total ?? 0)
     try {
       if (await maybeSlowExport(() => cancelled || my !== token)) {
-        state.value = cancelExportJob(state.value)
+        if (my === token) state.value = cancelExportJob(state.value)
         return 'cancelled'
       }
       if (shouldE2EFailExport()) {

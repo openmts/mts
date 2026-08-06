@@ -44,13 +44,7 @@ func (r *serverRuntime) handleLogin(writer http.ResponseWriter, request *http.Re
 		writeAPIError(writer, newAPIError(errorCodeBadRequest, err.Error(), err))
 		return
 	}
-	ttl := defaultAuthTTL
-	if req.TTLSeconds > 0 {
-		ttl = time.Duration(req.TTLSeconds) * time.Second
-	}
-	if ttl > maxAuthTTL {
-		ttl = maxAuthTTL
-	}
+	ttl := normalizeAuthTTL(req.TTLSeconds)
 	token, err := r.engine.Authenticate(request.Context(), mts.Credentials{
 		UserName: req.UserName,
 		Password: req.Password,
@@ -65,6 +59,17 @@ func (r *serverRuntime) handleLogin(writer http.ResponseWriter, request *http.Re
 	}
 	r.audit.record(auditEvent{UserName: req.UserName, Action: "login"})
 	writeHTTPJSON(writer, http.StatusOK, buildAuthTokenResponse(token, mustChange))
+}
+
+func normalizeAuthTTL(seconds int64) time.Duration {
+	if seconds <= 0 {
+		return defaultAuthTTL
+	}
+	maxSeconds := int64(maxAuthTTL / time.Second)
+	if seconds > maxSeconds {
+		return maxAuthTTL
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func (r *serverRuntime) handleLogout(writer http.ResponseWriter, request *http.Request) {

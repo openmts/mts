@@ -7,6 +7,7 @@ import {
   type LocaleCode,
   textForLocale,
 } from './rbacMatrix.ts'
+import { escapeCSVCell } from './csvEscape.ts'
 
 export function buildAccessMatrixExport(
   rows: CapabilityRow[] | null | undefined = RBAC_CAPABILITY_MATRIX,
@@ -47,12 +48,6 @@ export function buildAccessMatrixExport(
   }
 }
 
-function escapeCSV(v: string): string {
-  const s = String(v ?? '')
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
-  return s
-}
-
 /** 本地化矩阵 CSV（与 buildAccessMatrixExport 字段对齐） */
 export function accessMatrixToCSV(
   rows: CapabilityRow[] | null | undefined,
@@ -72,7 +67,7 @@ export function accessMatrixToCSV(
         r.route || '',
         r.notes ? textForLocale(r.notes, locale) : '',
       ]
-        .map(escapeCSV)
+        .map(escapeCSVCell)
         .join(','),
     )
   }

@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { parseMetricsPrefill, metricsFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
+import { buildShareURL } from '@/utils/shareURL'
 import { apiGet, apiGetText } from '@/api/client'
 import {
   normalizeDownsampleStatusSummary,
@@ -268,7 +269,7 @@ async function copyMetricsShareLink() {
     q: q.value,
     family: activeFamilyName.value || undefined,
   }, { hash: activeFamilyName.value ? '#metrics-detail' : '#metrics-list' })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('metricsShareCopied'))
   else notifyError(res.error || t.value('failed'))

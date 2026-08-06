@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, computed, inject, type ComputedRef } f
 import { useRoute, useRouter } from 'vue-router'
 import { useHashScroll } from '@/composables/useHashScroll'
 import { overviewFormToPrefill, parseOverviewPrefill } from '@/utils/routePrefill'
+import { buildShareURL } from '@/utils/shareURL'
 import { apiGet } from '@/api/client'
 import { fetchDataContract } from '@/api/dataContract'
 import type { DataContractResponse } from '@/api/types'
@@ -709,7 +710,7 @@ function currentOverviewSection(): string {
 
 async function copyOverviewShareLink() {
   const path = overviewFormToPrefill({ section: currentOverviewSection() })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('overviewShareCopied'))
   else notifyError(res.error || t.value('failed'))

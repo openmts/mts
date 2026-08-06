@@ -40,6 +40,7 @@ var ErrEngineBusy = storageengine.ErrShardBusy
 // 用户管理相关错误。
 var (
 	ErrInvalidUser             = runtime.ErrInvalidUser
+	ErrInvalidPageLimit        = runtime.ErrInvalidPageLimit
 	ErrUserNotFound            = runtime.ErrUserNotFound
 	ErrUserAlreadyExists       = runtime.ErrUserAlreadyExists
 	ErrInvalidPermission       = runtime.ErrInvalidPermission

@@ -70,11 +70,10 @@ func (r *serverRuntime) wrapHTTP(handler http.Handler) http.Handler {
 		if cfg.Limits.MaxRequestBodyBytes > 0 && request.Body != nil {
 			request.Body = http.MaxBytesReader(writer, request.Body, cfg.Limits.MaxRequestBodyBytes)
 		}
-		httpSem := r.httpSem
-		if !r.acquireHTTP(writer, httpSem) {
+		if !r.acquireHTTP(writer) {
 			return
 		}
-		defer releaseHTTP(httpSem)
+		defer r.httpLimiter.release()
 		// 默认 bootstrap 密码强制改密：对已认证用户拦截业务 API。
 		if strings.HasPrefix(request.URL.Path, "/api/") {
 			if userName, authErr := r.authenticateDataUser(httpCredentialSource{request: request}); authErr == nil {
@@ -101,46 +100,17 @@ func (r *serverRuntime) wrapHTTP(handler http.Handler) http.Handler {
 	})
 }
 
-func (r *serverRuntime) acquireHTTP(writer http.ResponseWriter, sem chan struct{}) bool {
-	if sem == nil {
+func (r *serverRuntime) acquireHTTP(writer http.ResponseWriter) bool {
+	if r.httpLimiter.tryAcquire() {
 		return true
 	}
-	select {
-	case sem <- struct{}{}:
-		return true
-	default:
-		writeHTTPJSON(writer, http.StatusTooManyRequests, errorResponse{
-			OK:      false,
-			Code:    errorCodeResourceExhausted,
-			Message: "too many concurrent http requests",
-			Error:   "too many concurrent http requests",
-		})
-		return false
-	}
-}
-
-func releaseHTTP(sem chan struct{}) {
-	if sem != nil {
-		<-sem
-	}
-}
-
-func acquireGRPC(sem chan struct{}) bool {
-	if sem == nil {
-		return true
-	}
-	select {
-	case sem <- struct{}{}:
-		return true
-	default:
-		return false
-	}
-}
-
-func releaseGRPC(sem chan struct{}) {
-	if sem != nil {
-		<-sem
-	}
+	writeHTTPJSON(writer, http.StatusTooManyRequests, errorResponse{
+		OK:      false,
+		Code:    errorCodeResourceExhausted,
+		Message: "too many concurrent http requests",
+		Error:   "too many concurrent http requests",
+	})
+	return false
 }
 
 func (r *serverRuntime) nextRequestID() string {

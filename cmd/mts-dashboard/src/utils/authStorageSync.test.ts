@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   AUTH_STORAGE_KEYS,
+  AUTH_SESSION_STORAGE_KEYS,
+  clearAuthStorage,
   isAuthStorageKey,
   readAuthStorageSnapshot,
 } from './authStorageSync.ts'
@@ -37,4 +39,15 @@ test('isAuthStorageKey', () => {
   assert.equal(isAuthStorageKey(AUTH_STORAGE_KEYS.token), true)
   assert.equal(isAuthStorageKey('mts_locale'), false)
   assert.equal(isAuthStorageKey(null), false)
+})
+
+test('clearAuthStorage removes user session and service credentials', () => {
+  const localRemoved: string[] = []
+  const sessionRemoved: string[] = []
+  clearAuthStorage(
+    (key) => localRemoved.push(key),
+    (key) => sessionRemoved.push(key),
+  )
+  assert.deepEqual(localRemoved.sort(), Object.values(AUTH_STORAGE_KEYS).sort())
+  assert.deepEqual(sessionRemoved.sort(), Object.values(AUTH_SESSION_STORAGE_KEYS).sort())
 })

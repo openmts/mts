@@ -32,7 +32,7 @@
 | 边缘 HTTPS / TLS | 是 | 反向代理证书；可选 mts-server 自带 TLS |
 | HSTS | 推荐 | 仅在确认全站 HTTPS 后启用 |
 | 安全响应头 | 是 | mts-server `wrapHTTP` 默认写入；冒烟 `TestCommercialDashboardSmoke` |
-| 修改默认 admin 密码 | 是 | 禁止长期 `admin/admin` |
+| 初始化管理员 | 是 | 配置强随机 `auth.admin_token` 后通过用户 API 创建 |
 | 健康与指标 | 是 | `/healthz` `/readyz` `/metrics` 接入监控 |
 | 备份/快照演练 | 推荐 | `admin/storage/snapshot` + 恢复演练 |
 | 登录-写-查-运维冒烟 | 是 | 服务侧 smoke + 浏览器人工/Playwright |
@@ -70,10 +70,18 @@ Dashboard 存储页提供同口径勾选清单（`edgeHttpsAcceptance.ts`）。
 
 ## 3. 首次登录与账号
 
-1. 服务启动且密码认证开启时，会 bootstrap 默认管理员 `admin`（默认密码 `admin`，以配置为准）。
-2. 首次登录若仍为 bootstrap 默认密码，服务端返回 `must_change_password=true` 并拦截业务 API；Dashboard 强制改密页引导完成后需重新登录。
-3. 为业务账号创建 `user` 角色，并按库授予 `read` / `write`。
-4. 在「权限矩阵」页对照 admin/user 能力，用非 admin 账号验证查询/写入降级路径。
+1. 首次部署先配置强随机 `auth.admin_token`，服务不会创建默认账号或默认密码。
+2. 使用 admin token 调用 `POST /api/v1/users` 创建首个 `admin` 角色账号并设置满足密码策略的初始密码；该操作会写入审计记录。
+3. 确认新管理员可登录后，按凭据轮换策略保管或更换服务级 admin token。
+4. 为业务账号创建 `user` 角色，并按库授予 `read` / `write`。
+5. 在「权限矩阵」页对照 admin/user 能力，用非 admin 账号验证查询/写入降级路径。
+
+```bash
+curl -X POST http://127.0.0.1:8086/api/v1/users \
+  -H 'Content-Type: application/json' \
+  -H 'X-MTS-Admin-Token: <strong-random-admin-token>' \
+  -d '{"name":"admin","role":"admin","password":"<strong-initial-password>"}'
+```
 
 ## 4. 反向代理示例（nginx）
 

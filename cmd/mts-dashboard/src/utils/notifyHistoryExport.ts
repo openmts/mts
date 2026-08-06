@@ -1,6 +1,7 @@
 /** 通知历史导出（纯函数） */
 
 import type { NotifyHistoryEntry } from './notifyHistory.ts'
+import { escapeCSVCell } from './csvEscape.ts'
 
 export interface NotifyHistoryExportPayload {
   generated_at: string
@@ -47,24 +48,18 @@ export function formatNotifyHistoryExportPretty(
   return JSON.stringify(buildNotifyHistoryExport(entries, now), null, 2)
 }
 
-function csvEscape(v: string): string {
-  const s = String(v ?? '')
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
-  return s
-}
-
 export function notifyHistoryToCSV(entries: readonly NotifyHistoryEntry[]): string {
   const header = ['at', 'kind', 'count', 'message', 'action_label', 'action_path']
   const lines = [header.join(',')]
   for (const e of entries) {
     lines.push(
       [
-        csvEscape(new Date(e.at).toISOString()),
-        csvEscape(e.kind),
+        escapeCSVCell(new Date(e.at).toISOString()),
+        escapeCSVCell(e.kind),
         String(e.count),
-        csvEscape(e.message),
-        csvEscape(e.actionLabel || ''),
-        csvEscape(e.actionPath || ''),
+        escapeCSVCell(e.message),
+        escapeCSVCell(e.actionLabel || ''),
+        escapeCSVCell(e.actionPath || ''),
       ].join(','),
     )
   }

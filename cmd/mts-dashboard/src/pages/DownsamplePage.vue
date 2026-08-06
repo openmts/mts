@@ -4,6 +4,7 @@ import { useHashScroll } from '@/composables/useHashScroll'
 import { useRoute, useRouter } from 'vue-router'
 import { parseDownsamplePrefill, downsampleFormToPrefill } from '@/utils/routePrefill'
 import { copyText } from '@/utils/clipboard'
+import { buildShareURL } from '@/utils/shareURL'
 import { apiGet, apiPost, apiDelete, apiPostNDJSONStream } from '@/api/client'
 import { useAdminOpBusy } from '@/composables/useAdminOpBusy'
 import { parseAdminOpStatusPayload } from '@/utils/adminOpBusy'
@@ -379,7 +380,7 @@ async function copyDownsampleShareLink() {
     health: statusHealthFilter.value || undefined,
     min_lag: statusHealthFilter.value === 'lagging' ? statusMinLag.value : undefined,
   }, { hash: statusHealthFilter.value ? '#downsample-status' : '#downsample-filters' })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('downsampleShareCopied'))
   else notifyError(res.error || t.value('failed'))
@@ -1168,7 +1169,7 @@ async function copyPolicyDetailLink() {
     enabled: enabledFilter.value || undefined,
     policy: name,
   }, { hash: '#downsample-detail' })
-  const url = `${window.location.origin}${path}`
+  const url = buildShareURL(path)
   const res = await copyText(url)
   if (res.ok) success(t.value('downsampleDetailLinkCopied'))
   else notifyError(res.error || t.value('failed'))
@@ -1917,7 +1918,7 @@ onBeforeUnmount(() => {
                 class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600"
               />
               <input v-model="fn.as" :placeholder="t('downsamplePhAs')" class="flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs dark:border-slate-600" />
-              <button class="rounded p-0.5 text-slate-400 hover:text-red-600" @click="removePolicyFunction(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
+              <button type="button" class="rounded p-0.5 text-slate-400 hover:text-red-600" :aria-label="formatMessage(t('downsampleRemoveFunction'), { n: idx + 1 })" @click="removePolicyFunction(idx)"><Trash2 class="h-3.5 w-3.5" /></button>
             </div>
           </div>
           <button class="mt-1.5 inline-flex items-center gap-1 text-xs mts-muted" @click="addPolicyFunction">

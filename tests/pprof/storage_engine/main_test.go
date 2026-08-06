@@ -282,6 +282,80 @@ func TestCollectRunMetrics(t *testing.T) {
 	}
 }
 
+func TestCollectRunMetricsToleratesConcurrentPartRemoval(t *testing.T) {
+	root := t.TempDir()
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	go churnRunMetricsPart(filepath.Join(root, "sst-live"), stop, done)
+
+	for range 5000 {
+		if _, err := collectRunMetrics(root); err != nil {
+			close(stop)
+			churnErr := <-done
+			if churnErr != nil {
+				t.Fatalf("churn part directory: %v", churnErr)
+			}
+			t.Fatalf("collectRunMetrics() during part removal error = %v", err)
+		}
+	}
+	close(stop)
+	if err := <-done; err != nil {
+		t.Fatalf("churn part directory: %v", err)
+	}
+
+	missingRoot := filepath.Join(t.TempDir(), "missing")
+	if _, err := collectRunMetrics(missingRoot); err == nil {
+		t.Fatal("collectRunMetrics(missing root) error = nil, want error")
+	}
+}
+
+func TestShouldIgnoreWalkError(t *testing.T) {
+	root := "/data"
+	tests := []struct {
+		name string
+		path string
+		err  error
+		want bool
+	}{
+		{name: "子路径瞬时消失", path: "/data/sst-1/values.bin", err: os.ErrNotExist, want: true},
+		{name: "根路径消失", path: root, err: os.ErrNotExist, want: false},
+		{name: "子路径权限错误", path: "/data/sst-1/values.bin", err: os.ErrPermission, want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shouldIgnoreWalkError(root, test.path, test.err); got != test.want {
+				t.Fatalf("shouldIgnoreWalkError() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+func churnRunMetricsPart(partDir string, stop <-chan struct{}, done chan<- error) {
+	for {
+		select {
+		case <-stop:
+			done <- nil
+			return
+		default:
+		}
+		if err := os.MkdirAll(partDir, 0700); err != nil {
+			done <- fmt.Errorf("create part directory: %w", err)
+			return
+		}
+		for index := range 64 {
+			path := filepath.Join(partDir, fmt.Sprintf("values-%03d.bin", index))
+			if err := os.WriteFile(path, []byte("value"), 0600); err != nil && !os.IsNotExist(err) {
+				done <- fmt.Errorf("write part file: %w", err)
+				return
+			}
+		}
+		if err := os.RemoveAll(partDir); err != nil {
+			done <- fmt.Errorf("remove part directory: %w", err)
+			return
+		}
+	}
+}
+
 func TestParseProcStatusRSS(t *testing.T) {
 	rss, peak, err := parseProcStatusRSS("Name:\tmts\nVmHWM:\t  456 kB\nVmRSS:\t  123 kB\n")
 	if err != nil {

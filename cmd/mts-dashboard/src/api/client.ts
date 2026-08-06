@@ -5,17 +5,23 @@ import {
   isAbortError,
   resolveApiTimeoutMs,
 } from '@/utils/requestTimeout'
-import { readAuthStorageSnapshot } from '@/utils/authStorageSync'
+import {
+  AUTH_SESSION_STORAGE_KEYS,
+  AUTH_STORAGE_KEYS,
+  clearAuthStorage,
+  readAuthStorageSnapshot,
+} from '@/utils/authStorageSync'
 import { parseAdminBusyFromHeaders } from '@/utils/adminOpBusy'
-const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
+import { buildAPIURL, normalizeAPIBase } from '@/utils/apiURL'
+const API_BASE = normalizeAPIBase(import.meta.env.VITE_API_BASE)
 const API_TIMEOUT_MS = resolveApiTimeoutMs(import.meta.env.VITE_API_TIMEOUT_MS, DEFAULT_API_TIMEOUT_MS)
-const TOKEN_KEY = 'mts_bearer_token'
-const USER_KEY = 'mts_user_name'
-const ROLE_KEY = 'mts_user_role'
-const MUST_CHANGE_KEY = 'mts_must_change_password'
-const EXPIRES_KEY = 'mts_token_expires_at'
-const ADMIN_TOKEN_KEY = 'mts_admin_token'
-const DATA_TOKEN_KEY = 'mts_data_token'
+const TOKEN_KEY = AUTH_STORAGE_KEYS.token
+const USER_KEY = AUTH_STORAGE_KEYS.user
+const ROLE_KEY = AUTH_STORAGE_KEYS.role
+const MUST_CHANGE_KEY = AUTH_STORAGE_KEYS.mustChange
+const EXPIRES_KEY = AUTH_STORAGE_KEYS.expiresAt
+const ADMIN_TOKEN_KEY = AUTH_SESSION_STORAGE_KEYS.adminToken
+const DATA_TOKEN_KEY = AUTH_SESSION_STORAGE_KEYS.dataToken
 
 interface APIError {
   ok: boolean
@@ -95,6 +101,12 @@ function sessionSet(key: string, value: string) {
   try {
     if (value) sessionStorage.setItem(key, value)
     else sessionStorage.removeItem(key)
+  } catch { /* 非关键 */ }
+}
+
+function sessionRemove(key: string) {
+  try {
+    sessionStorage.removeItem(key)
   } catch { /* 非关键 */ }
 }
 
@@ -203,11 +215,9 @@ export function clearAuth() {
   currentUserName = ''
   currentUserRole = ''
   tokenExpiresAt = ''
-  storageSet(TOKEN_KEY, '')
-  storageSet(USER_KEY, '')
-  storageSet(ROLE_KEY, '')
-  storageSet(EXPIRES_KEY, '')
-  storageRemove(MUST_CHANGE_KEY)
+  adminToken = ''
+  dataToken = ''
+  clearAuthStorage(storageRemove, sessionRemove)
 }
 
 export function resetAuthRedirect() {
@@ -298,7 +308,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     let response: Response
     try {
-      response = await fetch(`${API_BASE}${path}`, {
+      response = await fetch(buildAPIURL(API_BASE, path), {
         ...options,
         method,
         headers,
@@ -358,7 +368,7 @@ export async function apiGetSilent<T>(path: string, init: RequestInit = {}): Pro
   try {
     let response: Response
     try {
-      response = await fetch(`${API_BASE}${path}`, {
+      response = await fetch(buildAPIURL(API_BASE, path), {
         ...init,
         method,
         headers,
@@ -401,7 +411,7 @@ export async function apiGetSilent<T>(path: string, init: RequestInit = {}): Pro
 export async function probeReadyz(init: RequestInit = {}): Promise<{ ok: boolean; status: number }> {
   const timeoutHandle = createTimeoutSignal(init.signal, 5_000)
   try {
-    const response = await fetch(`${API_BASE}/readyz`, {
+    const response = await fetch(buildAPIURL(API_BASE, '/readyz'), {
       method: 'GET',
       cache: 'no-store',
       ...init,
@@ -433,7 +443,7 @@ export async function apiGetText(path: string, init: RequestInit = {}): Promise<
   try {
     let response: Response
     try {
-      response = await fetch(`${API_BASE}${path}`, {
+      response = await fetch(buildAPIURL(API_BASE, path), {
         ...init,
         method,
         headers,
@@ -504,7 +514,7 @@ export async function apiPostNDJSONStream(
   try {
     let response: Response
     try {
-      response = await fetch(`${API_BASE}${path}`, {
+      response = await fetch(buildAPIURL(API_BASE, path), {
         ...init,
         method: 'POST',
         headers,
@@ -679,14 +689,12 @@ export async function apiGetSession(init: RequestInit = {}): Promise<SessionResp
   return apiGetSilent<SessionResponse>('/api/v1/auth/session', init)
 }
 
-export async function apiLogout(): Promise<void> {
+export async function apiLogout(): Promise<boolean> {
+  const token = bearerToken
   try {
-    await fetch('/api/v1/auth/logout', {
-      method: 'POST',
-      headers: authHeaders({}, 'POST'),
-      body: JSON.stringify({ token: bearerToken }),
-    })
-  } catch (_) {
-    // 登出失败不影响前端清理
+    await apiPost('/api/v1/auth/logout', { token })
+    return true
+  } catch {
+    return false
   }
 }
