@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
+	"strings"
 	"syscall"
 
 	yaml "github.com/goccy/go-yaml"
@@ -45,8 +45,7 @@ func serveCommand(stdout io.Writer, stderr io.Writer) *cli.Command {
 			if cliCtx.Bool("print-config") {
 				return printDefaultConfig(stdout)
 			}
-			path := cliCtx.String("config")
-			cfg, err := loadConfig(path)
+			cfg, err := resolveServeConfig(cliCtx.String("config"), stdout)
 			if err != nil {
 				return err
 			}
@@ -54,6 +53,26 @@ func serveCommand(stdout io.Writer, stderr io.Writer) *cli.Command {
 			return runServer(cliCtx.Context, cfg, logger)
 		},
 	}
+}
+
+// resolveServeConfig 解析 serve 配置：未指定 --config 时生成并使用默认配置文件。
+func resolveServeConfig(path string, stdout io.Writer) (config, error) {
+	if strings.TrimSpace(path) == "" {
+		var (
+			generated bool
+			err       error
+		)
+		path, generated, err = ensureDefaultConfig()
+		if err != nil {
+			return config{}, err
+		}
+		if generated {
+			if _, err := fmt.Fprintf(stdout, "generated default config: %s\n", path); err != nil {
+				return config{}, err
+			}
+		}
+	}
+	return loadConfig(path)
 }
 
 func validateConfigCommand(stdout io.Writer) *cli.Command {
@@ -113,17 +132,10 @@ func initConfigCommand(stdout io.Writer) *cli.Command {
 					return err
 				}
 			}
-			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			if err := writeDefaultConfig(path); err != nil {
 				return err
 			}
-			data, err := yaml.MarshalWithOptions(defaultConfig(), yaml.Indent(2))
-			if err != nil {
-				return err
-			}
-			if err := os.WriteFile(path, data, 0600); err != nil {
-				return err
-			}
-			_, err = fmt.Fprintln(stdout, path)
+			_, err := fmt.Fprintln(stdout, path)
 			return err
 		},
 	}

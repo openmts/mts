@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1102,6 +1103,7 @@ func openTestRuntime(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()
 	cfg.DataDir = t.TempDir()
+	cfg.Backup.Dir = filepath.Join(t.TempDir(), "backups")
 	cfg.HTTP.Addr = "127.0.0.1:0"
 	cfg.GRPC.Addr = "127.0.0.1:0"
 	cfg.Observability.AccessLog = false
@@ -1122,6 +1124,7 @@ func openTestRuntimeWithAdminToken(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()
 	cfg.DataDir = t.TempDir()
+	cfg.Backup.Dir = filepath.Join(t.TempDir(), "backups")
 	cfg.HTTP.Addr = "127.0.0.1:0"
 	cfg.GRPC.Addr = "127.0.0.1:0"
 	cfg.Auth.AdminToken = "test-admin-token"
@@ -1143,6 +1146,7 @@ func openTestRuntimeRequireUser(t *testing.T) *serverRuntime {
 	t.Helper()
 	cfg := defaultConfig()
 	cfg.DataDir = t.TempDir()
+	cfg.Backup.Dir = filepath.Join(t.TempDir(), "backups")
 	cfg.HTTP.Addr = "127.0.0.1:0"
 	cfg.GRPC.Addr = "127.0.0.1:0"
 	cfg.Auth.RequireUser = true

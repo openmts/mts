@@ -205,6 +205,7 @@ go run ./cmd/mts-storage restore /backup/mts-snapshot /var/lib/mts-restored
 
 ```bash
 go run ./cmd/mts-server serve --config configs/mts-server.yaml
+go run ./cmd/mts-server serve            # 不带 --config 时自动生成并使用 ~/.mts/mts-server.yaml
 go run ./cmd/mts-server validate-config --config configs/mts-server.yaml
 go run ./cmd/mts-server doctor --config configs/mts-server.yaml
 go run ./cmd/mts-server init-config --output ./mts-server.yaml

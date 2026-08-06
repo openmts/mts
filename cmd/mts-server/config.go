@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -166,7 +167,7 @@ type durationText time.Duration
 
 func defaultConfig() config {
 	return config{
-		DataDir: "./data/mts",
+		DataDir: "~/.mts/data",
 		HTTP: httpConfig{
 			Enabled:           true,
 			Addr:              "127.0.0.1:8086",
@@ -198,7 +199,7 @@ func defaultConfig() config {
 			AccessLog: true,
 		},
 		Backup: backupConfig{
-			Dir: "./data/mts-server/backups",
+			Dir: "~/.mts/data/backups",
 		},
 		Log: logConfig{
 			Level:  "info",
@@ -237,12 +238,83 @@ func loadConfig(path string) (config, error) {
 	if err := yaml.UnmarshalWithOptions(data, &cfg, yaml.DisallowUnknownField()); err != nil {
 		return config{}, fmt.Errorf("decode config: %w", err)
 	}
+	if err := cfg.expandHomePaths(); err != nil {
+		return config{}, err
+	}
 	if err := cfg.validate(); err != nil {
 		return config{}, err
 	}
 	cfg.HTTP.DashboardBase = normalizeDashboardBase(cfg.HTTP.DashboardBase)
 	cfg.ConfigPath = path
 	return cfg, nil
+}
+
+// expandHomePaths 将 data_dir 与 backup.dir 中的 ~ 前缀展开为用户家目录。
+func (cfg *config) expandHomePaths() error {
+	var err error
+	if cfg.DataDir, err = expandHome(cfg.DataDir); err != nil {
+		return fmt.Errorf("expand data_dir: %w", err)
+	}
+	if strings.TrimSpace(cfg.Backup.Dir) != "" {
+		if cfg.Backup.Dir, err = expandHome(cfg.Backup.Dir); err != nil {
+			return fmt.Errorf("expand backup.dir: %w", err)
+		}
+	}
+	return nil
+}
+
+// expandHome 将 ~ 或 ~/ 前缀展开为用户家目录，其他路径原样返回。
+func expandHome(path string) (string, error) {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		if path == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, path[2:]), nil
+	}
+	return path, nil
+}
+
+// defaultConfigPath 返回未指定 --config 时使用的默认配置文件路径（用户家目录下 .mts）。
+func defaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home dir: %w", err)
+	}
+	return filepath.Join(home, ".mts", "mts-server.yaml"), nil
+}
+
+// writeDefaultConfig 将默认配置序列化写入 path，目录权限 0700、文件权限 0600。
+func writeDefaultConfig(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	data, err := yaml.MarshalWithOptions(defaultConfig(), yaml.Indent(2))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+// ensureDefaultConfig 返回默认配置路径；文件不存在时先生成默认配置文件，已存在则直接复用。
+// generated 表示本次是否新生成。
+func ensureDefaultConfig() (string, bool, error) {
+	path, err := defaultConfigPath()
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return path, false, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", false, err
+	}
+	if err := writeDefaultConfig(path); err != nil {
+		return "", false, err
+	}
+	return path, true, nil
 }
 
 func (cfg config) validate() error {

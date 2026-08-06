@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -349,6 +350,7 @@ func TestRuntimeAdminHeavyLastResultOnError(t *testing.T) {
 func TestRuntimeAdminHeavySharedMutex(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.DataDir = t.TempDir()
+	cfg.Backup.Dir = filepath.Join(t.TempDir(), "backups")
 	cfg.HTTP.Addr = "127.0.0.1:0"
 	cfg.HTTP.Enabled = true
 	cfg.GRPC.Enabled = false

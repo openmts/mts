@@ -63,7 +63,7 @@ func TestLoadConfigRejectsDecodeErrors(t *testing.T) {
 	}
 }
 
-func TestCLIDefaultConfigAndMissingConfig(t *testing.T) {
+func TestCLIPrintConfig(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	app := newApp(&stdout, &stderr)
@@ -73,11 +73,111 @@ func TestCLIDefaultConfigAndMissingConfig(t *testing.T) {
 	if !strings.Contains(stdout.String(), "data_dir:") {
 		t.Fatalf("print-config output = %s, want data_dir", stdout.String())
 	}
+}
 
-	stdout.Reset()
-	stderr.Reset()
-	if err := app.RunContext(context.Background(), []string{"mts-server", "serve"}); err == nil {
-		t.Fatal("Run(missing config) error = nil, want error")
+func TestResolveServeConfigGeneratesDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var stdout bytes.Buffer
+	cfg, err := resolveServeConfig("", &stdout)
+	if err != nil {
+		t.Fatalf("resolveServeConfig() error = %v", err)
+	}
+	wantPath := filepath.Join(home, ".mts", "mts-server.yaml")
+	if cfg.ConfigPath != wantPath {
+		t.Fatalf("ConfigPath = %q, want %q", cfg.ConfigPath, wantPath)
+	}
+	if !strings.Contains(stdout.String(), wantPath) {
+		t.Fatalf("stdout = %q, want generated config hint", stdout.String())
+	}
+	info, err := os.Stat(wantPath)
+	if err != nil {
+		t.Fatalf("Stat(default config) error = %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0600 {
+		t.Fatalf("default config perm = %v, want 0600", perm)
+	}
+	if !cfg.HTTP.Enabled || !cfg.GRPC.Enabled {
+		t.Fatalf("generated config listeners = http:%v grpc:%v, want enabled", cfg.HTTP.Enabled, cfg.GRPC.Enabled)
+	}
+	wantData := filepath.Join(home, ".mts", "data")
+	if cfg.DataDir != wantData {
+		t.Fatalf("DataDir = %q, want %q", cfg.DataDir, wantData)
+	}
+}
+
+func TestResolveServeConfigReusesExistingDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	defaultFile := filepath.Join(home, ".mts", "mts-server.yaml")
+	if err := os.MkdirAll(filepath.Dir(defaultFile), 0700); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(defaultFile, []byte("data_dir: /tmp/mts-reuse\n"), 0600); err != nil {
+		t.Fatalf("WriteFile(default) error = %v", err)
+	}
+	var stdout bytes.Buffer
+	cfg, err := resolveServeConfig("", &stdout)
+	if err != nil {
+		t.Fatalf("resolveServeConfig() error = %v", err)
+	}
+	if cfg.DataDir != "/tmp/mts-reuse" {
+		t.Fatalf("DataDir = %q, want reused value /tmp/mts-reuse", cfg.DataDir)
+	}
+}
+
+func TestLoadConfigExpandsHomePaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := writeTestConfig(t, "data_dir: ~/.mts/data\nbackup:\n  dir: ~/.mts/data/backups\n")
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+	if want := filepath.Join(home, ".mts", "data"); cfg.DataDir != want {
+		t.Fatalf("DataDir = %q, want %q", cfg.DataDir, want)
+	}
+	if want := filepath.Join(home, ".mts", "data", "backups"); cfg.Backup.Dir != want {
+		t.Fatalf("Backup.Dir = %q, want %q", cfg.Backup.Dir, want)
+	}
+}
+
+func TestExpandHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "~", want: home},
+		{in: "~/data", want: filepath.Join(home, "data")},
+		{in: "/var/lib/mts", want: "/var/lib/mts"},
+		{in: "relative/path", want: "relative/path"},
+		{in: "~not-home", want: "~not-home"},
+	}
+	for _, tt := range tests {
+		got, err := expandHome(tt.in)
+		if err != nil {
+			t.Fatalf("expandHome(%q) error = %v", tt.in, err)
+		}
+		if got != tt.want {
+			t.Fatalf("expandHome(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestResolveServeConfigExplicitPath(t *testing.T) {
+	path := writeTestConfig(t, "data_dir: /tmp/mts-explicit\n")
+	var stdout bytes.Buffer
+	cfg, err := resolveServeConfig(path, &stdout)
+	if err != nil {
+		t.Fatalf("resolveServeConfig() error = %v", err)
+	}
+	if cfg.DataDir != "/tmp/mts-explicit" {
+		t.Fatalf("DataDir = %q, want explicit value /tmp/mts-explicit", cfg.DataDir)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty for explicit path", stdout.String())
 	}
 }
 
@@ -89,15 +189,6 @@ func TestRunMain(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "data_dir:") {
 		t.Fatalf("runMain stdout = %s, want data_dir", stdout.String())
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	if code := runMain([]string{"mts-server", "serve"}, &stdout, &stderr); code != 1 {
-		t.Fatalf("runMain(missing config) code = %d, want 1", code)
-	}
-	if stderr.Len() == 0 {
-		t.Fatal("runMain(missing config) stderr is empty, want error output")
 	}
 }
 
