@@ -626,9 +626,14 @@ func TestBackgroundCompactionLifecycle(t *testing.T) {
 	// 先停止后台 compact，避免与测试读取 manifest 并发竞态。
 	eng.stopBackgroundCompaction()
 	shard := onlyShardForTest(t, eng)
-	if len(shard.manifest.Parts) != 1 || shard.manifest.Parts[0].Level != 1 {
+	// 后台 compact 会持续向下合并，L1/L2 均视为已收敛；核心断言是 manifest 只剩单个 part。
+	if len(shard.manifest.Parts) != 1 {
 		closeErr := eng.Close(ctx)
-		t.Fatalf("manifest parts = %#v, want single L1 part close = %v", shard.manifest.Parts, closeErr)
+		t.Fatalf("manifest parts = %#v, want single compacted part close = %v", shard.manifest.Parts, closeErr)
+	}
+	if level := shard.manifest.Parts[0].Level; level < 1 {
+		closeErr := eng.Close(ctx)
+		t.Fatalf("manifest part level = %d, want merged level >= 1 close = %v", level, closeErr)
 	}
 	if err := eng.Close(ctx); err != nil {
 		t.Fatalf("Close() error = %v", err)
