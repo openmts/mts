@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   test:
-    name: 单元测试
+    name: Unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -44,7 +44,7 @@ jobs:
           version: v2.12.2
 
   dependency-graph:
-    name: 依赖图
+    name: Dependency graph
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -59,11 +59,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: prepare embed
+        run: make ensure-dashboard-embed
+
       - name: submit
         uses: actions/go-dependency-submission@v2
 
   vulncheck:
-    name: Go 漏洞
+    name: Go vulncheck
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -73,7 +76,7 @@ jobs:
           go-version-file: go.mod
 
   frontend-audit:
-    name: 前端审计
+    name: Frontend audit
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

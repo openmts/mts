@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,6 +124,47 @@ func TestResolveServeConfigReusesExistingDefault(t *testing.T) {
 	}
 	if cfg.DataDir != "/tmp/mts-reuse" {
 		t.Fatalf("DataDir = %q, want reused value /tmp/mts-reuse", cfg.DataDir)
+	}
+}
+
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
+
+func TestResolveServeConfigFprintfError(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if _, err := resolveServeConfig("", failWriter{}); err == nil {
+		t.Fatal("resolveServeConfig() error = nil, want write error")
+	}
+}
+
+func TestResolveServeConfigPropagatesDefaultConfigErrors(t *testing.T) {
+	homeFile := filepath.Join(t.TempDir(), "home")
+	if err := os.WriteFile(homeFile, []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile(home) error = %v", err)
+	}
+	t.Setenv("HOME", homeFile)
+	var stdout bytes.Buffer
+	if _, err := resolveServeConfig("", &stdout); err == nil {
+		t.Fatal("resolveServeConfig() error = nil, want stat error")
+	}
+}
+
+func TestWriteDefaultConfigErrors(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile(blocker) error = %v", err)
+	}
+	if err := writeDefaultConfig(filepath.Join(blocker, "sub", "mts-server.yaml")); err == nil {
+		t.Fatal("writeDefaultConfig(MkdirAll over file) error = nil, want error")
+	}
+	existingDir := filepath.Join(dir, "existing")
+	if err := os.MkdirAll(existingDir, 0700); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := writeDefaultConfig(existingDir); err == nil {
+		t.Fatal("writeDefaultConfig(to directory) error = nil, want error")
 	}
 }
 
@@ -266,5 +308,99 @@ engine:
 	}
 	if !opts.WAL.Sync || opts.WAL.BatchRecords != 100 {
 		t.Fatalf("wal opts = %#v", opts.WAL)
+	}
+}
+
+func TestLoadConfigRejectsAdditionalInvalidConfig(t *testing.T) {
+	dataDir := filepath.ToSlash(t.TempDir())
+	tests := []struct {
+		name string
+		body string
+	}{
+		{name: "grpc tls missing cert", body: "data_dir: " + dataDir + "\ngrpc:\n  enabled: true\n  addr: '127.0.0.1:0'\n  tls:\n    enabled: true\n"},
+		{name: "negative concurrent", body: "data_dir: " + dataDir + "\nlimits:\n  max_concurrent_http: -1\n"},
+		{name: "negative request timeout", body: "data_dir: " + dataDir + "\nlimits:\n  request_timeout: -1s\n"},
+		{name: "negative grpc msg bytes", body: "data_dir: " + dataDir + "\ngrpc:\n  enabled: true\n  addr: '127.0.0.1:0'\n  max_recv_msg_bytes: -1\n"},
+		{name: "empty log level", body: "data_dir: " + dataDir + "\nlog:\n  level: ' '\n"},
+		{name: "client auth no ca", body: "data_dir: " + dataDir + "\ngrpc:\n  enabled: true\n  addr: '127.0.0.1:0'\n  tls:\n    enabled: true\n    cert_file: 'c'\n    key_file: 'k'\n    client_auth: true\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeTestConfig(t, tt.body)
+			if _, err := loadConfig(path); !errors.Is(err, errInvalidConfig) {
+				t.Fatalf("loadConfig(%s) error = %v, want errInvalidConfig", tt.name, err)
+			}
+		})
+	}
+}
+
+func TestDurationTextUnmarshalErrors(t *testing.T) {
+	var d durationText
+	if err := d.UnmarshalJSON([]byte(`123`)); err == nil {
+		t.Fatal("UnmarshalJSON(number) error = nil, want error")
+	}
+	if err := d.UnmarshalJSON([]byte(`"abc"`)); err == nil {
+		t.Fatal("UnmarshalJSON(bad duration) error = nil, want error")
+	}
+}
+
+func TestCLIServeInvalidConfigPath(t *testing.T) {
+	app := newApp(&bytes.Buffer{}, &bytes.Buffer{})
+	if err := app.RunContext(context.Background(), []string{"mts-server", "serve", "--config", "/nonexistent-mts.yaml"}); err == nil {
+		t.Fatal("Run(serve nonexistent config) error = nil, want error")
+	}
+}
+
+func TestCLIServeRuntimeOpenFailure(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "data")
+	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile(blocker) error = %v", err)
+	}
+	cfgPath := filepath.Join(dir, "mts-server.yaml")
+	body := fmt.Sprintf("data_dir: %s\nshutdown_timeout: 3s\n", filepath.ToSlash(blocker))
+	if err := os.WriteFile(cfgPath, []byte(body), 0600); err != nil {
+		t.Fatalf("WriteFile(config) error = %v", err)
+	}
+	app := newApp(&bytes.Buffer{}, &bytes.Buffer{})
+	if err := app.RunContext(context.Background(), []string{"mts-server", "serve", "--config", cfgPath}); err == nil {
+		t.Fatal("Run(serve invalid data_dir) error = nil, want error")
+	}
+}
+
+func TestCLIDoctorErrors(t *testing.T) {
+	app := newApp(&bytes.Buffer{}, &bytes.Buffer{})
+	if err := app.RunContext(context.Background(), []string{"mts-server", "doctor", "--config", "/nonexistent-mts.yaml"}); err == nil {
+		t.Fatal("doctor(nonexistent config) error = nil, want error")
+	}
+	cfgPath := writeTestConfig(t, "data_dir: "+filepath.ToSlash(t.TempDir())+"\n")
+	if err := app.RunContext(context.Background(), []string{"mts-server", "doctor", "--config", cfgPath}); err != nil {
+		t.Fatalf("doctor(valid config) error = %v", err)
+	}
+	failApp := newApp(failWriter{}, &bytes.Buffer{})
+	if err := failApp.RunContext(context.Background(), []string{"mts-server", "doctor", "--config", cfgPath}); err == nil {
+		t.Fatal("doctor(write fail) error = nil, want error")
+	}
+}
+
+func TestCLIInitConfigPathErrors(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile(blocker) error = %v", err)
+	}
+	output := filepath.Join(blocker, "sub", "mts-server.yaml")
+	app := newApp(&bytes.Buffer{}, &bytes.Buffer{})
+	if err := app.RunContext(context.Background(), []string{"mts-server", "init-config", "--output", output}); err == nil {
+		t.Fatal("init-config(parent is file) error = nil, want error")
+	}
+}
+
+func TestNewLoggerLevels(t *testing.T) {
+	for _, level := range []string{"debug", "warn", "error", "info", "bogus"} {
+		logger := newLogger(&bytes.Buffer{}, logConfig{Level: level})
+		if logger == nil {
+			t.Fatalf("newLogger(%q) = nil", level)
+		}
 	}
 }
