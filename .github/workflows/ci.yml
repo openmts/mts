@@ -13,32 +13,78 @@ permissions:
 
 jobs:
   test:
-    name: 单元测试与覆盖率
+    name: 单元测试
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: 检出代码
+      - name: checkout
         uses: actions/checkout@v4
 
-      - name: 安装 Go
+      - name: setup-go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: 安装 goimports-reviser
+      - name: setup-goimports
         run: go install github.com/incu6us/goimports-reviser/v3@v3.12.6
 
-      - name: 格式化检查
+      - name: fmt check
         run: goimports-reviser -project-name github.com/openmts/mts -recursive -list-diff -set-exit-status .
 
-      - name: 单元测试
+      - name: unit
         run: make unit
 
-      - name: 覆盖率门禁（>=90%）
+      - name: coverage
         run: make coverage
 
-      - name: Lint
+      - name: lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
+
+  dependency-graph:
+    name: 依赖图
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup-go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: submit
+        uses: actions/go-dependency-submission@v2
+
+  vulncheck:
+    name: Go 漏洞
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod
+
+  frontend-audit:
+    name: 前端审计
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: npm audit
+        working-directory: cmd/mts-dashboard
+        run: npm run audit:ci
