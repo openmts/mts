@@ -280,7 +280,7 @@ make e2e
 
 `.github/workflows/` 提供三个工作流：
 
-- `ci.yml`：push 触发，执行格式化检查、`make unit`、覆盖率门禁（>=90%）、`golangci-lint`、Go 依赖图上报（`actions/go-dependency-submission`）、Go 漏洞检查（`govulncheck`）与前端 `npm audit`，任一失败即阻塞。
+- `ci.yml`：push 触发，执行格式化检查、`make unit`、覆盖率门禁（>=90%）、`golangci-lint`、Go 漏洞检查（`govulncheck`）与前端 `npm audit`，任一失败即阻塞。
 - `pre-release.yml`：main 分支 push 后构建 mts-server 跨平台二进制（linux/darwin/windows × amd64/arm64）并发布 `dev` GitHub Pre-release，同时构建并推送 `ghcr.io/<owner>/mts-server:dev` 镜像（linux/amd64、linux/arm64）。
 - `release.yml`：推送 `v*` tag 时构建并发布 mts-server 正式版本，生成校验和并创建 GitHub Release，同时构建并推送 `ghcr.io/<owner>/mts-server:<tag>` 镜像。
 

@@ -43,28 +43,6 @@ jobs:
         with:
           version: v2.12.2
 
-  dependency-graph:
-    name: Dependency graph
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
-      - name: checkout
-        uses: actions/checkout@v4
-
-      - name: setup-go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: prepare embed
-        run: make ensure-dashboard-embed
-
-      - name: submit
-        uses: actions/go-dependency-submission@v2
-
   vulncheck:
     name: Go vulncheck
     runs-on: ubuntu-latest
