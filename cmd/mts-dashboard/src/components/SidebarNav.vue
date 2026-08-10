@@ -6,10 +6,9 @@ import { useI18n } from '@/composables/useI18n'
 import type { MessageKey } from '@/i18n/messages'
 import {
   LayoutDashboard, Database, Users, Settings, Wrench,
-  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound, PanelLeftClose, PanelLeftOpen, ChevronUp, ChevronDown, RotateCcw, GripVertical,
+  ArrowDownUp, Search, ScrollText, HardDrive, Send, X, BookOpen, Shield, ShieldCheck, Activity, ClipboardCheck, Info, UserRound, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-vue-next'
-import { navPathTestSuffix, useSidebarNavOrder } from '@/composables/useSidebarNavOrder'
-import { useSidebarNavDrag } from '@/composables/useSidebarNavDrag'
+import { groupNavItems } from '@/utils/navSections'
 import { filterNavItems } from '@/utils/navFilter'
 
 const props = defineProps<{ visible: boolean; collapsed: boolean }>()
@@ -41,47 +40,14 @@ const allNavItems = computed(() => [
 ])
 
 const roleNavItems = computed(() => allNavItems.value.filter((i) => !i.adminOnly || isAdmin.value))
-const canReorder = computed(() => !props.collapsed && !navFilter.value.trim())
-const {
-  orderMap,
-  orderedRoleNavItems,
-  orderedGroups,
-  reorder,
-  reorderTo,
-  resetSectionOrder,
-  resetAllOrder,
-  canMove,
-} = useSidebarNavOrder(roleNavItems, canReorder)
-
-const {
-  dragFrom,
-  dragOverPath,
-  onDragStart,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onDragEnd,
-} = useSidebarNavDrag(canReorder, reorderTo)
-
-function rowDragClass(sectionId: string, path: string): string {
-  const over =
-    dragOverPath.value === path &&
-    dragFrom.value &&
-    dragFrom.value.sectionId === sectionId &&
-    dragFrom.value.path !== path
-  const parts = ['flex items-stretch gap-0.5 rounded-lg']
-  if (over) parts.push('ring-1 ring-sky-400/70 dark:ring-sky-500/60')
-  if (dragFrom.value?.path === path) parts.push('opacity-60')
-  return parts.join(' ')
-}
 
 const filteredNavItems = computed(() => {
-  const base = orderedRoleNavItems.value
+  const base = roleNavItems.value
   if (props.collapsed) return base
   return filterNavItems(base, navFilter.value)
 })
 
-const navGroups = computed(() => orderedGroups(filteredNavItems.value))
+const navGroups = computed(() => groupNavItems(filteredNavItems.value))
 
 watch(
   () => props.collapsed,
@@ -93,6 +59,10 @@ watch(
 function isActive(to: string) {
   if (to === '/') return route.path === '/'
   return route.path === to || route.path.startsWith(to + '/')
+}
+
+function navPathTestSuffix(path: string): string {
+  return path === '/' ? 'home' : path.slice(1).split('/').join('-')
 }
 
 function navTestId(to: string): string {
@@ -196,17 +166,6 @@ defineExpose({ focusFilter, clearFilter })
             <X class="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
-        <button
-          v-if="Object.keys(orderMap).length"
-          type="button"
-          class="mts-btn mts-focus-ring mt-2 w-full justify-center text-[11px]"
-          data-testid="sidebar-order-reset-all"
-          :title="t('sidebarOrderResetAll')"
-          @click="resetAllOrder"
-        >
-          <RotateCcw class="h-3 w-3" aria-hidden="true" />
-          {{ t('sidebarOrderResetAll') }}
-        </button>
       </div>
       <nav class="flex-1 space-y-0.5 overflow-auto p-2" :aria-label="t('appName')" data-testid="sidebar-nav">
         <div
@@ -230,7 +189,7 @@ defineExpose({ focusFilter, clearFilter })
         >
           <div
             v-if="!collapsed"
-            class="flex items-center justify-between gap-1 px-2 pb-0.5 pt-2"
+            class="px-2 pb-0.5 pt-2"
           >
             <p
               class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
@@ -238,43 +197,15 @@ defineExpose({ focusFilter, clearFilter })
             >
               {{ t(group.labelKey as MessageKey) }}
             </p>
-            <button
-              v-if="canReorder && orderMap[group.id]?.length"
-              type="button"
-              class="mts-focus-ring rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
-              :data-testid="`sidebar-order-reset-${group.id}`"
-              :aria-label="t('sidebarOrderResetSection')"
-              :title="t('sidebarOrderResetSection')"
-              @click="resetSectionOrder(group.id)"
-            >
-              <RotateCcw class="h-3 w-3" aria-hidden="true" />
-            </button>
           </div>
           <div
             v-for="item in group.items"
             :key="item.to"
-            :class="rowDragClass(group.id, item.to)"
+            class="flex items-stretch gap-0.5 rounded-lg"
             :data-testid="`sidebar-nav-row-${navPathTestSuffix(item.to)}`"
             :data-section="group.id"
             :data-path="item.to"
-            @dragover="onDragOver(group.id, item.to, $event)"
-            @dragleave="onDragLeave(item.to)"
-            @drop="onDrop(group.id, item.to, $event)"
           >
-            <button
-              v-if="canReorder && group.items.length > 1"
-              type="button"
-              class="mts-focus-ring mt-1 flex h-8 w-5 shrink-0 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing dark:hover:bg-slate-800"
-              draggable="true"
-              :data-testid="`sidebar-drag-${navPathTestSuffix(item.to)}`"
-              :aria-label="t('sidebarOrderDrag')"
-              :title="t('sidebarOrderDrag')"
-              @dragstart="onDragStart(group.id, item.to, $event)"
-              @dragend="onDragEnd"
-              @click.prevent
-            >
-              <GripVertical class="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
             <button
               type="button"
               class="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-2 text-left text-sm"
@@ -293,34 +224,6 @@ defineExpose({ focusFilter, clearFilter })
               <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
               <span :class="collapsed ? 'sr-only' : 'truncate'">{{ item.label }}</span>
             </button>
-            <div
-              v-if="canReorder && group.items.length > 1"
-              class="flex flex-col justify-center gap-0.5"
-              data-testid="sidebar-order-controls"
-            >
-              <button
-                type="button"
-                class="mts-focus-ring rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 dark:hover:bg-slate-800"
-                :data-testid="`sidebar-order-up-${navPathTestSuffix(item.to)}`"
-                :aria-label="t('sidebarOrderUp')"
-                :title="t('sidebarOrderUp')"
-                :disabled="!canMove(group.id, item.to, 'up', navGroups)"
-                @click="reorder(group.id, item.to, 'up')"
-              >
-                <ChevronUp class="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="mts-focus-ring rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 dark:hover:bg-slate-800"
-                :data-testid="`sidebar-order-down-${navPathTestSuffix(item.to)}`"
-                :aria-label="t('sidebarOrderDown')"
-                :title="t('sidebarOrderDown')"
-                :disabled="!canMove(group.id, item.to, 'down', navGroups)"
-                @click="reorder(group.id, item.to, 'down')"
-              >
-                <ChevronDown class="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            </div>
           </div>
         </div>
       </nav>

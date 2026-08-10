@@ -165,49 +165,16 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('sidebar-collapse-toggle')).toBeVisible()
   await expect(page.getByTestId('sidebar-section-workspace')).toBeVisible()
   await expect(page.getByTestId('sidebar-section-label-workspace')).toBeVisible()
-  // 组内排序控件（工作区至少 3 项）
-  await expect(page.getByTestId('sidebar-order-up-query')).toBeVisible()
-  await expect(page.getByTestId('sidebar-order-down-query')).toBeVisible()
-  await expect(page.getByTestId('sidebar-drag-query')).toBeVisible()
-  await expect(page.getByTestId('sidebar-drag-write')).toBeVisible()
-  await page.getByTestId('sidebar-order-up-query').click()
-  // P107: 拖拽手柄可见；拖拽 write 到 home 行后顺序持久化
-  const navKeySmoke = 'mts.dashboard.nav-order.prefs.v1'
-  await page.getByTestId('sidebar-drag-write').dragTo(page.getByTestId('sidebar-nav-row-home'))
-  await expect.poll(async () => {
-    const raw = await page.evaluate((k) => localStorage.getItem(k), navKeySmoke)
-    if (!raw) return false
-    try {
-      const parsed = JSON.parse(raw) as { order?: { workspace?: string[] } }
-      const ws = parsed.order?.workspace || []
-      return ws.includes('/write') && ws.indexOf('/write') < ws.indexOf('/')
-    } catch {
-      return false
-    }
-  }).toBe(true)
-  // 过滤时隐藏排序（避免与搜索结果冲突）
+  // 侧栏过滤功能（排序控件已移除）
   await page.getByTestId('sidebar-filter').fill('query')
-  await expect(page.getByTestId('sidebar-order-up-query')).toHaveCount(0)
-  await expect(page.getByTestId('sidebar-drag-query')).toHaveCount(0)
+  await expect(page.getByTestId('sidebar-nav-row-query')).toBeVisible()
   await page.getByTestId('sidebar-filter-clear').click()
-  await expect(page.getByTestId('sidebar-order-up-query')).toBeVisible()
-  await expect(page.getByTestId('sidebar-drag-query')).toBeVisible()
-  // P424: 分组重置侧栏排序（workspace）；重置后重建自定义序，供后续账户偏好导出断言
-  await expect(page.getByTestId('sidebar-order-reset-workspace')).toBeVisible()
-  await page.getByTestId('sidebar-order-reset-workspace').click()
-  await expect.poll(async () => {
-    const raw = await page.evaluate((k) => localStorage.getItem(k), navKeySmoke)
-    if (!raw) return true
-    try {
-      const parsed = JSON.parse(raw) as { order?: { workspace?: string[] } }
-      const ws = parsed.order?.workspace
-      return !ws || ws.length === 0
-    } catch {
-      return false
-    }
-  }).toBe(true)
-  // 命令面板 section 重置入口
-  await page.getByTestId('sidebar-order-up-query').click()
+  // 直接写入自定义序（侧栏排序按钮已移除），供命令面板重置与账户偏好导出断言
+  const navKeySmoke = 'mts.dashboard.nav-order.prefs.v1'
+  await page.evaluate((k) => {
+    localStorage.setItem(k, JSON.stringify({ version: 1, order: { workspace: ['/write', '/query', '/'] } }))
+    window.dispatchEvent(new Event('mts-dashboard-prefs-changed'))
+  }, navKeySmoke)
   await expect.poll(async () => {
     const raw = await page.evaluate((k) => localStorage.getItem(k), navKeySmoke)
     if (!raw) return false
@@ -218,6 +185,7 @@ test('commercial browser smoke path', async ({ page }) => {
       return false
     }
   }).toBe(true)
+  // 命令面板 section 重置入口
   await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('重置工作区')
@@ -226,7 +194,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-palette')).toHaveCount(0)
   // P425: 英文 locale 下 section 重置可检索（随后恢复中文，避免干扰后续文案断言）
   await page.getByTestId('topbar-lang').click()
-  await page.getByTestId('sidebar-order-up-query').click()
+  await page.evaluate((k) => {
+    localStorage.setItem(k, JSON.stringify({ version: 1, order: { workspace: ['/write', '/query', '/'] } }))
+    window.dispatchEvent(new Event('mts-dashboard-prefs-changed'))
+  }, navKeySmoke)
   await page.getByTestId('topbar-command-palette').click()
   await expect(page.getByTestId('command-palette')).toBeVisible()
   await page.getByTestId('command-palette-input').fill('reset workspace')
@@ -235,7 +206,10 @@ test('commercial browser smoke path', async ({ page }) => {
   await expect(page.getByTestId('command-palette')).toHaveCount(0)
   await page.getByTestId('topbar-lang').click()
   // 再次写入自定义序，避免清空后账户页 orderBefore 为空
-  await page.getByTestId('sidebar-order-up-query').click()
+  await page.evaluate((k) => {
+    localStorage.setItem(k, JSON.stringify({ version: 1, order: { workspace: ['/write', '/query', '/'] } }))
+    window.dispatchEvent(new Event('mts-dashboard-prefs-changed'))
+  }, navKeySmoke)
   await expect.poll(async () => page.evaluate((k) => localStorage.getItem(k), navKeySmoke)).toBeTruthy()
   await expect(page.getByTestId('overview-export-json')).toBeVisible()
   await expect(page.getByTestId('overview-export-health-report')).toBeVisible()
