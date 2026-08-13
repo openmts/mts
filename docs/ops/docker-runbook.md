@@ -39,7 +39,7 @@ docker exec mts-server mts-server version # 查看镜像内版本
 
 ## 4. 自定义配置
 
-容器默认配置见 `deploy/docker/mts-server.yaml`（监听 `0.0.0.0`、数据目录 `/data`）。生产部署将自定义配置挂载到 `/etc/mts-server/config.yaml` 覆盖默认值：
+容器默认配置见 `deploy/docker/mts-server.yaml`（监听 `[::]` 全零 IPv4/IPv6 双栈、数据目录 `/data`）。生产部署将自定义配置挂载到 `/etc/mts-server/config.yaml` 覆盖默认值：
 
 ```bash
 docker run -d --name mts-server \
@@ -83,7 +83,7 @@ volumes:
 ## 7. 平台与安全注意
 
 - 容器以非 root 用户（uid 1001）运行；挂载宿主目录作为 `/data` 时需保证该 uid 有写权限（如 `chown -R 1001:1001`）。
-- 容器默认监听 `0.0.0.0`，暴露到公网前应放在反向代理后，并启用 TLS/鉴权（见 `docs/ops/dashboard-production-runbook.md`）。
+- 容器默认监听 `[::]` 全零地址（IPv4/IPv6 双栈），暴露到公网前应放在反向代理后，并启用 TLS/鉴权（见 `docs/ops/dashboard-production-runbook.md`）。
 
 ## 8. 相关文件
 

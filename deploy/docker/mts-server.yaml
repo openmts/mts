@@ -2,14 +2,14 @@
 #
 # 与 configs/mts-server.yaml 的区别：
 #   - data_dir 指向挂载卷 /data，backup.dir 同步指向 /data 下。
-#   - http/grpc 监听 0.0.0.0，便于容器外访问；生产暴露前应放反向代理后。
+#   - http/grpc 监听全零 [::]（IPv4/IPv6 双栈所有网卡）；生产暴露前应放反向代理后。
 # 生产部署可将自定义配置挂载到 /etc/mts-server/config.yaml 覆盖本文件。
 
 data_dir: /data/mts-server
 
 http:
   enabled: true
-  addr: 0.0.0.0:8086
+  addr: "[::]:8086"
   dashboard_base: /
   tls:
     enabled: false
@@ -24,7 +24,7 @@ http:
 
 grpc:
   enabled: true
-  addr: 0.0.0.0:9096
+  addr: "[::]:9096"
   tls:
     enabled: false
     cert_file: ""

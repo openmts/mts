@@ -11,8 +11,9 @@ data_dir: ./data/mts-server
 http:
   # enabled 控制是否启动 HTTP JSON API。
   enabled: true
-  # addr 是 HTTP 监听地址。生产环境暴露到外网前应放在反向代理或网关后面。
-  addr: 127.0.0.1:8086
+  # addr 是 HTTP 监听地址。全零 [::] 同时监听 IPv4/IPv6 所有网卡；
+  # 生产环境暴露到外网前应放在反向代理或网关后面。
+  addr: "[::]:8086"
   # dashboard_base 为内置 Dashboard SPA 子路径；默认 /。若前端以 VITE_BASE=/mts/ 构建，这里需设为 /mts/。
   dashboard_base: /
   # tls.enabled 为 true 时使用 HTTPS；client_auth 为 true 时启用 mTLS。
@@ -30,8 +31,8 @@ http:
 grpc:
   # enabled 控制是否启动 gRPC API。
   enabled: true
-  # addr 是 gRPC 监听地址。
-  addr: 127.0.0.1:9096
+  # addr 是 gRPC 监听地址。全零 [::] 同时监听 IPv4/IPv6 所有网卡。
+  addr: "[::]:9096"
   tls:
     enabled: false
     cert_file: ""

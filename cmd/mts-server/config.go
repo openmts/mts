@@ -170,7 +170,7 @@ func defaultConfig() config {
 		DataDir: "~/.mts/data",
 		HTTP: httpConfig{
 			Enabled:           true,
-			Addr:              "127.0.0.1:8086",
+			Addr:              "[::]:8086",
 			DashboardBase:     "/",
 			ReadHeaderTimeout: durationText(5 * time.Second),
 			ReadTimeout:       durationText(30 * time.Second),
@@ -179,7 +179,7 @@ func defaultConfig() config {
 		},
 		GRPC: grpcConfig{
 			Enabled:         true,
-			Addr:            "127.0.0.1:9096",
+			Addr:            "[::]:9096",
 			MaxRecvMsgBytes: 16 << 20,
 			MaxSendMsgBytes: 16 << 20,
 		},
